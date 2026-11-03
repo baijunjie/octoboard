@@ -47,7 +47,7 @@ export function SessionActions({
     const related = index.boundOwnerIds.has(session.id) ? sessionsOf(index.byConsole, session.console_id) : [];
     return !archiveNeedsConfirmation(related, session);
   });
-  const canHandoff = useDaemonStore((s) => pickableAgents(s.agentAvailability, s.settings.added_agents).some((agent) => agent !== session.agent));
+  const canHandoff = useDaemonStore((s) => pickableAgents(s.agentAvailability, s.settings.added_agents, s.providers).some((agent) => agent !== session.agent));
   // The menu's switch-account holds follow it while open, so it is read here rather than when the menu opens.
   const switching = useAccountSwitchHeld(session);
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
@@ -69,7 +69,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandoff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandoff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
     </>
   );
 }

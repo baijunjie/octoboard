@@ -1,11 +1,8 @@
 use super::*;
 use crate::coordinator::accounts::create_account;
 use crate::coordinator::handle;
-use crate::coordinator::test_support::only_account;
-use crate::protocol::{
-    Agent, ApprovalReviewer, ClaudeApprovalMode, Event, RequestBody, SessionKind,
-};
-use crate::test_support::bare_session;
+use crate::protocol::{AgentId, Event, RequestBody};
+use crate::providers::SettingValue;
 
 #[test]
 fn update_settings_applies_all_or_nothing_and_a_blank_clone_dir_clears_it() {
@@ -144,10 +141,15 @@ async fn turning_the_quota_window_setting_on_kicks_held_readings_and_repeating_i
         )
         .unwrap()
     };
-    state.account_quotas.hold_for_test(&unstarted(Agent::Codex));
+    state
+        .account_quotas
+        .hold_for_test(&unstarted(AgentId::CODEX));
     turn_on(None);
     let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-    while !state.account_quotas.is_kicked_for_test(Agent::Codex, None) {
+    while !state
+        .account_quotas
+        .is_kicked_for_test(AgentId::CODEX, None)
+    {
         assert!(
             std::time::Instant::now() < deadline,
             "the held reading was not kicked"
@@ -158,14 +160,49 @@ async fn turning_the_quota_window_setting_on_kicks_held_readings_and_repeating_i
     // Already on, though the same request does change another setting, so the quota setting
     // itself is what has to be told apart from a request that changed something: a reading
     // held since is left alone.
-    state.account_quotas.hold_for_test(&unstarted(Agent::Grok));
+    state
+        .account_quotas
+        .hold_for_test(&unstarted(AgentId::GROK));
     let ordered = state.store.sidebar_order_by_status().unwrap();
     turn_on(Some(!ordered));
     assert_eq!(state.store.sidebar_order_by_status().unwrap(), !ordered);
     // The test's runtime has the one thread, so yielding runs whatever `turn_on` spawned up to
     // its first wait, which is where a kick of the reading would already be claimed.
     tokio::task::yield_now().await;
-    assert!(!state.account_quotas.is_kicked_for_test(Agent::Grok, None));
+    assert!(!state.account_quotas.is_kicked_for_test(AgentId::GROK, None));
+}
+
+/// The value of the setting `id` of `agent`'s provider, as the session's launch reads it.
+fn launch_choice(state: &Arc<AppState>, agent: AgentId, id: &str) -> Option<String> {
+    state
+        .store
+        .provider_settings_of(agent)
+        .unwrap()
+        .choice(id)
+        .map(str::to_string)
+}
+
+async fn set(
+    state: &Arc<AppState>,
+    agent: AgentId,
+    setting: &str,
+    value: Option<SettingValue>,
+) -> Result<()> {
+    handle(
+        state,
+        None,
+        RequestBody::SetProviderSetting {
+            agent,
+            setting: setting.to_string(),
+            value,
+        },
+    )
+    .await
+    .map(|_| ())
+}
+
+fn choice(text: &str) -> Option<SettingValue> {
+    Some(SettingValue::Choice(text.to_string()))
 }
 
 #[tokio::test]
@@ -173,71 +210,61 @@ async fn the_codex_approval_reviewer_applies_to_every_codex_account_and_only_to_
     let (state, _dir) = crate::test_support::app_state("codex-approval-reviewer");
     create_account(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         "Work".into(),
         "/tmp/codex-work".into(),
     )
     .unwrap();
-    let account = only_account(&state);
-    let mut session = bare_session("session-1", SessionKind::Project);
-    session.agent = Agent::Codex;
-    assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
+    assert_eq!(
+        launch_choice(&state, AgentId::CODEX, "approval_reviewer"),
+        None
+    );
 
-    handle(
+    set(
         &state,
-        None,
-        RequestBody::SetCodexApprovalReviewer {
-            reviewer: Some(ApprovalReviewer::AutoReview),
-        },
+        AgentId::CODEX,
+        "approval_reviewer",
+        choice("auto_review"),
     )
     .await
     .unwrap();
     assert_eq!(
-        state.store.get_settings().unwrap().codex_approval_reviewer,
-        Some(ApprovalReviewer::AutoReview)
+        state.store.get_settings().unwrap().provider_settings["codex"]["approval_reviewer"],
+        choice("auto_review")
     );
-    // The default account, a pinned one and a legacy pinned directory with no account id all
-    // resolve the same value.
+    // The setting belongs to the provider, so every account of it resolves the same value, and
+    // another provider reads nothing of it.
     assert_eq!(
-        CODEX_REVIEWER.for_session(&state, &session).unwrap(),
-        Some(ApprovalReviewer::AutoReview)
+        launch_choice(&state, AgentId::CODEX, "approval_reviewer").as_deref(),
+        Some("auto_review")
     );
-    session.config_dir = Some("/tmp/codex-legacy".into());
     assert_eq!(
-        CODEX_REVIEWER.for_session(&state, &session).unwrap(),
-        Some(ApprovalReviewer::AutoReview)
-    );
-    session.account_id = Some(account.id.clone());
-    session.config_dir = Some(account.config_dir.clone());
-    assert_eq!(
-        CODEX_REVIEWER.for_session(&state, &session).unwrap(),
-        Some(ApprovalReviewer::AutoReview)
+        launch_choice(&state, AgentId::CLAUDE, "approval_reviewer"),
+        None
     );
     // Setting the same value again broadcasts nothing.
     let mut events = state.subscribe();
-    handle(
+    set(
         &state,
-        None,
-        RequestBody::SetCodexApprovalReviewer {
-            reviewer: Some(ApprovalReviewer::AutoReview),
-        },
+        AgentId::CODEX,
+        "approval_reviewer",
+        choice("auto_review"),
     )
     .await
     .unwrap();
     assert!(events.try_recv().is_err());
-    // A session of another agent reads nothing.
-    session.agent = Agent::Claude;
-    assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
 
-    handle(
-        &state,
-        None,
-        RequestBody::SetCodexApprovalReviewer { reviewer: None },
-    )
-    .await
-    .unwrap();
-    session.agent = Agent::Codex;
-    assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
+    set(&state, AgentId::CODEX, "approval_reviewer", None)
+        .await
+        .unwrap();
+    assert!(matches!(
+        events.try_recv(),
+        Ok(Event::SettingsUpdated { .. })
+    ));
+    assert_eq!(
+        launch_choice(&state, AgentId::CODEX, "approval_reviewer"),
+        None
+    );
 }
 
 #[tokio::test]
@@ -245,94 +272,160 @@ async fn the_claude_approval_mode_applies_to_every_claude_account_and_only_to_cl
     let (state, _dir) = crate::test_support::app_state("claude-approval-mode");
     create_account(
         &state,
-        Agent::Claude,
+        AgentId::CLAUDE,
         "Work".into(),
         "/tmp/claude-work".into(),
     )
     .unwrap();
-    let account = only_account(&state);
-    let mut session = bare_session("session-1", SessionKind::Project);
-    session.agent = Agent::Claude;
-    assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+    assert_eq!(
+        launch_choice(&state, AgentId::CLAUDE, "approval_mode"),
+        None
+    );
 
-    handle(
-        &state,
-        None,
-        RequestBody::SetClaudeApprovalMode {
-            mode: Some(ClaudeApprovalMode::Manual),
-        },
-    )
-    .await
-    .unwrap();
+    set(&state, AgentId::CLAUDE, "approval_mode", choice("manual"))
+        .await
+        .unwrap();
     assert_eq!(
-        state.store.get_settings().unwrap().claude_approval_mode,
-        Some(ClaudeApprovalMode::Manual)
+        state.store.get_settings().unwrap().provider_settings["claude"]["approval_mode"],
+        choice("manual")
     );
     assert_eq!(
-        CLAUDE_MODE.for_session(&state, &session).unwrap(),
-        Some(ClaudeApprovalMode::Manual)
+        launch_choice(&state, AgentId::CLAUDE, "approval_mode").as_deref(),
+        Some("manual")
     );
-    session.config_dir = Some("/tmp/claude-legacy".into());
-    assert_eq!(
-        CLAUDE_MODE.for_session(&state, &session).unwrap(),
-        Some(ClaudeApprovalMode::Manual)
-    );
-    session.account_id = Some(account.id.clone());
-    session.config_dir = Some(account.config_dir.clone());
-    assert_eq!(
-        CLAUDE_MODE.for_session(&state, &session).unwrap(),
-        Some(ClaudeApprovalMode::Manual)
-    );
-    session.agent = Agent::Codex;
-    assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+    assert_eq!(launch_choice(&state, AgentId::CODEX, "approval_mode"), None);
 
-    handle(
-        &state,
-        None,
-        RequestBody::SetClaudeApprovalMode { mode: None },
-    )
-    .await
-    .unwrap();
-    session.agent = Agent::Claude;
-    assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+    set(&state, AgentId::CLAUDE, "approval_mode", None)
+        .await
+        .unwrap();
+    assert_eq!(
+        launch_choice(&state, AgentId::CLAUDE, "approval_mode"),
+        None
+    );
 }
 
-/// Claude compatibility is set per agent, is refused for Claude Code and unknown names without
-/// applying any of the request, and broadcasts only a change. Codex starts off here, since
-/// Claude Code is not among the added agents.
+/// A request for a setting the provider does not declare, a value of the other kind or a choice it
+/// does not offer is refused as unreadable, and changes nothing.
 #[tokio::test]
-async fn claude_compatibility_is_set_per_agent_and_refused_for_claude_code() {
-    let (state, _dir) = crate::test_support::app_state("coordinator-claude-compat");
-    let set = |changes: &[(&str, bool)]| {
+async fn a_provider_setting_request_is_refused_unless_the_provider_declares_it_and_takes_the_value()
+{
+    let (state, _dir) = crate::test_support::app_state("provider-setting-refused");
+    let mut events = state.subscribe();
+    for (agent, setting, value) in [
+        (AgentId::CLAUDE, "nothing", choice("auto")),
+        (
+            AgentId::CLAUDE,
+            "claude_compatibility",
+            Some(SettingValue::Switch(true)),
+        ),
+        (AgentId::CLAUDE, "approval_mode", choice("everything")),
+        (
+            AgentId::CLAUDE,
+            "approval_mode",
+            Some(SettingValue::Switch(true)),
+        ),
+        (AgentId::CODEX, "claude_compatibility", choice("on")),
+    ] {
+        let error = set(&state, agent, setting, value.clone())
+            .await
+            .unwrap_err();
+        assert_eq!(
+            crate::protocol::error_parts(&error).0,
+            crate::protocol::error_code::UNREADABLE_REQUEST,
+            "{agent:?} {setting} {value:?}"
+        );
+    }
+    assert!(state.store.provider_setting_choices().unwrap().is_empty());
+    assert!(events.try_recv().is_err());
+}
+
+/// A switch is set per provider, null puts it back on its default rule, and only a change is
+/// broadcast. Codex starts off here, since Claude Code is not among the added agents.
+#[tokio::test]
+async fn a_switch_is_set_per_provider_and_cleared_to_its_default_rule() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-provider-switch");
+    let on = |agent: AgentId| {
+        state
+            .store
+            .provider_settings_of(agent)
+            .unwrap()
+            .switch("claude_compatibility")
+    };
+    let switch = |on| Some(SettingValue::Switch(on));
+    assert!(!on(AgentId::CODEX));
+    assert!(on(AgentId::GROK));
+
+    let mut events = state.subscribe();
+    set(&state, AgentId::CODEX, "claude_compatibility", switch(true))
+        .await
+        .unwrap();
+    assert!(matches!(
+        events.try_recv(),
+        Ok(Event::SettingsUpdated { settings })
+            if settings.provider_settings["codex"]["claude_compatibility"] == switch(true)
+                && settings.provider_settings["grok"]["claude_compatibility"] == switch(true)
+    ));
+    assert!(on(AgentId::CODEX));
+    assert!(on(AgentId::GROK));
+    set(&state, AgentId::CODEX, "claude_compatibility", switch(true))
+        .await
+        .unwrap();
+    assert!(events.try_recv().is_err(), "no change, no broadcast");
+
+    set(&state, AgentId::GROK, "claude_compatibility", switch(false))
+        .await
+        .unwrap();
+    assert!(!on(AgentId::GROK));
+    set(&state, AgentId::GROK, "claude_compatibility", None)
+        .await
+        .unwrap();
+    assert!(on(AgentId::GROK));
+}
+
+/// Choices applied in bulk (a configuration import) are refused, applying none of the request,
+/// for an unknown provider, an undeclared setting or a value the setting does not take.
+#[tokio::test]
+async fn bulk_provider_settings_are_refused_whole() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-bulk-provider-settings");
+    let apply = |settings: &[(&str, &str, SettingValue)]| {
+        let mut provider_settings: BTreeMap<String, BTreeMap<String, SettingValue>> =
+            BTreeMap::new();
+        for (provider, setting, value) in settings {
+            provider_settings
+                .entry(provider.to_string())
+                .or_default()
+                .insert(setting.to_string(), value.clone());
+        }
         update_settings(
             &state,
             SettingsChanges {
-                claude_compatibility: changes
-                    .iter()
-                    .map(|(name, enabled)| (name.to_string(), *enabled))
-                    .collect(),
+                provider_settings,
                 ..SettingsChanges::default()
             },
         )
     };
-    assert!(!state.store.claude_compatibility_of(Agent::Codex).unwrap());
-
-    let mut events = state.subscribe();
-    set(&[("codex", true)]).unwrap();
-    assert!(matches!(
-        events.try_recv(),
-        Ok(Event::SettingsUpdated { settings })
-            if settings.claude_compatibility
-                == [("codex".to_string(), true), ("grok".to_string(), true)].into()
-    ));
-    assert!(state.store.claude_compatibility_of(Agent::Codex).unwrap());
-    assert!(state.store.claude_compatibility_of(Agent::Grok).unwrap());
-    set(&[("codex", true)]).unwrap();
-    assert!(events.try_recv().is_err(), "no change, no broadcast");
-
-    assert!(set(&[("grok", false), ("claude", true)]).is_err());
-    assert!(set(&[("nobody", true)]).is_err());
-    assert!(state.store.claude_compatibility_of(Agent::Grok).unwrap());
+    let off = SettingValue::Switch(false);
+    apply(&[("codex", "claude_compatibility", off.clone())]).unwrap();
+    assert!(apply(&[
+        ("grok", "claude_compatibility", off.clone()),
+        ("claude", "claude_compatibility", off.clone()),
+    ])
+    .is_err());
+    assert!(apply(&[("nobody", "claude_compatibility", off.clone())]).is_err());
+    assert!(apply(&[(
+        "grok",
+        "claude_compatibility",
+        SettingValue::Choice("on".into())
+    )])
+    .is_err());
+    assert_eq!(
+        state.store.provider_setting_choices().unwrap(),
+        [(
+            "codex".to_string(),
+            [("claude_compatibility".to_string(), off)].into()
+        )]
+        .into()
+    );
 }
 
 /// Agent tags are normalised as a project's are, replace the agent's list, broadcast only a
@@ -389,9 +482,9 @@ async fn agent_tags_are_normalised_replaced_and_kept_when_the_agent_is_removed()
     // Removing the agent keeps its tags; clearing is an empty (or blank-only) list.
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE, AgentId::CODEX])
         .unwrap();
-    state.store.remove_added_agent(Agent::Codex).unwrap();
+    state.store.remove_added_agent(AgentId::CODEX).unwrap();
     assert_eq!(tags_of("codex").unwrap(), ["Review", "UI", "tests"]);
     set(&[("codex", &[" "])]).unwrap();
     assert_eq!(tags_of("codex"), None);

@@ -2,7 +2,8 @@
 
 An account can share its agent's default configuration directory instead of keeping a copy of its own. This module does
 what a change of that choice does to the directories on disk. The wire contract is "Sharing the default configuration"
-in [`PROTOCOL.md`](../../../PROTOCOL.md); the items that may be shared are the catalog in `items.rs`.
+in [`PROTOCOL.md`](../../../PROTOCOL.md); the items that may be shared are each provider's own catalog
+(`AccountOps::shared_items`, in `adapter/<provider>/shared_config.rs`), the shape of an item being `items.rs`'s.
 
 ## How it works
 
@@ -24,8 +25,9 @@ What lives where:
 Internals, by file: `link.rs` and `moves.rs` turn sharing on and off item by item and repair links an agent replaced
 (with the file-move primitives: across volumes, backup naming, merging directories); `take_back.rs` moves the account's
 own conversations back out of the default directory when sharing is turned off; `registries.rs` keeps the plugin
-registries' recorded paths consistent with shared or unshared items, and Codex's thread state database is kept
-consistent through `apps/daemon/src/accounts/codex_threads.rs`, which the account switch's copy uses too; `cli_reads.rs`
+registries' recorded paths consistent with shared or unshared items, and a provider's thread database is kept
+consistent through its `ThreadRegistry` (`apps/daemon/src/accounts/thread_registry.rs`; Codex's is
+`adapter/codex/threads.rs`), which the account switch's copy uses too; `cli_reads.rs`
 is the admission of agent CLI runs outside a session against a running change. `link.rs` also holds the
 constructors of `SharingCause` and `SharingItemFailure` (defined in `protocol/accounts.rs`).
 

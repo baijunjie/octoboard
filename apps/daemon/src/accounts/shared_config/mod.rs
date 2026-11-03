@@ -33,7 +33,8 @@ use tokio::sync::MutexGuard;
 
 use crate::hostfs::dir_key;
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, Session, SharingCause, SharingItemFailure, SharingLeft,
+    error_code, Account, AgentId, CodedError, Session, SharingCause, SharingItemFailure,
+    SharingLeft,
 };
 use crate::state::{AppState, Running};
 
@@ -41,6 +42,9 @@ pub(crate) use change::{carry_out, lock_account, Changing, Locked, Refused};
 pub(crate) use cli_reads::{admitted_reading, hold, is_missing, running_long, Run};
 #[cfg(test)]
 pub(crate) use cli_reads::{is_held, reading_account};
+pub(crate) use items::{
+    config_dir, config_file, history_dir, history_lines, thread_database, SharedItem,
+};
 pub use launch::before_launch;
 pub(crate) use link::entries;
 pub(crate) use take_back::own_conversations;
@@ -80,7 +84,7 @@ pub fn refuse_if_changing(state: &AppState, account: Option<&str>) -> Result<()>
 /// copy writes meanwhile. Refused while a change of the target's sharing runs.
 pub async fn before_switch_copy<'a>(
     state: &'a Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     target: Option<&str>,
 ) -> Result<MutexGuard<'a, ()>> {
     let guard = state.account_sharing.locks.lock(agent).await;
@@ -91,12 +95,12 @@ pub async fn before_switch_copy<'a>(
 /// The agent's lock, for an operation on an account's directory that must see every account switch
 /// of the agent either finished and recorded, or refused: a switch holds it from before it copies
 /// the conversation in until it has recorded the session ([`before_switch_copy`]).
-pub(crate) async fn lock_agent(state: &AppState, agent: Agent) -> MutexGuard<'_, ()> {
+pub(crate) async fn lock_agent(state: &AppState, agent: AgentId) -> MutexGuard<'_, ()> {
     state.account_sharing.locks.lock(agent).await
 }
 
 /// [`lock_agent`] if no operation holds the agent's lock now.
-pub(crate) fn try_lock_agent(state: &AppState, agent: Agent) -> Option<MutexGuard<'_, ()>> {
+pub(crate) fn try_lock_agent(state: &AppState, agent: AgentId) -> Option<MutexGuard<'_, ()>> {
     state.account_sharing.locks.try_lock(agent)
 }
 
@@ -144,7 +148,7 @@ pub(crate) fn in_use(account: &Account, running: &[Running]) -> Uses {
 
 /// The directory the agent's default account resolves to, as the default account's own sessions
 /// see it: what availability found at start-up, else the launch environment's.
-pub(crate) async fn default_dir(state: &Arc<AppState>, agent: Agent) -> Result<PathBuf> {
+pub(crate) async fn default_dir(state: &Arc<AppState>, agent: AgentId) -> Result<PathBuf> {
     if let Some(dir) = state.agent_availability_of(agent).default_account_dir {
         return Ok(PathBuf::from(dir));
     }

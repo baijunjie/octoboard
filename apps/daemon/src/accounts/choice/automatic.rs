@@ -8,7 +8,7 @@ use anyhow::Result;
 use super::session_account;
 use super::standing::{agent_can_open, blocked_by, candidate_dir, cannot_open, CannotOpen};
 use crate::accounts::quotas;
-use crate::protocol::{Agent, Console, Project};
+use crate::protocol::{AgentId, Console, Project};
 use crate::state::AppState;
 use crate::time::now_millis;
 
@@ -17,12 +17,12 @@ use crate::time::now_millis;
 /// the search to it; an explicit account never comes through this function.
 pub(crate) fn automatic_open_choice(
     state: &Arc<AppState>,
-    preferred: Agent,
+    preferred: AgentId,
     console: &Console,
     project: Option<&Project>,
-    inherited: Option<(Agent, Option<String>)>,
+    inherited: Option<(AgentId, Option<String>)>,
     allow_other_agents: bool,
-) -> Result<Option<(Agent, Option<String>)>> {
+) -> Result<Option<(AgentId, Option<String>)>> {
     let usable = |agent, account: Option<&str>| -> Result<bool> {
         Ok(cannot_open(state, agent, account)?.is_none())
     };
@@ -31,7 +31,7 @@ pub(crate) fn automatic_open_choice(
         for agent in state
             .store
             .added_agents()?
-            .unwrap_or_else(|| Agent::ALL.to_vec())
+            .unwrap_or_else(|| AgentId::ALL.to_vec())
         {
             if agent != preferred {
                 agents.push(agent);
@@ -79,7 +79,7 @@ pub(crate) fn automatic_open_choice(
 /// in the same order to preselect what this would pick
 /// (`packages/ui/src/accounts/accountRanking.ts` and `openingChoice.ts`), so a change to the
 /// ranking or its order is made on both sides.
-fn account_candidates(state: &Arc<AppState>, agent: Agent) -> Result<Vec<Option<String>>> {
+fn account_candidates(state: &Arc<AppState>, agent: AgentId) -> Result<Vec<Option<String>>> {
     let mut candidates = vec![None];
     for account in state.store.list_accounts()? {
         if account.agent == agent {
@@ -108,7 +108,7 @@ pub(crate) struct Candidate {
 
 /// The accounts of `agent` in the order of [`account_candidates`], each as a listing shows it: the
 /// default account under the name and the on/off setting the user gave it.
-pub(crate) fn candidate_accounts(state: &Arc<AppState>, agent: Agent) -> Result<Vec<Candidate>> {
+pub(crate) fn candidate_accounts(state: &Arc<AppState>, agent: AgentId) -> Result<Vec<Candidate>> {
     let stored = state.store.list_accounts()?;
     let mut listed = Vec::new();
     for id in account_candidates(state, agent)? {
@@ -147,7 +147,7 @@ pub(crate) fn candidate_accounts(state: &Arc<AppState>, agent: Agent) -> Result<
 /// qualifies.
 pub(crate) fn soonest_available_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
 ) -> Result<Option<Option<String>>> {
     let mut soonest: Option<(i64, Option<String>)> = None;
     for account_id in account_candidates(state, agent)? {
@@ -187,7 +187,7 @@ pub(crate) fn soonest_available_account(
 /// directory, so one still stored under another directory would be chosen.
 pub(crate) fn preferred_weekly_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
 ) -> Result<Option<Option<String>>> {
     preferred_weekly_account_except(state, agent, &[], false)
 }
@@ -198,7 +198,7 @@ pub(crate) fn preferred_weekly_account(
 /// not moved onto an account that cannot be seen to have quota left.
 pub(crate) fn preferred_weekly_account_except(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     except: &[Option<String>],
     readable_only: bool,
 ) -> Result<Option<Option<String>>> {

@@ -1,7 +1,7 @@
 //! Each agent's availability, as derived once per daemon start.
 
 use super::AppState;
-use crate::protocol::{Agent, AgentAvailability, Event};
+use crate::protocol::{AgentAvailability, AgentId, Event};
 
 impl AppState {
     /// Every agent's current availability, for `Event::Snapshot` — always three entries, each
@@ -12,7 +12,7 @@ impl AppState {
             .agent_availability
             .read()
             .expect("agent availability lock poisoned");
-        Agent::ALL
+        AgentId::ALL
             .into_iter()
             .map(|agent| map[&agent].clone())
             .collect()
@@ -20,7 +20,7 @@ impl AppState {
 
     /// One agent's current availability, for the launch refusal in
     /// `coordinator::open::open_session`.
-    pub fn agent_availability_of(&self, agent: Agent) -> AgentAvailability {
+    pub fn agent_availability_of(&self, agent: AgentId) -> AgentAvailability {
         self.agent_availability
             .read()
             .expect("agent availability lock poisoned")

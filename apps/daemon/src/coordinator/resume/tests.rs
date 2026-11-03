@@ -7,8 +7,8 @@ use crate::coordinator::test_support::{
     temp_dir,
 };
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, ConversationLocation, Event, Origin, RequestBody, Role,
-    Session, SessionKind, SessionStatus,
+    error_code, Account, AgentId, CodedError, ConversationLocation, Event, Origin, RequestBody,
+    Role, Session, SessionKind, SessionStatus,
 };
 use crate::session::term;
 use crate::state::AppState;
@@ -29,13 +29,13 @@ async fn a_reopen_is_not_refused_for_an_agent_that_is_not_added() {
     let (state, dir) = console_with_project_and_accounts("coordinator-reopen-agent-removed");
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Codex])
+        .set_added_agents_if_undecided(&[AgentId::CODEX])
         .unwrap();
     state
         .store
         .insert_session(&Session {
             ended_at: Some(5),
-            ..project_session("s", Agent::Claude, SessionStatus::Archived)
+            ..project_session("s", AgentId::CLAUDE, SessionStatus::Archived)
         })
         .unwrap();
 
@@ -51,7 +51,7 @@ async fn a_reopen_is_not_refused_for_an_agent_that_is_not_added() {
 async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
     const ID: &str = "11111111-2222-3333-4444-555555555555";
     let (state, _dir) = console_with_project_and_accounts("coordinator-resume-id-checked");
-    let mut holder = project_session("holder", Agent::Claude, SessionStatus::Archived);
+    let mut holder = project_session("holder", AgentId::CLAUDE, SessionStatus::Archived);
     holder.agent_session_id = Some(ID.to_string());
     state.store.insert_session(&holder).unwrap();
     let check = |kind, project: Option<&str>, bound_to: Option<&str>, id: &str| {
@@ -149,7 +149,7 @@ fn a_conversation_to_resume_must_be_in_the_accounts_directory() {
     let snapshot = shell_env(&dir);
 
     let err = locate_conversation_to_resume(
-        Agent::Claude,
+        AgentId::CLAUDE,
         Some(&pinned.to_string_lossy()),
         ID,
         no_snapshot,
@@ -162,7 +162,7 @@ fn a_conversation_to_resume_must_be_in_the_accounts_directory() {
     let record = default.join("projects/slug").join(format!("{ID}.jsonl"));
     std::fs::create_dir_all(record.parent().unwrap()).unwrap();
     std::fs::write(&record, "").unwrap();
-    locate_conversation_to_resume(Agent::Claude, None, ID, snapshot).unwrap();
+    locate_conversation_to_resume(AgentId::CLAUDE, None, ID, snapshot).unwrap();
 }
 
 /// The conversation to resume is placed in the account whose record was written to last, in the
@@ -182,8 +182,8 @@ fn a_conversation_to_resume_is_located_in_the_account_written_to_last() {
     };
     let (work, other) = (dir.join("work"), dir.join("other"));
     let accounts = [
-        account("work", Agent::Claude, work.clone()),
-        account("other", Agent::Claude, other.clone()),
+        account("work", AgentId::CLAUDE, work.clone()),
+        account("other", AgentId::CLAUDE, other.clone()),
     ];
     let write_record = |config_dir: &Path, seconds: u64| {
         let record = config_dir.join("projects/slug").join(format!("{ID}.jsonl"));
@@ -196,7 +196,7 @@ fn a_conversation_to_resume_is_located_in_the_account_written_to_last() {
             .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(seconds))
             .unwrap();
     };
-    let find = |agents: &[Agent]| {
+    let find = |agents: &[AgentId]| {
         find_conversation_to_resume(agents, &accounts, ID, shell_env(&dir)).unwrap()
     };
     let in_account = |agent, account: &str| {
@@ -206,26 +206,32 @@ fn a_conversation_to_resume_is_located_in_the_account_written_to_last() {
         })
     };
 
-    assert_eq!(find(&[Agent::Claude, Agent::Grok]), None);
+    assert_eq!(find(&[AgentId::CLAUDE, AgentId::GROK]), None);
 
     write_record(&other, 100);
-    assert_eq!(find(&[Agent::Claude]), in_account(Agent::Claude, "other"));
     assert_eq!(
-        find(&[Agent::Codex, Agent::Grok]),
+        find(&[AgentId::CLAUDE]),
+        in_account(AgentId::CLAUDE, "other")
+    );
+    assert_eq!(
+        find(&[AgentId::CODEX, AgentId::GROK]),
         None,
         "only the agents offered"
     );
 
     write_record(&work, 200);
-    assert_eq!(find(&[Agent::Claude]), in_account(Agent::Claude, "work"));
+    assert_eq!(
+        find(&[AgentId::CLAUDE]),
+        in_account(AgentId::CLAUDE, "work")
+    );
 
     // The default account's directory comes from the snapshot, which only a lookup that has a
     // default account to look in takes.
     write_record(&dir.join("default-claude"), 300);
     assert_eq!(
-        find(&[Agent::Claude]),
+        find(&[AgentId::CLAUDE]),
         Some(ConversationLocation::Record {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: None,
         })
     );
@@ -234,23 +240,28 @@ fn a_conversation_to_resume_is_located_in_the_account_written_to_last() {
     // it is the failure only when nothing was found.
     let no_shell = || -> Result<HashMap<String, String>> { anyhow::bail!("no login shell") };
     assert_eq!(
-        find_conversation_to_resume(&[Agent::Claude], &accounts, ID, no_shell).unwrap(),
-        in_account(Agent::Claude, "work"),
+        find_conversation_to_resume(&[AgentId::CLAUDE], &accounts, ID, no_shell).unwrap(),
+        in_account(AgentId::CLAUDE, "work"),
     );
     let other_id = "99999999-2222-3333-4444-555555555555";
-    let err = find_conversation_to_resume(&[Agent::Claude], &accounts, other_id, no_shell)
+    let err = find_conversation_to_resume(&[AgentId::CLAUDE], &accounts, other_id, no_shell)
         .expect_err("nothing found, and the default account unknown");
     assert!(format!("{err:#}").contains("no login shell"));
 
     // A Grok record in another agent's directory layout, written later still.
     let grok = dir.join("grok-home");
-    let grok_account = account("grok", Agent::Grok, grok.clone());
+    let grok_account = account("grok", AgentId::GROK, grok.clone());
     std::fs::create_dir_all(grok.join("sessions/cwd").join(ID)).unwrap();
     let both = [accounts[0].clone(), grok_account];
     assert_eq!(
-        find_conversation_to_resume(&[Agent::Claude, Agent::Grok], &both, ID, shell_env(&dir))
-            .unwrap(),
-        in_account(Agent::Grok, "grok"),
+        find_conversation_to_resume(
+            &[AgentId::CLAUDE, AgentId::GROK],
+            &both,
+            ID,
+            shell_env(&dir)
+        )
+        .unwrap(),
+        in_account(AgentId::GROK, "grok"),
     );
 }
 
@@ -278,7 +289,7 @@ async fn locating_a_conversation_to_resume_names_the_session_that_holds_it() {
         }
         other => panic!("expected conversation_located, got {other:?}"),
     };
-    let mut holder = project_session("holder", Agent::Claude, SessionStatus::Archived);
+    let mut holder = project_session("holder", AgentId::CLAUDE, SessionStatus::Archived);
     holder.agent_session_id = Some(ID.to_string());
     state.store.insert_session(&holder).unwrap();
     let project = holder.project_id.clone().expect("a project session");
@@ -349,7 +360,7 @@ async fn a_reopen_that_fails_to_launch_keeps_the_time_it_was_archived_at() {
         .store
         .insert_session(&Session {
             ended_at: Some(5),
-            ..project_session("s", Agent::Claude, SessionStatus::Archived)
+            ..project_session("s", AgentId::CLAUDE, SessionStatus::Archived)
         })
         .unwrap();
 
@@ -373,7 +384,7 @@ async fn a_reopen_with_another_model_is_checked_and_put_back_when_it_fails() {
         .insert_session(&Session {
             ended_at: Some(5),
             model: Some(Some("sonnet".to_string())),
-            ..project_session("s", Agent::Claude, SessionStatus::Archived)
+            ..project_session("s", AgentId::CLAUDE, SessionStatus::Archived)
         })
         .unwrap();
     let edit = |model: &str, effort: Option<&str>| LaunchEdit {
@@ -432,7 +443,7 @@ async fn a_reopen_with_another_model_is_checked_and_put_back_when_it_fails() {
 const AGENT_ID: &str = "11111111-2222-3333-4444-555555555555";
 
 /// An archived session of `agent` with a conversation, pinned to `account`, archived at 5.
-fn archived_with_conversation(id: &str, agent: Agent, account: &Path) -> Session {
+fn archived_with_conversation(id: &str, agent: AgentId, account: &Path) -> Session {
     Session {
         ended_at: Some(5),
         has_conversation: true,
@@ -457,7 +468,7 @@ async fn a_reopen_is_refused_when_the_conversation_record_is_gone() {
     std::fs::create_dir_all(account.join("projects")).unwrap();
     state
         .store
-        .insert_session(&archived_with_conversation("s", Agent::Claude, &account))
+        .insert_session(&archived_with_conversation("s", AgentId::CLAUDE, &account))
         .unwrap();
 
     let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
@@ -485,10 +496,10 @@ async fn the_check_before_asking_to_resume_refuses_a_conversation_that_is_gone()
     let (state, dir) = console_with_project_and_accounts("coordinator-check-can-resume");
     let account = dir.join("claude-a");
     std::fs::create_dir_all(account.join("projects")).unwrap();
-    let mut owner = archived_with_conversation("owner", Agent::Claude, &account);
+    let mut owner = archived_with_conversation("owner", AgentId::CLAUDE, &account);
     owner.agent_session_id = Some("owner-conversation".to_string());
     state.store.insert_session(&owner).unwrap();
-    let mut held = archived_with_conversation("s", Agent::Claude, &account);
+    let mut held = archived_with_conversation("s", AgentId::CLAUDE, &account);
     held.bound_to = Some("owner".to_string());
     held.role = Role::Worker;
     state.store.insert_session(&held).unwrap();
@@ -516,7 +527,7 @@ async fn a_reopen_of_a_record_that_cannot_be_proven_gone_still_launches() {
     std::fs::create_dir_all(account.join("sessions")).unwrap();
     state
         .store
-        .insert_session(&archived_with_conversation("s", Agent::Grok, &account))
+        .insert_session(&archived_with_conversation("s", AgentId::GROK, &account))
         .unwrap();
 
     let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
@@ -540,7 +551,7 @@ fn insert_hub_and_worker(state: &Arc<AppState>, hub_account: &Path, worker_accou
         Session {
             bound_to: Some("hub".to_string()),
             role: Role::Worker,
-            ..archived_with_conversation("worker", Agent::Claude, worker_account)
+            ..archived_with_conversation("worker", AgentId::CLAUDE, worker_account)
         },
     ] {
         state.store.insert_session(&session).unwrap();
@@ -639,14 +650,17 @@ async fn a_reopen_whose_target_cannot_be_unarchived_leaves_the_owner_archived() 
         .insert_session(&Session {
             bound_to: Some("hub".to_string()),
             role: Role::Worker,
-            ..archived_with_conversation("worker", Agent::Codex, &account)
+            ..archived_with_conversation("worker", AgentId::CODEX, &account)
         })
         .unwrap();
 
     let err = resume_session_with(&state, "worker", None, None, fake_codex(&dir, false))
         .await
         .expect_err("unarchive fails");
-    assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
+    assert_eq!(
+        code_of(&err),
+        crate::protocol::Code::of_provider(crate::providers::codex::UNARCHIVE_FAILED)
+    );
     assert_still_archived_at_5(&state, "hub");
     assert_still_archived_at_5(&state, "worker");
     assert!(archived.exists());
@@ -688,7 +702,7 @@ async fn a_reopen_with_an_unreadable_account_directory_is_left_to_the_launch() {
         .store
         .insert_session(&archived_with_conversation(
             "s",
-            Agent::Claude,
+            AgentId::CLAUDE,
             &dir.join("gone"),
         ))
         .unwrap();
@@ -727,13 +741,16 @@ async fn a_reopen_unarchives_a_codex_rollout_under_the_sessions_own_account() {
     std::fs::write(&archived, "x").unwrap();
     state
         .store
-        .insert_session(&archived_with_conversation("s", Agent::Codex, &account))
+        .insert_session(&archived_with_conversation("s", AgentId::CODEX, &account))
         .unwrap();
 
     let err = resume_session_with(&state, "s", None, None, fake_codex(&dir, false))
         .await
         .expect_err("unarchive fails");
-    assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
+    assert_eq!(
+        code_of(&err),
+        crate::protocol::Code::of_provider(crate::providers::codex::UNARCHIVE_FAILED)
+    );
     let coded = err.downcast_ref::<CodedError>().unwrap();
     assert_eq!(
         coded.params.get("detail").map(String::as_str),
@@ -817,7 +834,7 @@ fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
     for (name, status, owner, expected) in cases {
         let session = Session {
             bound_to: owner.map(str::to_string),
-            ..project_session("s", Agent::Claude, status)
+            ..project_session("s", AgentId::CLAUDE, status)
         };
         state.store.insert_session(&session).unwrap();
         assert_eq!(archived_owners(&state, "s").unwrap(), expected, "{name}");

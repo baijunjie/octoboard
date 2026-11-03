@@ -69,7 +69,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
     if (!statusItem || !ready) return;
     let tickTimer: ReturnType<typeof setTimeout> | undefined;
     const push = () => {
-      const { consoles, projects, sessions, settings, agentAvailability, accountQuotas, queuedAccountSwitches } = store.getState();
+      const { consoles, projects, sessions, settings, agentAvailability, accountQuotas, providers, queuedAccountSwitches } = store.getState();
       const now = Date.now();
       const draft = buildStatusItemMenu(t, {
         selectedSessionId,
@@ -83,7 +83,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         queuedSwitches: queuedAccountSwitches,
         byStatus: settings.sidebar_order_by_status,
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
-        quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas },
+        quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas, providers },
       });
       // Re-armed on every push, so it follows the quotas held now; the one pending is replaced.
       clearTimeout(tickTimer);

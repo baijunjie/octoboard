@@ -16,7 +16,7 @@ use crate::test_support::{
 fn fixture(label: &str) -> (Arc<AppState>, ScratchDir) {
     let (state, dir) = console_with_project_and_accounts(label);
     state.set_agent_availability(
-        Agent::ALL
+        AgentId::ALL
             .into_iter()
             .map(|agent| AgentAvailability {
                 agent,
@@ -28,7 +28,7 @@ fn fixture(label: &str) -> (Arc<AppState>, ScratchDir) {
     (state, dir)
 }
 
-fn default_of(dir: &Path, agent: Agent) -> PathBuf {
+fn default_of(dir: &Path, agent: AgentId) -> PathBuf {
     dir.join(format!("default-{}", agent.label()))
 }
 
@@ -48,7 +48,7 @@ fn create_directory(state: &AppState) -> PathBuf {
 fn run_on(
     state: &Arc<AppState>,
     id: &str,
-    agent: Agent,
+    agent: AgentId,
     account: &str,
 ) -> crate::test_support::StandIn {
     let session = Session {
@@ -85,7 +85,7 @@ async fn judged_at(
 ) -> Result<Option<PathBuf>> {
     let mut account = account(state, "claude-a");
     account.config_dir = config_dir.to_string_lossy().into_owned();
-    let defaults: Vec<_> = Agent::ALL
+    let defaults: Vec<_> = AgentId::ALL
         .into_iter()
         .map(|agent| {
             let dir = state.agent_availability_of(agent).default_account_dir;
@@ -161,10 +161,10 @@ async fn a_missing_directory_is_skipped_and_a_link_is_moved_as_itself() {
 async fn a_running_session_refuses_the_removal_that_moves_the_directory() {
     let (state, _dir) = fixture("account-trash-running");
     let directory = create_directory(&state);
-    let _elsewhere = run_on(&state, "elsewhere", Agent::Codex, "codex-a");
+    let _elsewhere = run_on(&state, "elsewhere", AgentId::CODEX, "codex-a");
     assert!(directory_to_trash(&state, "claude-a").await.is_ok());
 
-    let _here = run_on(&state, "here", Agent::Claude, "claude-a");
+    let _here = run_on(&state, "here", AgentId::CLAUDE, "claude-a");
     let err = remove(&state, true).await.unwrap_err();
     assert_eq!(coded(&err).code, error_code::ACCOUNT_HAS_RUNNING_SESSIONS);
     assert_eq!(coded(&err).params["sessions"], "1");
@@ -224,11 +224,11 @@ async fn what_belongs_to_something_else_is_refused() {
     };
 
     // An agent's default directory: the same, inside it, and a directory holding it.
-    let codex = default_of(&dir, Agent::Codex);
+    let codex = default_of(&dir, AgentId::CODEX);
     std::fs::create_dir_all(codex.join("inside")).unwrap();
     let holding = dir.join("holding");
     std::fs::create_dir_all(holding.join("default")).unwrap();
-    let mut moved = state.agent_availability_of(Agent::Grok);
+    let mut moved = state.agent_availability_of(AgentId::GROK);
     moved.default_account_dir = Some(holding.join("default").to_string_lossy().into());
     state.set_agent_availability(vec![moved]);
     for (path, agent) in [
@@ -412,15 +412,12 @@ async fn the_move_waits_for_the_accounts_sign_in_to_end() {
     let directory = create_directory(&state);
     let bin = dir.join("bin");
     std::fs::create_dir(&bin).unwrap();
-    let env = crate::test_support::fake_agent(
-        &bin,
-        crate::adapter::adapter_for(Agent::Claude).binary(),
-        "sleep 30",
-    );
+    let env =
+        crate::test_support::fake_agent(&bin, AgentId::CLAUDE.descriptor().binary, "sleep 30");
     crate::accounts::login::AccountLogins::start_for_test(
         &state,
         crate::accounts::login::Start {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: Some("claude-a".to_string()),
             config_dir: Some(directory.to_string_lossy().into_owned()),
             resolved_dir: Some(directory.to_string_lossy().into_owned()),
@@ -442,15 +439,12 @@ async fn a_sign_in_that_does_not_end_in_time_refuses_the_move() {
     let directory = create_directory(&state);
     let bin = dir.join("bin");
     std::fs::create_dir(&bin).unwrap();
-    let env = crate::test_support::fake_agent(
-        &bin,
-        crate::adapter::adapter_for(Agent::Claude).binary(),
-        "sleep 30",
-    );
+    let env =
+        crate::test_support::fake_agent(&bin, AgentId::CLAUDE.descriptor().binary, "sleep 30");
     crate::accounts::login::AccountLogins::start_for_test(
         &state,
         crate::accounts::login::Start {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: Some("claude-a".to_string()),
             config_dir: Some(directory.to_string_lossy().into_owned()),
             resolved_dir: Some(directory.to_string_lossy().into_owned()),
@@ -480,13 +474,10 @@ fn sign_in_start(
 ) {
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
-    let env = crate::test_support::fake_agent(
-        &bin,
-        crate::adapter::adapter_for(Agent::Claude).binary(),
-        "sleep 30",
-    );
+    let env =
+        crate::test_support::fake_agent(&bin, AgentId::CLAUDE.descriptor().binary, "sleep 30");
     let start = crate::accounts::login::Start {
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         account: Some("claude-a".to_string()),
         config_dir: Some(directory.to_string_lossy().into_owned()),
         resolved_dir: Some(directory.to_string_lossy().into_owned()),
@@ -516,7 +507,7 @@ async fn no_sign_in_starts_while_the_account_is_being_removed() {
     drop(lock);
     let ended = state
         .account_logins
-        .end(Agent::Claude, "claude-a", PATIENCE)
+        .end(AgentId::CLAUDE, "claude-a", PATIENCE)
         .await;
     assert!(ended);
 
@@ -564,7 +555,7 @@ async fn wait_until_held(directory: &Path) {
 async fn the_removal_marks_the_account_until_it_ends() {
     let (state, dir) = fixture("account-trash-marked");
     let directory = create_directory(&state);
-    let agent = crate::accounts::shared_config::lock_agent(&state, Agent::Claude).await;
+    let agent = crate::accounts::shared_config::lock_agent(&state, AgentId::CLAUDE).await;
     let removal = {
         let state = state.clone();
         tokio::spawn(async move { remove(&state, true).await })
@@ -575,7 +566,7 @@ async fn the_removal_marks_the_account_until_it_ends() {
         crate::accounts::login::AccountLogins::start_for_test(&state, start, env, dir.join("run"))
             .unwrap_err();
     assert_eq!(coded(&err).code, error_code::ACCOUNT_BEING_REMOVED);
-    let _here = run_on(&state, "here", Agent::Claude, "claude-a");
+    let _here = run_on(&state, "here", AgentId::CLAUDE, "claude-a");
     drop(agent);
     let err = removal.await.unwrap().unwrap_err();
     assert_eq!(coded(&err).code, error_code::ACCOUNT_HAS_RUNNING_SESSIONS);
@@ -588,7 +579,7 @@ async fn the_removal_marks_the_account_until_it_ends() {
 async fn a_removal_that_waits_for_the_agents_lock_judges_again() {
     let (state, _dir) = fixture("account-trash-lock-rejudged");
     let directory = create_directory(&state);
-    let agent = crate::accounts::shared_config::lock_agent(&state, Agent::Claude).await;
+    let agent = crate::accounts::shared_config::lock_agent(&state, AgentId::CLAUDE).await;
     let removal = {
         let state = state.clone();
         tokio::spawn(async move { move_directory(&state, "claude-a").await })
@@ -614,15 +605,18 @@ async fn a_switch_recording_its_target_under_the_copy_lock_refuses_removal() {
         .store
         .insert_session(&project_session(
             "switching",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Interrupted,
         ))
         .unwrap();
     let claim = state.begin_account_switch("switching", false).unwrap();
-    let copying =
-        crate::accounts::shared_config::before_switch_copy(&state, Agent::Claude, Some("claude-a"))
-            .await
-            .unwrap();
+    let copying = crate::accounts::shared_config::before_switch_copy(
+        &state,
+        AgentId::CLAUDE,
+        Some("claude-a"),
+    )
+    .await
+    .unwrap();
     let removal = {
         let state = state.clone();
         tokio::spawn(async move { remove(&state, true).await })
@@ -664,10 +658,13 @@ async fn the_switch_copy_guard_refuses_an_account_held_by_removal() {
     assert!(state.sharing_locked("claude-a").is_some());
     assert!(!removal.is_finished());
 
-    let err =
-        crate::accounts::shared_config::before_switch_copy(&state, Agent::Claude, Some("claude-a"))
-            .await
-            .unwrap_err();
+    let err = crate::accounts::shared_config::before_switch_copy(
+        &state,
+        AgentId::CLAUDE,
+        Some("claude-a"),
+    )
+    .await
+    .unwrap_err();
     assert_eq!(coded(&err).code, error_code::ACCOUNT_SHARING_IN_PROGRESS);
     assert_eq!(coded(&err).params["account"], "claude-a");
     assert!(directory.join("settings.json").exists());
@@ -749,7 +746,7 @@ async fn a_listing_waiting_for_the_move_runs_nothing_under_the_moved_directory()
     std::fs::create_dir_all(&bin).unwrap();
     let env = crate::test_support::fake_agent(
         &bin,
-        crate::adapter::adapter_for(Agent::Codex).binary(),
+        AgentId::CODEX.descriptor().binary,
         &format!("touch '{}'", ran.display()),
     );
     let read = crate::accounts::shared_config::reading_account(Some(&directory)).unwrap();
@@ -762,7 +759,7 @@ async fn a_listing_waiting_for_the_move_runs_nothing_under_the_moved_directory()
         let directory = directory.clone();
         tokio::task::spawn_blocking(move || {
             crate::agents::models::list(
-                Agent::Codex,
+                AgentId::CODEX,
                 &env,
                 Some(&directory),
                 Duration::from_secs(10),
@@ -809,7 +806,7 @@ async fn an_inspection_tells_a_directory_that_may_go_from_one_that_is_missing() 
     assert_eq!(inspected(&state).await, AccountTrashOutcome::Missing);
     let directory = create_directory(&state);
     assert_eq!(inspected(&state).await, AccountTrashOutcome::Ok);
-    let _here = run_on(&state, "here", Agent::Claude, "claude-a");
+    let _here = run_on(&state, "here", AgentId::CLAUDE, "claude-a");
     assert_eq!(inspected(&state).await, AccountTrashOutcome::Ok);
     assert!(directory.join("settings.json").exists());
     assert!(state.store.get_account("claude-a").unwrap().is_some());
@@ -855,7 +852,7 @@ async fn an_inspection_answers_each_refusal_as_data() {
 
     let (state, dir) = fixture("account-trash-inspect-default");
     let mut mine = account(&state, "claude-a");
-    mine.config_dir = default_of(&dir, Agent::Codex)
+    mine.config_dir = default_of(&dir, AgentId::CODEX)
         .to_string_lossy()
         .into_owned();
     std::fs::create_dir_all(&mine.config_dir).unwrap();

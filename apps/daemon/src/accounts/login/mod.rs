@@ -2,9 +2,9 @@
 //! configuration directory: no terminal and no window. Octoboard never reads or writes the
 //! credential; the CLI does, and the daemon only starts it, relays what it says the user has to do
 //! (the page to authorize on, and for a device-code flow the code) and learns how it ended. How
-//! each CLI is driven is `flows.rs`'s, measured in `docs/agent-cli-reference.md` ("Signing in a
-//! config directory without a terminal"); this module keeps the logins running and decides how
-//! each one ends.
+//! each CLI is driven is its provider's ([`flows::LoginFlow`]), measured in
+//! `docs/agent-cli-reference.md` ("Signing in a config directory without a terminal"); this module
+//! keeps the logins running and decides how each one ends.
 //!
 //! Logins are runtime state: held in [`AccountLogins`], one per account, never stored. Every change
 //! is broadcast as `account_login_updated`, and the ones still running replay in a `snapshot`. A
@@ -14,7 +14,7 @@
 //! on, or cut short by the daemon's exit) kills the CLI's whole session; a CLI that exits by
 //! itself is not followed into whatever it forked.
 
-mod flows;
+pub(crate) mod flows;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -26,9 +26,10 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use crate::accounts::quotas;
+use crate::adapter::provider;
 use crate::protocol::{
-    error_code, login_failure_code, AccountLogin, Agent, CodedError, Event, LoginFailure,
-    LoginStatus,
+    error_code, login_failure_code, AccountLogin, AgentId, Code, CodedError, Event, LoginFailure,
+    LoginStatus, ProviderOperation,
 };
 use crate::state::AppState;
 use flows::{Flow, Outcome};
@@ -41,7 +42,7 @@ const LOGIN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 /// Which login: the agent and the account's id, `None` for the default account.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Key {
-    agent: Agent,
+    agent: AgentId,
     account: Option<String>,
 }
 
@@ -96,7 +97,7 @@ impl Drop for Ending {
 
 /// What a login needs to know about its account.
 pub struct Start {
-    pub agent: Agent,
+    pub agent: AgentId,
     /// The account's id; `None` for the default account.
     pub account: Option<String>,
     /// The account's directory, exported to the CLI under the agent's own variable; `None` for the
@@ -117,7 +118,7 @@ impl AccountLogins {
             .collect();
         logins.sort_by_key(|login| {
             (
-                Agent::ALL.iter().position(|agent| *agent == login.agent),
+                AgentId::ALL.iter().position(|agent| *agent == login.agent),
                 login.account.clone(),
             )
         });
@@ -233,6 +234,11 @@ impl AccountLogins {
             agent: start.agent,
             account: start.account.clone(),
         };
+        let login = CodedError::require_offered(
+            start.agent,
+            ProviderOperation::SignIn,
+            provider(start.agent).accounts().and_then(|ops| ops.login()),
+        )?;
         let logins = &state.account_logins;
         let mut running = logins.lock();
         // Judged under the logins' lock, which `end` takes as well: an account whose removal is
@@ -255,16 +261,23 @@ impl AccountLogins {
                 &[("agent", start.agent.label())],
             ));
         }
-        // Codex's browser flow listens on a fixed local port, which two logins cannot share.
-        if start.agent == Agent::Codex && running.keys().any(|other| other.agent == Agent::Codex) {
+        // A sign-in that listens on a fixed local port is one two logins cannot share.
+        let busy = login
+            .busy_code()
+            .filter(|_| running.keys().any(|other| other.agent == start.agent));
+        if let Some(busy) = busy {
+            let label = start.agent.label();
             return Err(CodedError::raised(
-                error_code::LOGIN_CODEX_BUSY,
-                "Another Codex account is being signed in; Codex signs in one account at a time.",
+                Code::of_provider(busy),
+                format!(
+                    "Another {label} account is being signed in; {label} signs in one account at a time."
+                ),
                 &[],
             ));
         }
         let flow = Flow::new(
             start.agent,
+            login,
             shell_env,
             start.config_dir.map(PathBuf::from),
             start.resolved_dir.map(PathBuf::from),
@@ -317,7 +330,7 @@ impl AccountLogins {
     /// Asks the login of an account to end. It is announced as `cancelled` once the CLI has gone.
     /// Looks at nothing but the logins running, so that a login whose account has just gone can
     /// still be cancelled by its key.
-    pub fn cancel(&self, agent: Agent, account: Option<String>) -> Result<()> {
+    pub fn cancel(&self, agent: AgentId, account: Option<String>) -> Result<()> {
         let running = self.lock();
         let Some(entry) = running.get(&Key { agent, account }) else {
             return Err(CodedError::raised(
@@ -332,7 +345,7 @@ impl AccountLogins {
 
     /// Ends the login of an account and waits, for at most `within`, until it is gone and the CLI
     /// with it: `true` where none runs for the account any more, including where none ran.
-    pub async fn end(&self, agent: Agent, account: &str, within: Duration) -> bool {
+    pub async fn end(&self, agent: AgentId, account: &str, within: Duration) -> bool {
         if self.cancel(agent, Some(account.to_string())).is_err() {
             return true;
         }

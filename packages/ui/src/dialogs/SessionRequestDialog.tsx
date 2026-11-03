@@ -2,7 +2,7 @@ import React, { useId, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { incompleteAccount } from "../accounts/choiceEntries";
-import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
+import { defaultAccountName } from "../agents/agents";
 import { CodedError } from "../errors/codedError";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
@@ -14,6 +14,7 @@ import { type Account, type Agent, type SessionRequestAction, type Settings } fr
 import { CODE } from "../errors/codes";
 import { sessionAccount, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
+import { ProviderName } from "../components/text/ProviderName";
 import { raiseError } from "../components/alerts/raiseError";
 import { displayWirePath } from "../format/wirePath";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
@@ -148,7 +149,7 @@ function SessionRequestSentence({ request, incomplete }: { request: SessionReque
         : <Message id="dialog.sessionRequest.requester.console" params={{ session }} />;
     }
   }
-  const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[request.agent]}</InlineReference>;
+  const agent = <ProviderName agent={request.agent} />;
   const params = { requester, console: console_, agent };
   if (request.action === "resume_record") {
     const account = <>{recordAccount(t, accounts, defaultNames, request.agent, request.account)}{incompleteMark}</>;

@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Account, AccountQuota, AgentAvailability } from "../../protocol";
+import { isolate } from "../../i18n/isolate";
 import { accountQuotas, availability } from "./agentAccountsSectionTestState";
 import { mount, rowOf } from "./agentAccountsSectionTestSupport";
 
@@ -29,7 +30,7 @@ describe("the accounts table", () => {
   it("names its columns once, in a table of the agent's own, one row per account with the default account first", () => {
     const { container } = mount("Codex");
     const table = container.querySelector("table")!;
-    expect(table.getAttribute("aria-label")).toBe("Codex accounts");
+    expect(table.getAttribute("aria-label")).toBe(`${isolate("Codex")} accounts`);
     expect([...table.querySelectorAll("thead th")].map((th) => th.textContent)).toEqual(["", "Account", "Usage", "Status", "Disable", "Actions"]);
     expect([...table.querySelectorAll("tbody tr")].map((row) => row.getAttribute("data-account-row"))).toEqual(["default:codex", "codex-work"]);
     for (const row of table.querySelectorAll("tbody tr")) {
@@ -69,14 +70,14 @@ describe("the accounts table", () => {
     expect(name("default:claude").querySelector("div.min-w-0.text-app-muted")).toBeNull();
     const usage = (id: string) => rowOf(container, id).querySelectorAll("td")[1]!;
     expect(usage("claude-work").querySelector(".quota-meter--used-up")).not.toBeNull();
-    expect(usage("claude-work").querySelector(".quota-meter--claude")).toBeNull();
+    expect(usage("claude-work").querySelector(".quota-meter--provider")).toBeNull();
     const badge = [...usage("claude-work").querySelectorAll('[aria-hidden="true"]')].find((node) => node.textContent === "Limit reached");
     expect(badge).toBeDefined();
     // The hidden badge leaves no separator of its own behind for assistive technology.
     expect([...usage("claude-work").querySelectorAll(".sr-only")].map((node) => node.textContent?.trim())).not.toContain(",");
     expect(usage("claude-work").querySelector(".sr-only")?.textContent).toContain("Reached session limit");
     expect(usage("default:claude").textContent).not.toContain("Limit reached");
-    expect(usage("default:claude").querySelector(".quota-meter--claude")).not.toBeNull();
+    expect(usage("default:claude").querySelector(".quota-meter--provider")).not.toBeNull();
     expect(usage("default:claude").querySelector(".quota-meter--used-up")).toBeNull();
   });
 

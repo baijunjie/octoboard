@@ -44,6 +44,7 @@ export const UI_DISK_TESTS = [
 export const UI_DISK_TESTS_COVERED = [
   "src/appConfig.test.ts",
   "src/daemonCodes.test.ts",
+  "src/fixtures/fixtureProviders.test.ts",
   "src/i18n/bundleLocalizations.test.ts",
   "scripts/generate-licenses.test.mjs",
 ];
@@ -79,8 +80,8 @@ export const CRATE_WIDE_TESTS = {
     { filter: "protocol::", test: "committed_bindings_are_current", why: "the wire-type contract (`protocol/bindings.rs`) covers every type deriving `TS`", covers: [
       "src/protocol/accounts.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/configuration.rs", "src/protocol/events.rs",
       "src/protocol/git_workflow.rs", "src/protocol/history.rs", "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/processes.rs",
-      "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs", "src/protocol/session_branches.rs", "src/protocol/settings.rs",
-      "src/protocol/terminal.rs",
+      "src/protocol/providers.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs", "src/protocol/session_branches.rs", "src/protocol/settings.rs",
+      "src/protocol/terminal.rs", "src/providers/mod.rs",
     ] },
     { filter: "records::history::", test: "every_opening_octoboard_writes_with_is_matched", why: "scans every source file for `*_OPENING` constants", covers: ["src/records/history.rs"] },
     { filter: "layering_tests::", test: "every_top_level_module_depends_only_downward_or_as_listed", why: "scans every source file's `crate::` paths against the daemon's layer order", covers: ["src/layering_tests/scan.rs"] },

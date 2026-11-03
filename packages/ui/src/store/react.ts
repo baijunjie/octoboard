@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from "react";
 import { useStore } from "zustand/react";
 
+import type { ProviderInfo } from "../protocol";
 import { sameValue } from "../values/sameValue";
 import type { Daemon } from "./connection";
 import { createStateStore, type State } from "./state";
@@ -48,4 +49,9 @@ function keepingSameValue<T>(): (next: T) => T {
 export function useDaemonStoreEqual<T>(selector: (state: State) => T): T {
   const [same] = useState(keepingSameValue<T>);
   return useDaemonStore((state) => same(selector(state)));
+}
+
+/** The providers the daemon has registered, in its registry order; empty until the first snapshot. */
+export function useProviders(): ProviderInfo[] {
+  return useDaemonStore((state) => state.providers);
 }

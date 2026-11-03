@@ -9,20 +9,16 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::adapter::files::LARGE_FILE_LIMIT;
+use crate::adapter::provider;
 use crate::hostfs::replace::{replace_beside, Permissions};
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 
 /// The registries `agent` keeps, by the shared directory item they sit in and their path inside
 /// it.
-pub(super) fn registries(agent: Agent) -> &'static [(&'static str, &'static str)] {
-    match agent {
-        Agent::Claude => &[
-            ("plugins", "installed_plugins.json"),
-            ("plugins", "known_marketplaces.json"),
-        ],
-        Agent::Grok => &[("installed-plugins", "registry.json")],
-        Agent::Codex => &[],
-    }
+pub(super) fn registries(agent: AgentId) -> &'static [(&'static str, &'static str)] {
+    provider(agent)
+        .accounts()
+        .map_or(&[], |ops| ops.plugin_registries())
 }
 
 /// Rewrites, in `registry`, every string that is one of `from` or lies below it to the same path

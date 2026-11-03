@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::branch_origin::transfer::BranchTransfer;
 use crate::coordinator::open::OpenRequest;
-use crate::protocol::{Agent, Event, Session, SessionKind, SessionRequestAction};
+use crate::protocol::{AgentId, Event, Session, SessionKind, SessionRequestAction};
 use crate::time::now_millis;
 
 use super::outcome::approval_wording;
@@ -67,7 +67,7 @@ pub(super) struct Request {
     /// The agent the session would run, settled when the request was made; for a resume, the
     /// agent of the target or of the record; for a switch, the target's, and for a handoff, the
     /// receiving agent.
-    pub(super) agent: Agent,
+    pub(super) agent: AgentId,
     /// Where the session is, or would be.
     pub(super) console: String,
     pub(super) project: Option<String>,
@@ -80,7 +80,7 @@ pub(super) struct Request {
 impl Request {
     pub(super) fn new(
         caller: &Session,
-        agent: Agent,
+        agent: AgentId,
         console: String,
         project: Option<String>,
         ask: Ask,

@@ -141,6 +141,15 @@ region lands focus where `F6` would (see "Moving focus between regions with F6" 
 
 The error alert announces the failure it shows; nothing else announces that failure again.
 
+A failure the daemon answers with carries a code, which the window words the failure by. A code raised whichever agent
+the failure concerns is a plain name, such as `unknown_account`; a code only one agent's provider raises is named
+`provider.<agent>.<code>`, such as `provider.grok.home_not_initialized` or `provider.codex.login_busy`, and is worded in
+that agent's own terms. A request for something the agent's provider does not offer is refused with
+`provider_unsupported`, naming the agent and the operation — `sign_in` (logging an account in from Octoboard), `kick`
+(starting a usage window), `reset_credit` (redeeming a usage limit reset) or `config_sharing` (sharing the default
+account's configuration). The window does not offer such an action for such an agent; where the refusal is shown
+anyway, its sentence says what the agent does not offer, with no remedy and no request to report an issue.
+
 ## The failure modal
 
 A state in which a dialog's action cannot succeed is prevented where it can be — an entry that would open such a
@@ -589,7 +598,7 @@ acknowledgement button, instead of the step naming where to go:
 | Failure | Button | What it opens |
 |---|---|---|
 | The agent is not added (`agent_not_added`) | **Add agent** | Settings on Agent accounts, with the Add agent dialog in front (see "Adding an agent" in `docs/product/agent-accounts.md`) |
-| An account problem (`unknown_account`, `grok_home_not_initialized`) | **Manage accounts** | Settings on Agent accounts |
+| An account problem (`unknown_account`, `provider.grok.home_not_initialized`) | **Manage accounts** | Settings on Agent accounts |
 | An account that is turned off (`account_disabled`) | **Manage accounts** | Settings on Agent accounts, where it can be turned back on (see "Turning an account off" in `docs/product/agent-accounts.md`) |
 | An account that is not logged in (`account_not_signed_in`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to (see "An account that is not logged in" in `docs/product/account-quotas.md`) |
 | A usage limit reset refused because the account is not logged in (`reset_credit_not_signed_in`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to before the reset is redeemed again (see "How a redeem ends" in `docs/product/usage-limit-resets.md`) |

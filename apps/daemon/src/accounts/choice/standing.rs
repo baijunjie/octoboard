@@ -7,12 +7,12 @@ use anyhow::Result;
 
 use super::account_of_agent;
 use crate::accounts::quotas;
-use crate::protocol::{Agent, Availability};
+use crate::protocol::{AgentId, Availability};
 use crate::state::AppState;
 use crate::time::now_millis;
 
 /// Whether `agent` is not known to be missing; while availability is still undetermined it is kept.
-pub(crate) fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
+pub(crate) fn agent_is_available(state: &Arc<AppState>, agent: AgentId) -> bool {
     state.agent_availability_of(agent).availability != Availability::Unavailable
 }
 
@@ -24,7 +24,7 @@ pub(crate) fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
 /// [`refuse_if_account_quota_exhausted`]: super::refusals::refuse_if_account_quota_exhausted
 pub(super) fn used_up_quota(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
     config_dir: Option<&str>,
     now: i64,
@@ -40,7 +40,7 @@ pub(super) fn used_up_quota(
 ///
 /// [`refuse_if_agent_unavailable`]: super::refusals::refuse_if_agent_unavailable
 /// [`refuse_unless_agent_added`]: super::refusals::refuse_unless_agent_added
-pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: Agent) -> Result<bool> {
+pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: AgentId) -> Result<bool> {
     Ok(agent_is_available(state, agent) && state.store.agent_is_added(agent)?)
 }
 
@@ -57,7 +57,7 @@ pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: Agent) -> Result<bool
 /// [`checked_account_reference`]: super::checked_account_reference
 pub(crate) fn account_can_open(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
 ) -> Result<bool> {
     Ok(blocked_by(state, agent, account_id)?.is_none())
@@ -82,7 +82,7 @@ pub(crate) enum CannotOpen {
 /// whether one is.
 pub(crate) fn cannot_open(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
 ) -> Result<Option<CannotOpen>> {
     if let Some(blocked) = blocked_by(state, agent, account_id)? {
@@ -103,7 +103,7 @@ pub(crate) fn cannot_open(
 /// [`refuse_if_account_not_signed_in`]: super::refusals::refuse_if_account_not_signed_in
 pub(super) fn blocked_by(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
 ) -> Result<Option<CannotOpen>> {
     if state.store.account_disabled(agent, account_id)? {
@@ -133,7 +133,7 @@ pub(super) fn blocked_by(
 /// accounts.
 pub(super) fn candidate_dir(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
 ) -> Result<Option<Option<String>>> {
     Ok(match account_id {

@@ -1,12 +1,14 @@
 import { ArrowLeft, ArrowRight, Trash2 } from "lucide-react";
 import React, { useMemo } from "react";
 
-import { AGENT_LABEL } from "../../agents/agents";
+import { providerLabel } from "../../agents/providers";
 import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import type { Translate } from "../../i18n/catalog";
+import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
+import { useProviders } from "../../store";
 
 /** What an agent's menu holds, in its tab's context menu and in the strip's more menu alike: the ways to move the
  * agent's tab a step along (the keyboard's counterpart to dragging it; "earlier" and "later" hold in either reading
@@ -31,13 +33,14 @@ export function AgentTabMenu({ agent, target, index, count, onMove, onRemove }: 
   onRemove: () => void;
 }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   // A new object when the tab's element changes, which is what has the menu listen to the new element.
   const targetRef = useMemo(() => ({ current: target }), [target]);
   return (
     <ActionMenu
       contextOnly
       contextTargetRef={targetRef}
-      label={t("settings.accounts.agentActions", { agent: AGENT_LABEL[agent] })}
+      label={t("settings.accounts.agentActions", { agent: isolate(providerLabel(t, providers, agent)) })}
       className="hidden"
       items={agentMenu(t, index, count, onMove, onRemove)}
     />
@@ -55,5 +58,6 @@ export function AgentTabActions({ agent, index, count, onMove, onRemove }: {
   onRemove: () => void;
 }): React.ReactElement {
   const t = useT();
-  return <ActionMenu label={t("settings.accounts.agentActions", { agent: AGENT_LABEL[agent] })} items={agentMenu(t, index, count, onMove, onRemove)} />;
+  const providers = useProviders();
+  return <ActionMenu label={t("settings.accounts.agentActions", { agent: isolate(providerLabel(t, providers, agent)) })} items={agentMenu(t, index, count, onMove, onRemove)} />;
 }

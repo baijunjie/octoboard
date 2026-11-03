@@ -45,7 +45,7 @@ mod tests {
     use crate::agents::models::Listing;
     use crate::mcp::dispatch::call;
     use crate::mcp::test_support::{account, arguments, peer_state};
-    use crate::protocol::{Agent, AgentModel, ModelsUnavailable};
+    use crate::protocol::{AgentId, AgentModel, ModelsUnavailable};
 
     async fn list(state: &Arc<AppState>, caller: &str, input: Value) -> Result<Value> {
         call(state, caller, "list_agent_models", &arguments(input)).await
@@ -60,7 +60,7 @@ mod tests {
             .store
             .insert_account(&account(
                 "claude-work",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "Work",
                 "/tmp/claude-work",
             ))
@@ -96,7 +96,7 @@ mod tests {
     /// each model's version and availability, and the account's Claude Code configuration wins.
     #[tokio::test]
     async fn the_default_model_and_what_each_model_is_are_listed() {
-        use crate::agents::models::claude_fixtures::{write_claude_account, CLAUDE_CATALOGUE};
+        use crate::adapter::claude::models::fixtures::{write_claude_account, CLAUDE_CATALOGUE};
         let (state, dir) = peer_state("list-agent-models-default");
         let pinned = dir.join("pinned");
         std::fs::create_dir_all(&pinned).unwrap();
@@ -110,7 +110,7 @@ mod tests {
             .store
             .insert_account(&account(
                 "claude-work",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "Work",
                 pinned.to_string_lossy(),
             ))
@@ -141,12 +141,12 @@ mod tests {
         for (id, name) in [("codex-ok", "Ok"), ("codex-down", "Down")] {
             state
                 .store
-                .insert_account(&account(id, Agent::Codex, name, format!("/tmp/{id}")))
+                .insert_account(&account(id, AgentId::CODEX, name, format!("/tmp/{id}")))
                 .unwrap();
         }
         let held = |id: &str, listing: Listing| {
             state.agent_models.get_or_load(
-                Agent::Codex,
+                AgentId::CODEX,
                 Some(std::path::Path::new(&format!("/tmp/{id}"))),
                 || listing,
             );
@@ -212,7 +212,7 @@ mod tests {
             .store
             .insert_account(&account(
                 "codex-work",
-                Agent::Codex,
+                AgentId::CODEX,
                 "Work",
                 "/tmp/codex-work",
             ))

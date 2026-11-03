@@ -169,7 +169,7 @@ mod tests {
         sessions_as_stored, shared_console_state, Launches, Started, CONVERSATION,
     };
     use crate::protocol::{
-        Agent, Event, SessionRequestAction, SessionStatus, DEFAULT_ACCOUNT_NAME,
+        AgentId, Event, SessionRequestAction, SessionStatus, DEFAULT_ACCOUNT_NAME,
     };
     use crate::session_tools::catalogue::qualified_tool_name;
     use crate::test_support::{heard_after_marker, running, stand_in_launch, ScratchDir, StandIn};
@@ -187,7 +187,7 @@ mod tests {
         session: &str,
     ) -> impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static {
         let snapshot = prepare_relaunch(state, dir, session, &["project-1"]);
-        for (id, agent) in [("claude-a", Agent::Claude), ("codex-a", Agent::Codex)] {
+        for (id, agent) in [("claude-a", AgentId::CLAUDE), ("codex-a", AgentId::CODEX)] {
             state
                 .store
                 .insert_account(&account(
@@ -291,7 +291,7 @@ mod tests {
         assert_eq!(launches.lock().unwrap()[0].2, None);
         assert!(result["note"].as_str().unwrap().contains(&format!(
             "send it the next step with `{}`",
-            qualified_tool_name(Agent::Claude, "instruct_session")
+            qualified_tool_name(AgentId::CLAUDE, "instruct_session")
         )));
     }
 
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(launches.lock().unwrap()[0].2, None);
         assert!(result["note"].as_str().unwrap().contains(&format!(
             "send it the next step with `{}`",
-            qualified_tool_name(Agent::Claude, "instruct_session")
+            qualified_tool_name(AgentId::CLAUDE, "instruct_session")
         )));
     }
 
@@ -491,7 +491,7 @@ mod tests {
             .store
             .insert_account(&account(
                 "claude-b",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "claude-b name",
                 dir.join("claude-b").to_string_lossy().into_owned(),
             ))
@@ -534,7 +534,7 @@ mod tests {
         assert_eq!(action, SessionRequestAction::Switch);
         assert_eq!(target.as_deref(), Some("of-a"));
         assert_eq!(account.as_deref(), Some("claude-a"));
-        assert_eq!(agent, Agent::Claude);
+        assert_eq!(agent, AgentId::CLAUDE);
         assert!(state.session_requests.is_waiting_for("a"));
         assert!(
             launches.lock().unwrap().is_empty(),

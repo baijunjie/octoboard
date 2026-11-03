@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::adapter::files::{
     is_agent_config_dir, read_bounded_text, read_regular_text, SMALL_FILE_LIMIT,
 };
-use crate::agents::layout;
+use crate::providers::codex;
 use crate::records::line_file::JSON_FILE_LIMIT;
 
 /// The `notice.model_migrations` table for the models cache in `codex_home`: every model that has
@@ -17,7 +17,7 @@ use crate::records::line_file::JSON_FILE_LIMIT;
 /// launch.
 pub(super) fn model_migrations(codex_home: &Path) -> Option<String> {
     let text = read_regular_text(
-        &codex_home.join(layout::CODEX_MODELS_CACHE),
+        &codex_home.join(codex::CODEX_MODELS_CACHE),
         JSON_FILE_LIMIT as usize,
     )
     .ok()?;
@@ -52,10 +52,8 @@ pub(super) enum ConfigFile {
 }
 
 pub(super) fn read_config(codex_home: &Path) -> ConfigFile {
-    let text = match read_regular_text(
-        &codex_home.join(layout::CODEX_CONFIG_FILE),
-        SMALL_FILE_LIMIT,
-    ) {
+    let text = match read_regular_text(&codex_home.join(codex::CODEX_CONFIG_FILE), SMALL_FILE_LIMIT)
+    {
         Ok(text) => text,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return ConfigFile::Absent,
         Err(_) => return ConfigFile::Unreadable,

@@ -1,6 +1,6 @@
 use super::*;
 use crate::mcp::test_support::{console, console_session, peer_state, project_session};
-use crate::protocol::{Agent, Session, SessionStatus};
+use crate::protocol::{AgentId, Session, SessionStatus};
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -11,7 +11,7 @@ fn a_description_lists_the_background_tasks_of_an_idle_session_only() {
     let (state, _dir) = crate::test_support::app_state("mcp-exec-describe-background");
     state.store.insert_console(&console()).unwrap();
     let caller = console_session("hub");
-    let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
+    let session = crate::test_support::project_session("s", AgentId::CLAUDE, SessionStatus::Idle);
     let describe = |session: &Session| {
         describe_session(&state, session, &caller, &HashMap::new(), &HashMap::new()).unwrap()
             ["background_tasks"]
@@ -44,7 +44,7 @@ fn a_description_carries_the_sessions_context() {
     let (state, _dir) = crate::test_support::app_state("mcp-exec-describe-context");
     state.store.insert_console(&console()).unwrap();
     let caller = console_session("hub");
-    let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
+    let session = crate::test_support::project_session("s", AgentId::CLAUDE, SessionStatus::Idle);
     assert!(
         describe_session(&state, &session, &caller, &HashMap::new(), &HashMap::new()).unwrap()
             ["context"]

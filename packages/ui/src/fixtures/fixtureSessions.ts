@@ -1,6 +1,7 @@
 // What the fixture daemon answers for the sessions: opening, resuming, archiving and deleting them, handing one off,
 // switching its account or model, and the small changes to one (pin, lock, colour, title).
-import { AGENT_LABEL, isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
+import { isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
+import { servedLabel } from "./fixtureProviders";
 import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { applyDaemonEvent } from "../store";
@@ -15,8 +16,8 @@ const PROCESS_ASK_AFTER_MS = 30_000;
 /** The refusal to open a session, or hand one off, on an agent the user has not added. */
 const agentNotAdded = (agent: Agent) => ({
   code: "agent_not_added",
-  params: { agent: AGENT_LABEL[agent] },
-  message: `${AGENT_LABEL[agent]} is not added. Add it in Settings → Agent accounts to open a session with it.`,
+  params: { agent: servedLabel(agent) },
+  message: `${servedLabel(agent)} is not added. Add it in Settings → Agent accounts to open a session with it.`,
 });
 
 /** The replies about sessions. */
@@ -167,8 +168,8 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       if (session.status === "working" || session.status === "starting") return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
       refuseLocked([session]);
       refuseIfSharingChanges(session.account_id);
-      if (body.agent === session.agent) return fail({ code: "handoff_to_same_agent", params: { session: session.id, agent: AGENT_LABEL[session.agent] }, message: "The session already runs on that agent" });
-      if (isAgentUnavailable(current.agentAvailability, body.agent)) return fail({ code: "agent_not_available", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not available` });
+      if (body.agent === session.agent) return fail({ code: "handoff_to_same_agent", params: { session: session.id, agent: servedLabel(session.agent) }, message: "The session already runs on that agent" });
+      if (isAgentUnavailable(current.agentAvailability, body.agent)) return fail({ code: "agent_not_available", params: { agent: servedLabel(body.agent) }, message: `${servedLabel(body.agent)} is not available` });
       if (!isAgentAdded(current.settings.added_agents, body.agent)) return fail(agentNotAdded(body.agent));
       if (body.account != null && !current.settings.accounts.some((account) => account.id === body.account && account.agent === body.agent)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
       const owner = current.consoles.get(session.console_id);

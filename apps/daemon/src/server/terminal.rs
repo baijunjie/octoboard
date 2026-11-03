@@ -369,7 +369,7 @@ mod tests {
     use futures_util::{SinkExt, StreamExt};
 
     use super::*;
-    use crate::protocol::Agent;
+    use crate::protocol::AgentId;
     use crate::server::router;
     use crate::server::test_support::{serve_with_output_dir, websocket_frames};
     use crate::test_support::{app_state, PATIENCE, TEST_KEY};
@@ -482,7 +482,7 @@ mod tests {
         let (state, dir) = app_state("server-input-echo");
         let live = crate::test_support::fake_live_session(
             "echo",
-            Agent::Claude,
+            AgentId::CLAUDE,
             80,
             24,
             "stty raw -echo; printf READY; cat",
@@ -539,7 +539,7 @@ mod tests {
         let (state, dir) = app_state("server-input-held");
         let live = crate::test_support::fake_live_session(
             "held",
-            Agent::Claude,
+            AgentId::CLAUDE,
             80,
             24,
             "stty raw -echo; printf READY; cat",
@@ -628,7 +628,7 @@ mod tests {
         let (state, dir) = app_state("server-frozen-output");
         let live = crate::test_support::fake_live_session(
             "frozen",
-            crate::protocol::Agent::Grok,
+            crate::protocol::AgentId::GROK,
             80,
             24,
             "sleep 30",

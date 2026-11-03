@@ -11,8 +11,10 @@ import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
-import { buttons } from "../test/dom";
+import { buttons, withoutIsolates } from "../test/dom";
+import { availabilityOf } from "../fixtures/fixtureProviders";
 import { testDaemon } from "../test/testDaemon";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { HandoffDialog } from "./HandoffDialog";
 
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
@@ -36,7 +38,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
   const defaults = createStateStore().getState();
   initial.settings = { ...defaults.settings, added_agents: added, ...settings };
   initial.accountQuotas = accountQuotas;
-  initial.agentAvailability = new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state, default_account_dir: null } as AgentAvailability]));
+  initial.agentAvailability = availabilityOf(TEST_PROVIDERS, availability);
   let inspections = 0;
   const request = vi.fn(async (body: { type: string }) => {
     if (body.type === "inspect_session_branches" && branches === "failTwice" && ++inspections <= 2) throw new Error("git failed");
@@ -177,7 +179,7 @@ it("keeps focus inside the dialog when a retry of the check succeeds and takes t
 });
 
 it("turns into an acknowledgement-only failure modal when no other agent can be picked", async () => {
-  const { request, onClose } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
+  const { request, onClose } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable", test_agent: "unavailable" });
   await settle();
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("No other agent is available to take this session over.");
@@ -209,7 +211,7 @@ it("shows the receiving agent's only account in an account picker, its usage dra
   mount(session, [], [], { claude: "available", codex: "available", grok: "unavailable" }, null, [quota]);
   await settle();
   const triggers = [...document.body.querySelectorAll('[data-slot="select-trigger"]')];
-  const accountPicker = triggers.find((trigger) => trigger.getAttribute("aria-label")?.includes("Codex account"));
+  const accountPicker = triggers.find((trigger) => withoutIsolates(trigger.getAttribute("aria-label"))?.includes("Codex account"));
   expect(accountPicker?.textContent).toContain("Default");
   expect(triggers[0].getAttribute("aria-describedby")).toBeNull();
   expect(document.body.querySelectorAll('[class*="quota-meter--"]')).toHaveLength(1);

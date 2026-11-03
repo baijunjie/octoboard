@@ -1,10 +1,11 @@
-import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
+import { defaultAccountName } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import type { MessageKey, Translate } from "../i18n/catalog";
 import { displayColumns, ellipsize } from "../i18n/displayColumns";
 import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
-import type { Account, Console, Project, Session, Settings } from "../protocol";
+import type { Account, Console, Project, ProviderInfo, Session, Settings } from "../protocol";
 import type { ShownStatusKind } from "./sessionStatus";
 
 /** Keeps the agent's current task beside the session name the user created. Each name is
@@ -133,10 +134,10 @@ export function sessionAccountName(t: Translate, session: Session, accounts: Acc
 
 /** The agent and the account a session runs under, as one phrase: the agent part of the session's
  * accessible name, and what a dialog listing sessions reads out beside the agent's mark. */
-export function sessionAgentLabel(t: Translate, session: Session, accounts: Account[], defaultNames: Settings["default_account_names"]): string {
-  const agent = AGENT_LABEL[session.agent];
+export function sessionAgentLabel(t: Translate, providers: readonly ProviderInfo[], session: Session, accounts: Account[], defaultNames: Settings["default_account_names"]): string {
+  const agent = providerLabel(t, providers, session.agent);
   const account = sessionAccountName(t, session, accounts, defaultNames);
-  return account === undefined ? agent : t("session.agentAccount", { agent, account: isolate(account) });
+  return account === undefined ? agent : t("session.agentAccount", { agent: isolate(agent), account: isolate(account) });
 }
 
 /** The line beside a session's agent mark: the account it runs under, then `modelLabel` (see
@@ -156,6 +157,7 @@ export function sessionAccountModelLine(t: Translate, session: Session, accounts
 export function sessionAriaLabel(
   t: Translate,
   language: Language,
+  providers: readonly ProviderInfo[],
   session: Session,
   accounts: Account[],
   owner: Session | undefined,
@@ -164,7 +166,7 @@ export function sessionAriaLabel(
 ): string {
   const base = t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
     title: isolate(sessionDisplayTitle(t, session)),
-    agent: sessionAgentLabel(t, session, accounts, defaultNames),
+    agent: isolate(sessionAgentLabel(t, providers, session, accounts, defaultNames)),
     status: statusLabel(t, status),
   });
   return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })]) : base;
@@ -178,11 +180,11 @@ export function sessionRowName(
   t: Translate,
   language: Language,
   session: Session,
-  { accounts, defaultNames, owners, modelLabel, status }: { accounts: Account[]; defaultNames: Settings["default_account_names"]; owners: readonly (Session | undefined)[]; modelLabel: string; status: ShownStatusKind },
+  { accounts, defaultNames, owners, modelLabel, status, providers }: { providers: readonly ProviderInfo[]; accounts: Account[]; defaultNames: Settings["default_account_names"]; owners: readonly (Session | undefined)[]; modelLabel: string; status: ShownStatusKind },
 ): string {
   const [first, ...further] = owners.filter((owner) => owner !== undefined);
   return joinPhrases(language, [
-    sessionAriaLabel(t, language, session, accounts, first, defaultNames, status),
+    sessionAriaLabel(t, language, providers, session, accounts, first, defaultNames, status),
     ...further.map((owner) => t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })),
     modelLabel,
   ]);

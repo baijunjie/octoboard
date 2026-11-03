@@ -8,11 +8,13 @@ import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import { type Console, type Project, type Session, type ShellTerminal } from "../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
+import { TEST_PROVIDERS } from "../test/testProviders";
 
 const records = {
   consoles: new Map([["c1", { id: "c1", name: "Work" } as Console]]),
   projects: new Map<string, Project>(),
   sessions: new Map([["s1", { id: "s1", title: "Hub" } as Session]]),
+  providers: TEST_PROVIDERS,
 };
 
 it("words a known code from the catalog, showing a record by its name and an unknown record by its id", () => {
@@ -340,7 +342,7 @@ it("shows the default account of an exhausted quota by its name in the UI's lang
 it("words a refused Grok sandbox with its profile and where it was set, leaving no placeholder in either language", () => {
   const params = { source: "GROK_SANDBOX", profile: "workspace" };
   for (const language of ["en", "zh-Hans"] as const) {
-    const text = daemonMessage(language, "grok_sandbox_unsupported", params, "fallback", records);
+    const text = daemonMessage(language, "provider.grok.sandbox_unsupported", params, "fallback", records);
     expect(text).toContain(isolate("workspace"));
     expect(text).toContain(isolate("GROK_SANDBOX"));
     expect(text).not.toMatch(/\{\w+\}/);
@@ -453,11 +455,27 @@ it("resolves only producer-declared record IDs, preserving names that happen to 
 });
 
 it.each([
-  ["login_codex_busy", {}], ["codex_unarchive_failed", { detail: "denied" }],
-  ["grok_home_not_initialized", { path: "/tmp/home" }],
-  ["agent_not_available", { agent: "Codex" }], ["claude_workspace_untrusted", {}],
+  ["provider.codex.login_busy", {}], ["provider.codex.unarchive_failed", { detail: "denied" }],
+  ["provider.grok.home_not_initialized", { path: "/tmp/home" }],
+  ["agent_not_available", { agent: "Codex" }], ["provider.claude.workspace_untrusted", {}],
 ] as const)("supplies fixed references for %s without unresolved placeholders in either language", (code, params) => {
   for (const language of ["en", "zh-Hans"] as const) expect(daemonMessage(language, code, params, "fallback", records)).not.toMatch(/\{\w+\}/);
+});
+
+it("isolates each served label in the list of agents an unavailable agent's message offers", () => {
+  const labels = TEST_PROVIDERS.map(({ label }) => label);
+  for (const language of ["en", "zh-Hans"] as const) {
+    const text = daemonMessage(language, "agent_not_available", { agent: "Codex" }, "fallback", { ...records, providers: TEST_PROVIDERS });
+    for (const label of labels) expect(text, `${language} ${label}`).toContain(isolate(label));
+  }
+});
+
+it.each(["sign_in", "kick", "reset_credit", "config_sharing", "other"])("words a refused %s by the provider's name, not its wire id", (operation) => {
+  for (const language of ["en", "zh-Hans"] as const) {
+    const text = daemonMessage(language, "provider_unsupported", { agent: "grok", operation }, "fallback", { ...records, providers: TEST_PROVIDERS });
+    expect(text).toContain("Grok Build");
+    expect(text).not.toMatch(/\{\w+\}/);
+  }
 });
 
 it("keeps a nested detail-only shell failure usable without inventing missing command fields", () => {

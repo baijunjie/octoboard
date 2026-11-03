@@ -5,7 +5,7 @@
 use serde::Serialize;
 
 use super::accounts::{AccountLogin, AccountSharing, AccountTrashOutcome};
-use super::agents::Agent;
+use super::agents::AgentId;
 use super::browse::{
     BranchInfo, BrowseEntry, ChangeEntry, ChangeGroup, CommitChanges, ComparisonEndpoint,
     ContentSource, FileContent, ProjectSourceInfo, SideRead, UpstreamInfo,
@@ -21,6 +21,7 @@ use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence
 use super::models::{AgentModel, DefaultModelSource, ModelChangeOutcome, ModelsUnavailable};
 use super::path_links::PathLink;
 use super::processes::{ProcessCount, ProcessTree};
+use super::providers::ProviderInfo;
 use super::quotas::{AccountQuota, ResetCreditOutcome};
 use super::records::{
     AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, Session, SessionKind,
@@ -118,10 +119,12 @@ pub enum Event {
         sessions: Vec<Session>,
         trusted_directories: Vec<String>,
         settings: Settings,
+        /// Every registered provider's descriptor data, in the registry's order.
+        providers: Vec<ProviderInfo>,
         /// Every git status the daemon currently holds; empty on a fresh start. Carried here, like
         /// the trusted directories, so a reconnecting client never has to ask for it separately.
         git_statuses: Vec<GitStatus>,
-        /// One entry per supported agent, always three, each starting `not_determined` and
+        /// One entry per registered provider, each starting `not_determined` and
         /// replaced once the daemon's one-time login-shell snapshot lands; see
         /// `crate::agents::availability`.
         agent_availability: Vec<AgentAvailability>,
@@ -233,7 +236,7 @@ pub enum Event {
     /// the home directory cannot be determined, or the project's path is not absolute.
     TrustPrompt {
         session: String,
-        agent: Agent,
+        agent: AgentId,
         project: String,
         path: String,
         trust_dir: Option<String>,
@@ -260,7 +263,7 @@ pub enum Event {
         project: Option<String>,
         /// The agent the new session would run, or the agent of the session to bring back or
         /// switch; for `handoff`, the receiving agent.
-        agent: Agent,
+        agent: AgentId,
         /// For `reopen`, `resume`, `switch` and `handoff`: the session an approval brings back,
         /// switches or hands off. Null otherwise.
         target: Option<String>,
@@ -316,7 +319,7 @@ pub enum Event {
     /// or remote is set up for, or `null` for none, several, or one known not to be installed.
     AgentDetected {
         id: Option<String>,
-        agent: Option<Agent>,
+        agent: Option<AgentId>,
     },
     /// The reply to `list_agent_models`: `agent` and `account` echo the request. `models` is
     /// empty exactly when `unavailable` says why; a client then offers a free-text field or the
@@ -325,7 +328,7 @@ pub enum Event {
     /// else the best one the account may use), absent where the agent's own default applies.
     AgentModels {
         id: Option<String>,
-        agent: Agent,
+        agent: AgentId,
         account: Option<String>,
         models: Vec<AgentModel>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -342,7 +345,7 @@ pub enum Event {
         id: Option<String>,
         location: ConversationLocation,
     },
-    /// The reply to `use_codex_reset_credit`: what Codex did with the request.
+    /// The reply to `use_reset_credit`: what the provider did with the request.
     ResetCreditUsed {
         id: Option<String>,
         outcome: ResetCreditOutcome,

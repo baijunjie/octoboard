@@ -5,8 +5,9 @@ import { pickableAgents } from "../agents/agents";
 import { keepsEscapeFromPanel } from "../components/hint/Hint";
 import { STATUS_MARK_POPOVER } from "../components/status/StatusMark";
 import { useT } from "../i18n/react";
+import type { Agent } from "../protocol";
 import type { OpenSettings } from "../settings/settingsLauncher";
-import { useDaemon, useDaemonStore } from "../store";
+import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { UseResetCreditDialog, useResetFocusReturn } from "../quota/ResetCredits";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { nestedPopovers } from "./nestedPopover";
@@ -37,14 +38,15 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accountQuotas = useDaemonStore((s) => s.accountQuotas);
+  const providers = useProviders();
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   // Memoized rather than computed in a store selector, since its result is a new object on each call.
-  const bar = useMemo(() => sessionQuotaBarOf(session, { accounts, disabledDefaultAccounts: disabledDefaults, agentAvailability, accountQuotas }), [session, accounts, disabledDefaults, agentAvailability, accountQuotas]);
+  const bar = useMemo(() => sessionQuotaBarOf(session, { accounts, disabledDefaultAccounts: disabledDefaults, agentAvailability, accountQuotas, providers }), [session, accounts, disabledDefaults, agentAvailability, accountQuotas, providers]);
   // The panel stands the session's account out only if its row is listed. The bar already leaves out a turned-off account
   // unless the session runs on it, which is the panel's exception too; but an agent that is not added has a bar and no tab.
   const inUse = accountInUse(session);
-  const shownListed = session !== undefined && bar !== undefined && pickableAgents(agentAvailability, addedAgents).includes(session.agent);
+  const shownListed = session !== undefined && bar !== undefined && pickableAgents(agentAvailability, addedAgents, providers).includes(session.agent);
   const account = accounts.find((account) => account.id === session?.account_id);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const now = useResetClock(bar);
@@ -52,9 +54,9 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   // the button shows; it ends on entering the panel, on the panel's closing, or on leaving the button before the
   // panel has opened.
   const [onButton, setOnButton] = useState(false);
-  const label = session && bar ? accountQuotaLabel(t, session.agent, account?.name, bar, defaultNames, now) : t("rail.quota");
+  const label = session && bar ? accountQuotaLabel(t, providers, session.agent, account?.name, bar, defaultNames, now) : t("rail.quota");
 
-  const [resetting, setResetting] = useState<{ account: string | null; name: string }>();
+  const [resetting, setResetting] = useState<{ agent: Agent; account: string | null; name: string }>();
   // The panel closes on a press of Redeem reset, so with the confirmation gone focus has nowhere to go but this button.
   const railButton = useRef<HTMLButtonElement>(null);
   const handBack = useResetFocusReturn(() => railButton.current?.focus());
@@ -112,14 +114,14 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
             }}
             // The confirmation is held out here: a modal opening closes the panel (`CloseWhenCovered`), and a dialog
             // held inside it would go with it.
-            onUseReset={(account, name) => {
+            onUseReset={(agent, account, name) => {
               close();
-              setResetting({ account, name });
+              setResetting({ agent, account, name });
             }}
           />
         )}
       </RailPanelEntry>
-      {resetting && <UseResetCreditDialog account={resetting.account} accountName={resetting.name} onClose={() => {
+      {resetting && <UseResetCreditDialog agent={resetting.agent} account={resetting.account} accountName={resetting.name} onClose={() => {
         setResetting(undefined);
         handBack();
       }} />}

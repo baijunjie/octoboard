@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { REVIEW } from "../fixtures/configurationReview";
 import type { ImportedConsole, InspectedAccount, InspectedAccounts, InspectedConsole } from "../protocol";
-import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { defaultBinding } from "../shortcuts/commands";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import {
   accountChoicesFor,
   accountResolutionsOf,
@@ -16,7 +16,6 @@ import {
   documentShortcuts,
   hasAccountDirectoryProblem,
   hasAgentTags,
-  hasClaudeCompatibilityChoices,
   importedRegions,
   initialAccountReview,
   initialReview,
@@ -186,29 +185,12 @@ describe("the keyboard shortcuts of a document", () => {
 });
 
 describe("agent tags in a document", () => {
-  it("count only for the agents this build knows", () => {
-    expect(hasAgentTags({})).toBe(false);
-    expect(hasAgentTags({ someone_new: ["x"] } as never)).toBe(false);
-    expect(hasAgentTags({ constructor: ["x"] } as never)).toBe(false);
-    expect(hasAgentTags({ codex: ["review"] })).toBe(true);
-    expect(hasAgentTags({ someone_new: ["x"], grok: ["research"] } as never)).toBe(true);
-  });
-});
-
-describe("Claude compatibility in a document", () => {
-  it("says nothing when no agent was chosen for", () => {
-    expect(hasClaudeCompatibilityChoices({})).toBe(false);
-    expect(hasClaudeCompatibilityChoices({ codex: false })).toBe(true);
-  });
-
-  it("counts only the agents that have the setting", () => {
-    expect(hasClaudeCompatibility("codex")).toBe(true);
-    expect(hasClaudeCompatibility("grok")).toBe(true);
-    expect(hasClaudeCompatibility("claude")).toBe(false);
-    expect(hasClaudeCompatibility("other")).toBe(false);
-    expect(hasClaudeCompatibilityChoices({ claude: true })).toBe(false);
-    expect(hasClaudeCompatibilityChoices({ other: true } as never)).toBe(false);
-    expect(hasClaudeCompatibilityChoices({ claude: true, grok: false })).toBe(true);
+  it("count only for the agents the daemon serves", () => {
+    expect(hasAgentTags(TEST_PROVIDERS, {})).toBe(false);
+    expect(hasAgentTags(TEST_PROVIDERS, { someone_new: ["x"] } as never)).toBe(false);
+    expect(hasAgentTags(TEST_PROVIDERS, { constructor: ["x"] } as never)).toBe(false);
+    expect(hasAgentTags(TEST_PROVIDERS, { codex: ["review"] })).toBe(true);
+    expect(hasAgentTags(TEST_PROVIDERS, { someone_new: ["x"], grok: ["research"] } as never)).toBe(true);
   });
 });
 

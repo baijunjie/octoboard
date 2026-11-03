@@ -1,12 +1,13 @@
 import { consoleAccount } from "../accounts/accountInheritance";
-import { AGENT_SHORT_NAME, defaultAccountName, listedAgents } from "../agents/agents";
+import { defaultAccountName, listedAgents, servedAgents } from "../agents/agents";
+import { providerShortName } from "../agents/providers";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenuDraft, StatusItemSubmenuDraftItem } from "../platform";
 import { joinPhrases } from "../i18n/joinPhrases";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console, QuotaWindow, Settings } from "../protocol";
-import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../accounts/quotaFormat";
+import type { Account, AccountQuota, Agent, AgentAvailability, Console, ProviderInfo, QuotaWindow, Settings } from "../protocol";
+import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaNaming, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../accounts/quotaFormat";
 import { formatRelativeTime, isJustNow } from "../format/relativeTime";
 import { listedQuotaAccounts, type QuotaRow } from "../quota/quotaListing";
 import { accountQuotaLabel } from "../quota/sessionQuota";
@@ -43,6 +44,8 @@ export interface StatusItemQuotaSource {
   disabledDefaultAccounts?: Settings["disabled_default_accounts"];
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
+  /** The providers the daemon serves, which name the quota windows. */
+  providers: readonly ProviderInfo[];
 }
 
 /** A window as the shell shows it: its name, its detail ("82% remaining · resets in 1h 57m"), how full its
@@ -65,7 +68,7 @@ function windowParts(t: Translate, source: StatusItemQuotaSource, naming: QuotaN
 function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, { account, disabled }: QuotaRow): StatusItemSubmenuDraftItem[] {
   const name = account ? isolate(account.name) : defaultAccountName(t, source.defaultAccountNames, agent);
   const quota = accountQuotaOf(source.accountQuotas, agent, account?.id ?? null);
-  const planned = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(quota.plan) }) : name;
+  const planned = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(agent, quota.plan) }) : name;
   // A turned-off account is listed only while the selected session runs on it, and says so last, after its quota
   // state, as the rail's row puts its badge after the rest.
   const marked = (header: string) => disabled ? t("statusItem.quota.accountDisabled", { account: header, disabled: t("accountChoice.disabled.reason") }) : header;
@@ -73,8 +76,9 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   // An entry with no windows is unavailable whether or not it says why, which the menu does not, except for an
   // account that is not logged in: a state to be told in a word, not a failure.
   if (quota.windows.length === 0) return [{ kind: "header", title: marked(planned) }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
+  const naming = quotaNaming(quota, source.providers);
   const status = exhaustedQuotaWindow(quota, source.now) ? "used_up"
-    : quota.unavailable || !usageBarWindows(quota) ? "unknown" : "available";
+    : quota.unavailable || !usageBarWindows(naming) ? "unknown" : "available";
   const statusTitle = marked(t(status === "used_up" ? "statusItem.quota.accountUsedUp"
     : status === "unknown" ? "statusItem.quota.accountUnknown" : "statusItem.quota.accountAvailable", { account: planned }));
   const age = formatRelativeTime(source.language, quota.fetched_at, source.now);
@@ -94,8 +98,8 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   for (const window of orderedQuotaWindows(quota.windows)) {
     if (layers?.weekly && window === layers.weekly) continue;
     if (layers?.weekly && window === layers.session) {
-      const session = windowParts(t, source, quota, window);
-      const weekly = windowParts(t, source, quota, layers.weekly);
+      const session = windowParts(t, source, naming, window);
+      const weekly = windowParts(t, source, naming, layers.weekly);
       lines.push({
         kind: "meter",
         session: { name: session.name, detail: session.detail, fraction: session.fraction },
@@ -106,7 +110,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
       });
       continue;
     }
-    const { name: windowName, detail, label, fraction } = windowParts(t, source, quota, window);
+    const { name: windowName, detail, label, fraction } = windowParts(t, source, naming, window);
     lines.push({ kind: "window", name: windowName, detail, label, fraction, agent, ...usedUp });
   }
   return lines;
@@ -119,7 +123,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
  * whose accounts are all turned off: unlike the rail's panel, which lists an undetermined agent, a submenu
  * without readings to fill it would be empty. */
 export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console, inUse?: { agent: Agent; account: string | null }): StatusItemSubmenuDraft[] {
-  const available = listedAgents(source.addedAgents).filter((agent) => source.agentAvailability.get(agent)?.availability === "available");
+  const available = listedAgents(source.addedAgents, servedAgents(source.providers)).filter((agent) => source.agentAvailability.get(agent)?.availability === "available");
   return listedQuotaAccounts(available, source, inUse).flatMap(({ agent, rows }): StatusItemSubmenuDraft[] => {
     const items = rows.flatMap((row, index): StatusItemSubmenuDraftItem[] => [
       ...(index > 0 ? [{ kind: "separator" as const }] : []),
@@ -130,15 +134,15 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, 
     // head a list that does not hold it.
     const listed = accountId !== undefined && rows.some(({ account }) => (account?.id ?? null) === accountId);
     const reading = listed ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
-    const bar = reading && !reading.unavailable ? usageBarWindows(reading) : undefined;
+    const bar = reading && !reading.unavailable ? usageBarWindows(quotaNaming(reading, source.providers)) : undefined;
     const accountName = source.accounts.find((account) => account.id === accountId)?.name;
     return [{
-      title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }),
+      title: t("statusItem.quota", { agent: isolate(providerShortName(t, source.providers, agent)) }),
       icon: agentIconKey(agent),
       ...(bar ? {
         quota_remaining: remainingPercentAt(bar.main, source.now),
         ...(bar.thin ? { quota_weekly_remaining: remainingPercentAt(bar.thin, source.now) } : {}),
-        quota_label: accountQuotaLabel(t, agent, accountName, bar, source.defaultAccountNames, source.now),
+        quota_label: accountQuotaLabel(t, source.providers, agent, accountName, bar, source.defaultAccountNames, source.now),
       } : {}),
       items,
     }];

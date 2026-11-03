@@ -1,28 +1,27 @@
 import React from "react";
 
 import { useT } from "../i18n/react";
-import type { DocumentSettings } from "../protocol";
 import { BOOLEAN_SETTINGS, type BooleanField } from "./booleanSettings";
 import type { Inspection, shortcutsReview } from "./importPlan";
 import { SettingLine } from "./importParts";
 import { shortcutChangeValues } from "./importValues";
-import { SettingsCard } from "./SettingsCard";
+import { SettingsCard, type CurrentSettings } from "./SettingsCard";
 
 /** This machine's values of the settings the document carries, in the shape of the document's own. */
-function currentSettings(settings: NonNullable<Inspection["settings"]>): DocumentSettings {
+function currentSettings(settings: NonNullable<Inspection["settings"]>): CurrentSettings {
   const switches = Object.fromEntries(BOOLEAN_SETTINGS.map(({ field }) => [field, settings[`current_${field}` as const]])) as Record<BooleanField, boolean>;
   return {
     ...switches,
     git_workflow: settings.current_git_workflow,
-    claude_compatibility: settings.current_claude_compatibility,
+    provider_settings: settings.current_provider_settings,
     agent_tags: settings.current_agent_tags,
   };
 }
 
 /**
  * The application settings of the document, the panel of the review's Application settings tab: a card saying what
- * applying each of them would change here. A line whose setting is made of several items (the git workflow, Claude
- * compatibility, agent tags, keyboard shortcuts) lists, when applying would change it, the items that would change
+ * applying each of them would change here. A line whose setting is made of several items (the git workflow, provider
+ * settings, agent tags, keyboard shortcuts) lists, when applying would change it, the items that would change
  * with what each is now. `shortcuts` says what the document's keyboard shortcuts would do on this device;
  * `undefined` when it carries none.
  */

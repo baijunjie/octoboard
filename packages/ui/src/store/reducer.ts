@@ -133,6 +133,7 @@ export function reducer(state: State, action: Action): State {
             sessionRequests: [],
             gitStatuses: keepSame(state.gitStatuses, event.git_statuses, (s) => s.project),
             settings: keepSameFields(state.settings, event.settings),
+            providers: sameValue(state.providers, event.providers) ? state.providers : event.providers,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
             accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas),
             accountLogins: event.account_logins,

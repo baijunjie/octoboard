@@ -58,7 +58,7 @@ when the pointer leaves. The fade follows the name's own reading direction. Redu
 
 The homepage uses Octoboard's original silver mechanical octopus, red eyes, and pixel wordmark on a dark surface.
 The first screen introduces one workspace for existing coding agents and their accounts: retaining a conversation
-when switching accounts of the same agent, handing work to another agent brand, and choosing an agent to coordinate
+when switching accounts of the same agent, handing work to an agent from another provider, and choosing an agent to coordinate
 tasks across projects. The coordinator is a role taken by the chosen agent. The first screen offers links to view
 releases, visit its GitHub repository, and open the preview section.
 
@@ -78,7 +78,7 @@ The first numbered section presents 16 feature cards in three groups, in this or
   the conversation is to the length the agent can process, and moving later work to a fresh session before a long
   conversation risks losing details through summary compression; passing work to a new session while the original
   agent retains its conversation record for reviewing or resuming to ask about earlier decisions and implementation
-  details; and another agent brand taking over from a handoff record of the task, progress and remaining work.
+  details; and an agent from another provider taking over from a handoff record of the task, progress and remaining work.
 - Agents and projects (seven cards): coordinating different agents' strengths; organizing work across projects;
   separate native project contexts; retaining existing CLI instructions, Skills, Hooks and MCP configuration;
   entering a delegated project's session to guide its executing agent directly, without relaying every detail
@@ -113,7 +113,7 @@ Markdown copy keeps the case introduction without instructions for interacting w
 The workflow illustration places Octoboard's mascot and coordinating agent at the center of eight distinct
 project-agent nodes: Promotion console, Store management console, Customer ordering website, Restaurant order API,
 Mobile ordering app, Staff ordering tablet, Checkout register and Kitchen display. Every node identifies its agent
-brand, concrete example project and directory. Codex handles Promotion console, Restaurant order API and Checkout
+provider, concrete example project and directory. Codex handles Promotion console, Restaurant order API and Checkout
 register; Claude Code handles Store management console, Mobile ordering app and Kitchen display; Grok Build handles
 Customer ordering website and Staff ordering tablet. The nodes surround the coordinator on wide screens and form
 two columns below it on small screens. Curved connections carry outgoing task signals and incoming report signals.
@@ -159,7 +159,7 @@ Its data-handling summary describes local application storage, no upload of code
 own servers, and configured agents and tools connecting to their providers. The open-source panel states that
 Octoboard is free and open source under the MIT License.
 
-The nine questions in section 06 cover setup, data handling, independent project sessions and subagents, agent brands,
+The nine questions in section 06 cover setup, data handling, independent project sessions and subagents, providers,
 direct participation, requirements and cost, remote hosts, concurrent edits, and returning to the original CLI, in
 that order. The section's introductory label is separate from its questions heading. Each question can be expanded
 or collapsed independently, with the first expanded initially; several answers can remain open at once. The plus
@@ -178,7 +178,7 @@ receive a hover background; an expanded question and its answer share a uniform 
   its agent's own mechanisms while the coordinator organizes the work. A single conversation can mix project context;
   changing directories or using subagents alone does not guarantee loading the target project's full configuration,
   and loading behavior depends on the tool.
-- Agent brands: the coordinator and each project can use Claude Code, Codex or Grok Build independently, retaining
+- Providers: the coordinator and each project can use Claude Code, Codex or Grok Build independently, retaining
   their own instructions and toolchains. Tasks, relevant context and reports pass between sessions. The answer
   explains choosing agents by the task and the project's tools, with the coordinator delegating work and bringing
   the results together.

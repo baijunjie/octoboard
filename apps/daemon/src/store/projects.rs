@@ -1,21 +1,20 @@
 //! The projects table, and the directories the user has trusted for every project under them.
 
 use super::{Result, StoreError};
-use rusqlite::{params, OptionalExtension, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
+use std::collections::HashMap;
 
-use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
+use super::rows::{
+    agent_from_row, enum_from_row, enum_from_row_opt, enum_to_text, registered_provider_clause,
+};
 use super::Store;
 use crate::protocol::{
-    error_code, Agent, CodedError, GitWorkflowOverride, PerAgent, Project, ProjectAccount,
-    ProjectSource,
+    error_code, AgentId, CodedError, GitWorkflowOverride, Launch, PerAgent, Project,
+    ProjectAccount, ProjectSource,
 };
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
-                               remote_url, claude_account_id, codex_account_id, grok_account_id,
-                               claude_account_default, codex_account_default, grok_account_default,
-                               claude_session_model, claude_session_effort, codex_session_model,
-                               codex_session_effort, grok_session_model, grok_session_effort,
-                               trust_consent, pinned, tags, description, development,
+                               remote_url, trust_consent, pinned, tags, description, development,
                                rebase_before_delivery, delivery, revert_gate,
                                squash_before_delivery";
 
@@ -25,66 +24,51 @@ impl Store {
     /// `coordinator` checks and claims before it gets here, so this is a backstop for what that
     /// check cannot tell apart, such as two non-UTF-8 names that collide once converted to text.
     pub fn insert_project(&self, project: &Project) -> Result<()> {
-        self.lock()
-            .execute(
-                "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
-                                   remote_url, claude_account_id, codex_account_id,
-                                   grok_account_id, claude_account_default,
-                                   codex_account_default, grok_account_default,
-                                   claude_session_model, claude_session_effort,
-                                   codex_session_model, codex_session_effort, grok_session_model,
-                                   grok_session_effort, trust_consent, pinned, tags,
-                                   description, development, rebase_before_delivery, delivery,
-                                   revert_gate, squash_before_delivery)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                     ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
-                params![
-                    project.id,
-                    project.console_id,
-                    project.host_id,
-                    project.name,
-                    project.path,
-                    project.default_agent.as_ref().map(enum_to_text),
-                    enum_to_text(&project.source),
-                    project.remote_url,
-                    project.accounts.claude.account_id(),
-                    project.accounts.codex.account_id(),
-                    project.accounts.grok.account_id(),
-                    project.accounts.claude == ProjectAccount::Default,
-                    project.accounts.codex == ProjectAccount::Default,
-                    project.accounts.grok == ProjectAccount::Default,
-                    project.launch.claude.model,
-                    project.launch.claude.effort,
-                    project.launch.codex.model,
-                    project.launch.codex.effort,
-                    project.launch.grok.model,
-                    project.launch.grok.effort,
-                    project.trust_consent,
-                    project.pinned,
-                    tags_to_text(&project.tags),
-                    project.description,
-                    project.git_workflow.development.as_ref().map(enum_to_text),
-                    project.git_workflow.rebase_before_delivery,
-                    project.git_workflow.delivery.as_ref().map(enum_to_text),
-                    project.git_workflow.revert_gate,
-                    project.git_workflow.squash_before_delivery,
-                ],
-            )
-            .map_err(|err| match err {
-                rusqlite::Error::SqliteFailure(failure, _)
-                    if failure.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
-                {
-                    StoreError::from(CodedError::raised(
-                        error_code::ALL_PROJECTS_ALREADY_ADDED,
-                        format!(
-                            "console {} already has a project at {}",
-                            project.console_id, project.path
-                        ),
-                        &[],
-                    ))
-                }
-                err => err.into(),
-            })?;
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
+                                   remote_url, trust_consent, pinned, tags, description,
+                                   development, rebase_before_delivery, delivery, revert_gate,
+                                   squash_before_delivery)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            params![
+                project.id,
+                project.console_id,
+                project.host_id,
+                project.name,
+                project.path,
+                project.default_agent.as_ref().map(enum_to_text),
+                enum_to_text(&project.source),
+                project.remote_url,
+                project.trust_consent,
+                project.pinned,
+                tags_to_text(&project.tags),
+                project.description,
+                project.git_workflow.development.as_ref().map(enum_to_text),
+                project.git_workflow.rebase_before_delivery,
+                project.git_workflow.delivery.as_ref().map(enum_to_text),
+                project.git_workflow.revert_gate,
+                project.git_workflow.squash_before_delivery,
+            ],
+        )
+        .map_err(|err| match err {
+            rusqlite::Error::SqliteFailure(failure, _)
+                if failure.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
+            {
+                StoreError::from(CodedError::raised(
+                    error_code::ALL_PROJECTS_ALREADY_ADDED,
+                    format!(
+                        "console {} already has a project at {}",
+                        project.console_id, project.path
+                    ),
+                    &[],
+                ))
+            }
+            err => err.into(),
+        })?;
+        write_provider_rows(&tx, project)?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -111,35 +95,27 @@ impl Store {
         Ok(())
     }
 
+    /// Writes the project's record and its registered providers' rows. A stored default agent
+    /// naming a provider that is not registered is kept while the project still reads as it did
+    /// (the first registered provider), so an edit of anything else does not lose it.
     pub fn update_project(&self, project: &Project) -> Result<()> {
-        self.lock().execute(
-            "UPDATE projects SET name = ?2, default_agent = ?3, claude_account_id = ?4,
-                                 codex_account_id = ?5, grok_account_id = ?6,
-                                 claude_account_default = ?7, codex_account_default = ?8,
-                                 grok_account_default = ?9,
-                                 claude_session_model = ?10, claude_session_effort = ?11,
-                                 codex_session_model = ?12, codex_session_effort = ?13,
-                                 grok_session_model = ?14, grok_session_effort = ?15,
-                                 pinned = ?16, tags = ?17, description = ?18,
-                                 development = ?19, rebase_before_delivery = ?20, delivery = ?21,
-                                 revert_gate = ?22, squash_before_delivery = ?23
-             WHERE id = ?1",
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        let changed = tx.execute(
+            &format!(
+                "UPDATE projects SET name = ?2,
+                     default_agent = CASE WHEN ?3 = ?12 AND NOT ({}) THEN default_agent
+                                          ELSE ?3 END,
+                     pinned = ?4, tags = ?5, description = ?6, development = ?7,
+                     rebase_before_delivery = ?8, delivery = ?9, revert_gate = ?10,
+                     squash_before_delivery = ?11
+                 WHERE id = ?1",
+                registered_provider_clause("default_agent"),
+            ),
             params![
                 project.id,
                 project.name,
                 project.default_agent.as_ref().map(enum_to_text),
-                project.accounts.claude.account_id(),
-                project.accounts.codex.account_id(),
-                project.accounts.grok.account_id(),
-                project.accounts.claude == ProjectAccount::Default,
-                project.accounts.codex == ProjectAccount::Default,
-                project.accounts.grok == ProjectAccount::Default,
-                project.launch.claude.model,
-                project.launch.claude.effort,
-                project.launch.codex.model,
-                project.launch.codex.effort,
-                project.launch.grok.model,
-                project.launch.grok.effort,
                 project.pinned,
                 tags_to_text(&project.tags),
                 project.description,
@@ -148,8 +124,13 @@ impl Store {
                 project.git_workflow.delivery.as_ref().map(enum_to_text),
                 project.git_workflow.revert_gate,
                 project.git_workflow.squash_before_delivery,
+                enum_to_text(&AgentId::ALL[0]),
             ],
         )?;
+        if changed > 0 {
+            write_provider_rows(&tx, project)?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -168,7 +149,13 @@ impl Store {
                 read_project,
             )
             .optional()?;
-        Ok(project)
+        let Some(project) = project else {
+            return Ok(None);
+        };
+        let mut projects = [project];
+        read_provider_rows(&conn, Some(id), &mut projects)?;
+        let [project] = projects;
+        Ok(Some(project))
     }
 
     /// The project `id`, or the `unknown_project` refusal when there is none.
@@ -192,10 +179,12 @@ impl Store {
         let mut stmt = conn.prepare(&format!(
             "SELECT {PROJECT_COLUMNS} FROM projects ORDER BY name"
         ))?;
-        let rows = stmt
+        let mut projects = stmt
             .query_map([], read_project)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(rows)
+        drop(stmt);
+        read_provider_rows(&conn, None, &mut projects)?;
+        Ok(projects)
     }
 
     /// The directories under which the user has agreed Octoboard may press any agent's trust
@@ -228,35 +217,113 @@ impl Store {
     }
 }
 
+/// A project's record without its provider rows. A default agent naming no registered provider
+/// reads as the first registered one.
 fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     let id: String = row.get(0)?;
-    let tags = tags_from_text(&id, &row.get::<_, String>(22)?);
+    let tags = tags_from_text(&id, &row.get::<_, String>(10)?);
+    let default_agent: Option<String> = row.get(5)?;
     Ok(Project {
         id,
         console_id: row.get(1)?,
         host_id: row.get(2)?,
         name: row.get(3)?,
         path: row.get(4)?,
-        default_agent: enum_from_row_opt::<Agent>(row, 5)?,
+        default_agent: default_agent
+            .map(|id| AgentId::from_wire_name(&id).unwrap_or(AgentId::ALL[0])),
         source: enum_from_row::<ProjectSource>(row, 6)?,
         remote_url: row.get(7)?,
-        accounts: PerAgent::try_from_fn(|agent| {
-            let slot = column_slot(agent);
-            Ok::<_, rusqlite::Error>(project_account(row.get(8 + slot)?, row.get(11 + slot)?))
-        })?,
-        launch: PerAgent::try_from_fn(|agent| launch_from_row(row, 14 + 2 * column_slot(agent)))?,
-        trust_consent: row.get(20)?,
-        pinned: row.get(21)?,
+        accounts: PerAgent::default(),
+        launch: PerAgent::default(),
+        trust_consent: row.get(8)?,
+        pinned: row.get(9)?,
         tags,
-        description: row.get(23)?,
+        description: row.get(11)?,
         git_workflow: GitWorkflowOverride {
-            development: enum_from_row_opt(row, 24)?,
-            squash_before_delivery: row.get(28)?,
-            rebase_before_delivery: row.get(25)?,
-            delivery: enum_from_row_opt(row, 26)?,
-            revert_gate: row.get(27)?,
+            development: enum_from_row_opt(row, 12)?,
+            squash_before_delivery: row.get(16)?,
+            rebase_before_delivery: row.get(13)?,
+            delivery: enum_from_row_opt(row, 14)?,
+            revert_gate: row.get(15)?,
         },
     })
+}
+
+/// Replaces the provider rows of the project with the project's values, for the registered
+/// providers only: rows naming another provider are left as they are. A provider holding nothing
+/// but defaults has no row.
+fn write_provider_rows(tx: &Transaction<'_>, project: &Project) -> Result<()> {
+    tx.execute(
+        &format!(
+            "DELETE FROM project_providers WHERE project_id = ?1 AND {}",
+            registered_provider_clause("provider")
+        ),
+        params![project.id],
+    )?;
+    for (agent, account) in project.accounts.iter() {
+        let launch = &project.launch[agent];
+        let account_id = account.account_id();
+        let account_default = *account == ProjectAccount::Default;
+        if account_id.is_none()
+            && !account_default
+            && launch.model.is_none()
+            && launch.effort.is_none()
+        {
+            continue;
+        }
+        tx.execute(
+            "INSERT INTO project_providers (project_id, provider, account_id, account_default,
+                                            model, effort)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                project.id,
+                agent.wire_name(),
+                account_id,
+                account_default,
+                launch.model,
+                launch.effort
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+/// Fills in the provider rows of `projects`, those of the project `only` or of all of them. A row
+/// naming a provider this build does not register is left out.
+fn read_provider_rows(
+    conn: &Connection,
+    only: Option<&str>,
+    projects: &mut [Project],
+) -> Result<()> {
+    let positions: HashMap<String, usize> = projects
+        .iter()
+        .enumerate()
+        .map(|(position, project)| (project.id.clone(), position))
+        .collect();
+    let mut stmt = conn.prepare(
+        "SELECT project_id, provider, account_id, account_default, model, effort
+         FROM project_providers WHERE ?1 IS NULL OR project_id = ?1",
+    )?;
+    let rows = stmt
+        .query_map(params![only], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                agent_from_row(row, 1)?,
+                project_account(row.get(2)?, row.get(3)?),
+                Launch {
+                    model: row.get(4)?,
+                    effort: row.get(5)?,
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for (project_id, agent, account, launch) in rows {
+        if let (Some(&position), Some(agent)) = (positions.get(&project_id), agent) {
+            projects[position].accounts[agent] = account;
+            projects[position].launch[agent] = launch;
+        }
+    }
+    Ok(())
 }
 
 /// A project's account setting from its id column and its pins-the-default flag. An id wins over
@@ -324,15 +391,15 @@ mod tests {
             .insert_console(&console(None, None, None))
             .expect("console");
         let mut stored = project(false);
-        stored.accounts.claude = named("claude-acct");
-        stored.accounts.codex = ProjectAccount::Default;
+        stored.accounts[AgentId::CLAUDE] = named("claude-acct");
+        stored.accounts[AgentId::CODEX] = ProjectAccount::Default;
         store.insert_project(&stored).expect("insert");
         let read = || store.get_project("project-1").unwrap().unwrap();
         let states = |project: &Project| {
             [
-                project.accounts.claude.clone(),
-                project.accounts.codex.clone(),
-                project.accounts.grok.clone(),
+                project.accounts[AgentId::CLAUDE].clone(),
+                project.accounts[AgentId::CODEX].clone(),
+                project.accounts[AgentId::GROK].clone(),
             ]
         };
         assert_eq!(
@@ -352,27 +419,36 @@ mod tests {
         ];
         for from in &all {
             for to in &all {
-                stored.accounts.grok = from.clone();
+                stored.accounts[AgentId::GROK] = from.clone();
                 store.update_project(&stored).expect("update");
-                assert_eq!(read().accounts.grok, *from);
-                stored.accounts.grok = to.clone();
+                assert_eq!(read().accounts[AgentId::GROK], *from);
+                stored.accounts[AgentId::GROK] = to.clone();
                 store.update_project(&stored).expect("update");
-                assert_eq!(read().accounts.grok, *to);
+                assert_eq!(read().accounts[AgentId::GROK], *to);
             }
         }
 
         // The default state stores no id at all, only its flag.
-        stored.accounts.grok = ProjectAccount::Default;
+        stored.accounts[AgentId::GROK] = ProjectAccount::Default;
         store.update_project(&stored).expect("update");
-        let (id, flag): (Option<String>, bool) = store
-            .lock()
-            .query_row(
-                "SELECT grok_account_id, grok_account_default FROM projects WHERE id = 'project-1'",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap();
-        assert_eq!((id, flag), (None, true));
+        let row = |provider: &str| -> Option<(Option<String>, bool)> {
+            store
+                .lock()
+                .query_row(
+                    "SELECT account_id, account_default FROM project_providers
+                     WHERE project_id = 'project-1' AND provider = ?1",
+                    params![provider],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()
+                .unwrap()
+        };
+        assert_eq!(row("grok"), Some((None, true)));
+
+        // A provider that inherits and sets nothing else has no row.
+        stored.accounts[AgentId::GROK] = ProjectAccount::Inherit;
+        store.update_project(&stored).expect("update");
+        assert_eq!(row("grok"), None);
     }
 
     /// A project's own accounts, models and efforts start unset; all nine are written and read back
@@ -387,30 +463,36 @@ mod tests {
         store.insert_project(&project(true)).expect("project");
         let mut kept = store.get_project("project-1").unwrap().expect("kept");
         assert!(kept.trust_consent);
-        assert_eq!(kept.accounts.claude, ProjectAccount::Inherit);
-        assert_eq!(kept.launch.grok.effort, None);
-        kept.accounts.claude = named("claude-account");
-        kept.accounts.codex = named("codex-account");
-        kept.accounts.grok = named("grok-account");
-        kept.launch.claude.model = Some("claude-model".to_string());
-        kept.launch.claude.effort = Some("claude-effort".to_string());
-        kept.launch.codex.model = Some("codex-model".to_string());
-        kept.launch.codex.effort = Some("codex-effort".to_string());
-        kept.launch.grok.model = Some("grok-model".to_string());
-        kept.launch.grok.effort = Some("grok-effort".to_string());
+        assert_eq!(kept.accounts[AgentId::CLAUDE], ProjectAccount::Inherit);
+        assert_eq!(kept.launch[AgentId::GROK].effort, None);
+        kept.accounts[AgentId::CLAUDE] = named("claude-account");
+        kept.accounts[AgentId::CODEX] = named("codex-account");
+        kept.accounts[AgentId::GROK] = named("grok-account");
+        kept.launch[AgentId::CLAUDE].model = Some("claude-model".to_string());
+        kept.launch[AgentId::CLAUDE].effort = Some("claude-effort".to_string());
+        kept.launch[AgentId::CODEX].model = Some("codex-model".to_string());
+        kept.launch[AgentId::CODEX].effort = Some("codex-effort".to_string());
+        kept.launch[AgentId::GROK].model = Some("grok-model".to_string());
+        kept.launch[AgentId::GROK].effort = Some("grok-effort".to_string());
         store.update_project(&kept).expect("writes the columns");
 
         let fields = |project: &Project| {
             [
-                project.accounts.claude.account_id().map(str::to_string),
-                project.accounts.codex.account_id().map(str::to_string),
-                project.accounts.grok.account_id().map(str::to_string),
-                project.launch.claude.model.clone(),
-                project.launch.claude.effort.clone(),
-                project.launch.codex.model.clone(),
-                project.launch.codex.effort.clone(),
-                project.launch.grok.model.clone(),
-                project.launch.grok.effort.clone(),
+                project.accounts[AgentId::CLAUDE]
+                    .account_id()
+                    .map(str::to_string),
+                project.accounts[AgentId::CODEX]
+                    .account_id()
+                    .map(str::to_string),
+                project.accounts[AgentId::GROK]
+                    .account_id()
+                    .map(str::to_string),
+                project.launch[AgentId::CLAUDE].model.clone(),
+                project.launch[AgentId::CLAUDE].effort.clone(),
+                project.launch[AgentId::CODEX].model.clone(),
+                project.launch[AgentId::CODEX].effort.clone(),
+                project.launch[AgentId::GROK].model.clone(),
+                project.launch[AgentId::GROK].effort.clone(),
             ]
             .map(|field| field.expect("set"))
         };
@@ -436,15 +518,15 @@ mod tests {
         let mut inserted = project(false);
         inserted.id = "project-2".to_string();
         inserted.path = "/tmp/project-2".to_string();
-        inserted.accounts.claude = kept.accounts.claude.clone();
-        inserted.accounts.codex = kept.accounts.codex.clone();
-        inserted.accounts.grok = kept.accounts.grok.clone();
-        inserted.launch.claude.model = kept.launch.claude.model.clone();
-        inserted.launch.claude.effort = kept.launch.claude.effort.clone();
-        inserted.launch.codex.model = kept.launch.codex.model.clone();
-        inserted.launch.codex.effort = kept.launch.codex.effort.clone();
-        inserted.launch.grok.model = kept.launch.grok.model.clone();
-        inserted.launch.grok.effort = kept.launch.grok.effort.clone();
+        inserted.accounts[AgentId::CLAUDE] = kept.accounts[AgentId::CLAUDE].clone();
+        inserted.accounts[AgentId::CODEX] = kept.accounts[AgentId::CODEX].clone();
+        inserted.accounts[AgentId::GROK] = kept.accounts[AgentId::GROK].clone();
+        inserted.launch[AgentId::CLAUDE].model = kept.launch[AgentId::CLAUDE].model.clone();
+        inserted.launch[AgentId::CLAUDE].effort = kept.launch[AgentId::CLAUDE].effort.clone();
+        inserted.launch[AgentId::CODEX].model = kept.launch[AgentId::CODEX].model.clone();
+        inserted.launch[AgentId::CODEX].effort = kept.launch[AgentId::CODEX].effort.clone();
+        inserted.launch[AgentId::GROK].model = kept.launch[AgentId::GROK].model.clone();
+        inserted.launch[AgentId::GROK].effort = kept.launch[AgentId::GROK].effort.clone();
         store.insert_project(&inserted).expect("insert");
         let listed = store
             .list_projects()
@@ -643,5 +725,113 @@ mod tests {
     #[test]
     fn tags_that_are_not_a_json_array_of_strings_read_as_untagged() {
         assert!(tags_from_text("project-1", "not json").is_empty());
+    }
+
+    /// Every registered provider's account setting and launch pair round-trip, each independent of
+    /// the others, and a provider holding only defaults has no row.
+    #[test]
+    fn every_registered_providers_values_round_trip_and_defaults_have_no_rows() {
+        let path = temp_db("project-every-provider");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut stored = project(false);
+        for (position, agent) in AgentId::ALL.into_iter().enumerate() {
+            let id = agent.wire_name();
+            stored.accounts[agent] = match position % 3 {
+                0 => named(&format!("{id}-account")),
+                1 => ProjectAccount::Default,
+                _ => ProjectAccount::Inherit,
+            };
+            stored.launch[agent].model = Some(format!("{id}-model"));
+            stored.launch[agent].effort = Some(format!("{id}-effort"));
+        }
+        store.insert_project(&stored).expect("insert");
+        let read = store.get_project("project-1").unwrap().expect("stored");
+        assert_eq!(read.accounts, stored.accounts);
+        assert_eq!(read.launch, stored.launch);
+        assert_eq!(store.list_projects().unwrap()[0].launch, stored.launch);
+
+        let rows = || -> i64 {
+            store
+                .lock()
+                .query_row("SELECT COUNT(*) FROM project_providers", [], |row| {
+                    row.get(0)
+                })
+                .unwrap()
+        };
+        assert_eq!(rows(), AgentId::ALL.len() as i64);
+        stored.accounts = Default::default();
+        stored.launch = Default::default();
+        store.update_project(&stored).expect("update");
+        assert_eq!(rows(), 0);
+    }
+
+    /// Rows naming a provider that is not registered stay in the store through writes and are left
+    /// out of a load, and a default agent naming one falls back to the first registered provider.
+    #[test]
+    fn rows_of_an_unregistered_provider_are_kept_and_left_out_of_a_load() {
+        let path = temp_db("project-unregistered-provider");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut stored = project(false);
+        stored.accounts[AgentId::CODEX] = named("codex-account");
+        store.insert_project(&stored).expect("insert");
+        store
+            .lock()
+            .execute_batch(
+                "INSERT INTO project_providers (project_id, provider, account_id, account_default,
+                                                model, effort)
+                     VALUES ('project-1', 'retired', 'retired-account', 0, 'm', 'e');
+                 UPDATE projects SET default_agent = 'retired';",
+            )
+            .unwrap();
+        let read = store.get_project("project-1").unwrap().expect("not hidden");
+        assert_eq!(read.default_agent, Some(AgentId::ALL[0]));
+        assert_eq!(read.accounts[AgentId::CODEX], named("codex-account"));
+        assert_eq!(store.list_projects().unwrap().len(), 1);
+
+        stored.accounts[AgentId::CODEX] = ProjectAccount::Inherit;
+        store.update_project(&stored).expect("update");
+        let rows = |provider: &str| -> i64 {
+            store
+                .lock()
+                .query_row(
+                    "SELECT COUNT(*) FROM project_providers WHERE provider = ?1",
+                    params![provider],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(rows("retired"), 1);
+        assert_eq!(rows("codex"), 0);
+
+        // The agent it named stays named through a write that reads as it did, and a write that
+        // chooses another, or none, replaces it.
+        let default_agent = || -> Option<String> {
+            store
+                .lock()
+                .query_row("SELECT default_agent FROM projects", [], |row| row.get(0))
+                .unwrap()
+        };
+        store
+            .lock()
+            .execute_batch("UPDATE projects SET default_agent = 'retired';")
+            .unwrap();
+        stored.default_agent = Some(AgentId::ALL[0]);
+        store.update_project(&stored).expect("update");
+        assert_eq!(default_agent().as_deref(), Some("retired"));
+        stored.default_agent = Some(AgentId::GROK);
+        store.update_project(&stored).expect("update");
+        assert_eq!(default_agent().as_deref(), Some("grok"));
+        stored.default_agent = None;
+        store.update_project(&stored).expect("update");
+        assert_eq!(default_agent(), None);
+
+        store.delete_project("project-1").unwrap();
+        assert_eq!(rows("retired"), 0);
     }
 }

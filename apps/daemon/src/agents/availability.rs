@@ -30,7 +30,7 @@ use anyhow::Result;
 
 use crate::adapter;
 use crate::env_shell;
-use crate::protocol::{Agent, AgentAvailability, Availability};
+use crate::protocol::{AgentAvailability, AgentId, Availability};
 use crate::state::AppState;
 
 /// Determines availability on a blocking thread and publishes the result once it lands, without
@@ -55,7 +55,7 @@ fn apply_snapshot(state: &AppState, outcome: Result<HashMap<String, String>>) {
 }
 
 /// Fills the added agents once with the agents that are available plus those that have accounts,
-/// in `Agent::ALL` order, and broadcasts the settings when it did. Does nothing while any agent's
+/// in `AgentId::ALL` order, and broadcasts the settings when it did. Does nothing while any agent's
 /// availability is undetermined or once the list has been decided — a list the user saved empty
 /// stays empty. A fresh install has no accounts, so the same rule gives it the available agents.
 pub fn fill_added_agents(state: &AppState) -> Result<()> {
@@ -74,7 +74,7 @@ pub fn fill_added_agents(state: &AppState) -> Result<()> {
         // otherwise be missed.
         let _writes = state.lock_account_writes();
         let accounts = state.store.list_accounts()?;
-        let agents: Vec<Agent> = availability
+        let agents: Vec<AgentId> = availability
             .iter()
             .filter(|entry| {
                 entry.availability == Availability::Available
@@ -94,10 +94,10 @@ pub fn fill_added_agents(state: &AppState) -> Result<()> {
 /// and each agent's resolved default-account directory — are unit-tested without a real shell or
 /// the developer's own `PATH` and `HOME`.
 fn determine(shell_env: &HashMap<String, String>) -> Vec<AgentAvailability> {
-    Agent::ALL
+    AgentId::ALL
         .into_iter()
         .map(|agent| {
-            let binary = adapter::adapter_for(agent).binary();
+            let binary = agent.descriptor().binary;
             let availability = if env_shell::resolve_binary(binary, shell_env).is_ok() {
                 Availability::Available
             } else {
@@ -122,7 +122,8 @@ mod tests {
     use crate::protocol::Event;
 
     /// A binary on `PATH` is available, and a directory variable it exports wins over the agent's
-    /// own default — Claude Code's reading of `CLAUDE_CONFIG_DIR`, generalised across all three.
+    /// own default — Claude Code's reading of `CLAUDE_CONFIG_DIR`, generalised across every
+    /// provider.
     #[test]
     fn an_available_agent_shows_its_exported_directory() {
         let dir = crate::test_support::ScratchDir::new("availability-test-bin");
@@ -145,7 +146,7 @@ mod tests {
         let result = determine(&env);
         let claude_entry = result
             .iter()
-            .find(|entry| entry.agent == Agent::Claude)
+            .find(|entry| entry.agent == AgentId::CLAUDE)
             .expect("a Claude entry");
         assert_eq!(claude_entry.availability, Availability::Available);
         assert_eq!(
@@ -165,7 +166,7 @@ mod tests {
         let result = determine(&env);
         let codex_entry = result
             .iter()
-            .find(|entry| entry.agent == Agent::Codex)
+            .find(|entry| entry.agent == AgentId::CODEX)
             .expect("a Codex entry");
         assert_eq!(codex_entry.availability, Availability::Unavailable);
         assert_eq!(
@@ -188,7 +189,7 @@ mod tests {
         let result = determine(&env);
         let grok_entry = result
             .iter()
-            .find(|entry| entry.agent == Agent::Grok)
+            .find(|entry| entry.agent == AgentId::GROK)
             .expect("a Grok entry");
         assert_eq!(
             grok_entry.default_account_dir,
@@ -206,7 +207,7 @@ mod tests {
 
         apply_snapshot(&state, Err(anyhow::anyhow!("the snapshot shell timed out")));
 
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             assert_eq!(
                 state.agent_availability_of(agent).availability,
                 Availability::NotDetermined
@@ -234,7 +235,7 @@ mod tests {
             "/availability-mints-no-account-home".to_string(),
         );
 
-        let seeded: Vec<crate::protocol::Account> = Agent::ALL
+        let seeded: Vec<crate::protocol::Account> = AgentId::ALL
             .into_iter()
             .map(|agent| crate::protocol::Account {
                 id: format!("account-{agent:?}"),
@@ -253,7 +254,7 @@ mod tests {
         state.set_agent_availability(determine(&env));
 
         assert_eq!(state.store.list_accounts().unwrap(), seeded);
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             assert_eq!(
                 state.agent_availability_of(agent).availability,
                 Availability::Unavailable
@@ -261,21 +262,20 @@ mod tests {
         }
     }
 
-    fn set_availability(state: &AppState, availability: [Availability; 3]) {
+    fn set_availability(state: &AppState, availability: impl Fn(AgentId) -> Availability) {
         state.set_agent_availability(
-            Agent::ALL
+            AgentId::ALL
                 .into_iter()
-                .zip(availability)
-                .map(|(agent, availability)| AgentAvailability {
+                .map(|agent| AgentAvailability {
                     agent,
-                    availability,
+                    availability: availability(agent),
                     default_account_dir: None,
                 })
                 .collect(),
         );
     }
 
-    fn seed_account(state: &AppState, agent: Agent) {
+    fn seed_account(state: &AppState, agent: AgentId) {
         state
             .store
             .insert_account(&crate::protocol::Account {
@@ -295,30 +295,29 @@ mod tests {
     #[test]
     fn the_upgrade_fill_is_the_available_agents_and_those_with_accounts() {
         let (state, _dir) = crate::test_support::app_state("availability-upgrade-fill");
-        seed_account(&state, Agent::Codex);
+        seed_account(&state, AgentId::CODEX);
         let mut events = state.subscribe();
-        set_availability(
-            &state,
-            [
-                Availability::Available,
-                Availability::Unavailable,
-                Availability::Unavailable,
-            ],
-        );
+        set_availability(&state, |agent| {
+            if agent == AgentId::CLAUDE {
+                Availability::Available
+            } else {
+                Availability::Unavailable
+            }
+        });
         assert_eq!(state.store.added_agents().unwrap(), None);
 
         fill_added_agents(&state).unwrap();
 
         assert_eq!(
             state.store.added_agents().unwrap(),
-            Some(vec![Agent::Claude, Agent::Codex])
+            Some(vec![AgentId::CLAUDE, AgentId::CODEX])
         );
         let mut announced = false;
         while let Ok(event) = events.try_recv() {
             announced |= matches!(
                 event,
                 Event::SettingsUpdated { settings }
-                    if settings.added_agents == Some(vec![Agent::Claude, Agent::Codex])
+                    if settings.added_agents == Some(vec![AgentId::CLAUDE, AgentId::CODEX])
             );
         }
         assert!(announced, "the fill must broadcast the settings");
@@ -329,8 +328,8 @@ mod tests {
     fn a_list_saved_empty_stays_empty() {
         let (state, _dir) = crate::test_support::app_state("availability-empty-stays");
         state.store.set_added_agents_if_undecided(&[]).unwrap();
-        seed_account(&state, Agent::Claude);
-        set_availability(&state, [Availability::Available; 3]);
+        seed_account(&state, AgentId::CLAUDE);
+        set_availability(&state, |_| Availability::Available);
 
         fill_added_agents(&state).unwrap();
 
@@ -358,7 +357,7 @@ mod tests {
     #[test]
     fn a_completed_snapshot_fills_the_added_agents() {
         let (state, _dir) = crate::test_support::app_state("availability-snapshot-fills");
-        seed_account(&state, Agent::Grok);
+        seed_account(&state, AgentId::GROK);
         let mut env = HashMap::new();
         env.insert("PATH".to_string(), String::new());
         env.insert("HOME".to_string(), "/snapshot-home".to_string());
@@ -367,6 +366,9 @@ mod tests {
         assert_eq!(state.store.added_agents().unwrap(), None);
 
         apply_snapshot(&state, Ok(env));
-        assert_eq!(state.store.added_agents().unwrap(), Some(vec![Agent::Grok]));
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![AgentId::GROK])
+        );
     }
 }

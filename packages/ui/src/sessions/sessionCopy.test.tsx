@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
-import { AGENT_OPTIONS } from "../agents/agents";
+import { TEST_AGENTS, TEST_PROVIDERS } from "../test/testProviders";
+import { PROVIDER_MESSAGES } from "../providers/registry";
 import { SessionAgentTooltip } from "../components/icons/SessionAgentIcon";
 import { accountOf, consoleOf, gitStatusOf, projectOf, sessionOf } from "../fixtures/builders";
 import { gitBadgeContent } from "../git/gitStatusCopy";
@@ -48,10 +49,11 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location wording equal to 
   }
 });
 
-it.each(AGENT_OPTIONS)("retains account qualifiers and removed-account paths for $label", ({ value: agent, label }) => {
+it.each(TEST_AGENTS)("retains account qualifiers and removed-account paths for %s", (agent) => {
+  const label = (PROVIDER_MESSAGES.en as Record<string, string>)[`provider.${agent}.label`];
   for (const account of [undefined, accountOf("stored", "claude", "العمل Work 中文", "/home/stored")]) {
     const session = sessionOf("s", "c", "p", "Task", "idle", { agent, account_id: account?.id ?? "gone", config_dir: "/Users/中文/old account" });
-    const container = mount(<SessionAgentTooltip session={session} accounts={account ? [{ ...account, agent }] : []} defaultNames={{}} />);
+    const container = mount(<SessionAgentTooltip providers={TEST_PROVIDERS} session={session} accounts={account ? [{ ...account, agent }] : []} defaultNames={{}} />);
     expect(container.querySelector("[data-inline-reference]")).toBeNull();
     expect(container.firstElementChild!.firstElementChild!.textContent).toBe(label);
     expect(container.textContent).toContain(account?.name ?? session.config_dir);

@@ -5,9 +5,9 @@ import { onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
 import { type Account, type Agent, type AgentAvailability, type AgentModel, type Console, type Event, type ModelsUnavailable, type ClientRequestBody } from "../protocol";
-import { AGENTS } from "../agents/agents";
+import { TEST_AGENTS } from "../test/testProviders";
 import { createStateStore, DaemonProvider } from "../store";
-import { buttons, click, inputLabelled, type as typeInto } from "../test/dom";
+import { buttons, click, inputLabelled, type as typeInto, withoutIsolates } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
 import { personal, work } from "../fixtures/accountTestSupport";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -58,7 +58,7 @@ export function render(
     state: {
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
       agentAvailability: new Map(
-        AGENTS.map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
+        TEST_AGENTS.map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
       ),
     },
     request,
@@ -107,7 +107,7 @@ export const nameOf = (button: Element) =>
     .split(" ")
     .map((id) => document.getElementById(id))
     .filter((el) => el && !button.contains(el))
-    .map((el) => el!.textContent ?? "");
+    .map((el) => withoutIsolates(el!.textContent) ?? "");
 /** The Advanced picker of the setting `name` for the sessions of `group`, by the elements that name it. */
 export const groupPicker = (group: string, name: string) =>
   buttons().find((b) => {
@@ -125,6 +125,6 @@ export const stored = consoleOf("c-1", "Main", {
 export const optionTexts = () => Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent);
 
 /** The trigger of a picker named by its own label rather than by a visible one. */
-export const picker = (name: string) => buttons().find((b) => b.getAttribute("aria-label") === name)!;
+export const picker = (name: string) => buttons().find((b) => withoutIsolates(b.getAttribute("aria-label")) === name)!;
 
 export const tabNames = () => Array.from(document.body.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent);

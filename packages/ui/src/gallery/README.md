@@ -78,9 +78,9 @@ new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
   spreading into an un-annotated `new Map([...])`, `.map(([id, x]) => [id, { ...x, … }])` included, is not checked for
   leftover keys, so a renamed or removed protocol field survives in the fixture and the scenario silently shows the
   wrong state. Helpers for staged state (`switchingAccount`, `accountSharingOf`, `branchItemOf`, `worktreeItemOf`,
-  `effectiveClaudeCompatibility`) are in `builders.ts`; reset-credit readings are built with `resetCreditOf` and
-  `resetCreditsOf` (`fixtures/quotas.ts`). A scenario's `state.settings.claude_compatibility` holds the user's explicit
-  choices, as the daemon stores them; the window is told the value in effect.
+  `effectiveProviderSettings`) are in `builders.ts`; reset-credit readings are built with `resetCreditOf` and
+  `resetCreditsOf` (`fixtures/quotas.ts`). A scenario's `state.settings.provider_settings` holds the user's explicit
+  choices of provider settings, as the daemon stores them; the window is told the value in effect.
 - **Steps.** State that lives in a component rather than the store (a dialog, the archive view, the selected session) is
   reached with the shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`).
   The step driver's helpers (`ui.pressTab`, `ui.confirm`, `ui.contextMenu`, `ui.touchPress`, `ui.tapTopBarStatus`,

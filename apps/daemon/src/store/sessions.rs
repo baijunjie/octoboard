@@ -4,10 +4,10 @@
 use super::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use super::rows::{enum_from_row, enum_from_row_opt, enum_from_text, enum_to_text};
+use super::rows::{agent_from_row, enum_from_row, enum_from_row_opt, enum_from_text, enum_to_text};
 use super::Store;
 use crate::protocol::{
-    Agent, CodedError, ConsoleSessionColour, Origin, RecordTitles, Role, Session, SessionKind,
+    CodedError, ConsoleSessionColour, Origin, RecordTitles, Role, Session, SessionKind,
     SessionStatus,
 };
 
@@ -208,7 +208,8 @@ impl Store {
                 params![id],
                 read_session,
             )
-            .optional()?)
+            .optional()?
+            .flatten())
     }
 
     /// Writes the session's title and nothing else. Returns the record as it now stands, or `None`
@@ -423,13 +424,16 @@ impl Store {
         let Some(before) = conn
             .query_row(&select, params![id], read_session)
             .optional()?
+            .flatten()
         else {
             return Ok(None);
         };
         if conn.execute(update, params)? == 0 {
             return Ok(None);
         }
-        let after = conn.query_row(&select, params![id], read_session)?;
+        let Some(after) = conn.query_row(&select, params![id], read_session)? else {
+            return Ok(None);
+        };
         Ok(Some((before.status, after)))
     }
 
@@ -466,7 +470,8 @@ impl Store {
                     params![source.id],
                     read_session,
                 )
-                .optional()?;
+                .optional()?
+                .flatten();
             let Some(mut session) = session else { continue };
             if session.agent != source.agent
                 || session.agent_session_id != source.agent_session_id
@@ -551,7 +556,8 @@ impl Store {
                 params![id],
                 read_session,
             )
-            .optional()?;
+            .optional()?
+            .flatten();
         let Some(mut session) = session else {
             return Ok(None);
         };
@@ -775,7 +781,8 @@ impl Store {
                 params![id, enum_to_text(&SessionStatus::Archived)],
                 read_session,
             )
-            .optional()?)
+            .optional()?
+            .flatten())
     }
 
     /// Deletes the session only while it is unused: it has had no turn, has no session bound to it
@@ -797,7 +804,8 @@ impl Store {
                 params![id, enum_to_text(&Origin::User)],
                 read_session,
             )
-            .optional()?)
+            .optional()?
+            .flatten())
     }
 
     pub fn get_session(&self, id: &str) -> Result<Option<Session>> {
@@ -808,7 +816,8 @@ impl Store {
                 params![id],
                 read_session,
             )
-            .optional()?;
+            .optional()?
+            .flatten();
         Ok(session)
     }
 
@@ -835,7 +844,8 @@ impl Store {
                 params![agent_session_id, except],
                 read_session,
             )
-            .optional()?;
+            .optional()?
+            .flatten();
         Ok(session)
     }
 
@@ -847,7 +857,7 @@ impl Store {
         let rows = stmt
             .query_map([], read_session)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(rows)
+        Ok(rows.into_iter().flatten().collect())
     }
 
     /// Moves every session that a previous daemon left mid-flight to `interrupted`. The daemon
@@ -941,10 +951,15 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
-    Ok(Session {
+/// The session in the row, or `None` when its agent is no registered provider: such a session is
+/// kept in the table and left out of what is loaded.
+pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
+    let Some(agent) = agent_from_row(row, 1)? else {
+        return Ok(None);
+    };
+    Ok(Some(Session {
         id: row.get(0)?,
-        agent: enum_from_row::<Agent>(row, 1)?,
+        agent,
         agent_session_id: row.get(2)?,
         console_id: row.get(3)?,
         project_id: row.get(4)?,
@@ -981,7 +996,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
             .and_then(|text| serde_json::from_str(&text).ok()),
         model: row.get::<_, bool>(23)?.then(|| row.get(21)).transpose()?,
         effort: row.get::<_, bool>(24)?.then(|| row.get(22)).transpose()?,
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -2046,5 +2061,43 @@ mod tests {
             .set_terminal_title("session-1", Some("Late title"))
             .unwrap()
             .is_none());
+    }
+
+    /// A session of an agent that is not registered stays in the table and is left out of every
+    /// load.
+    #[test]
+    fn a_session_of_an_unregistered_agent_is_kept_and_left_out_of_a_load() {
+        let path = temp_db("session-unregistered-agent");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_session(&session(None)).expect("session");
+        store
+            .lock()
+            .execute(
+                "INSERT INTO sessions (id, agent, console_id, host_id, kind, origin, title, status,
+                                       role, started_at)
+                 VALUES ('retired', 'retired', 'console-1', 'local', 'console', 'user', 't',
+                         'idle', 'coordinator', 0)",
+                [],
+            )
+            .unwrap();
+        assert!(store.get_session("retired").unwrap().is_none());
+        assert!(store.set_session_title("retired", "x").unwrap().is_none());
+        assert_eq!(
+            store
+                .list_sessions()
+                .unwrap()
+                .into_iter()
+                .map(|session| session.id)
+                .collect::<Vec<_>>(),
+            ["session-1"]
+        );
+        let stored: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stored, 2);
     }
 }

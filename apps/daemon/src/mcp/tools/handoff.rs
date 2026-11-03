@@ -17,7 +17,7 @@ use crate::mcp::lookup::{
     resolve_owned_session,
 };
 use crate::mcp::views::{account_fields, insert_own_launch};
-use crate::protocol::{Agent, Session};
+use crate::protocol::{AgentId, Session};
 use crate::session_request::{self, Change, Edits, Perform, Performed};
 use crate::state::AppState;
 
@@ -116,7 +116,7 @@ fn unnamed_account(
     state: &Arc<AppState>,
     caller: &Session,
     target: &Session,
-    agent: Agent,
+    agent: AgentId,
 ) -> Result<Option<Option<String>>> {
     let console = state
         .store
@@ -139,7 +139,7 @@ fn unnamed_account(
 
 /// What the call asked for.
 struct Asked {
-    agent: Agent,
+    agent: AgentId,
     account: Option<Option<String>>,
     model: Option<Option<String>>,
     effort: Option<Option<String>>,
@@ -272,7 +272,7 @@ mod tests {
     use crate::mcp::test_support::{
         account, arguments, peer_state, project_session, shared_console_state, Launches, Started,
     };
-    use crate::protocol::{Agent, Event, SessionRequestAction, SessionStatus};
+    use crate::protocol::{AgentId, Event, SessionRequestAction, SessionStatus};
     use crate::test_support::{heard_after_marker, running, stand_in_launch, StandIn};
 
     /// Every session of the store with its status and owner, for what a refusal must leave alone.
@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(result["archived"], "of-a");
         assert_eq!(result["owned_sessions"], json!([]));
         let record = state.store.get_session(receiving).unwrap().unwrap();
-        assert_eq!(record.agent, Agent::Codex);
+        assert_eq!(record.agent, AgentId::CODEX);
         assert_eq!(record.bound_to.as_deref(), Some("a"));
         assert_eq!(record.project_id.as_deref(), Some("project-1"));
         assert_eq!(
@@ -367,7 +367,7 @@ mod tests {
         assert_eq!(result["owned_sessions"], json!(["owned-by-mine"]));
         assert!(result["note"].as_str().unwrap().contains("Handed off"));
         let record = state.store.get_session(receiving).unwrap().unwrap();
-        assert_eq!(record.agent, Agent::Grok);
+        assert_eq!(record.agent, AgentId::GROK);
         assert_eq!(record.bound_to.as_deref(), Some("starter"));
         assert_eq!(
             state
@@ -392,14 +392,14 @@ mod tests {
             .store
             .insert_account(&account(
                 "codex-work",
-                Agent::Codex,
+                AgentId::CODEX,
                 "Work",
                 "/tmp/codex-work",
             ))
             .unwrap();
         state
             .save_session(&Session {
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 ..state.session_record("a").unwrap()
             })
             .unwrap();
@@ -425,7 +425,7 @@ mod tests {
             .get_session(result["session"].as_str().unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(record.agent, Agent::Codex);
+        assert_eq!(record.agent, AgentId::CODEX);
         assert_eq!(record.account_id.as_deref(), Some("codex-work"));
         assert_eq!(record.title, "修复构建");
     }
@@ -438,11 +438,11 @@ mod tests {
         let (state, _dir) = shared_console_state("handoff-sharing-caller");
         state.store.set_auto_approve_handoffs(true).unwrap();
         state.store.set_auto_select_account(true).unwrap();
-        let account = account("codex-work", Agent::Codex, "Work", "/tmp/codex-work");
+        let account = account("codex-work", AgentId::CODEX, "Work", "/tmp/codex-work");
         state.store.insert_account(&account).unwrap();
         state
             .save_session(&Session {
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 ..state.session_record("a").unwrap()
             })
             .unwrap();
@@ -469,7 +469,7 @@ mod tests {
             .get_session(result["session"].as_str().unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(record.agent, Agent::Codex);
+        assert_eq!(record.agent, AgentId::CODEX);
         assert_eq!(record.account_id, None);
     }
 
@@ -486,7 +486,7 @@ mod tests {
         ] {
             state
                 .store
-                .insert_account(&account(id, Agent::Codex, id, dir))
+                .insert_account(&account(id, AgentId::CODEX, id, dir))
                 .unwrap();
         }
         let soon = crate::time::now_millis() + 60_000;
@@ -500,7 +500,7 @@ mod tests {
         let reading =
             |id: &str, window: crate::protocol::QuotaWindow| crate::protocol::AccountQuota {
                 reset_credits: None,
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 account: Some(id.to_string()),
                 fetched_at: 1,
                 plan: None,
@@ -517,7 +517,7 @@ mod tests {
         );
         state
             .save_session(&Session {
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 ..state.session_record("a").unwrap()
             })
             .unwrap();
@@ -554,7 +554,7 @@ mod tests {
             .store
             .insert_account(&crate::protocol::Account {
                 disabled: true,
-                ..account("codex-off", Agent::Codex, "codex-off", "/tmp/codex-off")
+                ..account("codex-off", AgentId::CODEX, "codex-off", "/tmp/codex-off")
             })
             .unwrap();
         let _caller = running(&state, "a");
@@ -584,7 +584,7 @@ mod tests {
         state.store.set_auto_select_account(true).unwrap();
         state
             .store
-            .set_default_account_disabled(Agent::Codex, true)
+            .set_default_account_disabled(AgentId::CODEX, true)
             .unwrap();
         let used_up = |resets_in: i64| crate::protocol::QuotaWindow {
             kind: crate::protocol::QuotaWindowKind::Session,
@@ -597,12 +597,12 @@ mod tests {
             let dir = format!("/tmp/{id}");
             state
                 .store
-                .insert_account(&account(id, Agent::Codex, id, dir.clone()))
+                .insert_account(&account(id, AgentId::CODEX, id, dir.clone()))
                 .unwrap();
             state.account_quotas.hold_in_dir_for_test(
                 &crate::protocol::AccountQuota {
                     reset_credits: None,
-                    agent: Agent::Codex,
+                    agent: AgentId::CODEX,
                     account: Some(id.to_string()),
                     fetched_at: 1,
                     plan: None,
@@ -615,7 +615,7 @@ mod tests {
         }
         state
             .save_session(&Session {
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 ..state.session_record("a").unwrap()
             })
             .unwrap();
@@ -697,7 +697,7 @@ mod tests {
             .store
             .insert_account(&account(
                 "claude-account",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "Work",
                 "/tmp/claude-account",
             ))
@@ -785,7 +785,7 @@ mod tests {
         };
         assert_eq!(action, SessionRequestAction::Handoff);
         assert_eq!(target.as_deref(), Some("of-a"));
-        assert_eq!(agent, Agent::Codex);
+        assert_eq!(agent, AgentId::CODEX);
         assert_eq!(
             account, None,
             "the default account, settled when the call was made"
@@ -801,7 +801,7 @@ mod tests {
             &request_id,
             true,
             Edits {
-                agent: Some(Agent::Grok),
+                agent: Some(AgentId::GROK),
                 account: Some(None),
                 ..Default::default()
             },
@@ -814,7 +814,7 @@ mod tests {
         assert_eq!(result["agent"], "grok");
         assert_eq!(result["session"], receiving.id);
         let record = state.store.get_session(&receiving.id).unwrap().unwrap();
-        assert_eq!(record.agent, Agent::Grok);
+        assert_eq!(record.agent, AgentId::GROK);
         assert_eq!(record.title, "Fix the build");
         assert_eq!(
             state.store.get_session("of-a").unwrap().unwrap().status,
@@ -893,7 +893,7 @@ mod tests {
             &request_id,
             true,
             crate::session_request::Edits {
-                agent: Some(Agent::Grok),
+                agent: Some(AgentId::GROK),
                 ..Default::default()
             },
         )

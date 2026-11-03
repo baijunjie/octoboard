@@ -35,7 +35,7 @@ export const homeQuestions = [
   "Setup",
   "DataFlow",
   "Subagents",
-  "Brands",
+  "Providers",
   "Participation",
   "SetupCosts",
   "RemoteExecution",
@@ -45,7 +45,7 @@ export const homeQuestions = [
 
 export function homeQuestionAnswerKey(question: typeof homeQuestions[number]): string {
   if (question === "Subagents") return "faqProjectIsolationAnswer";
-  if (question === "Brands") return "faqAgentChoiceAnswer";
+  if (question === "Providers") return "faqAgentChoiceAnswer";
   return `faq${question}Answer`;
 }
 

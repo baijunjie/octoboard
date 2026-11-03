@@ -10,7 +10,7 @@ use crate::session::LiveSession;
 pub(super) const QUIET: Duration = Duration::from_millis(100);
 
 /// How often [`wait_for`] looks again.
-pub(super) const POLL: Duration = Duration::from_millis(25);
+pub(crate) const POLL: Duration = Duration::from_millis(25);
 
 /// Waits until the session has printed nothing for [`QUIET`], or `timeout` passes.
 pub(crate) fn wait_quiet(live: &LiveSession, timeout: Duration) -> bool {

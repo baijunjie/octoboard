@@ -29,7 +29,7 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
     auto_approve_handoffs: false,
     ask_questions_as_choices: false,
     git_workflow: DEFAULT_GIT_WORKFLOW,
-    claude_compatibility: {},
+    provider_settings: {},
     agent_tags: {},
     ...carried,
   };

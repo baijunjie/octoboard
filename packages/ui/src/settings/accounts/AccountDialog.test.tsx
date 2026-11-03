@@ -5,7 +5,9 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { accountOf } from "../../fixtures/builders";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { availabilityOf as servedAvailability } from "../../fixtures/fixtureProviders";
 import type { Account, Agent, AgentAvailability, ClientRequestBody } from "../../protocol";
+import { TEST_PROVIDERS } from "../../test/testProviders";
 import { mountHost } from "../../test/mountHost";
 import { testDaemon } from "../../test/testDaemon";
 import { AccountDialog } from "./AccountDialog";
@@ -20,7 +22,7 @@ const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-w
 function render(
   editing: Account | undefined,
   request: (body: ClientRequestBody) => Promise<unknown>,
-  agentAvailability = new Map<Agent, AgentAvailability>(),
+  agentAvailability = servedAvailability(TEST_PROVIDERS),
   addedAgents: Agent[] | null = null,
   renameDefault = false,
   options: { accounts?: Account[]; listDirectory?: () => Promise<unknown> } = {},
@@ -59,7 +61,7 @@ it("lists every added agent as selectable when adding, naming the ones known to 
   render(undefined, () => Promise.resolve(), availabilityOf("codex"));
   await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
   const options = Array.from(document.body.querySelectorAll('[role="option"]'));
-  expect(options.map((o) => o.textContent)).toEqual(["Claude Code", "Codex, Not installed", "Grok Build"]);
+  expect(options.map((o) => o.textContent)).toEqual(["Claude Code", "Codex, Not installed", "Grok Build", "Test Agent"]);
   expect(options.some((o) => o.hasAttribute("data-disabled") || o.getAttribute("aria-disabled") === "true")).toBe(false);
 });
 
@@ -113,6 +115,12 @@ it.each([
 
 it("shows the config directory hint as a visible description", () => {
   render(work, () => Promise.resolve());
+  expect(document.body.textContent).toContain("does not need to exist yet.");
+  expect(document.body.textContent).not.toContain("To retain login and conversations");
+});
+
+it("shows the generic config directory hint alone for a provider whose module has none of its own", () => {
+  render({ ...work, agent: "test_agent" }, () => Promise.resolve());
   expect(document.body.textContent).toContain("does not need to exist yet.");
   expect(document.body.textContent).not.toContain("To retain login and conversations");
 });

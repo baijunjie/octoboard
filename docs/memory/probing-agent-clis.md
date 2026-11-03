@@ -98,7 +98,7 @@ subcommands answer most discovery questions outright and cost nothing: `grok ins
 file it found, `codex debug prompt-input` dumps the model-visible input list, `claude auth status` reports login state
 as JSON. Beyond those, pointing the agent's API base URL at a local HTTP server that dumps the request body and
 returns an error (`ANTHROPIC_BASE_URL` for Claude Code; each CLI has its own) makes the prompt it assembled — system
-prompt, instruction-file blocks, tool definitions — readable with nothing reaching the vendor, and provokes error
+prompt, instruction-file blocks, tool definitions — readable with nothing reaching the provider, and provokes error
 paths that are otherwise unreachable.
 
 **A stand-in endpoint or stub that carries a real login or real credentials — a signed-in config directory, a linked

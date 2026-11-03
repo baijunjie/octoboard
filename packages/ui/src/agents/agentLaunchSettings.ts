@@ -1,5 +1,5 @@
 import type { Translate } from "../i18n/catalog";
-import type { Agent, AgentModel } from "../protocol";
+import type { AgentModel, ModelDisplay } from "../protocol";
 
 // How each agent takes a model and an effort, and what it does with one it cannot honour, is in
 // the "Model and reasoning effort" note of each agent's section ("Claude Code", "Codex",
@@ -14,11 +14,11 @@ export type LaunchSettingOption = { value: string; label: string; badge?: string
   | { detail: string; reason: { state: string } }
 );
 
-/** A stored model as the pickers show it: the retired Claude alias `best` stands for no model at
- * all, as the daemon reads it at launch, so it is shown as unset rather than as a value that is not
- * in the list. */
-export function shownModel(agent: Agent, model: string | null): string | null {
-  return agent === "claude" && model === "best" ? null : model;
+/** A stored model as the pickers show it: a spelling the provider has retired (`retired` of its model display, as the
+ * alias `best` once was) stands for no model at all, as the daemon reads it at launch, so it is shown as unset rather
+ * than as a value that is not in the list. */
+export function shownModel(display: ModelDisplay | undefined, model: string | null): string | null {
+  return model !== null && display?.retired.includes(model) ? null : model;
 }
 
 /** The reasoning effort levels the agent's models accept, for the effort picker. A chosen model that

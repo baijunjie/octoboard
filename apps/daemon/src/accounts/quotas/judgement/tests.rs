@@ -4,12 +4,12 @@ use std::time::Instant;
 
 use crate::accounts::quotas::tests::{key, quota_of, window, NOW};
 use crate::protocol::{
-    quota_unavailable_code as code, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
+    quota_unavailable_code as code, AgentId, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
 };
 
 /// The readings of one Codex account `a` read under `/accounts/a`, holding `windows`.
 fn readings(windows: Vec<QuotaWindow>) -> HashMap<Key, Entry> {
-    let key = key(Agent::Codex, Some("a"));
+    let key = key(AgentId::CODEX, Some("a"));
     let mut quota = quota_of(&key, false);
     quota.windows = windows;
     HashMap::from([(
@@ -27,7 +27,7 @@ fn readings(windows: Vec<QuotaWindow>) -> HashMap<Key, Entry> {
 fn exhausted_of(windows: Vec<QuotaWindow>) -> Option<Exhausted> {
     exhausted_in(
         &readings(windows),
-        Agent::Codex,
+        AgentId::CODEX,
         Some("a"),
         Some("/accounts/a"),
         NOW,
@@ -118,10 +118,10 @@ fn the_window_that_resets_last_is_the_one_reported() {
 fn an_unknown_quota_or_one_of_another_directory_passes() {
     let held = readings(vec![window(QuotaWindowKind::Session, 100.0, None)]);
     let asked = |agent, account, dir| exhausted_in(&held, agent, account, dir, NOW);
-    assert!(asked(Agent::Codex, Some("a"), Some("/accounts/a")).is_some());
+    assert!(asked(AgentId::CODEX, Some("a"), Some("/accounts/a")).is_some());
     // No reading for the account, and one taken under another directory.
-    assert!(asked(Agent::Codex, Some("b"), Some("/accounts/b")).is_none());
-    assert!(asked(Agent::Codex, Some("a"), Some("/accounts/other")).is_none());
+    assert!(asked(AgentId::CODEX, Some("b"), Some("/accounts/b")).is_none());
+    assert!(asked(AgentId::CODEX, Some("a"), Some("/accounts/other")).is_none());
     // A reading without windows.
     assert!(exhausted_of(Vec::new()).is_none());
 }
@@ -132,7 +132,7 @@ fn windows_kept_over_a_failed_re_read_still_count() {
     for entry in held.values_mut() {
         entry.quota.unavailable = Some(QuotaUnavailable::new(code::TIMED_OUT, "no", &[]));
     }
-    let asked = exhausted_in(&held, Agent::Codex, Some("a"), Some("/accounts/a"), NOW);
+    let asked = exhausted_in(&held, AgentId::CODEX, Some("a"), Some("/accounts/a"), NOW);
     assert!(asked.is_some());
 }
 
@@ -392,10 +392,11 @@ fn the_session_window_is_named_as_each_agents_own_interface_names_it() {
         |kind| exhausted_of(vec![window(kind, 100.0, Some(NOW + 1))]).expect("a used-up window");
     let session = exhausted(QuotaWindowKind::Session);
     assert_eq!(session.window, "5-hour");
-    assert_eq!(session.named_for(Agent::Claude), "session");
-    assert_eq!(session.named_for(Agent::Codex), "5h");
+    assert_eq!(session.named_for(AgentId::CLAUDE), "session");
+    assert_eq!(session.named_for(AgentId::CODEX), "5h");
+    assert_eq!(session.named_for(AgentId::GROK), "5h");
     assert_eq!(
-        exhausted(QuotaWindowKind::Weekly).named_for(Agent::Claude),
+        exhausted(QuotaWindowKind::Weekly).named_for(AgentId::CLAUDE),
         "Weekly"
     );
 }
@@ -409,6 +410,6 @@ fn a_weekly_window_beside_a_models_own_is_for_all_models_in_claude_codes_words()
     .expect("a used-up window");
     assert!(blocked.has_model_weekly);
     assert_eq!(blocked.kind, QuotaWindowKind::Weekly);
-    assert_eq!(blocked.named_for(Agent::Claude), "Weekly · all models");
-    assert_eq!(blocked.named_for(Agent::Codex), "Weekly");
+    assert_eq!(blocked.named_for(AgentId::CLAUDE), "Weekly · all models");
+    assert_eq!(blocked.named_for(AgentId::CODEX), "Weekly");
 }

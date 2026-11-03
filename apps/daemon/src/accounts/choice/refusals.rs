@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::standing::{agent_is_available, used_up_quota};
-use crate::protocol::{error_code, Agent, CodedError};
+use crate::protocol::{error_code, AgentId, CodedError};
 use crate::state::AppState;
 use crate::time::now_millis;
 
@@ -16,7 +16,7 @@ use crate::time::now_millis;
 /// `docs/product/opening-sessions.md`. Checked here, ahead of everything that follows, so this is
 /// also what a console session's own `open_session` tool is refused through — it calls this same
 /// function.
-pub(crate) fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+pub(crate) fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: AgentId) -> Result<()> {
     if agent_is_available(state, agent) {
         return Ok(());
     }
@@ -24,10 +24,10 @@ pub(crate) fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -
         error_code::AGENT_NOT_AVAILABLE,
         format!(
             "{} is not available: its binary does not resolve on your login shell's PATH. {} \
-             supports Claude Code, Codex and Grok Build; install one of them and make sure it is \
-             on your PATH to open a session.",
+             supports {}; install one of them and make sure it is on your PATH to open a session.",
             agent.label(),
-            crate::APP_NAME
+            crate::APP_NAME,
+            supported_labels()
         ),
         &[("agent", agent.label())],
     ))
@@ -42,7 +42,7 @@ pub(crate) fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -
 /// [`Store::account_dir`]: crate::store::Store::account_dir
 pub(crate) fn refuse_if_account_quota_exhausted(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
     config_dir: Option<&str>,
 ) -> Result<()> {
@@ -92,7 +92,7 @@ pub(crate) fn refuse_if_account_quota_exhausted(
 /// [`Store::account_dir`]: crate::store::Store::account_dir
 pub(crate) fn refuse_if_account_not_signed_in(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
     config_dir: Option<&str>,
 ) -> Result<()> {
@@ -118,7 +118,7 @@ pub(crate) fn refuse_if_account_not_signed_in(
 /// account cannot open a session" in `docs/product/opening-sessions.md`. An undecided list refuses
 /// nothing. Only a session being opened is checked, so a live session of an agent removed since
 /// keeps running, and resuming, restarting or reopening an existing session never comes here.
-pub(crate) fn refuse_unless_agent_added(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+pub(crate) fn refuse_unless_agent_added(state: &Arc<AppState>, agent: AgentId) -> Result<()> {
     if state.store.agent_is_added(agent)? {
         return Ok(());
     }
@@ -130,6 +130,14 @@ pub(crate) fn refuse_unless_agent_added(state: &Arc<AppState>, agent: Agent) -> 
         ),
         &[("agent", agent.label())],
     ))
+}
+
+/// Every registered provider's label, as a list in prose: "Claude Code, Codex and Grok Build".
+fn supported_labels() -> String {
+    let labels: Vec<&str> = crate::providers::descriptors()
+        .map(|descriptor| descriptor.label)
+        .collect();
+    crate::text::list_names(&labels)
 }
 
 /// A span of milliseconds in the rough terms of a message to read: `3d 4h`, `5h 20m` or `7m`.

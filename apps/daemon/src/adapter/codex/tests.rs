@@ -8,6 +8,16 @@ use crate::adapter::files::SMALL_FILE_LIMIT;
 use crate::adapter::tests::spec_fixture;
 use crate::records::line_file::JSON_FILE_LIMIT;
 
+/// The Codex private server plan a launch plan carries.
+fn private_plan(plan: &LaunchPlan) -> &PrivateServerPlan {
+    plan.private_server
+        .as_ref()
+        .expect("a private server")
+        .as_any()
+        .downcast_ref()
+        .expect("Codex's plan")
+}
+
 #[test]
 fn verified_private_server_keeps_client_and_server_overrides() {
     let mut fixture = spec_fixture();
@@ -16,8 +26,8 @@ fn verified_private_server_keeps_client_and_server_overrides() {
     fixture.effort = Some("high".to_string());
     let mut spec = fixture.spec();
     spec.task = Some("first task");
-    let plan = CodexAdapter.plan(&spec).unwrap();
-    let private = plan.codex_server.as_ref().unwrap();
+    let plan = CodexProvider.plan(&spec).unwrap();
+    let private = private_plan(&plan);
     assert_eq!(overrides(&private.args), overrides(&plan.args));
     assert_eq!(private.tui_args, plan.args);
     assert_eq!(&private.tui_args[..2], ["--cd", spec.cwd.to_str().unwrap()]);
@@ -27,8 +37,8 @@ fn verified_private_server_keeps_client_and_server_overrides() {
     );
     assert_eq!(private.hook_command, spec.hook_script.to_string_lossy());
     spec.resume_agent_session_id = Some("thread-to-resume");
-    let resumed = CodexAdapter.plan(&spec).unwrap();
-    let private = resumed.codex_server.unwrap();
+    let resumed = CodexProvider.plan(&spec).unwrap();
+    let private = private_plan(&resumed);
     assert_eq!(private.resume_thread.as_deref(), Some("thread-to-resume"));
     assert_eq!(private.tui_args, resumed.args);
     assert_eq!(&private.tui_args[..2], ["resume", "thread-to-resume"]);
@@ -37,16 +47,16 @@ fn verified_private_server_keeps_client_and_server_overrides() {
         ["--cd", spec.cwd.to_str().unwrap()]
     );
     fixture.agent_version = None;
-    assert!(CodexAdapter
+    assert!(CodexProvider
         .plan(&fixture.spec())
         .unwrap()
-        .codex_server
+        .private_server
         .is_none());
     fixture.agent_version = Some((0, 164, 0));
-    assert!(CodexAdapter
+    assert!(CodexProvider
         .plan(&fixture.spec())
         .unwrap()
-        .codex_server
+        .private_server
         .is_none());
 }
 
@@ -62,7 +72,7 @@ fn standalone_installs_report_the_version_from_the_resolved_package() {
     .unwrap();
     std::os::unix::fs::symlink(fixture.join("release/bin/codex"), fixture.join("codex")).unwrap();
     assert_eq!(
-        CodexAdapter.installed_version(fixture.join("codex").to_str().unwrap()),
+        CodexProvider.installed_version(fixture.join("codex").to_str().unwrap()),
         Some((0, 163, 0))
     );
 }
@@ -70,7 +80,7 @@ fn standalone_installs_report_the_version_from_the_resolved_package() {
 #[test]
 fn terminal_titles_keep_only_the_task_between_the_spinner_and_the_project() {
     let names = ["proj".to_owned()];
-    let task = |raw| CodexAdapter.task_title(raw, &names);
+    let task = |raw| CodexProvider.task_title(raw, &names);
     for raw in [
         "proj",
         "⠧ ⠧ | proj",
@@ -101,7 +111,7 @@ fn terminal_titles_keep_only_the_task_between_the_spinner_and_the_project() {
 #[test]
 fn a_project_name_codex_cut_short_is_still_the_project() {
     let names = ["f1120ca1-f304-4489-aa46-2ac04c2297d1".to_owned()];
-    let task = |raw| CodexAdapter.task_title(raw, &names);
+    let task = |raw| CodexProvider.task_title(raw, &names);
     assert_eq!(task("f1120ca1-f304-4489-aa..."), None);
     assert_eq!(task("⠙ | f1120ca1-f304-4489-aa..."), None);
     assert_eq!(
@@ -116,7 +126,7 @@ fn a_project_name_codex_cut_short_is_still_the_project() {
     assert_eq!(task("Fix it | ...").as_deref(), Some("Fix it | ..."));
     let short = ["proj".to_owned()];
     assert_eq!(
-        CodexAdapter.task_title("x | proj...", &short).as_deref(),
+        CodexProvider.task_title("x | proj...", &short).as_deref(),
         Some("x | proj..."),
         "a name Codex keeps whole is never cut"
     );
@@ -133,7 +143,7 @@ fn overrides(args: &[String]) -> Vec<String> {
 #[test]
 fn no_model_or_effort_adds_no_overrides() {
     let fixture = spec_fixture();
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
     assert!(!overrides(&plan.args)
         .iter()
         .any(|override_| override_.starts_with("model")));
@@ -146,7 +156,7 @@ fn a_model_and_effort_are_config_overrides_ahead_of_the_task() {
     fixture.effort = Some("high".to_string());
     let mut spec = fixture.spec();
     spec.task = Some("do it");
-    let plan = CodexAdapter.plan(&spec).expect("plan");
+    let plan = CodexProvider.plan(&spec).expect("plan");
     let overrides = overrides(&plan.args);
     assert!(overrides.contains(&"model=\"gpt-5\"".to_string()));
     assert!(overrides.contains(&"model_reasoning_effort=\"high\"".to_string()));
@@ -159,7 +169,7 @@ fn a_model_and_effort_are_config_overrides_ahead_of_the_task() {
 #[test]
 fn passes_no_project_trust_and_no_update_check() {
     let fixture = spec_fixture();
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
     let overrides = overrides(&plan.args);
     assert!(
         !overrides
@@ -173,7 +183,7 @@ fn passes_no_project_trust_and_no_update_check() {
 #[test]
 fn injects_one_hook_override_per_event_and_gets_past_the_trust_gate() {
     let fixture = spec_fixture();
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
     let overrides = overrides(&plan.args);
     for event in HOOK_EVENTS {
         assert_eq!(
@@ -202,7 +212,7 @@ fn a_resume_names_the_subcommand_first_and_still_re_injects() {
     let fixture = spec_fixture();
     let mut spec = fixture.spec();
     spec.resume_agent_session_id = Some("thread-id");
-    let plan = CodexAdapter.plan(&spec).expect("plan");
+    let plan = CodexProvider.plan(&spec).expect("plan");
     assert_eq!(plan.args[0], "resume");
     assert_eq!(plan.args[1], "thread-id");
     // Every `-c` override is per-invocation and persisted nowhere, so a resume that omits them
@@ -220,7 +230,7 @@ fn a_resume_names_the_subcommand_first_and_still_re_injects() {
 #[test]
 fn registers_the_mcp_server_as_a_command_with_its_tools_pre_approved() {
     let fixture = spec_fixture();
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
     let overrides = overrides(&plan.args);
     assert!(overrides.contains(&format!(
         "mcp_servers.octoboard.command={:?}",
@@ -242,7 +252,7 @@ fn registers_the_mcp_server_as_a_command_with_its_tools_pre_approved() {
 #[test]
 fn the_servers_tool_timeout_sits_above_octoboards_own_call_limit() {
     let fixture = spec_fixture();
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
     let overrides = overrides(&plan.args);
     assert!(overrides.contains(&"mcp_servers.octoboard.tool_timeout_sec=660".to_string()));
     assert!(!overrides.iter().any(|o| o.starts_with("tool_timeout_sec")));
@@ -253,18 +263,33 @@ fn the_servers_tool_timeout_sits_above_octoboards_own_call_limit() {
 #[test]
 fn the_role_text_is_added_as_a_developer_message_not_a_replaced_system_prompt() {
     let fixture = spec_fixture();
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
     let overrides = overrides(&plan.args);
     assert!(overrides.iter().any(|o| o.starts_with(&format!(
         "developer_instructions={}",
         toml_string(&session_tools::role::role_description(
             fixture.kind,
             fixture.owner.as_ref(),
-            Agent::Codex,
+            AgentId::CODEX,
             &fixture.spec().role_options(),
         ))
     ))));
     assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));
+}
+
+/// The compatibility source Claude compatibility reads from.
+fn claude_source() -> Option<&'static dyn crate::adapter::CompatibilitySource> {
+    crate::adapter::provider(AgentId::CLAUDE).compatibility_source()
+}
+
+/// The settings that choose `reviewer`.
+fn reviewer_settings(reviewer: ApprovalReviewer) -> crate::providers::ProviderSettings {
+    crate::providers::ProviderSettings::new([(
+        "approval_reviewer".to_string(),
+        Some(crate::providers::SettingValue::Choice(
+            reviewer.as_str().to_string(),
+        )),
+    )])
 }
 
 /// Claude compatibility appends the instructions that have Codex read Claude Code's
@@ -283,16 +308,16 @@ fn claude_compatibility_appends_the_instructions_naming_the_claude_config_dir() 
         "CLAUDE_CONFIG_DIR".to_string(),
         "/work/claude-home".to_string(),
     );
-    let off = instructions(&CodexAdapter.plan(&fixture.spec()).unwrap());
+    let off = instructions(&CodexProvider.plan(&fixture.spec()).unwrap());
     assert!(!off.contains("Claude Code compatibility"));
 
     let mut spec = fixture.spec();
-    spec.claude_compatibility = true;
-    let on = instructions(&CodexAdapter.plan(&spec).unwrap());
+    spec.compatibility_source = claude_source();
+    let on = instructions(&CodexProvider.plan(&spec).unwrap());
     let description = toml_string(&session_tools::role::role_description(
         fixture.kind,
         fixture.owner.as_ref(),
-        Agent::Codex,
+        AgentId::CODEX,
         &spec.role_options(),
     ));
     let role_text = description.trim_end_matches('"');
@@ -333,14 +358,14 @@ fn claude_compatibility_passes_claude_codes_mcp_servers_without_secrets_on_argv(
         .insert("HOME".to_string(), home.to_string_lossy().into_owned());
     fixture.config_dir = Some(codex_home);
 
-    let plan = CodexAdapter.plan(&fixture.spec()).unwrap();
+    let plan = CodexProvider.plan(&fixture.spec()).unwrap();
     assert!(!overrides(&plan.args)
         .iter()
         .any(|o| o.starts_with("mcp_servers.remote")));
 
     let mut spec = fixture.spec();
-    spec.claude_compatibility = true;
-    let plan = CodexAdapter.plan(&spec).unwrap();
+    spec.compatibility_source = claude_source();
+    let plan = CodexProvider.plan(&spec).unwrap();
     let all = overrides(&plan.args);
     assert!(all.contains(&"mcp_servers.remote.url=\"https://x.example/mcp\"".to_string()));
     assert!(all
@@ -389,8 +414,8 @@ fn claude_compatibility_skips_servers_that_set_what_the_launch_or_codex_owns() {
     fixture.config_dir = Some(codex_home);
 
     let mut spec = fixture.spec();
-    spec.claude_compatibility = true;
-    let plan = CodexAdapter.plan(&spec).unwrap();
+    spec.compatibility_source = claude_source();
+    let plan = CodexProvider.plan(&spec).unwrap();
     let all = overrides(&plan.args);
     for skipped in ["home", "gitcfg", "octo", "log", "proxy"] {
         let prefix = format!("mcp_servers.{skipped}.");
@@ -442,22 +467,21 @@ fn claude_compatibility_leaves_servers_the_projects_codex_config_defines() {
         .insert("HOME".to_string(), home.to_string_lossy().into_owned());
     fixture.cwd = cwd.clone();
     let mut spec = fixture.spec();
-    spec.claude_compatibility = true;
-    let all = overrides(&CodexAdapter.plan(&spec).unwrap().args);
+    spec.compatibility_source = claude_source();
+    let all = overrides(&CodexProvider.plan(&spec).unwrap().args);
     assert!(all.contains(&"mcp_servers.free.command=\"c\"".to_string()));
     assert!(!all.iter().any(|o| o.starts_with("mcp_servers.near.")));
     assert!(!all.iter().any(|o| o.starts_with("mcp_servers.root.")));
 
     std::fs::write(cwd.join(".codex/config.toml"), "= not toml").unwrap();
     let mut spec = fixture.spec();
-    spec.claude_compatibility = true;
-    let all = overrides(&CodexAdapter.plan(&spec).unwrap().args);
+    spec.compatibility_source = claude_source();
+    let all = overrides(&CodexProvider.plan(&spec).unwrap().args);
     assert!(!all.iter().any(|o| o.starts_with("mcp_servers.free.")));
 }
 
 #[test]
 fn account_reviewer_overrides_are_repeated_on_resume_without_changing_the_users_config() {
-    use crate::protocol::ApprovalReviewer;
     let mut fixture = spec_fixture();
     let home = fixture.scratch.join("reviewer-home");
     std::fs::create_dir_all(&home).unwrap();
@@ -470,11 +494,12 @@ fn account_reviewer_overrides_are_repeated_on_resume_without_changing_the_users_
         (ApprovalReviewer::AutoReview, "auto_review", true),
     ] {
         for resume in [None, Some("conversation-1")] {
+            let settings = reviewer_settings(reviewer);
             let mut spec = fixture.spec();
-            spec.approval_reviewer = Some(reviewer);
+            spec.settings = &settings;
             spec.resume_agent_session_id = resume;
             spec.task = Some("Initial prompt");
-            let plan = CodexAdapter.plan(&spec).unwrap();
+            let plan = CodexProvider.plan(&spec).unwrap();
             assert_eq!(plan.resolves_approvals_itself, resolves);
             assert!(overrides(&plan.args).contains(&format!("approvals_reviewer=\"{text}\"")));
             assert!(!plan
@@ -487,7 +512,7 @@ fn account_reviewer_overrides_are_repeated_on_resume_without_changing_the_users_
             assert_eq!(std::fs::read_to_string(&config).unwrap(), original);
         }
     }
-    let plan = CodexAdapter.plan(&fixture.spec()).unwrap();
+    let plan = CodexProvider.plan(&fixture.spec()).unwrap();
     assert!(plan.resolves_approvals_itself);
     assert!(!overrides(&plan.args)
         .iter()
@@ -496,16 +521,16 @@ fn account_reviewer_overrides_are_repeated_on_resume_without_changing_the_users_
 
 #[test]
 fn remote_resumes_pass_the_reviewer_to_the_server_only() {
-    use crate::protocol::ApprovalReviewer;
     let mut fixture = spec_fixture();
     fixture.agent_version = Some((0, 163, 0));
     for reviewer in [ApprovalReviewer::User, ApprovalReviewer::AutoReview] {
         for resume in [None, Some("conversation-1")] {
+            let settings = reviewer_settings(reviewer);
             let mut spec = fixture.spec();
-            spec.approval_reviewer = Some(reviewer);
+            spec.settings = &settings;
             spec.resume_agent_session_id = resume;
-            let plan = CodexAdapter.plan(&spec).unwrap();
-            let private = plan.codex_server.as_ref().unwrap();
+            let plan = CodexProvider.plan(&spec).unwrap();
+            let private = private_plan(&plan);
             assert_eq!(private.resume_reviewer, Some(reviewer));
             let server_overrides = overrides(&private.args);
             let client_overrides = overrides(&private.tui_args);
@@ -546,7 +571,7 @@ fn auto_review_in_the_users_own_config_is_noticed() {
 
     // No configuration at all: the user gets asked, which is the safe way to be wrong.
     assert!(
-        !CodexAdapter
+        !CodexProvider
             .plan(&fixture.spec())
             .expect("plan")
             .resolves_approvals_itself
@@ -558,7 +583,7 @@ fn auto_review_in_the_users_own_config_is_noticed() {
     )
     .expect("config");
     assert!(
-        CodexAdapter
+        CodexProvider
             .plan(&fixture.spec())
             .expect("plan")
             .resolves_approvals_itself
@@ -572,7 +597,7 @@ fn auto_review_in_the_users_own_config_is_noticed() {
     )
     .expect("config");
     assert!(
-        CodexAdapter
+        CodexProvider
             .plan(&fixture.spec())
             .expect("plan")
             .resolves_approvals_itself
@@ -580,7 +605,7 @@ fn auto_review_in_the_users_own_config_is_noticed() {
 
     std::fs::write(home.join("config.toml"), "approvals_reviewer = \"ask\"\n").expect("config");
     assert!(
-        !CodexAdapter
+        !CodexProvider
             .plan(&fixture.spec())
             .expect("plan")
             .resolves_approvals_itself
@@ -605,7 +630,7 @@ fn a_fifo_or_an_oversized_config_counts_as_unreadable() {
     }
     let (done, finished) = std::sync::mpsc::channel();
     let fixture = std::thread::spawn(move || {
-        let planned = CodexAdapter.plan(&fixture.spec()).is_ok();
+        let planned = CodexProvider.plan(&fixture.spec()).is_ok();
         let _ = done.send(planned);
         fixture
     });
@@ -637,7 +662,7 @@ fn a_fifo_or_an_oversized_config_counts_as_unreadable() {
     .expect("config");
     assert!(matches!(read_config(&home), ConfigFile::Unreadable));
     assert!(
-        !CodexAdapter
+        !CodexProvider
             .plan(&fixture.spec())
             .expect("plan")
             .resolves_approvals_itself
@@ -671,10 +696,10 @@ fn a_linked_codex_home_under_a_home_opened_as_the_project_is_read() {
 #[test]
 fn every_launch_pins_the_terminal_title_and_hides_the_model_nudge() {
     let fixture = spec_fixture();
-    let fresh = overrides(&CodexAdapter.plan(&fixture.spec()).expect("plan").args);
+    let fresh = overrides(&CodexProvider.plan(&fixture.spec()).expect("plan").args);
     let mut spec = fixture.spec();
     spec.resume_agent_session_id = Some("thread-id");
-    let resumed = overrides(&CodexAdapter.plan(&spec).expect("plan").args);
+    let resumed = overrides(&CodexProvider.plan(&spec).expect("plan").args);
     for overrides in [&fresh, &resumed] {
         assert!(overrides.contains(
             &"tui.terminal_title=[\"activity\",\"thread-name\",\"project-name\"]".to_string()
@@ -735,7 +760,7 @@ fn the_migration_override_comes_from_the_codex_home_in_effect() {
         shell_home.to_string_lossy().into_owned(),
     );
     let migrations = |fixture: &crate::adapter::tests::SpecFixture| {
-        overrides(&CodexAdapter.plan(&fixture.spec()).expect("plan").args)
+        overrides(&CodexProvider.plan(&fixture.spec()).expect("plan").args)
             .into_iter()
             .find(|o| o.starts_with("notice.model_migrations="))
     };
@@ -780,7 +805,7 @@ fn the_approval_setting_is_read_from_the_pinned_codex_home() {
     )
     .expect("config");
     let resolves = |fixture: &crate::adapter::tests::SpecFixture| {
-        CodexAdapter
+        CodexProvider
             .plan(&fixture.spec())
             .expect("plan")
             .resolves_approvals_itself
@@ -801,7 +826,7 @@ fn the_approval_setting_is_read_from_the_pinned_codex_home() {
 #[test]
 fn a_pinned_codex_home_is_exported_and_an_unpinned_launch_adds_nothing() {
     let mut fixture = spec_fixture();
-    assert!(CodexAdapter
+    assert!(CodexProvider
         .plan(&fixture.spec())
         .expect("plan")
         .env
@@ -810,7 +835,7 @@ fn a_pinned_codex_home_is_exported_and_an_unpinned_launch_adds_nothing() {
     let dir = fixture.scratch.join("codex-alt");
     std::fs::create_dir_all(&dir).expect("config dir");
     fixture.config_dir = Some(dir.clone());
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
     assert_eq!(
         plan.env,
         vec![("CODEX_HOME".to_string(), dir.to_string_lossy().into_owned())]
@@ -823,7 +848,7 @@ fn a_pinned_codex_home_that_has_gone_refuses_resuming_a_conversation() {
     fixture.config_dir = Some(fixture.scratch.join("missing"));
     let mut spec = fixture.spec();
     spec.resume_agent_session_id = Some("agent-side-id");
-    let err = CodexAdapter.plan(&spec).err().expect("refused");
+    let err = CodexProvider.plan(&spec).err().expect("refused");
     let message = err.to_string();
     assert!(message.contains("Codex"), "{message}");
     assert!(message.contains("missing"), "{message}");
@@ -838,15 +863,20 @@ fn a_pinned_codex_home_that_has_gone_is_created_with_no_conversation_to_resume()
     let mut fixture = spec_fixture();
     let dir = fixture.scratch.join("missing").join("nested");
     fixture.config_dir = Some(dir.clone());
-    CodexAdapter.plan(&fixture.spec()).expect("not refused");
+    CodexProvider.plan(&fixture.spec()).expect("not refused");
     assert!(dir.is_dir());
 }
 
 #[test]
 fn never_pre_allocates_a_session_id() {
     let fixture = spec_fixture();
-    let plan = CodexAdapter.plan(&fixture.spec()).expect("plan");
-    assert!(!CodexAdapter.preallocates_session_id());
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
+    assert!(
+        !AgentId::CODEX
+            .descriptor()
+            .capabilities
+            .preallocates_session_id
+    );
     assert!(!plan.args.iter().any(|arg| arg.contains("session-id")));
 }
 
@@ -862,4 +892,14 @@ fn codex_action_markers_are_activity_items_rather_than_task_text() {
     ] {
         assert!(!action_required_title(title), "{title}");
     }
+}
+
+/// Codex has no stash the daemon uses, whatever its version.
+#[test]
+fn codex_never_uses_a_stash() {
+    let mut fixture = spec_fixture();
+    fixture.agent_version = Some((99, 0, 0));
+    assert!(!CodexProvider
+        .screen()
+        .native_stash(&fixture.spec(), &LaunchPlan::default()));
 }

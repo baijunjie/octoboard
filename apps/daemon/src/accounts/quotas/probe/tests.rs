@@ -1,6 +1,11 @@
 use super::*;
-use crate::adapter;
+use crate::adapter::claude::quota::{claude_signed_out, read_claude};
+use crate::adapter::codex::quota::read_codex;
+use crate::adapter::grok::quota::read_grok;
+use crate::adapter::provider;
+use crate::protocol::{QuotaWindow, QuotaWindowKind, ResetCredit};
 use crate::test_support::{fake_agent, until_the_shell_ran, ScratchDir};
+use serde_json::json;
 
 const CLAUDE_REPLY: &str = include_str!("../../../../testdata/claude_get_usage_reply.json");
 const CODEX_REPLY: &str = include_str!("../../../../testdata/codex_rate_limits_reply.json");
@@ -9,35 +14,47 @@ const GROK_REPLY: &str = include_str!("../../../../testdata/grok_billing_reply.j
 /// Long enough for a fake agent to start on a loaded machine, short enough to wait out.
 const SHORT: Duration = Duration::from_millis(700);
 
-fn reply_of(agent: Agent) -> &'static str {
+fn reply_of(agent: AgentId) -> &'static str {
     match agent {
-        Agent::Claude => CLAUDE_REPLY,
-        Agent::Codex => CODEX_REPLY,
-        Agent::Grok => GROK_REPLY,
+        AgentId::CLAUDE => CLAUDE_REPLY,
+        AgentId::CODEX => CODEX_REPLY,
+        AgentId::GROK => GROK_REPLY,
+        other => panic!("no fixture for {other}"),
     }
 }
 
+/// The providers that read a quota by asking their CLI; the others have nothing to probe.
+fn probing_providers() -> impl Iterator<Item = AgentId> {
+    AgentId::ALL.into_iter().filter(|agent| {
+        provider(*agent)
+            .accounts()
+            .and_then(|ops| ops.quota_probe())
+            .is_some()
+    })
+}
+
 /// What the request the reply answers is recognised by in the fake's input.
-fn request_marker(agent: Agent) -> &'static str {
+fn request_marker(agent: AgentId) -> &'static str {
     match agent {
-        Agent::Claude => "get_usage",
-        Agent::Codex => "account/rateLimits/read",
-        Agent::Grok => "_x.ai/billing",
+        AgentId::CLAUDE => "get_usage",
+        AgentId::CODEX => "account/rateLimits/read",
+        AgentId::GROK => "_x.ai/billing",
+        other => panic!("no fixture for {other}"),
     }
 }
 
 /// A fake CLI named after `agent`'s binary in `dir`, running `body`; the environment it is
 /// found through is returned.
-fn fake(dir: &Path, agent: Agent, body: &str) -> HashMap<String, String> {
-    fake_agent(dir, adapter::adapter_for(agent).binary(), body)
+fn fake(dir: &Path, agent: AgentId, body: &str) -> HashMap<String, String> {
+    fake_agent(dir, agent.descriptor().binary, body)
 }
 
 /// A fake that records its arguments, the directory variable and each line it is given under
 /// `dir`, and answers the request `agent`'s probe ends with by printing `reply` after a line
 /// that is not the reply.
-fn answering_agent(dir: &Path, agent: Agent, reply: &str) -> HashMap<String, String> {
+fn answering_agent(dir: &Path, agent: AgentId, reply: &str) -> HashMap<String, String> {
     std::fs::write(dir.join("reply"), reply).expect("reply");
-    let var = crate::agents::layout::layout(agent).config_dir_var;
+    let var = crate::providers::layout::layout(agent).config_dir_var;
     fake(
         dir,
         agent,
@@ -59,9 +76,9 @@ fn unavailable_code(result: Result<Reading, QuotaUnavailable>) -> crate::protoco
 #[test]
 fn claude_reports_its_session_weekly_and_model_windows_from_limits() {
     let dir = ScratchDir::new("quota-claude");
-    let env = answering_agent(&dir, Agent::Claude, CLAUDE_REPLY);
+    let env = answering_agent(&dir, AgentId::CLAUDE, CLAUDE_REPLY);
     let reading = probe(
-        Agent::Claude,
+        AgentId::CLAUDE,
         &env,
         None,
         crate::test_support::PATIENCE,
@@ -151,7 +168,11 @@ fn claude_without_a_subscription_has_no_windows_and_an_error_reply_is_a_failure(
 
 /// A fake agent that prints, for each input line containing a marker, the reply beside it, in
 /// the order the markers are listed here.
-fn replying_agent(dir: &Path, agent: Agent, replies: &[(&str, &Value)]) -> HashMap<String, String> {
+fn replying_agent(
+    dir: &Path,
+    agent: AgentId,
+    replies: &[(&str, &Value)],
+) -> HashMap<String, String> {
     let arms: String = replies
         .iter()
         .map(|(marker, reply)| format!("*'{marker}'*) echo '{reply}';;\n"))
@@ -163,7 +184,7 @@ fn replying_agent(dir: &Path, agent: Agent, replies: &[(&str, &Value)]) -> HashM
     )
 }
 
-fn probe_of(agent: Agent, env: &HashMap<String, String>) -> Result<Reading, QuotaUnavailable> {
+fn probe_of(agent: AgentId, env: &HashMap<String, String>) -> Result<Reading, QuotaUnavailable> {
     probe(
         agent,
         env,
@@ -237,11 +258,11 @@ fn claude_whose_initialize_reply_holds_no_credential_is_not_signed_in() {
         let init = initialize(account);
         let env = replying_agent(
             &dir,
-            Agent::Claude,
+            AgentId::CLAUDE,
             &[("initialize", &init), ("get_usage", &no_limits)],
         );
         assert_eq!(
-            unavailable_code(probe_of(Agent::Claude, &env)),
+            unavailable_code(probe_of(AgentId::CLAUDE, &env)),
             expected,
             "{account}"
         );
@@ -257,10 +278,10 @@ fn claude_with_a_subscription_reads_its_windows_whatever_its_account_says() {
     let usage: Value = serde_json::from_str(CLAUDE_REPLY).unwrap();
     let env = replying_agent(
         &dir,
-        Agent::Claude,
+        AgentId::CLAUDE,
         &[("initialize", &init), ("get_usage", &usage)],
     );
-    assert!(probe_of(Agent::Claude, &env).is_ok());
+    assert!(probe_of(AgentId::CLAUDE, &env).is_ok());
 }
 
 /// The replies to `account/read` Codex 0.163.0 gave in scratch homes.
@@ -326,22 +347,22 @@ fn codex_probe_waits_for_account_read_only_when_its_quota_is_refused() {
     ] {
         let env = replying_agent(
             &dir,
-            Agent::Codex,
+            AgentId::CODEX,
             &[
                 ("account/rateLimits/read", &refusal),
                 ("account/read", &account),
             ],
         );
-        assert_eq!(unavailable_code(probe_of(Agent::Codex, &env)), expected);
+        assert_eq!(unavailable_code(probe_of(AgentId::CODEX, &env)), expected);
     }
     // A reading that arrives is returned without `account/read` ever answering.
     let readings: Value = serde_json::from_str(CODEX_REPLY).unwrap();
     let env = replying_agent(
         &dir,
-        Agent::Codex,
+        AgentId::CODEX,
         &[("account/rateLimits/read", &readings)],
     );
-    assert!(probe_of(Agent::Codex, &env).is_ok());
+    assert!(probe_of(AgentId::CODEX, &env).is_ok());
 }
 
 #[test]
@@ -396,8 +417,8 @@ fn grok_probe_tells_a_refused_account_by_its_initialize_reply_in_either_order() 
             [("_x.ai/billing", &refusal), ("initialize", &init)],
             [("initialize", &init), ("_x.ai/billing", &refusal)],
         ] {
-            let env = replying_agent(&dir, Agent::Grok, &replies);
-            assert_eq!(unavailable_code(probe_of(Agent::Grok, &env)), expected);
+            let env = replying_agent(&dir, AgentId::GROK, &replies);
+            assert_eq!(unavailable_code(probe_of(AgentId::GROK, &env)), expected);
         }
     }
 }
@@ -405,9 +426,9 @@ fn grok_probe_tells_a_refused_account_by_its_initialize_reply_in_either_order() 
 #[test]
 fn codex_reports_its_primary_and_secondary_windows_and_plan() {
     let dir = ScratchDir::new("quota-codex");
-    let env = answering_agent(&dir, Agent::Codex, CODEX_REPLY);
+    let env = answering_agent(&dir, AgentId::CODEX, CODEX_REPLY);
     let reading = probe(
-        Agent::Codex,
+        AgentId::CODEX,
         &env,
         None,
         crate::test_support::PATIENCE,
@@ -601,9 +622,9 @@ fn an_error_reply_carries_its_data_into_the_detail() {
 #[test]
 fn grok_reports_its_credit_pool_over_the_current_period_and_tier() {
     let dir = ScratchDir::new("quota-grok");
-    let env = answering_agent(&dir, Agent::Grok, GROK_REPLY);
+    let env = answering_agent(&dir, AgentId::GROK, GROK_REPLY);
     let reading = probe(
-        Agent::Grok,
+        AgentId::GROK,
         &env,
         None,
         crate::test_support::PATIENCE,
@@ -647,7 +668,7 @@ fn a_grok_pool_without_a_period_still_reads() {
 
 #[test]
 fn an_account_directory_is_exported_under_the_agents_own_variable() {
-    for agent in Agent::ALL {
+    for agent in probing_providers() {
         let dir = ScratchDir::new("quota-dir");
         let env = answering_agent(&dir, agent, reply_of(agent));
         let account_dir = dir.join("account");
@@ -688,11 +709,11 @@ fn an_account_directory_is_exported_under_the_agents_own_variable() {
 fn a_reply_that_is_not_in_a_known_shape_is_unreadable() {
     let replies = [
         (
-            Agent::Claude,
+            AgentId::CLAUDE,
             r#"{"type":"control_response","response":{"subtype":"success","request_id":"r2","response":{}}}"#,
         ),
-        (Agent::Codex, r#"{"id":2,"result":{}}"#),
-        (Agent::Grok, r#"{"jsonrpc":"2.0","id":2,"result":{}}"#),
+        (AgentId::CODEX, r#"{"id":2,"result":{}}"#),
+        (AgentId::GROK, r#"{"jsonrpc":"2.0","id":2,"result":{}}"#),
     ];
     for (agent, reply) in replies {
         let dir = ScratchDir::new("quota-unreadable");
@@ -714,7 +735,7 @@ fn a_reply_that_is_not_in_a_known_shape_is_unreadable() {
 
 #[test]
 fn a_cli_that_never_replies_times_out() {
-    for agent in Agent::ALL {
+    for agent in probing_providers() {
         // Answers nothing, as a CLI waiting on a login would; the marker shows it started,
         // since a fake killed before it ran proves nothing.
         let got = until_the_shell_ran(|| {
@@ -744,8 +765,18 @@ fn a_cli_that_never_replies_times_out() {
 }
 
 #[test]
+fn a_provider_with_no_quota_probe_fails_without_running_anything() {
+    let dir = ScratchDir::new("quota-no-probe");
+    let ran = dir.join("ran");
+    let env = fake(&dir, AgentId::TEST, &format!("touch '{}'", ran.display()));
+    let unavailable = probe_of(AgentId::TEST, &env).expect_err("nothing to read");
+    assert_eq!(unavailable.code, code::COMMAND_FAILED);
+    assert!(!ran.exists(), "the CLI was not run");
+}
+
+#[test]
 fn a_cli_that_exits_without_replying_fails_with_what_it_wrote() {
-    for agent in Agent::ALL {
+    for agent in probing_providers() {
         let dir = ScratchDir::new("quota-exit");
         let env = fake(&dir, agent, "echo 'not logged in' >&2; exit 1");
         let unavailable = probe(
@@ -771,10 +802,10 @@ fn a_cli_that_exits_without_replying_fails_with_what_it_wrote() {
 fn a_read_admitted_after_the_directory_was_moved_runs_nothing() {
     let dir = ScratchDir::new("quota-probe-moved");
     let ran = dir.join("ran");
-    let env = fake(&dir, Agent::Codex, &format!("touch '{}'", ran.display()));
+    let env = fake(&dir, AgentId::CODEX, &format!("touch '{}'", ran.display()));
     let account = dir.join("account");
     let unavailable = probe(
-        Agent::Codex,
+        AgentId::CODEX,
         &env,
         Some(&account),
         crate::test_support::PATIENCE,
@@ -790,18 +821,25 @@ fn a_read_admitted_after_the_directory_was_moved_runs_nothing() {
 #[test]
 fn codex_refusing_a_home_that_does_not_exist_is_a_missing_config_directory() {
     let detail = r#"ended without replying (exit status: 1): Error: CODEX_HOME points to "/h/.codex", but that path does not exist"#;
-    assert_eq!(missing_codex_home(Agent::Codex, detail), Some("/h/.codex"));
-    assert_eq!(missing_codex_home(Agent::Claude, detail), None);
-    assert_eq!(missing_codex_home(Agent::Codex, "not logged in"), None);
+    let missing_home = |agent: AgentId, detail| {
+        let probe = provider(agent).accounts().unwrap().quota_probe().unwrap();
+        probe.missing_config_dir(detail).map(str::to_string)
+    };
+    assert_eq!(
+        missing_home(AgentId::CODEX, detail).as_deref(),
+        Some("/h/.codex")
+    );
+    assert_eq!(missing_home(AgentId::CLAUDE, detail), None);
+    assert_eq!(missing_home(AgentId::CODEX, "not logged in"), None);
 
     let dir = ScratchDir::new("quota-codex-home");
     let env = fake(
         &dir,
-        Agent::Codex,
+        AgentId::CODEX,
         "echo 'Error loading configuration: CODEX_HOME points to \"/h/.codex\", but that path does not exist' >&2; exit 1",
     );
     let unavailable = probe(
-        Agent::Codex,
+        AgentId::CODEX,
         &env,
         None,
         crate::test_support::PATIENCE,
@@ -819,7 +857,7 @@ fn a_missing_binary_is_reported_as_such() {
     let env = HashMap::from([("PATH".to_string(), dir.to_string_lossy().into_owned())]);
     assert_eq!(
         unavailable_code(probe(
-            Agent::Codex,
+            AgentId::CODEX,
             &env,
             None,
             SHORT,
@@ -836,7 +874,7 @@ fn a_program_that_ignores_the_end_of_its_input_is_killed_and_the_trace_says_how_
     std::fs::write(dir.join("reply"), CLAUDE_REPLY).expect("reply");
     let env = fake(
         &dir,
-        Agent::Claude,
+        AgentId::CLAUDE,
         &format!(
             "read a; read b; cat '{d}/reply'; exec /bin/sleep 300",
             d = dir.display()
@@ -844,7 +882,7 @@ fn a_program_that_ignores_the_end_of_its_input_is_killed_and_the_trace_says_how_
     );
     let mut trace = ProbeTrace::default();
     let reading = probe(
-        Agent::Claude,
+        AgentId::CLAUDE,
         &env,
         None,
         Duration::from_millis(3500),
@@ -867,7 +905,7 @@ fn an_error_line_besides_the_reply_is_kept_redacted_in_the_notes() {
     std::fs::write(dir.join("reply"), CLAUDE_REPLY).expect("reply");
     let env = fake(
         &dir,
-        Agent::Claude,
+        AgentId::CLAUDE,
         &format!(
             "while read line; do case \"$line\" in *get_usage*) \
              echo '{{\"type\":\"error\",\"message\":\"refresh failed for me@example.com\"}}'; \
@@ -877,7 +915,7 @@ fn an_error_line_besides_the_reply_is_kept_redacted_in_the_notes() {
     );
     let mut trace = ProbeTrace::default();
     probe(
-        Agent::Claude,
+        AgentId::CLAUDE,
         &env,
         None,
         crate::test_support::PATIENCE,
@@ -906,12 +944,12 @@ fn the_signed_out_reason_of_claude_names_the_fields_that_decided_it() {
         "request_id": "r2", "error": "no credentials for me@example.com"}});
     let env = replying_agent(
         &dir,
-        Agent::Claude,
+        AgentId::CLAUDE,
         &[("initialize", &init), ("get_usage", &usage)],
     );
     let mut trace = ProbeTrace::default();
     let result = probe(
-        Agent::Claude,
+        AgentId::CLAUDE,
         &env,
         None,
         crate::test_support::PATIENCE,

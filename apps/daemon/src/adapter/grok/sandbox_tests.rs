@@ -20,7 +20,10 @@ fn refused_profile(fixture: &SpecFixture, resume: Option<&str>) -> Option<(Strin
         Ok(_) => None,
         Err(err) => {
             let coded = err.downcast_ref::<CodedError>().expect("coded");
-            assert_eq!(coded.code, error_code::GROK_SANDBOX_UNSUPPORTED);
+            assert_eq!(
+                coded.code,
+                Code::of_provider(crate::providers::grok::SANDBOX_UNSUPPORTED)
+            );
             assert!(!farm.exists(), "a refusal builds no farm");
             Some((
                 coded.params["source"].clone(),

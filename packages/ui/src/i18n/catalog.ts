@@ -1,4 +1,5 @@
 import { appConfig } from "../appConfig";
+import { PROVIDER_PARAMS } from "../providers/registry";
 import { en } from "./messages/en";
 import { zhHans } from "./messages/zh-Hans";
 import { FALLBACK_LANGUAGE, type Language } from "./languages";
@@ -21,10 +22,20 @@ export function isMessageKey(key: string): key is MessageKey {
   return Object.hasOwn(en, key);
 }
 
-/** The placeholders filled from the app config in every message, so callers never pass them. */
-const GLOBAL_PARAMS = { appName: appConfig.name, claude: "Claude Code", codex: "Codex", grok: "Grok", git: "Git", macOS: "macOS", tauri: "Tauri" } as const;
+/** The placeholders that are not a provider's: the app's own name (from the app config) and the products' names. */
+const CORE_PARAMS = { appName: appConfig.name, git: "Git", macOS: "macOS", tauri: "Tauri" } as const;
+
+/** The placeholders filled in every message, so callers never pass them: the core ones and the providers' brand names
+ * (`params` of their modules). */
+const GLOBAL_PARAMS = { ...PROVIDER_PARAMS, ...CORE_PARAMS } as const;
 
 type GlobalParam = keyof typeof GLOBAL_PARAMS | "systemSettings";
+
+/** The names of the placeholders that name a provider, which a message shows as references like `{agent}`. */
+export const PROVIDER_PARAM_NAMES: readonly string[] = Object.keys(PROVIDER_PARAMS);
+
+/** The names of the core placeholders, which no provider module may reuse; `systemSettings` is the one filled from the catalog. */
+export const CORE_PARAM_NAMES: readonly string[] = [...Object.keys(CORE_PARAMS), "systemSettings"];
 
 /** The value of a global placeholder, or `undefined` when `name` is not one. */
 export function globalParam(name: string, language: Language = FALLBACK_LANGUAGE): string | undefined {

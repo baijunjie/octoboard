@@ -10,7 +10,7 @@ use super::{
 };
 use crate::coordinator::handle;
 use crate::protocol::{
-    error_code, Agent, Event, ProcessTarget, ProcessTree, RequestBody, SessionStatus,
+    error_code, AgentId, Event, ProcessTarget, ProcessTree, RequestBody, SessionStatus,
 };
 use crate::state::AppState;
 use crate::test_support::{
@@ -25,7 +25,7 @@ use crate::test_support::{
 fn agent_with(state: &Arc<AppState>, id: &str, pid_files: &[&Path]) -> (StandIn, Vec<i32>) {
     state
         .store
-        .insert_session(&project_session(id, Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session(id, AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let commands: String = pid_files
         .iter()
@@ -38,7 +38,7 @@ fn agent_with(state: &Arc<AppState>, id: &str, pid_files: &[&Path]) -> (StandIn,
         .collect();
     let live = fake_live_session(
         id,
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!("{commands}exec sleep 300"),
@@ -95,7 +95,7 @@ async fn a_session_lists_its_trees_and_a_session_without_a_process_or_a_record_i
         .store
         .insert_session(&project_session(
             "s2",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Interrupted,
         ))
         .unwrap();
@@ -308,7 +308,7 @@ async fn a_tree_whose_top_exited_since_it_was_listed_is_kept_by_its_listed_id() 
     let (state, dir) = console_with_project_and_accounts("process-requests-top-exited");
     state
         .store
-        .insert_session(&project_session("s1", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s1", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let (top_file, child_file, go) = (dir.join("top"), dir.join("child"), dir.join("go"));
     let wrapper = format!(
@@ -320,7 +320,7 @@ async fn a_tree_whose_top_exited_since_it_was_listed_is_kept_by_its_listed_id() 
     );
     let live = fake_live_session(
         "s1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!("{wrapper}\nexec sleep 300"),
@@ -498,7 +498,7 @@ fn console_agent(state: &Arc<AppState>, pid_file: &Path) -> (StandIn, i32) {
         .unwrap();
     let live = fake_live_session(
         "hub",
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!(

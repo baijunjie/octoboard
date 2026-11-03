@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 
 /// Which language a session's name is written in, said on every argument that names one. Agents
 /// otherwise take the language of what they read most — the project, its docs and code, the brief —
@@ -150,14 +150,24 @@ pub(super) fn open_session_schema(with_project: bool) -> Value {
     object_schema(properties, &["project", "brief"])
 }
 
-/// The `enum` of an argument that names an agent, in [`Agent::ALL`] order.
+/// The `enum` of an argument that names an agent, in [`AgentId::ALL`] order.
 pub(super) fn agent_enum() -> Value {
     Value::Array(
-        Agent::ALL
+        AgentId::ALL
             .iter()
             .map(|agent| json!(agent.wire_name()))
             .collect(),
     )
+}
+
+/// The agents' ids as an argument's description lists them, in [`AgentId::ALL`] order: "`claude`,
+/// `codex`, `grok`".
+pub(super) fn agent_id_list() -> String {
+    AgentId::ALL
+        .iter()
+        .map(|agent| format!("`{}`", agent.wire_name()))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The `enum` of an argument that names an agent or is `null`.

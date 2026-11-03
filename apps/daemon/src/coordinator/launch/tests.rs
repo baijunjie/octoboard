@@ -2,7 +2,7 @@ use super::*;
 use crate::agents::launch_settings::normalize_session_launch_setting;
 use crate::coordinator::test_support::{console, project_of};
 use crate::protocol::{
-    error_code, Agent, Event, GitWorkflowSettings, GitWorkflowSettingsChanges, Session,
+    error_code, AgentId, Event, GitWorkflowSettings, GitWorkflowSettingsChanges, Session,
     SessionKind, SessionStatus,
 };
 use crate::session::term;
@@ -21,23 +21,23 @@ use std::time::Duration;
 #[test]
 fn a_session_launches_with_the_pair_of_the_record_that_owns_it() {
     let (state, _dir) = crate::test_support::app_state("coordinator-launch-settings");
-    let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
-    owner.launch.claude.model = Some("console-opus".to_string());
-    owner.launch.codex.effort = Some("console-high".to_string());
-    owner.launch.grok.model = Some("console-grok".to_string());
-    owner.launch.grok.effort = Some("console-low".to_string());
+    let mut owner = console(AgentId::CLAUDE, Path::new("/tmp/unused"));
+    owner.launch[AgentId::CLAUDE].model = Some("console-opus".to_string());
+    owner.launch[AgentId::CODEX].effort = Some("console-high".to_string());
+    owner.launch[AgentId::GROK].model = Some("console-grok".to_string());
+    owner.launch[AgentId::GROK].effort = Some("console-low".to_string());
     state.store.insert_console(&owner).unwrap();
     let mut configured = project_of("console-1", "configured");
-    configured.launch.claude.model = Some("project-sonnet".to_string());
-    configured.launch.claude.effort = Some("project-low".to_string());
-    configured.launch.codex.model = Some("project-gpt".to_string());
+    configured.launch[AgentId::CLAUDE].model = Some("project-sonnet".to_string());
+    configured.launch[AgentId::CLAUDE].effort = Some("project-low".to_string());
+    configured.launch[AgentId::CODEX].model = Some("project-gpt".to_string());
     state.store.insert_project(&configured).unwrap();
     state
         .store
         .insert_project(&project_of("console-1", "plain"))
         .unwrap();
 
-    let launched = |kind: SessionKind, project_id: Option<&str>, agent: Agent| {
+    let launched = |kind: SessionKind, project_id: Option<&str>, agent: AgentId| {
         let mut session = bare_session("s", kind);
         session.project_id = project_id.map(str::to_string);
         session.agent = agent;
@@ -48,35 +48,35 @@ fn a_session_launches_with_the_pair_of_the_record_that_owns_it() {
     };
 
     assert_eq!(
-        launched(SessionKind::Console, None, Agent::Claude),
+        launched(SessionKind::Console, None, AgentId::CLAUDE),
         pair(Some("console-opus"), None)
     );
     assert_eq!(
-        launched(SessionKind::Console, None, Agent::Codex),
+        launched(SessionKind::Console, None, AgentId::CODEX),
         pair(None, Some("console-high"))
     );
     assert_eq!(
-        launched(SessionKind::Console, None, Agent::Grok),
+        launched(SessionKind::Console, None, AgentId::GROK),
         pair(Some("console-grok"), Some("console-low"))
     );
     assert_eq!(
-        launched(SessionKind::Project, Some("configured"), Agent::Claude),
+        launched(SessionKind::Project, Some("configured"), AgentId::CLAUDE),
         pair(Some("project-sonnet"), Some("project-low"))
     );
     assert_eq!(
-        launched(SessionKind::Project, Some("configured"), Agent::Codex),
+        launched(SessionKind::Project, Some("configured"), AgentId::CODEX),
         pair(Some("project-gpt"), None)
     );
     assert_eq!(
-        launched(SessionKind::Project, Some("configured"), Agent::Grok),
+        launched(SessionKind::Project, Some("configured"), AgentId::GROK),
         pair(None, None)
     );
     assert_eq!(
-        launched(SessionKind::Project, Some("plain"), Agent::Claude),
+        launched(SessionKind::Project, Some("plain"), AgentId::CLAUDE),
         pair(None, None)
     );
     assert_eq!(
-        launched(SessionKind::Project, Some("plain"), Agent::Codex),
+        launched(SessionKind::Project, Some("plain"), AgentId::CODEX),
         pair(None, None)
     );
 }
@@ -87,17 +87,17 @@ fn a_session_launches_with_the_pair_of_the_record_that_owns_it() {
 #[test]
 fn a_stored_best_model_is_read_as_unset_for_claude_only() {
     let (state, _dir) = crate::test_support::app_state("coordinator-launch-best");
-    let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
-    owner.launch.claude.model = Some("best".to_string());
-    owner.launch.codex.model = Some("best".to_string());
-    owner.project_session_launch.claude.model = Some("sonnet".to_string());
+    let mut owner = console(AgentId::CLAUDE, Path::new("/tmp/unused"));
+    owner.launch[AgentId::CLAUDE].model = Some("best".to_string());
+    owner.launch[AgentId::CODEX].model = Some("best".to_string());
+    owner.project_session_launch[AgentId::CLAUDE].model = Some("sonnet".to_string());
     state.store.insert_console(&owner).unwrap();
     let mut project = project_of("console-1", "project-1");
-    project.launch.claude.model = Some("best".to_string());
+    project.launch[AgentId::CLAUDE].model = Some("best".to_string());
     state.store.insert_project(&project).unwrap();
 
     let model =
-        |kind: SessionKind, project_id: Option<&str>, agent: Agent, own: Option<Option<&str>>| {
+        |kind: SessionKind, project_id: Option<&str>, agent: AgentId, own: Option<Option<&str>>| {
             let mut session = bare_session("s", kind);
             session.project_id = project_id.map(str::to_string);
             session.agent = agent;
@@ -105,20 +105,28 @@ fn a_stored_best_model_is_read_as_unset_for_claude_only() {
             launch_settings(&state, &session).unwrap().0
         };
     let some = |model: &str| Some(model.to_string());
-    assert_eq!(model(SessionKind::Console, None, Agent::Claude, None), None);
     assert_eq!(
-        model(SessionKind::Console, None, Agent::Codex, None),
+        model(SessionKind::Console, None, AgentId::CLAUDE, None),
+        None
+    );
+    assert_eq!(
+        model(SessionKind::Console, None, AgentId::CODEX, None),
         some("best")
     );
     assert_eq!(
-        model(SessionKind::Project, Some("project-1"), Agent::Claude, None),
+        model(
+            SessionKind::Project,
+            Some("project-1"),
+            AgentId::CLAUDE,
+            None
+        ),
         some("sonnet")
     );
     assert_eq!(
         model(
             SessionKind::Console,
             None,
-            Agent::Claude,
+            AgentId::CLAUDE,
             Some(Some("best"))
         ),
         None
@@ -127,7 +135,7 @@ fn a_stored_best_model_is_read_as_unset_for_claude_only() {
         model(
             SessionKind::Console,
             None,
-            Agent::Claude,
+            AgentId::CLAUDE,
             Some(Some("opus"))
         ),
         some("opus")
@@ -140,13 +148,13 @@ fn a_stored_best_model_is_read_as_unset_for_claude_only() {
 /// session has of its own stands, and the other agents are left to their own default.
 #[tokio::test]
 async fn an_unset_claude_model_is_launched_as_the_default_unless_claude_code_names_one() {
-    use crate::agents::models::claude_fixtures::{claude_home, CLAUDE_CATALOGUE};
+    use crate::adapter::claude::models::fixtures::{claude_home, CLAUDE_CATALOGUE};
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
     let (state, dir) = console_with_project_and_accounts("coordinator-launch-default-model");
     let env = claude_home(&dir, "[]", Some(CLAUDE_CATALOGUE));
     let launch_model =
-        |id: &str, agent: Agent, own: Option<Option<&str>>, env: &HashMap<String, String>| {
+        |id: &str, agent: AgentId, own: Option<Option<&str>>, env: &HashMap<String, String>| {
             let session = Session {
                 agent_session_id: Some(format!("conversation-{id}")),
                 has_conversation: true,
@@ -183,22 +191,25 @@ async fn an_unset_claude_model_is_launched_as_the_default_unless_claude_code_nam
         };
     let some = |model: &str| Some(model.to_string());
     assert_eq!(
-        launch_model("plain", Agent::Claude, None, &env).await,
-        some("opus")
-    );
-    assert_eq!(launch_model("codex", Agent::Codex, None, &env).await, None);
-    assert_eq!(
-        launch_model("best", Agent::Claude, Some(Some("best")), &env).await,
+        launch_model("plain", AgentId::CLAUDE, None, &env).await,
         some("opus")
     );
     assert_eq!(
-        launch_model("own", Agent::Claude, Some(Some("haiku")), &env).await,
+        launch_model("codex", AgentId::CODEX, None, &env).await,
+        None
+    );
+    assert_eq!(
+        launch_model("best", AgentId::CLAUDE, Some(Some("best")), &env).await,
+        some("opus")
+    );
+    assert_eq!(
+        launch_model("own", AgentId::CLAUDE, Some(Some("haiku")), &env).await,
         some("haiku")
     );
     let mut named = env.clone();
     named.insert("ANTHROPIC_MODEL".to_string(), "sonnet".to_string());
     assert_eq!(
-        launch_model("named", Agent::Claude, None, &named).await,
+        launch_model("named", AgentId::CLAUDE, None, &named).await,
         None
     );
     // The project's own settings are only known at launch.
@@ -207,7 +218,7 @@ async fn an_unset_claude_model_is_launched_as_the_default_unless_claude_code_nam
     std::fs::create_dir_all(cwd.join(".claude")).unwrap();
     std::fs::write(cwd.join(".claude/settings.json"), r#"{"model":"opus"}"#).unwrap();
     assert_eq!(
-        launch_model("project", Agent::Claude, None, &env).await,
+        launch_model("project", AgentId::CLAUDE, None, &env).await,
         None
     );
 }
@@ -219,12 +230,12 @@ async fn a_stored_best_model_is_not_refused_when_only_the_effort_changes() {
     let (state, _dir) = crate::test_support::app_state("coordinator-launch-best-effort");
     state
         .store
-        .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+        .insert_console(&console(AgentId::CLAUDE, Path::new("/tmp/unused")))
         .unwrap();
     let owner = state.store.require_console("console-1").unwrap();
     let checked = check_launch_settings(
         &state,
-        Agent::Claude,
+        AgentId::CLAUDE,
         None,
         None,
         &owner,
@@ -242,13 +253,13 @@ async fn a_stored_best_model_is_not_refused_when_only_the_effort_changes() {
 #[test]
 fn session_launch_overrides_take_precedence_over_live_defaults() {
     let (state, _dir) = crate::test_support::app_state("coordinator-session-overrides");
-    let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
-    owner.launch.claude.model = Some("console-model".to_string());
-    owner.launch.claude.effort = Some("console-effort".to_string());
+    let mut owner = console(AgentId::CLAUDE, Path::new("/tmp/unused"));
+    owner.launch[AgentId::CLAUDE].model = Some("console-model".to_string());
+    owner.launch[AgentId::CLAUDE].effort = Some("console-effort".to_string());
     state.store.insert_console(&owner).unwrap();
     let mut project = project_of("console-1", "project-1");
-    project.launch.claude.model = Some("project-model".to_string());
-    project.launch.claude.effort = Some("project-effort".to_string());
+    project.launch[AgentId::CLAUDE].model = Some("project-model".to_string());
+    project.launch[AgentId::CLAUDE].effort = Some("project-effort".to_string());
     state.store.insert_project(&project).unwrap();
     for (kind, project_id) in [
         (SessionKind::Console, None),
@@ -258,13 +269,13 @@ fn session_launch_overrides_take_precedence_over_live_defaults() {
         session.project_id = project_id.map(str::to_string);
         let defaults = if kind == SessionKind::Console {
             (
-                owner.launch.claude.model.clone(),
-                owner.launch.claude.effort.clone(),
+                owner.launch[AgentId::CLAUDE].model.clone(),
+                owner.launch[AgentId::CLAUDE].effort.clone(),
             )
         } else {
             (
-                project.launch.claude.model.clone(),
-                project.launch.claude.effort.clone(),
+                project.launch[AgentId::CLAUDE].model.clone(),
+                project.launch[AgentId::CLAUDE].effort.clone(),
             )
         };
         assert_eq!(launch_settings(&state, &session).unwrap(), defaults);
@@ -289,7 +300,7 @@ fn session_launch_overrides_take_precedence_over_live_defaults() {
     let mut inherited = bare_session("legacy", SessionKind::Project);
     inherited.project_id = Some("project-1".to_string());
     state.store.insert_session(&inherited).unwrap();
-    project.launch.claude.model = Some("changed-model".to_string());
+    project.launch[AgentId::CLAUDE].model = Some("changed-model".to_string());
     state.store.update_project(&project).unwrap();
     let reread = state.session_record("legacy").unwrap();
     assert_eq!(
@@ -307,7 +318,7 @@ fn a_project_session_launches_with_its_projects_git_workflow_settings() {
     let (state, _dir) = crate::test_support::app_state("coordinator-git-workflow-settings");
     state
         .store
-        .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+        .insert_console(&console(AgentId::CLAUDE, Path::new("/tmp/unused")))
         .unwrap();
     let mut project = project_of("console-1", "project-1");
     state.store.insert_project(&project).unwrap();
@@ -348,8 +359,8 @@ fn a_project_session_launches_with_its_projects_git_workflow_settings() {
 #[test]
 fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value() {
     let (state, _dir) = crate::test_support::app_state("coordinator-project-session-pair");
-    let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
-    owner.launch.claude.model = Some("console-session-model".to_string());
+    let mut owner = console(AgentId::CLAUDE, Path::new("/tmp/unused"));
+    owner.launch[AgentId::CLAUDE].model = Some("console-session-model".to_string());
     state.store.insert_console(&owner).unwrap();
     let mut project = project_of("console-1", "project-1");
     state.store.insert_project(&project).unwrap();
@@ -359,9 +370,9 @@ fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value()
     // A console that names no pair: nothing to fall back to.
     assert_eq!(launch_settings(&state, &session).unwrap(), (None, None));
 
-    owner.project_session_launch.claude.model = Some("fallback-model".to_string());
-    owner.project_session_launch.claude.effort = Some("fallback-effort".to_string());
-    owner.project_session_launch.codex.model = Some("codex-fallback".to_string());
+    owner.project_session_launch[AgentId::CLAUDE].model = Some("fallback-model".to_string());
+    owner.project_session_launch[AgentId::CLAUDE].effort = Some("fallback-effort".to_string());
+    owner.project_session_launch[AgentId::CODEX].model = Some("codex-fallback".to_string());
     state.store.update_console(&owner).unwrap();
     assert_eq!(
         launch_settings(&state, &session).unwrap(),
@@ -372,7 +383,7 @@ fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value()
     );
 
     // The project's own value wins for that value alone.
-    project.launch.claude.model = Some("project-model".to_string());
+    project.launch[AgentId::CLAUDE].model = Some("project-model".to_string());
     state.store.update_project(&project).unwrap();
     assert_eq!(
         launch_settings(&state, &session).unwrap(),
@@ -383,12 +394,12 @@ fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value()
     );
 
     // Another agent's pair is its own.
-    session.agent = Agent::Codex;
+    session.agent = AgentId::CODEX;
     assert_eq!(
         launch_settings(&state, &session).unwrap(),
         (Some("codex-fallback".to_string()), None)
     );
-    session.agent = Agent::Claude;
+    session.agent = AgentId::CLAUDE;
 
     // The session's own choice, an explicit null included, wins over both.
     session.model = normalize_session_launch_setting(Some(None));
@@ -411,7 +422,7 @@ fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value()
 #[tokio::test]
 async fn a_relaunched_process_that_ends_at_once_did_not_come_up() {
     let settle = Duration::from_millis(400);
-    let gone = fake_live_session("gone", Agent::Claude, 80, 24, "exit 1");
+    let gone = fake_live_session("gone", AgentId::CLAUDE, 80, 24, "exit 1");
     let up = idle_stand_in("up");
 
     assert!(!came_up(&gone, settle).await);
@@ -428,7 +439,7 @@ async fn a_relaunch_for_a_switch_never_reopens_an_archived_session() {
         .store
         .insert_session(&project_session(
             "s",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Archived,
         ))
         .unwrap();
@@ -455,14 +466,14 @@ async fn a_claude_resume_takes_its_instruction_as_the_launch_prompt() {
     for (id, agent, instruction, prompt, queued) in [
         (
             "claude",
-            Agent::Claude,
+            AgentId::CLAUDE,
             "\u{1}/clear it",
             Some(" /clear it"),
             0,
         ),
-        ("dashed", Agent::Claude, "- item", Some(" - item"), 0),
-        ("blank", Agent::Claude, "\u{1} ", None, 0),
-        ("codex", Agent::Codex, "/clear it", None, 1),
+        ("dashed", AgentId::CLAUDE, "- item", Some(" - item"), 0),
+        ("blank", AgentId::CLAUDE, "\u{1} ", None, 0),
+        ("codex", AgentId::CODEX, "/clear it", None, 1),
     ] {
         state
             .store
@@ -505,7 +516,7 @@ async fn a_relaunch_shows_as_prompting_only_while_it_is_given_an_instruction() {
             .store
             .insert_session(&project_session(
                 id,
-                Agent::Claude,
+                AgentId::CLAUDE,
                 SessionStatus::Interrupted,
             ))
             .unwrap();

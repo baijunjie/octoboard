@@ -32,7 +32,7 @@
 //! Claude Code's transcript records no context window; only the input of its status line carries
 //! one. So the `--settings` JSON also sets `statusLine`, to a command that hands the window to the
 //! daemon and then runs the user's own status line, resolved afresh on every run, with the same
-//! input, its output and exit status passed on unchanged (`crate::cli::status_line`). A
+//! input, its output and exit status passed on unchanged (`status_line`). A
 //! `statusLine` from the flags outranks the user's and the project's, so carrying theirs out is
 //! this command's job, and their layout fields (`padding`, `refreshInterval`,
 //! `hideVimModeIndicator`) are carried into the injected one when well-typed. What cannot be carried over is the status line's absence: with any status
@@ -41,7 +41,21 @@
 //! those two changes. That is accepted as the price of the window. A managed `statusLine` outranks
 //! the flags, and then this one never runs and the session reports no window.
 
+pub(crate) mod accounts;
+mod compatibility;
+mod conversation;
+mod hooks;
+mod login;
+pub(crate) mod models;
+pub(crate) mod quota;
+pub(crate) mod records;
+pub(crate) mod screen;
 pub mod settings;
+mod shared_config;
+mod stash;
+mod status_line;
+pub(crate) mod switch_continue;
+pub(crate) mod transcript_watch;
 
 use std::path::Path;
 
@@ -49,11 +63,12 @@ use serde_json::json;
 
 use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
 use super::{
-    hook_command, hook_url, shell_quote, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec,
+    hook_command, hook_url, shell_quote, AgentProvider, AgentVersion, LaunchPlan, LaunchSpec,
     NamedTitle, HOOK_TIMEOUT_SECS,
 };
-use crate::agents::layout;
-use crate::protocol::{Agent, ClaudeApprovalMode};
+use crate::protocol::AgentId;
+use crate::providers::{claude, ProviderDescriptor};
+use crate::session::screen::ScreenReader;
 use crate::session_tools;
 use settings::{http_hooks_allowed, settings_files, untrusted_workspace_notice, user_status_line};
 
@@ -63,7 +78,7 @@ use settings::{http_hooks_allowed, settings_files, untrusted_workspace_notice, u
 /// forever. `PostToolBatch` is here because a tool call rejected by Claude Code's own
 /// pre-execution guard fires only that one, skipping `PreToolUse` and both post events.
 /// `SubagentStart` and `SubagentStop` keep the background tasks current while the session is idle
-/// and a subagent works (see `crate::hooks::background_tasks_change`).
+/// and a subagent works (see `crate::hooks::HookInterpreter::background_tasks_change`).
 const HOOK_EVENTS: &[&str] = &[
     "SessionStart",
     "UserPromptSubmit",
@@ -96,9 +111,9 @@ const COMMAND_ONLY_EVENTS: &[&str] = &["SessionStart"];
 /// still passes the user's own status line through and reports nothing.
 const STATUS_LINE_SINCE: AgentVersion = (2, 0, 0);
 
-pub struct ClaudeAdapter;
+pub struct ClaudeProvider;
 
-impl ClaudeAdapter {
+impl ClaudeProvider {
     /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the daemon
     /// itself, so a hook costs no process at all, except for [`COMMAND_ONLY_EVENTS`]; with an older
     /// or unknown version, or when a settings file's `allowedHttpHookUrls` leaves the daemon's URL
@@ -160,7 +175,7 @@ impl ClaudeAdapter {
             "hooks": hooks,
             "permissions": { "allow": [format!("mcp__{}", session_tools::catalogue::SERVER_KEY)] },
         });
-        if spec.approval_mode == Some(ClaudeApprovalMode::Bypass) {
+        if spec.settings.choice("approval_mode") == Some("bypass") {
             settings["skipDangerousModePermissionPrompt"] = json!(true);
         }
         if spec.agent_version.is_some_and(|v| v >= STATUS_LINE_SINCE) {
@@ -176,15 +191,17 @@ impl ClaudeAdapter {
     /// command is given the directories the user's settings files are in, worked out here as for
     /// the rest of this launch, and reads the files themselves again on every run.
     fn status_line(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> serde_json::Value {
-        let user_dir = super::account_dir(Agent::Claude, pinned, spec.shell_env);
+        let user_dir = super::account_dir(AgentId::CLAUDE, pinned, spec.shell_env);
         let own = user_status_line(&user_dir, spec.cwd).unwrap_or_default();
         let mut line = serde_json::Map::new();
         line.insert("type".to_owned(), json!("command"));
         line.insert(
             "command".to_owned(),
             json!(format!(
-                "exec {} status-line --session {} --port {} --key {} --cwd {} --config-dir {}",
+                "exec {} status-line --provider {} --session {} --port {} --key {} --cwd {} \
+                 --config-dir {}",
                 shell_quote(spec.self_exe),
+                AgentId::CLAUDE.descriptor().id,
                 shell_quote(spec.session_id),
                 spec.daemon_port,
                 shell_quote(spec.daemon_key),
@@ -222,13 +239,37 @@ impl ClaudeAdapter {
     }
 }
 
-impl AgentAdapter for ClaudeAdapter {
-    fn binary(&self) -> &'static str {
-        "claude"
+impl AgentProvider for ClaudeProvider {
+    fn descriptor(&self) -> &'static ProviderDescriptor {
+        AgentId::CLAUDE.descriptor()
     }
 
-    fn preallocates_session_id(&self) -> bool {
-        true
+    fn screen(&self) -> &'static dyn ScreenReader {
+        &screen::ClaudeScreen
+    }
+
+    fn hooks(&self) -> &'static dyn crate::hooks::HookInterpreter {
+        &hooks::ClaudeHooks
+    }
+
+    fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {
+        Some(&accounts::ClaudeAccounts)
+    }
+
+    fn catalogue(&self) -> &'static dyn crate::agents::models::ModelCatalogue {
+        &models::ClaudeCatalogue
+    }
+
+    fn records(&self) -> &'static dyn crate::records::RecordStore {
+        &records::ClaudeRecords
+    }
+
+    fn compatibility_source(&self) -> Option<&'static dyn super::CompatibilitySource> {
+        Some(&compatibility::ClaudeCompatibility)
+    }
+
+    fn status_line(&self) -> Option<&'static dyn super::StatusLine> {
+        Some(&status_line::ClaudeStatusLine)
     }
 
     /// Two layouts, each matched exactly, since a guess that is wrong switches hook mechanisms on
@@ -343,7 +384,7 @@ impl AgentAdapter for ClaudeAdapter {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
-        let pinned = super::pinned_config_dir(spec, Agent::Claude)?;
+        let pinned = super::pinned_config_dir(spec, AgentId::CLAUDE)?;
         let mut args = Vec::new();
 
         // The task goes first, ahead of every flag. `--mcp-config` takes a *list* of values, so
@@ -372,23 +413,22 @@ impl AgentAdapter for ClaudeAdapter {
         args.push(session_tools::role::role_description(
             spec.kind,
             spec.owner.as_ref(),
-            Agent::Claude,
+            AgentId::CLAUDE,
             &spec.role_options(),
         ));
         // Last, after every list-valued flag has closed. All are global flags, so they sit
         // alongside `--resume` too.
-        if let Some(mode) = spec.approval_mode {
-            args.push("--permission-mode".to_string());
+        let permission_mode = match spec.settings.choice("approval_mode") {
+            Some("auto") => Some("auto"),
             // `default` rather than `manual`: every Claude Code version accepts it, and it is what
             // the hooks and the transcript report; `manual` exists only from 2.1.200.
-            args.push(
-                match mode {
-                    ClaudeApprovalMode::Auto => "auto",
-                    ClaudeApprovalMode::Manual => "default",
-                    ClaudeApprovalMode::Bypass => "bypassPermissions",
-                }
-                .to_string(),
-            );
+            Some("manual") => Some("default"),
+            Some("bypass") => Some("bypassPermissions"),
+            _ => None,
+        };
+        if let Some(mode) = permission_mode {
+            args.push("--permission-mode".to_string());
+            args.push(mode.to_string());
         }
         if let Some(model) = spec.model {
             args.push("--model".to_string());
@@ -404,7 +444,7 @@ impl AgentAdapter for ClaudeAdapter {
         let mut env = Vec::new();
         if let Some(dir) = pinned {
             env.push((
-                layout::CLAUDE.config_dir_var.to_string(),
+                claude::LAYOUT.config_dir_var.to_string(),
                 dir.to_string_lossy().into_owned(),
             ));
         }
@@ -434,10 +474,11 @@ impl AgentAdapter for ClaudeAdapter {
 mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
+    use crate::providers::{ProviderSettings, SettingValue};
 
     #[test]
     fn terminal_titles_lose_the_status_glyph_and_the_placeholder() {
-        let task = |raw| ClaudeAdapter.task_title(raw, &[]);
+        let task = |raw| ClaudeProvider.task_title(raw, &[]);
         assert_eq!(task("✳ Claude Code"), None);
         assert_eq!(task("◐ Claude Code"), None);
         assert_eq!(
@@ -455,7 +496,7 @@ mod tests {
     #[test]
     fn the_transcripts_custom_title_outranks_its_ai_title() {
         let title = |line| {
-            ClaudeAdapter
+            ClaudeProvider
                 .named_title(line)
                 .map(|t| (t.precedence, t.text))
         };
@@ -485,7 +526,7 @@ mod tests {
         .unwrap();
         let prompts: Vec<_> = capture
             .lines()
-            .map(|line| ClaudeAdapter.prompt_text(line))
+            .map(|line| ClaudeProvider.prompt_text(line))
             .collect();
         assert_eq!(
             prompts,
@@ -493,7 +534,7 @@ mod tests {
         );
 
         let prompt = |content: &str| {
-            ClaudeAdapter.prompt_text(&format!(
+            ClaudeProvider.prompt_text(&format!(
                 r#"{{"type":"user","promptId":"p","message":{{"role":"user","content":{content}}}}}"#
             ))
         };
@@ -516,16 +557,16 @@ mod tests {
             None
         );
         let peer = r#"{"type":"user","promptId":"p","origin":{"kind":"peer"},"message":{"role":"user","content":"From another session"}}"#;
-        assert_eq!(ClaudeAdapter.prompt_text(peer), None);
+        assert_eq!(ClaudeProvider.prompt_text(peer), None);
         let summary = r#"{"type":"user","promptId":"p","isCompactSummary":true,"message":{"role":"user","content":"This session is being continued"}}"#;
-        assert_eq!(ClaudeAdapter.prompt_text(summary), None);
+        assert_eq!(ClaudeProvider.prompt_text(summary), None);
     }
 
     /// With no model or effort set, neither flag is passed, so Claude Code keeps its own choice.
     #[test]
     fn no_model_or_effort_adds_no_flags() {
         let fixture = spec_fixture();
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         for flag in ["--model", "--effort"] {
             assert!(!plan.args.iter().any(|arg| arg == flag), "{flag}");
         }
@@ -536,7 +577,7 @@ mod tests {
         let mut fixture = spec_fixture();
         fixture.model = Some("opus".to_string());
         fixture.effort = Some("high".to_string());
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         assert_eq!(
             plan.args[plan.args.len() - 4..],
             ["--model", "opus", "--effort", "high"]
@@ -552,20 +593,22 @@ mod tests {
         fixture.model = Some("opus".to_string());
         let cases = [
             (None, None, false),
-            (Some(ClaudeApprovalMode::Auto), Some("auto"), false),
-            (Some(ClaudeApprovalMode::Manual), Some("default"), false),
-            (
-                Some(ClaudeApprovalMode::Bypass),
-                Some("bypassPermissions"),
-                true,
-            ),
+            (Some("auto"), Some("auto"), false),
+            (Some("manual"), Some("default"), false),
+            (Some("bypass"), Some("bypassPermissions"), true),
         ];
         for (mode, flag, bypass) in cases {
             for resume in [None, Some("conversation-1")] {
+                let settings = ProviderSettings::new(mode.map(|mode| {
+                    (
+                        "approval_mode".to_string(),
+                        Some(SettingValue::Choice(mode.to_string())),
+                    )
+                }));
                 let mut spec = fixture.spec();
-                spec.approval_mode = mode;
+                spec.settings = &settings;
                 spec.resume_agent_session_id = resume;
-                let plan = ClaudeAdapter.plan(&spec).expect("plan");
+                let plan = ClaudeProvider.plan(&spec).expect("plan");
                 let position = plan.args.iter().position(|arg| arg == "--permission-mode");
                 assert_eq!(
                     position.map(|at| plan.args[at + 1].as_str()),
@@ -612,7 +655,7 @@ mod tests {
     #[test]
     fn never_passes_the_flags_that_drop_the_projects_own_configuration() {
         let fixture = spec_fixture();
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         for forbidden in ["--setting-sources", "--strict-mcp-config"] {
             assert!(
                 !plan.args.iter().any(|arg| arg == forbidden),
@@ -627,7 +670,7 @@ mod tests {
     #[test]
     fn a_pinned_config_dir_is_exported_and_an_unpinned_launch_adds_nothing() {
         let mut fixture = spec_fixture();
-        assert!(ClaudeAdapter
+        assert!(ClaudeProvider
             .plan(&fixture.spec())
             .expect("plan")
             .env
@@ -636,7 +679,7 @@ mod tests {
         let dir = fixture.scratch.join("claude-alt");
         std::fs::create_dir_all(&dir).expect("config dir");
         fixture.config_dir = Some(dir.clone());
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         assert_eq!(
             plan.env,
             vec![(
@@ -661,14 +704,14 @@ mod tests {
                 .map(|(_, value)| value)
         };
         assert_eq!(
-            memory(ClaudeAdapter.plan(&fixture.spec()).expect("plan")),
+            memory(ClaudeProvider.plan(&fixture.spec()).expect("plan")),
             None
         );
 
         let shared = fixture.scratch.join("default");
         fixture.shared_default_dir = Some(shared.clone());
         assert_eq!(
-            memory(ClaudeAdapter.plan(&fixture.spec()).expect("plan")),
+            memory(ClaudeProvider.plan(&fixture.spec()).expect("plan")),
             Some(shared.to_string_lossy().into_owned())
         );
     }
@@ -679,7 +722,7 @@ mod tests {
         fixture.config_dir = Some(fixture.scratch.join("missing"));
         let mut spec = fixture.spec();
         spec.resume_agent_session_id = Some("agent-side-id");
-        let err = ClaudeAdapter.plan(&spec).err().expect("refused");
+        let err = ClaudeProvider.plan(&spec).err().expect("refused");
         let message = err.to_string();
         assert!(message.contains("Claude"), "{message}");
         assert!(message.contains("missing"), "{message}");
@@ -692,12 +735,12 @@ mod tests {
     fn a_pinned_config_dir_that_has_gone_is_fine_with_no_conversation_to_resume() {
         let mut fixture = spec_fixture();
         fixture.config_dir = Some(fixture.scratch.join("missing"));
-        ClaudeAdapter.plan(&fixture.spec()).expect("not refused");
+        ClaudeProvider.plan(&fixture.spec()).expect("not refused");
     }
 
     /// The `hooks` table of the `--settings` this launch passes.
     fn injected_hooks(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         let settings_index = plan
             .args
             .iter()
@@ -713,7 +756,7 @@ mod tests {
     fn a_binary_version_comes_from_its_install_location() {
         let root = crate::test_support::ScratchDir::new("binary-version");
         let version_of =
-            |path: &std::path::Path| ClaudeAdapter.installed_version(&path.to_string_lossy());
+            |path: &std::path::Path| ClaudeProvider.installed_version(&path.to_string_lossy());
         std::fs::create_dir_all(root.join("bin")).expect("bin");
 
         let versions = root.join("share/versions");
@@ -808,7 +851,7 @@ mod tests {
 
     /// The `--settings` this launch passes.
     fn injected_settings(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         let at = plan
             .args
             .iter()
@@ -850,7 +893,7 @@ mod tests {
         assert_eq!(
             command(&fixture),
             format!(
-                "exec '/opt/octoboard/octoboardd' status-line --session 'session-1' --port 4321 \
+                "exec '/opt/octoboard/octoboardd' status-line --provider claude --session 'session-1' --port 4321 \
                  --key 'feedface' --cwd '{cwd}' --config-dir '{}'",
                 home.join(".claude").display()
             )
@@ -949,7 +992,7 @@ mod tests {
         let fixture = spec_fixture();
         let mut spec = fixture.spec();
         spec.task = Some("do the thing");
-        let plan = ClaudeAdapter.plan(&spec).expect("plan");
+        let plan = ClaudeProvider.plan(&spec).expect("plan");
         assert_eq!(plan.args[0], "do the thing");
         assert!(plan.args[1].starts_with("--"));
     }
@@ -957,13 +1000,13 @@ mod tests {
     #[test]
     fn a_new_session_takes_octoboards_id_and_a_resume_takes_the_agents() {
         let fixture = spec_fixture();
-        let fresh = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let fresh = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         assert_eq!(fresh.args[0], "--session-id");
         assert_eq!(fresh.args[1], fixture.new_agent_session_id);
 
         let mut spec = fixture.spec();
         spec.resume_agent_session_id = Some("agent-side-id");
-        let resumed = ClaudeAdapter.plan(&spec).expect("plan");
+        let resumed = ClaudeProvider.plan(&spec).expect("plan");
         assert_eq!(resumed.args[0], "--resume");
         assert_eq!(resumed.args[1], "agent-side-id");
         // The injection is reassembled on a resume too: without it the resumed session fires no
@@ -981,7 +1024,7 @@ mod tests {
     #[test]
     fn registers_the_mcp_server_as_a_stdio_child_under_octoboards_own_key() {
         let fixture = spec_fixture();
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         let at = plan
             .args
             .iter()
@@ -1001,7 +1044,7 @@ mod tests {
     #[test]
     fn the_role_text_is_the_one_for_this_sessions_kind() {
         let fixture = spec_fixture();
-        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
         let at = plan
             .args
             .iter()
@@ -1012,7 +1055,7 @@ mod tests {
             session_tools::role::role_description(
                 fixture.kind,
                 fixture.owner.as_ref(),
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &fixture.spec().role_options(),
             )
         );
@@ -1040,7 +1083,7 @@ mod tests {
                     r#"{"version":"2.1.100"}"#,
                     SMALL_FILE_LIMIT,
                 );
-                fixture.agent_version = ClaudeAdapter.installed_version(&binary.to_string_lossy());
+                fixture.agent_version = ClaudeProvider.installed_version(&binary.to_string_lossy());
                 let readable = matches!(case, "regular" | "linked");
                 assert_eq!(fixture.agent_version, readable.then_some((2, 1, 100)));
                 let hooks = injected_hooks(&fixture);

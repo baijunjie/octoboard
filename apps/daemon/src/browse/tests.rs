@@ -15,7 +15,7 @@ use super::*;
 use crate::git::isolated::tests::test_env;
 use crate::git::isolated::IsolatedGit;
 use crate::protocol::{
-    Agent, BrowseEntry, BrowseRequest, Console, ContentKind, EntryKind, FileContent, LinkTarget,
+    AgentId, BrowseEntry, BrowseRequest, Console, ContentKind, EntryKind, FileContent, LinkTarget,
     Project, ProjectSource, ProjectSourceInfo,
 };
 use crate::state::AppState;
@@ -82,7 +82,7 @@ impl Fixture {
                 id: "console".to_string(),
                 name: "Console".to_string(),
                 workdir: workdir.to_string_lossy().into_owned(),
-                default_agent: Agent::Claude,
+                default_agent: AgentId::CLAUDE,
                 project_session_agent: None,
                 accounts: Default::default(),
                 launch: Default::default(),

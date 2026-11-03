@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 
 import { Button } from "../../components/controls/Button";
-import { AGENT_INSTALL_URL, AGENT_LABEL, AGENT_OPTIONS } from "../../agents/agents";
+import { providerLabel } from "../../agents/providers";
 import { AgentIcon } from "../../components/icons/AgentIcon";
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
@@ -11,10 +11,11 @@ import { useDialogAction, useRefocusIfLost } from "../../components/dialog/dialo
 import { appDataRecovery } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
+import { isolate } from "../../i18n/isolate";
+import { useDaemon, useDaemonStore, useProviders } from "../../store";
 
-/** Every agent with whether it is installed, to add the installed ones that are not added yet: the dialog stays
- * open for more, and an agent added shows as such in place. An agent that is not installed offers its vendor's
+/** Every served agent with whether it is installed, to add the installed ones that are not added yet: the dialog stays
+ * open for more, and an agent added shows as such in place. An agent that is not installed offers its provider's
  * install instructions instead of the button; one whose installation is not yet determined, or any while the daemon
  * has not decided the list, cannot be added yet. A refusal is acknowledged like any other failure. */
 export function AddAgentDialog({ onClose }: { onClose: () => void }): React.ReactElement {
@@ -22,6 +23,7 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
   const { request } = useDaemon();
   const added = useDaemonStore((s) => s.settings.added_agents);
   const availability = useDaemonStore((s) => s.agentAvailability);
+  const providers = useProviders();
   const { busy, run } = useDialogAction(undefined, t("settings.accounts.addAgentFailedTitle"), appDataRecovery);
   const [pending, setPending] = useState<Agent>();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -47,7 +49,10 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
     >
       <p className="text-sm text-app-muted">{t("settings.addAgent.description")}</p>
       <ul aria-label={t("settings.accounts.agents")} className="flex flex-col">
-        {AGENT_OPTIONS.map(({ value: agent, label }) => {
+        {providers.map((provider) => {
+          const agent = provider.id;
+          const label = providerLabel(t, providers, agent);
+          const installUrl = provider.install_url;
           const state = availability.get(agent)?.availability;
           const isAdded = added?.includes(agent) ?? false;
           const status = isAdded ? "added" : state === "available" ? "installed" : state === "unavailable" ? "notInstalled" : "checking";
@@ -59,8 +64,8 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
                 <FadeOverflow as="span" dir="auto" className={`min-w-0 ${dimmed ? "text-app-muted" : ""}`} titleWhenClipped={label}>{label}</FadeOverflow>
                 <StatusBadge>{t(`settings.addAgent.${status}`)}</StatusBadge>
               </div>
-              {status === "notInstalled" && (
-                <ExternalLink href={AGENT_INSTALL_URL[agent]} aria-label={t("settings.addAgent.installLabel", { agent: AGENT_LABEL[agent] })}>
+              {status === "notInstalled" && installUrl && (
+                <ExternalLink href={installUrl} aria-label={t("settings.addAgent.installLabel", { agent: isolate(label) })}>
                   {t("settings.addAgent.install")}
                 </ExternalLink>
               )}
@@ -69,7 +74,7 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
                   size="sm"
                   variant="outline"
                   preventFocusOnPress
-                  aria-label={t("settings.addAgent.addLabel", { agent: AGENT_LABEL[agent] })}
+                  aria-label={t("settings.addAgent.addLabel", { agent: isolate(label) })}
                   isDisabled={status !== "installed" || added === null || (busy && pending !== agent)}
                   isPending={pending === agent}
                   onPress={() => add(agent)}

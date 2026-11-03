@@ -13,9 +13,10 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::{self, Message, WebSocket};
 
+use super::app_server;
 use crate::adapter::codex::PrivateServerPlan;
-use crate::agents::{codex_app_server, json_rpc};
-use crate::session::term;
+use crate::agents::json_rpc;
+use crate::session::term::{self, MessageTransport};
 use crate::terminal::ptyio::PartialWrite;
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(5);
@@ -144,8 +145,10 @@ impl CodexTransport {
     pub fn endpoint(&self) -> String {
         format!("unix://{}", self.socket_directory.socket().display())
     }
+}
 
-    pub fn stop(&self) {
+impl MessageTransport for CodexTransport {
+    fn stop(&self) {
         self.server
             .lock()
             .expect("Codex sidecar lock poisoned")
@@ -154,7 +157,7 @@ impl CodexTransport {
         let _ = std::fs::remove_dir(&self.socket_directory.0);
     }
 
-    pub fn send(&self, text: &str, logical_id: &str) -> Result<(), PartialWrite> {
+    fn send(&self, text: &str, logical_id: &str) -> Result<(), PartialWrite> {
         let _operation = self.operation.lock().expect("Codex message lock poisoned");
         let before_add = |error: RpcFailure| PartialWrite {
             written: 0,
@@ -343,7 +346,7 @@ impl Rpc {
         &mut self,
         thread: &str,
         cwd: &Path,
-        reviewer: crate::protocol::ApprovalReviewer,
+        reviewer: super::ApprovalReviewer,
     ) -> Result<(), RpcFailure> {
         self.request(
             "thread/resume",
@@ -375,10 +378,10 @@ impl Rpc {
             next_id: 0,
             deadline,
         };
-        let mut params = codex_app_server::initialize_params();
+        let mut params = app_server::initialize_params();
         params["capabilities"] = json!({"experimentalApi": true});
         rpc.request("initialize", params)?;
-        rpc.write(codex_app_server::initialized())?;
+        rpc.write(app_server::initialized())?;
         Ok(rpc)
     }
 
@@ -503,7 +506,7 @@ mod tests {
 
     #[test]
     fn reviewer_resume_uses_the_explicit_choice_and_reports_rejections() {
-        use crate::protocol::ApprovalReviewer;
+        use super::super::ApprovalReviewer;
         let (transport, listener) = fixture();
         let server = std::thread::spawn(move || {
             let mut socket = initialized(listener);

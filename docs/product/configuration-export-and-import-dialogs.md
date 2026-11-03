@@ -197,9 +197,14 @@ now. A line with no item to list is badged **No change**, so a changing badge ne
   names them (see "The five settings" in `docs/product/git-workflow-settings.md`), a switch as **On** or **Off**. Squash
   commits before delivery, Rebase before delivery and Delivery are listed when they differ even where the file's Where
   sessions develop is **On the current branch**, since their values are written all the same.
-- **Claude compatibility**, present when the document carries a choice for an agent that has the setting: badged **Set
-  to the file's**, it lists each agent that has the setting and that this machine reports whose value would change,
-  **On** or **Off**.
+- **The provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), one line per setting
+  — today **Claude compatibility** — present when the document carries a choice that this machine's agents declare
+  as carried and that the setting takes, the agents declaring a setting under the same id sharing its line, named as
+  the agents' tabs name it. A setting the window has no wording for under any of those agents is a line of its own for
+  each agent, named by the agent's name, a colon, then the setting's id in words (an id `sandbox_mode` as "Sandbox
+  mode"). Badged **Set to the file's**, it lists each such agent that this machine reports whose value would change: a
+  switch **On** or **Off**, a choice by its name, or by its value in words where the window has no name for it, and a
+  choice left unset here as **Follow account configuration**.
 - **Agent tags**, present when the document carries tags for an agent this build knows: badged **Set to the file's**, it
   lists each such agent whose tags would change, its tags shown as tags, or **No tags** for none.
 - **Keyboard shortcuts**, present when the document carries them: badged **Set to the file's**, with how many of the
@@ -294,8 +299,8 @@ applied**, with a line for each setting applied, badged **On** or **Off**, and a
 several items that lists under it, one per row, the item and the value applied, worded as in the review:
 
 - one line for the git workflow settings, badged **Matches the file**, listing all five;
-- one line for Claude compatibility, when the document carried a choice for an agent that has the setting, badged
-  **Matches the file**, listing each agent the document carried that has the setting, **On** or **Off**;
+- one line per provider setting name, as in the review — today Claude compatibility — badged **Matches the file**,
+  listing each agent whose choice the document carried for it, worded as in the review;
 - one line for agent tags, when the document carried tags for an agent this build knows, badged **Matches the file**,
   listing each such agent with its tags shown as tags, or **No tags** for none;
 - and, when this device applied the file's keyboard shortcuts, a line for them badged with how many changes from the

@@ -60,28 +60,71 @@
 //! submission, allowing independent messages even while the user is composing the first prompt.
 //! The persisted conversation id still arrives through the hooks; thread id and session id match.
 
+pub(crate) mod accounts;
+mod app_server;
 mod claude_compatibility;
 mod claude_mcp;
 mod config;
+mod conversation;
+mod hooks;
+mod login;
+pub(crate) mod models;
 mod private_server;
+pub(crate) mod quota;
+pub(crate) mod records;
+mod reset_credit;
+mod rollout_files;
+pub(crate) mod rollout_watch;
+pub(crate) mod screen;
+mod shared_config;
+mod switch_continue;
 #[cfg(test)]
 mod tests;
+pub(crate) mod threads;
 pub(crate) mod transport;
 mod unarchive;
 
 use serde_json::json;
 
 use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
-use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
-use crate::agents::layout;
-use crate::protocol::{error_code, Agent, CodedError};
+use super::{AgentProvider, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use crate::protocol::{error_code, AgentId, CodedError};
+use crate::providers::{codex, ProviderDescriptor};
+use crate::session::screen::ScreenReader;
 use crate::session_tools;
-use claude_compatibility::{claude_compatibility_instructions, reserved_env};
+use claude_compatibility::reserved_env;
 use config::{model_migrations, project_server_names, read_config, server_names, ConfigFile};
 use private_server::private_server_supported;
 
+use crate::session::term::PrivateServer;
 pub use private_server::PrivateServerPlan;
-pub use unarchive::unarchive;
+
+/// Who resolves Codex's approval requests: the value of the `approval_reviewer` setting. Unset
+/// follows the account's own configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ApprovalReviewer {
+    User,
+    AutoReview,
+}
+
+impl ApprovalReviewer {
+    /// The reviewer the session's settings choose.
+    fn of(settings: &crate::providers::ProviderSettings) -> Option<Self> {
+        match settings.choice("approval_reviewer")? {
+            "user" => Some(Self::User),
+            "auto_review" => Some(Self::AutoReview),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::AutoReview => "auto_review",
+        }
+    }
+}
 
 /// Both phases of Codex's blinking activity title identify a visible user interaction.
 pub(crate) fn action_required_title(title: &str) -> bool {
@@ -92,8 +135,8 @@ pub(crate) fn action_required_title(title: &str) -> bool {
 }
 
 /// The events Octoboard's session states are derived from. `Interrupt` is included because it is
-/// mutually exclusive with `Stop` and is the only signal of a cancelled turn any of the three
-/// agents gives. `SubagentStart` / `SubagentStop` are deliberately not injected: they are noise
+/// mutually exclusive with `Stop` and is the only signal of a cancelled turn Claude Code, Codex or
+/// Grok Build gives. `SubagentStart` / `SubagentStop` are deliberately not injected: they are noise
 /// here, and their payloads' ids cannot be joined back to the parent turn. `PreToolUse` is kept
 /// although Codex's mapping reads no status from it, so that the deliberate `None` arm in
 /// `crate::hooks` has an event to be about: drop the event and the arm goes with it, and with it
@@ -111,7 +154,7 @@ const HOOK_EVENTS: &[&str] = &[
     "Stop",
 ];
 
-pub struct CodexAdapter;
+pub struct CodexProvider;
 
 /// What the user typed, from one parsed line of a rollout: the `user_message` event of older Codex,
 /// or the `item_completed` event of a `UserMessage` item of newer. The user-role response items
@@ -141,17 +184,29 @@ pub(crate) fn typed_text(value: &serde_json::Value) -> Option<String> {
     }
 }
 
-impl AgentAdapter for CodexAdapter {
-    fn binary(&self) -> &'static str {
-        "codex"
+impl AgentProvider for CodexProvider {
+    fn descriptor(&self) -> &'static ProviderDescriptor {
+        AgentId::CODEX.descriptor()
     }
 
-    fn preallocates_session_id(&self) -> bool {
-        false
+    fn screen(&self) -> &'static dyn ScreenReader {
+        &screen::CodexScreen
     }
 
-    fn uses_hook_script(&self) -> bool {
-        true
+    fn hooks(&self) -> &'static dyn crate::hooks::HookInterpreter {
+        &hooks::CodexHooks
+    }
+
+    fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {
+        Some(&accounts::CodexAccounts)
+    }
+
+    fn catalogue(&self) -> &'static dyn crate::agents::models::ModelCatalogue {
+        &models::CodexCatalogue
+    }
+
+    fn records(&self) -> &'static dyn crate::records::RecordStore {
+        &records::CodexRecords
     }
 
     fn installed_version(&self, binary: &str) -> Option<super::AgentVersion> {
@@ -233,7 +288,7 @@ impl AgentAdapter for CodexAdapter {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
-        let pinned = super::pinned_config_dir(spec, Agent::Codex)?;
+        let pinned = super::pinned_config_dir(spec, AgentId::CODEX)?;
         // Unlike Claude Code, Codex refuses a `CODEX_HOME` that does not exist rather than creating
         // it, so an account pointed at a directory the user has yet to create is created here. A
         // resume that needs the directory's conversation has already been refused above.
@@ -246,7 +301,7 @@ impl AgentAdapter for CodexAdapter {
                         dir.display()
                     ),
                     &[
-                        ("agent", Agent::Codex.label()),
+                        ("agent", AgentId::CODEX.label()),
                         ("path", &dir.to_string_lossy()),
                     ],
                 )
@@ -313,22 +368,23 @@ impl AgentAdapter for CodexAdapter {
 
         // Read from the launch environment rather than the daemon's: the daemon's own `CODEX_HOME`
         // may belong to an agent session it was started from.
-        let home = super::account_dir(Agent::Codex, pinned, spec.shell_env);
+        let home = super::account_dir(AgentId::CODEX, pinned, spec.shell_env);
         let config = read_config(&home);
         // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
         // stands.
         let mut env = pinned
             .map(|dir| {
                 vec![(
-                    layout::CODEX.config_dir_var.to_string(),
+                    codex::LAYOUT.config_dir_var.to_string(),
                     dir.to_string_lossy().into_owned(),
                 )]
             })
             .unwrap_or_default();
-        // Claude Code's MCP servers, for the session's working directory. A server of the same name
-        // in the account's own `config.toml` or the project's `.codex/config.toml` stays as it is,
-        // and an unreadable one leaves nothing to compare with, so then none is added.
-        if spec.claude_compatibility {
+        // The compatibility source's MCP servers (Claude Code's), for the session's working
+        // directory. A server of the same name in the account's own `config.toml` or the project's
+        // `.codex/config.toml` stays as it is, and an unreadable one leaves nothing to compare
+        // with, so then none is added.
+        if let Some(source) = spec.compatibility_source {
             let project_names = project_server_names(&canonical_project(spec.cwd), &home);
             let taken = |name: &str| {
                 project_names
@@ -340,8 +396,13 @@ impl AgentAdapter for CodexAdapter {
                         ConfigFile::Parsed(parsed) => server_names(parsed).contains(name),
                     }
             };
-            let servers =
-                claude_mcp::codex_servers(spec.shell_env, &env, &reserved_env, spec.cwd, &taken);
+            let servers = claude_mcp::codex_servers(
+                source.mcp_servers(spec.shell_env, spec.cwd),
+                spec.shell_env,
+                &env,
+                &reserved_env,
+                &taken,
+            );
             for server_override in servers.overrides {
                 server_args.push("-c".to_string());
                 server_args.push(server_override);
@@ -370,12 +431,12 @@ impl AgentAdapter for CodexAdapter {
         let mut instructions = session_tools::role::role_description(
             spec.kind,
             spec.owner.as_ref(),
-            Agent::Codex,
+            AgentId::CODEX,
             &spec.role_options(),
         );
-        if spec.claude_compatibility {
+        if let Some(source) = spec.compatibility_source {
             instructions.push_str("\n\n");
-            instructions.push_str(&claude_compatibility_instructions(spec.shell_env));
+            instructions.push_str(&source.instructions(AgentId::CODEX.label(), spec.shell_env));
         }
         server_args.push("-c".to_string());
         server_args.push(format!(
@@ -404,14 +465,14 @@ impl AgentAdapter for CodexAdapter {
             tui_args
         });
 
-        if let Some(reviewer) = spec.approval_reviewer {
-            let value = match reviewer {
-                crate::protocol::ApprovalReviewer::User => "user",
-                crate::protocol::ApprovalReviewer::AutoReview => "auto_review",
-            };
+        let reviewer = ApprovalReviewer::of(spec.settings);
+        if let Some(reviewer) = reviewer {
             // Repeated on resume like the other launch overrides; the user's file stays intact.
             server_args.push("-c".to_string());
-            server_args.push(format!("approvals_reviewer={}", toml_string(value)));
+            server_args.push(format!(
+                "approvals_reviewer={}",
+                toml_string(reviewer.as_str())
+            ));
         }
 
         args.extend(server_args.iter().cloned());
@@ -422,19 +483,20 @@ impl AgentAdapter for CodexAdapter {
             }
         }
 
-        let codex_server =
-            private_server_supported(spec.agent_version).then(|| PrivateServerPlan {
+        let private_server = private_server_supported(spec.agent_version).then(|| {
+            Box::new(PrivateServerPlan {
                 args: server_args,
                 // Explicit --remote selects the server even with -c. Omitting the client overrides
                 // would lose its terminal title, resume cwd and startup-notice settings.
                 tui_args: resume_tui_args.unwrap_or_else(|| args.clone()),
                 hook_command: command,
                 resume_thread: spec.resume_agent_session_id.map(str::to_string),
-                resume_reviewer: spec.approval_reviewer,
-            });
+                resume_reviewer: reviewer,
+            }) as Box<dyn PrivateServer>
+        });
         Ok(LaunchPlan {
             args,
-            codex_server,
+            private_server,
             env,
             resolves_approvals_itself: resolves_approvals_itself(spec, &config),
             ..LaunchPlan::default()
@@ -451,8 +513,8 @@ impl AgentAdapter for CodexAdapter {
 /// will be asked", which is the safe way to be wrong: a hand raised needlessly is visible, while
 /// one never raised leaves a session looking busy while it waits.
 fn resolves_approvals_itself(spec: &LaunchSpec<'_>, config: &ConfigFile) -> bool {
-    if let Some(reviewer) = spec.approval_reviewer {
-        return reviewer == crate::protocol::ApprovalReviewer::AutoReview;
+    if let Some(reviewer) = ApprovalReviewer::of(spec.settings) {
+        return reviewer == ApprovalReviewer::AutoReview;
     }
     const AUTO_REVIEW: &str = "auto_review";
     let ConfigFile::Parsed(parsed) = config else {

@@ -1,54 +1,40 @@
-//! How each agent's CLI is driven to sign an account in, as measured in
-//! `docs/agent-cli-reference.md` ("Signing in a config directory without a terminal"). All three
-//! run with no terminal and nothing written to their stdin beyond what is said below:
-//!
-//! - **Claude Code** is `claude auth login` with `BROWSER` pointed at a script that appends the
-//!   URL it is given to a file the flow watches. That URL is the one whose loopback callback
-//!   finishes the login with nothing pasted. Done is exit 0, confirmed by `claude auth status`.
-//! - **Codex** is `codex app-server`: `account/login/start` answers with the authorization URL,
-//!   `account/login/completed` says how it went, and `account/read` confirms. The config directory
-//!   is created first, as Codex refuses a missing one; for the default account that is the home
-//!   the agent resolved.
-//! - **Grok Build** is `grok login --device-auth`, which prints the device URL and code on stderr
-//!   and opens the browser itself, which cannot be stopped. Done is exit 0 with `auth.json` in its
-//!   home.
+//! What drives an agent's CLI to sign an account in, whichever the agent: the [`Flow`] to run, the
+//! [`Process`] it runs in and what it reports through [`Progress`]. How each CLI is driven is the
+//! provider's own ([`LoginFlow`], in `crate::adapter::<provider>::login`), as measured in
+//! `docs/agent-cli-reference.md` ("Signing in a config directory without a terminal"). All run
+//! with no terminal and nothing written to their stdin beyond what the provider writes.
 //!
 //! Dropping a flow's future kills the CLI's whole session (see [`Process`]), which is how a timeout
 //! and the daemon's exit end one, and removes the flow's scratch directory.
 
 use std::collections::HashMap;
-use std::os::unix::fs::DirBuilderExt;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, Notify};
 
 use super::Key;
 use crate::adapter;
-use crate::adapter::account_cli;
-use crate::agents::codex_app_server::{self, CODEX_APP_SERVER_ARGS};
-use crate::agents::json_rpc;
-use crate::agents::layout::GROK_SIGN_IN_FILE;
 use crate::processes::leader;
-use crate::protocol::{login_failure_code as code, Agent, LoginFailure, LoginStatus};
+use crate::protocol::{login_failure_code as code, AgentId, LoginFailure, LoginStatus};
+use crate::providers::ProviderCode;
 use crate::state::AppState;
 use crate::terminal::plain_text::strip_escapes;
 
 /// How a login ended.
-pub(super) enum Outcome {
+pub(crate) enum Outcome {
     Succeeded,
     Failed(LoginFailure),
     Cancelled,
     TimedOut,
 }
-
-/// How often the file Claude Code's `BROWSER` script writes is looked at.
-const URL_POLL: Duration = Duration::from_millis(100);
 
 /// How long a CLI's last words are waited for after it exits.
 const LAST_WORDS: Duration = Duration::from_millis(300);
@@ -57,22 +43,13 @@ const LAST_WORDS: Duration = Duration::from_millis(300);
 /// said, is what the login reports.
 const WRITE_FAILURE_GRACE: Duration = Duration::from_secs(1);
 
-/// How long Codex's app server is given to answer a cancel before it is killed anyway.
-const CANCEL_GRACE: Duration = Duration::from_secs(2);
-
-/// How long `claude auth status` may take.
-const STATUS_TIMEOUT: Duration = Duration::from_secs(15);
-
-/// The most `claude auth status` may print: a short JSON object.
-const STATUS_OUTPUT_LIMIT: usize = 64 * 1024;
-
 /// How often a CLI that has been killed is looked at for having exited, which is found out
 /// without reaping it so that what it left in its session can be killed first (see
 /// [`Process::stop`]).
 const EXIT_POLL: Duration = Duration::from_millis(20);
 
 /// Reports a login's progress to the clients.
-pub(super) struct Progress {
+pub(crate) struct Progress {
     state: Arc<AppState>,
     key: Key,
 }
@@ -84,7 +61,12 @@ impl Progress {
 
     /// The user has something to do: authorize on `url`, confirming `device_code` there if there
     /// is one. `opened_by_agent` is the CLI having opened the page itself.
-    fn waiting(&self, url: Option<String>, device_code: Option<String>, opened_by_agent: bool) {
+    pub(crate) fn waiting(
+        &self,
+        url: Option<String>,
+        device_code: Option<String>,
+        opened_by_agent: bool,
+    ) {
         self.state
             .account_logins
             .update(&self.state, &self.key, |login| {
@@ -120,16 +102,38 @@ impl Drop for SigningIn {
     }
 }
 
+/// How one provider's CLI is driven to sign an account in.
+pub(crate) trait LoginFlow: Send + Sync {
+    /// Runs the CLI's sign-in for the account `flow` describes (binary, shell environment,
+    /// directories, scratch), reporting what the user has to do through `progress`, until it ends
+    /// or `cancel` is notified. A boxed future because the crate has no `async-trait`.
+    fn run<'a>(
+        &'a self,
+        flow: &'a Flow,
+        progress: &'a Progress,
+        cancel: &'a Notify,
+    ) -> Pin<Box<dyn Future<Output = Outcome> + Send + 'a>>;
+
+    /// The code a sign-in is refused with while another account of this provider is being signed
+    /// in, for a provider whose sign-in only one login at a time can use (one that listens on a
+    /// fixed local port); `None`, the default, lets its logins run side by side.
+    fn busy_code(&self) -> Option<ProviderCode> {
+        None
+    }
+}
+
 /// One agent's login, ready to run.
-pub(super) struct Flow {
-    agent: Agent,
+pub(crate) struct Flow {
+    pub(crate) agent: AgentId,
+    /// How the agent's sign-in is driven.
+    login: &'static dyn LoginFlow,
     /// Where the agent's binary resolved, once, so that every command of the flow runs the same.
     binary: String,
-    shell_env: HashMap<String, String>,
+    pub(crate) shell_env: HashMap<String, String>,
     /// The account's directory, exported to the CLI; `None` for the default account.
-    config_dir: Option<PathBuf>,
+    pub(crate) config_dir: Option<PathBuf>,
     /// Where the credential ends up, if known: the pinned directory or the agent's own default.
-    resolved_dir: Option<PathBuf>,
+    pub(crate) resolved_dir: Option<PathBuf>,
     /// This login's own scratch directory, removed when the flow is dropped.
     scratch: Scratch,
 }
@@ -147,7 +151,8 @@ impl Drop for Scratch {
 impl Flow {
     /// `Err` carries the binary's name when it does not resolve in `shell_env`.
     pub(super) fn new(
-        agent: Agent,
+        agent: AgentId,
+        login: &'static dyn LoginFlow,
         shell_env: HashMap<String, String>,
         config_dir: Option<PathBuf>,
         resolved_dir: Option<PathBuf>,
@@ -156,6 +161,7 @@ impl Flow {
         let binary = adapter::resolve_account_binary(agent, &shell_env)?;
         Ok(Self {
             agent,
+            login,
             binary,
             shell_env,
             config_dir,
@@ -176,14 +182,32 @@ impl Flow {
             () = cancel.notified() => return Outcome::Cancelled,
         };
         let _signing_in = running.map(|run| SigningIn::new(progress.state.clone(), run));
-        match self.agent {
-            Agent::Claude => self.claude(progress, cancel).await,
-            Agent::Codex => self.codex(progress, cancel).await,
-            Agent::Grok => self.grok(progress, cancel).await,
+        self.login.run(&self, progress, cancel).await
+    }
+
+    /// A flow of `agent` for a test, its binary not resolved.
+    #[cfg(test)]
+    pub(crate) fn unresolved(agent: AgentId, scratch: PathBuf) -> Self {
+        Self {
+            agent,
+            login: adapter::provider(agent)
+                .accounts()
+                .and_then(|ops| ops.login())
+                .expect("the agent has a sign-in flow"),
+            binary: String::new(),
+            shell_env: HashMap::new(),
+            config_dir: None,
+            resolved_dir: None,
+            scratch: Scratch(scratch),
         }
     }
 
-    fn command(&self, args: &[&str]) -> std::process::Command {
+    /// This login's own scratch directory, created by whatever needs it.
+    pub(crate) fn scratch_dir(&self) -> &Path {
+        &self.scratch.0
+    }
+
+    pub(crate) fn command(&self, args: &[&str]) -> std::process::Command {
         adapter::account_command_of(
             &self.binary,
             self.agent,
@@ -193,7 +217,7 @@ impl Flow {
         )
     }
 
-    fn failed(&self, detail: &str) -> Outcome {
+    pub(crate) fn failed(&self, detail: &str) -> Outcome {
         Outcome::Failed(LoginFailure::new(
             code::FAILED,
             format!("{} could not sign in: {detail}", self.agent.label()),
@@ -201,7 +225,7 @@ impl Flow {
         ))
     }
 
-    fn not_confirmed(&self) -> Outcome {
+    pub(crate) fn not_confirmed(&self) -> Outcome {
         Outcome::Failed(LoginFailure::new(
             code::NOT_CONFIRMED,
             format!(
@@ -213,163 +237,11 @@ impl Flow {
     }
 
     /// How a CLI that ended without signing in is reported: its last words, else its exit status.
-    fn ended(&self, status: std::process::ExitStatus, last_words: &str) -> Outcome {
+    pub(crate) fn ended(&self, status: std::process::ExitStatus, last_words: &str) -> Outcome {
         if last_words.is_empty() {
             self.failed(&format!("it ended with {status}"))
         } else {
             self.failed(last_words)
-        }
-    }
-
-    async fn claude(&self, progress: &Progress, cancel: &Notify) -> Outcome {
-        let (script, urls) = match self.write_browser_script() {
-            Ok(written) => written,
-            Err(err) => return self.failed(&format!("preparing the sign-in failed: {err}")),
-        };
-        let mut command = self.command(&["auth", "login"]);
-        command.env("BROWSER", script);
-        let mut process = match Process::spawn(command, self.agent.label(), false) {
-            Ok(process) => process,
-            Err(err) => return self.failed(&format!("it could not be started: {err}")),
-        };
-
-        let mut reported = String::new();
-        let mut last_words = String::new();
-        let mut poll = tokio::time::interval(URL_POLL);
-        let status = loop {
-            tokio::select! {
-                _ = poll.tick() => {
-                    let url = last_line_of(&urls);
-                    if !url.is_empty() && url != reported {
-                        progress.waiting(Some(url.clone()), None, false);
-                        reported = url;
-                    }
-                }
-                Some(line) = process.lines.recv() => {
-                    if let Some(words) = line.into_words() {
-                        last_words = words;
-                    }
-                }
-                status = process.child.wait() => break status,
-                () = cancel.notified() => {
-                    process.stop().await;
-                    return Outcome::Cancelled;
-                }
-            }
-        };
-        let status = match status {
-            Ok(status) => status,
-            Err(err) => return self.failed(&err.to_string()),
-        };
-        process.last_words(&mut last_words).await;
-        if !status.success() {
-            return self.ended(status, &last_words);
-        }
-        // The CLI has gone, but a cancel is still honoured while its answer is waited for.
-        let signed_in = tokio::select! {
-            signed_in = self.claude_signed_in() => signed_in,
-            () = cancel.notified() => return Outcome::Cancelled,
-        };
-        if signed_in {
-            Outcome::Succeeded
-        } else {
-            self.not_confirmed()
-        }
-    }
-
-    /// Writes the `BROWSER` script, which appends its argument to the returned file, into the
-    /// scratch directory. A script because `BROWSER` is run as `$BROWSER <url>`.
-    fn write_browser_script(&self) -> std::io::Result<(PathBuf, PathBuf)> {
-        use std::os::unix::fs::PermissionsExt;
-
-        // Private to the user, as the script is run by whatever the CLI hands the URL to.
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&self.scratch.0)?;
-        let (script, urls) = (
-            self.scratch.0.join("browser.sh"),
-            self.scratch.0.join("urls"),
-        );
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$1\" >> {}\n",
-                adapter::shell_quote(&urls.to_string_lossy())
-            ),
-        )?;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700))?;
-        Ok((script, urls))
-    }
-
-    /// Whether `claude auth status` says the account is signed in. It exits 1 when it is not, with
-    /// the answer on stdout either way, so the exit status is not looked at.
-    async fn claude_signed_in(&self) -> bool {
-        let mut command = self.command(&["auth", "status"]);
-        let output = tokio::task::spawn_blocking(move || {
-            account_cli::run_query(&mut command, STATUS_TIMEOUT, STATUS_OUTPUT_LIMIT, None)
-        })
-        .await;
-        let Ok(Ok(output)) = output else {
-            return false;
-        };
-        serde_json::from_slice::<Value>(&output.stdout)
-            .ok()
-            .and_then(|status| status.get("loggedIn").and_then(Value::as_bool))
-            .unwrap_or(false)
-    }
-
-    async fn grok(&self, progress: &Progress, cancel: &Notify) -> Outcome {
-        let mut process = match Process::spawn(
-            self.command(&["login", "--device-auth"]),
-            self.agent.label(),
-            false,
-        ) {
-            Ok(process) => process,
-            Err(err) => return self.failed(&format!("it could not be started: {err}")),
-        };
-        let (mut url, mut device_code) = (None, None);
-        let mut last_words = String::new();
-        let status = loop {
-            tokio::select! {
-                Some(line) = process.lines.recv() => {
-                    let mut found = false;
-                    if url.is_none() {
-                        if let Some(page) = url_in(&line.text) {
-                            device_code = device_code.take().or_else(|| user_code_in(&page));
-                            url = Some(page);
-                            found = true;
-                        }
-                    }
-                    if device_code.is_none() && looks_like_device_code(&line.text) {
-                        device_code = Some(line.text.clone());
-                        found = true;
-                    }
-                    if found {
-                        progress.waiting(url.clone(), device_code.clone(), true);
-                    }
-                    if let Some(words) = line.into_words() {
-                        last_words = words;
-                    }
-                }
-                status = process.child.wait() => break status,
-                () = cancel.notified() => {
-                    process.stop().await;
-                    return Outcome::Cancelled;
-                }
-            }
-        };
-        let status = match status {
-            Ok(status) => status,
-            Err(err) => return self.failed(&err.to_string()),
-        };
-        process.last_words(&mut last_words).await;
-        if !status.success() {
-            return self.ended(status, &last_words);
-        }
-        match &self.resolved_dir {
-            Some(dir) if !dir.join(GROK_SIGN_IN_FILE).is_file() => self.not_confirmed(),
-            _ => Outcome::Succeeded,
         }
     }
 
@@ -378,7 +250,7 @@ impl Flow {
     /// it said is why the login failed, not the broken pipe: a failed write is reported as the
     /// CLI's exit, with `last_words` (what it has said so far) brought up to date. Only a CLI still
     /// running after [`WRITE_FAILURE_GRACE`] is reported as not taking the write.
-    async fn send(
+    pub(crate) async fn send(
         &self,
         process: &mut Process,
         request: &Value,
@@ -395,167 +267,10 @@ impl Flow {
             _ => Err(self.failed(&format!("it could not be written to: {err}"))),
         }
     }
-
-    async fn codex(&self, progress: &Progress, cancel: &Notify) -> Outcome {
-        // Codex refuses a home that does not exist, the default account's included.
-        if let Some(dir) = self.config_dir.as_ref().or(self.resolved_dir.as_ref()) {
-            if let Err(err) = std::fs::create_dir_all(dir) {
-                return self.failed(&format!("creating {} failed: {err}", dir.display()));
-            }
-        }
-        let mut process = match Process::spawn(
-            self.command(CODEX_APP_SERVER_ARGS),
-            self.agent.label(),
-            true,
-        ) {
-            Ok(process) => process,
-            Err(err) => return self.failed(&format!("it could not be started: {err}")),
-        };
-        let requests = [
-            codex_app_server::initialize(),
-            codex_app_server::initialized(),
-            json!({"jsonrpc": "2.0", "id": 2, "method": "account/login/start",
-                "params": {"type": "chatgpt"}}),
-        ];
-        let mut last_words = String::new();
-        for request in &requests {
-            if let Err(outcome) = self.send(&mut process, request, &mut last_words).await {
-                return outcome;
-            }
-        }
-
-        let mut login_id: Option<String> = None;
-        loop {
-            tokio::select! {
-                Some(line) = process.lines.recv() => {
-                    let Ok(message) = serde_json::from_str::<Value>(&line.text) else {
-                        if let Some(words) = line.into_words() {
-                            last_words = words;
-                        }
-                        continue;
-                    };
-                    match codex_event(&message, login_id.as_deref()) {
-                        CodexEvent::Started { login, url } => {
-                            login_id = Some(login);
-                            progress.waiting(Some(url), None, false);
-                        }
-                        CodexEvent::Completed => {
-                            let read = json!({"jsonrpc": "2.0", "id": 3, "method": "account/read",
-                                "params": {}});
-                            if let Err(outcome) =
-                                self.send(&mut process, &read, &mut last_words).await
-                            {
-                                return outcome;
-                            }
-                        }
-                        CodexEvent::Confirmed(true) => return Outcome::Succeeded,
-                        CodexEvent::Confirmed(false) => return self.not_confirmed(),
-                        CodexEvent::Rejected(detail) => return self.failed(&detail),
-                        CodexEvent::GaveUp(detail) if is_timeout(&detail) => {
-                            return Outcome::TimedOut;
-                        }
-                        CodexEvent::GaveUp(detail) => return self.failed(&detail),
-                        CodexEvent::Other => {}
-                    }
-                }
-                status = process.child.wait() => {
-                    return match status {
-                        Ok(status) => {
-                            process.last_words(&mut last_words).await;
-                            self.ended(status, &last_words)
-                        }
-                        Err(err) => self.failed(&err.to_string()),
-                    };
-                }
-                () = cancel.notified() => {
-                    if let Some(login) = &login_id {
-                        let cancel = json!({"jsonrpc": "2.0", "id": 4,
-                            "method": "account/login/cancel", "params": {"loginId": login}});
-                        // Best effort: its listener goes with the process either way, but this
-                        // lets it close the flow itself first.
-                        if process.send(&cancel).await.is_ok() {
-                            let completed = process.until_completed();
-                            let _ = tokio::time::timeout(CANCEL_GRACE, completed).await;
-                        }
-                    }
-                    process.stop().await;
-                    return Outcome::Cancelled;
-                }
-            }
-        }
-    }
-}
-
-/// Whether Codex's account of why a login did not complete says it ran out of time.
-fn is_timeout(detail: &str) -> bool {
-    detail.to_lowercase().contains("timed out")
-}
-
-/// What a line of Codex's app server means to the login.
-enum CodexEvent {
-    /// The reply to `account/login/start`.
-    Started {
-        login: String,
-        url: String,
-    },
-    /// `account/login/completed` with `success: true`.
-    Completed,
-    /// The reply to `account/read`: whether an account is there.
-    Confirmed(bool),
-    /// The reply to `account/login/start` was an error.
-    Rejected(String),
-    /// `account/login/completed` with `success: false`, and what it said.
-    GaveUp(String),
-    Other,
-}
-
-fn codex_event(message: &Value, login: Option<&str>) -> CodexEvent {
-    if json_rpc::is_reply_to(message, 2) {
-        if let Some(detail) = json_rpc::error_detail(message) {
-            return CodexEvent::Rejected(detail);
-        }
-        let result = message.get("result");
-        let field = |name: &str| {
-            result
-                .and_then(|result| result.get(name))
-                .and_then(Value::as_str)
-        };
-        return match (field("loginId"), field("authUrl")) {
-            (Some(login), Some(url)) => CodexEvent::Started {
-                login: login.to_string(),
-                url: url.to_string(),
-            },
-            _ => CodexEvent::Rejected("the login start was answered without a page".to_string()),
-        };
-    }
-    if json_rpc::is_reply_to(message, 3) {
-        let signed_in = message
-            .pointer("/result/account")
-            .is_some_and(|account| !account.is_null());
-        return CodexEvent::Confirmed(signed_in);
-    }
-    if message.get("method").and_then(Value::as_str) == Some("account/login/completed") {
-        let params = message.get("params");
-        let named = params
-            .and_then(|params| params.get("loginId"))
-            .and_then(Value::as_str);
-        if login.is_some() && named.is_some() && named != login {
-            return CodexEvent::Other;
-        }
-        if params.and_then(|params| params.get("success")) == Some(&Value::Bool(true)) {
-            return CodexEvent::Completed;
-        }
-        let detail = params
-            .and_then(|params| params.get("error"))
-            .and_then(Value::as_str)
-            .unwrap_or("the login did not complete");
-        return CodexEvent::GaveUp(detail.to_string());
-    }
-    CodexEvent::Other
 }
 
 /// The last non-empty line of the file at `path`; empty while it is missing.
-fn last_line_of(path: &Path) -> String {
+pub(crate) fn last_line_of(path: &Path) -> String {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|text| {
@@ -568,51 +283,22 @@ fn last_line_of(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// The first `https://` word of `line`.
-fn url_in(line: &str) -> Option<String> {
-    line.split_whitespace()
-        .find(|word| word.starts_with("https://"))
-        .map(str::to_string)
-}
-
-/// The `user_code` of a device-flow page's address.
-fn user_code_in(url: &str) -> Option<String> {
-    let query = url.split_once('?')?.1;
-    query
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("user_code="))
-        .filter(|code| !code.is_empty())
-        .map(str::to_string)
-}
-
-/// A line that is only a code of two groups of four letters or digits, as Grok Build prints it
-/// under "Confirm this code in your browser".
-fn looks_like_device_code(line: &str) -> bool {
-    let mut groups = line.split('-');
-    let is_group = |group: Option<&str>| {
-        group.is_some_and(|group| {
-            group.len() == 4 && group.chars().all(|c| c.is_ascii_alphanumeric())
-        })
-    };
-    is_group(groups.next()) && is_group(groups.next()) && groups.next().is_none()
-}
-
 /// A CLI running in a session of its own, with the lines of its stdout and stderr (escape
 /// sequences stripped, trimmed) arriving on [`Self::lines`]. A cancel ([`Self::stop`]) kills the
 /// whole session, and so does dropping it, as a flow's end by a timeout or the daemon's exit does:
 /// some helpers of an agent CLI move into process groups of their own, where a signal to its group
 /// would miss them. A CLI that exits by itself is only reaped, its session left as it is: the
 /// browser a login opens can be in it, started directly by `xdg-open` on a Linux desktop.
-struct Process {
-    child: Child,
+pub(crate) struct Process {
+    pub(crate) child: Child,
     /// Names the CLI in the log of a session sweep: the agent's name.
     label: &'static str,
     stdin: Option<ChildStdin>,
-    lines: mpsc::Receiver<Line>,
+    pub(crate) lines: mpsc::Receiver<Line>,
 }
 
 impl Process {
-    fn spawn(
+    pub(crate) fn spawn(
         mut command: std::process::Command,
         label: &'static str,
         pipe_stdin: bool,
@@ -645,29 +331,17 @@ impl Process {
     }
 
     /// Writes `request` as a line to the CLI's stdin.
-    async fn send(&mut self, request: &Value) -> std::io::Result<()> {
+    pub(crate) async fn send(&mut self, request: &Value) -> std::io::Result<()> {
         let stdin = self.stdin.as_mut().ok_or(std::io::ErrorKind::BrokenPipe)?;
         stdin.write_all(format!("{request}\n").as_bytes()).await?;
         stdin.flush().await
-    }
-
-    /// Reads on until Codex's `account/login/completed`, or until the CLI's output ends.
-    async fn until_completed(&mut self) {
-        while let Some(line) = self.lines.recv().await {
-            let completed = serde_json::from_str::<Value>(&line.text).is_ok_and(|message| {
-                message.get("method").and_then(Value::as_str) == Some("account/login/completed")
-            });
-            if completed {
-                return;
-            }
-        }
     }
 
     /// Kills the CLI's whole session and waits for the CLI to be gone, so that what it held
     /// (Codex's login port) is free when this returns. The session is swept once the CLI has
     /// exited, found out without reaping it (`WNOWAIT`), while its zombie keeps the session id
     /// from passing to another process.
-    async fn stop(&mut self) {
+    pub(crate) async fn stop(&mut self) {
         // `id` is `None` once the child has been reaped, when its pid may be someone else's.
         if let Some(pid) = self.child.id() {
             let pid = pid as libc::pid_t;
@@ -690,7 +364,7 @@ impl Process {
 
     /// Takes what the CLI printed last into `last_words`, a moment's worth: the line that says
     /// why it failed comes just before it exits.
-    async fn last_words(&mut self, last_words: &mut String) {
+    pub(crate) async fn last_words(&mut self, last_words: &mut String) {
         while let Ok(Some(line)) = tokio::time::timeout(LAST_WORDS, self.lines.recv()).await {
             if let Some(words) = line.into_words() {
                 *last_words = words;
@@ -719,8 +393,8 @@ const LINE_LIMIT: usize = 16 * 1024;
 const LINE_BACKLOG: usize = 256;
 
 /// One line of a CLI's output.
-struct Line {
-    text: String,
+pub(crate) struct Line {
+    pub(crate) text: String,
     /// Whether the CLI's line was longer than [`LINE_LIMIT`] and `text` is only its start.
     cut: bool,
 }
@@ -728,7 +402,7 @@ struct Line {
 impl Line {
     /// What the line says, for a CLI's last words: `None` for an empty line and for a cut one,
     /// whose end, the part that would tell something, is gone.
-    fn into_words(self) -> Option<String> {
+    pub(crate) fn into_words(self) -> Option<String> {
         (!self.text.is_empty() && !self.cut).then_some(self.text)
     }
 }
@@ -795,19 +469,7 @@ mod tests {
         assert_stops_running, helper_in_its_own_group, is_running, read_pid_file, KillOnDrop,
         ScratchDir, ScratchFile, PATIENCE,
     };
-
-    #[test]
-    fn grok_builds_its_page_and_code_from_the_lines_it_prints() {
-        let url = "https://accounts.x.ai/oauth2/device?user_code=ABCD-1234";
-        assert_eq!(url_in(&format!("  {url}")).as_deref(), Some(url),);
-        assert_eq!(url_in("To sign in, open this URL in your browser:"), None);
-        assert_eq!(user_code_in(url).as_deref(), Some("ABCD-1234"));
-        assert_eq!(user_code_in("https://accounts.x.ai/oauth2/device"), None);
-        assert!(looks_like_device_code("ABCD-1234"));
-        assert!(!looks_like_device_code("Waiting for authorization..."));
-        assert!(!looks_like_device_code("ABCD-12345"));
-        assert!(!looks_like_device_code("abcd-12-34"));
-    }
+    use serde_json::json;
 
     /// What `forward_lines` hands over for `input` once its sender is gone, as (text, cut).
     async fn forwarded(input: Vec<u8>) -> Vec<(String, bool)> {
@@ -873,100 +535,6 @@ mod tests {
         assert_eq!(line("", false).into_words(), None);
     }
 
-    #[test]
-    fn codex_lines_are_told_apart_by_their_ids_and_methods() {
-        let started: Value = serde_json::from_str(
-            r#"{"id":2,"result":{"type":"chatgpt","loginId":"L","authUrl":"https://a/b"}}"#,
-        )
-        .unwrap();
-        assert!(matches!(
-            codex_event(&started, None),
-            CodexEvent::Started { login, url } if login == "L" && url == "https://a/b"
-        ));
-        let refused: Value =
-            serde_json::from_str(r#"{"id":2,"error":{"code":-32600,"message":"busy"}}"#).unwrap();
-        assert!(matches!(codex_event(&refused, None), CodexEvent::Rejected(m) if m == "busy"));
-        let done = |extra: &str| -> Value {
-            serde_json::from_str(&format!(
-                r#"{{"method":"account/login/completed","params":{{"loginId":"L",{extra}}}}}"#
-            ))
-            .unwrap()
-        };
-        assert!(matches!(
-            codex_event(&done(r#""success":true"#), Some("L")),
-            CodexEvent::Completed
-        ));
-        assert!(matches!(
-            codex_event(&done(r#""success":false,"error":"no""#), Some("L")),
-            CodexEvent::GaveUp(m) if m == "no"
-        ));
-        // A message with a method is the server's own, whatever id it numbers itself by.
-        let request: Value =
-            serde_json::from_str(r#"{"id":2,"method":"item/tool/call","params":{}}"#).unwrap();
-        assert!(matches!(codex_event(&request, None), CodexEvent::Other));
-        // Another login's end is not this one's.
-        assert!(matches!(
-            codex_event(&done(r#""success":true"#), Some("other")),
-            CodexEvent::Other
-        ));
-        let read = |account: &str| -> Value {
-            serde_json::from_str(&format!(r#"{{"id":3,"result":{{"account":{account}}}}}"#))
-                .unwrap()
-        };
-        assert!(matches!(
-            codex_event(&read(r#"{"type":"chatgpt"}"#), None),
-            CodexEvent::Confirmed(true)
-        ));
-        assert!(matches!(
-            codex_event(&read("null"), None),
-            CodexEvent::Confirmed(false)
-        ));
-    }
-
-    #[test]
-    fn the_browser_script_appends_its_argument_to_the_file_the_flow_watches() {
-        let dir = crate::test_support::ScratchDir::new("login-browser-script");
-        let flow = Flow {
-            agent: Agent::Claude,
-            shell_env: HashMap::new(),
-            config_dir: None,
-            resolved_dir: None,
-            binary: String::new(),
-            scratch: Scratch(dir.join("it's here")),
-        };
-        let (script, urls) = flow.write_browser_script().unwrap();
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(&flow.scratch.0)
-                .unwrap()
-                .permissions()
-                .mode();
-            assert_eq!(mode & 0o777, 0o700);
-        }
-        for url in ["https://a/one?x=1&y=2", "https://a/two"] {
-            // A process forked by another thread while the script was open for writing holds it
-            // open until it execs, and until then the script cannot be run (`ETXTBSY`).
-            let deadline = std::time::Instant::now() + PATIENCE;
-            let status = loop {
-                match std::process::Command::new(&script).arg(url).status() {
-                    Err(err)
-                        if err.raw_os_error() == Some(libc::ETXTBSY)
-                            && std::time::Instant::now() < deadline =>
-                    {
-                        std::thread::sleep(Duration::from_millis(10));
-                    }
-                    other => break other.unwrap(),
-                }
-            };
-            assert!(status.success());
-        }
-        assert_eq!(last_line_of(&urls), "https://a/two");
-        assert_eq!(
-            std::fs::read_to_string(&urls).unwrap(),
-            "https://a/one?x=1&y=2\nhttps://a/two\n"
-        );
-    }
-
     /// Starts a stand-in login CLI that leaves a helper in a process group of its own and then
     /// runs `then`, and returns it with the helper's pid once the helper is running.
     async fn stand_in_with_a_helper(then: &str) -> (Process, libc::pid_t) {
@@ -1023,14 +591,7 @@ mod tests {
     #[tokio::test]
     async fn a_write_to_a_cli_that_has_exited_reports_what_it_said_last() {
         let scratch = ScratchDir::new("login-write-after-exit");
-        let flow = Flow {
-            agent: Agent::Codex,
-            binary: String::new(),
-            shell_env: HashMap::new(),
-            config_dir: None,
-            resolved_dir: None,
-            scratch: Scratch(scratch.to_path_buf()),
-        };
+        let flow = Flow::unresolved(AgentId::CODEX, scratch.to_path_buf());
         let mut command = std::process::Command::new("/bin/sh");
         command.args(["-c", "echo 'Error: bad configuration' >&2; exit 1"]);
         let mut process = Process::spawn(command, "stand-in", true).expect("the stand-in starts");

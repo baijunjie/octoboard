@@ -256,6 +256,7 @@ it("leaves the agents known to be missing out of the default agent picker", asyn
     "Same as console, Claude Code",
     "Claude Code",
     "Grok Build",
+    "Test Agent",
   ]);
 });
 
@@ -267,6 +268,7 @@ it("keeps the project's own missing agent in the picker as not installed until a
     "Same as console, Claude Code",
     "Claude Code",
     "Grok Build",
+    "Test Agent",
     "Codex, Not installed",
   ]);
   await choose("Claude Code");

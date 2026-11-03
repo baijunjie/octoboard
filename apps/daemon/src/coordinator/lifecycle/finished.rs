@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::messaging::naming::session_labels;
-use crate::protocol::{Agent, Session, SessionStatus};
+use crate::protocol::{AgentId, Session, SessionStatus};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::bindings::{bound_sessions, team};
 use crate::state::AppState;
@@ -129,7 +129,7 @@ impl Unfinished {
 /// What refuses a session its own archive while sessions under it are not archived. A session
 /// bound to a project coordinator is not the caller's to archive, so it is named under its
 /// coordinator with different advice from the caller's direct sessions.
-fn unarchived_refusal(caller: Agent, caller_id: &str, unarchived: &[Session]) -> String {
+fn unarchived_refusal(caller: AgentId, caller_id: &str, unarchived: &[Session]) -> String {
     let archive_session = qualified_tool_name(caller, "archive_session");
     let (direct, under_coordinators): (Vec<&Session>, Vec<&Session>) = unarchived
         .iter()

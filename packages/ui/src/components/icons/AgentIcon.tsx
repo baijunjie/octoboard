@@ -2,8 +2,8 @@ import React from "react";
 
 import { agentPickerOptions, agentSetupOptions } from "../../agents/agents";
 import type { Translate } from "../../i18n/catalog";
-import type { Agent, AgentAvailability } from "../../protocol";
-import { AGENT_MARKS } from "./agentMarks";
+import type { Agent, AgentAvailability, ProviderInfo } from "../../protocol";
+import { providerMark } from "../../providers/registry";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 
 /** The mark of a session's agent. Always decorative: wherever it appears, the agent's name is in
@@ -22,7 +22,7 @@ export function AgentIcon({
   tooltip?: React.ReactNode;
   touchPopover?: boolean;
 }): React.ReactElement {
-  const { d, fill } = AGENT_MARKS[agent];
+  const { d, fill } = providerMark(agent);
   const icon = (
     <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} fill={fill} fillRule="evenodd" aria-hidden="true">
       <path d={d} />
@@ -37,11 +37,11 @@ export function AgentIcon({
 }
 
 /** `agentSetupOptions`, with each agent's mark. */
-export function agentIconSetupOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>, listed: Agent[]) {
-  return agentSetupOptions(t, agentAvailability, listed).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+export function agentIconSetupOptions(t: Translate, providers: readonly ProviderInfo[], agentAvailability: Map<Agent, AgentAvailability>, listed: Agent[]) {
+  return agentSetupOptions(t, providers, agentAvailability, listed).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
 }
 
 /** `agentPickerOptions`, with each agent's mark. */
-export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>, added: Agent[] | null, held?: Agent | null) {
-  return agentPickerOptions(t, agentAvailability, added, held).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>, added: Agent[] | null, providers: readonly ProviderInfo[], held?: Agent | null) {
+  return agentPickerOptions(t, agentAvailability, added, providers, held).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
 }

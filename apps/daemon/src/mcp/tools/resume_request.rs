@@ -218,7 +218,7 @@ fn held_elsewhere(state: &Arc<AppState>, holder: &Session, asked: &Project) -> a
 mod tests {
     use super::*;
     use crate::mcp::test_support::{arguments, shared_console_state};
-    use crate::protocol::Agent;
+    use crate::protocol::AgentId;
     use serde_json::json;
 
     const ID: &str = "11111111-2222-3333-4444-555555555555";
@@ -363,7 +363,7 @@ mod tests {
             .await,
         );
         assert!(
-            reason.contains(&qualified_tool_name(Agent::Claude, "resume_session")),
+            reason.contains(&qualified_tool_name(AgentId::CLAUDE, "resume_session")),
             "{reason}"
         );
 
@@ -556,7 +556,7 @@ mod tests {
     async fn a_record_opens_an_unbound_session_on_the_account_that_holds_it() {
         let (state, _dir) = shared_console_state("resume-request-record");
         let location = ConversationLocation::Record {
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: Some("work".to_string()),
         };
         let action = planned(
@@ -586,7 +586,7 @@ mod tests {
             (
                 "console-1",
                 Some("project-1"),
-                Some(Agent::Codex),
+                Some(AgentId::CODEX),
                 Some(Some("work".to_string()))
             )
         );

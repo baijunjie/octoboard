@@ -1,6 +1,14 @@
 //! The read tools for sessions, projects, consoles, agents and their models.
 
+use std::sync::LazyLock;
+
 use serde_json::json;
+
+use crate::adapter::provider;
+use crate::agents::models::ModelCatalogue;
+use crate::protocol::AgentId;
+use crate::providers::{descriptors, QuotaWindowKind};
+use crate::text::list_names;
 
 use super::schemas::{agent_enum, object_schema, started_by_a_session};
 use super::ToolDef;
@@ -296,50 +304,92 @@ pub(super) const LIST_ARCHIVED_SESSIONS: ToolDef = ToolDef {
     },
 };
 
+/// The providers, by label, that satisfy `keep` on their model catalogue, as a list in prose.
+fn catalogue_providers(keep: impl Fn(&dyn ModelCatalogue) -> bool) -> String {
+    let labels: Vec<&str> = AgentId::ALL
+        .into_iter()
+        .filter(|agent| keep(provider(*agent).catalogue()))
+        .map(AgentId::label)
+        .collect();
+    list_names(&labels)
+}
+
+/// The description of `list_agent_models`: the providers that name a default model are the ones
+/// whose own configuration `default_model_source` can say `configured` of, and the others' answers
+/// are the ones cached for ten minutes ([`ModelCache`](crate::agents::models::ModelCache)).
+fn list_agent_models_description() -> &'static str {
+    static DESCRIPTION: LazyLock<String> = LazyLock::new(|| {
+        let naming = catalogue_providers(|catalogue| catalogue.names_default_model());
+        let cached = catalogue_providers(|catalogue| !catalogue.names_default_model());
+        let configured = if naming.is_empty() {
+            "the agent's own configuration names it".to_string()
+        } else {
+            format!("{naming}'s own configuration names it, and it is left to {naming}")
+        };
+        let not_built_in = if naming.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", not {naming}'s built-in default; a project's own {naming} settings still win \
+                 at launch"
+            )
+        };
+        let cache = if cached.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " The answer of {cached} is kept for ten minutes, as it is for the application's \
+                 own model pickers, because reading it can run the agent."
+            )
+        };
+        format!(
+            "The models an agent offers right now, read-only, each with its `id` (what a \
+             `model` takes), `name`, `efforts` (the reasoning-effort levels an `effort` takes for \
+             that model, in the agent's own spelling), and where the agent says so `version` (the \
+             model an alias resolves to, such as `Opus 5.5`) and `available` (`false`: the agent \
+             refuses it for this account at launch; absent: not known). `default_model` is the \
+             model a session of the account gets when no setting names one, and \
+             `default_model_source` says where it came from: `configured` ({configured}) or \
+             `best_available` (the first listed model that is `available`). A left-out or blank \
+             `model` gets `default_model`{not_built_in}. Both are `null` when the agent's own \
+             default applies. Use it before passing a `model` or `effort`, or a `launch` that \
+             holds them, to any tool you have that takes one; an `effort` can still be refused \
+             or lowered by the agent for a model that does not advertise it. A catalogue belongs \
+             to an account, so name `account` to read another account's.{cache} When the agent \
+             cannot be asked, `models` is empty and `unavailable` (`code` and `message`) says \
+             why: leave `model` out then, which takes the default."
+        )
+    });
+    &DESCRIPTION
+}
+
 /// The models an agent offers, and the efforts of each: what the `model` and `effort` that
 /// `open_session`, `request_session`, `request_resume_session` and the `launch` settings take must
 /// be among. Offered to every role, since every role can pass them.
-pub(super) const LIST_AGENT_MODELS: ToolDef = ToolDef {
-    name: "list_agent_models",
-    description: "The models an agent offers right now, read-only, each with its `id` (what a \
-                  `model` takes), `name`, `efforts` (the reasoning-effort levels an `effort` \
-                  takes for that model, in the agent's own spelling), and where the agent says \
-                  so `version` (the model an alias resolves to, such as `Opus 5.5`) and \
-                  `available` (`false`: the agent refuses it for this account at launch; absent: \
-                  not known). `default_model` is the model a session of the account gets when no \
-                  setting names one, and `default_model_source` says where it came from: \
-                  `configured` (Claude Code's own configuration names it, and it is left to \
-                  Claude Code) or `best_available` (the first listed model that is \
-                  `available`). A left-out or blank `model` gets `default_model`, not Claude \
-                  Code's built-in default; a project's own Claude Code settings still win at \
-                  launch. Both are `null` when the agent's own default applies. Use it before \
-                  passing a `model` or `effort`, or a `launch` that holds them, to any tool you \
-                  have that takes one; an `effort` can still be refused or lowered by the agent \
-                  for a model that does not advertise it. A catalogue belongs to an account, so \
-                  name `account` to read another account's. The answer of Codex and Grok Build \
-                  is kept for ten minutes, as it is for the application's own model pickers, \
-                  because reading it can run the agent. When the agent cannot be asked, \
-                  `models` is empty and `unavailable` (`code` and `message`) says why: leave \
-                  `model` out then, which takes the default.",
-    schema: || {
-        object_schema(
-            json!({
-                "agent": {
-                    "type": "string",
-                    "enum": agent_enum(),
-                    "description": "The agent whose models to list.",
-                },
-                "account": {
-                    "type": "string",
-                    "description": "An account's id or name, or `default` for the agent's \
-                                    default account. It must belong to `agent`. Defaults to the \
-                                    agent's default account.",
-                },
-            }),
-            &["agent"],
-        )
-    },
-};
+pub(super) fn list_agent_models() -> ToolDef {
+    ToolDef {
+        name: "list_agent_models",
+        description: list_agent_models_description(),
+        schema: || {
+            object_schema(
+                json!({
+                    "agent": {
+                        "type": "string",
+                        "enum": agent_enum(),
+                        "description": "The agent whose models to list.",
+                    },
+                    "account": {
+                        "type": "string",
+                        "description": "An account's id or name, or `default` for the agent's \
+                                        default account. It must belong to `agent`. Defaults to the \
+                                        agent's default account.",
+                    },
+                }),
+                &["agent"],
+            )
+        },
+    }
+}
 
 /// What a session's conversation held, for an owner or a peer to review: more than the tail of
 /// output `get_session` gives. Any session may read any session's, as `get_session` does.
@@ -507,61 +557,100 @@ pub(super) const GET_PROJECT: ToolDef = ToolDef {
     },
 };
 
+/// What `list_agents` says up to the five-hour window, and from where the weekly one is named on;
+/// the names the agents give the five-hour window go between, as `list_agents_description` writes
+/// them.
+const LIST_AGENTS_UNTIL_SESSION: &str =
+    "The agents a session could be opened on, for choosing an agent and an \
+    account: under `agents`, the agents the user has added that are installed, in \
+    the order the user keeps them (a removed agent is not listed), each with its \
+    `tags` — short notes the user put on the agent about what it is for \
+    (information to weigh, not a rule) — and its `accounts`: every account the \
+    user has not turned off, the agent's default account (`account: \"default\"`) \
+    and the stored ones, with its `account_name`, `plan`, and its quota `windows` \
+    (`kind` `session` is the five-hour window";
+const LIST_AGENTS_FROM_WEEKLY: &str =
+    ", `weekly` the weekly one across all models, `weekly_model` a \
+    weekly window of the model named by `label`, `credit_period` a pool of credits \
+    over a billing period). All values are percentages of a window: \
+    `used_percent` and `remaining_percent`, with `resets_at` (milliseconds since \
+    the epoch) and `window_minutes`; no absolute token or dollar amount is \
+    available. `exhausted` says the account is used up and cannot open a session \
+    until it resets, and `exhausted_until` is when (milliseconds since the epoch; \
+    null when it is not exhausted or the reset time is unknown). `can_open` says a \
+    session could be opened on the account now; when it is false \
+    `cannot_open_reason` says why (used up, not logged in, or a change of its \
+    sharing settings is running). `auto_select_account` says whether automatic \
+    account selection is enabled for sessions opened without naming an account. \
+    Naming an agent that is not listed returns `agents: []`. These are the \
+    readings Octoboard last took, refreshed about every five minutes, and this \
+    call takes a new one only when `refresh` is true: `fetched_at` says how old a \
+    reading is, `unavailable` gives the reason a reading is missing or could not \
+    be refreshed (an account not read yet has `fetched_at: null`, as has one of an \
+    agent not detected yet). Use it to choose an agent by its tags and an account \
+    that can open a session, or to pick the account for `switch_session_account` \
+    or `handoff_session`.";
+
+/// The description of `list_agents`: the fixed text, with what each provider that reports a
+/// five-hour window calls it (Claude Code's session limit, Codex's 5h limit) in the parenthesis
+/// after the window; none leaves the parenthesis out.
+fn list_agents_description() -> &'static str {
+    static DESCRIPTION: LazyLock<String> = LazyLock::new(|| {
+        let names: Vec<String> = descriptors()
+            .filter(|descriptor| {
+                descriptor
+                    .quota_windows
+                    .kinds
+                    .contains(&QuotaWindowKind::Session)
+            })
+            .map(|descriptor| {
+                format!(
+                    "{}'s {} limit",
+                    descriptor.label,
+                    descriptor.quota_windows.session_window.text()
+                )
+            })
+            .collect();
+        let names = if names.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", names.join(", "))
+        };
+        format!("{LIST_AGENTS_UNTIL_SESSION}{names}{LIST_AGENTS_FROM_WEEKLY}")
+    });
+    &DESCRIPTION
+}
+
 /// What every session may read of the agents a session could be opened on: each one's tags, and
 /// the plan quota each of its accounts has left, to choose an agent and an account, or an account
 /// before one runs dry.
-pub(super) const LIST_AGENTS: ToolDef = ToolDef {
-    name: "list_agents",
-    description: "The agents a session could be opened on, for choosing an agent and an \
-                  account: under `agents`, the agents the user has added that are installed, in \
-                  the order the user keeps them (a removed agent is not listed), each with its \
-                  `tags` — short notes the user put on the agent about what it is for \
-                  (information to weigh, not a rule) — and its `accounts`: every account the \
-                  user has not turned off, the agent's default account (`account: \"default\"`) \
-                  and the stored ones, with its `account_name`, `plan`, and its quota `windows` \
-                  (`kind` `session` is the five-hour window (Claude Code's session limit, \
-                  Codex's 5h limit), `weekly` the weekly one across all models, `weekly_model` a \
-                  weekly window of the model named by `label`, `credit_period` a pool of credits \
-                  over a billing period). All values are percentages of a window: \
-                  `used_percent` and `remaining_percent`, with `resets_at` (milliseconds since \
-                  the epoch) and `window_minutes`; no absolute token or dollar amount is \
-                  available. `exhausted` says the account is used up and cannot open a session \
-                  until it resets, and `exhausted_until` is when (milliseconds since the epoch; \
-                  null when it is not exhausted or the reset time is unknown). `can_open` says a \
-                  session could be opened on the account now; when it is false \
-                  `cannot_open_reason` says why (used up, not logged in, or a change of its \
-                  sharing settings is running). `auto_select_account` says whether automatic \
-                  account selection is enabled for sessions opened without naming an account. \
-                  Naming an agent that is not listed returns `agents: []`. These are the \
-                  readings Octoboard last took, refreshed about every five minutes, and this \
-                  call takes a new one only when `refresh` is true: `fetched_at` says how old a \
-                  reading is, `unavailable` gives the reason a reading is missing or could not \
-                  be refreshed (an account not read yet has `fetched_at: null`, as has one of an \
-                  agent not detected yet). Use it to choose an agent by its tags and an account \
-                  that can open a session, or to pick the account for `switch_session_account` \
-                  or `handoff_session`.",
-    schema: || {
-        object_schema(
-            json!({
-                "agent": {
-                    "type": "string",
-                    "enum": agent_enum(),
-                    "description": "List only this agent; one that is not listed gives \
-                                    `agents: []`. Left out, every added agent that is \
-                                    installed.",
-                },
-                "refresh": {
-                    "type": "boolean",
-                    "description": "Take new readings before answering, of the accounts listed. \
-                                    The call then waits for them, which can take several \
-                                    seconds. An account is read at most once a minute, whoever \
-                                    asked: within it the held reading is returned as it is, \
-                                    with no error. A refresh only reads quota and never starts \
-                                    a quota window. Defaults to false, which spends nothing; \
-                                    ask only when a reading is too old to decide on.",
-                },
-            }),
-            &[],
-        )
-    },
-};
+pub(super) fn list_agents() -> ToolDef {
+    ToolDef {
+        name: "list_agents",
+        description: list_agents_description(),
+        schema: || {
+            object_schema(
+                json!({
+                    "agent": {
+                        "type": "string",
+                        "enum": agent_enum(),
+                        "description": "List only this agent; one that is not listed gives \
+                                        `agents: []`. Left out, every added agent that is \
+                                        installed.",
+                    },
+                    "refresh": {
+                        "type": "boolean",
+                        "description": "Take new readings before answering, of the accounts listed. \
+                                        The call then waits for them, which can take several \
+                                        seconds. An account is read at most once a minute, whoever \
+                                        asked: within it the held reading is returned as it is, \
+                                        with no error. A refresh only reads quota and never starts \
+                                        a quota window. Defaults to false, which spends nothing; \
+                                        ask only when a reading is too old to decide on.",
+                    },
+                }),
+                &[],
+            )
+        },
+    }
+}

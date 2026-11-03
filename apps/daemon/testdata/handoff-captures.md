@@ -38,4 +38,6 @@ a slash command with arguments) rather than found by luck in a capture:
   whose reply is spread over several assistant lines.
 - Codex: `AgentMessage` items and `agent_message` events with `commentary` and `final_answer` phases, one with no
   phase, and a "Report from session" user message.
-- Grok Build: a prompt inside `<user_query>` wrapping a paste.
+- Grok Build: a prompt inside `<user_query>` that also carries Claude Code's paste wrapper, and a plain prompt. The
+  wrapper is not an observed Grok Build shape (no real record or capture holds one); it pins the guard the reader keeps
+  against it.

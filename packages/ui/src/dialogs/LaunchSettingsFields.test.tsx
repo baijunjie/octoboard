@@ -5,11 +5,13 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { providerModelDisplay } from "../agents/providers";
 import { press } from "../components/alerts/detailsTestSupport";
 import { CodedError } from "../errors/codedError";
 import { isolate } from "../i18n/isolate";
 import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { LaunchMatrix } from "./ConsoleLaunchFields";
 import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } from "./LaunchSettingsFields";
 
@@ -132,7 +134,7 @@ it("retains request-refusal metadata for rich model descriptions in the mark's p
 it("directs inherited model and effort badges without selecting or submitting their display values", () => {
   const inherited = { model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
   const changed = vi.fn();
-  const launch: LaunchModels = { agent: "claude", defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure: undefined };
+  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure: undefined };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -155,7 +157,7 @@ it("takes the effort levels from the default model while neither the pair nor it
     { id: "fable", name: "Fable", efforts: ["low", "max"] },
     { id: "opus", name: "Opus", efforts: ["medium"] },
   ];
-  const launch: LaunchModels = { agent: "claude", defaultModel: "fable", defaultModelSource: "best_available", loading: false, listed: true, models, modelText: undefined, modelDescription: undefined, modelFailure: undefined };
+  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: "fable", defaultModelSource: "best_available", loading: false, listed: true, models, modelText: undefined, modelDescription: undefined, modelFailure: undefined };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -171,7 +173,7 @@ it("takes the effort levels from the default model while neither the pair nor it
 
 it("says the agent's own setting, not Best available, for a default model Claude Code's configuration names, and names it as a session reads it", () => {
   const launchOf = (defaultModel: string, defaultModelSource: LaunchModels["defaultModelSource"]): LaunchModels =>
-    ({ agent: "claude", defaultModel, defaultModelSource, loading: false, listed: true, models: [{ id: "fable", name: "Fable", efforts: [], version: "Fable 5.1" }], modelText: undefined, modelDescription: undefined, modelFailure: undefined });
+    ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel, defaultModelSource, loading: false, listed: true, models: [{ id: "fable", name: "Fable", efforts: [], version: "Fable 5.1" }], modelText: undefined, modelDescription: undefined, modelFailure: undefined });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -190,7 +192,7 @@ it("says the agent's own setting, not Best available, for a default model Claude
 });
 
 it("hands focus to the Model trigger when the mark that holds it goes, and leaves other focus alone", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -212,7 +214,7 @@ it("hands focus to the Model trigger when the mark that holds it goes, and leave
 });
 
 it("hands focus to the console's Model trigger when the console matrix's mark that holds it goes", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -230,7 +232,7 @@ it("hands focus to the console's Model trigger when the console matrix's mark th
 });
 
 it("turns the focus ring on only when the console matrix's mark hands focus on, not when the whole matrix goes with it", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
   const modality = getInteractionModality();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -327,7 +329,7 @@ it.each([
 });
 
 it("keeps the mark clear of the Model field's own press: pressing it neither opens the list nor clears the value", () => {
-  const launch: LaunchModels = { agent: "claude", defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [{ id: "alpha", name: "alpha" }] as LaunchModels["models"], modelText: undefined, modelDescription: undefined, modelFailure: "Why" };
+  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [{ id: "alpha", name: "alpha" }] as LaunchModels["models"], modelText: undefined, modelDescription: undefined, modelFailure: "Why" };
   const changed = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

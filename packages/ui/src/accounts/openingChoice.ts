@@ -1,5 +1,5 @@
 import { agentsInListingOrder, projectSessionAgent, selectableAgent } from "../agents/agents";
-import type { Account, AgentAvailability, Agent, Console, Project, QuotaWindow } from "../protocol";
+import type { Account, AgentAvailability, Agent, Console, Project, ProviderInfo, QuotaWindow } from "../protocol";
 import { inheritedAccount } from "./accountInheritance";
 import { preferExpiringWeekly, selectionEntries, soonestAvailable } from "./accountRanking";
 import {
@@ -77,7 +77,7 @@ export function openingChoice(
 ): AccountChoice {
   const initial = agentOpeningChoice(owner, project, agent, accounts, groups, autoSelect);
   if (!autoSelect) return initial;
-  for (const candidate of [agent, ...agentsInListingOrder(added).filter((other) => other !== agent)]) {
+  for (const candidate of [agent, ...agentsInListingOrder(added, groups.map((group) => group.agent)).filter((other) => other !== agent)]) {
     const choice = candidate === agent ? initial : avoidUnavailableAccount({ agent: candidate, account: accountOpenedOn(owner, project, candidate, accounts, groups, autoSelect) }, groups);
     const entry = findEntry(groups, choiceKey(choice));
     if (entry?.selectable && isUsable(entry)) return choice;
@@ -105,10 +105,11 @@ export function settledInitialChoice(
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
   added: Agent[] | null,
+  providers: readonly ProviderInfo[],
   groups: ChoiceGroup[],
   autoSelect?: { now: number },
 ): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined; changingSharing: boolean; signedOut: boolean; disabled: boolean } {
-  const agent = selectableAgent(agentAvailability, added, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
+  const agent = selectableAgent(agentAvailability, added, providers, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
   const choice = openingChoice(owner, project, agent, accounts, groups, added, autoSelect);
   return { choice, exhaustedBy: choiceExhaustion(choice, groups), changingSharing: choiceChangingSharing(choice, groups), signedOut: choiceSignedOut(choice, groups), disabled: choiceDisabled(choice, groups) };
 }

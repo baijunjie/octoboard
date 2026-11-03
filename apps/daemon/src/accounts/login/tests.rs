@@ -8,16 +8,16 @@ struct Setup {
 }
 
 /// A daemon state and a fake CLI of `agent` running `body`, all under one scratch directory.
-fn setup(name: &str, agent: Agent, body: &str) -> Setup {
+fn setup(name: &str, agent: AgentId, body: &str) -> Setup {
     let (state, dir) = crate::test_support::app_state(name);
     let bin = dir.join("bin");
     std::fs::create_dir(&bin).unwrap();
-    let env = fake_agent(&bin, crate::adapter::adapter_for(agent).binary(), body);
+    let env = fake_agent(&bin, agent.descriptor().binary, body);
     Setup { state, dir, env }
 }
 
 impl Setup {
-    fn start(&self, agent: Agent, account: Option<&str>, timeout: Duration) -> Result<()> {
+    fn start(&self, agent: AgentId, account: Option<&str>, timeout: Duration) -> Result<()> {
         let config_dir = self.dir.join(format!("{}-home", agent.wire_name()));
         AccountLogins::start_with(
             &self.state,
@@ -73,10 +73,10 @@ const CLAUDE_SIGNS_IN: &str = r#"
 
 #[tokio::test]
 async fn claude_hands_the_browser_url_to_the_daemon_and_signs_in() {
-    let setup = setup("login-claude", Agent::Claude, CLAUDE_SIGNS_IN);
+    let setup = setup("login-claude", AgentId::CLAUDE, CLAUDE_SIGNS_IN);
     let mut events = setup.state.subscribe();
     setup
-        .start(Agent::Claude, Some("a"), LOGIN_TIMEOUT)
+        .start(AgentId::CLAUDE, Some("a"), LOGIN_TIMEOUT)
         .unwrap();
 
     let updates = until_ended(&mut events).await;
@@ -107,9 +107,9 @@ async fn claude_exiting_zero_without_a_sign_in_is_not_a_success() {
         r#"echo '{"loggedIn":true}'"#,
         r#"echo '{"loggedIn":false}'"#,
     );
-    let setup = setup("login-claude-unconfirmed", Agent::Claude, &body);
+    let setup = setup("login-claude-unconfirmed", AgentId::CLAUDE, &body);
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Failed);
     assert_eq!(
@@ -129,9 +129,9 @@ async fn a_sign_in_check_that_floods_its_output_confirms_nothing() {
             64 * 1024
         ),
     );
-    let setup = setup("login-claude-flooded-status", Agent::Claude, &body);
+    let setup = setup("login-claude-flooded-status", AgentId::CLAUDE, &body);
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Failed);
     assert_eq!(
@@ -144,11 +144,11 @@ async fn a_sign_in_check_that_floods_its_output_confirms_nothing() {
 async fn a_cli_that_fails_reports_its_last_line() {
     let setup = setup(
         "login-claude-fails",
-        Agent::Claude,
+        AgentId::CLAUDE,
         "echo 'Login failed: Request failed with status code 400' >&2; exit 1",
     );
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Failed);
     let failure = ended.failure.unwrap();
@@ -161,18 +161,18 @@ async fn a_cli_that_fails_reports_its_last_line() {
 
 #[tokio::test]
 async fn one_login_runs_per_account_and_a_second_is_refused_with_a_code() {
-    let setup = setup("login-twice", Agent::Claude, "sleep 30");
+    let setup = setup("login-twice", AgentId::CLAUDE, "sleep 30");
     setup
-        .start(Agent::Claude, Some("a"), LOGIN_TIMEOUT)
+        .start(AgentId::CLAUDE, Some("a"), LOGIN_TIMEOUT)
         .unwrap();
     let refused = setup
-        .start(Agent::Claude, Some("a"), LOGIN_TIMEOUT)
+        .start(AgentId::CLAUDE, Some("a"), LOGIN_TIMEOUT)
         .expect_err("already running");
     let coded = refused.downcast_ref::<CodedError>().unwrap();
     assert_eq!(coded.code, error_code::LOGIN_ALREADY_RUNNING);
     // Another account of the same agent is not in the way.
     setup
-        .start(Agent::Claude, Some("b"), LOGIN_TIMEOUT)
+        .start(AgentId::CLAUDE, Some("b"), LOGIN_TIMEOUT)
         .unwrap();
     assert_eq!(setup.state.account_logins.running().len(), 2);
     setup.state.account_logins.stop_all().await;
@@ -182,17 +182,17 @@ async fn one_login_runs_per_account_and_a_second_is_refused_with_a_code() {
 async fn cancelling_ends_the_login_and_kills_the_cli() {
     let setup = setup(
         "login-cancel",
-        Agent::Claude,
+        AgentId::CLAUDE,
         "echo $$ > \"$HOME/pid\"; sleep 30",
     );
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
     let pid = until_pid(&setup.dir.join("bin/pid")).await;
 
     setup
         .state
         .account_logins
-        .cancel(Agent::Claude, None)
+        .cancel(AgentId::CLAUDE, None)
         .unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Cancelled);
@@ -205,7 +205,7 @@ async fn cancelling_ends_the_login_and_kills_the_cli() {
     let refused = setup
         .state
         .account_logins
-        .cancel(Agent::Claude, None)
+        .cancel(AgentId::CLAUDE, None)
         .expect_err("nothing to cancel");
     assert_eq!(
         refused.downcast_ref::<CodedError>().unwrap().code,
@@ -218,7 +218,7 @@ async fn a_login_nobody_authorizes_is_given_up_on_and_its_process_group_killed()
     // A child of the CLI, as `sh` forks for `sleep`, is in the group too.
     let setup = setup(
         "login-timeout",
-        Agent::Claude,
+        AgentId::CLAUDE,
         "(sleep 30 & echo $! > \"$HOME/child.pid\"; wait) & echo $$ > \"$HOME/pid\"; wait",
     );
     let (pid, child_pid) = (setup.dir.join("bin/pid"), setup.dir.join("bin/child.pid"));
@@ -227,7 +227,7 @@ async fn a_login_nobody_authorizes_is_given_up_on_and_its_process_group_killed()
     for _ in 0..5 {
         let mut events = setup.state.subscribe();
         setup
-            .start(Agent::Claude, None, Duration::from_millis(1500))
+            .start(AgentId::CLAUDE, None, Duration::from_millis(1500))
             .unwrap();
         let ended = until_ended(&mut events).await.pop().unwrap();
         assert_eq!(ended.status, LoginStatus::TimedOut);
@@ -242,14 +242,14 @@ async fn a_login_nobody_authorizes_is_given_up_on_and_its_process_group_killed()
 
 #[tokio::test]
 async fn a_login_task_that_is_dropped_without_an_outcome_ends_the_login_as_failed() {
-    let setup = setup("login-ending-guard", Agent::Claude, "sleep 30");
+    let setup = setup("login-ending-guard", AgentId::CLAUDE, "sleep 30");
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
     // What a panic in the task unwinds through.
     drop(Ending::new(
         setup.state.clone(),
         Key {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: None,
         },
     ));
@@ -266,9 +266,9 @@ async fn a_cancel_during_claudes_sign_in_check_ends_the_login_as_cancelled() {
         r#"echo '{"loggedIn":true}'"#,
         r#"sleep 10; echo '{"loggedIn":true}'"#,
     );
-    let setup = setup("login-cancel-late", Agent::Claude, &body);
+    let setup = setup("login-cancel-late", AgentId::CLAUDE, &body);
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
     loop {
         let Ok(Event::AccountLoginUpdated { login }) = events.recv().await else {
             continue;
@@ -282,7 +282,7 @@ async fn a_cancel_during_claudes_sign_in_check_ends_the_login_as_cancelled() {
     setup
         .state
         .account_logins
-        .cancel(Agent::Claude, None)
+        .cancel(AgentId::CLAUDE, None)
         .unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Cancelled);
@@ -292,11 +292,11 @@ async fn a_cancel_during_claudes_sign_in_check_ends_the_login_as_cancelled() {
 async fn a_codex_that_exits_reports_what_it_said_last() {
     let setup = setup(
         "login-codex-exits",
-        Agent::Codex,
+        AgentId::CODEX,
         "echo 'Error: bad configuration' >&2; exit 1",
     );
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Codex, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CODEX, None, LOGIN_TIMEOUT).unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Failed);
     assert_eq!(
@@ -314,7 +314,7 @@ async fn a_codex_that_exits_reports_what_it_said_last() {
 async fn the_default_accounts_codex_home_is_created_when_it_is_missing() {
     let setup = setup(
         "login-codex-default-home",
-        Agent::Codex,
+        AgentId::CODEX,
         &codex_server(true),
     );
     let mut events = setup.state.subscribe();
@@ -322,7 +322,7 @@ async fn the_default_accounts_codex_home_is_created_when_it_is_missing() {
     AccountLogins::start_with(
         &setup.state,
         Start {
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: None,
             config_dir: None,
             resolved_dir: Some(home.to_string_lossy().into_owned()),
@@ -339,11 +339,11 @@ async fn the_default_accounts_codex_home_is_created_when_it_is_missing() {
 
 #[tokio::test]
 async fn every_end_of_a_login_makes_the_accounts_reading_due() {
-    let setup = setup("login-due", Agent::Claude, "exit 1");
+    let setup = setup("login-due", AgentId::CLAUDE, "exit 1");
     let mut events = setup.state.subscribe();
     let quota = crate::protocol::AccountQuota {
         reset_credits: None,
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         account: Some("a".to_string()),
         fetched_at: 1,
         plan: None,
@@ -353,25 +353,25 @@ async fn every_end_of_a_login_makes_the_accounts_reading_due() {
     };
     setup.state.account_quotas.hold_for_test(&quota);
     setup
-        .start(Agent::Claude, Some("a"), LOGIN_TIMEOUT)
+        .start(AgentId::CLAUDE, Some("a"), LOGIN_TIMEOUT)
         .unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Failed);
     assert!(setup
         .state
         .account_quotas
-        .is_due_for_test(Agent::Claude, Some("a")));
+        .is_due_for_test(AgentId::CLAUDE, Some("a")));
 }
 
 #[tokio::test]
 async fn stopping_every_login_kills_its_cli_without_announcing_anything() {
     let setup = setup(
         "login-stop-all",
-        Agent::Claude,
+        AgentId::CLAUDE,
         "echo $$ > \"$HOME/pid\"; sleep 30",
     );
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
     let pid = until_pid(&setup.dir.join("bin/pid")).await;
     while events.try_recv().is_ok() {}
 
@@ -421,9 +421,9 @@ const GROK_SIGNS_IN: &str = r#"
 
 #[tokio::test]
 async fn grok_shows_the_device_code_and_leaves_opening_the_page_to_the_cli() {
-    let setup = setup("login-grok", Agent::Grok, GROK_SIGNS_IN);
+    let setup = setup("login-grok", AgentId::GROK, GROK_SIGNS_IN);
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Grok, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::GROK, None, LOGIN_TIMEOUT).unwrap();
 
     let updates = until_ended(&mut events).await;
     let waiting: Vec<_> = updates
@@ -445,9 +445,9 @@ async fn grok_shows_the_device_code_and_leaves_opening_the_page_to_the_cli() {
 #[tokio::test]
 async fn grok_exiting_zero_without_its_credential_is_not_a_success() {
     let body = GROK_SIGNS_IN.replace("echo '{}' > \"$GROK_HOME/auth.json\"", "true");
-    let setup = setup("login-grok-unconfirmed", Agent::Grok, &body);
+    let setup = setup("login-grok-unconfirmed", AgentId::GROK, &body);
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Grok, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::GROK, None, LOGIN_TIMEOUT).unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Failed);
     assert_eq!(
@@ -485,9 +485,11 @@ fn codex_server(completes: bool) -> String {
 
 #[tokio::test]
 async fn codex_logs_in_through_its_app_server_in_a_directory_created_first() {
-    let setup = setup("login-codex", Agent::Codex, &codex_server(true));
+    let setup = setup("login-codex", AgentId::CODEX, &codex_server(true));
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Codex, Some("a"), LOGIN_TIMEOUT).unwrap();
+    setup
+        .start(AgentId::CODEX, Some("a"), LOGIN_TIMEOUT)
+        .unwrap();
 
     let updates = until_ended(&mut events).await;
     let waiting = updates
@@ -508,23 +510,25 @@ async fn codex_logs_in_through_its_app_server_in_a_directory_created_first() {
 
 #[tokio::test]
 async fn codex_allows_one_login_at_a_time_across_accounts() {
-    let setup = setup("login-codex-busy", Agent::Codex, &codex_server(false));
-    setup.start(Agent::Codex, Some("a"), LOGIN_TIMEOUT).unwrap();
+    let setup = setup("login-codex-busy", AgentId::CODEX, &codex_server(false));
+    setup
+        .start(AgentId::CODEX, Some("a"), LOGIN_TIMEOUT)
+        .unwrap();
     let refused = setup
-        .start(Agent::Codex, Some("b"), LOGIN_TIMEOUT)
+        .start(AgentId::CODEX, Some("b"), LOGIN_TIMEOUT)
         .expect_err("busy");
     assert_eq!(
         refused.downcast_ref::<CodedError>().unwrap().code,
-        error_code::LOGIN_CODEX_BUSY
+        crate::protocol::Code::of_provider(crate::providers::codex::LOGIN_BUSY)
     );
     setup.state.account_logins.stop_all().await;
 }
 
 #[tokio::test]
 async fn cancelling_a_codex_login_asks_the_app_server_to_cancel_it() {
-    let setup = setup("login-codex-cancel", Agent::Codex, &codex_server(false));
+    let setup = setup("login-codex-cancel", AgentId::CODEX, &codex_server(false));
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Codex, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CODEX, None, LOGIN_TIMEOUT).unwrap();
     let pid = until_pid(&setup.dir.join("bin/pid")).await;
     // Wait for the URL, so the cancel has a login id to name.
     loop {
@@ -538,7 +542,7 @@ async fn cancelling_a_codex_login_asks_the_app_server_to_cancel_it() {
     setup
         .state
         .account_logins
-        .cancel(Agent::Codex, None)
+        .cancel(AgentId::CODEX, None)
         .unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Cancelled);
@@ -551,9 +555,9 @@ async fn a_codex_login_that_ends_unsuccessfully_reports_the_servers_words() {
         r#""success":true,"error":null"#,
         r#""success":false,"error":"Login server error: denied""#,
     );
-    let setup = setup("login-codex-denied", Agent::Codex, &body);
+    let setup = setup("login-codex-denied", AgentId::CODEX, &body);
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Codex, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CODEX, None, LOGIN_TIMEOUT).unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Failed);
     assert_eq!(
@@ -573,9 +577,9 @@ async fn a_codex_login_the_server_timed_out_is_a_timeout() {
         r#""success":true,"error":null"#,
         r#""success":false,"error":"Login timed out""#,
     );
-    let setup = setup("login-codex-timed-out", Agent::Codex, &body);
+    let setup = setup("login-codex-timed-out", AgentId::CODEX, &body);
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Codex, None, LOGIN_TIMEOUT).unwrap();
+    setup.start(AgentId::CODEX, None, LOGIN_TIMEOUT).unwrap();
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::TimedOut);
 }
@@ -587,7 +591,7 @@ async fn a_missing_binary_refuses_the_login_before_anything_is_announced() {
     let refused = AccountLogins::start_with(
         &state,
         Start {
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             account: None,
             config_dir: None,
             resolved_dir: None,
@@ -612,11 +616,13 @@ async fn a_missing_binary_refuses_the_login_before_anything_is_announced() {
 async fn a_login_in_progress_replays_in_the_snapshot_list_with_its_page() {
     let setup = setup(
         "login-running-list",
-        Agent::Grok,
+        AgentId::GROK,
         &GROK_SIGNS_IN.replace("sleep 0.4", "sleep 30"),
     );
     let mut events = setup.state.subscribe();
-    setup.start(Agent::Grok, Some("a"), LOGIN_TIMEOUT).unwrap();
+    setup
+        .start(AgentId::GROK, Some("a"), LOGIN_TIMEOUT)
+        .unwrap();
     loop {
         let Ok(Event::AccountLoginUpdated { login }) = events.recv().await else {
             continue;

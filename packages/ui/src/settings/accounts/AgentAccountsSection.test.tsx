@@ -8,6 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { ErrorAlertBody } from "../../components/dialog/ErrorAlertBody";
 import { CodedError } from "../../errors/codedError";
+import { isolate } from "../../i18n/isolate";
 import { currentLanguage, setLanguage, t } from "../../i18n/language";
 import type { Console, Project, Session } from "../../protocol";
 import { TestHost } from "../../test/TestHost";
@@ -34,7 +35,7 @@ it("offers one Codex mode above the table, following configuration by default", 
   const { container } = mount("Codex");
   const select = approvalOf(container);
   expect(select.value).toBe("inherit");
-  expect(select.getAttribute("aria-label")).toBe("Permission approval for Codex");
+  expect(select.getAttribute("aria-label")).toBe("Permission approval for \u2068Codex\u2069");
   expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto_review", "user"]);
   expect(container.querySelectorAll("tbody select")).toHaveLength(0);
 });
@@ -43,7 +44,7 @@ it("says the permission approval once, as a row above the table with its help, n
   const { container } = mount("Codex");
   const panel = container.querySelector('[role="tabpanel"]')!;
   expect(panel.textContent?.match(/Permission approval/g)).toHaveLength(1);
-  expect(panel.textContent).toContain("Applies to every Codex account");
+  expect(panel.textContent).toContain("Applies to every \u2068Codex\u2069 account");
   expect(panel.querySelectorAll('button[aria-label="About permission approval"]')).toHaveLength(1);
   expect(panel.querySelector("select")!.compareDocumentPosition(panel.querySelector("table")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   const dialog = await openDetailsOf(container, "codex-work");
@@ -63,7 +64,7 @@ it("shows no permission approval row for Grok", () => {
 });
 
 it("shows the stored Codex choice", () => {
-  settings.codex_approval_reviewer = "user";
+  settings.provider_settings = { codex: { approval_reviewer: "user" } };
   const { container } = mount("Codex");
   expect(approvalOf(container).value).toBe("user");
 });
@@ -72,11 +73,11 @@ it.each([
   ["auto_review", "auto_review"],
   ["user", "user"],
   ["inherit", null],
-] as const)("saves the Codex selector as %s at once", async (value, reviewer) => {
-  settings.codex_approval_reviewer = value === "inherit" ? "user" : null;
+] as const)("saves the Codex selector as %s at once", async (value, saved) => {
+  settings.provider_settings = { codex: { approval_reviewer: value === "inherit" ? "user" : null } };
   const { container, change } = mount("Codex");
   change(approvalOf(container), value);
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_codex_approval_reviewer", reviewer });
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "codex", setting: "approval_reviewer", value: saved });
   await act(async () => {});
 });
 
@@ -143,9 +144,9 @@ it("offers Claude Code's four choices, following configuration by default, and s
   const { container } = mount("Claude Code");
   const select = approvalOf(container);
   expect(select.value).toBe("inherit");
-  expect(select.getAttribute("aria-label")).toBe("Permission approval for Claude Code");
+  expect(select.getAttribute("aria-label")).toBe("Permission approval for \u2068Claude Code\u2069");
   expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto", "manual", "bypass"]);
-  settings.claude_approval_mode = "manual";
+  settings.provider_settings = { claude: { approval_mode: "manual" } };
   expect(approvalOf(mount("Claude Code").container).value).toBe("manual");
 });
 
@@ -153,11 +154,11 @@ it.each([
   ["auto", "auto"],
   ["manual", "manual"],
   ["inherit", null],
-] as const)("saves the Claude Code selector as %s at once", async (value, mode) => {
-  settings.claude_approval_mode = value === "inherit" ? "auto" : null;
+] as const)("saves the Claude Code selector as %s at once", async (value, saved) => {
+  settings.provider_settings = { claude: { approval_mode: value === "inherit" ? "auto" : null } };
   const { container, change } = mount("Claude Code");
   change(approvalOf(container), value);
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_claude_approval_mode", mode });
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: saved });
   await act(async () => {});
 });
 
@@ -179,7 +180,7 @@ it("saves Approve everything only once the warning, which names the agent, is co
   expect(request).not.toHaveBeenCalled();
   const buttons = () => [...document.querySelectorAll<HTMLButtonElement>("button")];
   const press = (label: string) => act(() => buttons().find((b) => b.textContent === label)!.click());
-  expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Approve everything");
+  expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Approve everything?");
   expect(document.body.textContent).toContain("in every Claude Code account's sessions");
   press("Cancel");
   expect(request).not.toHaveBeenCalled();
@@ -187,7 +188,7 @@ it("saves Approve everything only once the warning, which names the agent, is co
   change(select, "bypass");
   press("Approve everything");
   await act(async () => {});
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_claude_approval_mode", mode: "bypass" });
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "bypass" });
 });
 
 it("shows one agent at a time, opening on the first and switching by tab", () => {
@@ -206,7 +207,7 @@ it("marks an agent that is not installed in its tab, not in its panel", () => {
   availability.set("grok", { agent: "grok", availability: "unavailable", default_account_dir: null });
   const { container } = mount("Grok Build");
   const tabs = [...container.querySelectorAll('[role="tab"]')];
-  expect(tabs.map((tab) => tab.getAttribute("aria-label"))).toEqual([null, null, "Grok Build (not installed)"]);
+  expect(tabs.map((tab) => tab.getAttribute("aria-label"))).toEqual([null, null, "\u2068Grok Build\u2069 (not installed)"]);
   expect(tabs.map((tab) => tab.querySelector("svg.lucide-triangle-alert") !== null)).toEqual([false, false, true]);
   expect(container.querySelector('[role="tabpanel"]')?.textContent).not.toContain("not installed");
 });
@@ -246,7 +247,7 @@ it("drops the row of an account removed and adds the row of one added within the
 });
 
 function notInstalledTab(container: HTMLElement) {
-  return [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) => el.getAttribute("aria-label") === "Codex (not installed)")!;
+  return [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) => el.getAttribute("aria-label") === "\u2068Codex\u2069 (not installed)")!;
 }
 
 it("shows what the not-installed icon means in a tooltip when its tab takes keyboard focus", () => {
@@ -413,7 +414,7 @@ it("shows only the added agents, in the list's order", () => {
 it("shows every agent while the list is undecided, with no menu to remove or reorder them", async () => {
   settings.added_agents = null;
   const { container } = mount();
-  expect(tabNames(container)).toEqual(["Claude Code", "Codex", "Grok Build"]);
+  expect(tabNames(container)).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
   await act(async () => {
     container.querySelector('[role="tab"]')!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   });
@@ -595,7 +596,7 @@ it("flags only an added agent that is not installed", () => {
   availability.set("grok", { agent: "grok", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   expect(tabNames(container)).toEqual(["Claude Code", "Grok Build"]);
-  expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute("aria-label"))).toEqual([null, "Grok Build (not installed)"]);
+  expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute("aria-label"))).toEqual([null, "\u2068Grok Build\u2069 (not installed)"]);
 });
 
 it("opens an agent tab's menu with the Menu key and Shift+F10 as well as a right-click", async () => {
@@ -639,7 +640,7 @@ it("reports a refused reorder", async () => {
 it("offers the same entries in an actions button of each tab, named for its agent", async () => {
   const { container } = mount();
   // The tab's own button, in the wrapper the strip places it with; the tab's context menu has a hidden trigger of the same name.
-  const actions = (agent: string) => container.querySelector<HTMLElement>(`[data-tab-actions] button[aria-label="Actions for ${agent}"]`) ?? undefined;
+  const actions = (agent: string) => container.querySelector<HTMLElement>(`[data-tab-actions] button[aria-label="Actions for ${isolate(agent)}"]`) ?? undefined;
   for (const agent of ["Claude Code", "Codex", "Grok Build"]) expect(actions(agent)).toBeDefined();
   await act(async () => {
     const trigger = actions("Codex")!;

@@ -20,7 +20,7 @@ use anyhow::Result;
 use crate::accounts::shared_config::runs_under;
 use crate::hostfs::place::{Looking, Stuck};
 use crate::protocol::{
-    error_code, Account, AccountTrashOutcome, AccountTrashSharing, Agent, CodedError,
+    error_code, Account, AccountTrashOutcome, AccountTrashSharing, AgentId, CodedError,
 };
 use crate::removal_safety::{
     looked_at_for_trash, Blocked, Failure, Overlap, Unresolved, TRASH_LOOK_DEADLINE,
@@ -38,7 +38,7 @@ const SIGNING_IN: &str = "signing_in";
 /// What a path in the way of the move belongs to, for the refusal that names it.
 enum Way {
     Account(Account),
-    DefaultAccount(Agent),
+    DefaultAccount(AgentId),
     Project(String),
 }
 
@@ -141,7 +141,7 @@ async fn judged_now(
 ) -> Result<std::result::Result<Option<PathBuf>, Refusal>> {
     let account = state.store.require_account(id)?;
     let mut defaults = Vec::new();
-    for agent in Agent::ALL {
+    for agent in AgentId::ALL {
         defaults.push((
             agent,
             crate::accounts::shared_config::default_dir(state, agent).await?,
@@ -269,7 +269,7 @@ async fn judged(
     looking: Looking,
     account: &Account,
     accounts: &[Account],
-    defaults: &[(Agent, PathBuf)],
+    defaults: &[(AgentId, PathBuf)],
     projects: &[crate::protocol::Project],
     home: Option<PathBuf>,
     data: PathBuf,

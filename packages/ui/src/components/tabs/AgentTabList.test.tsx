@@ -7,6 +7,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import type { Agent } from "../../protocol";
 import { AgentTabList } from "./AgentTabList";
 import { presence, stubListMotion } from "../motion/listMotionTestSupport";
+import { TEST_PROVIDERS } from "../../test/testProviders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,7 +41,7 @@ it("moves a dropped tab into its new place from where the drag left it, and the 
     order = agents;
     return (
       <Tabs selectedKey={agents[0]}>
-        <AgentTabList agents={agents} label="Agents" onReorder={setAgents} />
+        <AgentTabList providers={TEST_PROVIDERS} agents={agents} label="Agents" onReorder={setAgents} />
       </Tabs>
     );
   }
@@ -76,7 +77,7 @@ it("gives focus back to an agent's actions button when reordering the tabs dropp
     order = agents;
     return (
       <Tabs selectedKey="claude">
-        <AgentTabList agents={agents} label="Agents" tabActions={(agent) => <button type="button" aria-label={`Actions for ${agent}`} />} />
+        <AgentTabList providers={TEST_PROVIDERS} agents={agents} label="Agents" tabActions={(agent) => <button type="button" aria-label={`Actions for ${agent}`} />} />
       </Tabs>
     );
   }

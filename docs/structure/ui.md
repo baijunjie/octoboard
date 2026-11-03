@@ -53,7 +53,8 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 - `src/i18n/` — languages, the typed English catalog and translated ones (`messages/`), lookup, the React side; every
   user-facing string goes through it, and `languages.ts` is also the language list the website derives from.
 - `src/format/` — small pure formatting helpers (paths, relative time, sizes, `Reason`).
-- `src/agents/` — agent names (`agents.ts` holds the `AGENTS` list), install pages, model and effort picker rules, per-agent launch settings.
+- `src/providers/` — one presentation module per provider (`claude.ts`, `codex.ts`, `grok.ts`: mark, quota colour and the `provider.<id>.*` catalog messages, among them the trust, sharing and directory-hint wording that `types.ts`'s `ProviderMessageName` names; each also owns the copy of every setting its descriptor declares (`provider.<id>.setting.<setting>.*`) and the record and wording of every code the descriptor declares (`codes`, `provider.<id>.<code>`, whose recovery may be the module's own `provider.<id>.<code>.remedy` copy); `planNames` for plan ids whose generic wording reads badly and `params`, the product-name placeholders its messages use, which `i18n/catalog.ts` merges into the catalogs' global params as `PROVIDER_PARAMS`), `registry.ts` listing them (the built-in three plus a test-only `testAgent` module registered under the test runner, one line each) and looking them up by provider id (`genericMark.ts` is the mark of a provider with no module), and `agentMarks.ts`, the `@octoboard/ui/agent-marks` entry. Imports nothing; the catalogs and the website import it.
+- `src/agents/` — agent rules (`agents.ts`: the pickable, listed and served agents, always taken from the providers the daemon serves in `snapshot`, in its registry order), provider names and facts read from the module or from the providers the daemon serves in `snapshot` (`providers.ts`, which also reads the served model display rule and capabilities; the store holds them as `State.providers`, read with `useProviders()`; `ProviderMessage.tsx` shows a provider's message with a generic fallback), model and effort picker rules, per-agent launch settings; `providers.ts` also holds `settingMessageKey` (the copy key of a provider setting), `idWords` (an id read as words, for a setting or choice a module has no copy for) and re-exports the providers' code records as `PROVIDER_CODES`.
 - `src/git/` — git workflow settings and git-badge wording, repository host links.
 - `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, status derivation — `sessionStatus.ts` holds the live and no-process status sets — colours, filtering, waiting).
 - `src/accounts/` — pure account rules: order, quota of an account, quota formatting, the default account's name
@@ -61,7 +62,7 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
   records (`accountRecords.ts`), and the account picker split by concern (`choiceEntries.ts`, `accountInheritance.ts`,
   `accountRanking.ts`, `openingChoice.ts`, `switchEntries.ts`).
 - `src/errors/` — turning a failure into words: `codedError.ts` (`CodedError`, the failure carrying a daemon or client
-  code), `codes.ts` (the one record per error code, with `Code` and `CODE`), daemon wording (`daemonMessage.ts`, with
+  code), `codes.ts` (the one record per error code, core codes and the providers' `PROVIDER_CODES` merged, with `Code` and `CODE`; `messageKey` maps a code to its catalog key), daemon wording (`daemonMessage.ts`, with
   `sharingFailure.ts` and `branchCleanupItems.ts` for the two items-bearing messages, and the folder rules the latter
   applies), `causes.ts` (parsers for the structured causes a daemon failure carries), the shared `ErrorPresentation`,
   recovery classification, issue-report address.
@@ -116,7 +117,7 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 - `src/quota/` — plan quota wording, meters, reset credits, and the rail's quota panels (`RailQuotaBars`, `QuotaPanel`,
   `AgentPanel`, `QuotaAccount`).
 - `src/settings/` — the settings modal and its sections (`sections.ts` holds the section ids and `SettingsNavigation`);
-  `accounts/` the Agent accounts section.
+  `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent.
 - `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
   archive and removal choices), on the `components/dialog/` toolkit. `RequestedDialog.tsx` only routes a requested
   dialog to its component; the archive, removal and restore confirmations are in `confirmations/`. The dialogs' daemon
@@ -126,7 +127,7 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 - `src/process/` — the Processes panel and its data, the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces), and the rail's process panel (`ProcessCounts`).
 - `src/configuration/` — configuration export and import dialogs (with the cards and parts they share, `SettingsCard.tsx`
-  and `importParts.tsx`), and the list of plain switch settings.
+  and `importParts.tsx`; the review and result show one line per distinct provider-setting heading, from the served schema and the providers' copy), and the list of plain switch settings.
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
 
 ### Dev-only and website-facing
@@ -147,8 +148,8 @@ the shape is:
 
 - `protocol` imports only `protocol.generated`, and nothing but `protocol` imports that file (`GENERATED_PROTOCOL` in
   `eslint.layers.mjs`; the rule sees import declarations, not `import("…")` type expressions);
-  `values/` and `preferences/` import nothing else below `src/`; `platform/` imports only `protocol`. Each other pure layer imports only layers beneath it: `input/` only the `platform/` barrel; `i18n/` only
-  `preferences/` and `appConfig`; `format/` only `i18n/`; `agents/` and `git/` only `i18n/` and `protocol`; `sessions/`
+  `values/`, `providers/` and `preferences/` import nothing else below `src/`; `platform/` imports only `protocol`. Each other pure layer imports only layers beneath it: `input/` only the `platform/` barrel; `i18n/` only
+  `preferences/`, `providers/` and `appConfig`; `format/` only `i18n/`; `agents/` only `i18n/`, `providers/` and `protocol`; `git/` only `i18n/` and `protocol`; `sessions/`
   adds `agents/`; `accounts/` adds `sessions/` and `format/`; `errors/` adds `accounts/` and `appConfig`; `browse/`
   imports `i18n/`, `errors/`, `format/` and `protocol`; `store/` imports `values/`, `i18n/`, `agents/`, `errors/`, `accounts/`,
   `sessions/`, `preferences/`, `git/`, `protocol`, `requests`, `daemon` and `daemon-client`. `errors/` and `browse/`
@@ -168,7 +169,7 @@ the shape is:
   has a title.
 
 Other checks that hold structure: `src/errorModulesCycle.test.ts` (the error modules do not import each other in a
-cycle), `src/daemonCodes.test.ts` (the registry in `errors/codes.ts` matches the codes the daemon declares and the
+cycle), `src/daemonCodes.test.ts` (the registry in `errors/codes.ts` matches the codes the daemon declares, the providers' included, and the
 catalogs), `src/i18n/catalog.test.ts` (placeholders and plural categories of every catalog), `src/appConfig.test.ts`
 (copies of `config/app.json` elsewhere), `src/cssDependencies.test.ts` (every package a stylesheet names is a production
 dependency).
@@ -179,9 +180,26 @@ dependency).
   directory importing the leaf and pure layers (and other features only where the rules above allow it).
 - Pure rules and wording about sessions, accounts, agents, git or formatting go in the matching pure layer, not in a
   component; a shared building block goes in `components/<kind>/`.
+- What is specific to one provider lives in the provider: its presentation module (`src/providers/<id>.ts`) for its mark,
+  colour and names, and the facts the daemon serves about it (names, install page, configuration directory, declared
+  capabilities). Components and rules branch on those capabilities and read facts through `src/agents/providers.ts`,
+  not on which provider it is. Quota window names (`QuotaNaming`, `src/accounts/quotaFormat.ts`) and the display of
+  model ids (`modelDisplayName`, `src/sessions/sessionModel.ts`) follow the rules the daemon serves in each provider's
+  descriptor; reset credits and the account sharing switch show only for a provider that declares the capability.
+  A provider's settings are drawn from the schema the daemon serves (`ProviderInfo.settings`) by
+  `AgentProviderSettings` (`src/settings/accounts/`), with their copy in the provider's presentation module; Settings
+  does not show a setting whose provider has no heading copy for it, while the configuration import review still lists
+  such a setting, worded from the served label and the setting's id (`configuration.import.settingUnnamed`). Text that
+  names a provider sets its name apart through `ProviderName` (`src/components/text/`).
+- A new provider: its presentation module `src/providers/<id>.ts` (mark, colour, its messages in every language, the
+  record and wording of each code it declares, with the code's recovery copy `provider.<id>.<code>.remedy`, the copy of
+  each of its settings, `planNames`, `params`), added to `BUILT_IN` in `src/providers/registry.ts`, whose keys type the
+  catalogs. `providers/agentMarks.ts` and the website's marks are outside this bar, updated by hand when a provider is to
+  be shown there. A provider the daemon serves with no module here is shown by its served label and a generic mark.
 - A user-facing string goes through `i18n/` with its key in every catalog (typed `Translation<...>`, so a missing
   message fails type checking).
-- A new daemon error code needs its record in `errors/codes.ts` in the same change.
+- A new daemon error code needs its record in `errors/codes.ts` in the same change; a code only one provider raises
+  (`provider.<id>.<code>`) has its record and wording in that provider's presentation module instead.
 - A new request names its reply in `REPLY_TYPES` in `requests.ts`; the type check fails until it does.
 - A new wire type is added in the daemon's Rust types (`apps/daemon/src/protocol/`) and `protocol.generated.ts` is
   regenerated; it is never written by hand in the UI. What a client has to do with the wire in general is
@@ -236,6 +254,10 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/components/hooks/useSerialPush.ts`) |
 | Browse directories in a picker | `useDirectoryBrowse` with `DirectoryPicker` (`src/components/dialog/`) |
 | Delete options of a dialog that deletes sessions | `useSessionDeletionOptions` (`src/dialogs/`) |
+| A provider's name, install page or configuration directory | `providerLabel`, `providerShortName`, `providerInstallUrl`, `providerConfigDir` (`src/agents/providers.ts`) over `useProviders()` |
+| A provider's setting in Settings; its copy | `AgentProviderSettings` (`src/settings/accounts/AgentProviderSettings.tsx`) over the served `ProviderInfo.settings`; copy keys by `settingMessageKey` (`src/agents/providers.ts`), messages in the provider's module |
+| A provider's name set apart in a sentence | `ProviderName` (`src/components/text/ProviderName.tsx`) |
+| A provider's mark and colour | `providerMark`, `providerColour` (`src/providers/registry.ts`); `AgentIcon` (`src/components/icons/`) draws the mark, `providerFillVars` (`src/quota/providerFill.ts`) paints a quota bar |
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |
 | Platform capabilities (native menu, updater, clipboard, permissions) | the `PlatformAdapter` through `src/platform/` |

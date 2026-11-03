@@ -4,11 +4,10 @@
 
 use std::sync::Arc;
 
-use crate::hooks::{self, BackgroundTasksChange};
+use crate::adapter::AgentProvider;
+use crate::hooks::{self, BackgroundTasksChange, HookInterpreter};
 use crate::messaging::reporting;
-use crate::protocol::{Agent, SessionStatus};
-use crate::records::watch::claude_transcript;
-use crate::records::watch::codex_rollout;
+use crate::protocol::{AgentId, SessionStatus};
 use crate::state::{AppState, TurnClose};
 
 /// Applies a session's queued hook events one after another until none is left. Applying one is
@@ -43,7 +42,7 @@ pub fn drain_hook_queue(state: &Arc<AppState>, session_id: &str) {
 }
 
 /// The agent a hook's session runs, live or recorded.
-fn hook_agent(state: &Arc<AppState>, session_id: &str) -> Option<Agent> {
+fn hook_agent(state: &Arc<AppState>, session_id: &str) -> Option<AgentId> {
     state
         .live_session(session_id)
         .map(|live| live.agent)
@@ -67,15 +66,19 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // An event of the turn the end of the session's process cut short comes from the ended
     // process, posted after the end by a hook the agent did not wait for: it is that turn's
     // late word, and nothing of it reaches whatever runs in the session now.
-    let agent = hook_agent(state, session_id);
-    let is_subagent = hooks::is_subagent(agent, &payload);
-    let turn_key = agent
+    let provider = hook_agent(state, session_id).map(crate::adapter::provider);
+    let interpreter = provider.map(|provider| provider.hooks());
+    let is_subagent = interpreter.map_or_else(
+        || hooks::is_named_subagent(&payload),
+        |interpreter| interpreter.is_subagent(&payload),
+    );
+    let turn_key = interpreter
         .filter(|_| !is_subagent)
-        .and_then(|agent| hooks::turn_key(agent, &payload));
-    if let (Some(agent), Some(key)) = (agent, &turn_key) {
+        .and_then(|interpreter| interpreter.turn_key(&payload));
+    if let (Some(interpreter), Some(key)) = (interpreter, &turn_key) {
         let outcome = event
             .as_deref()
-            .and_then(|event| hooks::turn_outcome(agent, event, &payload));
+            .and_then(|event| interpreter.turn_outcome(event, &payload));
         if state.apply_late_turn_event(session_id, key, outcome) {
             return;
         }
@@ -84,8 +87,8 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // Marked before anything of this event can release a queue: the first hook ends the trust
     // hold below, and its drain must not write into an error's prompt. A subagent's failure is
     // its own business, never the session's.
-    if let (Some(agent), Some(event)) = (agent, event.as_deref()) {
-        if !is_subagent && hooks::stopped_on_agent_error(agent, event, &payload) {
+    if let (Some(interpreter), Some(event)) = (interpreter, event.as_deref()) {
+        if !is_subagent && interpreter.stopped_on_agent_error(event, &payload) {
             if let Some(live) = state.live_session(session_id) {
                 live.mark_agent_error();
                 // Nothing else drains the queue once the hold has run out.
@@ -116,8 +119,8 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     if is_subagent {
         let change = event
             .as_deref()
-            .zip(agent)
-            .and_then(|(event, agent)| hooks::background_tasks_change(agent, event, &payload));
+            .zip(interpreter)
+            .and_then(|(event, interpreter)| interpreter.background_tasks_change(event, &payload));
         if let Some(change) = change {
             state.apply_background_tasks_change(session_id, change);
         }
@@ -138,34 +141,37 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
         }
     }
 
-    crate::records::on_hook(state, session_id, &payload);
+    if let Some(provider) = provider {
+        crate::records::on_hook(state, session_id, provider.records(), &payload);
+    }
 
     let Some(event) = event else {
         tracing::debug!(session = %session_id, "hook payload carried no event name");
         return;
     };
-    let mut prompt_sent = false;
-    if hooks::starts_conversation(&event) {
-        if let Err(err) = state.mark_conversation_started(session_id) {
-            tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
-        }
-        let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
-        // A background task's completion, and a subagent's hand-back, arrive as prompts the agent
-        // sends itself, which say nothing about what is in its input box.
-        prompt_sent = !prompt.is_some_and(hooks::is_self_sent);
-        // The previous turn's watch goes before the new turn opens: a watch still current
-        // when it opens could find the previous turn's failure (Codex) or cancel (Claude
-        // Code, Grok) and close this one.
-        if agent.is_some() {
-            state.end_record_watch(session_id);
-        }
-        state.turn_started(session_id, prompt);
-    }
-    let Some(agent) = agent else {
+    let (Some(provider), Some(interpreter)) = (provider, interpreter) else {
         tracing::debug!(session = %session_id, %event, "hook callback for an unknown session");
         return;
     };
-    if !read_turn_boundary(state, session_id, agent, &event, &payload) {
+    let mut prompt_sent = false;
+    if interpreter.starts_conversation(&event) {
+        if let Err(err) = state.mark_conversation_started(session_id) {
+            tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
+        }
+        let prompt = interpreter.submitted_prompt(&payload);
+        // A background task's completion, and a subagent's hand-back, arrive as prompts the agent
+        // sends itself, which say nothing about what is in its input box.
+        prompt_sent = !prompt.is_some_and(|prompt| interpreter.is_self_sent(prompt));
+        // The previous turn's watch goes before the new turn opens: a watch still current
+        // when it opens could find the previous turn's failure (Codex) or cancel (Claude
+        // Code, Grok) and close this one.
+        state.end_record_watch(session_id);
+        state.turn_started(session_id, prompt);
+        if prompt.is_some_and(|prompt| interpreter.is_completion_notice(prompt)) {
+            state.note_completion_notice(session_id);
+        }
+    }
+    if !read_turn_boundary(state, session_id, interpreter, &event, &payload) {
         return;
     }
     // A whole new list goes in before the status, so the record the status change publishes
@@ -173,7 +179,7 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // the session is still idle, and trimming the list first would publish a plain idle record
     // before the turn starts.
     let mut finished = None;
-    match hooks::background_tasks_change(agent, &event, &payload) {
+    match interpreter.background_tasks_change(&event, &payload) {
         Some(BackgroundTasksChange::Finished(ids)) => finished = Some(ids),
         Some(change) => state.apply_background_tasks_change(session_id, change),
         None => {}
@@ -181,7 +187,7 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     apply_status(
         state,
         session_id,
-        agent,
+        provider,
         &event,
         &payload,
         turn_key.as_deref(),
@@ -194,29 +200,32 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
 
 /// Applies the status `event` brings, if it brings one: the pause, the status itself, and what the
 /// status sets going. `turn_key` is the key of the turn the event belongs to, and `prompt_sent`
-/// whether the event is a prompt the agent was sent.
+/// whether the event is a prompt the agent was sent. The session's `provider` reads the event
+/// (`AgentProvider::hooks`) and arms the record watch it asks for (`AgentProvider::records`).
 fn apply_status(
     state: &Arc<AppState>,
     session_id: &str,
-    agent: Agent,
+    provider: &dyn AgentProvider,
     event: &str,
     payload: &serde_json::Value,
     turn_key: Option<&str>,
     prompt_sent: bool,
 ) {
-    let Some(status) = hooks::status_from_event(agent, event, payload) else {
+    let interpreter = provider.hooks();
+    let Some(status) = interpreter.status(event, payload) else {
         return;
     };
     let status = suppress_auto_review_hook(state, session_id, status);
     // Before the status write, so the record it publishes already carries whether the turn that
     // ended left the session paused.
-    let outcome = hooks::turn_outcome(agent, event, payload);
+    let outcome = interpreter.turn_outcome(event, payload);
     if let Some(outcome) = outcome {
         state.set_paused(session_id, outcome == hooks::TurnOutcome::Abnormal);
     }
-    // Read before the status lands: a Claude Code watch, and a Grok one past the agent's own hand,
-    // is armed on a move into a status, not on more of the same.
-    let previous = matches!(agent, Agent::Claude | Agent::Grok)
+    // Read before the status lands: a watch armed on a move into a status, not on more of the
+    // same, needs the status the event found.
+    let previous = interpreter
+        .watch_reads_previous_status()
         .then(|| state.session_record(session_id).ok())
         .flatten()
         .map(|session| state.agent_status(&session));
@@ -244,69 +253,21 @@ fn apply_status(
             state.apply_late_turn_event(session_id, key, Some(outcome));
         }
     }
-    arm_record_watches(state, session_id, agent, event, previous, status, payload);
+    if let Some(watch) = interpreter.record_watch(event, payload, previous, status) {
+        provider.records().arm_watch(state, session_id, watch);
+    }
     // Counted after the status it brings and before the drain that status releases: that drain
     // lets a queue held for an unsent message go on, and the agent reads as working by the time
     // the outbox sees the count move.
     if prompt_sent {
         if let Some(live) = state.live_session(session_id) {
-            live.note_prompt_sent(hooks::submitted_prompt(agent, payload));
+            live.note_prompt_sent(interpreter.submitted_prompt(payload));
         }
     }
     // Releasing a message queued while the session could not take one writes into its PTY, which
     // blocks; it must not sit on this response, where the adapters' few-second hook timeout would
     // surface as agent-visible noise.
     state.spawn_flush_outbox(session_id, status);
-}
-
-/// Starts watching the agent's own session record for what its hooks will not report after this
-/// event, which reported `status` and found the agent at `previous` (read for Claude Code and Grok
-/// Build alone). Claude Code reports neither a declined prompt nor an interrupted turn, so its
-/// transcript is watched (`crate::records::watch::claude_transcript` says when); a Codex turn that
-/// ends in an error fires nothing after its `UserPromptSubmit`, so its rollout is; a Grok turn
-/// cancelled before its first token fires nothing at all, so its terminal title is watched from its
-/// `UserPromptSubmit`, and again from each event that brings it back from waiting on the user
-/// (`crate::session::title_interrupt`). Each watch is spawned, not awaited: it is expected to far
-/// outlive this response, which the adapters' few-second hook timeout would not allow.
-fn arm_record_watches(
-    state: &Arc<AppState>,
-    session_id: &str,
-    agent: Agent,
-    event: &str,
-    previous: Option<SessionStatus>,
-    status: SessionStatus,
-    payload: &serde_json::Value,
-) {
-    let transcript_path = payload
-        .get("transcript_path")
-        .and_then(serde_json::Value::as_str);
-    match agent {
-        Agent::Claude => claude_transcript::watch_after_hook(
-            state,
-            session_id,
-            event,
-            previous,
-            status,
-            transcript_path,
-        ),
-        Agent::Codex if event == "UserPromptSubmit" => codex_rollout::watch_for_failure(
-            state,
-            session_id,
-            transcript_path,
-            payload.get("turn_id").and_then(serde_json::Value::as_str),
-        ),
-        // From the prompt, and again each time the hand comes down: whatever the title showed while
-        // a card waited on the user must not end the turn that carries on after it.
-        Agent::Grok
-            if status == SessionStatus::Working
-                && (hooks::starts_conversation(event)
-                    || previous == Some(SessionStatus::WaitingUser)) =>
-        {
-            let generation = state.begin_record_watch(session_id);
-            crate::session::title_interrupt::watch(state, session_id, generation);
-        }
-        _ => {}
-    }
 }
 
 /// Acts on what this event says about the session's current turn, and says whether anything else it
@@ -318,17 +279,17 @@ fn arm_record_watches(
 fn read_turn_boundary(
     state: &Arc<AppState>,
     session_id: &str,
-    agent: Agent,
+    interpreter: &dyn HookInterpreter,
     event: &str,
     payload: &serde_json::Value,
 ) -> bool {
-    if hooks::turn_cancelled(agent, event) {
+    if interpreter.turn_cancelled(event) {
         // No report is owed — the user did it and knows — but the turn still has to be closed, or a
         // later clock-attributed end would find it open and invent one.
         state.abandon_turn(session_id);
         return true;
     }
-    match hooks::turn_end(agent, event, payload) {
+    match interpreter.turn_end(event, payload) {
         // A session with its hand up has not finished its turn — it is waiting for a person (the
         // agent's own hand: a session request's hand says nothing of its turn). Grok's
         // clock-attributed end would otherwise lower the hand and report "it said nothing" for any

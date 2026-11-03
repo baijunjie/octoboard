@@ -1,5 +1,5 @@
 import { ActionableError } from "./actionableError";
-import { CODE, codeRecord } from "./codes";
+import { CODE, codeRecord, messageKey } from "./codes";
 import { messageCode, withUiParams } from "./daemonMessage";
 import type { ErrorPresentation } from "./errorPresentation";
 import { isMessageKey } from "../i18n/catalog";
@@ -15,5 +15,5 @@ import type { MessageParams } from "./codedError";
 export function isUncataloguedFailure(error: ErrorPresentation | { code: string; params: MessageParams }): boolean {
   if (typeof error === "string" || error.code === "" || error instanceof ActionableError || codeRecord(error.code)?.origin === "client") return false;
   if (error.code === CODE.internal_error || error.code === CODE.unexpected_error) return true;
-  return !isMessageKey(`daemon.${messageCode(error.code, withUiParams(error.code, error.params))}`);
+  return !isMessageKey(messageKey(messageCode(error.code, withUiParams(error.code, error.params))));
 }

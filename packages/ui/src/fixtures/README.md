@@ -32,6 +32,11 @@ It is excluded from the production type check and from release verification, and
 - `fakeTerminal.ts` answers terminal sockets in the page (output, mouse, full screen, shell, exited, refused).
   `builders.ts` builds protocol records and `snapshotState` builds a store state. `interact.ts` is the step driver
   (`ui.press`, `ui.t`, `ui.chord`, ...) that names controls as a user does, in the language the window is in.
+  `fixtureProviders.ts` holds the providers the daemon serves in its snapshot (`FIXTURE_PROVIDERS`, with the real daemon's
+  values), which `snapshotState` and the fixture daemon's store start with, and `servedLabel` for the name the daemon writes
+  into its own text; UI text names a provider through `providerLabel` instead. `fixtureProviders.test.ts` holds that copy to the
+  daemon's descriptors (`apps/daemon/src/providers/`), so a descriptor that changes there fails it until the copy follows.
+  `UNPRESENTED_PROVIDER` is a provider with no presentation module, which a scenario serves beside the registered ones.
 - `pageFrame.ts` and `preferences.ts` are the page set-up the gallery and the website preview do before the app loads;
   they import nothing from the app that reads a stored preference at load.
 - Sample data shared by scenarios and tests: `archiveSessions.ts`, `configurationReview.ts`, `restoreSample.ts`,

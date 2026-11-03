@@ -1,6 +1,7 @@
 import type { Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
-import type { Account, Launch, Session, Settings } from "../protocol";
+import { providerModelDisplay } from "../agents/providers";
+import type { Account, Launch, ProviderInfo, Session, Settings } from "../protocol";
 import { sessionRowName } from "./sessionLabel";
 import { sessionModelLabel } from "./sessionModel";
 import type { ShownStatusKind } from "./sessionStatus";
@@ -12,6 +13,8 @@ export interface SessionRowModel {
   launch: Launch;
   /** The model and effort beside the agent's mark, which is also the last part of `name`. */
   modelLabel: string;
+  /** The providers the daemon serves, which name an agent that has no presentation module. */
+  providers: readonly ProviderInfo[];
   /** The row's accessible name (`sessionRowName`). `owners` are the sessions it is listed under or
    * bound to, in the order it names them; an absent one is skipped. */
   name: string;
@@ -25,8 +28,8 @@ export function sessionRowModel(
   session: Session,
   owners: readonly (Session | undefined)[],
   status: ShownStatusKind,
-  { accounts, defaultNames, launch }: Pick<SessionRowModel, "accounts" | "defaultNames" | "launch">,
+  { accounts, defaultNames, launch, providers }: Pick<SessionRowModel, "accounts" | "defaultNames" | "launch" | "providers">,
 ): SessionRowModel {
-  const modelLabel = sessionModelLabel(t, session.agent, launch);
-  return { accounts, defaultNames, launch, modelLabel, name: sessionRowName(t, language, session, { accounts, defaultNames, owners, modelLabel, status }) };
+  const modelLabel = sessionModelLabel(t, providerModelDisplay(providers, session.agent), launch);
+  return { accounts, defaultNames, launch, modelLabel, providers, name: sessionRowName(t, language, session, { accounts, defaultNames, owners, modelLabel, status, providers }) };
 }

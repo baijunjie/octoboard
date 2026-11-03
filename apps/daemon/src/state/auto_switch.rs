@@ -4,12 +4,12 @@
 use std::sync::Arc;
 
 use super::AppState;
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 
 /// The hook [`AppState::after_quota_refresh`] runs.
 pub(crate) type AfterQuotaRefresh = fn(
     &Arc<AppState>,
-    Agent,
+    AgentId,
     Option<String>,
     Option<String>,
     i64,
@@ -47,7 +47,7 @@ impl AppState {
     /// the account. `None` when nothing was scheduled, and always where no switch is installed.
     pub(crate) fn after_quota_refresh(
         self: &Arc<Self>,
-        agent: Agent,
+        agent: AgentId,
         account: Option<String>,
         config_dir: Option<String>,
         started_at: i64,

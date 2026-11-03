@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 
 import { accountOf, sessionOf } from "../fixtures/builders";
 import type { Account, AccountQuota, Agent, AgentAvailability, QuotaWindow } from "../protocol";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { sessionQuotaBarOf, type SessionQuotaSource } from "./sessionQuota";
 
 const session = (extra = {}) => sessionOf("s-1", "c-1", undefined, "Fix", "idle", extra);
@@ -14,12 +15,13 @@ const source = (patch: Partial<SessionQuotaSource> = {}): SessionQuotaSource => 
   accounts: [work],
   agentAvailability: new Map<Agent, AgentAvailability>([["claude", { agent: "claude", availability: "available", default_account_dir: null }]]),
   accountQuotas: [reading(null), reading("a-work")],
+  providers: TEST_PROVIDERS,
   ...patch,
 });
 
 it("draws the bar of the account the session runs on", () => {
-  expect(sessionQuotaBarOf(session(), source())).toMatchObject({ main: window, thin: undefined, naming: { agent: "claude" } });
-  expect(sessionQuotaBarOf(session({ account_id: "a-work", config_dir: work.config_dir }), source())).toMatchObject({ main: window, thin: undefined, naming: { agent: "claude" } });
+  expect(sessionQuotaBarOf(session(), source())).toMatchObject({ main: window, thin: undefined, naming: { windowNaming: { session_window: "session" } } });
+  expect(sessionQuotaBarOf(session({ account_id: "a-work", config_dir: work.config_dir }), source())).toMatchObject({ main: window, thin: undefined, naming: { windowNaming: { session_window: "session" } } });
 });
 
 it("draws nothing without a session or for an agent that is not available", () => {

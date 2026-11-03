@@ -16,7 +16,7 @@ use super::{injected, interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS}
 use crate::branch_origin::{ref_created, repo_key, RefReport};
 use crate::git::repo_files::repository_of;
 use crate::protocol::{
-    Agent, Console, GitWorkflowSettingsChanges, Project, ProjectSource, Session, SessionKind,
+    AgentId, Console, GitWorkflowSettingsChanges, Project, ProjectSource, Session, SessionKind,
     SessionStatus,
 };
 use crate::state::AppState;
@@ -158,7 +158,7 @@ impl Fixture {
                 id: "console".to_string(),
                 name: "Console".to_string(),
                 workdir: workdir.to_string_lossy().into_owned(),
-                default_agent: Agent::Claude,
+                default_agent: AgentId::CLAUDE,
                 project_session_agent: None,
                 accounts: Default::default(),
                 launch: Default::default(),

@@ -284,7 +284,7 @@ mod tests {
     use std::path::Path;
     use std::time::{Duration, Instant};
 
-    use crate::protocol::Agent;
+    use crate::protocol::AgentId;
     use crate::test_support::{
         assert_gone_by, fake_live_session, is_running, read_pid_file, KillOnDrop, ScratchDir,
         PATIENCE,
@@ -383,7 +383,7 @@ mod tests {
         // rather than not yet killed.
         let stand_in = fake_live_session(
             "crash-cleanup",
-            Agent::Claude,
+            AgentId::CLAUDE,
             80,
             24,
             &format!(

@@ -1,14 +1,14 @@
-import { AGENT_OPTIONS } from "../agents/agents";
-import { format, isMessageKey, messageText, globalParam, translatorFor, type MessageKey } from "../i18n/catalog";
+import { format, isMessageKey, messageText, globalParam, PROVIDER_PARAM_NAMES, translatorFor, type MessageKey } from "../i18n/catalog";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { isolate } from "../i18n/isolate";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "../accounts/quotaFormat";
 import type { Language } from "../i18n/languages";
 import { leftBranchesText, leftBranchGroups, leftBranchItems } from "./branchCleanupItems";
-import { CODE, codeRecord, messageFacets } from "./codes";
+import { providerLabel } from "../agents/providers";
+import { CODE, codeRecord, messageFacets, messageKey } from "./codes";
 import { sharingFailureItems, sharingItemsText, sharingReasonKey } from "./sharingFailure";
-import { type Console, type Project, type QuotaWindow, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type Console, type Project, type ProviderInfo, type QuotaWindow, type Session, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "./codedError";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 
@@ -31,6 +31,8 @@ export interface RecordNames {
   shellTerminals?: Map<string, ShellTerminal>;
   accounts?: Settings["accounts"];
   settings?: Settings;
+  /** The providers the daemon serves, which a quota refusal names its window by. */
+  providers?: readonly ProviderInfo[];
 }
 
 /** No records to name anything by, for a message about none of them (a quota reading, a login) or worded where the
@@ -57,7 +59,7 @@ export function hasTrustDiagnostic(code: string, params: MessageParams): boolean
 /** The catalog key of a failure's further explanation in the application's own words, which leads its Details: the
  * `.details` of the message it is worded under, else of its code, so a variant can replace its code's explanation. */
 export function furtherKey(code: string, params: MessageParams): MessageKey | undefined {
-  return [`daemon.${messageCode(code, params)}.details`, `daemon.${code}.details`].find(isMessageKey);
+  return [`${messageKey(messageCode(code, params))}.details`, `${messageKey(code)}.details`].find(isMessageKey);
 }
 
 /** The rich sentence omits a raw diagnostic that is rendered separately. Plain messages keep the
@@ -76,17 +78,17 @@ export function lacksSummary(code: string): boolean {
 /** Whether the catalog words the failure's rich sentence: its `.summary`, or the plain message where the code has no
  * diagnostic to leave out; a code without an opening sentence has none to look up. */
 export function hasRichMessage(code: string, params: MessageParams): boolean {
-  return lacksSummary(code) || isMessageKey(`daemon.${richMessageCode(code, params)}`);
+  return lacksSummary(code) || isMessageKey(messageKey(richMessageCode(code, params)));
 }
 
 /** Every referenced agent and product uses the same name treatment, including messages whose only
  * parameter is a global product name. */
 export function referenceNameParams(code: string, params: MessageParams): string[] {
-  const key = `daemon.${messageCode(code, params)}`;
+  const key = messageKey(messageCode(code, params));
   if (!isMessageKey(key)) return [];
-  const richKey = `daemon.${richMessageCode(code, params)}`;
+  const richKey = messageKey(richMessageCode(code, params));
   const text = messageText("en", key, params) + (isMessageKey(richKey) ? messageText("en", richKey, params) : "");
-  return ["agent", "appName", "codex", "claude", "grok", "grokBuild", "git", "macOS"].filter((name) => text.includes(`{${name}}`));
+  return ["agent", "appName", ...PROVIDER_PARAM_NAMES, "git", "macOS"].filter((name) => text.includes(`{${name}}`));
 }
 
 /** The catalog suffix for a daemon code and its parameter-selected variant. Corrected meanings use a new suffix
@@ -104,24 +106,31 @@ export function withUiParams(code: string, params: MessageParams): MessageParams
   return { ...codeRecord(messageCode(code, params))?.uiParams, ...params };
 }
 
+/** The names of the providers the daemon serves, in their order, for a message that lists the supported agents. */
+export function servedAgentLabels(language: Language, providers: readonly ProviderInfo[]): string[] {
+  const t = translatorFor(language);
+  return providers.map(({ id }) => providerLabel(t, providers, id));
+}
+
 /** The kinds a refusal can name: a model's own weekly window never refuses. */
 const REFUSED_WINDOW_KINDS: readonly QuotaWindow["kind"][] = ["session", "weekly", "credit_period"];
 
 /** The window an `account_quota_exhausted` refusal names, with what names it (`QuotaNaming`): its `window_kind`,
- * `window_minutes` and `model_weekly` params, and the `agent` label. Undefined for a refusal without them. */
-function refusedQuotaWindow(params: MessageParams): { naming: QuotaNaming; window: QuotaWindow } | undefined {
+ * `window_minutes` and `model_weekly` params, and the `agent` label, which names one of the served `providers` by its
+ * label. Undefined for a refusal without them, or for a provider not served. */
+function refusedQuotaWindow(params: MessageParams, providers: readonly ProviderInfo[] | undefined): { naming: QuotaNaming; window: QuotaWindow } | undefined {
   const kind = REFUSED_WINDOW_KINDS.find((candidate) => candidate === params.window_kind);
-  const agent = AGENT_OPTIONS.find((option) => option.label === params.agent)?.value;
-  if (!kind || !agent) return undefined;
+  const provider = providers?.find((candidate) => candidate.label === params.agent);
+  if (!kind || !provider) return undefined;
   const minutes = /^\d+$/.test(params.window_minutes ?? "") ? Number(params.window_minutes) : null;
   const window: QuotaWindow = { kind, label: null, used_percent: 100, resets_at: null, window_minutes: minutes };
   const modelWeekly: QuotaWindow = { kind: "weekly_model", label: null, used_percent: 0, resets_at: null, window_minutes: null };
-  return { naming: { agent, windows: params.model_weekly === "true" ? [window, modelWeekly] : [window] }, window };
+  return { naming: { windowNaming: provider.quota_windows, windows: params.model_weekly === "true" ? [window, modelWeekly] : [window] }, window };
 }
 
 /** Whether the refusal's window can be worded from its structured params; if not, from its English name. */
-export function hasRefusedQuotaWindow(params: MessageParams): boolean {
-  return refusedQuotaWindow(params) !== undefined;
+export function hasRefusedQuotaWindow(params: MessageParams, providers: readonly ProviderInfo[] | undefined): boolean {
+  return refusedQuotaWindow(params, providers) !== undefined;
 }
 
 /** An account's name as the application shows it: the default account, which the daemon names by its fixed English
@@ -168,6 +177,10 @@ export function daemonParams<V = never>(
   // A failed launch or move carries its failure's params, which take the UI's own for the failure's code.
   const nested = codeRecord(code)?.nested !== undefined;
   const all = nested && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
+  // The provider a refusal names arrives as its wire id, shown by its name.
+  if (code === CODE.provider_unsupported && all.agent) all.agent = providerLabel(translatorFor(language), records.providers ?? [], all.agent);
+  // The supported agents are the providers the daemon serves.
+  if (code === CODE.agent_not_available) all.agents = joinPhrases(language, servedAgentLabels(language, records.providers ?? []).map(isolate));
   // The default account is shown by its name in the current language, as the accounts section does.
   for (const accountParam of codeRecord(code)?.defaultAccountParams ?? []) {
     if (accountParam in all) all[accountParam] = accountNameText(language, all[accountParam]);
@@ -186,7 +199,7 @@ export function daemonParams<V = never>(
   // The window is worded in the UI's language from its structured params; a refusal without them, as a quota of
   // its English `window` name.
   if (code === CODE.account_quota_exhausted) {
-    const refused = refusedQuotaWindow(all);
+    const refused = refusedQuotaWindow(all, records.providers);
     shown.quota = refused
       ? quotaWindowPhrase(translatorFor(language), refused.naming, refused.window)
       : format(language, "quota.windowPhrase.named", { window: shown.window });
@@ -197,7 +210,7 @@ export function daemonParams<V = never>(
   }
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
-  const failureKey = `daemon.${messageCode(all.reason_code ?? "", all)}`;
+  const failureKey = messageKey(messageCode(all.reason_code ?? "", all));
   if (nested && all.reason_code !== code && isMessageKey(failureKey)) shown.reason = daemonMessage(language, all.reason_code, all, String(shown.reason ?? shown.detail ?? ""), records);
   if (!mark) return shown;
   const marked: Record<string, string | number | V> = { ...shown };
@@ -232,8 +245,8 @@ export function daemonMessage(
   summary = false,
 ): string {
   if (summary && lacksSummary(code)) return "";
-  const summaryKey = `daemon.${richMessageCode(code, params)}`;
-  const key = summary && isMessageKey(summaryKey) ? summaryKey : `daemon.${messageCode(code, params)}`;
+  const summaryKey = messageKey(richMessageCode(code, params));
+  const key = summary && isMessageKey(summaryKey) ? summaryKey : messageKey(messageCode(code, params));
   if (!isMessageKey(key)) return fallback;
   if (code === CODE.shell_environment_timeout && !["shell", "command", "timeout"].every((name) => !!params[name])) return fallback;
   const shown = daemonParams(language, code, params, records);

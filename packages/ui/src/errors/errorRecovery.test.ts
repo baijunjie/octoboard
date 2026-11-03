@@ -12,12 +12,12 @@ it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
   ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"], ["model_change_did_not_come_up", "modelChange"], ["switch_did_not_come_up", "switchRelaunch"], ["model_change_did_not_stop", "stopProcess"],
   ["connection_closed", "connection"], ["not_a_git_repository", "repository"],
-  ["conversation_unresumable", "unresumable"], ["codex_unarchive_failed", "unarchive"],
+  ["conversation_unresumable", "unresumable"], ["provider.codex.unarchive_failed", "provider.codex.unarchive_failed.remedy"],
   ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],
   ["session_working", "wait"], ["session_busy", "wait"], ["session_changing", "wait"], ["session_owner_changing", "ownerChanging"], ["session_binding_changed", "ownerMoved"], ["session_not_bound", "session"], ["quick_create_owner_gone", "ownerGone"], ["icon_not_an_image", "avatarImage"], ["icon_too_large", "avatarSize"], ["console_session_never_bound", "none"], ["session_not_bound_to_owner", "none"], ["handoff_messages_dropped", "lostMessages"], ["sharing_messages_dropped", "sharingLostMessages"], ["message_not_sent", "unsentMessage"],
   ["agent_not_installed", "tool"], ["agent_availability_pending", "availability"], ["added_agents_undecided", "availability"],
   ["account_order_invalid", "refresh"], ["unknown_shell_terminal", "refresh"], ["queued_messages_lost", "refreshMessages"], ["queued_messages_dropped", "refreshMessages"], ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
-  ["grok_sandbox_unsupported", "grokSandbox"],
+  ["provider.grok.sandbox_unsupported", "provider.grok.sandbox_unsupported.remedy"],
   ["export_empty", "exportSelection"], ["import_accounts_missing", "configuration"], ["import_resolution_invalid", "configuration"], ["import_settings_missing", "configuration"],
   ["default_account_not_shareable", "accountNotShareable"], ["account_sharing_failed", "accountSharing"], ["account_still_sharing", "accountBusy"],
   ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"], ["account_disabled", "accountDisabled"], ["account_not_signed_in", "accountNotSignedIn"], ["daemon_shutting_down", "none"],
@@ -25,7 +25,7 @@ it.each([
   ["git_switch_failed", "gitSwitchFailure"], ["git_restore_failed", "gitRestoreFailure"], ["git_operation_in_progress", "none"], ["push_in_progress", "none"],
   ["terminal_unavailable", "openTerminal"], ["directory_unavailable", "openFileManager"], ["path_open_failed", "openDefaultApplication"],
   ["sharing_resume_failed", "none"], ["message_acceptance_unconfirmed", "none"], ["terminal_input_lost", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
-  ["login_codex_busy", "none"], ["login_already_running", "none"], ["login_not_running", "none"],
+  ["provider.codex.login_busy", "none"], ["provider_unsupported", "none"], ["login_already_running", "none"], ["login_not_running", "none"],
   ["reset_credit_in_progress", "none"], ["reset_credit_timed_out", "none"], ["reset_credit_failed", "resetCredit"], ["reset_credit_not_signed_in", "resetCreditLogin"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new CodedError("localized text", code, { session: "s1" });

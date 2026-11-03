@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
 import { type AgentAvailability } from "../protocol";
-import { AGENTS } from "../agents/agents";
+import { TEST_AGENTS } from "../test/testProviders";
 import { presence, stubListMotion } from "../components/motion/listMotionTestSupport";
 import { listing, lastStore, render, buttons, click, clickButton, choose, sent, type, openAdvanced, clickTab, nameOf, groupPicker, picker, tabNames } from "./consoleDialogTestSupport";
 
@@ -13,7 +13,7 @@ const selectedTab = () => document.body.querySelector('[role="tab"][aria-selecte
 it("opens the Advanced section on the console session agent, with a tab for each installed agent", async () => {
   render(consoleOf("c-1", "Main", { default_agent: "codex" }));
   await openAdvanced();
-  expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build"]);
+  expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
   expect(selectedTab()).toBe("Codex");
 });
 
@@ -70,7 +70,7 @@ it("sends an explicit null when a project session value is cleared", async () =>
 });
 
 it("leaves a missing agent without a tab unless the console stores a value for it, and drops it once cleared", async () => {
-  render(consoleOf("c-1", "Main", { project_session_launch: { codex: { model: "kept" } } }), [], undefined, { codex: "unavailable", grok: "unavailable" });
+  render(consoleOf("c-1", "Main", { project_session_launch: { codex: { model: "kept" } } }), [], undefined, { codex: "unavailable", grok: "unavailable", test_agent: "unavailable" });
   await openAdvanced();
   expect(tabNames()).toEqual(["Claude Code", "Codex, Not installed"]);
   await clickTab("Codex, Not installed");
@@ -101,7 +101,7 @@ it("does not take the view back to an agent picked earlier that comes back", asy
   await click(groupPicker("Project sessions", "Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   expect(selectedTab()).toBe("Claude Code");
   await act(async () => lastStore.setState({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available", default_account_dir: null }], ["codex", { agent: "codex", availability: "available", default_account_dir: null }], ["grok", { agent: "grok", availability: "available", default_account_dir: null }]]) }));
-  expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build"]);
+  expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
   expect(selectedTab()).toBe("Claude Code");
 });
 
@@ -156,7 +156,7 @@ it("moves the Advanced tabs that come and go, none as the section opens, and han
   await clickTab("Grok Build");
   await act(async () => grok.focus());
   expect(selectedTab()).toBe("Grok Build");
-  const availability = (grokState: AgentAvailability["availability"]) => new Map(AGENTS.map((agent) => [agent, { agent, availability: agent === "grok" ? grokState : "available", default_account_dir: null }]));
+  const availability = (grokState: AgentAvailability["availability"]) => new Map(TEST_AGENTS.map((agent) => [agent, { agent, availability: agent === "grok" ? grokState : "available", default_account_dir: null }]));
   await act(async () => lastStore.setState({ agentAvailability: availability("unavailable") }));
   expect(motion.played().map(({ frames }) => presence(frames))).toEqual(["exit"]);
   const copy = document.body.querySelector("[data-list-motion-exit]")!;

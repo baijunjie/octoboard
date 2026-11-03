@@ -9,19 +9,21 @@ import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { ConfirmConsequences } from "../components/dialog/ConfirmConsequences";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { AccountQuota, ResetCreditOutcome } from "../protocol";
-import { useDaemon } from "../store";
+import type { AccountQuota, Agent, ResetCreditOutcome } from "../protocol";
+import { useDaemon, useProviders } from "../store";
+import { servedProvider } from "../agents/providers";
 import { ringForAutomaticFocus } from "../input/touchInput";
 import { useNow } from "../format/useNow";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { AccountQuotaSummary, QuotaStaleMark } from "./AccountQuotaSummary";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
-import { expiryLine, nextResetCredit, resetCreditsSummary, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
+import { expiryLine, nextResetCredit, quotaNaming, resetCreditsSummary, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 import { useAccountQuota, type QuotaReading } from "./useAccountQuota";
 
-/** An account's rate limit reset credits (Codex's "usage limit resets") in one line, with the action that redeems
+/** An account's rate limit reset credits (a provider's "usage limit resets") in one line, with the action that redeems
  * one, beneath the account's quota windows: "1 usage limit reset available · expires in 6d 3h" and "Redeem reset".
- * Nothing for an account with no credit to use, which is every account but a Codex one holding at least one. `onUse`
+ * Nothing for an account with no credit to use, which is every account of a provider that does not offer them
+ * (`capabilities.reset_credits`) and any account holding none. `onUse`
  * opens `UseResetCreditDialog`, which the surface holds itself (a panel that closes when a modal opens cannot hold
  * it). `preventFocusOnPress` is for a surface that closes on a press here, so the press moves no focus into it. */
 export function ResetCreditsLine({ quota, accountName, onUse, preventFocusOnPress }: {
@@ -32,7 +34,8 @@ export function ResetCreditsLine({ quota, accountName, onUse, preventFocusOnPres
 }): React.ReactElement | null {
   const t = useT();
   const now = useNow();
-  if (typeof quota !== "object" || !quota.reset_credits) return null;
+  const providers = useProviders();
+  if (typeof quota !== "object" || !quota.reset_credits || !servedProvider(providers, quota.agent)?.capabilities.reset_credits) return null;
   const summary = resetCreditsSummary(t, quota.reset_credits, now);
   return (
     <div className="flex min-w-0 items-center gap-3 text-sm">
@@ -79,8 +82,8 @@ type Stage =
   | { kind: "waiting"; frozen: AccountQuota; baseline: AccountQuota }
   | { kind: "done"; updated: boolean; frozen: AccountQuota };
 
-/** The confirmation of redeeming one of a Codex account's reset credits (`account` null for the default account): it
- * names the credit that would be used (Codex's own title and description when it gives them), when it expires, and
+/** The confirmation of redeeming one of an account's reset credits (`account` null for the default account of `agent`): it
+ * names the credit that would be used (the provider's own title and description when it gives them), when it expires, and
  * that it resets the account's eligible usage windows now, over the account's usage meters as they are. Confirming asks
  * the daemon to use it. A use that worked keeps the dialog open: the meters hold the values they had at the confirm
  * until a reading newer than the one held when the use was answered arrives, then fill to the new ones (the meter's
@@ -91,7 +94,8 @@ type Stage =
  * credit that is used up or expires meanwhile shows, and Confirm is held while none is left. Focus stays where it is
  * (Done after a use); what changes is said through a `StatusAnnouncer` that stands with the dialog, while the visible
  * status line is `aria-hidden`. */
-export function UseResetCreditDialog({ account, accountName, onClose }: {
+export function UseResetCreditDialog({ agent, account, accountName, onClose }: {
+  agent: Agent;
   account: string | null;
   accountName: string;
   onClose: () => void;
@@ -99,7 +103,8 @@ export function UseResetCreditDialog({ account, accountName, onClose }: {
   const t = useT();
   const now = useNow();
   const { request, showNotice, store } = useDaemon();
-  const quota = useAccountQuota("codex", account);
+  const providers = useProviders();
+  const quota = useAccountQuota(agent, account);
   const [stage, setStage] = useState<Stage>({ kind: "ask" });
   // The reading the confirm was pressed on, from then until the request fails: the daemon takes a used credit out of
   // the held reading before it replies, and what the dialog asks and says meanwhile must not follow that.
@@ -128,20 +133,20 @@ export function UseResetCreditDialog({ account, accountName, onClose }: {
     // Confirm is held while no reading holds a credit, so there is a reading to freeze.
     if (typeof quota !== "object") return;
     setPressed(quota);
-    const reply = await request({ type: "use_codex_reset_credit", account }).catch((error: unknown) => {
+    const reply = await request({ type: "use_reset_credit", agent, account }).catch((error: unknown) => {
       setPressed(undefined);
       throw error;
     });
     const key = OUTCOME_NOTICE[reply.outcome];
     if (key === undefined) {
-      const held = accountQuotaOf(store.getState().accountQuotas, "codex", account);
+      const held = accountQuotaOf(store.getState().accountQuotas, agent, account);
       setStage({ kind: "waiting", frozen: quota, baseline: typeof held === "object" ? held : quota });
       return;
     }
     showNotice(t(key, { account: isolate(accountName) }), <Message id={key} params={{ account: nameChip }} />);
     onClose();
   };
-  const updatedBar = stage.kind === "done" && stage.updated && typeof quota === "object" ? usageBarWindows(quota) : undefined;
+  const updatedBar = stage.kind === "done" && stage.updated && typeof quota === "object" ? usageBarWindows(quotaNaming(quota, providers)) : undefined;
   const statusText = stage.kind === "waiting"
     ? t("quota.resetCredits.updating")
     : updatedBar ? t("quota.resetCredits.updated") : t("quota.resetCredits.updateFailed");

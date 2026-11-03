@@ -1,14 +1,14 @@
 //! The command line: the daemon itself when no mode is named, and the modes other processes start
-//! it in — an agent's hook, a session's git hooks, the Claude Code status line and the MCP server —
+//! it in — an agent's hook, a session's git hooks, a provider's status line and the MCP server —
 //! each of which runs in a process of its own and calls the running daemon.
 
 pub(crate) mod hook;
-pub(crate) mod status_line;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use crate::{mcp, protocol, revert_gate, session_git_hooks};
+use crate::protocol::AgentId;
+use crate::{adapter, mcp, protocol, revert_gate, session_git_hooks};
 
 #[derive(Parser)]
 #[command(name = "octoboardd")]
@@ -71,9 +71,13 @@ pub(crate) enum Command {
         #[command(subcommand)]
         hook: revert_gate::Hook,
     },
-    /// Report a Claude Code session's context window and run the user's own status line. This is
-    /// the status line the Claude Code adapter injects; it is not meant to be run by hand.
+    /// Report a session's context window and run the user's own status line. This is the status
+    /// line a provider's adapter injects; it is not meant to be run by hand.
     StatusLine {
+        /// The provider whose status line it is. Absent from the command a session launched by an
+        /// earlier build is still running, which is the one provider with a status line.
+        #[arg(long)]
+        provider: Option<String>,
         #[arg(long)]
         session: String,
         #[arg(long)]
@@ -81,12 +85,9 @@ pub(crate) enum Command {
         /// The key the daemon requires of every connection.
         #[arg(long)]
         key: String,
-        /// The session's working directory, whose project settings name the user's status line.
-        #[arg(long)]
-        cwd: std::path::PathBuf,
-        /// The Claude Code configuration directory whose user settings name it.
-        #[arg(long)]
-        config_dir: std::path::PathBuf,
+        /// The provider's own arguments, which come last.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
     /// Serve the Octoboard MCP tools for one session over stdio. This is what the adapters
     /// register as the session's MCP server; it is not meant to be run by hand.
@@ -156,12 +157,18 @@ pub(crate) fn run(command: Command) -> Result<()> {
         )),
         // On the path of every status line update, and its stdout is the user's status line's.
         Command::StatusLine {
+            provider,
             session,
             port,
             key,
-            cwd,
-            config_dir,
-        } => std::process::exit(status_line::run(&session, port, &key, &cwd, &config_dir)),
+            args,
+        } => std::process::exit(run_status_line(
+            provider.as_deref(),
+            &session,
+            port,
+            &key,
+            &args,
+        )),
         // The MCP child owns its stdout for the protocol, so it installs no log subscriber either.
         Command::Mcp {
             session,
@@ -171,5 +178,89 @@ pub(crate) fn run(command: Command) -> Result<()> {
             key,
             token,
         } => mcp::stdio::run(session, kind.into(), worker, port, key, token),
+    }
+}
+
+/// Runs `provider`'s status line, or the one provider's that has one when none is named. A provider
+/// without one, or an unknown one, has its input drained and nothing shown.
+fn run_status_line(
+    provider: Option<&str>,
+    session: &str,
+    port: u16,
+    key: &str,
+    args: &[String],
+) -> i32 {
+    let agent = match provider {
+        Some(id) => AgentId::from_wire_name(id),
+        None => AgentId::ALL
+            .into_iter()
+            .find(|agent| agent.descriptor().capabilities.status_line),
+    };
+    match agent.and_then(|agent| adapter::provider(agent).status_line()) {
+        Some(status_line) => status_line.run(session, port, key, args),
+        None => {
+            let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
+            0
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+
+    fn status_line(args: &str) -> (Option<String>, Vec<String>) {
+        let cli = Cli::try_parse_from(["octoboardd"].into_iter().chain(args.split(' '))).unwrap();
+        let Some(Command::StatusLine {
+            provider,
+            session,
+            port,
+            key,
+            args,
+        }) = cli.command
+        else {
+            panic!("not the status-line command");
+        };
+        assert_eq!((session.as_str(), port, key.as_str()), ("s", 1, "k"));
+        (provider, args)
+    }
+
+    /// The command without `--provider` is an earlier build's, which only Claude Code's launches
+    /// injected: it resolves to the one provider declaring a status line, which has to stay the
+    /// only one and be Claude Code, or such a session's status line would go to another provider.
+    #[test]
+    fn exactly_one_provider_declares_a_status_line_and_it_is_claude_code() {
+        let declaring: Vec<_> = AgentId::ALL
+            .into_iter()
+            .filter(|agent| agent.descriptor().capabilities.status_line)
+            .collect();
+        assert_eq!(
+            declaring,
+            [AgentId::CLAUDE],
+            "a second provider with a status line needs the command without `--provider` resolved \
+             to Claude Code explicitly"
+        );
+        assert!(adapter::provider(AgentId::CLAUDE).status_line().is_some());
+    }
+
+    /// The command of a session launched before `--provider` existed, and still running, parses,
+    /// its provider's own arguments passed on as they stand.
+    #[test]
+    fn the_status_line_command_parses_with_and_without_a_provider() {
+        let own = ["--cwd", "/p", "--config-dir", "/c"]
+            .map(str::to_owned)
+            .to_vec();
+        assert_eq!(
+            status_line("status-line --session s --port 1 --key k --cwd /p --config-dir /c"),
+            (None, own.clone())
+        );
+        assert_eq!(
+            status_line(
+                "status-line --provider claude --session s --port 1 --key k --cwd /p --config-dir /c"
+            ),
+            (Some("claude".to_owned()), own)
+        );
     }
 }

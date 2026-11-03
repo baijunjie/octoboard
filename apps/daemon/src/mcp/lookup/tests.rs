@@ -3,7 +3,7 @@ use crate::mcp::dispatch::call;
 use crate::mcp::test_support::{
     arguments, bound_coordinator_state, peer_state, refused, shared_console_state,
 };
-use crate::protocol::{error_code, Agent, CodedError, SessionStatus};
+use crate::protocol::{error_code, AgentId, CodedError, SessionStatus};
 use serde_json::json;
 
 /// The one ownership check, exercised through each write-side tool: a session that is unbound,
@@ -271,7 +271,7 @@ async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_inform_sessi
     );
 
     let mut grok = state.session_record("a").unwrap();
-    grok.agent = Agent::Grok;
+    grok.agent = AgentId::GROK;
     state.store.update_session(&grok).unwrap();
     let message = refused(
         &state,

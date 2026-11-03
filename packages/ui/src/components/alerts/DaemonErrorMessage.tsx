@@ -1,7 +1,8 @@
 import React, { useId } from "react";
 
 import { CodedError, type MessageParams } from "../../errors/codedError";
-import { daemonParams, NO_RECORDS, hasTrustDiagnostic, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow } from "../../errors/daemonMessage";
+import { messageKey } from "../../errors/codes";
+import { daemonParams, NO_RECORDS, hasTrustDiagnostic, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow, servedAgentLabels } from "../../errors/daemonMessage";
 import { leftBranchDetail, leftBranchGroups, leftBranchName, type LeftBranchItem } from "../../errors/branchCleanupItems";
 import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
@@ -17,6 +18,7 @@ import { DiagnosticBlock } from "./DiagnosticBlock";
 import { daemonErrorParts } from "./daemonErrorParts";
 import { hasErrorDetails, hasErrorRemedy } from "./errorPartPresence";
 import { InlineReference } from "../../i18n/InlineReference";
+import { AgentNameList } from "../text/AgentNameList";
 import { SharingCauseSummary, SharingDetails, SharingFailureReason } from "./SharingFailure";
 
 export function DaemonErrorTitle(): React.ReactElement {
@@ -94,7 +96,8 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
   const sessions = useDaemonStoreOrEmpty((s) => ("session" in error.params || "receiving_session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS.sessions));
   const shellTerminals = useDaemonStoreOrEmpty((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS.shellTerminals));
   const accounts = useDaemonStoreOrEmpty((s) => (error.code === "unknown_account" ? s.settings.accounts : undefined));
-  const id = `daemon.${richMessageCode(error.code, error.params)}`;
+  const providers = useDaemonStoreOrEmpty((s) => (error.code === "account_quota_exhausted" || error.code === "provider_unsupported" || error.code === "agent_not_available" ? s.providers : undefined));
+  const id = messageKey(richMessageCode(error.code, error.params));
   const parts = daemonErrorParts(error);
   // An `ActionableError`'s `detail` is raw text of its own, whatever the catalog says of its code.
   const actionableRaw = parts.actionableDetail ? <DiagnosticBlock>{parts.actionableDetail}</DiagnosticBlock> : null;
@@ -102,7 +105,7 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
   if (!parts.worded) return part === undefined || part === "summary" ? <>{error.message}</> : part === "details" || part === "raw" ? actionableRaw : null;
   const left = parts.left;
   if (left) return <LeftBranches count={left.length} items={left} part={part} />;
-  const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts }, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
+  const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts, providers }, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
   if (error.code === "conversation_held_in_project" || error.code === "conversation_held_in_console") {
     const holder = sessions.get(error.params.session);
     const task = holder && sessionTask(holder);
@@ -112,7 +115,7 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
       params.session = <InlineReference dir="auto" wrap><Message id="session.displayTitle" params={{ title: <bdi>{task}</bdi>, name: <bdi>{holder.title}</bdi> }} /></InlineReference>;
     }
   }
-  if (error.code === "account_quota_exhausted" && error.params.window && !hasRefusedQuotaWindow(error.params)) {
+  if (error.code === "account_quota_exhausted" && error.params.window && !hasRefusedQuotaWindow(error.params, providers)) {
     params.quota = <Message id="quota.windowPhrase.named" params={{ window: <InlineReference dir="auto" wrap>{error.params.window}</InlineReference> }} />;
   }
   const running = error.code === "session_has_running_sessions" ? runningSessionIds(error.params) : undefined;
@@ -148,7 +151,12 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
   // Verbatim diagnostic output (a push's hook checks) can run to hundreds of lines: it wraps and scrolls inside the block.
   const diagnostic = parts.diagnostic ? <DiagnosticBlock wrap tall>{parts.diagnostic}</DiagnosticBlock> : null;
   const unwordedRaw = unworded ? <DiagnosticBlock>{unworded.raw}</DiagnosticBlock> : null;
-  const recovery = parts.recovery ? <span className="block"><Message id={parts.recovery} params={params as never} /></span> : null;
+  // The supported agents follow their sentence as a list, one agent to an item.
+  const recovery = !parts.recovery
+    ? null
+    : error.code === "agent_not_available"
+      ? <AgentNameList lead={<Message id={parts.recovery} params={params as never} />} labels={servedAgentLabels(language, providers ?? [])} />
+      : <span className="block"><Message id={parts.recovery} params={params as never} /></span>;
   // The application's own further explanation, which leads Details, ahead of the raw text.
   const furtherId = parts.further;
   const further = furtherId ? <span className="block"><Message id={furtherId} params={params as never} /></span> : null;

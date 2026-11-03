@@ -3,7 +3,7 @@ import { Check, CircleDashed, FileUp, LayoutDashboard, Minus, Plus } from "lucid
 import React, { useId, useImperativeHandle, useRef } from "react";
 
 import { StatusBadge } from "./components/status/StatusBadge";
-import { AGENT_OPTIONS } from "./agents/agents";
+import { providerLabel } from "./agents/providers";
 import { AgentIcon } from "./components/icons/AgentIcon";
 import { EmptyPanel } from "./components/panel/EmptyPanel";
 import { PATH_VAR_PARAMS } from "./components/text/literalParams";
@@ -11,7 +11,7 @@ import { useFadeRegion, useScrollFade } from "./components/scroll/scrollFade";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { Message, useT } from "./i18n/react";
 import { usePlatform } from "./platform/react";
-import { useDaemonStore } from "./store";
+import { useDaemonStore, useProviders } from "./store";
 
 export interface WelcomeScreenHandle {
   focus: () => void;
@@ -41,6 +41,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
   const t = useT();
   const { configurationFile } = usePlatform();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const providers = useProviders();
   const rootRef = useRef<HTMLElement>(null);
   const toolsHeadingId = useId();
   const scrollRegion = useFadeRegion({ label: t("welcome.label") });
@@ -85,7 +86,8 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
           <Card>
             <Card.Content>
               <ul>
-                {AGENT_OPTIONS.map(({ value, label }) => {
+                {providers.map((provider) => {
+                  const value = provider.id;
                   const availability = agentAvailability.get(value)?.availability;
                   const available = availability === "available";
                   const unavailable = availability === "unavailable";
@@ -95,7 +97,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
                       <div role="status" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <span className="flex min-w-0 items-center gap-3 text-sm font-medium">
                           <AgentIcon agent={value} className="size-5 shrink-0" />
-                          <bdi className="break-words">{label}</bdi>
+                          <bdi className="break-words">{providerLabel(t, providers, value)}</bdi>
                         </span>
                         <StatusBadge variant="soft" color={available ? "success" : "default"} className="inline-flex items-center gap-1">
                           <StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />

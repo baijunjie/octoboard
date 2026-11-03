@@ -7,12 +7,12 @@
 //! kept here: a console session reaches its own console and that console's projects, a project
 //! session its own project. The settings of "Agent behavior" and "Agent accounts" (automatic
 //! approvals, asking questions as choices, accounts, added agents, automatic account selection and
-//! switching, starting usage windows, Claude Code compatibility, agent tags), the permission
-//! settings (approval modes, trusted directories, a project's trust consent) and a console's
-//! session instructions are the user's alone and never written here. Of the Agent accounts
-//! settings, the accounts, `auto_select_account`, `claude_compatibility` and `agent_tags` are
-//! returned read-only, as are the trusted directories. A project's directory, source and remote are chosen when it is added and fixed
-//! afterwards.
+//! switching, starting usage windows, the providers' settings, agent tags), the permission settings
+//! (approval modes, trusted directories, a project's trust consent) and a console's session
+//! instructions are the user's alone and never written here. Of the Agent accounts settings, the
+//! accounts, `auto_select_account`, the providers' settings that declare `shown_to_agents`
+//! (`provider_settings`) and `agent_tags` are returned read-only, as are the trusted directories. A
+//! project's directory, source and remote are chosen when it is added and fixed afterwards.
 
 use std::sync::Arc;
 
@@ -30,7 +30,7 @@ use crate::mcp::lookup::{
 };
 use crate::mcp::views::{describe_console, describe_project};
 use crate::project_git::remote_url;
-use crate::protocol::{error_code, Agent, CodedError, Project, ProjectSource, Session};
+use crate::protocol::{error_code, AgentId, CodedError, Project, ProjectSource, Session};
 use crate::state::AppState;
 
 pub(in crate::mcp) async fn update_project(
@@ -174,7 +174,7 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
     // `accounts` arguments take for it. Each agent's accounts come in the order automatic account
     // selection weighs them.
     let mut listed = Vec::new();
-    for agent in Agent::ALL {
+    for agent in AgentId::ALL {
         for candidate in choice::candidate_accounts(state, agent)? {
             listed.push(match candidate.id {
                 None => json!({
@@ -198,7 +198,7 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
     // are shown while the added list is undecided.
     let mut agent_tags = Map::new();
     for (name, tags) in state.store.agent_tags()? {
-        let shown = match Agent::from_wire_name(&name) {
+        let shown = match AgentId::from_wire_name(&name) {
             Some(agent) => state.store.agent_is_added(agent)?,
             None => false,
         };
@@ -214,11 +214,20 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "sidebar_order_by_status": state.store.sidebar_order_by_status()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "git_workflow": state.store.git_workflow_settings()?,
-        "claude_compatibility": state.store.claude_compatibility()?,
+        "provider_settings": shown_provider_settings(state)?,
         "agent_tags": agent_tags,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
     }))
+}
+
+/// The values in effect of the provider settings agents may read, by provider id and then setting
+/// id; a provider with none to show has no entry.
+fn shown_provider_settings(state: &Arc<AppState>) -> Result<Value> {
+    let shown = crate::providers::settings_where(state.store.provider_settings()?, |setting, _| {
+        setting.shown_to_agents
+    });
+    Ok(json!(shown))
 }
 
 pub(in crate::mcp) fn update_settings(
@@ -244,7 +253,7 @@ pub(in crate::mcp) fn update_settings(
             auto_select_account: None,
             auto_switch_on_usage_limit: None,
             auto_start_quota_windows: None,
-            claude_compatibility: Default::default(),
+            provider_settings: Default::default(),
             agent_tags: Default::default(),
             interface_language: raw_text(arguments, "interface_language")?
                 .map(|tag| tag.trim().to_string()),

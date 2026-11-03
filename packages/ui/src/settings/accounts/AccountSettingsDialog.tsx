@@ -1,9 +1,11 @@
 import React, { useEffect, useRef } from "react";
 
+import { servedProvider } from "../../agents/providers";
 import { Dialog } from "../../components/dialog/Dialog";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { useAccountQuota } from "../../quota/useAccountQuota";
+import { useProviders } from "../../store";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { AccountDisableSwitch } from "./AccountDisableSwitch";
 import { AccountLoginAnnouncer, useSucceededAccountLogin } from "./AccountLogin";
@@ -28,7 +30,8 @@ function DisableAccountRow({ agent, account, name }: { agent: Agent; account: st
  * One account's settings in a modal of its own, opened from its row's actions menu (`account` null for the agent's
  * default account): the account's switches as the Settings page's rows are. The title is plain ("Account settings");
  * the body's first line names the account, with its email under it, so it is clear which one the switches are for.
- * Then, for an account the user owns, the Share default configuration switch with the lock reason, the progress and the
+ * Then, for an account the user owns whose provider can share the default configuration (`config_sharing`), the
+ * Share default configuration switch with the lock reason, the progress and the
  * unfinished-change warning it carries, and last the Disable account switch, whose description follows the switch (off
  * or on). What the account is, its quota and where its configuration lives are in `AccountDetailsDialog`. It has no
  * footer: the header's close button, Escape and a click outside close it. It reads the account from the store as it is
@@ -45,6 +48,7 @@ export function AccountSettingsDialog({ agent, account, focusSharing = false, on
   const { stored, name, gone } = useAccountDialogSubject(agent, account, onClose);
   const succeeded = useSucceededAccountLogin(agent, account);
   const quota = useAccountQuota(agent, account);
+  const sharable = servedProvider(useProviders(), agent)?.capabilities.config_sharing === true;
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!focusSharing || !stored) return;
@@ -71,7 +75,7 @@ export function AccountSettingsDialog({ agent, account, focusSharing = false, on
         <AccountHeading name={name} quota={quota} />
         <AccountLoginAnnouncer login={succeeded} name={name} />
         <div>
-          {stored && <AccountSharingSwitch account={stored} opensFocused={focusSharing} />}
+          {stored && sharable && <AccountSharingSwitch account={stored} opensFocused={focusSharing} />}
           <DisableAccountRow agent={agent} account={account} name={name} />
         </div>
       </div>

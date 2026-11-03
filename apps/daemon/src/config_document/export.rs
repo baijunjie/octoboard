@@ -26,7 +26,7 @@ use anyhow::Result;
 use crate::hostfs::dir_key;
 use crate::project_git::remote_url;
 use crate::protocol::{
-    error_code, Account, AccountName, Agent, CodedError, ConfigurationDocument, Console,
+    error_code, Account, AccountName, AgentId, CodedError, ConfigurationDocument, Console,
     DocumentAccount, DocumentAccounts, DocumentAgentAccounts, DocumentConsole,
     DocumentDefaultAccount, DocumentProject, DocumentSettings, ExportedConsoles, PerAgent, Project,
     ProjectAccount, ProjectAccountRef, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
@@ -152,7 +152,9 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
             auto_approve_handoffs: store.auto_approve_handoffs()?,
             ask_questions_as_choices: store.ask_questions_as_choices()?,
             git_workflow: store.git_workflow_settings()?,
-            claude_compatibility: store.claude_compatibility_choices()?,
+            provider_settings: super::exported_provider_settings(
+                &store.provider_setting_choices()?,
+            ),
             agent_tags: store.agent_tags()?,
             keyboard_shortcuts: None,
         })
@@ -209,7 +211,7 @@ fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts>
     let home = crate::paths::home_dir();
     let names = store.default_account_names()?;
     let mut agents = Vec::new();
-    for agent in Agent::ALL {
+    for agent in AgentId::ALL {
         let owned: Vec<&Account> = all
             .iter()
             .filter(|account| account.agent == agent)
@@ -300,7 +302,7 @@ fn document_project(
     accounts: &HashMap<String, Account>,
     include_paths: bool,
 ) -> DocumentProject {
-    let reference = |agent: Agent, account: &ProjectAccount| match account {
+    let reference = |agent: AgentId, account: &ProjectAccount| match account {
         ProjectAccount::Inherit => ProjectAccountRef::Inherit,
         ProjectAccount::Default => ProjectAccountRef::Default,
         // An account that is gone is dropped to what deleting it leaves behind: inheriting.
@@ -347,7 +349,7 @@ fn directory_name(path: &str) -> String {
 /// nothing was referenced, the account no longer exists, or it belongs to another agent.
 fn account_ref(
     accounts: &HashMap<String, Account>,
-    agent: Agent,
+    agent: AgentId,
     id: Option<&str>,
 ) -> Option<AccountName> {
     let account = accounts.get(id?).filter(|account| account.agent == agent)?;
@@ -370,7 +372,7 @@ mod tests {
             id: id.to_string(),
             name: name.to_string(),
             workdir: format!("/consoles/{id}"),
-            default_agent: Agent::Codex,
+            default_agent: AgentId::CODEX,
             project_session_agent: None,
             accounts: Default::default(),
             launch: Default::default(),
@@ -401,7 +403,7 @@ mod tests {
         }
     }
 
-    fn account(id: &str, agent: Agent, name: &str, config_dir: &str) -> Account {
+    fn account(id: &str, agent: AgentId, name: &str, config_dir: &str) -> Account {
         Account {
             id: id.to_string(),
             agent,
@@ -420,7 +422,7 @@ mod tests {
         store
             .insert_account(&account(
                 "acct-1",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "Work",
                 "/home/u/.claude-work",
             ))
@@ -428,7 +430,7 @@ mod tests {
         store
             .insert_account(&account(
                 "acct-2",
-                Agent::Codex,
+                AgentId::CODEX,
                 "Team",
                 "/home/u/.codex-team",
             ))
@@ -437,12 +439,12 @@ mod tests {
         let mut hub = console("console-1", "Hub");
         hub.created_at = 2000;
         hub.icon = Some("data:image/png;base64,AAAA".to_string());
-        hub.accounts.claude = Some("acct-1".to_string());
+        hub.accounts[AgentId::CLAUDE] = Some("acct-1".to_string());
         // Names an account that no longer exists, and one of another agent.
-        hub.accounts.codex = Some("acct-gone".to_string());
-        hub.accounts.grok = Some("acct-1".to_string());
-        hub.launch.claude.model = Some("opus".to_string());
-        hub.launch.claude.effort = Some("some-future-level".to_string());
+        hub.accounts[AgentId::CODEX] = Some("acct-gone".to_string());
+        hub.accounts[AgentId::GROK] = Some("acct-1".to_string());
+        hub.launch[AgentId::CLAUDE].model = Some("opus".to_string());
+        hub.launch[AgentId::CLAUDE].effort = Some("some-future-level".to_string());
         hub.console_session_prompt = Some("Be brief.".to_string());
         store.insert_console(&hub).unwrap();
         // Created at the same instant as each other and before `hub`; the id breaks the tie.
@@ -457,19 +459,19 @@ mod tests {
         let mut cloned = project("project-1", "console-1", "cloned");
         cloned.source = ProjectSource::Git;
         cloned.remote_url = Some("git@example.com:team/cloned.git".to_string());
-        cloned.default_agent = Some(Agent::Grok);
+        cloned.default_agent = Some(AgentId::GROK);
         cloned.pinned = true;
         cloned.tags = vec!["backend".to_string(), "Rust".to_string()];
         cloned.description = Some("Mirrors the team's service.".to_string());
-        cloned.accounts.claude = ProjectAccount::Account {
+        cloned.accounts[AgentId::CLAUDE] = ProjectAccount::Account {
             id: "acct-1".to_string(),
         };
-        cloned.accounts.codex = ProjectAccount::Default;
-        cloned.accounts.grok = ProjectAccount::Account {
+        cloned.accounts[AgentId::CODEX] = ProjectAccount::Default;
+        cloned.accounts[AgentId::GROK] = ProjectAccount::Account {
             id: "acct-gone".to_string(),
         };
-        cloned.launch.codex.model = Some("gpt-x".to_string());
-        cloned.launch.codex.effort = Some("high".to_string());
+        cloned.launch[AgentId::CODEX].model = Some("gpt-x".to_string());
+        cloned.launch[AgentId::CODEX].effort = Some("high".to_string());
         // Not a git repository: exported like any other.
         store
             .insert_project(&project("project-0", "console-1", "plain"))
@@ -552,7 +554,7 @@ mod tests {
                 auto_approve_handoffs: false,
                 ask_questions_as_choices: true,
                 git_workflow: GitWorkflowSettings::default(),
-                claude_compatibility: std::collections::BTreeMap::new(),
+                provider_settings: std::collections::BTreeMap::new(),
                 agent_tags: std::collections::BTreeMap::new(),
                 keyboard_shortcuts: None,
             })
@@ -588,10 +590,10 @@ mod tests {
 
         let hub = &document.consoles[2];
         assert_eq!(hub.icon.as_deref(), Some("data:image/png;base64,AAAA"));
-        assert_eq!(hub.launch.claude.model.as_deref(), Some("opus"));
+        assert_eq!(hub.launch[AgentId::CLAUDE].model.as_deref(), Some("opus"));
         assert_eq!(hub.console_session_prompt.as_deref(), Some("Be brief."));
         assert_eq!(
-            hub.launch.claude.effort.as_deref(),
+            hub.launch[AgentId::CLAUDE].effort.as_deref(),
             Some("some-future-level"),
             "a value is exported as it is stored"
         );
@@ -602,15 +604,21 @@ mod tests {
             cloned.remote_url.as_deref(),
             Some("git@example.com:team/cloned.git")
         );
-        assert_eq!(cloned.default_agent, Some(Agent::Grok));
+        assert_eq!(cloned.default_agent, Some(AgentId::GROK));
         assert!(cloned.pinned);
         assert_eq!(cloned.tags, ["backend", "Rust"]);
         assert_eq!(
             cloned.description.as_deref(),
             Some("Mirrors the team's service.")
         );
-        assert_eq!(cloned.launch.codex.model.as_deref(), Some("gpt-x"));
-        assert_eq!(cloned.launch.codex.effort.as_deref(), Some("high"));
+        assert_eq!(
+            cloned.launch[AgentId::CODEX].model.as_deref(),
+            Some("gpt-x")
+        );
+        assert_eq!(
+            cloned.launch[AgentId::CODEX].effort.as_deref(),
+            Some("high")
+        );
         let plain = &hub.projects[1];
         assert_eq!(
             (plain.source, plain.remote_url.as_deref()),
@@ -720,26 +728,30 @@ mod tests {
 
         let hub = &document.consoles[0];
         assert_eq!(
-            hub.accounts.claude,
+            hub.accounts[AgentId::CLAUDE],
             Some(AccountName {
                 name: "Work".to_string()
             })
         );
-        assert_eq!(hub.accounts.codex, None, "the account is gone");
+        assert_eq!(hub.accounts[AgentId::CODEX], None, "the account is gone");
         assert_eq!(
-            hub.accounts.grok, None,
+            hub.accounts[AgentId::GROK],
+            None,
             "the account belongs to another agent"
         );
         let cloned = &hub.projects[0];
         assert_eq!(
-            cloned.accounts.claude,
+            cloned.accounts[AgentId::CLAUDE],
             ProjectAccountRef::Account {
                 name: "Work".to_string()
             }
         );
-        assert_eq!(cloned.accounts.codex, ProjectAccountRef::Default);
-        assert_eq!(cloned.accounts.grok, ProjectAccountRef::Inherit);
-        assert_eq!(hub.projects[1].accounts.claude, ProjectAccountRef::Inherit);
+        assert_eq!(cloned.accounts[AgentId::CODEX], ProjectAccountRef::Default);
+        assert_eq!(cloned.accounts[AgentId::GROK], ProjectAccountRef::Inherit);
+        assert_eq!(
+            hub.projects[1].accounts[AgentId::CLAUDE],
+            ProjectAccountRef::Inherit
+        );
 
         for leaked in [
             "acct-1",
@@ -969,16 +981,16 @@ mod tests {
     fn with_accounts(store: &Store) -> (String, String) {
         let under_home = home().join(".claude-work").to_string_lossy().into_owned();
         let outside = "/srv/agents/claude-team".to_string();
-        let mut work = account("acct-1", Agent::Claude, "Work", &under_home);
+        let mut work = account("acct-1", AgentId::CLAUDE, "Work", &under_home);
         work.share_default_config = true;
-        let mut team = account("acct-2", Agent::Claude, "Team", &outside);
+        let mut team = account("acct-2", AgentId::CLAUDE, "Team", &outside);
         team.disabled = true;
         store.insert_account(&work).unwrap();
         store.insert_account(&team).unwrap();
         store
             .insert_account(&account(
                 "acct-3",
-                Agent::Codex,
+                AgentId::CODEX,
                 "Solo",
                 "/srv/agents/codex",
             ))
@@ -986,15 +998,15 @@ mod tests {
         // The saved order: Team, the default, then Work.
         store
             .reorder_accounts(
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &[Some("acct-2".to_string()), None, Some("acct-1".to_string())],
             )
             .unwrap();
         store
-            .set_default_account_name(Agent::Claude, Some("Personal"))
+            .set_default_account_name(AgentId::CLAUDE, Some("Personal"))
             .unwrap();
         store
-            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude])
+            .set_added_agents_if_undecided(&[AgentId::CODEX, AgentId::CLAUDE])
             .unwrap();
         (under_home, outside)
     }
@@ -1018,12 +1030,12 @@ mod tests {
 
         assert_eq!(
             accounts.added_agents,
-            Some(vec![Agent::Codex, Agent::Claude])
+            Some(vec![AgentId::CODEX, AgentId::CLAUDE])
         );
-        let agents: Vec<Agent> = accounts.agents.iter().map(|entry| entry.agent).collect();
+        let agents: Vec<AgentId> = accounts.agents.iter().map(|entry| entry.agent).collect();
         assert_eq!(
             agents,
-            [Agent::Claude, Agent::Codex],
+            [AgentId::CLAUDE, AgentId::CODEX],
             "grok has nothing to carry"
         );
         let claude = &accounts.agents[0];
@@ -1058,24 +1070,24 @@ mod tests {
         let (state, _dir) = crate::test_support::app_state("config-export-account-order");
         state
             .store
-            .insert_account(&account("acct-1", Agent::Grok, "One", "/srv/one"))
+            .insert_account(&account("acct-1", AgentId::GROK, "One", "/srv/one"))
             .unwrap();
         state
             .store
-            .insert_account(&account("acct-2", Agent::Grok, "Two", "/srv/two"))
+            .insert_account(&account("acct-2", AgentId::GROK, "Two", "/srv/two"))
             .unwrap();
         // A saved order that lacks the newer account and names a deleted one.
         state
             .store
             .reorder_accounts(
-                Agent::Grok,
+                AgentId::GROK,
                 &[Some("acct-1".to_string()), None, Some("acct-2".to_string())],
             )
             .unwrap();
         state.store.delete_account("acct-2").unwrap();
         state
             .store
-            .insert_account(&account("acct-4", Agent::Grok, "Four", "/srv/four"))
+            .insert_account(&account("acct-4", AgentId::GROK, "Four", "/srv/four"))
             .unwrap();
 
         let grok = &exported_accounts(&state.store, true).agents[0];

@@ -70,7 +70,7 @@ impl Fixture {
                 role: Role::Worker,
                 has_conversation: true,
                 agent_session_id: Some("a0000000-0000-4000-8000-000000000001".to_string()),
-                ..crate::test_support::project_session("w", Agent::Claude, status)
+                ..crate::test_support::project_session("w", AgentId::CLAUDE, status)
             })
             .unwrap();
         for (id, name) in [("claude-a", "Work A"), ("claude-b", "Work B")] {
@@ -78,7 +78,7 @@ impl Fixture {
                 .store
                 .insert_account(&Account {
                     id: id.to_string(),
-                    agent: Agent::Claude,
+                    agent: AgentId::CLAUDE,
                     name: name.to_string(),
                     config_dir: dir.join(id).to_string_lossy().into_owned(),
                     share_default_config: false,
@@ -134,7 +134,7 @@ impl Fixture {
     ) {
         let quota = AccountQuota {
             reset_credits: None,
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: account.map(str::to_string),
             fetched_at: 1,
             plan: None,
@@ -298,7 +298,7 @@ impl Fixture {
     fn refresh_quota(&self, account: Option<&str>, used: f64) -> tokio::task::JoinHandle<()> {
         let quota = AccountQuota {
             reset_credits: None,
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: account.map(str::to_string),
             fetched_at: now_millis(),
             plan: None,
@@ -457,7 +457,7 @@ async fn failed_stale_or_still_exhausted_probes_keep_waiting() {
         .state
         .account_quotas
         .held(
-            Agent::Claude,
+            AgentId::CLAUDE,
             Some("claude-a"),
             fixture.dir.join("claude-a").to_str(),
         )
@@ -536,7 +536,7 @@ async fn a_probe_started_before_the_wait_or_with_another_exhausted_window_cannot
     fixture.hold(Some("claude-a"), 0.0);
     after_quota_refresh(
         &fixture.state,
-        Agent::Claude,
+        AgentId::CLAUDE,
         Some("claude-a".to_string()),
         Some(fixture.dir.join("claude-a").to_string_lossy().into_owned()),
         since - 1,
@@ -549,7 +549,7 @@ async fn a_probe_started_before_the_wait_or_with_another_exhausted_window_cannot
         .state
         .account_quotas
         .held(
-            Agent::Claude,
+            AgentId::CLAUDE,
             Some("claude-a"),
             fixture.dir.join("claude-a").to_str(),
         )
@@ -588,7 +588,7 @@ async fn a_models_window_alone_is_not_evidence_the_account_recovered() {
     fixture.waiting_for_quota().await;
     let quota = AccountQuota {
         reset_credits: None,
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         account: Some("claude-a".to_string()),
         fetched_at: now_millis(),
         plan: None,
@@ -860,7 +860,7 @@ async fn a_switch_that_does_not_continue_folds_what_it_ended_into_its_one_messag
     let worker = fixture.worker();
     let (state, note) = (
         fixture.state.clone(),
-        note_to_session(Agent::Claude, "A", "B"),
+        note_to_session(AgentId::CLAUDE, "A", "B"),
     );
     let ended = "The restart ended these processes you had started: `serve` in `/w`. Start again \
                  any you still need.";
@@ -1027,7 +1027,7 @@ async fn a_held_account_recovering_during_switch_preparation_resumes_on_itself()
     let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
     let recovered = AccountQuota {
         reset_credits: None,
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         account: None,
         fetched_at: 1,
         plan: None,
@@ -1461,7 +1461,11 @@ async fn a_switch_is_refused_under_its_claim_when_the_record_it_was_decided_on_i
         .store
         .insert_session(&Session {
             project_id: Some("p1".to_string()),
-            ..crate::test_support::project_session("no-process", Agent::Claude, SessionStatus::Idle)
+            ..crate::test_support::project_session(
+                "no-process",
+                AgentId::CLAUDE,
+                SessionStatus::Idle,
+            )
         })
         .unwrap();
     let attempt = |id: &'static str, only_if: SwitchOnlyIf<'static>| {
@@ -1866,7 +1870,7 @@ async fn a_note_written_instead_of_the_prompt_opens_a_turn_that_owes_no_report()
 
     let (state, note) = (
         fixture.state.clone(),
-        note_to_session(Agent::Claude, "A", "B"),
+        note_to_session(AgentId::CLAUDE, "A", "B"),
     );
     tokio::task::spawn_blocking(move || {
         tell_sessions(&state, &worker, "A", "B", &note, false, None)
@@ -1879,7 +1883,7 @@ async fn a_note_written_instead_of_the_prompt_opens_a_turn_that_owes_no_report()
     fixture.state.close_turn("w", false);
     fixture
         .state
-        .turn_started("w", Some(&note_to_session(Agent::Claude, "A", "B")));
+        .turn_started("w", Some(&note_to_session(AgentId::CLAUDE, "A", "B")));
     assert_eq!(
         fixture.state.close_turn("w", false),
         crate::state::TurnClose::Reported
@@ -1896,7 +1900,7 @@ async fn another_notices_turn_does_not_spend_the_notes_credit() {
 
     let (state, note) = (
         fixture.state.clone(),
-        note_to_session(Agent::Claude, "A", "B"),
+        note_to_session(AgentId::CLAUDE, "A", "B"),
     );
     tokio::task::spawn_blocking(move || {
         tell_sessions(&state, &worker, "A", "B", &note, false, None)
@@ -1918,7 +1922,7 @@ async fn another_notices_turn_does_not_spend_the_notes_credit() {
     );
     fixture
         .state
-        .turn_started("w", Some(&note_to_session(Agent::Claude, "A", "B")));
+        .turn_started("w", Some(&note_to_session(AgentId::CLAUDE, "A", "B")));
     assert_eq!(
         fixture.state.close_turn("w", false),
         crate::state::TurnClose::Reported
@@ -1936,7 +1940,7 @@ async fn a_note_naming_an_account_the_write_strips_still_credits_its_turn() {
 
     let (state, note) = (
         fixture.state.clone(),
-        note_to_session(Agent::Claude, from, "B"),
+        note_to_session(AgentId::CLAUDE, from, "B"),
     );
     tokio::task::spawn_blocking(move || {
         tell_sessions(&state, &worker, from, "B", &note, false, None)
@@ -1946,7 +1950,7 @@ async fn a_note_naming_an_account_the_write_strips_still_credits_its_turn() {
     output_containing(&fixture.worker_process, "switched you to `B`");
     fixture.state.close_turn("w", false);
 
-    let written = crate::session::term::stripped(&note_to_session(Agent::Claude, from, "B"));
+    let written = crate::session::term::stripped(&note_to_session(AgentId::CLAUDE, from, "B"));
     assert!(!written.contains('\u{200C}'));
     fixture.state.turn_started("w", Some(&written));
     assert_eq!(
@@ -1967,7 +1971,7 @@ async fn a_grok_session_showing_its_usage_limit_dialog_passes_every_wait_check()
         project_id: Some("p1".to_string()),
         has_conversation: true,
         agent_session_id: Some("b0000000-0000-4000-8000-000000000001".to_string()),
-        ..crate::test_support::project_session("g", Agent::Grok, SessionStatus::Idle)
+        ..crate::test_support::project_session("g", AgentId::GROK, SessionStatus::Idle)
     };
     // Its turn stopped on the limit, as Grok 1.0.70 writes it.
     let record = fixture
@@ -1994,7 +1998,7 @@ async fn a_grok_session_showing_its_usage_limit_dialog_passes_every_wait_check()
             .into_owned(),
     )]);
     fixture.state.store.insert_session(&grok_session).unwrap();
-    let grok = crate::test_support::fake_live_session("g", Agent::Grok, 80, 24, "sleep 30");
+    let grok = crate::test_support::fake_live_session("g", AgentId::GROK, 80, 24, "sleep 30");
     fixture.state.register_live(grok.clone());
     grok.on_output(GROK_MODAL.as_bytes());
     assert!(grok
@@ -2007,7 +2011,7 @@ async fn a_grok_session_showing_its_usage_limit_dialog_passes_every_wait_check()
         .store
         .insert_account(&Account {
             id: "grok-a".to_string(),
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             name: "Grok A".to_string(),
             config_dir: fixture.dir.join("grok-a").to_string_lossy().into_owned(),
             share_default_config: false,
@@ -2018,7 +2022,7 @@ async fn a_grok_session_showing_its_usage_limit_dialog_passes_every_wait_check()
     fixture.state.account_quotas.hold_in_dir_for_test(
         &AccountQuota {
             reset_credits: None,
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             account: Some("grok-a".to_string()),
             fetched_at: 1,
             plan: None,
@@ -2639,10 +2643,10 @@ async fn the_owner_is_not_told_of_a_wait_by_a_usage_limit_dialog() {
             project_id: Some("p1".to_string()),
             bound_to: Some("owner".to_string()),
             role: Role::Worker,
-            ..crate::test_support::project_session("g", Agent::Grok, SessionStatus::Idle)
+            ..crate::test_support::project_session("g", AgentId::GROK, SessionStatus::Idle)
         })
         .unwrap();
-    let grok = crate::test_support::fake_live_session("g", Agent::Grok, 80, 24, "sleep 30");
+    let grok = crate::test_support::fake_live_session("g", AgentId::GROK, 80, 24, "sleep 30");
     fixture.state.register_live(grok.clone());
     grok.on_output(GROK_MODAL.as_bytes());
     let limit = grok.look_for_dialog().current;

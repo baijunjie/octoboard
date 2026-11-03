@@ -12,7 +12,8 @@ use super::link::{self, DirsError};
 use super::{
     cli_reads, default_dir, describe, in_use, moves, not_shareable, sharing_in_progress, take_back,
 };
-use crate::protocol::{Account, Agent, SharingCause, SharingFailure, SharingItemFailure};
+use crate::accounts::thread_registry::thread_registry;
+use crate::protocol::{Account, SharingCause, SharingFailure, SharingItemFailure};
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 use crate::store::SharingStart;
 
@@ -161,8 +162,9 @@ pub(crate) async fn carry_out(
         match start {
             None => Ok(Vec::new()),
             Some(start) => {
-                // Only a Codex conversation taken back has a database row of its own to point.
-                let launch_env = if agent == Agent::Codex && !conversations.is_empty() {
+                // Only a conversation taken back into a provider with a thread registry has a row
+                // of its own to point.
+                let launch_env = if thread_registry(agent).is_some() && !conversations.is_empty() {
                     launch_env().await.map_err(|err| format!("{err:#}"))
                 } else {
                     Ok(HashMap::new())

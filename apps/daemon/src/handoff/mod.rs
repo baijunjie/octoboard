@@ -28,7 +28,7 @@ use anyhow::{bail, Result};
 use crate::branch_origin::session_branches::{self, BranchState, Worktree};
 use crate::hostfs::replace::{replace_file, Permissions};
 use crate::messaging::naming::one_line;
-use crate::protocol::{Agent, Session, SessionKind, SessionStatus};
+use crate::protocol::{AgentId, Session, SessionKind, SessionStatus};
 use crate::records::conversation::{self, Conversation, Speaker, Todo};
 use crate::records::{conversation_branch, Branch, Locator};
 use crate::state::AppState;
@@ -40,7 +40,7 @@ use package_file::{package_path_in, remove_in};
 pub struct Identity {
     pub id: String,
     pub title: String,
-    pub agent: Agent,
+    pub agent: AgentId,
     pub account: String,
     pub kind: SessionKind,
     /// The project's name and directory, or the console's name.

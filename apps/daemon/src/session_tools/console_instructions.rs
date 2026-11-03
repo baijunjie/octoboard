@@ -8,7 +8,7 @@
 //! both, loading a symlinked pair once. That is why the file names the tools without a prefix:
 //! each agent shows the same tools under its own.
 
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 
 use super::role::RoleOptions;
 
@@ -338,21 +338,14 @@ pub fn console_session_instructions(user_prompt: Option<&str>, options: &RoleOpt
     }
 }
 
-/// The file every agent's console session is pointed to, which holds the instructions themselves.
+/// The file every agent's console session is pointed to, which holds the instructions themselves;
+/// a provider that reads another spelling is given a symlink to it.
 pub(crate) const INSTRUCTION_FILE: &str = "AGENTS.md";
 
-/// The symlink to [`INSTRUCTION_FILE`] that Claude Code reads, since it reads only this spelling
-/// and not `AGENTS.md`.
-pub(crate) const CLAUDE_INSTRUCTION_FILE: &str = "CLAUDE.md";
-
 /// The instruction file a console session of this agent is pointed to, read out of its working
-/// directory. Matched by **exact spelling** by every agent, and no agent accepts an all-lowercase
-/// name (see "Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`).
-pub(super) fn console_session_instruction_filename(agent: Agent) -> &'static str {
-    match agent {
-        Agent::Claude => CLAUDE_INSTRUCTION_FILE,
-        Agent::Codex | Agent::Grok => INSTRUCTION_FILE,
-    }
+/// directory: the one its descriptor names.
+pub(super) fn console_session_instruction_filename(agent: AgentId) -> &'static str {
+    agent.descriptor().instruction_file
 }
 
 #[cfg(test)]
@@ -506,15 +499,15 @@ mod tests {
     #[test]
     fn each_agent_is_pointed_to_the_spelling_it_reads() {
         assert_eq!(
-            console_session_instruction_filename(Agent::Claude),
+            console_session_instruction_filename(AgentId::CLAUDE),
             "CLAUDE.md"
         );
         assert_eq!(
-            console_session_instruction_filename(Agent::Codex),
+            console_session_instruction_filename(AgentId::CODEX),
             "AGENTS.md"
         );
         assert_eq!(
-            console_session_instruction_filename(Agent::Grok),
+            console_session_instruction_filename(AgentId::GROK),
             "AGENTS.md"
         );
     }

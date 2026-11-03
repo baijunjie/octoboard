@@ -7,8 +7,8 @@ use crate::coordinator::test_support::{
 use crate::mcp;
 use crate::messaging::owner_notices;
 use crate::protocol::{
-    error_code, Agent, CodedError, Project, ProjectSource, RequestBody, Role, Session, SessionKind,
-    SessionStatus,
+    error_code, AgentId, CodedError, Project, ProjectSource, RequestBody, Role, Session,
+    SessionKind, SessionStatus,
 };
 use crate::session_tools;
 use crate::store::LOCAL_HOST_ID;
@@ -50,7 +50,7 @@ fn a_project_session_binds_to_the_console_session_it_names() {
     let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-valid");
     state
         .store
-        .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+        .insert_console(&console(AgentId::CLAUDE, Path::new("/tmp/unused")))
         .unwrap();
     state
         .store
@@ -77,9 +77,9 @@ fn binding_to_an_invalid_target_is_refused() {
     let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-invalid");
     state
         .store
-        .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+        .insert_console(&console(AgentId::CLAUDE, Path::new("/tmp/unused")))
         .unwrap();
-    let mut other_console = console(Agent::Claude, Path::new("/tmp/unused"));
+    let mut other_console = console(AgentId::CLAUDE, Path::new("/tmp/unused"));
     other_console.id = "console-2".to_string();
     state.store.insert_console(&other_console).unwrap();
 
@@ -125,7 +125,7 @@ fn a_project_session_binds_only_to_an_unbound_or_bound_coordinator_of_its_own_pr
     let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-project");
     state
         .store
-        .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+        .insert_console(&console(AgentId::CLAUDE, Path::new("/tmp/unused")))
         .unwrap();
     state
         .store
@@ -214,12 +214,12 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
                 console_id: "console-2".to_string(),
                 ..console_session("foreign-hub", Idle)
             },
-            project_session("starter", Agent::Claude, Idle),
-            project_session("other-starter", Agent::Claude, Idle),
-            project_session("loner", Agent::Claude, Idle),
+            project_session("starter", AgentId::CLAUDE, Idle),
+            project_session("other-starter", AgentId::CLAUDE, Idle),
+            project_session("loner", AgentId::CLAUDE, Idle),
             Session {
                 project_id: Some("project-2".to_string()),
-                ..project_session("elsewhere", Agent::Claude, Idle)
+                ..project_session("elsewhere", AgentId::CLAUDE, Idle)
             },
             bound_session("mine", Idle, "starter"),
             bound_session("bound", Idle, "hub"),
@@ -299,7 +299,7 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
             bound_session("plain", Idle, "hub"),
             bound_session("no-process", Interrupted, "hub"),
             bound_session("starting", Starting, "hub"),
-            project_session("peer", Agent::Claude, Idle),
+            project_session("peer", AgentId::CLAUDE, Idle),
         ],
         &[
             "hub",
@@ -400,7 +400,7 @@ async fn a_claimed_session_or_owner_is_not_bound_to_or_from() {
         vec![
             console_session("hub", Idle),
             console_session("hub-2", Idle),
-            project_session("loner", Agent::Claude, Idle),
+            project_session("loner", AgentId::CLAUDE, Idle),
             bound_session("plain", Idle, "hub"),
         ],
         &["hub", "hub-2", "loner", "plain"],
@@ -473,7 +473,7 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
             bound_session("plain", Idle, "hub"),
             bound_session("no-process", Interrupted, "hub"),
             bound_session("by-user", Idle, "hub"),
-            project_session("loner", Agent::Claude, Idle),
+            project_session("loner", AgentId::CLAUDE, Idle),
         ],
         &["hub", "coordinator", "child", "plain", "by-user"],
     );
@@ -539,9 +539,9 @@ async fn a_no_process_session_is_told_of_its_new_owner_when_it_next_starts() {
         vec![
             console_session("hub", Idle),
             console_session("hub-2", Idle),
-            no_process_with_conversation("released", Agent::Claude, "hub"),
-            no_process_with_conversation("handed", Agent::Claude, "hub"),
-            no_process_with_conversation("replaced", Agent::Claude, "hub"),
+            no_process_with_conversation("released", AgentId::CLAUDE, "hub"),
+            no_process_with_conversation("handed", AgentId::CLAUDE, "hub"),
+            no_process_with_conversation("replaced", AgentId::CLAUDE, "hub"),
         ],
         &["hub", "hub-2"],
     );
@@ -612,8 +612,8 @@ async fn a_failed_launch_keeps_the_notice_and_a_queued_launch_delivers_it() {
         "owner-notice-launch",
         vec![
             console_session("hub", Idle),
-            no_process_with_conversation("claude", Agent::Claude, "hub"),
-            no_process_with_conversation("codex", Agent::Codex, "hub"),
+            no_process_with_conversation("claude", AgentId::CLAUDE, "hub"),
+            no_process_with_conversation("codex", AgentId::CODEX, "hub"),
         ],
         &["hub"],
     );
@@ -654,10 +654,10 @@ async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
         vec![
             console_session("hub", Idle),
             console_session("hub-2", Idle),
-            no_process_with_conversation("noted", Agent::Claude, "hub"),
-            no_process_with_conversation("blank", Agent::Claude, "hub"),
-            no_process_with_conversation("moved", Agent::Claude, "hub"),
-            no_process_with_conversation("rebound", Agent::Claude, "hub"),
+            no_process_with_conversation("noted", AgentId::CLAUDE, "hub"),
+            no_process_with_conversation("blank", AgentId::CLAUDE, "hub"),
+            no_process_with_conversation("moved", AgentId::CLAUDE, "hub"),
+            no_process_with_conversation("rebound", AgentId::CLAUDE, "hub"),
         ],
         &["hub", "hub-2"],
     );
@@ -735,7 +735,7 @@ async fn a_failed_write_after_a_release_keeps_the_note_owed() {
         "release-note-failed-write",
         vec![
             console_session("hub", Idle),
-            no_process_with_conversation("gone", Agent::Claude, "hub"),
+            no_process_with_conversation("gone", AgentId::CLAUDE, "hub"),
         ],
         &["hub"],
     );
@@ -800,7 +800,7 @@ async fn a_release_by_the_user_tells_a_running_owner() {
     );
     assert!(told.contains("left with the user"), "{told}");
     let inform_session =
-        session_tools::catalogue::qualified_tool_name(Agent::Claude, "inform_session");
+        session_tools::catalogue::qualified_tool_name(AgentId::CLAUDE, "inform_session");
     assert!(told.contains(&format!("`{inform_session}`")), "{told}");
     assert_eq!(
         state.store.get_session("plain").unwrap().unwrap().bound_to,

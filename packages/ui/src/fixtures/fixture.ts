@@ -231,7 +231,7 @@ export interface Fixture {
    * daemon finding a session mid-turn that the window still lists as idle). Unlisted sessions are
    * handed off normally. */
   sessionHandoffs?: Record<string, FixtureError | "pending">;
-  /** A refusal to save an agent's permission approval, Codex's reviewer or Claude Code's mode; successful requests update settings. */
+  /** A refusal to save a provider setting (a `set_provider_setting`: an agent's permission approval or its Claude compatibility); successful requests update settings. */
   accountApprovalError?: FixtureError;
   /** A refusal to save an agent's tags, an `update_settings` that carries `agent_tags`; other settings updates and successful tag saves update settings as usual. */
   agentTagsError?: FixtureError;
@@ -256,7 +256,7 @@ export interface Fixture {
    * device code); `failed` carries `login_failed`. Left out, a started login stays waiting until it is cancelled. A
    * state shown from the start is set in `state.accountLogins` instead. */
   loginOutcome?: "succeeded" | "failed" | "timed_out";
-  /** How `use_codex_reset_credit` ends for any Codex account: the outcome Codex answers with, a refusal as the daemon
+  /** How `use_reset_credit` ends for any Codex account: the outcome Codex answers with, a refusal as the daemon
    * words one, or `"pending"` for a use never answered, which keeps the confirmation busy. The quota is read again
    * after the answer and after a failure of Codex's run, but not after a refusal that comes before Codex runs
    * (`binary_not_found`, `reset_credit_in_progress`, `daemon_shutting_down`, `unknown_account`,

@@ -17,6 +17,7 @@ const draft: StatusItemMenuDraft = {
     { kind: "meter", ...meter, used_up: true },
     { kind: "window", name: "5h", detail: "", label: "", fraction: 0.5, agent: "claude" },
     { kind: "window", name: "5h", detail: "", label: "", fraction: 0.5, agent: "codex" },
+    { kind: "window", name: "5h", detail: "", label: "", fraction: 0.5, agent: "grok" },
   ] }],
   open: "Open", quit: "Quit", attention: false,
 };
@@ -28,35 +29,41 @@ const unagented = (index: number) => {
 };
 
 const GREY = "#7b7b85";
-const FILLS: Record<string, string> = { "quota-meter--claude": "#c2562f", "quota-meter--codex": "#2a6df0" };
-const fillsOf = (appearance: "light" | "dark") => vi.mocked(resolveCssColour).mockImplementation((expression, theme, probeClass) => {
+const FOREGROUND = "#101010";
+const fillsOf = (appearance: "light" | "dark") => vi.mocked(resolveCssColour).mockImplementation((expression, theme) => {
   expect(theme).toBe(appearance);
   if (expression === "var(--meter-used-up-fill)") return GREY;
-  return expression === "var(--meter-fill)" && probeClass ? FILLS[probeClass] : undefined;
+  return expression === "var(--default-foreground)" ? FOREGROUND : undefined;
 });
 
-it.each(["light", "dark"] as const)("gives a bar its agent's stylesheet colour and a used-up account's the stylesheet's grey in %s native menus", async (appearance) => {
+const FILL = {
+  light: { claude: [194, 86, 47], codex: [42, 109, 240] },
+  dark: { claude: [234, 131, 93], codex: [110, 160, 255] },
+};
+
+it.each(["light", "dark"] as const)("gives a bar its provider's colour, the foreground to one without, and a used-up account's the stylesheet's grey in %s native menus", async (appearance) => {
   fillsOf(appearance);
   const result = await withIcons(draft, appearance);
   expect(result.submenus[0].items).toEqual([
     draft.submenus[0].items[0],
-    { ...unagented(1), fill_colour: [194, 86, 47], used_up_colour: [123, 123, 133] },
-    { ...unagented(2), fill_colour: [194, 86, 47], used_up_colour: [123, 123, 133] },
-    { ...unagented(3), fill_colour: [194, 86, 47] },
-    { ...unagented(4), fill_colour: [42, 109, 240] },
+    { ...unagented(1), fill_colour: FILL[appearance].claude, used_up_colour: [123, 123, 133] },
+    { ...unagented(2), fill_colour: FILL[appearance].claude, used_up_colour: [123, 123, 133] },
+    { ...unagented(3), fill_colour: FILL[appearance].claude },
+    { ...unagented(4), fill_colour: FILL[appearance].codex },
+    { ...unagented(5), fill_colour: [16, 16, 16] },
   ]);
   expect(result.submenus[0].items.every((item) => !("agent" in item))).toBe(true);
   expect(draft.submenus[0].items[1]).not.toHaveProperty("used_up_colour");
   expect(draft.submenus[0].items[1]).not.toHaveProperty("fill_colour");
 });
 
-it("sends only the colours the stylesheet resolves", async () => {
+it("sends only the colours the stylesheet resolves for the grey and the foreground", async () => {
   const none = (await withIcons(draft, "light")).submenus[0].items;
-  expect(none).toEqual(draft.submenus[0].items.map((item, index) => ("agent" in item ? unagented(index) : item)));
+  expect(none).toEqual(draft.submenus[0].items.map((item, index) => (!("agent" in item) ? item : index === 5 ? unagented(index) : { ...unagented(index), fill_colour: index === 4 ? FILL.light.codex : FILL.light.claude })));
   vi.mocked(resolveCssColour).mockImplementation((expression) => (expression === "var(--meter-used-up-fill)" ? GREY : undefined));
   const [, used_up, , fine] = (await withIcons(draft, "light")).submenus[0].items;
-  expect(used_up).toEqual({ ...unagented(1), used_up_colour: [123, 123, 133] });
-  expect(fine).toEqual(unagented(3));
+  expect(used_up).toEqual({ ...unagented(1), fill_colour: FILL.light.claude, used_up_colour: [123, 123, 133] });
+  expect(fine).toEqual({ ...unagented(3), fill_colour: FILL.light.claude });
 });
 
 const COLOURS: Record<string, string> = {

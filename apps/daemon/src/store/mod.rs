@@ -15,6 +15,14 @@
 //! serde (`enum_to_text` / `enum_from_text`) rather than a second hand-written mapping, so a
 //! renamed variant cannot mean one thing in the database and another on the socket.
 //!
+//! Values that belong to a provider are rows keyed by the provider's id (an account's and a
+//! session's `agent`, the child tables of consoles and projects, `provider_settings`) or entries of
+//! a JSON column keyed by it. A provider that is no longer registered may still be named in the
+//! file: its rows and entries are kept, left out of what is loaded, and left in place by the writes
+//! of the registered providers' values. A default agent naming one reads as the first registered
+//! provider, and a project session agent naming one as following the default agent; a write of the
+//! record keeps either while it still reads so.
+//!
 //! A list-valued field is one JSON text column rather than a join table: a project's tags are
 //! always read and written whole, so `read_project` stays a single-row read.
 //!
@@ -31,6 +39,7 @@ mod hosts;
 mod kept_messages;
 mod pages;
 mod projects;
+mod provider_settings;
 mod rows;
 mod schema;
 mod session_links;

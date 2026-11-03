@@ -1,5 +1,5 @@
 import { type Project, type Session, type SessionStatus } from "../../protocol";
-import { AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Scenario } from "../scenario";
 import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
@@ -53,7 +53,7 @@ projects.slice(0, projectNames.length).forEach((project, p) => {
       p === 0 && i === 0 ? LONG_TITLE : p === 2 && i === 0 ? SECOND_LONG_TITLE : `${["Refactor", "Fix", "Investigate", "Write tests for", "Review"][(p + i) % 5]} task ${p}-${i}`;
     sessions.push(
       sessionOf(`s-${p}-${i}`, "c-1", project.id, title, STATUSES[(p + i) % STATUSES.length], {
-        agent: AGENTS[(p + i) % AGENTS.length],
+        agent: FIXTURE_AGENTS[(p + i) % FIXTURE_AGENTS.length],
         pinned: p === 0 && i === 1,
         started_at: minutesAgo(10 + p * 7 + i * 3),
         // An idle session whose turn ended with work still running.

@@ -1,6 +1,7 @@
 import { Label, ProgressBar } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
+import { ProviderMessage } from "../../agents/ProviderMessage";
 import { defaultAccountName } from "../../agents/agents";
 import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../../components/alerts/SharingFailure";
 import { focusHandoffTarget, HandoffOnUnmount } from "../../components/focus/HandoffOnUnmount";
@@ -12,7 +13,7 @@ import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey 
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Account, AccountSharing } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
+import { useDaemon, useDaemonStore, useProviders } from "../../store";
 import { SettingRow, SettingSwitch } from "../SettingRow";
 import { alertFailure } from "../../components/alerts/raiseError";
 
@@ -44,6 +45,7 @@ import { alertFailure } from "../../components/alerts/raiseError";
  *   Focus on the mark or in its popover goes to the switch when the mark goes. */
 export function AccountSharingSwitch({ account, opensFocused }: { account: Account; opensFocused?: boolean }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   const { request } = useDaemon();
   const sharing = useDaemonStore((s) => s.accountSharing.get(account.id));
   const defaultName = useDaemonStore((s) => defaultAccountName(t, s.settings.default_account_names, account.agent));
@@ -123,17 +125,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
           <div className="flex flex-col gap-2">
             <p>{t("settings.accounts.sharing.helpShared")}</p>
             <p>
-              {account.agent === "claude"
-                ? <Message id="settings.accounts.sharing.helpNeverClaude" params={{
-                  claudeJson: <InlineReference dir="ltr" monospace wrap unbroken>.claude.json</InlineReference>,
-                  plans: <InlineReference dir="ltr" monospace wrap unbroken>plans/</InlineReference>,
-                }} />
-                : account.agent === "grok"
-                  ? <Message id="settings.accounts.sharing.helpNeverGrok" params={{
-                    trustedFolders: <InlineReference dir="ltr" monospace wrap unbroken>trusted_folders.toml</InlineReference>,
-                    hooksPaths: <InlineReference dir="ltr" monospace wrap unbroken>hooks-paths</InlineReference>,
-                  }} />
-                  : t("settings.accounts.sharing.helpNever")}
+              <ProviderMessage providers={providers} id={account.agent} name="sharingNeverShared" fallback="settings.accounts.sharing.helpNever" unbroken />
             </p>
             <p><Message id="settings.accounts.sharing.helpOff" /></p>
             {idle > 0 && <p>{t("settings.accounts.sharing.idleSessions", { count: idle })}</p>}

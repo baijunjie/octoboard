@@ -4,7 +4,7 @@
 use anyhow::Result;
 
 use crate::hostfs;
-use crate::protocol::{error_code, Agent, CodedError};
+use crate::protocol::{error_code, AgentId, CodedError};
 
 /// What the user typed for one agent's config directory, as the absolute, lexically normalised
 /// path an account's own directory is stored as. Required and non-blank: an account always has a
@@ -12,7 +12,7 @@ use crate::protocol::{error_code, Agent, CodedError};
 /// itself, by the Codex adapter for Codex), so a user pointing an account at a directory they are
 /// about to create should not be stopped; the agent that needs one to already exist (Grok Build,
 /// against a *pinned* source home) checks that itself, at launch.
-pub(crate) fn normalize_account_dir(agent: Agent, text: &str) -> Result<String> {
+pub(crate) fn normalize_account_dir(agent: AgentId, text: &str) -> Result<String> {
     let text = text.trim();
     if text.is_empty() {
         return Err(CodedError::raised(

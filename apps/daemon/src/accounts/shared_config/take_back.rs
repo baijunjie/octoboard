@@ -11,12 +11,10 @@ use anyhow::Result;
 
 use super::link::Dirs;
 use super::moves::{backup_path, is_link, lstat, merge_copy, merge_move, resolve};
-use crate::accounts::codex_threads::{self, is_state_database, RowError};
-use crate::accounts::shared_config::items::shared_items;
-use crate::adapter::files::LARGE_FILE_LIMIT;
-use crate::agents::layout::CODEX_TITLE_INDEX;
+use crate::accounts::shared_config::items::{shared_items, ItemClass};
+use crate::accounts::thread_registry::{thread_registry, RowCause, RowError};
 use crate::hostfs::dir_key;
-use crate::protocol::{Account, Agent, SharingCause, SharingItemFailure, SharingLeft};
+use crate::protocol::{Account, AgentId, SharingCause, SharingItemFailure, SharingLeft};
 use crate::state::AppState;
 
 /// A conversation of the account's own sessions, by the agent's id of it.
@@ -70,17 +68,17 @@ pub(crate) fn own_conversations(state: &AppState, account: &Account) -> Result<V
 }
 
 /// Takes `conversation` back from the default directory into the account's own conversation
-/// directories. Where the account already holds a file of it, the one written to last stays and
-/// the other is kept under `<directory>.bak-<stamp>/` in the account's directory. A Codex thread
-/// moved out loses its row in the default's database, which would otherwise name a rollout no
-/// longer there, also when its files left on an earlier attempt, but never while no file of it is
-/// found; the account's own database, when it has one, is pointed at the head taken back, found
-/// where `launch_env` (the environment the account's sessions launch with, or why it could not be
-/// had) and the account's `config.toml` put it. Nothing is taken back while a directory it would
-/// land in is still linked into the default directory.
+/// directories. Where the account already holds a file of it, the one written to last stays and the
+/// other is kept under `<directory>.bak-<stamp>/` in the account's directory. A thread moved out
+/// loses its row in the default's thread database, which would otherwise name a record no longer
+/// there, also when its files left on an earlier attempt, but never while no file of it is found;
+/// the account's own database, when it has one, is pointed at the head taken back, found where
+/// `launch_env` (the environment the account's sessions launch with, or why it could not be had)
+/// and the account's `config.toml` put it. Nothing is taken back while a directory it would land in
+/// is still linked into the default directory.
 pub(super) fn take_back(
     locator: &mut crate::records::Locator,
-    agent: Agent,
+    agent: AgentId,
     dirs: &Dirs,
     conversation: &Conversation,
     stamp: &str,
@@ -156,12 +154,12 @@ pub(super) fn take_back(
             ));
         }
     }
-    if agent != Agent::Codex {
+    let Some(threads) = thread_registry(agent) else {
         return Ok(());
-    }
-    copy_thread_names(dirs, id);
+    };
+    threads.after_take_back(&dirs.default, &dirs.account, id);
     let mut problems = Vec::new();
-    // A row goes only once the thread's rollouts are known to be the account's: taken back now,
+    // A row goes only once the thread's records are known to be the account's: taken back now,
     // or on an earlier attempt. With none found anywhere, the row is the only trace left of where
     // they were, and stays.
     let taken = !files.is_empty()
@@ -175,10 +173,10 @@ pub(super) fn take_back(
     if taken && !conversation.held_elsewhere {
         for item in shared_items(agent)
             .iter()
-            .filter(|item| is_state_database(item.name))
+            .filter(|item| item.class == ItemClass::ThreadDatabase)
         {
             if let Ok(Some(database)) = resolve(&dirs.default.join(item.name)) {
-                if let Err(err) = codex_threads::forget_threads(&database, &[id]) {
+                if let Err(err) = threads.forget_threads(&database, &[id]) {
                     problems.push((
                         SharingCause::of_database(&err),
                         format!("the default's `{}` still names it: {err}", item.name),
@@ -191,14 +189,15 @@ pub(super) fn take_back(
         let pointed = launch_env
             .map_err(|err| (SharingCause::Other, format!("the shell environment: {err}")))
             .and_then(|env| {
-                codex_threads::point_thread_at(
-                    &dirs.account,
-                    &dirs.account.join(head),
-                    id,
-                    env,
-                    codex_threads::PATIENCE,
-                )
-                .map_err(|err| (cause_of_row(&err), err.to_string()))
+                threads
+                    .point_thread_at(
+                        &dirs.account,
+                        &dirs.account.join(head),
+                        id,
+                        env,
+                        threads.patience(),
+                    )
+                    .map_err(|err| (cause_of_row(&err), err.to_string()))
             });
         if let Err((cause, err)) = pointed {
             problems.push((
@@ -217,56 +216,8 @@ pub(super) fn take_back(
 
 /// Why the account's own row of a thread was not pointed at the head taken back.
 fn cause_of_row(err: &RowError) -> SharingCause {
-    match err {
-        RowError::ConfigUnreadable(err)
-        | RowError::Listing(_, err)
-        | RowError::Inspecting(_, err) => SharingCause::of(err),
-        RowError::Database(_, err) => SharingCause::of_database(err),
-        RowError::ConfigInvalid(_) | RowError::Unresolvable(_) => SharingCause::Other,
-    }
-}
-
-/// Copies the default's thread-name entries of Codex thread `id` into the account's own index, so
-/// a resume of the thread by name still finds it there. Best effort: a name is not needed to
-/// resume by id, which is how a session is resumed.
-fn copy_thread_names(dirs: &Dirs, id: &str) {
-    use std::io::Write;
-    let Ok(index) =
-        crate::hostfs::read_regular_text(&dirs.default.join(CODEX_TITLE_INDEX), LARGE_FILE_LIMIT)
-    else {
-        return;
-    };
-    let lines: String = index
-        .lines()
-        .filter(|line| {
-            serde_json::from_str::<serde_json::Value>(line)
-                .is_ok_and(|entry| entry.get("id").and_then(|value| value.as_str()) == Some(id))
-        })
-        .map(|line| format!("{line}\n"))
-        .collect();
-    if lines.is_empty() {
-        return;
-    }
-    let target = dirs.account.join(CODEX_TITLE_INDEX);
-    // An index that is there but cannot be read is not appended to: it may hold the names already,
-    // or be no file to write to.
-    let already = match crate::hostfs::read_regular_text(&target, LARGE_FILE_LIMIT) {
-        Ok(text) => text,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(err) => {
-            tracing::warn!(thread = %id, %err, "reading the account's Codex thread names failed");
-            return;
-        }
-    };
-    if already.contains(&lines) {
-        return;
-    }
-    let written = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&target)
-        .and_then(|mut file| file.write_all(lines.as_bytes()));
-    if let Err(err) = written {
-        tracing::warn!(thread = %id, %err, "copying a Codex thread's name into the account failed");
+    match err.cause {
+        RowCause::Configuration(cause) | RowCause::Registry(cause) => cause,
+        RowCause::Unlocatable => SharingCause::Other,
     }
 }

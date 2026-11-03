@@ -12,8 +12,8 @@ use crate::adapter::files::{
     SMALL_FILE_LIMIT,
 };
 use crate::adapter::LaunchSpec;
-use crate::agents::layout;
-use crate::protocol::{notice_code, Agent, Notice};
+use crate::protocol::{AgentId, Code, Notice};
+use crate::providers::claude;
 
 /// The configuration directory in effect for this launch's Claude Code, when there is one: the
 /// session's, else one the user's own shell exports.
@@ -23,7 +23,7 @@ fn explicit_config_dir(
 ) -> Option<PathBuf> {
     pinned
         .map(PathBuf::from)
-        .or_else(|| exported_dir(shell_env, layout::CLAUDE.config_dir_var))
+        .or_else(|| exported_dir(shell_env, claude::LAYOUT.config_dir_var))
 }
 
 /// A settings file Claude Code reads: one the project keeps, read through `browse::live`, or one
@@ -62,7 +62,7 @@ fn own_settings_files(user_dir: &Path, project: &Path) -> [SettingsFile; 3] {
         SettingsFile::Project
     };
     [
-        SettingsFile::Other(user_dir.join(layout::CLAUDE_SETTINGS_FILE)),
+        SettingsFile::Other(user_dir.join(claude::CLAUDE_SETTINGS_FILE)),
         project_file(dir.join("settings.json")),
         project_file(dir.join("settings.local.json")),
     ]
@@ -102,7 +102,7 @@ pub(super) fn settings_files(
     project: &Path,
 ) -> Vec<SettingsFile> {
     let mut files = Vec::from(own_settings_files(
-        &crate::adapter::account_dir(Agent::Claude, pinned, spec.shell_env),
+        &crate::adapter::account_dir(AgentId::CLAUDE, pinned, spec.shell_env),
         project,
     ));
     files.extend(managed_settings_files(managed_settings_dir()));
@@ -179,7 +179,7 @@ fn configured_model_in(
     if let Some(model) = shell_env.get(MODEL_VARIABLE).and_then(|model| named(model)) {
         return Some(model);
     }
-    let user_dir = crate::adapter::account_dir(Agent::Claude, pinned, shell_env);
+    let user_dir = crate::adapter::account_dir(AgentId::CLAUDE, pinned, shell_env);
     let (project, mut files) = match cwd {
         Some(cwd) => {
             let project = canonical_project(cwd);
@@ -189,7 +189,7 @@ fn configured_model_in(
         None => (
             PathBuf::new(),
             vec![SettingsFile::Other(
-                user_dir.join(layout::CLAUDE_SETTINGS_FILE),
+                user_dir.join(claude::CLAUDE_SETTINGS_FILE),
             )],
         ),
     };
@@ -344,7 +344,7 @@ pub(super) fn untrusted_workspace_notice(
     }
     match accepted(&canonical) {
         Some(false) => Some(Notice::new(
-            notice_code::CLAUDE_WORKSPACE_UNTRUSTED,
+            Code::of_provider(claude::WORKSPACE_UNTRUSTED),
             format!(
                 "Claude Code has not been trusted with this directory, so this project's own `allow` \
                  permission rules are ignored until Claude Code's trust prompt is answered — its `deny` \
@@ -361,9 +361,9 @@ pub(super) fn untrusted_workspace_notice(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::claude::ClaudeAdapter;
+    use crate::adapter::claude::ClaudeProvider;
     use crate::adapter::tests::spec_fixture;
-    use crate::adapter::AgentAdapter;
+    use crate::adapter::AgentProvider;
 
     /// Reading the trust state wrong must not nag: only an explicit `false` warns, so an absent
     /// project entry or a key that was renamed upstream leaves the user alone.
@@ -378,14 +378,14 @@ mod tests {
         let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
         let config = home.join(".claude.json");
 
-        assert!(ClaudeAdapter
+        assert!(ClaudeProvider
             .plan(&fixture.spec())
             .expect("plan")
             .notice
             .is_none());
 
         std::fs::write(&config, r#"{"projects":{}}"#).expect("config");
-        assert!(ClaudeAdapter
+        assert!(ClaudeProvider
             .plan(&fixture.spec())
             .expect("plan")
             .notice
@@ -395,7 +395,7 @@ mod tests {
             "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": false } }
         });
         std::fs::write(&config, untrusted.to_string()).expect("config");
-        assert!(ClaudeAdapter
+        assert!(ClaudeProvider
             .plan(&fixture.spec())
             .expect("plan")
             .notice
@@ -405,7 +405,7 @@ mod tests {
             "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": true } }
         });
         std::fs::write(&config, trusted.to_string()).expect("config");
-        assert!(ClaudeAdapter
+        assert!(ClaudeProvider
             .plan(&fixture.spec())
             .expect("plan")
             .notice
@@ -420,7 +420,7 @@ mod tests {
             }
         });
         std::fs::write(&config, under_trusted.to_string()).expect("config");
-        assert!(ClaudeAdapter
+        assert!(ClaudeProvider
             .plan(&fixture.spec())
             .expect("plan")
             .notice
@@ -449,7 +449,7 @@ mod tests {
             std::fs::write(dir.join(".claude.json"), config.to_string()).expect("config");
         };
         let warns = |fixture: &crate::adapter::tests::SpecFixture| {
-            ClaudeAdapter
+            ClaudeProvider
                 .plan(&fixture.spec())
                 .expect("plan")
                 .notice
@@ -510,7 +510,7 @@ mod tests {
 
         let (done, finished) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let plan = ClaudeAdapter.plan(&fixture.spec()).map(|plan| plan.notice);
+            let plan = ClaudeProvider.plan(&fixture.spec()).map(|plan| plan.notice);
             let _ = done.send(plan.is_ok_and(|notice| notice.is_none()));
         });
         assert_eq!(
@@ -685,7 +685,7 @@ mod tests {
             &files,
             &home
         ));
-        assert!(ClaudeAdapter
+        assert!(ClaudeProvider
             .plan(&fixture.spec())
             .expect("plan")
             .notice

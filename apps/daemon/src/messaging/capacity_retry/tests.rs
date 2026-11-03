@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::*;
+use crate::adapter::codex::rollout_watch::end_failed_turn;
 use crate::hooks::TurnEnd;
 use crate::protocol::Session;
-use crate::records::watch::codex_rollout::end_failed_turn;
 use crate::test_support::owner_team::{hub_heard, hub_heard_of, team_state};
 use crate::test_support::{output_containing, running, ScratchDir, StandIn};
 

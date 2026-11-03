@@ -1,9 +1,9 @@
 use super::*;
-use crate::protocol::{quota_unavailable_code as code, Agent, QuotaUnavailable};
+use crate::protocol::{quota_unavailable_code as code, AgentId, QuotaUnavailable};
 
 fn quota(unavailable: Option<(crate::protocol::Code, &str)>) -> AccountQuota {
     AccountQuota {
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         account: None,
         fetched_at: 1,
         plan: None,

@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENT_LABEL, AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS } from "../../fixtures/fixtureProviders";
+import { providerLabel } from "../../agents/providers";
 import { type Session, type SessionContext } from "../../protocol";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
@@ -22,7 +23,7 @@ const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "
 // A named account exposed through agent icon tooltips and accessible session labels.
 const settings = {
   ...DEFAULT_SETTINGS,
-  added_agents: [...AGENTS],
+  added_agents: [...FIXTURE_AGENTS],
   default_clone_dir: "/Users/dev/Projects",
   accounts: [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")],
 };
@@ -362,7 +363,7 @@ export const focusScenarios: Scenario[] = [
     description: "The pointer rests on the Claude Code mark of Rework the result ranking. The tooltip names the agent, then lists the account the session runs under, its model and its effort, each under its label: Work, Opus 5.5 and high. Compare the labels' muted colour with the values.",
     state: observedModelState,
     preferences: { sidebarConsole: console_.id },
-    steps: [(ui) => ui.hoverSessionAgent(rankingRow(ui), AGENT_LABEL.claude, { account: "Work", model: "Opus 5.5", effort: "high" })],
+    steps: [(ui) => ui.hoverSessionAgent(rankingRow(ui), providerLabel(ui.t, FIXTURE_PROVIDERS, "claude"), { account: "Work", model: "Opus 5.5", effort: "high" })],
   },
   {
     id: "sidebar-session-agent-tooltip-removed-account",
@@ -372,7 +373,7 @@ export const focusScenarios: Scenario[] = [
     description: "The pointer rests on the Claude Code mark of Rework the result ranking, whose account was removed and which was launched with the agent's defaults. The tooltip names the agent, then lists the directory the session recorded as its account, with Default as both model and effort; the long path breaks onto further lines under its label instead of running past the tooltip's edge.",
     state: removedAccountState,
     preferences: { sidebarConsole: console_.id },
-    steps: [(ui) => ui.hoverSessionAgent(rankingRow(ui), AGENT_LABEL.claude, { account: REMOVED_ACCOUNT_DIR, model: ui.t("session.modelEffort.unknownItem"), effort: ui.t("session.modelEffort.unknownItem") })],
+    steps: [(ui) => ui.hoverSessionAgent(rankingRow(ui), providerLabel(ui.t, FIXTURE_PROVIDERS, "claude"), { account: REMOVED_ACCOUNT_DIR, model: ui.t("session.modelEffort.unknownItem"), effort: ui.t("session.modelEffort.unknownItem") })],
   },
   {
     id: "focus-project",

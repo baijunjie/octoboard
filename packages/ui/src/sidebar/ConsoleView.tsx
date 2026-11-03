@@ -22,7 +22,7 @@ import type { Console, Project } from "../protocol";
 import { INACTIVE_PROJECT_RANK, liveSessions, projectRank, sortProjectsByRank } from "../sessions/order";
 import { effectiveTags, matchesFilter } from "../sessions/projectFiltering";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useArchivedOwnerSessions, useDaemonStore, useDaemonStoreEqual, useSessionProjectId } from "../store";
+import { useArchivedOwnerSessions, useDaemonStore, useDaemonStoreEqual, useProviders, useSessionProjectId } from "../store";
 import { consoleMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { type FilterUpdate, isFiltering, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
@@ -238,6 +238,7 @@ function ConsoleSessionsSection({
   const t = useT();
   const listRef = useListMotion<HTMLDivElement>();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const providers = useProviders();
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   // Only the rows themselves, so a status event that leaves this list as it was renders nothing here.
   const live = useDaemonStoreEqual((s) => {
@@ -250,7 +251,7 @@ function ConsoleSessionsSection({
   // rendered whenever the console is blocked, not only when `live` is empty, because a blocked
   // console can still hold console sessions left over from before: one that was interrupted (an
   // agent removed, or a `PATH` change) stays live and keeps `liveSessions` from being empty.
-  const noAgents = noAgentState(agentAvailability, addedAgents);
+  const noAgents = noAgentState(agentAvailability, addedAgents, providers);
   const blocked = noAgents !== undefined;
   const openNew = () => handlers.onOpenConsoleSession(thisConsole);
 

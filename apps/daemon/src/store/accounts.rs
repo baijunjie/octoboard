@@ -3,7 +3,7 @@
 use super::{Result, StoreError};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use super::rows::{enum_from_row, enum_to_text};
+use super::rows::{agent_from_row, enum_to_text};
 use super::Store;
 use crate::protocol::{error_code, Account, CodedError};
 use crate::time::now_millis;
@@ -170,7 +170,7 @@ impl Store {
                 read_account,
             )
             .optional()?;
-        Ok(account)
+        Ok(account.flatten())
     }
 
     /// The account `id`, or the `unknown_account` refusal when there is none.
@@ -188,7 +188,7 @@ impl Store {
         })
     }
 
-    /// Every account of every agent, oldest first.
+    /// Every account of every registered agent, oldest first.
     pub fn list_accounts(&self) -> Result<Vec<Account>> {
         read_accounts(&self.lock())
     }
@@ -197,32 +197,39 @@ impl Store {
     /// which puts each console back on its agent's default account and each project back to
     /// inheriting its console's — in the same locked transaction, so no reader ever sees one still
     /// pointing at an id the `accounts` table no longer has. A project that pins the default
-    /// account refers to no id, so it is left alone.
+    /// account refers to no id, so it is left alone. A provider row left holding nothing is
+    /// removed.
     pub fn delete_account(&self, id: &str) -> Result<()> {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
-        for column in ["claude_account_id", "codex_account_id", "grok_account_id"] {
-            for table in ["consoles", "projects"] {
-                tx.execute(
-                    &format!("UPDATE {table} SET {column} = NULL WHERE {column} = ?1"),
-                    params![id],
-                )?;
-            }
-        }
+        tx.execute(
+            "DELETE FROM console_providers WHERE account_id = ?1",
+            params![id],
+        )?;
+        tx.execute(
+            "UPDATE project_providers SET account_id = NULL WHERE account_id = ?1",
+            params![id],
+        )?;
+        tx.execute(
+            "DELETE FROM project_providers
+             WHERE account_id IS NULL AND account_default = 0 AND model IS NULL AND effort IS NULL",
+            [],
+        )?;
         tx.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
         tx.commit()?;
         Ok(())
     }
 }
 
-/// Every account of every agent, oldest first.
+/// Every account of every registered agent, oldest first; an account of an agent no provider
+/// registers is kept in the table and left out.
 pub(super) fn read_accounts(conn: &Connection) -> Result<Vec<Account>> {
     let mut stmt =
         conn.prepare("SELECT id, agent, name, config_dir, share_default_config, share_default_config_incomplete, disabled FROM accounts ORDER BY created_at")?;
     let rows = stmt
         .query_map([], read_account)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows)
+    Ok(rows.into_iter().flatten().collect())
 }
 
 /// Turns the `accounts_agent_name_unique` index tripping into the protocol's own
@@ -251,22 +258,26 @@ fn account_write_error(err: rusqlite::Error, account: &Account) -> StoreError {
     err.into()
 }
 
-fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
-    Ok(Account {
+/// The account in the row, or `None` when its agent is no registered provider.
+fn read_account(row: &Row<'_>) -> rusqlite::Result<Option<Account>> {
+    let Some(agent) = agent_from_row(row, 1)? else {
+        return Ok(None);
+    };
+    Ok(Some(Account {
         id: row.get(0)?,
-        agent: enum_from_row(row, 1)?,
+        agent,
         name: row.get(2)?,
         config_dir: row.get(3)?,
         share_default_config: row.get(4)?,
         share_default_config_incomplete: row.get(5)?,
         disabled: row.get(6)?,
-    })
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{error_code, error_parts, Agent, ProjectAccount};
+    use crate::protocol::{error_code, error_parts, AgentId, ProjectAccount};
 
     use crate::store::test_support::*;
 
@@ -279,7 +290,7 @@ mod tests {
         store
             .insert_account(&account(
                 "claude-acct",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "/home/u/.claude-alt",
             ))
             .expect("account");
@@ -307,7 +318,7 @@ mod tests {
         store
             .insert_account(&account(
                 "claude-acct",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "/home/u/.claude-alt",
             ))
             .expect("account");
@@ -320,7 +331,7 @@ mod tests {
         store
             .insert_account(&account(
                 "claude-other",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "/home/u/.claude-other",
             ))
             .expect("account");
@@ -328,15 +339,15 @@ mod tests {
         untouched.id = "console-3".to_string();
         store.insert_console(&untouched).expect("insert");
         let mut referring = project(false);
-        referring.accounts.claude = named("claude-acct");
+        referring.accounts[AgentId::CLAUDE] = named("claude-acct");
         // Another agent's setting of the same project is not touched by a Claude account going.
-        referring.accounts.codex = ProjectAccount::Default;
+        referring.accounts[AgentId::CODEX] = ProjectAccount::Default;
         store.insert_project(&referring).expect("insert");
         // A project that pins the default account refers to no id, so it keeps saying so.
         let mut defaulting = project(false);
         defaulting.id = "project-2".to_string();
         defaulting.path = "/tmp/project-2".to_string();
-        defaulting.accounts.claude = ProjectAccount::Default;
+        defaulting.accounts[AgentId::CLAUDE] = ProjectAccount::Default;
         store.insert_project(&defaulting).expect("insert");
         let mut inheriting = project(false);
         inheriting.id = "project-3".to_string();
@@ -344,26 +355,25 @@ mod tests {
         store.insert_project(&inheriting).expect("insert");
 
         store.delete_account("claude-acct").expect("deleted");
-        let claude_account = |id: &str| store.get_project(id).unwrap().unwrap().accounts.claude;
+        let claude_account =
+            |id: &str| store.get_project(id).unwrap().unwrap().accounts[AgentId::CLAUDE].clone();
         assert_eq!(claude_account("project-1"), ProjectAccount::Inherit);
         assert_eq!(claude_account("project-2"), ProjectAccount::Default);
         assert_eq!(claude_account("project-3"), ProjectAccount::Inherit);
         assert_eq!(
-            store
-                .get_project("project-1")
-                .unwrap()
-                .unwrap()
-                .accounts
-                .codex,
+            store.get_project("project-1").unwrap().unwrap().accounts[AgentId::CODEX],
             ProjectAccount::Default
         );
         assert!(store.get_account("claude-acct").unwrap().is_none());
         for id in ["console-1", "console-2"] {
             let console = store.get_console(id).unwrap().unwrap();
-            assert_eq!(console.accounts.claude, None);
+            assert_eq!(console.accounts[AgentId::CLAUDE], None);
         }
         let untouched = store.get_console("console-3").unwrap().unwrap();
-        assert_eq!(untouched.accounts.claude.as_deref(), Some("claude-other"));
+        assert_eq!(
+            untouched.accounts[AgentId::CLAUDE].as_deref(),
+            Some("claude-other")
+        );
     }
 
     /// A removal that fails part-way leaves the references it had already cleared as they were.
@@ -374,7 +384,7 @@ mod tests {
         store
             .insert_account(&account(
                 "claude-acct",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "/home/u/.claude-alt",
             ))
             .expect("account");
@@ -391,7 +401,10 @@ mod tests {
 
         store.delete_account("claude-acct").expect_err("refused");
         let kept = store.get_console("console-1").unwrap().unwrap();
-        assert_eq!(kept.accounts.claude.as_deref(), Some("claude-acct"));
+        assert_eq!(
+            kept.accounts[AgentId::CLAUDE].as_deref(),
+            Some("claude-acct")
+        );
         assert!(store.get_account("claude-acct").unwrap().is_some());
     }
 
@@ -402,7 +415,7 @@ mod tests {
         let path = temp_db("account-round-trip");
         let store = Store::open(&path).expect("store");
         store
-            .insert_account(&account("acct-1", Agent::Codex, "/home/u/.codex-alt"))
+            .insert_account(&account("acct-1", AgentId::CODEX, "/home/u/.codex-alt"))
             .expect("account");
 
         let mut renamed = store.get_account("acct-1").unwrap().unwrap();
@@ -430,7 +443,7 @@ mod tests {
         let path = temp_db("account-sharing-repoint");
         let store = Store::open(&path).expect("store");
         store
-            .insert_account(&account("acct-1", Agent::Codex, "/home/u/.codex-alt"))
+            .insert_account(&account("acct-1", AgentId::CODEX, "/home/u/.codex-alt"))
             .expect("account");
         let start = SharingStart {
             stamp: "20261020T000000Z".to_string(),
@@ -510,7 +523,7 @@ mod tests {
         store
             .insert_account(&Account {
                 id: "work".to_string(),
-                agent: Agent::Claude,
+                agent: AgentId::CLAUDE,
                 name: "Work".to_string(),
                 config_dir: "/home/u/.claude-work".to_string(),
                 share_default_config: false,
@@ -522,9 +535,49 @@ mod tests {
         assert!(!store.set_account_disabled("work", true).unwrap());
         assert!(!store.set_account_disabled("nope", true).unwrap());
         assert!(store.get_account("work").unwrap().unwrap().disabled);
-        assert!(store.account_disabled(Agent::Claude, Some("work")).unwrap());
-        assert!(!store.account_disabled(Agent::Codex, Some("work")).unwrap());
+        assert!(store
+            .account_disabled(AgentId::CLAUDE, Some("work"))
+            .unwrap());
+        assert!(!store
+            .account_disabled(AgentId::CODEX, Some("work"))
+            .unwrap());
         assert!(store.set_account_disabled("work", false).unwrap());
-        assert!(!store.account_disabled(Agent::Claude, Some("work")).unwrap());
+        assert!(!store
+            .account_disabled(AgentId::CLAUDE, Some("work"))
+            .unwrap());
+    }
+
+    /// An account of an agent that is not registered stays in the table and is left out of every
+    /// load, and deleting an account clears it from the provider rows that name it.
+    #[test]
+    fn an_account_of_an_unregistered_agent_is_kept_and_left_out_of_a_load() {
+        let path = temp_db("account-unregistered-agent");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_account(&account("kept", AgentId::CLAUDE, "/home/u/.kept"))
+            .expect("account");
+        store
+            .lock()
+            .execute(
+                "INSERT INTO accounts (id, agent, name, config_dir, created_at)
+                 VALUES ('retired', 'retired', 'Retired', '/home/u/.retired', 0)",
+                [],
+            )
+            .unwrap();
+        assert!(store.get_account("retired").unwrap().is_none());
+        assert_eq!(
+            store
+                .list_accounts()
+                .unwrap()
+                .into_iter()
+                .map(|account| account.id)
+                .collect::<Vec<_>>(),
+            ["kept"]
+        );
+        let stored: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM accounts", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stored, 2);
     }
 }

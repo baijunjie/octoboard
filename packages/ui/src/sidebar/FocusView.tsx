@@ -628,7 +628,7 @@ const SessionCard = memo(function SessionCard({
   const rowRef = useRef<HTMLDivElement>(null);
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
   // only through the row's name, where it comes last; the account is already in its first part.
-  const { accounts, defaultNames, launch, modelLabel, name } = useSessionRowModel(session, [under ?? consoleOwner, under && consoleOwner], status);
+  const { accounts, defaultNames, launch, modelLabel, name, providers } = useSessionRowModel(session, [under ?? consoleOwner, under && consoleOwner], status);
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   // A console session's card shows its own colour; a project session's shows its console owner's.
   const badgeOwner = own ? session : consoleOwner;
@@ -658,7 +658,7 @@ const SessionCard = memo(function SessionCard({
         </FadeOverflow>
       </div>
       <RowIconLine
-        icon={<SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />}
+        icon={<SessionAgentIcon providers={providers} session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />}
         className="text-xs text-app-muted"
       >
         <FadeOverflow
@@ -691,7 +691,7 @@ function ArchivedRow({
   const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
-  const { accounts, defaultNames, launch, name } = useSessionRowModel(session, [], "archived");
+  const { accounts, defaultNames, launch, name, providers } = useSessionRowModel(session, [], "archived");
   return (
     <TreeRow
       ref={rowRef}
@@ -700,7 +700,7 @@ function ArchivedRow({
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
+      <SessionAgentIcon providers={providers} session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>

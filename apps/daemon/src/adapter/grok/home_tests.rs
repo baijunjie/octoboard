@@ -6,7 +6,7 @@ use super::tests::{plan_isolated, with_default_home};
 use super::*;
 use crate::adapter::tests::spec_fixture;
 use crate::adapter::HOOK_TIMEOUT_SECS;
-use crate::agents::layout::GROK_TRUST_STORE;
+use crate::providers::grok::GROK_TRUST_STORE;
 
 #[test]
 fn the_farm_links_the_users_home_but_owns_the_files_grok_writes_back_to() {
@@ -49,10 +49,17 @@ fn the_farms_trust_store_is_the_users_copied_without_the_project_added() {
         users
     );
     let carried = plan.carried_trust.expect("Grok's trust is carried");
-    assert_eq!(carried.session_store, farm.join(GROK_TRUST_STORE));
-    assert_eq!(carried.user_store, home.join(GROK_TRUST_STORE));
+    assert_eq!(carried.user_store(), home.join(GROK_TRUST_STORE));
+    // The entry Grok writes into the session's copy for the canonical working directory is the one
+    // carried into the user's store.
     let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
-    assert_eq!(carried.folder, canonical.to_string_lossy());
+    let entry = format!("\n[folders.\"{}\"]\ntrusted = true\n", canonical.display());
+    std::fs::write(farm.join(GROK_TRUST_STORE), format!("{users}{entry}")).expect("recorded");
+    carried.carry().expect("carried");
+    assert_eq!(
+        std::fs::read_to_string(home.join(GROK_TRUST_STORE)).expect("the user's store"),
+        format!("{users}{entry}")
+    );
 }
 
 #[test]

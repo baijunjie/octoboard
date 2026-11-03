@@ -34,7 +34,7 @@ use crate::messaging::owner_notices::{
 };
 use crate::messaging::texts::{takeover_prompt, NOTICE_PREFIX};
 use crate::protocol::{
-    error_code, notice_code, Agent, CodedError, Notice, Role, Session, SessionStatus,
+    error_code, notice_code, AgentId, CodedError, Notice, Role, Session, SessionStatus,
     TerminalAppearance,
 };
 use crate::session::term;
@@ -46,7 +46,7 @@ use crate::state::{AppState, OutboxHold};
 /// `effort` are as in [`OpenRequest`].
 pub struct Handoff {
     pub session: String,
-    pub agent: Agent,
+    pub agent: AgentId,
     pub account: Option<Option<String>>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
@@ -216,7 +216,7 @@ pub(crate) fn receiving_request(
     }
 }
 
-pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agent) -> Result<()> {
+pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: AgentId) -> Result<()> {
     let named = label(original);
     match original.status {
         SessionStatus::Archived => {
@@ -355,7 +355,7 @@ pub(super) async fn tell(
     asked_by: Option<&str>,
 ) {
     let receiving = &moved.receiving;
-    let tool = |agent: Agent, name: &str| qualified_tool_name(agent, name);
+    let tool = |agent: AgentId, name: &str| qualified_tool_name(agent, name);
     let owner = receiving
         .bound_to
         .as_deref()

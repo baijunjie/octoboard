@@ -1,11 +1,12 @@
 //! The context size an agent's own records show a session at: how much the main conversation's
 //! latest request carried, never a running total. Subagents and side calls do not count, and the
-//! size falls again after a compaction or a revert. This module holds each agent's knowledge of
-//! which record says it, in which field, and how the window limit and the share used come out;
-//! reading the records is the collector's business (`collector.rs`).
+//! size falls again after a compaction or a revert. Which record says it, in which field, and how
+//! the share used comes out is each provider's own knowledge, which folds a line into a [`Context`]
+//! through the calls here (`RecordStore::fold_line`, `RecordStore::used_percent`); reading the
+//! records is the collector's business (`collector.rs`).
 //!
 //! Claude Code's transcript records no window. Its status line input does, so Octoboard's injected
-//! status line reports it (`crate::cli::status_line`), and [`ReportedWindows`] holds the last
+//! status line reports it (`crate::adapter::StatusLine`), and [`ReportedWindows`] holds the last
 //! report of each stored session, which the collector applies on every pass.
 
 use std::collections::{HashMap, HashSet};
@@ -14,7 +15,8 @@ use std::sync::Mutex;
 
 use serde_json::Value;
 
-use crate::protocol::{Agent, SessionContext};
+use crate::protocol::SessionContext;
+use crate::records::RecordStore;
 
 /// A context size in tokens and the window limit beside it, where the record gives one.
 pub type Figure = (u64, Option<u64>);
@@ -25,13 +27,15 @@ pub struct Context {
     /// The size in tokens the records last gave: `None` before any, `Some(None)` after a
     /// compaction left it unknown until the next request.
     tokens: Option<Option<u64>>,
-    /// The context-window limit: with each figure for Codex, from the signals file for Grok, and
-    /// for Claude what its status line reported (`ReportedWindows`).
+    /// The context-window limit: with each figure where the record gives one, else from a source
+    /// beside it (a file the provider keeps, or what its status line reported, `ReportedWindows`).
     window: Option<u64>,
-    /// The size a Grok compaction began from, which a trailing line may still repeat.
+    /// The size a compaction began from, which a trailing line may still repeat
+    /// ([`Self::observe_total`]).
     stale: Option<u64>,
-    /// For a Codex head segment, which holds only the turns since the last revert, the figure its
-    /// base ends on, with the head it was read for: what shows until the head's first turn.
+    /// For a record that continues an earlier file and holds only what came after it picked up,
+    /// the figure the earlier file ends on, with the record it was read for: what shows until the
+    /// record's own first figure.
     base: Option<(PathBuf, Option<Figure>)>,
 }
 
@@ -59,115 +63,46 @@ impl Context {
         self.base = Some((head, figure));
     }
 
-    /// Takes the window limit a source beside the record gives: Grok's signals file, Claude's
-    /// status line.
+    /// Takes the window limit a source beside the record gives.
     pub fn set_window(&mut self, window: Option<u64>) {
         self.window = window;
     }
 
-    /// Takes a line of Claude's main transcript. A subagent's lines are marked as a sidechain,
-    /// `<synthetic>` is the client's own notice, and replies that were not metered, failed or
-    /// carried nothing in say nothing. A request's size is what it sent in: ordinary, cache-read
-    /// and cache-write input, without the reply (Claude's own status line counts it so); a message
-    /// that carries `iterations` is sized by the last of its own calls. A compaction leaves the
-    /// size unknown until the next request.
-    pub fn fold_claude(&mut self, line: &Value) {
-        let flag = |key: &str| line.get(key).and_then(Value::as_bool) == Some(true);
-        match line.get("type").and_then(Value::as_str) {
-            Some("system")
-                if line.get("subtype").and_then(Value::as_str) == Some("compact_boundary") =>
-            {
-                self.tokens = Some(None);
-            }
-            Some("assistant") => {
-                let Some(message) = line.get("message") else {
-                    return;
-                };
-                if flag("isSidechain")
-                    || flag("isUnmetered")
-                    || flag("isApiErrorMessage")
-                    || message.get("model").and_then(Value::as_str) == Some("<synthetic>")
-                {
-                    return;
-                }
-                let Some(usage) = message.get("usage") else {
-                    return;
-                };
-                let usage = usage
-                    .get("iterations")
-                    .and_then(Value::as_array)
-                    .and_then(|calls| {
-                        calls.iter().rev().find(|call| {
-                            matches!(
-                                call.get("type").and_then(Value::as_str),
-                                Some("message" | "fallback_message")
-                            )
-                        })
-                    })
-                    .unwrap_or(usage);
-                let tokens = [
-                    "input_tokens",
-                    "cache_creation_input_tokens",
-                    "cache_read_input_tokens",
-                ]
-                .iter()
-                .fold(0u64, |sum, key| {
-                    sum.saturating_add(number(usage, key).unwrap_or(0))
-                });
-                if tokens > 0 {
-                    self.tokens = Some(Some(tokens));
-                }
-            }
-            _ => {}
-        }
+    /// A compaction left the size unknown until the next request.
+    pub fn compacted(&mut self) {
+        self.tokens = Some(None);
     }
 
-    /// Takes a line of a Codex rollout: a `token_count` record gives the last request's total and
-    /// the window limit.
-    pub fn fold_codex(&mut self, line: &str) {
-        if let Some((tokens, window)) = codex_figure(line) {
-            self.tokens = Some(Some(tokens));
-            self.window = window;
-        }
+    /// The latest request carried `tokens`.
+    pub fn observe(&mut self, tokens: u64) {
+        self.tokens = Some(Some(tokens));
     }
 
-    /// Takes a line of a Grok session's updates log. Every streamed update carries the session's
-    /// running context size; a compaction reports the size it left, after which a trailing line may
-    /// still repeat the size it began from.
-    pub fn fold_grok(&mut self, line: &str) {
-        let compacted = line.contains("auto_compact_completed");
-        if !compacted && !line.contains("\"totalTokens\"") {
-            return;
-        }
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            return;
-        };
-        let Some(params) = value.get("params") else {
-            return;
-        };
-        let update = params.get("update");
-        if compacted
-            && update.and_then(|update| update.get("sessionUpdate")?.as_str())
-                == Some("auto_compact_completed")
-        {
-            if let Some(after) = update.and_then(|update| number(update, "tokens_after")) {
-                self.tokens = Some(Some(after));
-                self.stale = update.and_then(|update| number(update, "tokens_before"));
-            }
-        } else if let Some(total) = params
-            .get("_meta")
-            .and_then(|meta| number(meta, "totalTokens"))
-        {
-            if self.stale != Some(total) {
-                self.tokens = Some(Some(total));
-                self.stale = None;
-            }
+    /// The latest request carried `tokens`, in a record that gives the window limit beside it.
+    pub fn observe_with_window(&mut self, (tokens, window): Figure) {
+        self.tokens = Some(Some(tokens));
+        self.window = window;
+    }
+
+    /// A compaction left `after`, having begun from `before`, which a line after it may still
+    /// repeat ([`Self::observe_total`]).
+    pub fn compacted_to(&mut self, after: u64, before: Option<u64>) {
+        self.tokens = Some(Some(after));
+        self.stale = before;
+    }
+
+    /// The running total a line gives, skipped once when it repeats the size the last compaction
+    /// began from.
+    pub fn observe_total(&mut self, total: u64) {
+        if self.stale != Some(total) {
+            self.tokens = Some(Some(total));
+            self.stale = None;
         }
     }
 
     /// The context the records show, in the form the store takes it: `None` when they have shown
-    /// nothing, `Some(None)` when they say it is not known now.
-    pub fn context(&self, agent: Agent) -> Option<Option<SessionContext>> {
+    /// nothing, `Some(None)` when they say it is not known now. The share used is `store`'s own.
+    pub fn context(&self, store: &dyn RecordStore) -> Option<Option<SessionContext>> {
         let (tokens, window) = match self.tokens {
             Some(Some(tokens)) => (tokens, self.window),
             Some(None) => return Some(None),
@@ -176,7 +111,7 @@ impl Context {
         Some(Some(SessionContext {
             tokens,
             window,
-            used_percent: window.and_then(|window| used_percent(agent, tokens, window)),
+            used_percent: window.and_then(|window| store.used_percent(tokens, window)),
         }))
     }
 }
@@ -205,59 +140,50 @@ impl ReportedWindows {
     }
 }
 
-fn number(value: &Value, key: &str) -> Option<u64> {
+/// The unsigned number `value` holds at `key`.
+pub(crate) fn number(value: &Value, key: &str) -> Option<u64> {
     value.get(key)?.as_u64()
-}
-
-/// The size of the context the conversation's last request carried and the window limit, from a
-/// `token_count` record. One whose `info` is null reports nothing yet.
-pub fn codex_figure(line: &str) -> Option<Figure> {
-    if !line.contains("\"token_count\"") {
-        return None;
-    }
-    let value: Value = serde_json::from_str(line).ok()?;
-    if value.get("type")?.as_str()? != "event_msg" {
-        return None;
-    }
-    let payload = value.get("payload")?;
-    if payload.get("type")?.as_str()? != "token_count" {
-        return None;
-    }
-    let info = payload.get("info").filter(|info| !info.is_null())?;
-    Some((
-        number(info.get("last_token_usage")?, "total_tokens")?,
-        number(info, "model_context_window"),
-    ))
-}
-
-/// How much of the window is used, in whole percent, by the agent's own formula.
-fn used_percent(agent: Agent, tokens: u64, window: u64) -> Option<u8> {
-    /// What Codex sets aside of every window before it counts anything as used or left.
-    const CODEX_BASELINE: u64 = 12_000;
-    let percent = match agent {
-        // Codex's `/status` shows what is left of the window past the baseline, rounded; the
-        // share used is what that leaves of the whole. A window no larger than the baseline has
-        // nothing left.
-        Agent::Codex => match window.saturating_sub(CODEX_BASELINE) {
-            0 => 100,
-            usable => {
-                let used = tokens.saturating_sub(CODEX_BASELINE).min(usable);
-                let left = ((usable - used) as f64 / usable as f64 * 100.0).round() as u64;
-                100 - left
-            }
-        },
-        // Grok's `contextWindowUsage` rounds down.
-        Agent::Grok => (u128::from(tokens) * 100 / u128::from(window.max(1))).min(100) as u64,
-        // Claude Code's status line rounds to the nearest percent.
-        Agent::Claude => ((tokens as f64 / window.max(1) as f64 * 100.0).round() as u64).min(100),
-    };
-    u8::try_from(percent).ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::AgentId;
+    use crate::records::observed::Observed;
     use serde_json::json;
+
+    fn store(agent: AgentId) -> &'static dyn RecordStore {
+        crate::adapter::provider(agent).records()
+    }
+
+    fn used_percent(agent: AgentId, tokens: u64, window: u64) -> Option<u8> {
+        store(agent).used_percent(tokens, window)
+    }
+
+    fn codex_figure(line: &str) -> Option<Figure> {
+        crate::adapter::codex::records::figure(line)
+    }
+
+    /// Each provider's own reading of a line into the context.
+    trait Folds {
+        fn fold_claude(&mut self, line: &Value);
+        fn fold_codex(&mut self, line: &str);
+        fn fold_grok(&mut self, line: &str);
+    }
+
+    impl Folds for Context {
+        fn fold_claude(&mut self, line: &Value) {
+            crate::adapter::claude::records::fold_context(self, line);
+        }
+
+        fn fold_codex(&mut self, line: &str) {
+            store(AgentId::CODEX).fold_line(line, false, self, &mut Observed::default());
+        }
+
+        fn fold_grok(&mut self, line: &str) {
+            store(AgentId::GROK).fold_line(line, false, self, &mut Observed::default());
+        }
+    }
 
     fn claude(lines: &[Value]) -> Context {
         let mut context = Context::default();
@@ -276,9 +202,9 @@ mod tests {
         line
     }
 
-    fn tokens_of(context: &Context, agent: Agent) -> Option<Option<u64>> {
+    fn tokens_of(context: &Context, agent: AgentId) -> Option<Option<u64>> {
         context
-            .context(agent)
+            .context(store(agent))
             .map(|context| context.map(|context| context.tokens))
     }
 
@@ -290,7 +216,7 @@ mod tests {
         let mut sizes = Vec::new();
         for line in include_str!("../../testdata/usage_claude_2.1.296.jsonl").lines() {
             context.fold_claude(&serde_json::from_str(line).unwrap());
-            sizes.push(tokens_of(&context, Agent::Claude).unwrap().unwrap());
+            sizes.push(tokens_of(&context, AgentId::CLAUDE).unwrap().unwrap());
         }
         // Each request's input, cached input included and the reply left out.
         assert_eq!(sizes, [48_762, 48_762, 48_762, 52_051, 52_051]);
@@ -304,7 +230,7 @@ mod tests {
             grok.fold_grok(line);
         }
         // The compaction left 25,032; the stale line repeating 205,620 was skipped.
-        assert_eq!(tokens_of(&grok, Agent::Grok), Some(Some(25_500)));
+        assert_eq!(tokens_of(&grok, AgentId::GROK), Some(Some(25_500)));
     }
 
     #[test]
@@ -313,7 +239,7 @@ mod tests {
             "cache_creation_input_tokens":8,"output_tokens":10});
         let main = claude_line(json!({}), usage);
         assert_eq!(
-            tokens_of(&claude(std::slice::from_ref(&main)), Agent::Claude),
+            tokens_of(&claude(std::slice::from_ref(&main)), AgentId::CLAUDE),
             Some(Some(50))
         );
         // Later lines that are not the main conversation's own requests leave it as it was.
@@ -325,7 +251,7 @@ mod tests {
         ] {
             let later = claude_line(extra, big.clone());
             assert_eq!(
-                tokens_of(&claude(&[main.clone(), later]), Agent::Claude),
+                tokens_of(&claude(&[main.clone(), later]), AgentId::CLAUDE),
                 Some(Some(50))
             );
         }
@@ -335,13 +261,13 @@ mod tests {
             json!({"input_tokens":0,"cache_read_input_tokens":0,"output_tokens":5}),
         );
         assert_eq!(
-            tokens_of(&claude(&[main.clone(), synthetic, empty]), Agent::Claude),
+            tokens_of(&claude(&[main.clone(), synthetic, empty]), AgentId::CLAUDE),
             Some(Some(50))
         );
         // The last line wins, repeated or not.
         let later = claude_line(json!({}), json!({"input_tokens":70,"output_tokens":1}));
         assert_eq!(
-            tokens_of(&claude(&[main.clone(), main, later]), Agent::Claude),
+            tokens_of(&claude(&[main.clone(), main, later]), AgentId::CLAUDE),
             Some(Some(70))
         );
     }
@@ -353,12 +279,15 @@ mod tests {
             {"type":"advisor_message","input_tokens":5000},
             {"type":"fallback_message","input_tokens":20,"cache_creation_input_tokens":30}]});
         assert_eq!(
-            tokens_of(&claude(&[claude_line(json!({}), usage)]), Agent::Claude),
+            tokens_of(&claude(&[claude_line(json!({}), usage)]), AgentId::CLAUDE),
             Some(Some(50))
         );
         let unusable = json!({"input_tokens":7,"iterations":[{"type":"advisor_message"}]});
         assert_eq!(
-            tokens_of(&claude(&[claude_line(json!({}), unusable)]), Agent::Claude),
+            tokens_of(
+                &claude(&[claude_line(json!({}), unusable)]),
+                AgentId::CLAUDE
+            ),
             Some(Some(7))
         );
     }
@@ -370,15 +299,15 @@ mod tests {
             "compactMetadata":{"postTokens":123}});
         let next = claude_line(json!({}), json!({"input_tokens":9,"output_tokens":1}));
         let mut context = claude(&[request, boundary]);
-        assert_eq!(context.context(Agent::Claude), Some(None));
+        assert_eq!(context.context(store(AgentId::CLAUDE)), Some(None));
         context.fold_claude(&next);
-        let shown = context.context(Agent::Claude).unwrap().unwrap();
+        let shown = context.context(store(AgentId::CLAUDE)).unwrap().unwrap();
         assert_eq!(
             (shown.tokens, shown.window, shown.used_percent),
             (9, None, None)
         );
         context.forget();
-        assert_eq!(context.context(Agent::Claude), None);
+        assert_eq!(context.context(store(AgentId::CLAUDE)), None);
     }
 
     /// The window comes from beside the transcript, so a compaction leaves it for the next request,
@@ -388,27 +317,27 @@ mod tests {
         let request = claude_line(json!({}), json!({"input_tokens":1_000,"output_tokens":1}));
         let mut context = claude(std::slice::from_ref(&request));
         context.set_window(Some(200_000));
-        let shown = context.context(Agent::Claude).unwrap().unwrap();
+        let shown = context.context(store(AgentId::CLAUDE)).unwrap().unwrap();
         assert_eq!(
             (shown.tokens, shown.window, shown.used_percent),
             (1_000, Some(200_000), Some(1))
         );
         context.fold_claude(&json!({"type":"system","subtype":"compact_boundary"}));
-        assert_eq!(context.context(Agent::Claude), Some(None));
+        assert_eq!(context.context(store(AgentId::CLAUDE)), Some(None));
         context.fold_claude(&claude_line(
             json!({}),
             json!({"input_tokens":2_000,"cache_read_input_tokens":96_000,"output_tokens":1}),
         ));
-        let shown = context.context(Agent::Claude).unwrap().unwrap();
+        let shown = context.context(store(AgentId::CLAUDE)).unwrap().unwrap();
         assert_eq!(
             (shown.tokens, shown.window, shown.used_percent),
             (98_000, Some(200_000), Some(49))
         );
-        assert_eq!(used_percent(Agent::Claude, 0, 200_000), Some(0));
-        assert_eq!(used_percent(Agent::Claude, 999, 200_000), Some(0));
-        assert_eq!(used_percent(Agent::Claude, 1_001, 200_000), Some(1));
-        assert_eq!(used_percent(Agent::Claude, 199_000, 200_000), Some(100));
-        assert_eq!(used_percent(Agent::Claude, 900_000, 200_000), Some(100));
+        assert_eq!(used_percent(AgentId::CLAUDE, 0, 200_000), Some(0));
+        assert_eq!(used_percent(AgentId::CLAUDE, 999, 200_000), Some(0));
+        assert_eq!(used_percent(AgentId::CLAUDE, 1_001, 200_000), Some(1));
+        assert_eq!(used_percent(AgentId::CLAUDE, 199_000, 200_000), Some(100));
+        assert_eq!(used_percent(AgentId::CLAUDE, 900_000, 200_000), Some(100));
     }
 
     #[test]
@@ -437,17 +366,17 @@ mod tests {
         // A record with no info yet leaves the figure as it was.
         context.fold_codex(&codex_count(Value::Null));
         // Codex's `/status` reads 98% left of a 475,000 window at 18,999 tokens.
-        let shown = context.context(Agent::Codex).unwrap().unwrap();
+        let shown = context.context(store(AgentId::CODEX)).unwrap().unwrap();
         assert_eq!(shown.tokens, 18_999);
         assert_eq!(shown.window, Some(475_000));
         assert_eq!(shown.used_percent, Some(2));
-        assert_eq!(used_percent(Agent::Codex, 12_000, 475_000), Some(0));
-        assert_eq!(used_percent(Agent::Codex, 0, 475_000), Some(0));
-        assert_eq!(used_percent(Agent::Codex, 475_000, 475_000), Some(100));
-        assert_eq!(used_percent(Agent::Codex, 900_000, 475_000), Some(100));
+        assert_eq!(used_percent(AgentId::CODEX, 12_000, 475_000), Some(0));
+        assert_eq!(used_percent(AgentId::CODEX, 0, 475_000), Some(0));
+        assert_eq!(used_percent(AgentId::CODEX, 475_000, 475_000), Some(100));
+        assert_eq!(used_percent(AgentId::CODEX, 900_000, 475_000), Some(100));
         // A window no larger than the baseline has nothing left, which Codex shows as 0% left.
-        assert_eq!(used_percent(Agent::Codex, 5, 12_000), Some(100));
-        assert_eq!(used_percent(Agent::Codex, 5, 8_000), Some(100));
+        assert_eq!(used_percent(AgentId::CODEX, 5, 12_000), Some(100));
+        assert_eq!(used_percent(AgentId::CODEX, 5, 8_000), Some(100));
     }
 
     #[test]
@@ -470,25 +399,25 @@ mod tests {
         for line in [chunk(100), turn_done, chunk(200)] {
             context.fold_grok(&line);
         }
-        assert_eq!(tokens_of(&context, Agent::Grok), Some(Some(200)));
+        assert_eq!(tokens_of(&context, AgentId::GROK), Some(Some(200)));
         context.fold_grok(&compacted(200, 30));
         context.fold_grok(&chunk(200));
         assert_eq!(
-            tokens_of(&context, Agent::Grok),
+            tokens_of(&context, AgentId::GROK),
             Some(Some(30)),
             "the stale line is skipped"
         );
         context.fold_grok(&chunk(35));
-        assert_eq!(tokens_of(&context, Agent::Grok), Some(Some(35)));
+        assert_eq!(tokens_of(&context, AgentId::GROK), Some(Some(35)));
         context.fold_grok(&chunk(200));
         assert_eq!(
-            tokens_of(&context, Agent::Grok),
+            tokens_of(&context, AgentId::GROK),
             Some(Some(200)),
             "the stale value counts only once"
         );
         context.fold_grok(&chunk(25_500));
         context.set_window(Some(256_000));
-        let shown = context.context(Agent::Grok).unwrap().unwrap();
+        let shown = context.context(store(AgentId::GROK)).unwrap().unwrap();
         assert_eq!((shown.window, shown.used_percent), (Some(256_000), Some(9)));
     }
 }

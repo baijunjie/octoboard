@@ -128,10 +128,10 @@ async fn each_project_is_offered_the_choices_its_state_allows_and_the_first_is_t
 async fn inspecting_reports_the_fallbacks_and_creates_nothing() {
     let (state, _dir) = app_state("import-inspect-readonly");
     let mut hub = console("Hub", vec![project("p", "/nowhere/p")]);
-    hub.accounts.claude = Some(AccountName {
+    hub.accounts[AgentId::CLAUDE] = Some(AccountName {
         name: "Missing".to_string(),
     });
-    hub.projects[0].accounts.codex = ProjectAccountRef::Account {
+    hub.projects[0].accounts[AgentId::CODEX] = ProjectAccountRef::Account {
         name: "Gone".to_string(),
     };
 

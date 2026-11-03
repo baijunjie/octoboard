@@ -5,7 +5,7 @@ use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::lifecycle::archive_record;
 use crate::coordinator::test_support::{shell_env, status_of};
 use crate::protocol::{
-    error_code, Agent, Event, ModelChangeOutcome, RequestBody, Session, SessionStatus,
+    error_code, AgentId, Event, ModelChangeOutcome, RequestBody, Session, SessionStatus,
 };
 use crate::session::term;
 use crate::test_support::code_of;
@@ -24,7 +24,7 @@ async fn a_session_shows_as_starting_while_a_model_change_restarts_it() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-shown");
     state
         .store
-        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let mut events = state.subscribe();
     let shown = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
@@ -55,7 +55,7 @@ async fn an_owner_cannot_change_the_model_of_a_session_showing_its_background_ag
     let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-view");
     state
         .store
-        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let live = idle_stand_in("s");
     state.register_live(live.clone());
@@ -110,7 +110,7 @@ async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() 
             .store
             .insert_session(&Session {
                 model: Some(Some("sonnet".to_string())),
-                ..project_session(id, Agent::Claude, status)
+                ..project_session(id, AgentId::CLAUDE, status)
             })
             .unwrap();
     }
@@ -165,12 +165,12 @@ async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() 
 #[tokio::test]
 async fn a_set_session_model_request_is_answered_with_its_outcome() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-reply");
-    crate::test_support::offer_models(&state, Agent::Claude, &[("opus", &["high"])]);
+    crate::test_support::offer_models(&state, AgentId::CLAUDE, &[("opus", &["high"])]);
     state
         .store
         .insert_session(&project_session(
             "s",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Interrupted,
         ))
         .unwrap();
@@ -202,13 +202,13 @@ async fn a_set_session_model_request_is_answered_with_its_outcome() {
 #[tokio::test]
 async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
     let (state, dir) = console_with_project_and_accounts("model-unlisted-noop");
-    crate::test_support::offer_models(&state, Agent::Claude, &[("sonnet", &["low"])]);
+    crate::test_support::offer_models(&state, AgentId::CLAUDE, &[("sonnet", &["low"])]);
     state
         .store
         .insert_session(&Session {
             model: Some(Some("retired-model".to_string())),
             effort: Some(Some("retired-effort".to_string())),
-            ..project_session("s", Agent::Claude, SessionStatus::Interrupted)
+            ..project_session("s", AgentId::CLAUDE, SessionStatus::Interrupted)
         })
         .unwrap();
     let changed = set_session_model_with(
@@ -252,12 +252,12 @@ async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
 #[tokio::test]
 async fn an_interrupted_session_archived_during_model_validation_is_not_changed() {
     let (state, dir) = console_with_project_and_accounts("model-late-archive");
-    crate::test_support::offer_models(&state, Agent::Claude, &[("sonnet", &["low"])]);
+    crate::test_support::offer_models(&state, AgentId::CLAUDE, &[("sonnet", &["low"])]);
     state
         .store
         .insert_session(&project_session(
             "s",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Interrupted,
         ))
         .unwrap();
@@ -294,7 +294,7 @@ async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had()
         .store
         .insert_session(&Session {
             effort: Some(Some("high".to_string())),
-            ..project_session("s", Agent::Claude, SessionStatus::Idle)
+            ..project_session("s", AgentId::CLAUDE, SessionStatus::Idle)
         })
         .unwrap();
     let live = idle_stand_in("s");
@@ -345,7 +345,7 @@ async fn a_model_change_carries_what_the_process_started_over_to_the_relaunch() 
     let (state, dir) = console_with_project_and_accounts("coordinator-model-carry-over");
     state
         .store
-        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let (first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
     let _guard = crate::test_support::KillOnDrop(vec![child]);
@@ -421,7 +421,7 @@ async fn a_model_change_tells_the_session_which_trees_it_ended() {
             .insert_session(&Session {
                 has_conversation: true,
                 agent_session_id: Some("a0000000-0000-4000-8000-000000000001".to_string()),
-                ..project_session("s", Agent::Claude, SessionStatus::Idle)
+                ..project_session("s", AgentId::CLAUDE, SessionStatus::Idle)
             })
             .unwrap();
         let (_first, survivor, doomed) =
@@ -495,7 +495,7 @@ async fn a_model_change_that_fails_keeps_what_the_process_started_under_its_proj
     let (state, dir) = console_with_project_and_accounts("coordinator-model-carry-failed");
     state
         .store
-        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
     let _guard = crate::test_support::KillOnDrop(vec![child]);

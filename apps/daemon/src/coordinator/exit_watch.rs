@@ -124,7 +124,7 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
 #[cfg(test)]
 mod tests {
     use super::watch_exit;
-    use crate::protocol::{Agent, SessionStatus};
+    use crate::protocol::{AgentId, SessionStatus};
     use crate::session::spawn_reader_thread;
     use crate::state::test_support::insert_record;
     use crate::state::AppState;
@@ -137,7 +137,13 @@ mod tests {
     async fn a_process_that_ends_leaves_its_last_output_behind() {
         let (state, dir) = app_state("exit-watch-output-kept-on-exit");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "printf 'last words'; sleep 0.2");
+        let live = fake_live_session(
+            "s",
+            AgentId::CLAUDE,
+            80,
+            24,
+            "printf 'last words'; sleep 0.2",
+        );
         spawn_reader_thread(live.clone(), 8 * 1024);
         state.register_live(live.clone());
         watch_exit(&state, live.clone());
@@ -153,7 +159,7 @@ mod tests {
     async fn a_session_deleted_while_exiting_leaves_no_output_behind() {
         let (state, dir) = app_state("exit-watch-output-deleted-while-exiting");
         insert_record(&state, &dir, "s", SessionStatus::Archived);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "printf 'gone'; sleep 0.2");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "printf 'gone'; sleep 0.2");
         spawn_reader_thread(live.clone(), 8 * 1024);
         state.register_live(live.clone());
         assert!(state.delete_if_archived("s").unwrap());
@@ -170,7 +176,7 @@ mod tests {
     async fn an_exit_under_a_request_hand_over_an_idle_agent_leaves_the_session_unpaused() {
         let (state, dir) = app_state("exit-watch-request-hand");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 0.2");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 0.2");
         state.register_live(live.clone());
         state.raise_request_hand("s").unwrap();
         watch_exit(&state, live.clone());
@@ -190,7 +196,7 @@ mod tests {
     async fn a_stop_still_being_applied_when_the_process_exits_decides_how_the_turn_ended() {
         let (state, dir) = app_state("exit-watch-stop-in-flight");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "true");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "true");
         state.register_live(live.clone());
         // Queued as the hook route queues it, with its application held back.
         let stop = bytes::Bytes::from_static(br#"{"hook_event_name": "Stop"}"#);

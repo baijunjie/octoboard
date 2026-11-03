@@ -815,7 +815,7 @@ mod tests {
     fn hanging_up_stops_the_reader_of_a_process_still_running() {
         let live = crate::test_support::fake_live_session(
             "hang-up",
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             80,
             24,
             "trap '' HUP; echo ready; exec sleep 30",

@@ -7,8 +7,8 @@ use anyhow::Result;
 
 use crate::adapter::files::{read_regular_text, SMALL_FILE_LIMIT};
 use crate::adapter::LaunchSpec;
-use crate::agents::layout;
-use crate::protocol::{error_code, CodedError};
+use crate::protocol::{Code, CodedError};
+use crate::providers::grok;
 use crate::records::line_file::JSON_FILE_LIMIT;
 
 /// One sandbox profile in effect, and where it is set.
@@ -29,7 +29,7 @@ pub(super) fn require_unsandboxed(
         return Ok(());
     };
     Err(CodedError::raised(
-        error_code::GROK_SANDBOX_UNSUPPORTED,
+        Code::of_provider(grok::SANDBOX_UNSUPPORTED),
         format!(
             "Octoboard's per-session Grok home is incompatible with Grok's sandbox (profile `{}`, \
              set by {}): to launch this session through Octoboard, turn the sandbox off where it \
@@ -88,7 +88,7 @@ pub(super) fn sandbox_setting(
         return on(source, profile);
     }
     [
-        (source_home, layout::GROK_CONFIG_FILE),
+        (source_home, grok::GROK_CONFIG_FILE),
         (system_dir, "managed_config.toml"),
     ]
     .into_iter()
@@ -114,11 +114,11 @@ pub(super) fn saved_sandbox_profile(source_home: &Path, id: &str) -> Option<(Str
     if !crate::records::plausible_id(id) {
         return None;
     }
-    for entry in std::fs::read_dir(source_home.join(layout::GROK_RECORDS_DIR))
+    for entry in std::fs::read_dir(source_home.join(grok::GROK_RECORDS_DIR))
         .ok()?
         .flatten()
     {
-        let summary = entry.path().join(id).join(layout::GROK_TITLE_SUMMARY);
+        let summary = entry.path().join(id).join(grok::GROK_TITLE_SUMMARY);
         if !std::fs::symlink_metadata(&summary).is_ok_and(|meta| meta.is_file()) {
             continue;
         }

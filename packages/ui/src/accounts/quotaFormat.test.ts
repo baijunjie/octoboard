@@ -4,13 +4,15 @@ import { isolate } from "../i18n/isolate";
 import { translatorFor, type Translate } from "../i18n/catalog";
 import type { QuotaWindow } from "../protocol";
 import type { AccountQuota } from "../protocol";
-import { nextResetCredit, expiryLine, exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, resetCreditsSummary, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { TEST_PROVIDERS } from "../test/testProviders";
+import { nextResetCredit, expiryLine, exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaNaming, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, resetCreditsSummary, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
 
 const t: Translate = translatorFor("en");
 const MINUTE = 60_000;
 const NOW = 1_000_000_000;
-const claude = { agent: "claude", windows: [] } as const;
-const codex = { agent: "codex", windows: [] } as const;
+const named = (agent: "claude" | "codex", windows: QuotaWindow[] = []) => quotaNaming({ agent, windows }, TEST_PROVIDERS);
+const claude = named("claude");
+const codex = named("codex");
 
 const window = (patch: Partial<QuotaWindow> = {}): QuotaWindow => ({
   kind: "session",
@@ -65,11 +67,11 @@ describe("naming a window as the agent's own interface does", () => {
   });
 
   it("names Claude's weekly window for all models only beside a model's own weekly window", () => {
-    const both = { agent: "claude", windows: [weekly, model] } as const;
+    const both = named("claude", [weekly, model]);
     expect(quotaWindowLabel(t, both, weekly)).toBe("Weekly · all models");
     expect(quotaWindowPhrase(t, both, weekly)).toBe("weekly limit for all models");
-    expect(quotaWindowLabel(t, { agent: "claude", windows: [weekly] }, weekly)).toBe("Weekly");
-    expect(quotaWindowLabel(t, { agent: "codex", windows: [weekly, model] }, weekly)).toBe("Weekly");
+    expect(quotaWindowLabel(t, named("claude", [weekly]), weekly)).toBe("Weekly");
+    expect(quotaWindowLabel(t, named("codex", [weekly, model]), weekly)).toBe("Weekly");
   });
 });
 
@@ -97,12 +99,17 @@ it("has no countdown for a window that gives no reset time", () => {
 it.each([
   ["max", "Max"],
   ["plus", "Plus"],
-  ["self_serve_business_prolite", "Business Pro Lite"],
+  ["self_serve_business_prolite", "Self Serve Business Prolite"],
   ["SuperGrok", "SuperGrok"],
   ["pro_lite", "Pro Lite"],
   ["team-plan", "Team Plan"],
 ])("displays the plan %s as %s", (plan, shown) => {
-  expect(planLabel(plan)).toBe(shown);
+  expect(planLabel("claude", plan)).toBe(shown);
+});
+
+it("shows a plan by the name its provider's module gives it", () => {
+  expect(planLabel("codex", "self_serve_business_prolite")).toBe("Business Pro Lite");
+  expect(planLabel("codex", "constructor")).toBe("Constructor");
 });
 
 it.each([
@@ -207,18 +214,18 @@ describe("the compact usage bar", () => {
   const weekly = window({ kind: "weekly", used_percent: 60 });
 
   it("draws the 5-hour window with the weekly one beneath it", () => {
-    expect(usageBarWindows({ ...codex, windows: [weekly, session] })).toEqual({ main: session, thin: weekly, naming: { ...codex, windows: [weekly, session] } });
+    expect(usageBarWindows(named("codex", [weekly, session]))).toEqual({ main: session, thin: weekly, naming: named("codex", [weekly, session]) });
   });
 
   it("draws a 5-hour window alone when there is no weekly one", () => {
-    expect(usageBarWindows({ ...codex, windows: [session] })).toEqual({ main: session, thin: undefined, naming: { ...codex, windows: [session] } });
+    expect(usageBarWindows(named("codex", [session]))).toEqual({ main: session, thin: undefined, naming: named("codex", [session]) });
   });
 
   it("draws the one primary window of an account without a 5-hour one, never a model limit", () => {
     const credits = window({ kind: "credit_period" });
     const windows = [window({ kind: "weekly_model", label: "Fable" }), credits];
-    expect(usageBarWindows({ ...codex, windows })).toEqual({ main: credits, naming: { ...codex, windows } });
-    expect(usageBarWindows({ ...codex, windows: [window({ kind: "weekly_model", label: "Fable" })] })).toBeUndefined();
+    expect(usageBarWindows(named("codex", windows))).toEqual({ main: credits, naming: named("codex", windows) });
+    expect(usageBarWindows(named("codex", [window({ kind: "weekly_model", label: "Fable" })]))).toBeUndefined();
   });
 
   it("states both windows in words, or the one", () => {

@@ -12,7 +12,7 @@ use crate::mcp::lookup::{
 use crate::messaging::delivery::{self, Delivery, SentBy, WhenBlocked};
 use crate::messaging::reporting::{self, ReportStatus};
 use crate::messaging::sharing::{self, OwnerCopy};
-use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 
@@ -35,7 +35,7 @@ pub(in crate::mcp) async fn instruct_session(
 /// A refusal for a session with no process, said with what the caller can do about it: the
 /// session is the caller's, so `resume_session` relaunches it with the message. The code and the
 /// params stay the refusal's own. `caller` is the agent of the session asking.
-fn point_to_resume(err: anyhow::Error, caller: Agent, target: &Session) -> anyhow::Error {
+fn point_to_resume(err: anyhow::Error, caller: AgentId, target: &Session) -> anyhow::Error {
     match err.downcast_ref::<CodedError>() {
         Some(coded)
             if coded.code == error_code::SESSION_NOT_RUNNING && target.status.has_no_process() =>

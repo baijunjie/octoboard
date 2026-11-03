@@ -5,8 +5,9 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { currentLanguage, setLanguage, t } from "../i18n/language";
 import type { QuotaWindow } from "../protocol";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { quotaUsedUpMessage, QuotaWindowName } from "./quotaCopy";
-import { quotaUsedUpSentence, quotaWindowLabel } from "../accounts/quotaFormat";
+import { quotaNaming, quotaUsedUpSentence, quotaWindowLabel } from "../accounts/quotaFormat";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,7 +20,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps the rich used-up sentence the p
   const name = "العمل Work/中文";
   for (const kind of ["session", "weekly", "credit_period", "weekly_model"] as const) {
     const window: QuotaWindow = { kind, label: kind === "weekly_model" ? "model/中文" : null, used_percent: 100, resets_at: 7200000, window_minutes: null };
-    const naming = { agent: "claude" as const, windows: [window] };
+    const naming = quotaNaming({ agent: "claude", windows: [window] }, TEST_PROVIDERS);
     act(() => root.render(<p>{quotaUsedUpMessage(t, naming, name, window, 0)}</p>));
     const bare = (text: string) => text.replace(/[\u2068\u2069]/g, "");
     expect(container.textContent).toBe(bare(quotaUsedUpSentence(t, naming, name, window, 0)));

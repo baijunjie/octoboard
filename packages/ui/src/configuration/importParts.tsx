@@ -1,10 +1,11 @@
 import { Info, TriangleAlert, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
-import { AGENT_LABEL } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import { DetailsButton } from "../components/alerts/DetailsButton";
 import { InlineReference } from "../i18n/InlineReference";
 import { TILDE_PARAMS } from "../components/text/literalParams";
+import { AgentNameList } from "../components/text/AgentNameList";
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { StatusMark } from "../components/status/StatusMark";
 import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
@@ -12,13 +13,14 @@ import { useSubmitValidation } from "../components/dialog/dialogHooks";
 import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { TextInput } from "../components/form/TextInput";
 import { isolate } from "../i18n/isolate";
-import { joinNodes } from "../i18n/joinPhrases";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { AccountFallback, Agent, ImportFailure } from "../protocol";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useFailureNode } from "./failureText";
 import { type DirectoryProblem } from "./importPlan";
 import type { SettingValue } from "./importValues";
+import { useProviders } from "../store";
+import { ProviderName } from "../components/text/ProviderName";
 
 /**
  * The look of one card of the import dialog: a console's projects, an agent's accounts, the applied or applicable
@@ -156,10 +158,11 @@ export function FieldList({ children }: { children: React.ReactNode }): React.Re
   return <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">{children}</dl>;
 }
 
-/** The agents of a list as references in a sentence, joined as the language joins a list. */
-export function AgentList({ agents }: { agents: Agent[] }): React.ReactNode {
-  const language = useCurrentLanguage();
-  return joinNodes(language, agents.map((agent) => AGENT_LABEL[agent]), (label, key) => <InlineReference key={key} dir="auto" wrap>{label}</InlineReference>);
+/** The sentence `lead` introducing agents, and the agents under it as a list, one agent to an item. */
+export function AgentList({ lead, agents }: { lead: React.ReactNode; agents: Agent[] }): React.ReactElement {
+  const t = useT();
+  const providers = useProviders();
+  return <p className="text-sm"><AgentNameList lead={lead} labels={agents.map((agent) => providerLabel(t, providers, agent))} /></p>;
 }
 
 /**
@@ -238,7 +241,7 @@ export function FallbackLines({ fallbacks }: { fallbacks: AccountFallback[] }): 
         <p key={`${fallback.agent}:${fallback.name}`} dir="auto">
           <Message
             id="configuration.import.fallback"
-            params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference> }}
+            params={{ agent: <ProviderName agent={fallback.agent} />, name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference> }}
           />
         </p>
       ))}

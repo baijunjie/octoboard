@@ -160,10 +160,12 @@ pub(super) fn still_waiting_after_claim(live: &LiveSession) -> bool {
 pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
     let agent = live.agent;
     let trust = &live.trust;
-    // Every Grok launch says where its trust record is carried (`crate::adapter::grok`).
-    let Some(carried) = trust.carried.as_ref() else {
+    // Every launch of a provider whose trust is per session says where its trust record is
+    // carried (`crate::adapter::LaunchPlan::carried_trust`).
+    let Some(carried) = trust.carried.as_deref() else {
         return Err(anyhow!(
-            "this Grok Build session has nowhere to carry its trust record to"
+            "this {} session has nowhere to carry its trust record to",
+            agent.label()
         ));
     };
     let writes = trust.writes_at_sighting.load(Ordering::Acquire);
@@ -187,7 +189,7 @@ pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
     // outcome is waited for in full, so that the press reports what really happened.
     let mut outcome = trust.carry_outcome(CARRY_WAIT);
     if outcome.is_none() && trust.hook_seen.load(Ordering::Acquire) {
-        outcome = trust.carry_outcome(CARRY_LONGEST);
+        outcome = trust.carry_outcome(carried.longest());
     }
     // Anything handed over in the meantime is still this press's; from here on, a hook reports
     // its own outcome.
@@ -205,7 +207,7 @@ pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
     }
 }
 
-pub(super) fn screen_gone(agent: Agent) -> anyhow::Error {
+pub(super) fn screen_gone(agent: AgentId) -> anyhow::Error {
     answer_failed(
         agent,
         trust_reason::SCREEN_GONE,
@@ -214,7 +216,7 @@ pub(super) fn screen_gone(agent: Agent) -> anyhow::Error {
     )
 }
 
-pub(super) fn cursor_not_at_start(agent: Agent) -> anyhow::Error {
+pub(super) fn cursor_not_at_start(agent: AgentId) -> anyhow::Error {
     answer_failed(
         agent,
         trust_reason::CURSOR_NOT_AT_START,
@@ -223,7 +225,7 @@ pub(super) fn cursor_not_at_start(agent: Agent) -> anyhow::Error {
     )
 }
 
-pub(super) fn not_settled(agent: Agent) -> anyhow::Error {
+pub(super) fn not_settled(agent: AgentId) -> anyhow::Error {
     answer_failed(
         agent,
         trust_reason::TERMINAL_NOT_SETTLED,
@@ -232,7 +234,7 @@ pub(super) fn not_settled(agent: Agent) -> anyhow::Error {
     )
 }
 
-pub(super) fn cursor_moved_away(agent: Agent) -> anyhow::Error {
+pub(super) fn cursor_moved_away(agent: AgentId) -> anyhow::Error {
     answer_failed(
         agent,
         trust_reason::CURSOR_MOVED_AWAY,
@@ -241,7 +243,7 @@ pub(super) fn cursor_moved_away(agent: Agent) -> anyhow::Error {
     )
 }
 
-pub(super) fn not_dismissed(agent: Agent) -> anyhow::Error {
+pub(super) fn not_dismissed(agent: AgentId) -> anyhow::Error {
     answer_failed(
         agent,
         trust_reason::SCREEN_NOT_DISMISSED,

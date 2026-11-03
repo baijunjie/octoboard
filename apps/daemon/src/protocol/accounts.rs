@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 
-use super::agents::Agent;
+use super::agents::AgentId;
 use super::codes::Code;
 use super::errors::{params, Params};
 use super::fields::is_zero;
@@ -83,7 +83,7 @@ pub enum LoginStatus {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountLogin {
-    pub agent: Agent,
+    pub agent: AgentId,
     /// The account's id; `None` for the agent's default account.
     pub account: Option<String>,
     pub status: LoginStatus,
@@ -289,7 +289,7 @@ impl LoginFailure {
 mod tests {
     use crate::protocol::{
         AccountInUse, AccountLogin, AccountSharing, AccountTrashOutcome, AccountTrashSharing,
-        Agent, Event, LoginStatus, Request, RequestBody, ResetCreditOutcome, SharingCause,
+        AgentId, Event, LoginStatus, Request, RequestBody, ResetCreditOutcome, SharingCause,
         SharingFailure, SharingPhase, SharingProgress,
     };
 
@@ -352,7 +352,7 @@ mod tests {
         assert!(matches!(
             request.body,
             RequestBody::StartAccountLogin {
-                agent: Agent::Grok,
+                agent: AgentId::GROK,
                 account: None
             }
         ));
@@ -363,15 +363,33 @@ mod tests {
         assert!(matches!(
             request.body,
             RequestBody::CancelAccountLogin {
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 account: Some(_)
             }
         ));
+        assert!(
+            serde_json::from_str::<Request>(r#"{"type":"use_reset_credit","id":"r"}"#).is_err()
+        );
         let request: Request =
-            serde_json::from_str(r#"{"type":"use_codex_reset_credit","id":"r"}"#).unwrap();
+            serde_json::from_str(r#"{"type":"use_reset_credit","id":"r","agent":"codex"}"#)
+                .unwrap();
         assert!(matches!(
             request.body,
-            RequestBody::UseCodexResetCredit { account: None }
+            RequestBody::UseResetCredit {
+                agent: AgentId::CODEX,
+                account: None
+            }
+        ));
+        let request: Request = serde_json::from_str(
+            r#"{"type":"use_reset_credit","id":"r","agent":"codex","account":"a"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::UseResetCredit {
+                agent: AgentId::CODEX,
+                account: Some(_)
+            }
         ));
         let event = serde_json::to_value(Event::ResetCreditUsed {
             id: Some("r".to_string()),
@@ -385,7 +403,7 @@ mod tests {
         );
         let event = serde_json::to_value(Event::AccountLoginUpdated {
             login: AccountLogin {
-                agent: Agent::Grok,
+                agent: AgentId::GROK,
                 account: None,
                 status: LoginStatus::Waiting,
                 authorization_url: Some("https://accounts.x.ai/oauth2/device".to_string()),

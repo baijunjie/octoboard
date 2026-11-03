@@ -2,38 +2,26 @@ import { ActionableError } from "../errors/actionableError";
 import { Checkbox, Description, Label } from "@heroui/react";
 import React, { useId, useState } from "react";
 
-import { AGENT_LABEL } from "../agents/agents";
+import { ProviderMessage } from "../agents/ProviderMessage";
+import { providerMessageKey } from "../agents/providers";
 import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
 import { raiseError } from "../components/alerts/raiseError";
 import { InlineReference } from "../i18n/InlineReference";
 import { CodedError } from "../errors/codedError";
 import { Message, useT } from "../i18n/react";
-import { type Agent } from "../protocol";
 import { CODE, TRUST_REFUSED_CODES } from "../errors/codes";
 import { abbreviateHome } from "../format/pathDisplay";
-import { useDaemon, useDaemonStore, type TrustPrompt } from "../store";
+import { useDaemon, useDaemonStore, type TrustPrompt, useProviders } from "../store";
+import { ProviderName } from "../components/text/ProviderName";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
 
 function Path({ children }: { children: string }): React.ReactElement {
   return <InlineReference monospace wrap>{children}</InlineReference>;
 }
 
-/** What trusting lets the asking agent do with the project's own configuration: true for that agent
- * alone, since each one's trust gates something different. */
-function Caution({ agent }: { agent: Agent }): React.ReactElement {
-  switch (agent) {
-    case "claude":
-      return <Message id="dialog.trust.caution.claude" params={{ file: <Path>.claude/settings.json</Path> }} />;
-    case "codex":
-      return <Message id="dialog.trust.caution.codex" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />;
-    case "grok":
-      return <Message id="dialog.trust.caution.grok" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />;
-  }
-}
-
 /** What the trust dialog says: which agent asks, the question with the project's path, what
  * agreeing does (the agent records its own trust, and the permission Octoboard records is shared by
- * every agent), for Codex that its record covers the whole repository, and the caution, in plain text like the rest.
+ * every agent), where the provider says so how far its record reaches, and the caution, in plain text like the rest.
  * The folder-wide choice is the checkbox under all of it (`TrustDirCheckbox`). */
 function TrustPromptMessage({
   prompt,
@@ -45,7 +33,8 @@ function TrustPromptMessage({
   // Shown as Settings lists trusted folders, with the home directory as `~`, so the folder named
   // here reads the same as the row it adds there.
   const home = useDaemonStore((s) => s.homeDir);
-  const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[prompt.agent]}</InlineReference>;
+  const providers = useProviders();
+  const agent = <ProviderName agent={prompt.agent} />;
   return (
     <>
       <p>
@@ -54,8 +43,8 @@ function TrustPromptMessage({
           : <Message id="dialog.trust.question" params={{ agent, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />}
       </p>
       <p><Message id="dialog.trust.behavior" params={{ agent }} /></p>
-      {prompt.agent === "codex" && <p><Message id="dialog.trust.codexRoot" params={{ agent }} /></p>}
-      <p><Caution agent={prompt.agent} /></p>
+      {providerMessageKey(prompt.agent, "trustScope") && <p><ProviderMessage providers={providers} id={prompt.agent} name="trustScope" /></p>}
+      <p><ProviderMessage providers={providers} id={prompt.agent} name="trustCaution" fallback="dialog.trust.caution.generic" /></p>
     </>
   );
 }

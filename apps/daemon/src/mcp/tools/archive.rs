@@ -10,7 +10,7 @@ use crate::branch_cleanup;
 use crate::coordinator::lifecycle::{self, Finish, Finished};
 use crate::mcp::lookup::{optional_bool, required_str, resolve_owned_session};
 use crate::mcp::views::branch_names_of;
-use crate::protocol::{Agent, Session, SessionStatus};
+use crate::protocol::{AgentId, Session, SessionStatus};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 
@@ -72,7 +72,7 @@ pub(in crate::mcp) async fn archive_session(
 /// to `transfer_branches`, which takes the caller itself or a session bound to it: the archived
 /// session, once reopened, hands them to itself first.
 fn keep_note(
-    caller: Agent,
+    caller: AgentId,
     target: &Session,
     archived: &[Session],
     kept: &HashMap<String, Vec<String>>,
@@ -166,7 +166,7 @@ mod tests {
     use crate::mcp::test_support::{
         arguments, bound_coordinator_state, peer_state, project_session, with_status, RepoState,
     };
-    use crate::protocol::{Agent, Role, Session, SessionStatus};
+    use crate::protocol::{AgentId, Role, Session, SessionStatus};
     use crate::session_tools::catalogue::qualified_tool_name;
     use crate::state::AppState;
     use crate::test_support::running;
@@ -208,7 +208,7 @@ mod tests {
                     assert!(
                         message.contains(&format!(
                             "`{}`",
-                            qualified_tool_name(Agent::Claude, "archive_session")
+                            qualified_tool_name(AgentId::CLAUDE, "archive_session")
                         )),
                         "{message}"
                     );
@@ -232,7 +232,7 @@ mod tests {
         assert!(
             message.contains(&format!(
                 "`{}`",
-                qualified_tool_name(Agent::Claude, "report")
+                qualified_tool_name(AgentId::CLAUDE, "report")
             )),
             "{message}"
         );
@@ -273,7 +273,7 @@ mod tests {
         assert!(
             err.to_string().contains(&format!(
                 "`{}`",
-                qualified_tool_name(Agent::Claude, "archive_self")
+                qualified_tool_name(AgentId::CLAUDE, "archive_self")
             )),
             "{err}"
         );
@@ -388,7 +388,7 @@ mod tests {
 
         assert_eq!(archived["branches_kept"], true);
         let note = archived["note"].as_str().unwrap();
-        let tool = |name: &str| qualified_tool_name(Agent::Claude, name);
+        let tool = |name: &str| qualified_tool_name(AgentId::CLAUDE, name);
         assert!(
             note.contains(&format!(
                 "`{}` with `from` `mid`",

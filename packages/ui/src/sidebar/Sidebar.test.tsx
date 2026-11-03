@@ -14,6 +14,7 @@ import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
+import { TEST_AGENTS } from "../test/testProviders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -241,10 +242,10 @@ it("lists a project session's own sessions under it, and the binding badge only 
   // ever (delegated before interrupted) and its own sessions follow it, ranked among themselves (done
   // before working).
   expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
-    `${isolate("Rework the gallery")} session, Claude Code (${isolate("Default")}), Child sessions working, Bound to ${isolate("Hub")}, Default model`,
-    `${isolate("Chase the flaky test")} session, Claude Code (${isolate("Default")}), Done, Bound to ${isolate("Rework the gallery")}, Default model`,
-    `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}, Default model`,
-    `${isolate("Tidy the changelog")} session, Claude Code (${isolate("Default")}), Interrupted, Default model`,
+    `${isolate("Rework the gallery")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Child sessions working, Bound to ${isolate("Hub")}, Default model`,
+    `${isolate("Chase the flaky test")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Done, Bound to ${isolate("Rework the gallery")}, Default model`,
+    `${isolate("Measure the first paint")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Working, Bound to ${isolate("Rework the gallery")}, Default model`,
+    `${isolate("Tidy the changelog")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Interrupted, Default model`,
   ]);
   const badges = rows.map((row) => row.querySelector(".session-colour-dot") !== null);
   expect(badges).toEqual([true, false, false, false]);
@@ -647,7 +648,7 @@ it("follows a project's sessions while a console session's focus mode replaces t
 
 it("says no agent is installed in the console's sessions with a neutral glyph, not a warning one", () => {
   const { container, daemon } = mountSidebar({});
-  const none = new Map<Agent, AgentAvailability>(["claude", "codex", "grok"].map((agent) => [agent as Agent, { agent, availability: "unavailable", default_account_dir: null } as AgentAvailability]));
+  const none = new Map<Agent, AgentAvailability>(TEST_AGENTS.map((agent) => [agent as Agent, { agent, availability: "unavailable", default_account_dir: null } as AgentAvailability]));
   act(() => daemon.store.setState({ agentAvailability: none }));
   const row = [...container.querySelectorAll('[data-slot="empty-state"]')].find((node) => node.textContent?.includes("No agent found on"))!;
   expect(row).toBeDefined();

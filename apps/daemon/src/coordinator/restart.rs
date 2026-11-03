@@ -17,7 +17,7 @@ use crate::accounts::relocate;
 use crate::messaging::delivery::{write_message, WhenBlocked};
 use crate::messaging::texts;
 use crate::processes::ledger::HeldForLaunch;
-use crate::protocol::{Agent, ProcessTree, Session, SessionStatus};
+use crate::protocol::{AgentId, ProcessTree, Session, SessionStatus};
 use crate::records::switch_continue;
 use crate::state::AppState;
 
@@ -37,8 +37,8 @@ use super::resume::resumable_agent_session_id;
 /// window, the session would be interrupted on the new account, where the copy is, and so
 /// resumable.
 ///
-/// An account that is not signed in is not caught here, for any of the three agents: each comes up
-/// on its own sign-in instead of exiting — Grok Build included, which waits on a browser
+/// An account that is not signed in is not caught here, for any of the registered providers: each
+/// comes up on its own sign-in instead of exiting — Grok Build included, which waits on a browser
 /// device-code approval — so a switch to such an account counts as having come up.
 const SWITCH_SETTLE: Duration = Duration::from_secs(4);
 
@@ -118,7 +118,7 @@ where
 /// had stopped: the conversation record at `record`, relative to the account directory `dir`,
 /// says so (`switch_continue::should_continue`). A process that had ended before was left there by
 /// something else.
-pub(crate) fn carry_on(agent: Agent, dir: &Path, record: &Path, ended: bool) -> bool {
+pub(crate) fn carry_on(agent: AgentId, dir: &Path, record: &Path, ended: bool) -> bool {
     ended && switch_continue::should_continue(agent, &dir.join(record))
 }
 

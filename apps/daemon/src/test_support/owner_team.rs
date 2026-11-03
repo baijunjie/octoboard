@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::protocol::{Agent, Origin, Role, Session, SessionKind, SessionStatus};
+use crate::protocol::{AgentId, Origin, Role, Session, SessionKind, SessionStatus};
 use crate::state::AppState;
 use crate::test_support::bare_session;
 
@@ -26,7 +26,7 @@ pub(crate) fn console() -> crate::protocol::Console {
         id: "console-1".to_string(),
         name: "Console".to_string(),
         workdir: "/tmp/console-1".to_string(),
-        default_agent: Agent::Claude,
+        default_agent: AgentId::CLAUDE,
         project_session_agent: None,
         accounts: Default::default(),
         launch: Default::default(),

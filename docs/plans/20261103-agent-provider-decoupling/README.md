@@ -122,11 +122,12 @@ The terminology changes with it. What the website and docs call agent "brands", 
 
 ## Milestones
 
-- [01 Provider terminology](01-provider-terminology.md)
-- [02 Provider descriptor and registries](02-provider-descriptor-and-registries.md)
-- [03 Hooks and message delivery](03-hooks-and-message-delivery.md)
-- [04 Records and history](04-records-and-history.md)
-- [05 Screen reading](05-screen-reading.md)
-- [06 Accounts, models and session tools](06-accounts-models-and-session-tools.md)
-- [07 Provider settings, compatibility and error codes](07-provider-settings-compatibility-and-error-codes.md)
-- [08 Open provider id](08-open-provider-id.md)
+- 01 Provider terminology (closed)
+- 02 Provider descriptor and registries (closed)
+- 03 Hooks and message delivery (closed)
+- 04 Records and history (closed)
+- 05 Screen reading (closed)
+- 06 Accounts, models and session tools (closed)
+- 07 Provider settings, compatibility and error codes (closed)
+- 08 Open provider id (closed)
+- [09 Final confirmation](09-final-confirmation.md)

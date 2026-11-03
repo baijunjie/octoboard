@@ -3,18 +3,17 @@
 
 use std::path::Path;
 
-use crate::agents::layout::{
-    layout, CLAUDE_TRANSCRIPT_SUFFIX, CODEX, CODEX_ARCHIVED_DIR, CODEX_RECORDS_DIR,
-};
+use crate::adapter::provider;
 use crate::hostfs::lexically_normalise;
-use crate::protocol::{Account, Agent, Session};
-use crate::records::codex_rollout_files::is_rollout_of;
+use crate::protocol::{Account, Session};
+use crate::providers::layout::layout;
 use crate::records::locate::{account_roots, plausible_id, walk_records, Hints, Locator, Step};
 use crate::records::removal::removable_record_paths;
 
 /// Whether all known account locations can prove the absence of the native records deleting this
-/// session would remove ([`removable_record_paths`]). Missing ids and unreadable or linked
-/// directories cannot establish absence.
+/// session would remove ([`removable_record_paths`]). Missing ids, unreadable or linked directories
+/// and a provider whose store recognises no record (`RecordStore::recognises_records`) cannot
+/// establish absence.
 pub fn presence(
     hints: &Hints,
     locator: &mut Locator,
@@ -22,10 +21,11 @@ pub fn presence(
     session: &Session,
 ) -> crate::protocol::SessionRecordPresence {
     use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
-    if !session
-        .agent_session_id
-        .as_deref()
-        .is_some_and(plausible_id)
+    if !provider(session.agent).records().recognises_records()
+        || !session
+            .agent_session_id
+            .as_deref()
+            .is_some_and(plausible_id)
     {
         return Unknown;
     }
@@ -55,8 +55,10 @@ pub enum Resumability {
     /// be acted on destructively.
     Unresumable,
     /// Not provable either way: a location that cannot be resolved or read (a pinned account
-    /// directory included), a linked records directory, or a Grok session folder missing locally,
-    /// which Grok restores from its remote registry.
+    /// directory included), a linked records directory, or a record missing whose absence proves
+    /// nothing (`RecordStore::absence_is_conclusive`): one the agent restores itself, as Grok does
+    /// a session folder from its remote registry, or one of a provider whose store recognises no
+    /// record.
     Unknown,
 }
 
@@ -64,16 +66,17 @@ pub enum Resumability {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Judgement {
     pub resumability: Resumability,
-    /// Resuming first needs `codex unarchive`: the rollout sits in the account's
-    /// `archived_sessions/`, which a resume refuses, and `sessions/` does not show it present.
+    /// Resuming first needs the record brought back (`RecordStore::unarchive`): it sits only where
+    /// the agent archives records (`AgentLayout::archived_records_dir`), which a resume does not
+    /// read, and the records directory does not show it present.
     pub needs_unarchive: bool,
 }
 
 /// Where a session's record sits in its own account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Located {
+pub(crate) enum Located {
     Present,
-    /// Codex's `archived_sessions/`.
+    /// Where the agent archives records (`AgentLayout::archived_records_dir`).
     Archived,
     Missing,
     Uncertain,
@@ -84,79 +87,40 @@ enum Located {
 /// A copy left in another account by an earlier switch does not count. A session with no
 /// conversation always is: it relaunches into a fresh one.
 ///
-/// Claude Code needs `<id>.jsonl` in some project directory (the working directory's slug is not
-/// required); a subagent directory alone is not a record. Codex needs a rollout, plain or `.zst`,
-/// under `sessions/` or `archived_sessions/`; any file of the thread's chain (its first rollout or
-/// a later history segment) counts, so a thread is never judged gone while a part of it is there.
-/// Grok needs its session directory, and its absence is only ever `Unknown`. File names are
-/// matched whatever the case of the id.
+/// What counts as the record is the provider's store's to say (`RecordStore::names_record`), in
+/// the records directory and where the agent archives records, as far down as its layout's search
+/// depth; a store's own rules are documented with it. File names are matched whatever the case of
+/// the id.
 pub fn resumability(locator: &Locator, session: &Session) -> Resumability {
     judge(locator, session).resumability
 }
 
-/// [`resumability`], with whether resuming first needs `codex unarchive`, from one look at the
-/// account's records.
+/// [`resumability`], with whether resuming first needs the record brought back from where the
+/// agent archives records, from one look at the account's records.
 ///
-/// An account sharing the default configuration reaches its Codex rollouts through linked
-/// `sessions/` and `archived_sessions/`, which leave the verdict `Unknown`, so that nothing is
-/// deleted on it. Whether a rollout Codex archived has to be brought back before a resume is
-/// still decided, from where those links lead.
+/// An account sharing the default configuration reaches its records through linked records
+/// directories, which leave the verdict `Unknown`, so that nothing is deleted on it. Whether a
+/// record the agent archived has to be brought back before a resume is still decided, from where
+/// those links lead (`RecordStore::archived_behind_links`).
 pub fn judge(locator: &Locator, session: &Session) -> Judgement {
+    let store = provider(session.agent).records();
     let (resumability, needs_unarchive) = match locate_own_record(locator, session) {
         Err(answer) => (answer, false),
         Ok(Located::Present) => (Resumability::Resumable, false),
         Ok(Located::Archived) => (Resumability::Resumable, true),
-        Ok(Located::Missing) if session.agent == Agent::Grok => (Resumability::Unknown, false),
+        Ok(Located::Missing) if !(store.recognises_records() && store.absence_is_conclusive()) => {
+            (Resumability::Unknown, false)
+        }
         Ok(Located::Missing) => (Resumability::Unresumable, false),
         Ok(Located::Uncertain) => (
             Resumability::Unknown,
-            archived_behind_links(locator, session),
+            store.archived_behind_links(locator, session),
         ),
     };
     Judgement {
         resumability,
         needs_unarchive,
     }
-}
-
-/// Whether `session`'s Codex rollout sits only in `archived_sessions/` when the account's
-/// `sessions/` or `archived_sessions/` is a link, as an account sharing the default configuration
-/// has them: each linked one is searched where it leads, by the same rules as any records
-/// directory (exact names, no link followed below it).
-fn archived_behind_links(locator: &Locator, session: &Session) -> bool {
-    let Some(agent_id) = session
-        .agent_session_id
-        .as_deref()
-        .filter(|id| session.agent == Agent::Codex && session.has_conversation && plausible_id(id))
-        .map(str::to_ascii_lowercase)
-    else {
-        return false;
-    };
-    let Some(root) = locator.root(Agent::Codex, session.config_dir.as_deref()) else {
-        return false;
-    };
-    let root = lexically_normalise(&root);
-    let dirs = [root.join(CODEX_RECORDS_DIR), root.join(CODEX_ARCHIVED_DIR)];
-    let is_link =
-        |dir: &Path| std::fs::symlink_metadata(dir).is_ok_and(|meta| meta.file_type().is_symlink());
-    if !dirs.iter().any(|dir| is_link(dir)) {
-        return false;
-    }
-    let is_record = |name: &str, kind: std::fs::FileType| {
-        is_rollout_of(kind, &name.to_ascii_lowercase(), &agent_id)
-    };
-    let found = |dir: &Path| {
-        let dir = if is_link(dir) {
-            match std::fs::canonicalize(dir) {
-                Ok(resolved) => resolved,
-                Err(_) => return Located::Uncertain,
-            }
-        } else {
-            dir.to_path_buf()
-        };
-        scan_for_record(&dir, CODEX.search_depth, &is_record)
-    };
-    found(&dirs[0]) == Located::Missing && found(&dirs[1]) == Located::Present
 }
 
 /// `Err` carries the answer when the record need not, or cannot, be looked for.
@@ -198,15 +162,9 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
         return Err(Resumability::Unknown);
     }
     let agent_id = agent_id.to_ascii_lowercase();
+    let store = provider(agent).records();
     let is_record = |name: &str, kind: std::fs::FileType| {
-        let name = name.to_ascii_lowercase();
-        match agent {
-            Agent::Claude => {
-                kind.is_file() && name == format!("{agent_id}{CLAUDE_TRANSCRIPT_SUFFIX}")
-            }
-            Agent::Codex => is_rollout_of(kind, &name, &agent_id),
-            Agent::Grok => kind.is_dir() && name == agent_id,
-        }
+        store.names_record(&name.to_ascii_lowercase(), kind, &agent_id)
     };
     // The first directory is the one a resume reads; a record found only in a later one is
     // archived. A directory that cannot be searched does not stop the next from being.
@@ -231,7 +189,7 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
 /// Looks for an entry `is_record` accepts in `dir`, at most `depth` levels down, without following
 /// a link. A link anywhere, or anything unreadable, leaves a record that is not found `Uncertain`
 /// rather than `Missing`, since it could be behind that.
-fn scan_for_record(
+pub(crate) fn scan_for_record(
     dir: &Path,
     depth: usize,
     is_record: &dyn Fn(&str, std::fs::FileType) -> bool,
@@ -254,6 +212,7 @@ fn scan_for_record(
 
 #[cfg(test)]
 mod tests {
+    use crate::protocol::AgentId;
     use std::collections::HashMap;
 
     use super::*;
@@ -271,7 +230,7 @@ mod tests {
             )])
         };
         let hints = Hints::default();
-        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
             let mut native = session(agent, CLAUDE_ID, Some(&account));
             assert_eq!(
                 presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
@@ -288,14 +247,14 @@ mod tests {
                 Unknown
             );
         }
-        let claude = session(Agent::Claude, CLAUDE_ID, Some(&account));
+        let claude = session(AgentId::CLAUDE, CLAUDE_ID, Some(&account));
         let orphan = account.join("projects/work").join(CLAUDE_ID);
         std::fs::create_dir_all(orphan.join("subagents")).unwrap();
         assert_eq!(
             presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
             Present
         );
-        let grok = session(Agent::Grok, CLAUDE_ID, Some(&account));
+        let grok = session(AgentId::GROK, CLAUDE_ID, Some(&account));
         std::fs::create_dir_all(account.join("sessions/work").join(CLAUDE_ID)).unwrap();
         assert_eq!(
             presence(&hints, &mut Locator::with_shell(shell()), &[], &grok),
@@ -332,6 +291,58 @@ mod tests {
         );
     }
 
+    /// A provider whose store recognises no record (the test-only provider, on `NoRecords`) never
+    /// has a record proven absent: a session of it is neither unresumable, which would refuse its
+    /// resume and let an archived session's cleanup delete it, nor without records, and deleting
+    /// it names no path; its history cannot be read, and an archived record cannot be brought
+    /// back.
+    #[test]
+    fn a_store_that_recognises_no_record_never_proves_one_absent() {
+        use crate::protocol::SessionRecordPresence;
+        let dir = crate::test_support::ScratchDir::new("agent-records-no-store");
+        let account = dir.join("account");
+        let records = crate::providers::layout::layout(AgentId::TEST).records_dir;
+        touch(&account.join(records).join("work").join("unrelated"));
+        let shell = HashMap::from([(
+            "HOME".to_owned(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]);
+        let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
+        let judgement = judge(&Locator::with_shell(shell.clone()), &own);
+        assert_eq!(judgement.resumability, Resumability::Unknown);
+        assert!(!judgement.needs_unarchive);
+        // Nor can it bring an archived record back.
+        assert!(provider(AgentId::TEST)
+            .records()
+            .unarchive(&HashMap::new(), Some(&account), CLAUDE_ID)
+            .is_err());
+        let hints = Hints::default();
+        assert_eq!(
+            presence(&hints, &mut Locator::with_shell(shell.clone()), &[], &own),
+            SessionRecordPresence::Unknown
+        );
+        assert!(
+            removable_record_paths(&hints, &mut Locator::with_shell(shell.clone()), &[], &own)
+                .is_empty()
+        );
+        let history = |session: &Session| {
+            crate::records::history::of_session(
+                &hints,
+                &mut Locator::with_shell(shell.clone()),
+                &[],
+                session,
+            )
+        };
+        assert_eq!(history(&own), None);
+        let mut fresh = own.clone();
+        fresh.has_conversation = false;
+        assert_eq!(history(&fresh), Some(Vec::new()));
+        assert_eq!(
+            resumability(&Locator::with_shell(shell), &fresh),
+            Resumability::Resumable
+        );
+    }
+
     fn judged(session: &Session) -> Resumability {
         resumability(&Locator::default(), session)
     }
@@ -344,7 +355,7 @@ mod tests {
     fn claude_is_resumable_only_with_its_main_transcript_in_its_own_account() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-claude");
         let (account, other) = (dir.join("account"), dir.join("other"));
-        let own = session(Agent::Claude, CLAUDE_ID, Some(&account));
+        let own = session(AgentId::CLAUDE, CLAUDE_ID, Some(&account));
         std::fs::create_dir_all(account.join("projects")).unwrap();
         assert_eq!(judged(&own), Resumability::Unresumable);
 
@@ -373,7 +384,7 @@ mod tests {
     fn a_session_without_a_conversation_is_resumable_and_an_unusable_id_is_unknown() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-fresh");
         let account = dir.join("account");
-        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
             let mut fresh = session(agent, CLAUDE_ID, Some(&account));
             fresh.has_conversation = false;
             assert_eq!(judged(&fresh), Resumability::Resumable);
@@ -388,13 +399,13 @@ mod tests {
     #[test]
     fn an_account_directory_that_cannot_be_read_is_unknown_for_every_agent() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-gone");
-        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
             let gone = session(agent, CLAUDE_ID, Some(&dir.join("gone")));
             assert_eq!(judged(&gone), Resumability::Unknown);
         }
         // Present but not a directory, so it cannot be read either.
         touch(&dir.join("file"));
-        let file = session(Agent::Claude, CLAUDE_ID, Some(&dir.join("file")));
+        let file = session(AgentId::CLAUDE, CLAUDE_ID, Some(&dir.join("file")));
         assert_eq!(judged(&file), Resumability::Unknown);
     }
 
@@ -402,7 +413,7 @@ mod tests {
     fn an_account_directory_without_any_records_directory_is_unknown_for_every_agent() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-empty");
         std::fs::create_dir_all(dir.join("account")).unwrap();
-        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
             let empty = session(agent, CLAUDE_ID, Some(&dir.join("account")));
             assert_eq!(judged(&empty), Resumability::Unknown);
         }
@@ -411,7 +422,7 @@ mod tests {
     #[test]
     fn the_default_account_is_judged_through_the_shell_and_unknown_when_it_cannot_be_resolved() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-default");
-        let default = session(Agent::Claude, CLAUDE_ID, None);
+        let default = session(AgentId::CLAUDE, CLAUDE_ID, None);
         let shell = HashMap::from([(
             "CLAUDE_CONFIG_DIR".to_owned(),
             dir.join("default").to_string_lossy().into_owned(),
@@ -437,7 +448,7 @@ mod tests {
     fn codex_counts_compressed_and_archived_rollouts_and_archived_ones_need_unarchiving() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-codex");
         let account = dir.join("account");
-        let own = session(Agent::Codex, CODEX_ID, Some(&account));
+        let own = session(AgentId::CODEX, CODEX_ID, Some(&account));
         std::fs::create_dir_all(account.join("sessions")).unwrap();
         assert_eq!(judged(&own), Resumability::Unresumable);
         assert!(!needs_unarchive(&own));
@@ -466,7 +477,7 @@ mod tests {
         let plain = dir.join("plain");
         touch(&plain.join("sessions/2026/10/01").join(&name));
         assert_eq!(
-            judged(&session(Agent::Codex, CODEX_ID, Some(&plain))),
+            judged(&session(AgentId::CODEX, CODEX_ID, Some(&plain))),
             Resumability::Resumable
         );
     }
@@ -478,7 +489,7 @@ mod tests {
     fn a_reverted_codex_thread_is_not_gone_while_any_of_its_chain_is_there() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-chain");
         let account = dir.join("account");
-        let own = session(Agent::Codex, CODEX_ID, Some(&account));
+        let own = session(AgentId::CODEX, CODEX_ID, Some(&account));
         let chain = crate::test_support::codex_chain(&account, CODEX_ID, false);
         assert_eq!(judged(&own), Resumability::Resumable);
 
@@ -506,7 +517,7 @@ mod tests {
     fn an_archived_codex_rollout_is_found_although_sessions_cannot_be_searched() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-codex-uncertain");
         let account = dir.join("account");
-        let own = session(Agent::Codex, CODEX_ID, Some(&account));
+        let own = session(AgentId::CODEX, CODEX_ID, Some(&account));
         std::fs::create_dir_all(dir.join("elsewhere")).unwrap();
         std::fs::create_dir_all(&account).unwrap();
         #[cfg(unix)]
@@ -533,7 +544,7 @@ mod tests {
                 .join(format!("{}.jsonl", CLAUDE_ID.to_uppercase())),
         );
         assert_eq!(
-            judged(&session(Agent::Claude, CLAUDE_ID, Some(&claude))),
+            judged(&session(AgentId::CLAUDE, CLAUDE_ID, Some(&claude))),
             Resumability::Resumable
         );
         touch(&codex.join("sessions/2026/10/01").join(format!(
@@ -541,11 +552,11 @@ mod tests {
             CODEX_ID.to_uppercase()
         )));
         assert_eq!(
-            judged(&session(Agent::Codex, CODEX_ID, Some(&codex))),
+            judged(&session(AgentId::CODEX, CODEX_ID, Some(&codex))),
             Resumability::Resumable
         );
         // And an id recorded in capitals finds a lower-case file.
-        let upper = session(Agent::Codex, &CODEX_ID.to_uppercase(), Some(&codex));
+        let upper = session(AgentId::CODEX, &CODEX_ID.to_uppercase(), Some(&codex));
         assert_eq!(judged(&upper), Resumability::Resumable);
     }
 
@@ -559,7 +570,7 @@ mod tests {
                 .join(format!("rollout-x-{CODEX_ID}.jsonl")),
         );
         assert_eq!(
-            judged(&session(Agent::Codex, CODEX_ID, Some(&account))),
+            judged(&session(AgentId::CODEX, CODEX_ID, Some(&account))),
             Resumability::Resumable
         );
     }
@@ -568,7 +579,7 @@ mod tests {
     fn grok_is_resumable_with_its_folder_and_only_unknown_without() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-grok");
         let account = dir.join("account");
-        let own = session(Agent::Grok, CLAUDE_ID, Some(&account));
+        let own = session(AgentId::GROK, CLAUDE_ID, Some(&account));
         std::fs::create_dir_all(account.join("sessions")).unwrap();
         assert_eq!(judged(&own), Resumability::Unknown);
         touch(
@@ -589,7 +600,7 @@ mod tests {
         std::fs::create_dir_all(&account).unwrap();
         std::os::unix::fs::symlink(dir.join("elsewhere"), account.join("projects")).unwrap();
         assert_eq!(
-            judged(&session(Agent::Claude, CLAUDE_ID, Some(&account))),
+            judged(&session(AgentId::CLAUDE, CLAUDE_ID, Some(&account))),
             Resumability::Unknown
         );
         // A link inside the records directory could hide the record as well.
@@ -597,7 +608,7 @@ mod tests {
         std::fs::create_dir_all(inner.join("projects")).unwrap();
         std::os::unix::fs::symlink(dir.join("elsewhere"), inner.join("projects/work")).unwrap();
         assert_eq!(
-            judged(&session(Agent::Claude, CLAUDE_ID, Some(&inner))),
+            judged(&session(AgentId::CLAUDE, CLAUDE_ID, Some(&inner))),
             Resumability::Unknown
         );
     }

@@ -4,7 +4,8 @@ import { expect, it, vi } from "vitest";
 import { accountOf, pageOf, sessionOf } from "../fixtures/builders";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
 import type { ConnectionState } from "../daemon-client";
-import type { Event, Project, ShellTerminal } from "../protocol";
+import type { Event, Project, ProviderInfo, ShellTerminal } from "../protocol";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { createDaemon, dismissAccountLogin, setAccountSwitchesQueued, trackAccountLogin } from ".";
 
@@ -380,4 +381,18 @@ it("keeps each setting an update leaves as it was, so what reads only that setti
   // An update that changes nothing leaves the state as it was.
   client.onEvents!([{ type: "settings_updated", settings: structuredClone(after) }]);
   expect(daemon.store.getState().settings).toBe(after);
+});
+
+it("holds the providers a snapshot serves, empty before one arrives, and keeps the same array when a later snapshot repeats them", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  expect(daemon.store.getState().providers).toEqual([]);
+  const snapshot = (providers: ProviderInfo[]) => ({
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [], providers,
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+  } as unknown as Event);
+  client.onEvents!([snapshot(TEST_PROVIDERS)]);
+  const held = daemon.store.getState().providers;
+  expect(held).toEqual(TEST_PROVIDERS);
+  client.onEvents!([snapshot(structuredClone(TEST_PROVIDERS))]);
+  expect(daemon.store.getState().providers).toBe(held);
 });

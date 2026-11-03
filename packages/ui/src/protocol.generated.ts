@@ -239,7 +239,15 @@ export type AccountTrashOutcome = {
  */
 export type AccountTrashSharing = "account" | "default_account" | "project";
 
-export type Agent = "claude" | "codex" | "grok";
+/**
+ * A provider's id: the id of one of the registered providers, so it is only ever made from the
+ * registry ([`AgentId::from_wire_name`], deserializing, or a provider's own constant). Ids that
+ * name no registered provider are not `AgentId`s: the wire refuses them and the store keeps them
+ * as text, leaving them out of what it loads.
+ *
+ * Serialized as the id string, and generated for the clients as `Agent`, a plain `string`.
+ */
+export type Agent = string;
 
 /**
  * One agent's availability and what its default account currently resolves to, derived once per
@@ -296,11 +304,6 @@ export type AgentModel = {
    */
   available?: boolean,
 };
-
-/**
- * Who resolves Codex approval requests. An absent override follows the account configuration.
- */
-export type ApprovalReviewer = "user" | "auto_review";
 
 /**
  * Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
@@ -513,6 +516,40 @@ export type BrowseRequest = {
 });
 
 /**
+ * What a provider can do that not every provider can, declared so that code and the UI branch
+ * on it rather than on which provider it is.
+ */
+export type Capabilities = {
+  /**
+   * Accepts an id for a new conversation, so Octoboard's session id can be the agent's;
+   * otherwise the agent's id becomes known from its first hook payload.
+   */
+  preallocates_session_id: boolean,
+  /**
+   * Runs its hooks through the per-session hook script rather than an inline command.
+   */
+  hook_script: boolean,
+  /**
+   * Shows a status line Octoboard can feed.
+   */
+  status_line: boolean,
+  /**
+   * Offers credits that reset its usage limits early.
+   */
+  reset_credits: boolean,
+  /**
+   * Keeps the trust its confirmation grants in a per-session home, from where Octoboard carries
+   * it to the user's own configuration.
+   */
+  per_session_trust: boolean,
+  /**
+   * Its accounts can share the default account's configuration.
+   */
+  config_sharing: boolean,
+  delivery: DeliveryQuirks,
+};
+
+/**
  * One entry of a change listing: a change between two sides, or a path in conflict, which is
  * not a two-sided change at all. `stats` is what the change adds and removes, absent where the
  * daemon does not count it (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`).
@@ -580,12 +617,6 @@ export type ChangeSide = {
   "state": "out_of_scope",
   repository_path: string,
 };
-
-/**
- * The permission mode a Claude Code launch is asked for. An absent override follows the account
- * configuration and passes no flag.
- */
-export type ClaudeApprovalMode = "auto" | "manual" | "bypass";
 
 /**
  * One commit a branch made since it forked, as `list_project_commits` lists it: its full id, its
@@ -708,8 +739,8 @@ export type Console = {
  * afterwards only by the user (see `Session.colour`). The daemon only ever hands the label
  * around; what each one looks like in the light and the dark appearance is the UI's own
  * (`packages/ui/src/sessions/sessionColours.ts`), not here. A stored label must stay readable,
- * so one is renamed or removed only together with a schema version step (`SCHEMA_VERSION` in
- * `apps/daemon/src/store/schema.rs`).
+ * so once a release has stored it, one is renamed or removed only together with a schema version
+ * step (`SCHEMA_VERSION` in `apps/daemon/src/store/schema.rs`).
  */
 export type ConsoleSessionColour = "red" | "orange" | "amber" | "yellow" | "lime" | "green" | "teal" | "cyan" | "sky" | "blue" | "indigo" | "violet" | "fuchsia" | "pink" | "brown" | "gray";
 
@@ -763,6 +794,26 @@ export type ConversationLocation = {
  * Where the `default_model` of a `list_agent_models` answer came from.
  */
 export type DefaultModelSource = "configured" | "best_available";
+
+/**
+ * How writing a message into the provider's session differs from the plain case.
+ */
+export type DeliveryQuirks = {
+  /**
+   * A write is confirmed only by the agent's report of the prompt it sent, and is marked unsent
+   * when no report comes.
+   */
+  confirms_by_reported_prompt: boolean,
+  /**
+   * A report is held for the completion notice the agent sends after a turn.
+   */
+  holds_report_for_completion_notice: boolean,
+  /**
+   * An instruction for a resumed conversation goes as the launch prompt, which keeps the agent
+   * from showing a resume dialog that would swallow it.
+   */
+  resume_instruction_as_launch_prompt: boolean,
+};
 
 /**
  * One entry of a directory listing. Only directories are ever listed — a project is a directory —
@@ -839,7 +890,7 @@ export type DocumentAccounts = {
   added_agents?: Array<Agent> | null,
   /**
    * One entry for each agent that has an account of its own or a named default account, in
-   * `Agent::ALL` order.
+   * `AgentId::ALL` order.
    */
   agents: Array<DocumentAgentAccounts>,
 };
@@ -949,12 +1000,13 @@ export type DocumentSettings = {
    */
   git_workflow: GitWorkflowSettings,
   /**
-   * The choices the user made on whether an agent other than Claude Code (by wire name) loads
-   * Claude Code's instructions and skills. An agent they never chose for is not listed, so the
-   * importing machine keeps following its own default for it; an agent the document does not
-   * list is left as it is.
+   * The choices the user made for the settings of each provider (by provider id, then setting
+   * id) that a configuration export carries (`SettingDescriptor::exported`). A setting they
+   * never chose for is not listed, so the importing machine keeps following its own default for
+   * it, and a setting the document does not list is left as it is. A provider's settings that
+   * let its sessions act without asking are never listed.
    */
-  claude_compatibility: Partial<Record<Agent, boolean>>,
+  provider_settings: Partial<Record<Agent, Record<string, boolean | string>>>,
   /**
    * The tags the user put on each agent (by wire name), for the agents that have any, removed
    * agents' included. An agent the document does not list is left as it is on import.
@@ -1063,12 +1115,16 @@ export type Event = {
   trusted_directories: Array<string>,
   settings: Settings,
   /**
+   * Every registered provider's descriptor data, in the registry's order.
+   */
+  providers: Array<ProviderInfo>,
+  /**
    * Every git status the daemon currently holds; empty on a fresh start. Carried here, like
    * the trusted directories, so a reconnecting client never has to ask for it separately.
    */
   git_statuses: Array<GitStatus>,
   /**
-   * One entry per supported agent, always three, each starting `not_determined` and
+   * One entry per registered provider, each starting `not_determined` and
    * replaced once the daemon's one-time login-shell snapshot lands; see
    * `crate::agents::availability`.
    */
@@ -1853,8 +1909,15 @@ export type InspectedSettings = {
   current_ask_questions_as_choices: boolean,
   git_workflow: GitWorkflowSettings,
   current_git_workflow: GitWorkflowSettings,
-  claude_compatibility: Partial<Record<Agent, boolean>>,
-  current_claude_compatibility: Partial<Record<Agent, boolean>>,
+  /**
+   * The document's choices for the exported provider settings, those this build declares only
+   * (see `DocumentSettings::provider_settings`).
+   */
+  provider_settings: Partial<Record<Agent, Record<string, boolean | string>>>,
+  /**
+   * The values in effect on this machine of the exported provider settings.
+   */
+  current_provider_settings: Partial<Record<Agent, Record<string, boolean | string | null>>>,
   agent_tags: Partial<Record<Agent, Array<string>>>,
   current_agent_tags: Partial<Record<Agent, Array<string>>>,
 };
@@ -1908,6 +1971,30 @@ export type LoginStatus = "starting" | "waiting" | "succeeded" | "failed" | "can
  * What a `set_session_model` did (`Event::SessionModelSet`).
  */
 export type ModelChangeOutcome = "unchanged" | "recorded" | "restarted";
+
+/**
+ * How a model id of the provider is shown.
+ */
+export type ModelDisplay = {
+  /**
+   * Whether an id of the form `<prefix><family>-<major>-<minor>[-<patch>...][-<date>]` reads as
+   * "Family major.minor" (`claude-opus-5-5` as "Opus 5.5"), a bracketed suffix kept; any other
+   * id is shown as it is.
+   */
+  family_version: boolean,
+  /**
+   * What such an id starts with, when only ids of one provider's spelling are read that way.
+   */
+  id_prefix: string | null,
+  /**
+   * Aliases shown capitalized (`opus` as "Opus").
+   */
+  aliases: Array<string>,
+  /**
+   * Stored spellings that read as no model at all (a retired alias).
+   */
+  retired: Array<string>,
+};
 
 /**
  * Why `list_agent_models` has no list, as a coded message of the same shape as an `error`. It
@@ -1978,15 +2065,11 @@ export type PathLinkView = {
 };
 
 /**
- * One value for each [`Agent`], serialised as `{"claude": …, "codex": …, "grok": …}`. A struct
- * rather than a map, so that adding an agent fails to compile everywhere a value is built or
- * looked up instead of defaulting silently. A key left out when reading is the default value.
+ * One value for each registered provider: a map keyed by [`AgentId`] that always holds an entry
+ * for every one of them, serialised as `{"<provider id>": …, …}` in the registry's order. Reading
+ * one, a key left out is the default value and a key naming no registered provider is ignored.
  */
-export type PerAgent<T> = {
-  claude: T,
-  codex: T,
-  grok: T,
-};
+export type PerAgent<T> = Record<Agent, T>;
 
 /**
  * How many trees there are under one project, or for one console session, in the count of
@@ -2178,6 +2261,44 @@ export type ProjectSourceInfo = {
 };
 
 /**
+ * One registered provider, as `snapshot` carries it.
+ */
+export type ProviderInfo = {
+  id: Agent,
+  /**
+   * The provider's product name, for a client with no presentation of its own for it.
+   */
+  label: string,
+  /**
+   * The shorter form of `label`, where the text around it already says which product is meant.
+   */
+  short_name: string,
+  /**
+   * Where the user is sent to install the provider's CLI.
+   */
+  install_url: string,
+  /**
+   * The configuration directory the provider uses when none is set, relative to the home
+   * directory (`.claude`).
+   */
+  default_config_dir: string,
+  capabilities: Capabilities,
+  /**
+   * How the provider's own interface names its quota windows, which a client's wording follows.
+   */
+  quota_windows: QuotaWindowNaming,
+  /**
+   * How a model id of the provider is shown.
+   */
+  model_display: ModelDisplay,
+  /**
+   * The settings the user can make for the provider, in the order a client lists them. Their
+   * values in effect are `Settings::provider_settings`.
+   */
+  settings: Array<SettingDescriptor>,
+};
+
+/**
  * Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
  * is part of the reading rather than a failure of anything else.
  */
@@ -2214,10 +2335,28 @@ export type QuotaWindow = {
 };
 
 /**
- * The kind of a quota window. Not every agent has every kind: Claude Code has `session`,
+ * The kind of a quota window. Not every provider has every kind: Claude Code has `session`,
  * `weekly` and `weekly_model`, Codex `session` and `weekly`, Grok Build `credit_period`.
  */
 export type QuotaWindowKind = "session" | "weekly" | "weekly_model" | "credit_period";
+
+/**
+ * How the provider's own interface names its quota windows, which Octoboard's wording follows.
+ */
+export type QuotaWindowNaming = {
+  /**
+   * The kinds of window the provider reports at all.
+   */
+  kinds: Array<QuotaWindowKind>,
+  /**
+   * What it calls the five-hour window.
+   */
+  session_window: SessionWindowName,
+  /**
+   * Whether an account-wide weekly window beside a model's own is named "Weekly · all models".
+   */
+  weekly_all_models: boolean,
+};
 
 /**
  * Which content a `read_project_file` reads. Absent means `live`.
@@ -2770,12 +2909,6 @@ export type Request = {
    */
   git_workflow?: GitWorkflowSettingsChanges,
   /**
-   * Per agent other than Claude Code, by wire name: whether its sessions load Claude Code's
-   * instructions and skills. An agent left out is left alone; Claude Code or an unknown
-   * name is refused.
-   */
-  claude_compatibility?: Partial<Record<Agent, boolean>>,
-  /**
    * Per agent, by wire name: its tags, replacing the ones it has, normalised as a project's
    * are (trimmed, empty ones dropped, case-insensitive duplicates dropped keeping the first
    * spelling); an empty list clears them. An agent left out is left alone; an unknown name
@@ -2836,12 +2969,10 @@ export type Request = {
   disabled: boolean,
 }
   | {
-  "type": "set_codex_approval_reviewer",
-  reviewer: ApprovalReviewer | null,
-}
-  | {
-  "type": "set_claude_approval_mode",
-  mode: ClaudeApprovalMode | null,
+  "type": "set_provider_setting",
+  agent: Agent,
+  setting: string,
+  value: boolean | string | null,
 }
   | {
   "type": "set_account_sharing",
@@ -2859,7 +2990,8 @@ export type Request = {
   account?: string | null,
 }
   | {
-  "type": "use_codex_reset_credit",
+  "type": "use_reset_credit",
+  agent: Agent,
   account?: string | null,
 }
   | {
@@ -3458,12 +3590,6 @@ export type RequestBody = {
    */
   git_workflow?: GitWorkflowSettingsChanges,
   /**
-   * Per agent other than Claude Code, by wire name: whether its sessions load Claude Code's
-   * instructions and skills. An agent left out is left alone; Claude Code or an unknown
-   * name is refused.
-   */
-  claude_compatibility?: Partial<Record<Agent, boolean>>,
-  /**
    * Per agent, by wire name: its tags, replacing the ones it has, normalised as a project's
    * are (trimmed, empty ones dropped, case-insensitive duplicates dropped keeping the first
    * spelling); an empty list clears them. An agent left out is left alone; an unknown name
@@ -3524,12 +3650,10 @@ export type RequestBody = {
   disabled: boolean,
 }
 | {
-  "type": "set_codex_approval_reviewer",
-  reviewer: ApprovalReviewer | null,
-}
-| {
-  "type": "set_claude_approval_mode",
-  mode: ClaudeApprovalMode | null,
+  "type": "set_provider_setting",
+  agent: Agent,
+  setting: string,
+  value: boolean | string | null,
 }
 | {
   "type": "set_account_sharing",
@@ -3547,7 +3671,8 @@ export type RequestBody = {
   account?: string | null,
 }
 | {
-  "type": "use_codex_reset_credit",
+  "type": "use_reset_credit",
+  agent: Agent,
   account?: string | null,
 }
 | {
@@ -3626,7 +3751,8 @@ export type RequestBody = {
 };
 
 /**
- * One of an account's rate limit reset credits that can still be used, as Codex describes it.
+ * One of an account's rate limit reset credits that can still be used, as its provider describes
+ * it.
  */
 export type ResetCredit = {
   id: string,
@@ -3639,7 +3765,7 @@ export type ResetCredit = {
    */
   description: string | null,
   /**
-   * When the credit was granted, in milliseconds since the epoch, if Codex says.
+   * When the credit was granted, in milliseconds since the epoch, if the provider says.
    */
   granted_at: number | null,
   /**
@@ -3649,13 +3775,13 @@ export type ResetCredit = {
 };
 
 /**
- * What Codex did with a request to use a reset credit (`reset_credit_used`).
+ * What the provider did with a request to use a reset credit (`reset_credit_used`).
  */
 export type ResetCreditOutcome = "reset" | "nothing_to_reset" | "no_credit" | "already_redeemed";
 
 /**
- * The rate limit reset credits of a Codex account that can be used now. Only present while there
- * is at least one.
+ * The rate limit reset credits of an account that can be used now. Only present while there is at
+ * least one.
  */
 export type ResetCredits = {
   /**
@@ -3664,8 +3790,8 @@ export type ResetCredits = {
   available_count: number,
   /**
    * The usable credits in the order they would be used: the one that expires first, a credit
-   * with no expiry last. Null when Codex gave only the count, and may be shorter than
-   * `available_count` when Codex caps its list.
+   * with no expiry last. Null when the provider gave only the count, and may be shorter than
+   * `available_count` when the provider caps its list.
    */
   credits: Array<ResetCredit> | null,
 };
@@ -3941,6 +4067,62 @@ export type SessionRequestEnding = "approved" | "refused" | "timed_out" | "withd
 export type SessionStatus = "starting" | "working" | "waiting_user" | "dormant" | "idle" | "interrupted" | "archived";
 
 /**
+ * What a provider's own interface calls the five-hour window.
+ */
+export type SessionWindowName = "session" | "five_hour";
+
+/**
+ * One choice of a [`SettingKind::Choice`] setting.
+ */
+export type SettingChoice = {
+  value: string,
+  /**
+   * Whether a client asks the user to confirm before saving this choice. The daemon does not
+   * enforce it.
+   */
+  confirm: boolean,
+};
+
+/**
+ * One setting of a provider, declared by its descriptor. The values the user chose are kept
+ * per provider and setting id, never as a field of their own.
+ */
+export type SettingDescriptor = {
+  /**
+   * Unique within its provider; snake_case.
+   */
+  id: string,
+  kind: SettingKind,
+  /**
+   * Whether a configuration export carries the user's explicit choice. A setting that lets
+   * agents act without asking stays out of one.
+   */
+  exported: boolean,
+  /**
+   * Whether the agents' `get_settings` tool returns the value in effect. Agents never write a
+   * provider setting.
+   */
+  shown_to_agents: boolean,
+  /**
+   * The id of the provider whose configuration this switch makes the provider read, when it is
+   * such a switch. That provider declares itself a compatibility source.
+   */
+  compatibility_with: string | null,
+};
+
+/**
+ * What values a setting takes.
+ */
+export type SettingKind = {
+  "type": "choice",
+  choices: Array<SettingChoice>,
+}
+| {
+  "type": "switch",
+  default: SwitchDefault,
+};
+
+/**
  * The app-wide user settings the daemon stores, and the account list alongside them: a record
  * that already grows without a new request shape or a new event for every addition, which is
  * why the accounts live here rather than in a record of their own.
@@ -4040,23 +4222,16 @@ export type Settings = {
    */
   added_agents: Array<Agent> | null,
   /**
-   * Launch override for every Codex session, whichever account it uses; never written into
-   * Codex's own configuration. Null follows each account's configuration. Kept local.
+   * The value in effect of every setting of every provider (see `ProviderInfo::settings`), by
+   * provider id and then setting id: each provider the daemon registers has an entry and each of
+   * its settings a key, and the type is `Partial` only because a client may index it by an id
+   * the daemon does not serve. A switch holds the user's choice, else the value its default rule
+   * gives now; a choice holds the user's, else `null`, which follows each account's own
+   * configuration. Read when a session starts, resumes or switches account. The choices of a
+   * setting its provider does not export (`exported` false) are kept local to this machine; an
+   * exported one travels with a configuration export.
    */
-  codex_approval_reviewer: ApprovalReviewer | null,
-  /**
-   * Launch override for every Claude Code session, whichever account it uses; never written
-   * into Claude Code's own configuration. Null follows each account's configuration. Kept local.
-   */
-  claude_approval_mode: ClaudeApprovalMode | null,
-  /**
-   * Whether each agent other than Claude Code (by wire name) loads Claude Code's instructions
-   * (CLAUDE.md and rules), skills, agents, commands, MCP servers, hooks and permissions in its
-   * sessions: one value per agent, whichever account a session uses. It is the value in effect:
-   * the user's choice for the agent, else on for Grok Build and, for Codex, on while Claude Code
-   * is an added agent. Read when a session starts, resumes or switches account.
-   */
-  claude_compatibility: Partial<Record<Agent, boolean>>,
+  provider_settings: Partial<Record<Agent, Record<string, boolean | string | null>>>,
   /**
    * The tags the user put on each agent (by wire name), which tell a session choosing an agent
    * what it is good for. Application-wide, and they apply to every account of the agent. An
@@ -4255,6 +4430,13 @@ export type SideVersion = {
 }
 | {
   "state": "absent"
+};
+
+/**
+ * What a switch is while the user has made no choice for it.
+ */
+export type SwitchDefault = "on" | "off" | {
+  "while_added": string
 };
 
 /**

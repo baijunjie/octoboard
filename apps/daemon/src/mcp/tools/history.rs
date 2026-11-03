@@ -95,7 +95,7 @@ mod tests {
     use super::*;
     use crate::mcp::dispatch::call;
     use crate::mcp::test_support::{account, arguments, shared_console_state};
-    use crate::protocol::{Agent, HistorySpeaker};
+    use crate::protocol::{AgentId, HistorySpeaker};
 
     fn messages(count: usize) -> Vec<HistoryMessage> {
         (0..count)
@@ -204,7 +204,7 @@ mod tests {
         )
         .unwrap();
         let mut session = state.session_record("of-b").unwrap();
-        session.agent = Agent::Codex;
+        session.agent = AgentId::CODEX;
         session.has_conversation = true;
         session.agent_session_id = Some(thread.to_string());
         state.save_session(&session).unwrap();
@@ -213,7 +213,7 @@ mod tests {
             .store
             .insert_account(&account(
                 "codex-work",
-                Agent::Codex,
+                AgentId::CODEX,
                 "Work",
                 dir.join("codex").to_string_lossy().into_owned(),
             ))

@@ -3,9 +3,20 @@
 use std::path::PathBuf;
 
 use super::tests::{plan_isolated, with_default_home};
+use super::writeback::SharedConfigWriteback;
 use super::*;
 use crate::adapter::files::SMALL_FILE_LIMIT;
 use crate::adapter::tests::{spec_fixture, SpecFixture};
+
+/// The write-back the plan leaves for after the exit.
+fn writeback_of(plan: &LaunchPlan) -> &SharedConfigWriteback {
+    plan.after_exit
+        .as_ref()
+        .expect("writeback")
+        .as_any()
+        .downcast_ref()
+        .expect("the work after the exit is the write-back")
+}
 
 const SHARED_CONFIG: &str = "\
 # kept comment
@@ -47,7 +58,7 @@ fn an_oversized_linked_config_is_kept_whole_and_not_written_back() {
     let text = format!("default_model = \"x\"\n# {}", "x".repeat(SMALL_FILE_LIMIT));
     link_config(&mut fixture, &text);
     let plan = plan_isolated(&fixture.spec()).expect("plan");
-    assert!(plan.shared_config_writeback.is_none());
+    assert!(plan.after_exit.is_none());
     let copy = std::fs::read_to_string(session_config(&plan)).expect("copy");
     let appended = copy.strip_prefix(&text).expect("the user's text first");
     assert!(appended.starts_with("\n\n[mcp_servers."), "{appended}");
@@ -58,7 +69,7 @@ fn a_plain_config_is_not_written_back() {
     let mut fixture = spec_fixture();
     with_default_home(&mut fixture);
     let plan = plan_isolated(&fixture.spec()).expect("plan");
-    assert!(plan.shared_config_writeback.is_none());
+    assert!(plan.after_exit.is_none());
 }
 
 #[test]
@@ -72,7 +83,7 @@ fn a_dangling_config_link_is_not_written_back() {
     )
     .expect("dangling link");
     let plan = plan_isolated(&fixture.spec()).expect("plan");
-    assert!(plan.shared_config_writeback.is_none());
+    assert!(plan.after_exit.is_none());
     assert!(std::fs::symlink_metadata(home.join("config.toml"))
         .expect("link")
         .file_type()
@@ -102,7 +113,7 @@ fn a_linked_config_gains_the_theme_the_plugin_switches_and_the_chosen_model() {
         std::fs::read_to_string(&shared).expect("shared"),
         SHARED_CONFIG
     );
-    let writeback = plan.shared_config_writeback.expect("writeback");
+    let writeback = writeback_of(&plan);
 
     std::fs::write(
         &session,
@@ -201,7 +212,7 @@ command = \"/usr/bin/true\"
 ",
     )
     .expect("session config");
-    plan.shared_config_writeback.expect("writeback").publish();
+    writeback_of(&plan).publish();
     assert_eq!(
         std::fs::read_to_string(&shared).expect("shared"),
         SHARED_CONFIG
@@ -220,7 +231,7 @@ fn a_model_chosen_without_a_launch_model_is_written_back() {
     let mut session = std::fs::read_to_string(session_config(&plan)).expect("copy");
     session = session.replace("kept-model", "other-model");
     std::fs::write(session_config(&plan), session).expect("session config");
-    plan.shared_config_writeback.expect("writeback").publish();
+    writeback_of(&plan).publish();
     let parsed: toml::Table = std::fs::read_to_string(&shared)
         .expect("shared")
         .parse()
@@ -255,7 +266,7 @@ fn a_chain_of_links_is_written_at_its_end_and_both_links_stay() {
     let mut session = std::fs::read_to_string(session_config(&plan)).expect("copy");
     session = session.replace("theme = \"dark\"", "theme = \"tokyonight\"");
     std::fs::write(session_config(&plan), session).expect("session config");
-    plan.shared_config_writeback.expect("writeback").publish();
+    writeback_of(&plan).publish();
 
     let parsed: toml::Table = std::fs::read_to_string(&real)
         .expect("real")
@@ -290,7 +301,7 @@ fn a_link_replaced_before_exit_is_left_alone() {
     let mut session = std::fs::read_to_string(session_config(&plan)).expect("copy");
     session = session.replace("theme = \"dark\"", "theme = \"tokyonight\"");
     std::fs::write(session_config(&plan), session).expect("session config");
-    plan.shared_config_writeback.expect("writeback").publish();
+    writeback_of(&plan).publish();
     assert_eq!(
         std::fs::read_to_string(&link).expect("account file"),
         "own = true\n"
@@ -316,7 +327,7 @@ fn a_link_redirected_or_broken_before_exit_is_not_written_back() {
             .expect("session change");
         std::fs::remove_file(&link).expect("unlink");
         std::os::unix::fs::symlink(&replacement, &link).expect("redirect link");
-        plan.shared_config_writeback.expect("writeback").publish();
+        writeback_of(&plan).publish();
         assert_eq!(std::fs::read_to_string(&shared).unwrap(), SHARED_CONFIG);
         assert_eq!(std::fs::read_link(&link).unwrap(), replacement);
         if dangling {
@@ -364,7 +375,7 @@ fn concurrent_exits_merge_different_fields_into_the_latest_shared_file() {
             let ready = ready.clone();
             scope.spawn(move || {
                 ready.wait();
-                plan.shared_config_writeback.expect("writeback").publish();
+                writeback_of(&plan).publish();
             });
         }
         ready.wait();
@@ -397,7 +408,7 @@ fn the_last_exit_that_changed_a_field_wins_but_an_unchanged_session_does_not() {
             text.replace("theme = \"dark\"", &format!("theme = \"{theme}\"")),
         )
         .unwrap();
-        plan.shared_config_writeback.unwrap().publish();
+        writeback_of(&plan).publish();
     }
     let current: toml::Table = std::fs::read_to_string(shared).unwrap().parse().unwrap();
     assert_eq!(current["ui"]["theme"].as_str(), Some("grokday"));
@@ -409,11 +420,7 @@ fn an_invalid_session_config_leaves_the_shared_file_untouched() {
     let shared = link_config(&mut fixture, SHARED_CONFIG);
     let plan = plan_isolated(&fixture.spec()).unwrap();
     std::fs::write(session_config(&plan), "[ui]\ntheme = \"").unwrap();
-    assert!(plan
-        .shared_config_writeback
-        .unwrap()
-        .publish_locked()
-        .is_err());
+    assert!(writeback_of(&plan).publish_locked().is_err());
     assert_eq!(std::fs::read_to_string(shared).unwrap(), SHARED_CONFIG);
 }
 
@@ -424,7 +431,7 @@ fn a_section_that_is_not_a_table_is_left_unchanged() {
     let plan = plan_isolated(&fixture.spec()).expect("plan");
     std::fs::write(session_config(&plan), "[ui]\ntheme = \"tokyonight\"\n")
         .expect("session config");
-    plan.shared_config_writeback.expect("writeback").publish();
+    writeback_of(&plan).publish();
     assert_eq!(
         std::fs::read_to_string(&shared).expect("shared"),
         "ui = \"dark\"\n"
@@ -459,7 +466,7 @@ fn bounded_agent_files_do_not_hold_grok_writeback() {
                 &changed
             };
             agent_file(path, kind, text, SMALL_FILE_LIMIT);
-            let writeback = plan.shared_config_writeback.unwrap();
+            let writeback = writeback_of(&plan);
             let readable = matches!(kind, "regular" | "linked");
             if !readable {
                 let error = writeback.publish_locked().unwrap_err();

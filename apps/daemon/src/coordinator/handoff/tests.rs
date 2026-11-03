@@ -98,17 +98,17 @@ impl Fixture {
     }
 
     async fn handoff(&self, session: &str) -> Result<Session> {
-        self.handoff_to(session, Agent::Codex).await
+        self.handoff_to(session, AgentId::CODEX).await
     }
 
-    async fn handoff_to(&self, session: &str, agent: Agent) -> Result<Session> {
+    async fn handoff_to(&self, session: &str, agent: AgentId) -> Result<Session> {
         self.handoff_launching(session, agent, self.launch()).await
     }
 
     async fn handoff_launching(
         &self,
         session: &str,
-        agent: Agent,
+        agent: AgentId,
         launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
     ) -> Result<Session> {
         handoff_session_with(
@@ -216,7 +216,7 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     let receiving = fixture.handoff("original").await.unwrap();
 
     let stored = fixture.stored(&receiving.id);
-    assert_eq!(stored.agent, Agent::Codex);
+    assert_eq!(stored.agent, AgentId::CODEX);
     assert_eq!(stored.status, SessionStatus::Working);
     assert!(stored.pinned, "the original's pinned mark is carried over");
     assert_eq!(
@@ -451,7 +451,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
         .store
         .insert_account(&Account {
             id: "claude-account".to_string(),
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             name: "Work".to_string(),
             config_dir: fixture.dir.join("account").to_string_lossy().into_owned(),
             share_default_config: false,
@@ -486,7 +486,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
         refusal(fixture.handoff("locked").await),
         error_code::SESSION_LOCKED
     );
-    let same = fixture.handoff_to("idle", Agent::Claude).await;
+    let same = fixture.handoff_to("idle", AgentId::CLAUDE).await;
     let same_text = format!("{:#}", same.as_ref().unwrap_err());
     assert_eq!(refusal(same), error_code::HANDOFF_TO_SAME_AGENT);
     assert!(same_text.contains("switch its account"), "{same_text}");
@@ -494,7 +494,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
     fixture
         .state
         .set_agent_availability(vec![crate::protocol::AgentAvailability {
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             availability: Availability::Unavailable,
             default_account_dir: None,
         }]);
@@ -505,7 +505,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
     fixture
         .state
         .set_agent_availability(vec![crate::protocol::AgentAvailability {
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             availability: Availability::NotDetermined,
             default_account_dir: None,
         }]);
@@ -515,7 +515,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
         &fixture.state,
         Handoff {
             session: "with-branch".to_string(),
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: Some(Some("claude-account".to_string())),
             model: None,
             effort: None,
@@ -533,13 +533,13 @@ async fn a_handoff_that_is_refused_changes_nothing() {
     );
 
     // A model the receiving agent does not offer.
-    crate::test_support::offer_models(&fixture.state, Agent::Codex, &[("gpt-a", &["low"])]);
+    crate::test_support::offer_models(&fixture.state, AgentId::CODEX, &[("gpt-a", &["low"])]);
     for (model, effort) in [("gpt-z", None), ("gpt-a", Some("extreme"))] {
         let err = handoff_session_with(
             &fixture.state,
             Handoff {
                 session: "with-branch".to_string(),
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 account: None,
                 model: Some(Some(model.to_string())),
                 effort: Some(effort.map(str::to_string)),
@@ -571,17 +571,17 @@ async fn a_handoff_to_an_agent_that_is_not_added_is_refused() {
     fixture
         .state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE])
         .unwrap();
     let before = fixture.snapshot();
 
     let err = fixture
-        .handoff_to("original", Agent::Codex)
+        .handoff_to("original", AgentId::CODEX)
         .await
         .expect_err("refused");
     let coded = err.downcast_ref::<CodedError>().expect("a coded error");
     assert_eq!(coded.code, error_code::AGENT_NOT_ADDED);
-    assert_eq!(coded.params["agent"], Agent::Codex.label());
+    assert_eq!(coded.params["agent"], AgentId::CODEX.label());
     assert!(fixture.launches.lock().unwrap().is_empty());
     assert_eq!(fixture.snapshot(), before);
 }
@@ -600,7 +600,7 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
         &fixture.state,
         Handoff {
             session: "original".to_string(),
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: None,
             model: None,
             effort: None,
@@ -679,7 +679,7 @@ async fn messages_for_the_original_during_a_handoff_are_forwarded_to_the_receivi
     });
 
     let receiving = fixture
-        .handoff_launching("original", Agent::Codex, during)
+        .handoff_launching("original", AgentId::CODEX, during)
         .await
         .unwrap();
 
@@ -773,7 +773,7 @@ async fn messages_for_the_original_during_a_failed_handoff_reach_the_original() 
         &fixture.state,
         Handoff {
             session: "original".to_string(),
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: None,
             model: None,
             effort: None,
@@ -824,7 +824,7 @@ async fn messages_held_for_the_original_go_to_the_receiving_session_when_the_han
     });
 
     let err = fixture
-        .handoff_launching("original", Agent::Codex, during)
+        .handoff_launching("original", AgentId::CODEX, during)
         .await
         .expect_err("archiving the original failed");
 
@@ -857,7 +857,7 @@ async fn a_session_that_is_no_longer_the_askers_is_refused() {
         &fixture.state,
         Handoff {
             session: "owned".to_string(),
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: None,
             model: None,
             effort: None,
@@ -883,7 +883,7 @@ fn run_leaving_one(fixture: &Fixture, id: &str) -> (StandIn, i32) {
     let pid_file = fixture.dir.join(format!("{id}-child"));
     let live = crate::test_support::fake_live_session(
         id,
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!(
@@ -966,7 +966,7 @@ async fn a_receiving_session_that_does_not_start_leaves_what_the_original_starte
     let _guard = crate::test_support::KillOnDrop(vec![child]);
 
     fixture
-        .handoff_launching("original", Agent::Codex, |_| {
+        .handoff_launching("original", AgentId::CODEX, |_| {
             Err(anyhow!("the agent could not be started"))
         })
         .await
@@ -998,7 +998,7 @@ async fn a_failed_archive_takes_back_the_carry_over_of_what_the_original_started
     });
 
     let err = fixture
-        .handoff_launching("original", Agent::Codex, during)
+        .handoff_launching("original", AgentId::CODEX, during)
         .await
         .expect_err("archiving the original failed");
     assert!(
@@ -1033,7 +1033,7 @@ async fn a_failed_archive_carries_the_failure_it_failed_with() {
     });
 
     let err = fixture
-        .handoff_launching("original", Agent::Codex, during)
+        .handoff_launching("original", AgentId::CODEX, during)
         .await
         .expect_err("archiving the original failed");
     let (code, params, message) = crate::protocol::error_parts(&err);
@@ -1126,7 +1126,7 @@ async fn a_moved_session_without_a_process_is_left_owed_the_notice_of_its_owner(
     insert_project(&state, &repo);
     let original = session("original", true, "idle", None, true);
     let receiving = Session {
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         ..session("receiving", true, "idle", None, true)
     };
     let asleep = session("asleep", true, "interrupted", Some("receiving"), false);

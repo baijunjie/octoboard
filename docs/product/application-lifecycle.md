@@ -443,8 +443,9 @@ application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On ever
   fails to start, with a reason that names the file and says it is not an Octoboard database. A file that is not a
   SQLite database at all is refused and left as it is too, with a reason that names the file.
 - **A database at the version this build reads** is used as it is.
-- **A database at an older version** is backed up, then upgraded in place. No release has needed this yet: version 1 is
-  the first, so there is nothing older to upgrade from.
+- **A database at an older version** is backed up, then upgraded in place. Versions change only between releases, so
+  an older version is always one a release wrote. No release has needed this yet: version 1 is the first, so there is
+  nothing older to upgrade from.
   - The backup is a copy beside it, `octoboard.db.pre-v<its version>`, taken after its write-ahead log is written back
     into it. No earlier backup is overwritten: when that name is taken, the copy's name has the Unix time in seconds
     added, `octoboard.db.pre-v<its version>-<time>` (and a counter after it, should that be taken too). When an earlier

@@ -43,6 +43,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "wire_path",
         ],
     ),
+    ("providers", &["providers"]),
     ("wire", &["protocol"]),
     (
         "host",

@@ -9,9 +9,12 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 
 use crate::accounts::relocate;
+use crate::accounts::thread_registry::thread_registry;
 use crate::adapter;
 use crate::messaging::texts;
-use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus, TerminalAppearance};
+use crate::protocol::{
+    error_code, AgentId, CodedError, Session, SessionStatus, TerminalAppearance,
+};
 use crate::records::switch_continue;
 use crate::session::term;
 use crate::state::refusals::refuse_if_archived;
@@ -50,11 +53,11 @@ struct Relocation {
 /// Everything a switch can refuse before it ends the session's process: the launch rule on the
 /// target directory, and the conversation record being where it is expected. The default account
 /// pins nothing, so each side of it resolves from one shell snapshot taken here, once, and kept
-/// for the relaunch; so does a Codex switch, whose environment says where a home keeps its
-/// database. `source` and `target` are the pinned directories, `None` for the default account.
-/// Blocking.
+/// for the relaunch; so does a switch of a provider with a thread registry, whose environment can
+/// say where an account keeps it. `source` and `target` are the pinned directories, `None` for the
+/// default account. Blocking.
 fn prepare_switch(
-    agent: Agent,
+    agent: AgentId,
     resume_id: Option<&str>,
     source: Option<&str>,
     target: Option<&str>,
@@ -62,9 +65,10 @@ fn prepare_switch(
 ) -> Result<SwitchPlan> {
     // Before anything is copied: the copy would create the directory's `sessions/` and so make a
     // Grok home that was never initialized pass the same check at launch.
-    adapter::refuse_unlaunchable_account(agent, target.map(Path::new))?;
-    // Codex's environment also says where a home keeps its database, which the copy must find.
-    let shell_env = if source.is_none() || target.is_none() || agent == Agent::Codex {
+    adapter::provider(agent).refuse_unlaunchable_account(target.map(Path::new))?;
+    // A thread registry is pointed with the environment the relaunch sees
+    // (`ThreadRegistry::point_thread_at`), which can say where the account keeps it.
+    let shell_env = if source.is_none() || target.is_none() || thread_registry(agent).is_some() {
         Some(snapshot().context("snapshotting the user's shell environment")?)
     } else {
         None
@@ -382,8 +386,8 @@ pub(crate) async fn switch_session_account_if(
             if state.session_record(id)?.status == SessionStatus::Archived {
                 return Err(session_archived(id));
             }
-            // The process is down, so what the account it ran on holds now is final: a Codex
-            // thread may have started a segment since the plan, and that head is the one carried.
+            // The process is down, so what the account it ran on holds now is final: a thread may
+            // have started a segment since the plan, and that head is the one carried.
             // Only a turn this switch ended, or that was waiting out a usage limit in the process
             // it ended, is carried on: a session whose process had ended before was left there by
             // something else.
@@ -391,7 +395,7 @@ pub(crate) async fn switch_session_account_if(
                 Some(mut relocation) => {
                     let agent = before.agent;
                     tokio::task::spawn_blocking(move || -> Result<_> {
-                        if agent == Agent::Codex {
+                        if adapter::provider(agent).records().head_moves_during_turn() {
                             relocation.record = relocate::locate(
                                 agent,
                                 &relocation.from,
@@ -424,8 +428,8 @@ pub(crate) async fn switch_session_account_if(
                 relocation.filter(|relocation| relocation.from != relocation.to)
             {
                 let agent = before.agent;
-                // The environment the relaunch will see, which with the target's `config.toml` says
-                // where a Codex home keeps its database.
+                // The environment the relaunch will see, which can say where the target keeps its
+                // thread registry.
                 let launch_env = plan.shell_env.clone().unwrap_or_default();
                 tokio::task::spawn_blocking(move || {
                     let Relocation {

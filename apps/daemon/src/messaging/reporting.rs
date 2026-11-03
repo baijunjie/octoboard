@@ -32,7 +32,7 @@ use crate::messaging::delivery::{
 use crate::messaging::idle_children;
 use crate::messaging::naming::{one_line, session_labels};
 use crate::messaging::texts::REPORT_OPENING;
-use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::session_tools::catalogue;
 use crate::state::{AppState, TurnClose};
 
@@ -418,21 +418,23 @@ pub fn close_turn_and_report(
 /// every such synthesised report reaching its owner this much later.
 const COMPLETION_NOTICE_SETTLE: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Whether the owed report for a Claude Code turn that just ended is to be dropped, because the
-/// agent went straight on to a turn telling itself that background work finished: work it was
-/// waiting on had ended during the turn, so the turn's end no longer lists it, but the session
-/// has not been told yet, and its work is not over. That turn is judged in its place. `notices` is
-/// [`AppState::completion_notices`] as the turn closed.
+/// Whether the owed report for a turn that just ended is to be dropped, for a provider that holds
+/// its reports for a completion notice (`DeliveryQuirks::holds_report_for_completion_notice`,
+/// Claude Code's), because the agent went straight on to a turn telling itself that background work
+/// finished: work it was waiting on had ended during the turn, so the turn's end no longer lists
+/// it, but the session has not been told yet, and its work is not over. That turn is judged in its
+/// place. `notices` is [`AppState::completion_notices`] as the turn closed.
 async fn held_for_a_completion_notice(
     state: &Arc<AppState>,
     session_id: &str,
     notices: u64,
 ) -> bool {
-    let claude = matches!(
+    let holds = matches!(
         state.store.get_session(session_id),
-        Ok(Some(session)) if session.agent == Agent::Claude
+        Ok(Some(session))
+            if session.agent.descriptor().capabilities.delivery.holds_report_for_completion_notice
     );
-    if !claude {
+    if !holds {
         return false;
     }
     tokio::time::sleep(COMPLETION_NOTICE_SETTLE).await;
@@ -608,7 +610,7 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::protocol::{Agent, Role, SessionKind};
+    use crate::protocol::{AgentId, Role, SessionKind};
     use crate::test_support::bare_session;
     use crate::test_support::owner_team::{
         console, hub_heard, hub_heard_of, interrupted_hub_state, kept_texts, project_session,
@@ -1067,7 +1069,7 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
         let starter = Session {
             id: "starter".to_string(),
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             bound_to: None,
             ..project_session("starter")
         };
@@ -1097,7 +1099,7 @@ mod tests {
 
         let wanted = format!(
             "it said nothing. Check it with `{}`.",
-            catalogue::qualified_tool_name(Agent::Grok, "get_session")
+            catalogue::qualified_tool_name(AgentId::GROK, "get_session")
         );
         let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
         let output = loop {
@@ -1340,6 +1342,11 @@ mod tests {
 
         close_turn_and_report(&state, "waiting", turn("waiting-for-the-other-review"));
         state.turn_started("waiting", Some(notice));
+        // As applying the hook does for a prompt Claude Code's interpreter reads as a notice.
+        assert!(crate::adapter::provider(crate::protocol::AgentId::CLAUDE)
+            .hooks()
+            .is_completion_notice(notice));
+        state.note_completion_notice("waiting");
         close_turn_and_report(&state, "finished", turn("nothing-left-running"));
         let heard = hub_heard_of(&hub, "nothing-left-running").await;
         assert!(heard.contains("nothing-left-running"), "{heard}");
@@ -1465,7 +1472,7 @@ mod tests {
             id: "hub".into(),
             kind: SessionKind::Console,
             bound_to: None,
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             ..project_session("hub")
         };
         state.store.insert_session(&hub).unwrap();
@@ -1475,8 +1482,9 @@ mod tests {
         worker.role = Role::Worker;
         state.store.insert_session(&worker).unwrap();
         let (transport, listener) = crate::adapter::codex::transport::test_transport();
-        let live = crate::test_support::fake_live_session("hub", Agent::Codex, 120, 40, "sleep 30")
-            .with_codex_transport(transport);
+        let live =
+            crate::test_support::fake_live_session("hub", AgentId::CODEX, 120, 40, "sleep 30")
+                .with_transport(std::sync::Arc::new(transport));
         state.register_live(live.clone());
         state.turn_started("worker", Some("work"));
         let server = std::thread::spawn(move || {

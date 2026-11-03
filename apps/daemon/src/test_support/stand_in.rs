@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use super::{is_running, perl_write, wait_for_pid, within, PATIENCE};
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 use crate::session::{LiveSession, NewSession};
 use crate::state::AppState;
 
@@ -44,7 +44,7 @@ pub(crate) fn show_agents_view(live: &LiveSession) {
 
 /// A stand-in live session that stays alive on a PTY (`sleep 30`) with nothing reading it.
 pub(crate) fn idle_stand_in(id: &str) -> StandIn {
-    fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
+    fake_live_session(id, AgentId::CLAUDE, 80, 24, "sleep 30")
 }
 
 /// A stand-in session for `id` that is registered with `state` and has its output read, so a test
@@ -63,7 +63,7 @@ pub(crate) fn running_leaving_one(state: &Arc<AppState>, dir: &Path, id: &str) -
     let pid_file = dir.join(format!("{id}-child"));
     let live = fake_live_session(
         id,
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!(
@@ -90,7 +90,7 @@ pub(crate) fn running_leaving_two(
     let doomed_file = dir.join(format!("{id}-doomed"));
     let live = fake_live_session(
         id,
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!(
@@ -186,13 +186,13 @@ impl StandIn {
         self
     }
 
-    pub(crate) fn with_codex_transport(
+    pub(crate) fn with_transport(
         mut self,
-        transport: crate::adapter::codex::transport::CodexTransport,
+        transport: Arc<dyn crate::session::term::MessageTransport>,
     ) -> Self {
         Arc::get_mut(&mut self.0)
             .expect("configure before registering the stand-in")
-            .codex_transport = Some(Arc::new(transport));
+            .transport = Some(transport);
         self
     }
 
@@ -220,7 +220,7 @@ impl Drop for StandIn {
 
 pub(crate) fn fake_live_session(
     id: &str,
-    agent: Agent,
+    agent: AgentId,
     cols: u16,
     rows: u16,
     script: &str,
@@ -289,11 +289,11 @@ pub(crate) fn stand_in_launch_running(
 /// launched session's is, and, for a Grok one, where its trust record is carried after a press.
 pub(crate) fn watched_live_session(
     id: &str,
-    agent: Agent,
+    agent: AgentId,
     cols: u16,
     rows: u16,
     script: &str,
-    carried_trust: Option<crate::session::trust::CarriedTrust>,
+    carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
 ) -> StandIn {
     stand_in(id, agent, cols, rows, script, carried_trust, None)
 }
@@ -302,7 +302,7 @@ pub(crate) fn watched_live_session(
 /// environment, as an agent `term::launch` starts does, and has its launch id.
 pub(crate) fn tagged_live_session(
     id: &str,
-    agent: Agent,
+    agent: AgentId,
     script: &str,
     tag: &crate::processes::ledger::ProcessTag,
 ) -> StandIn {
@@ -313,11 +313,11 @@ pub(crate) fn tagged_live_session(
 
 fn stand_in(
     id: &str,
-    agent: Agent,
+    agent: AgentId,
     cols: u16,
     rows: u16,
     script: &str,
-    carried_trust: Option<crate::session::trust::CarriedTrust>,
+    carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
     tag: Option<&crate::processes::ledger::ProcessTag>,
 ) -> StandIn {
     // Bash rather than `/bin/sh`: callers' scripts may use bash builtins and syntax that dash, the
@@ -337,7 +337,7 @@ fn stand_in(
         ),
         spawned,
         checks_composer: false,
-        codex_transport: None,
+        transport: None,
         scratch_dir: None,
         resolves_approvals_itself: false,
         carried_trust,

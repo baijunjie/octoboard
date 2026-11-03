@@ -6,10 +6,12 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { accountOf } from "../fixtures/builders";
 import { presence, stubListMotion } from "../components/motion/listMotionTestSupport";
 import { enter, leave, mountForTooltip, openTooltip, pointer, press as pressWith, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Account, AccountQuota, Agent, Availability, Event, Session } from "../protocol";
 import { createStateStore, DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
+import { TEST_AGENTS, TEST_PROVIDERS } from "../test/testProviders";
 import { MODAL_OPEN } from "../components/focus/selectors";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
@@ -105,8 +107,9 @@ function mount(
 ) {
   vi.setSystemTime(NOW);
   const store = createStateStore({
-    agentAvailability: new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }])),
+    agentAvailability: new Map(TEST_AGENTS.map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }])),
     settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+    providers: TEST_PROVIDERS,
     accountQuotas: [quota("claude", null, "max"), quota("claude", "claude-work", "pro"), quota("codex", null, "plus")],
   });
   const daemon = testDaemon({ store, request, showNotice });
@@ -488,16 +491,16 @@ it("recedes a used-up account, naming it used up, and draws it as before once it
   const rows = () => Array.from(document.querySelectorAll<HTMLElement>('[role="tabpanel"]:not([data-inert="true"]) .groove-b'));
   const [usable, usedUp] = rows();
   expect(usable!.textContent).not.toContain("Limit reached");
-  expect(usable!.querySelector(".quota-meter--claude")).not.toBeNull();
+  expect(usable!.querySelector(".quota-meter--provider")).not.toBeNull();
   expect(usedUp!.textContent).toContain("Limit reached");
   expect(usedUp!.querySelector("div.min-w-0.text-app-muted")?.textContent).toBe("Work");
   expect(usable!.querySelector("div.min-w-0.text-app-muted")).toBeNull();
   expect(usedUp!.querySelector(".quota-meter--used-up")).not.toBeNull();
-  expect(usedUp!.querySelector(".quota-meter--claude")).toBeNull();
+  expect(usedUp!.querySelector(".quota-meter--provider")).toBeNull();
 
   advance(10 * MINUTE + 1000);
   expect(rows()[1]!.textContent).not.toContain("Limit reached");
-  expect(rows()[1]!.querySelector(".quota-meter--claude")).not.toBeNull();
+  expect(rows()[1]!.querySelector(".quota-meter--provider")).not.toBeNull();
 });
 
 it("holds the panel's height across tabs, so that choosing a tab with fewer accounts moves nothing under the pointer", () => {
@@ -580,7 +583,7 @@ it("lists every installed agent while the daemon has not decided the added list"
   withFakeTimers();
   const { button } = mount(undefined, null);
   openPanel(button);
-  expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code", "Codex"]);
+  expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code", "Codex", "Test Agent"]);
 });
 
 it("says so, pointing to Settings, when agents are installed but none is added", () => {
@@ -600,7 +603,7 @@ it("says so, pointing to Settings, when agents are installed but none is added",
 
 it("says that no agent is available when the added ones are not installed and nothing else is", () => {
   withFakeTimers();
-  const { button } = mount({ claude: "unavailable", codex: "unavailable", grok: "unavailable" }, ["claude"]);
+  const { button } = mount({ claude: "unavailable", codex: "unavailable", grok: "unavailable", test_agent: "unavailable" }, ["claude"]);
   openPanel(button);
   expect(tabs()).toHaveLength(0);
   expect(panel()!.textContent).toContain("No agent available");
@@ -711,7 +714,7 @@ it("follows the selected session's actual agent and account, account switches an
   const button = () => host.querySelector("button")!;
   const fill = () => button().querySelector(CAPSULE);
   select(session.id);
-  expect(button().getAttribute("aria-label")).toContain("Claude Code, ⁨Work⁩, Session 82% remaining");
+  expect(button().getAttribute("aria-label")).toContain(`${isolate("Claude Code")}, ${isolate("Work")}, Session 82% remaining`);
   expect(remaining(button())).toEqual(["82%"]);
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, config_dir: "/home/dev/.claude-other" }] } }));
   expect(fill()).toBeNull();
@@ -721,7 +724,7 @@ it("follows the selected session's actual agent and account, account switches an
   expect(fill()).toBeNull();
 
   act(() => store.setState({ sessions: new Map([[session.id, { ...session, agent: "codex", account_id: null, config_dir: null }]]) }));
-  expect(button().getAttribute("aria-label")).toContain("Codex, ⁨Default⁩");
+  expect(button().getAttribute("aria-label")).toContain(`${isolate("Codex")}, ${isolate("Default")}`);
   const weekly = quota("codex", null, "plus");
   weekly.windows = [{ ...weekly.windows[0]!, kind: "weekly", used_percent: 64 }];
   act(() => store.setState({ accountQuotas: [weekly] }));
@@ -1263,10 +1266,10 @@ it("closes the panel when Redeem reset is pressed and asks for the confirmation 
   expect(confirmation.textContent).toContain("Full reset (Weekly + 5 hr)");
   expect(confirmation.textContent).toContain("Expires in 6d 3h");
 
-  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "use_codex_reset_credit" }));
+  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "use_reset_credit" }));
   const confirm = confirmation.querySelector<HTMLButtonElement>("button[type=submit]")!;
   await act(async () => confirm.click());
-  expect(request).toHaveBeenCalledWith({ type: "use_codex_reset_credit", account: null });
+  expect(request).toHaveBeenCalledWith({ type: "use_reset_credit", agent: "codex", account: null });
   // A use that worked keeps the dialog open to show the meters fill, with Done to leave it; no notice.
   expect(showNotice).not.toHaveBeenCalled();
   const done = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((candidate) => candidate.textContent === "Done")!;
@@ -1282,7 +1285,7 @@ it("takes Cancel as leaving the credit unused and the confirmation gone", () => 
   const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((candidate) => candidate.textContent === "Cancel")!;
   click(cancel);
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "use_codex_reset_credit" }));
+  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "use_reset_credit" }));
 });
 
 it("returns focus to the rail button after a keyboard-opened panel raised the confirmation and it was cancelled", () => {

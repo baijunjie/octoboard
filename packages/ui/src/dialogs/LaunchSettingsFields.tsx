@@ -2,6 +2,7 @@ import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { effortLevels, type LaunchSettingOption, launchSettingOptions, shownModel } from "../agents/agentLaunchSettings";
+import { providerModelDisplay } from "../agents/providers";
 import { FailureBody } from "../components/alerts/errorParts";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -12,7 +13,7 @@ import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel, Launch } from "../protocol";
 import { modelDisplayName } from "../sessions/sessionModel";
-import { useDaemon, useDaemonStore } from "../store";
+import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { AdvancedSection, type AdvancedTab, AdvancedTabs } from "../components/form/AdvancedSection";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { useAgentModels } from "./useAgentModels";
@@ -39,6 +40,7 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const t = useT();
   const language = useCurrentLanguage();
   const { request } = useDaemon();
+  const display = providerModelDisplay(useProviders(), agent);
   const { status, models, defaultModel, defaultModelSource, unavailable, error } = useAgentModels(request, agent, account, enabled);
   const loading = status === "loading";
   // Selected as the worded text rather than the records it names, so the field follows a rename
@@ -55,7 +57,7 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const modelDescription = loading ? modelText : undefined;
   const modelFailure = loading ? undefined : reason;
   const listed = status === "ready" && !unavailable && models.length > 0;
-  return { agent, loading, listed, models, defaultModel, defaultModelSource, modelText, modelDescription, modelFailure };
+  return { agent, display, loading, listed, models, defaultModel, defaultModelSource, modelText, modelDescription, modelFailure };
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
@@ -72,7 +74,7 @@ function inherited(t: Translate, value: string | null): { placeholder: string; p
 /** The model a pair resolves to: its own `model` if it names one, else the one it `inherit`s, else the
  * one Octoboard launches with when nothing names one, else `null`, the agent's own choice. */
 function resolvedModel(launch: LaunchModels, model: string | null, inherit: Launch | undefined): string | null {
-  return shownModel(launch.agent, model) ?? shownModel(launch.agent, inherit?.model ?? null) ?? launch.defaultModel;
+  return shownModel(launch.display, model) ?? shownModel(launch.display, inherit?.model ?? null) ?? launch.defaultModel;
 }
 
 /** The warning mark of a Model field whose list of models could not be read: it concerns the whole field,
@@ -127,9 +129,9 @@ export function ModelPicker({
   const nameOf = (id: string | null) => {
     if (id === null) return null;
     const listed = launch.models.find((candidate) => candidate.id === id);
-    return listed?.version ?? listed?.name ?? modelDisplayName(launch.agent, id);
+    return listed?.version ?? listed?.name ?? modelDisplayName(id, launch.display);
   };
-  const shown = shownModel(launch.agent, model);
+  const shown = shownModel(launch.display, model);
   // What an unset picker resolves to, for its badge.
   const resolved = nameOf(resolvedModel(launch, null, inherit));
   let unset: { placeholder: string; placeholderBadge?: string } | undefined;

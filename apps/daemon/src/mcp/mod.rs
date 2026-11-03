@@ -8,7 +8,7 @@
 //! registers `octoboardd mcp --session … --kind … --port … --key … --token …` as a `command`-type
 //! MCP server, and that child ([`stdio`]) speaks MCP on its stdin/stdout while forwarding every
 //! call to the daemon over loopback HTTP, where [`dispatch`] runs it against the real state. One
-//! mechanism covers all three agents, which is why it was chosen over pointing them at a Streamable
+//! mechanism covers every provider, which is why it was chosen over pointing them at a Streamable
 //! HTTP endpoint in the daemon: Codex's verified injection takes a `command` and `args` ("Injecting
 //! Octoboard into each agent" in `docs/agent-cli-reference.md`), and Grok's SSRF protection rejects
 //! loopback HTTP outright, which is already why its hooks cannot be HTTP either.

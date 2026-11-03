@@ -7,15 +7,15 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::adapter::adapter_for;
+use crate::adapter::provider;
 use crate::hostfs::lexically_normalise;
-use crate::protocol::{Agent, RecordTitles};
+use crate::protocol::{AgentId, RecordTitles};
 
 /// The title to show for a session, `None` when nothing says what it is about. `names` yields the
 /// project's names (`project_names`), and is asked only when the agent's terminal title has to be
 /// read against them.
 pub fn resolve(
-    agent: Agent,
+    agent: AgentId,
     raw: Option<&str>,
     records: &RecordTitles,
     names: impl FnOnce() -> Vec<String>,
@@ -24,7 +24,7 @@ pub fn resolve(
         return Some(named.clone());
     }
     raw.and_then(|raw| {
-        let adapter = adapter_for(agent);
+        let adapter = provider(agent);
         let names = if adapter.names_project() {
             names()
         } else {
@@ -98,7 +98,8 @@ mod tests {
     fn a_named_title_wins_then_the_task_in_the_terminal_title_then_the_prompt() {
         let named = records(Some("Named"), Some("Prompt"));
         let none = records(None, Some("Prompt"));
-        let resolve = |raw, records: &RecordTitles| resolve(Agent::Claude, raw, records, Vec::new);
+        let resolve =
+            |raw, records: &RecordTitles| resolve(AgentId::CLAUDE, raw, records, Vec::new);
         assert_eq!(resolve(Some("◐ Task"), &named).as_deref(), Some("Named"));
         assert_eq!(resolve(Some("◐ Task"), &none).as_deref(), Some("Task"));
         assert_eq!(
@@ -114,7 +115,7 @@ mod tests {
         // Match a persisted, truncated prompt, independently of the current handoff wording.
         let prompt =
             "You are taking over the work of the project session `original` (\"Fix the build\"), …";
-        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
             let mut titles = records(None, Some(prompt));
             assert_eq!(resolve(agent, None, &titles, Vec::new), None);
             assert_eq!(
@@ -137,15 +138,15 @@ mod tests {
             vec!["proj".to_owned()]
         };
         let none = RecordTitles::default();
-        resolve(Agent::Claude, Some("Task"), &none, cwd);
+        resolve(AgentId::CLAUDE, Some("Task"), &none, cwd);
         resolve(
-            Agent::Codex,
+            AgentId::CODEX,
             Some("Task | other"),
             &records(Some("Named"), None),
             cwd,
         );
         assert!(!asked.get());
-        let task = resolve(Agent::Codex, Some("Task | proj"), &none, cwd);
+        let task = resolve(AgentId::CODEX, Some("Task | proj"), &none, cwd);
         assert_eq!(task.as_deref(), Some("Task"));
         assert!(asked.get());
     }

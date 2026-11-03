@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { choiceKey, findEntry } from "../accounts/choiceEntries";
-import { AGENT_LABEL } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import { CodedError } from "../errors/codedError";
 import { CONVERSATION_ID } from "../agents/conversationId";
 import type { ErrorPresentation } from "../errors/errorPresentation";
@@ -10,7 +10,7 @@ import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
-import { useDaemon, useDaemonStore } from "../store";
+import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { useChoiceGroups } from "./useLaunchChoice";
 import { useLocatedConversation } from "./useLocatedConversation";
 
@@ -78,6 +78,7 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   reask: () => void;
 } {
   const t = useT();
+  const providers = useProviders();
   const { request } = useDaemon();
   const groups = useChoiceGroups();
   const [checkedMissing, setCheckedMissing] = useState<string>();
@@ -112,7 +113,7 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   const looking = idProblem === undefined && resuming && (lookup.status === "pending" || missing);
   let status: string | undefined;
   if (looking) status = t("dialog.session.resumeLooking");
-  else if (target?.kind === "record") status = t("dialog.session.resumeFound", { agent: AGENT_LABEL[target.agent], account: isolate(target.accountName) });
+  else if (target?.kind === "record") status = t("dialog.session.resumeFound", { agent: isolate(providerLabel(t, providers, target.agent)), account: isolate(target.accountName) });
   else if (target) status = t(FOUND_SESSION_MESSAGE[target.kind], { title: isolate(sessionDisplayTitle(t, target.session)) });
 
   return { idProblem, target, looking, notFound, problem, status, reask: () => setReasked((count) => count + 1) };

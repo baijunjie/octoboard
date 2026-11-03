@@ -9,11 +9,14 @@ use rusqlite::Connection;
 /// at another version is not opened as it stands; see [`settle_existing_file`].
 ///
 /// `SCHEMA` only ever runs on an empty file, so an existing database keeps the shape it was
-/// created with and fails at query time unless it is brought up to date. Every change to `SCHEMA`
-/// therefore raises this by one and appends the step from the previous version to [`MIGRATIONS`];
-/// the schema of every past version is kept as `schema/v{N}.sql` and listed in the test-only
-/// `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the result
-/// with a fresh one.
+/// created with and fails at query time unless it is brought up to date. Version changes and
+/// migration code are written only between released versions: a change to `SCHEMA` that no
+/// release has carried yet is made in place, at this version, with no new step (when this version
+/// already has a step from a released one, that step is amended instead); the first change to the
+/// schema of a released version raises this by one and appends the step from that version to
+/// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
+/// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
+/// result with a fresh one.
 pub(super) const SCHEMA_VERSION: i64 = 1;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
@@ -70,29 +73,6 @@ CREATE TABLE consoles (
     -- The agent a project session here falls back to when its project names none;
     -- NULL follows `default_agent`.
     project_session_agent TEXT,
-    -- The account each agent's sessions here read, by id; NULL means that agent's
-    -- default account. No `REFERENCES`: `Store::delete_account` clears these itself,
-    -- in the same locked step as the row's removal, rather than relying on a cascade.
-    claude_account_id TEXT,
-    codex_account_id  TEXT,
-    grok_account_id   TEXT,
-    -- The model and reasoning effort a console session here is launched with, per
-    -- agent because each has its own model names; NULL means the agent's own default.
-    -- Read at launch, so nothing is copied onto the session.
-    claude_console_session_model  TEXT,
-    claude_console_session_effort TEXT,
-    codex_console_session_model   TEXT,
-    codex_console_session_effort  TEXT,
-    grok_console_session_model    TEXT,
-    grok_console_session_effort   TEXT,
-    -- The model and reasoning effort a project session here is launched with when
-    -- neither it nor its project names one; NULL means the agent's own default.
-    claude_project_session_model TEXT,
-    claude_project_session_effort TEXT,
-    codex_project_session_model TEXT,
-    codex_project_session_effort TEXT,
-    grok_project_session_model TEXT,
-    grok_project_session_effort TEXT,
     icon          TEXT,
     -- The user's own addition to the console session's instruction file; NULL means
     -- none.
@@ -113,27 +93,6 @@ CREATE TABLE projects (
     default_agent TEXT,
     source        TEXT NOT NULL,
     remote_url    TEXT,
-    -- The account each agent's sessions here read, by id; NULL with the flag clear
-    -- inherits the console's reference for that agent. The flag, set only where the id
-    -- is NULL, says the project pins the agent's default account instead, even where
-    -- the console names an account: a separate column so that no stored value in the
-    -- id column can be mistaken for an account id. The id is cleared by
-    -- `Store::delete_account`, like the console's; the flag names no account.
-    claude_account_id TEXT,
-    codex_account_id  TEXT,
-    grok_account_id   TEXT,
-    claude_account_default INTEGER NOT NULL DEFAULT 0,
-    codex_account_default  INTEGER NOT NULL DEFAULT 0,
-    grok_account_default   INTEGER NOT NULL DEFAULT 0,
-    -- The model and reasoning effort a session here is launched with, per agent;
-    -- NULL means the agent's own default. Read at launch, so nothing is copied onto
-    -- the session.
-    claude_session_model  TEXT,
-    claude_session_effort TEXT,
-    codex_session_model   TEXT,
-    codex_session_effort  TEXT,
-    grok_session_model    TEXT,
-    grok_session_effort   TEXT,
     trust_consent INTEGER NOT NULL DEFAULT 0,
     pinned        INTEGER NOT NULL DEFAULT 0,
     tags          TEXT NOT NULL DEFAULT '[]',
@@ -151,6 +110,49 @@ CREATE TABLE projects (
 -- of a console's projects.
 CREATE UNIQUE INDEX projects_console_path_unique
     ON projects (console_id, path);
+-- The account each provider's sessions in a console read, by id; a provider with no row
+-- uses its default account. No `REFERENCES` on `account_id`: `Store::delete_account` removes
+-- these rows itself, in the same locked step as the account's removal, rather than relying on
+-- a cascade. A row exists only while it names an account. Rows naming a provider this build
+-- does not register are kept and ignored.
+CREATE TABLE console_providers (
+    console_id TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+    provider   TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    PRIMARY KEY (console_id, provider)
+);
+-- The model and reasoning effort sessions in a console are launched with, per provider because
+-- each has its own model names; NULL means the provider's own default. `session_kind` says which
+-- sessions the pair launches: `console` for a console session of the console, `project` for a
+-- project session there when neither it nor its project names one. Read at launch, so nothing
+-- is copied onto the session. A row exists only while it names a model or an effort.
+CREATE TABLE console_launches (
+    console_id   TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+    provider     TEXT NOT NULL,
+    session_kind TEXT NOT NULL CHECK (session_kind IN ('console', 'project')),
+    model        TEXT,
+    effort       TEXT,
+    PRIMARY KEY (console_id, provider, session_kind)
+);
+-- What a project sets for each provider; a provider with no row inherits everything from its
+-- console. `account_id` is the account the provider's sessions here read, by id; NULL with
+-- `account_default` clear inherits the console's reference. The flag, set only where the id is
+-- NULL, says the project pins the provider's default account instead, even where the console
+-- names an account: a separate column so that no stored value in the id column can be mistaken
+-- for an account id. The id is cleared by `Store::delete_account`, like the console's; the flag
+-- names no account. `model` and `effort` are what a session here is launched with; NULL means
+-- the provider's own default. Read at launch, so nothing is copied onto the session. A row
+-- exists only while it holds a value; rows naming a provider this build does not register are
+-- kept and ignored.
+CREATE TABLE project_providers (
+    project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    provider        TEXT NOT NULL,
+    account_id      TEXT,
+    account_default INTEGER NOT NULL DEFAULT 0,
+    model           TEXT,
+    effort          TEXT,
+    PRIMARY KEY (project_id, provider)
+);
 CREATE TABLE sessions (
     id               TEXT PRIMARY KEY,
     agent            TEXT NOT NULL,
@@ -305,12 +307,6 @@ CREATE TABLE settings (
     default_account_names  TEXT,
     -- NULL until a default account is turned off; see `Store::disabled_default_accounts`.
     disabled_default_accounts TEXT,
-    -- One choice per agent; NULL until the user makes one.
-    codex_approval_reviewer TEXT,
-    claude_approval_mode   TEXT,
-    -- NULL until the user makes a choice for an agent's Claude compatibility; see
-    -- `Store::claude_compatibility_choices`.
-    claude_compatibility   TEXT,
     -- NULL until the user puts a tag on an agent; see `Store::agent_tags`.
     agent_tags             TEXT,
     development         TEXT NOT NULL DEFAULT 'worktree',
@@ -318,6 +314,15 @@ CREATE TABLE settings (
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
     revert_gate         INTEGER NOT NULL DEFAULT 0
+);
+-- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
+-- choice); a setting with no row follows its default. Rows naming a provider or setting this
+-- build does not declare are kept and ignored. See `Store::provider_settings`.
+CREATE TABLE provider_settings (
+    provider TEXT NOT NULL,
+    setting  TEXT NOT NULL,
+    value    TEXT NOT NULL,
+    PRIMARY KEY (provider, setting)
 );
 "#;
 

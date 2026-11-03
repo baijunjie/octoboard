@@ -7,6 +7,7 @@ import { isolate } from "../i18n/isolate";
 import type { Account, AccountQuota, Agent, QuotaWindow, Session, SessionStatus } from "../protocol";
 import { displayColumns } from "../i18n/displayColumns";
 import { delegatingSessionIds } from "../sessions/sessionStatus";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { iconKeysOf } from "./statusItemIcons";
 import { buildStatusItemMenu, MAX_PER_SECTION, MAX_SESSION_LABEL_COLUMNS } from "./statusItemMenu";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
@@ -19,7 +20,7 @@ const projects = [projectOf("p", "c", "Alpha")];
 const NOW = Date.UTC(2026, 9, 19, 12);
 const MINUTE = 60_000;
 
-const NO_QUOTA: StatusItemQuotaSource = { language: "en", now: NOW, accounts: [], addedAgents: null, agentAvailability: new Map(), accountQuotas: [] };
+const NO_QUOTA: StatusItemQuotaSource = { language: "en", now: NOW, accounts: [], addedAgents: null, agentAvailability: new Map(), accountQuotas: [], providers: TEST_PROVIDERS };
 
 const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA, queuedSwitches: ReadonlySet<string> = new Set()) =>
   buildStatusItemMenu(t, {
@@ -201,18 +202,18 @@ describe("buildStatusItemMenu quota submenus", () => {
 
   it("has one submenu per available agent, in the agents' usual order", () => {
     const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
-    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude usage", "Grok usage"]);
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["\u2068Claude\u2069 usage", "\u2068Grok\u2069 usage"]);
   });
 
   it("has a submenu only for added agents, in the order they were added", () => {
     const menu = menuOf([], source({ addedAgents: ["grok", "claude"], agentAvailability: available("claude", "codex", "grok") }));
-    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Grok usage", "Claude usage"]);
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["\u2068Grok\u2069 usage", "\u2068Claude\u2069 usage"]);
     expect(menuOf([], source({ addedAgents: [], agentAvailability: available("claude") })).submenus).toEqual([]);
   });
 
   it("still leaves out an added agent that is not available", () => {
     const menu = menuOf([], source({ addedAgents: ["codex", "claude"], agentAvailability: available("claude") }));
-    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude usage"]);
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["\u2068Claude\u2069 usage"]);
   });
 
   it("names each submenu's mark by the key a session line of that agent uses", () => {

@@ -1,7 +1,7 @@
 import { orderedAccounts } from "./accountOrder";
-import { accountsByAgent, isAgentPickable } from "../agents/agents";
+import { isAgentPickable, servedAgents } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
-import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, QuotaWindow, Settings } from "../protocol";
+import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, ProviderInfo, QuotaWindow, Settings } from "../protocol";
 import { accountQuotaOf } from "./accountQuotaOf";
 import { accountKey } from "./accountRecords";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "./quotaFormat";
@@ -110,13 +110,14 @@ export function choiceGroups(
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
   added: Agent[] | null,
+  providers: readonly ProviderInfo[],
   defaultName: (agent: Agent) => string,
   readings?: QuotaReadings,
   sharing?: Map<string, AccountSharing>,
   disabledDefaults?: readonly Agent[],
   order?: Settings["account_order"],
 ): ChoiceGroup[] {
-  return accountsByAgent(accounts).map(({ agent }) => ({
+  return servedAgents(providers).map((agent) => ({
     agent,
     selectable: isAgentPickable(agentAvailability, added, agent),
     entries: orderedAccounts(agent, accounts, order).map((account) => ({ account: account?.id ?? null, name: account?.name ?? defaultName(agent) })).map((entry) => {

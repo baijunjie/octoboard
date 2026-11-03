@@ -12,7 +12,7 @@ use crate::accounts::relocate;
 use crate::adapter;
 use crate::env_shell;
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, ConversationLocation, Session, SessionKind,
+    error_code, Account, AgentId, CodedError, ConversationLocation, Session, SessionKind,
     SessionStatus, TerminalAppearance,
 };
 use crate::records;
@@ -109,7 +109,7 @@ pub(super) fn refuse_if_conversation_recorded(
 /// Answers that snapshot (none for a pinned account) for the launch to use, so the check and the
 /// launch cannot disagree about where the default account is. Blocking.
 pub(super) fn locate_conversation_to_resume(
-    agent: Agent,
+    agent: AgentId,
     config_dir: Option<&str>,
     id: &str,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>>,
@@ -156,7 +156,7 @@ pub(crate) async fn locate_conversation(
         return Ok(held_conversation(&holder, project));
     }
     let mut agents = Vec::new();
-    for agent in Agent::ALL {
+    for agent in AgentId::ALL {
         if agent_can_open(state, agent)? {
             agents.push(agent);
         }
@@ -199,7 +199,7 @@ fn held_conversation(holder: &Session, project: &str) -> ConversationLocation {
 /// A snapshot that fails leaves the default accounts out, so as not to hide a stored account's
 /// record, and is the error only when nothing was found anywhere. Blocking.
 fn find_conversation_to_resume(
-    agents: &[Agent],
+    agents: &[AgentId],
     accounts: &[Account],
     id: &str,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>>,
@@ -285,10 +285,10 @@ pub(crate) fn resumable_agent_session_id(session: &Session) -> Option<String> {
 /// conversation the agent can still resume ([`check_resumable`]). The session itself is refused
 /// with `conversation_unresumable` when its conversation is proven gone, with nothing changed; an
 /// owner whose conversation is proven gone is relaunched into a fresh conversation instead. A
-/// Codex rollout that sits in `archived_sessions/` is brought back first ([`unarchive_rollout`]),
-/// the session's own before any owner is launched. An owner's leftover records of the conversation
-/// it gives up go to the Trash. The login-shell snapshot is taken once and serves the checks, the
-/// unarchive and every launch.
+/// record that sits only where its agent archives records is brought back first
+/// ([`unarchive_record`]), the session's own before any owner is launched. An owner's leftover
+/// records of the conversation it gives up go to the Trash. The login-shell snapshot is taken once
+/// and serves the checks, the unarchive and every launch.
 pub async fn resume_session(
     state: &Arc<AppState>,
     id: &str,
@@ -306,7 +306,7 @@ pub async fn resume_session(
 }
 
 /// [`resume_session`] with the login-shell snapshot supplied by the caller. It is taken once and
-/// serves the resumability checks, any `codex unarchive` and every relaunch, so all of them look at
+/// serves the resumability checks, any unarchive and every relaunch, so all of them look at
 /// the same accounts; tests pass a stub so no real login shell runs.
 pub(super) async fn resume_session_with(
     state: &Arc<AppState>,
@@ -370,7 +370,7 @@ pub(crate) async fn resume_session_with_launch(
     )
     .await?;
     // Before any owner is launched, so a failed unarchive leaves the whole group as it was.
-    unarchive_rollout(&target, &shell).await?;
+    unarchive_record(&target, &shell).await?;
     for checked in checked_owners {
         let owner = checked.session.id.clone();
         // The owners were listed before the awaits of the earlier relaunches, so a resume of a
@@ -394,7 +394,7 @@ pub(crate) async fn resume_session_with_launch(
         if checked.judgement.resumability == records::Resumability::Unresumable {
             forget_gone_conversation(state, &checked.session, &shell).await?;
         } else {
-            unarchive_rollout(&checked, &shell).await?;
+            unarchive_record(&checked, &shell).await?;
         }
         relaunch_session_with(
             state,
@@ -523,17 +523,17 @@ fn conversation_unresumable(session: &Session) -> anyhow::Error {
     )
 }
 
-/// Runs `codex unarchive` for a checked Codex session whose rollout only sits in the account's
-/// `archived_sessions/`, which a resume refuses. A failure leaves the session untouched: this
-/// runs before its status is written.
-async fn unarchive_rollout(checked: &Checked, shell: &HashMap<String, String>) -> Result<()> {
+/// Brings back the record of a checked session that only sits where its agent archives records,
+/// which a resume does not read, through its provider's store (`RecordStore::unarchive`). A
+/// failure leaves the session untouched: this runs before its status is written.
+async fn unarchive_record(checked: &Checked, shell: &HashMap<String, String>) -> Result<()> {
     if !checked.judgement.needs_unarchive {
         return Ok(());
     }
     let (session, shell) = (checked.session.clone(), shell.clone());
     tokio::task::spawn_blocking(move || {
         let agent_session_id = session.agent_session_id.as_deref().unwrap_or_default();
-        adapter::codex::unarchive(
+        adapter::provider(session.agent).records().unarchive(
             &shell,
             session.config_dir.as_deref().map(Path::new),
             agent_session_id,

@@ -1,3 +1,5 @@
+import { PROVIDER_MESSAGES } from "../../providers/registry";
+
 /**
  * The English catalog: every message the UI shows, and the base every other language is translated
  * from and falls back to. A key names where the message is used (`area.what`); `{name}` is a
@@ -13,6 +15,8 @@
  * `.claude/skills/knowledge-i18n-copy/SKILL.md`.
  */
 export const en = {
+  // The providers' names, which live with their presentation modules (`src/providers/`).
+  ...PROVIDER_MESSAGES.en,
   "common.openIn": "Open in",
   "common.opensExternally": "Opens in your browser",
   "externalLink.unavailable": "The link did not open in a browser. Its address is shown below.",
@@ -125,7 +129,6 @@ export const en = {
   "error.recovery.accountBusy": "Wait for the account’s working sessions and login to finish, then try again.",
   "error.recovery.accountChanging": "Wait for the change to finish, then try again. Its progress is shown at the account’s Share default configuration switch in the Agent accounts settings.",
   "error.recovery.sharingStop": "Nothing was changed. Try again, and if the session keeps running, end it in its terminal first.",
-  "error.recovery.grokSandbox": "To launch this session through {appName}, turn the sandbox off where it is set, or ask whoever manages that setting to. A conversation started under the sandbox keeps it, so continue that one in Grok itself.",
   "error.recovery.account": "Select an available account whose configuration directory is accessible. If needed, log in through the agent CLI using that configuration directory.",
   "error.recovery.tool": "Install the named agent CLI or {git} on the daemon host and make it available in the login shell {pathVar}, then reopen {appName} and retry.",
   "error.recovery.shell": "Open your login shell in {terminal} and fix slow or blocked startup commands in its configuration, then retry.",
@@ -160,9 +163,8 @@ export const en = {
   "error.recovery.trust": "Open the affected session’s terminal and answer its pending prompt. For folder trust, choose only the project’s folder, then retry.",
   "error.recovery.conversation": "Check the conversation ID and selected account. Resume the existing session when one is named above, or start a new session.",
   "error.recovery.unresumable": "Archive this session if it is not already, delete it, and start a new session to carry on the work.",
-  "error.recovery.unarchive": "Check that {codex} runs in the login shell and can read its account directory, then reopen the session. If it still fails, delete the session and start a new one.",
   "error.recovery.resetCreditLogin": "Log in to this account, then redeem the reset again.",
-  "error.recovery.resetCredit": "Check that {codex} runs in the login shell and is logged in to this account, then try again. If {codex} reports a problem with the reset itself, try again later.",
+  "error.recovery.resetCredit": "Check that the agent runs in the login shell and is logged in to this account, then try again. If it reports a problem with the reset itself, try again later.",
   "error.recovery.session": "Select the current session in the sidebar. Reopen it from the archive if archived, or create a new session if it has been removed.",
   "error.recovery.ownerGone": "If that session was archived, choose {viewArchive}, then {reopen} on that session. Otherwise start a session with {newSession} instead.",
   "error.recovery.avatarSize": "Give the console a smaller avatar in the {appName} the configuration came from, export it again, then import the new file.",
@@ -301,12 +303,8 @@ export const en = {
   "daemon.quota_not_signed_in.recovery": "Log in to use this account.",
   "daemon.quota_config_dir_missing.summary": "Not logged in yet.",
   "daemon.quota_config_dir_missing.recovery": "Log in to use this account.",
-  "daemon.login_codex_busy.summary": "Another {codex} account is logging in.",
-  "daemon.login_codex_busy.recovery": "Wait for it to finish, then try again.",
   "daemon.config_dir_unreachable.summary": "The {agent} config directory {path} is not a directory the daemon can reach.",
   "daemon.config_dir_unreachable.recovery": "Recreate it, or point the account at a different directory.",
-  "daemon.grok_home_not_initialized.summary": "{path} is not a {grok} home yet.",
-  "daemon.grok_home_not_initialized.recovery": "Run {grok} against it directly at least once so it has a session history, before pointing an account at it.",
   "daemon.session_archived.summary": "An archived session cannot be locked, switched to another account or handed off.",
   "daemon.session_archived.recovery": "Reopen it first.",
   "daemon.conversation_to_resume_not_found.summary": "No {agent} conversation with this ID was found in {path}.",
@@ -331,7 +329,7 @@ export const en = {
   "daemon.trust_directory_unreachable.summary": "{path} or the folder above it did not respond in time, so that folder could not be checked.",
   "daemon.trust_directory_unreachable.recovery": "Uncheck the folder option to trust this project on its own, or try again once the volume responds again.",
   "daemon.agent_not_available.summary": "{agent} is not available on this machine: its binary does not resolve on your login shell's {pathVar}.",
-  "daemon.agent_not_available.recovery": "Supported agents are {claude}, {codex} and {grokBuild}. Make sure one is on your {pathVar} to open a session.",
+  "daemon.agent_not_available.recovery": "To open a session, make sure one of these supported agents is on your {pathVar}:",
   "daemon.queued_messages_dropped.summary": "{appName} dropped what it had queued for this session.",
   "daemon.queued_messages_dropped.recovery": "Check the session's input line before sending anything else.",
   "daemon.queued_messages_dropped.details": "The input line may be holding part of a message the application could not finish writing, and the next message written into the session will be run together with it.",
@@ -489,8 +487,12 @@ export const en = {
   "daemon.reset_credit_timed_out": "{agent} did not answer in time. The reset may have been used, so check the account's usage once it updates.",
   "daemon.process_count_timed_out": "Counting the processes took too long.",
   "daemon.reset_credit_not_signed_in": "{account} ({agent}) is not logged in, so a reset cannot be redeemed on it.",
+  "daemon.provider_unsupported": "{agent} does not support this.",
+  "daemon.provider_unsupported.sign_in": "{agent} has no login flow, so an account cannot be logged in from {appName}.",
+  "daemon.provider_unsupported.kick": "{agent} cannot start a usage window.",
+  "daemon.provider_unsupported.reset_credit": "{agent} has no usage limit resets to redeem.",
+  "daemon.provider_unsupported.config_sharing": "{agent} cannot share the default account's configuration.",
   "daemon.reset_credit_failed": "{agent} could not redeem the reset: {detail}",
-  "daemon.login_codex_busy": "Another {codex} account is logging in. Wait for it to finish, then try again.",
   "daemon.login_not_running": "No login is running for this account.",
   "daemon.default_account_not_shareable": "This account cannot share the default configuration: it is the default account, or its directory is the default account’s own.",
   "daemon.account_sharing_failed": "Could not finish the sharing change for account {name}. Nothing was rolled back.",
@@ -522,10 +524,6 @@ export const en = {
   "daemon.config_dir_not_absolute": "The {agent} config directory must be an absolute path, or start with {tilde}.",
   "daemon.config_dir_unreachable":
     "The {agent} config directory {path} is not a directory the daemon can reach. Recreate it, or point the account at a different directory.",
-  "daemon.grok_home_not_initialized":
-    "{path} is not a {grok} home yet. Run {grok} against it directly at least once so it has a session history, before pointing an account at it.",
-  "daemon.grok_sandbox_unsupported":
-    "Grok's sandbox ({profile}, set by {source}) is incompatible with the home {appName} gives each session, so the session was not launched.",
   "daemon.icon_not_an_image": "The console avatar must be an image.",
   "daemon.icon_too_large": "The console avatar is larger than {limit_kib} KiB.",
   "daemon.icon_not_an_image.import": "The avatar of the console {console_name} is not an image.",
@@ -558,8 +556,6 @@ export const en = {
     "No {agent} conversation of this session was found in {path}, so it cannot continue under another account.",
   "daemon.conversation_unresumable":
     "{agent} no longer has this session's conversation, so it cannot be resumed.",
-  "daemon.codex_unarchive_failed.summary": "{codex} could not restore this session's archived conversation.",
-  "daemon.codex_unarchive_failed": "{codex} could not restore this session's archived conversation: {detail}",
   "daemon.conversation_to_resume_not_found":
     "No {agent} conversation with this ID was found in {path}. Check the ID, and that it was started under this account.",
   "daemon.resume_id_invalid": "This is not a conversation ID. It looks like {example}.",
@@ -678,14 +674,12 @@ export const en = {
   "daemon.shell_environment_timeout.sessionsBlocked": "Sessions cannot start until the login shell environment has been read.",
   "daemon.shell_environment_timeout.recovery": "Fix or skip the slow step in the shell's rc files.",
   "daemon.agent_not_available":
-    "{agent} is not available on this machine: its binary does not resolve on your login shell's {pathVar}. Supported agents are {claude}, {codex} and {grokBuild}. Make sure one is on your {pathVar} to open a session.",
+    "{agent} is not available on this machine: its binary does not resolve on your login shell's {pathVar}. To open a session, make sure one of these supported agents is on your {pathVar}: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) is disabled, so a session cannot be opened on it.",
   "daemon.daemon_shutting_down": "The daemon is shutting down, so nothing can be started now.",
   "daemon.account_not_signed_in": "{account} ({agent}) is not logged in, so a session cannot be opened on it.",
   "daemon.account_quota_exhausted": "{account} ({agent}) cannot run a session because it has reached its {quota}.",
   "daemon.account_quota_exhausted.resets": "{account} ({agent}) cannot run a session because it has reached its {quota}. It resets in {time}.",
-  "daemon.claude_workspace_untrusted":
-    "{claude} has not been trusted with this directory, so this project's own {allow} permission rules are ignored until {claude}'s trust confirmation is answered. Its {deny} rules still apply, so a session is only more restrictive, never less. {appName} presses that confirmation for you once you have agreed to it.",
   "daemon.queued_messages_dropped":
     "{appName} dropped what it had queued for this session. The input line may be holding part of a message the application could not finish writing, and the next message written into the session will be run together with it. Check the session's input line before sending anything else.",
   "daemon.handoff_messages_dropped":
@@ -785,7 +779,7 @@ export const en = {
   "daemon.sharing.state.linked": "left linked to the default directory",
   "daemon.sharing.state.absent": "left absent",
   "daemon.unshared_state_database":
-    "{path} is a {codex} state database that the default configuration does not share, so account {name} keeps its threads apart from the other accounts’.",
+    "{path} is an agent state database that the default configuration does not share, so account {name} keeps its threads apart from the other accounts’.",
   // What goes in place of `{reason}` above, keyed by the daemon's `reason_code`. Lowercase: it is
   // spliced into the middle of that sentence.
   "daemon.trust_reason.screen_gone": "the trust confirmation is no longer on the terminal",
@@ -1885,12 +1879,7 @@ export const en = {
   "dialog.trust.questionForSession": "{agent} is asking whether to trust the folder {path} for session {session}.",
   "dialog.trust.behavior":
     "If you agree, {appName} accepts {agent}’s trust confirmation for you. The agent records the trust and does not ask again here. Authorization is also saved for every agent, so later trust confirmations for this project are accepted without asking you.",
-  "dialog.trust.codexRoot":
-    "{agent} records trust for the root of the {git} repository containing this folder. For a subfolder or linked worktree, this covers more than this project.",
-  "dialog.trust.caution.claude": "Trusting lets this project's own permission rules and hooks take effect: its {file} may pre-approve tool permissions.",
-  "dialog.trust.caution.codex":
-    "Trusting lets {agent} load this project's own configuration, hooks and command rules, which can run code even without a model request. This confirmation does not change {agent}'s sandbox or approval policy, though the project's own configuration can.",
-  "dialog.trust.caution.grok": "Trusting lets {agent} load this project's own instructions, hooks and MCP servers.",
+  "dialog.trust.caution.generic": "Trusting lets {agent} load this project's own configuration.",
   "dialog.trust.confirm": "Trust and continue",
   "dialog.trust.notNow": "Not now",
   "dialog.trust.parent": "Trust every project under {directory}",
@@ -2044,7 +2033,7 @@ export const en = {
   "configuration.import.result.sharingWarning.text": "The account was created, but sharing the default configuration with it could not be turned on.",
   "configuration.import.result.accounts.defaultNamed": "The default account of {agent} is now named as in the file.",
   "configuration.import.result.accounts.loginNote": "The new accounts are not logged in yet. Log each one in before a session uses it.",
-  "configuration.import.accounts.toAdd": { "one": "{agents} will be added to the agent list.", "other": "{agents} will be added to the agent list." },
+  "configuration.import.accounts.toAdd": { "one": "This agent will be added to the agent list:", "other": "These agents will be added to the agent list:" },
   "configuration.import.result.accountsCreated": {
     one: "{count} account created",
     other: "{count} accounts created",
@@ -2057,7 +2046,7 @@ export const en = {
     one: "{count} account left out",
     other: "{count} accounts left out",
   },
-  "configuration.import.result.accounts.added": { "one": "{agents} was added to the agent list.", "other": "{agents} were added to the agent list." },
+  "configuration.import.result.accounts.added": { "one": "This agent was added to the agent list:", "other": "These agents were added to the agent list:" },
   "configuration.import.all.label": "Set every project that offers it to",
   "configuration.import.all.exportedPath": "Exported path ({count})",
   "configuration.import.all.defaultCloneDir": "Default clone directory ({count})",
@@ -2074,10 +2063,10 @@ export const en = {
   "configuration.import.settings.badge.reset": "Back to defaults",
   "configuration.import.settingValue": "{item}: {value}",
   "configuration.import.settingValueChange": "{value} (now {current})",
+  "configuration.import.settingUnnamed": "{agent}: {setting}",
   "configuration.import.value.on": "On",
   "configuration.import.value.off": "Off",
   "configuration.import.gitWorkflow": "Git workflow",
-  "configuration.import.claudeCompatibility": "Claude compatibility",
   "configuration.import.agentTags": "Agent tags",
   "configuration.import.settings.consequence.autoPull": "Your repositories will then be pulled automatically.",
   "configuration.import.settings.consequence.archiveCleanup": "Archived sessions whose conversations are gone will then be deleted automatically.",
@@ -2522,19 +2511,8 @@ export const en = {
   "settings.accounts.login.cancel": "Cancel login",
   "settings.accounts.defaultHelp": "About the default account",
   "settings.accounts.defaultSetup": "The agent's own default configuration directory. New sessions use it when no account is chosen, and other accounts can share its configuration.",
-  "settings.accounts.approval.heading": "Permission approval",
-  "settings.accounts.approval.helpLabel": "About permission approval",
-  "settings.accounts.approval.label": "Permission approval for {agent}",
-  "settings.accounts.approval.codexReviewDescription": "Choose how {codex} reviews permission requests in every account. Automatic review may use additional tokens. Follow account configuration leaves it to each account's own configuration.",
-  "settings.accounts.approval.saveFailedTitle": "Could not save the permission approval",
-  "settings.accounts.approval.inherit": "Follow account configuration",
-  "settings.accounts.approval.auto": "Automatic review",
-  "settings.accounts.approval.user": "Ask me",
-  "settings.accounts.approval.claudeReviewDescription": "Choose how {claude} handles permission requests in every account. Follow account configuration leaves it to each account's own configuration.",
-  "settings.accounts.approval.claudeAuto": "Automatic",
-  "settings.accounts.approval.claudeBypass": "Approve everything",
-  "settings.accounts.approval.bypassTitle": "Approve everything",
-  "settings.accounts.approval.bypassMessage": "Every tool will run without asking you in every {agent} account's sessions, including commands that change or delete files.",
+  "settings.accounts.setting.saveFailedTitle": "Could not save the setting",
+  "settings.accounts.setting.inherit": "Follow account configuration",
   "settings.accounts.disable": "Disable",
   "settings.accounts.disableLabel": "Disable {name}",
   "settings.accounts.disableAccount": "Disable account",
@@ -2555,19 +2533,14 @@ export const en = {
   "settings.accounts.settingsItem": "Settings",
   "settings.accounts.details.title": "Account settings",
   "settings.accounts.detailsDialogTitle": "Account details",
-  "settings.accounts.approval.description": "Applies to every {agent} account.",
+  "settings.accounts.setting.description": "Applies to every {agent} account.",
+  "settings.accounts.setting.confirmMessage": "Set {setting} to {choice} for every {agent} account?",
   "settings.accounts.tags.heading": "Tags",
   "settings.accounts.tags.label": "Tags for {agent}",
   "settings.accounts.tags.picked": "Tags picked for {agent}",
   "settings.accounts.tags.none": "No tags",
   "settings.accounts.tags.add": "Add a tag",
   "settings.accounts.tags.saveFailedTitle": "Could not save the tags",
-  "settings.accounts.claudeCompat.heading": "Claude compatibility",
-  "settings.accounts.claudeCompat.helpLabel": "About Claude compatibility",
-  "settings.accounts.claudeCompat.label": "Claude compatibility for {agent}",
-  "settings.accounts.claudeCompat.codexDescription": "When on, {agent} sessions load {claude} instructions ({claudeMd} and rules), skills, agents, commands and MCP servers, and follow {claude} hooks and permissions; when off, they follow only their own configuration. {appName} passes these in when a session starts or resumes, so a change takes effect then.",
-  "settings.accounts.claudeCompat.grokDescription": "When on, {agent} sessions load {claude} instructions ({claudeMd} and rules), skills, agents, commands and MCP servers, and follow {claude} hooks and permissions; when off, they follow only their own configuration. {appName} turns on the Claude support built into {agent}. A change takes effect when a session next starts or resumes.",
-  "settings.accounts.claudeCompat.saveFailedTitle": "Could not save Claude compatibility",
   "settings.accounts.loginChecking": "Checking…",
   "settings.accounts.loginUnknown": "Unknown",
   "settings.accounts.sharing.failedTitle": "Could not change sharing",
@@ -2576,8 +2549,6 @@ export const en = {
   "settings.accounts.sharing.helpLabel": "About sharing the default configuration",
   "settings.accounts.sharing.helpShared": "Configuration (skills, plugins, settings and more) and conversation history are linked to the default account’s directory.",
   "settings.accounts.sharing.helpNever": "Login credentials are never shared.",
-  "settings.accounts.sharing.helpNeverClaude": "Login credentials, {claudeJson} (which holds user-scope MCP servers) and {plans} are never shared.",
-  "settings.accounts.sharing.helpNeverGrok": "Login credentials, {trustedFolders} and {hooksPaths} are never shared.",
   "settings.accounts.sharing.helpOff": "Once sharing is off, this account’s {appName} sessions take their conversations back; the rest stay in the default directory.",
   "settings.accounts.sharing.describeOff": "Turning this on links the account’s configuration and conversation history to the default account’s directory.",
   "settings.accounts.sharing.describeOn": "The account’s configuration and conversation history are linked to the default account’s directory.",
@@ -2671,8 +2642,6 @@ export const en = {
   "settings.accounts.nameExample": "Ex. Work",
   "settings.accounts.configDir": "Config directory",
   "settings.accounts.dirHint": "The directory does not need to exist yet.",
-  "settings.accounts.dirHintGrok":
-    "The directory does not need to exist yet. To retain login and conversations, sessions need a {grok} home initialized by running the CLI with that directory. This is checked when a session launches.",
   "settings.accounts.dirNotAbsolute": "Enter an absolute path, or one starting with {tilde}.",
   "settings.accounts.nameTaken": "{agent} already has an account named {name}.",
   "settings.accounts.nameTakenDefault": "{name} is the name of the default {agent} account.",

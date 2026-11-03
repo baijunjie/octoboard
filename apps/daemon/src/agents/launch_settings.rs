@@ -17,9 +17,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::agents::models::Listing;
+use crate::adapter::provider;
+use crate::agents::models::{Listing, COMMAND_TIMEOUT};
 use crate::protocol::{
-    error_code, Agent, CodedError, DefaultModelSource, Launch, LaunchChange, PerAgent,
+    error_code, AgentId, CodedError, DefaultModelSource, Launch, LaunchChange, PerAgent,
 };
 use crate::state::AppState;
 use crate::text::trimmed_or_none;
@@ -44,7 +45,7 @@ pub(crate) fn normalize_session_launch_setting(
     value.map(|text| normalize_launch_setting(text.as_deref()))
 }
 
-impl From<PerAgent<LaunchChange>> for HashMap<Agent, LaunchChange> {
+impl From<PerAgent<LaunchChange>> for HashMap<AgentId, LaunchChange> {
     /// The map the in-memory changes carry, leaving out an agent whose two fields are absent.
     fn from(changes: PerAgent<LaunchChange>) -> Self {
         changes
@@ -57,7 +58,7 @@ impl From<PerAgent<LaunchChange>> for HashMap<Agent, LaunchChange> {
 /// What a record was newly given for one agent's model and effort, and what to check it against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchCheck {
-    pub agent: Agent,
+    pub agent: AgentId,
     /// The account whose catalogue is asked: the one the record's sessions of `agent` would run
     /// under (`None` for the default account).
     pub account_id: Option<String>,
@@ -71,7 +72,7 @@ pub struct LaunchCheck {
 impl LaunchCheck {
     /// For a record created with `model` and `effort`, blank read as unset.
     pub fn given(
-        agent: Agent,
+        agent: AgentId,
         account_id: Option<String>,
         model: Option<&str>,
         effort: Option<&str>,
@@ -154,7 +155,7 @@ impl LaunchCheck {
 /// Applies `change` to a record's launch pair, blank read as unset, and returns what is
 /// left to check: only a value that differs from the one stored.
 pub fn apply_change(
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<String>,
     launch: &mut Launch,
     change: &LaunchChange,
@@ -186,7 +187,7 @@ pub fn apply_change(
 /// the cache or by asking the agent, which is why this runs off the runtime.
 pub async fn agent_listing(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: &Option<String>,
 ) -> Result<Listing> {
     let config_dir = state.store.account_dir(account_id)?;
@@ -205,16 +206,17 @@ pub struct DefaultModel {
 }
 
 /// The models `agent` offers under the account `account_id` and the model a session of the
-/// account with no setting naming one resolves to as far as the account can tell: for Claude Code
-/// the model its own configuration names (see [`configured_model`]), else the best one the
-/// account may use. `None` for the other agents, and for Claude Code when nothing is known, which
-/// leaves the choice to the agent. Project settings are not known per account, so a session may
-/// resolve to another model at launch (see [`launch_default_model`]).
+/// account with no setting naming one resolves to as far as the account can tell: for an agent
+/// that names a default model, the model its own configuration names (see
+/// [`ModelCatalogue::configured_model`]), else the best one the account may use. `None` for the
+/// other agents, and for one that names a default when nothing is known, which leaves the choice
+/// to the agent. Project settings are not known per account, so a session may resolve to another
+/// model at launch (see [`launch_default_model`]).
 ///
-/// [`configured_model`]: crate::adapter::claude::settings::configured_model
+/// [`ModelCatalogue::configured_model`]: crate::agents::models::ModelCatalogue::configured_model
 pub async fn agent_models(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: &Option<String>,
 ) -> Result<(Listing, Option<DefaultModel>)> {
     let config_dir = state.store.account_dir(account_id)?;
@@ -232,17 +234,17 @@ pub async fn agent_models(
     Ok((resolved.listing, default))
 }
 
-/// The model to pass to a session of `agent` that no setting names one for: for Claude Code the
-/// best model the account may use, so that it never falls to the alias Claude Code would pick on
-/// its own, which does not check what the account may use. `None` leaves the choice to the
-/// agent: for the other agents, when the account's models are not known, and for Claude Code when
-/// its own configuration names a model — the user's, a managed one, `ANTHROPIC_MODEL`, or the
-/// project's in `cwd` — which `--model` would override. `config_dir` is the session's pinned
-/// account directory and `shell_env` the environment the launch runs in, taken here when the
-/// caller has none.
+/// The model to pass to a session of `agent` that no setting names one for: for an agent that names
+/// a default model, the best model the account may use, so that it never falls to the one the agent
+/// would pick on its own, which does not check what the account may use. `None` leaves the choice
+/// to the agent: for the other agents, when the account's models are not known, and for one that
+/// names a default when its own configuration names a model (the user's, a managed one, an
+/// environment variable, or the project's in `cwd`), which `--model` would override. `config_dir`
+/// is the session's pinned account directory and `shell_env` the environment the launch runs in,
+/// taken here when the caller has none.
 pub async fn launch_default_model(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     config_dir: Option<String>,
     cwd: &Path,
     shell_env: Option<HashMap<String, String>>,
@@ -263,16 +265,16 @@ pub async fn launch_default_model(
 /// What [`resolve`] found.
 struct Resolved {
     listing: Listing,
-    /// The model Claude Code's own configuration names; `None` for the other agents and when the
-    /// request did not ask for it.
+    /// The model the agent's own configuration names; `None` for an agent that names no default
+    /// model and when the request did not ask for it.
     configured: Option<String>,
 }
 
 /// What [`resolve`] is asked.
 struct Resolve {
-    agent: Agent,
+    agent: AgentId,
     config_dir: Option<String>,
-    /// The environment to read Claude Code's files in; else a snapshot is taken.
+    /// The environment to read the agent's files in; else a snapshot is taken.
     shell_env: Option<HashMap<String, String>>,
     /// The session's working directory, whose project settings count too.
     cwd: Option<PathBuf>,
@@ -284,7 +286,7 @@ struct Resolve {
 }
 
 impl Resolve {
-    fn new(agent: Agent, config_dir: Option<String>) -> Self {
+    fn new(agent: AgentId, config_dir: Option<String>) -> Self {
         Self {
             agent,
             config_dir,
@@ -296,16 +298,10 @@ impl Resolve {
     }
 }
 
-/// The one rule for which agents have Octoboard name a default model: only Claude Code does, since
-/// it is the one whose own default is not checked against what the account may use.
-fn names_default_model(agent: Agent) -> bool {
-    agent == Agent::Claude
-}
-
-/// The listing for the agent and, for one that has a default model and when asked, what its
-/// configuration says. Claude Code's listing is two small file reads, so it is read afresh each
-/// time rather than cached: a cached one would let a default that is no longer true drive
-/// launches.
+/// The listing for the agent and, for one that names a default model and when asked, what its
+/// configuration says. The listing of a provider that names a default model is cheap to read (see
+/// [`crate::agents::models::ModelCatalogue::names_default_model`]), so it is read afresh each time
+/// rather than cached: a cached one would let a default that is no longer true drive launches.
 async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
     let state = state.clone();
     Ok(tokio::task::spawn_blocking(move || {
@@ -318,7 +314,8 @@ async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
             for_launch,
         } = request;
         let dir = config_dir.as_deref().map(Path::new);
-        if !names_default_model(agent) {
+        let catalogue = provider(agent).catalogue();
+        if !catalogue.names_default_model() {
             let listing = state
                 .agent_models
                 .get_or_load(agent, dir, || crate::agents::models::load(agent, dir));
@@ -327,7 +324,7 @@ async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
                 configured: None,
             };
         }
-        // A failed snapshot still reads `~/.claude`, where the default account lives.
+        // A failed snapshot still reads the provider's default configuration directory.
         let shell_env = shell_env.unwrap_or_else(|| {
             let tools = state.host_tools.get();
             let take = if for_launch {
@@ -337,13 +334,11 @@ async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
             };
             take().unwrap_or_default()
         });
-        let listing = crate::agents::models::claude_listing(&shell_env, dir);
+        let listing = catalogue.list(&shell_env, dir, COMMAND_TIMEOUT);
         #[cfg(test)]
-        let listing = state.agent_models.seeded(dir).unwrap_or(listing);
+        let listing = state.agent_models.seeded(agent, dir).unwrap_or(listing);
         let configured = configuration
-            .then(|| {
-                crate::adapter::claude::settings::configured_model(&shell_env, dir, cwd.as_deref())
-            })
+            .then(|| catalogue.configured_model(&shell_env, dir, cwd.as_deref()))
             .flatten();
         Resolved {
             listing,
@@ -356,7 +351,7 @@ async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::models::claude_fixtures::{
+    use crate::adapter::claude::models::fixtures::{
         claude_home, write_claude_account, CLAUDE_CATALOGUE,
     };
 
@@ -369,33 +364,33 @@ mod tests {
         let env = claude_home(&dir, "[]", Some(CLAUDE_CATALOGUE));
         let cwd = dir.join("project");
         std::fs::create_dir_all(cwd.join(".claude")).unwrap();
-        let default = |agent: Agent, env: &HashMap<String, String>| {
+        let default = |agent: AgentId, env: &HashMap<String, String>| {
             launch_default_model(&state, agent, None, &cwd, Some(env.clone()))
         };
         assert_eq!(
-            default(Agent::Claude, &env).await.unwrap().as_deref(),
+            default(AgentId::CLAUDE, &env).await.unwrap().as_deref(),
             Some("opus")
         );
-        assert_eq!(default(Agent::Codex, &env).await.unwrap(), None);
+        assert_eq!(default(AgentId::CODEX, &env).await.unwrap(), None);
         // Each place Claude Code reads a model from leaves the choice to it.
         let mut named = env.clone();
         named.insert("ANTHROPIC_MODEL".to_string(), "sonnet".to_string());
-        assert_eq!(default(Agent::Claude, &named).await.unwrap(), None);
+        assert_eq!(default(AgentId::CLAUDE, &named).await.unwrap(), None);
         let user = dir.join(".claude/settings.json");
         std::fs::create_dir_all(user.parent().unwrap()).unwrap();
         std::fs::write(&user, r#"{"model":"haiku"}"#).unwrap();
-        assert_eq!(default(Agent::Claude, &env).await.unwrap(), None);
+        assert_eq!(default(AgentId::CLAUDE, &env).await.unwrap(), None);
         std::fs::write(&user, "{}").unwrap();
-        assert!(default(Agent::Claude, &env).await.unwrap().is_some());
+        assert!(default(AgentId::CLAUDE, &env).await.unwrap().is_some());
         std::fs::write(
             cwd.join(".claude/settings.local.json"),
             r#"{"model":"opus"}"#,
         )
         .unwrap();
-        assert_eq!(default(Agent::Claude, &env).await.unwrap(), None);
+        assert_eq!(default(AgentId::CLAUDE, &env).await.unwrap(), None);
         // Nothing known to be usable leaves the choice to Claude Code.
         let empty = HashMap::from([("HOME".to_string(), "/nonexistent".to_string())]);
-        assert_eq!(default(Agent::Claude, &empty).await.unwrap(), None);
+        assert_eq!(default(AgentId::CLAUDE, &empty).await.unwrap(), None);
     }
 
     /// What an unset picker shows is the model Claude Code's account-level configuration names,
@@ -413,7 +408,7 @@ mod tests {
         );
         let account = crate::protocol::Account {
             id: "claude-work".to_string(),
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             name: "Work".to_string(),
             config_dir: pinned.to_string_lossy().into_owned(),
             share_default_config: false,
@@ -422,12 +417,12 @@ mod tests {
         };
         state.store.insert_account(&account).unwrap();
         let id = Some("claude-work".to_string());
-        let (listing, default) = agent_models(&state, Agent::Claude, &id).await.unwrap();
+        let (listing, default) = agent_models(&state, AgentId::CLAUDE, &id).await.unwrap();
         assert_eq!(listing.models[1].version.as_deref(), Some("Opus 5.5"));
         assert_eq!(default.as_ref().map(|d| d.id.as_str()), Some("opus"));
         assert_eq!(default.unwrap().source, DefaultModelSource::BestAvailable);
         std::fs::write(pinned.join("settings.json"), r#"{"model":"claude-x-1"}"#).unwrap();
-        let (_, default) = agent_models(&state, Agent::Claude, &id).await.unwrap();
+        let (_, default) = agent_models(&state, AgentId::CLAUDE, &id).await.unwrap();
         assert_eq!(
             default,
             Some(DefaultModel {
@@ -436,7 +431,7 @@ mod tests {
             })
         );
         // The other agents have none to name, whatever Claude Code's files hold.
-        let (_, default) = agent_models(&state, Agent::Codex, &None).await.unwrap();
+        let (_, default) = agent_models(&state, AgentId::CODEX, &None).await.unwrap();
         assert_eq!(default, None);
     }
 
@@ -445,11 +440,11 @@ mod tests {
     #[test]
     fn the_model_behind_a_record_decides_the_efforts_only_while_it_sets_none() {
         let behind = Some("fallback".to_string());
-        let none = LaunchCheck::given(Agent::Claude, None, None, Some("high")).behind(&behind);
+        let none = LaunchCheck::given(AgentId::CLAUDE, None, None, Some("high")).behind(&behind);
         assert_eq!(none.effective_model.as_deref(), Some("fallback"));
         assert_eq!(none.model, None);
         let own =
-            LaunchCheck::given(Agent::Claude, None, Some("own"), Some("high")).behind(&behind);
+            LaunchCheck::given(AgentId::CLAUDE, None, Some("own"), Some("high")).behind(&behind);
         assert_eq!(own.effective_model.as_deref(), Some("own"));
     }
 }

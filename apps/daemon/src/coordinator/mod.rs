@@ -77,7 +77,7 @@ use crate::env_shell;
 use crate::host_open;
 use crate::hostfs;
 use crate::project_git;
-use crate::protocol::{Agent, Event, ModelChangeOutcome, Origin, RequestBody};
+use crate::protocol::{Event, ModelChangeOutcome, Origin, RequestBody};
 use crate::records;
 use crate::records::history;
 use crate::session::trust;
@@ -111,7 +111,7 @@ use projects::{
     update_project, AddProjectRequest, NewProjectSettings, ProjectChanges,
 };
 use resume::{locate_conversation, resume_session};
-use settings::{update_settings, SettingsChanges, CLAUDE_MODE, CODEX_REVIEWER};
+use settings::{set_provider_setting, update_settings, SettingsChanges};
 use validate::{absolute_path, required_text};
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
@@ -393,11 +393,12 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::UseCodexResetCredit { account } => {
-            refuse_if_agent_unavailable(state, Agent::Codex)?;
-            let account = checked_account_reference(state, Agent::Codex, account)?;
+        RequestBody::UseResetCredit { agent, account } => {
+            refuse_if_agent_unavailable(state, agent)?;
+            let account = checked_account_reference(state, agent, account)?;
             let outcome = quotas::use_reset_credit(
                 state,
+                agent,
                 account,
                 reset_credit_shell(),
                 quotas::RESET_CREDIT_TIMEOUT,
@@ -810,7 +811,6 @@ async fn handle_inner(
             auto_start_quota_windows,
             default_clone_dir,
             git_workflow,
-            claude_compatibility,
             agent_tags,
         } => {
             update_settings(
@@ -830,7 +830,8 @@ async fn handle_inner(
                     auto_start_quota_windows,
                     default_clone_dir,
                     git_workflow: git_workflow.unwrap_or_default(),
-                    claude_compatibility: claude_compatibility.unwrap_or_default(),
+                    // Only a configuration import chooses provider settings in bulk.
+                    provider_settings: Default::default(),
                     agent_tags: agent_tags.unwrap_or_default(),
                 },
             )?;
@@ -990,13 +991,12 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::SetCodexApprovalReviewer { reviewer } => {
-            CODEX_REVIEWER.set(state, reviewer)?;
-            Ok(None)
-        }
-
-        RequestBody::SetClaudeApprovalMode { mode } => {
-            CLAUDE_MODE.set(state, mode)?;
+        RequestBody::SetProviderSetting {
+            agent,
+            setting,
+            value,
+        } => {
+            set_provider_setting(state, agent, &setting, value)?;
             Ok(None)
         }
 
@@ -1059,8 +1059,8 @@ async fn handle_inner(
     }
 }
 
-/// The shell environment a use of a reset credit runs Codex in. A test has none: a request that
-/// got through to it would spend a credit of the machine's own Codex account.
+/// The shell environment a use of a reset credit runs the agent's CLI in. A test has none: a
+/// request that got through to it would spend a credit of the machine's own account.
 #[cfg(not(test))]
 fn reset_credit_shell() -> quotas::ShellSource {
     Arc::new(env_shell::launch_snapshot)

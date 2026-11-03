@@ -276,7 +276,7 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, Event, Role, SessionKind};
+    use crate::protocol::{AgentId, Event, Role, SessionKind};
     use crate::test_support::{
         console_with_project_and_accounts, project_session, session_ids, PATIENCE,
     };
@@ -349,7 +349,7 @@ mod tests {
                 } else {
                     Role::Coordinator
                 },
-                ..project_session(id, Agent::Claude, SessionStatus::Archived)
+                ..project_session(id, AgentId::CLAUDE, SessionStatus::Archived)
             }
         }
 
@@ -396,7 +396,7 @@ mod tests {
 
     fn grok(session: Session) -> Session {
         Session {
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             ..session
         }
     }

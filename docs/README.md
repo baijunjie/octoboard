@@ -69,6 +69,8 @@ Where to start, by question:
 
 ### Agents, accounts and quotas
 
+- [Supported agents](product/supported-agents.md) — the agents Octoboard supports, their ids and order, how an agent
+  the window has no presentation for is shown, and what happens to stored data of an agent the build does not support.
 - [Launching agents](product/launching-agents.md) — what every agent launch injects, what is never modified, and the
   launch environment.
 - [Per-agent launch specifics](product/per-agent-launch-specifics.md) — what Claude Code, Codex and Grok Build each do
@@ -77,8 +79,8 @@ Where to start, by question:
   and what a session shows running.
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: added agents, the default account,
   owned accounts, the accounts table and the account details and settings dialogs.
-- [Per-agent settings](product/per-agent-settings.md) — settings that apply to every account of one agent: permission
-  approval modes and Claude compatibility.
+- [Per-agent settings](product/per-agent-settings.md) — settings that apply to every account of one agent: the settings
+  each provider declares (permission approval modes, Claude compatibility) and agent tags.
 - [Removing an account](product/removing-accounts.md) — what removing an account clears, its confirmation, and the option
   to move the account directory to the Trash.
 - [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.
@@ -236,7 +238,7 @@ Where to start, by question:
 - [Adding a reason an account cannot be used](memory/adding-a-reason-an-account-cannot-be-used.md) — every place that
   picks or accepts an account must check a new reason.
 - [Adding a user setting](memory/adding-a-user-setting.md) — exposing a new setting to agents' settings tools and the
-  configuration export.
+  configuration export, and the flags of a new provider setting.
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) —
   building, launching and isolating the real app and its daemon sidecar to verify a change.
 - [Building on HeroUI and react-aria](memory/building-on-heroui-and-react-aria.md) — pitfalls of HeroUI 3 and react-aria
@@ -245,6 +247,8 @@ Where to start, by question:
   and role texts from the agent's side: descriptions against results, parity with the UI, the agents' typical tasks.
 - [Catching a branch up with its target](memory/catching-a-branch-up-with-its-target.md) — which branch is the target,
   and why a guarded pushed branch is merged, not rebased.
+- [Committing alongside other agents](memory/committing-alongside-other-agents.md) — several agents in one worktree
+  share one index: stage your paths only right before committing and check the index holds nothing else.
 - [Driving and reading the real app window](memory/driving-and-reading-the-real-app-window.md) — scripting and
   inspecting the live window without touching the user's work, and what a probe can prove.
 - [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — the single module every faded scroller
@@ -282,12 +286,14 @@ Where to start, by question:
 - [What goes on the window material](memory/what-goes-on-the-window-material.md) — which chrome may sit on the
   translucent window material.
 - [Writing automated tests](memory/writing-automated-tests.md) — keeping tests lean, checking a test by breaking its
-  rule, replaying committed agent captures, and the jsdom test pitfalls.
+  rule, the test-only fourth provider (never hard-code the provider list), replaying committed agent captures, and the
+  jsdom test pitfalls.
 - [Writing daemon tests](memory/writing-daemon-tests.md) — fixtures that are real processes: sharing one exec'd script,
   bounding waits by `PATIENCE` and waiting for the condition itself, signal windows in fixtures, stand-in markers,
   seeded model lists, keeping tests off the real agent CLI, testing budgets by lowering them.
-- [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where live state lives, store writes, timing, threads, process
-  cleanup and linting.
+- [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where
+  live state lives, store writes, raising versions only between releases, timing, threads, process cleanup, linting,
+  and provider interface defaults that claim nothing.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — main-thread queuing, native hooks into Tauri
   internals and native menu width.
 - [Writing text into a session](memory/writing-text-into-a-session.md) — how the daemon adds text or keys to a session's

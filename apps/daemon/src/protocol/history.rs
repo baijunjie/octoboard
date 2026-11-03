@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use super::agents::Agent;
+use super::agents::AgentId;
 
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -57,7 +57,7 @@ pub enum ConversationLocation {
     /// No session records it, and an agent's own records do, in this account (`null` for the
     /// agent's default account).
     Record {
-        agent: Agent,
+        agent: AgentId,
         account: Option<String>,
     },
     /// No session records it and no account of an available, added agent holds it.

@@ -1,7 +1,8 @@
 import type { ReactElement } from "react";
 
-import { classifyError, type ErrorRecovery } from "../../errors/errorRecovery";
-import { globalParam, type Translate } from "../../i18n/catalog";
+import { providerLabel } from "../../agents/providers";
+import { classifyError, type ErrorRecovery, type ProviderRemedy } from "../../errors/errorRecovery";
+import { globalParam, type MessageKey, type Translate } from "../../i18n/catalog";
 import { Message, useT } from "../../i18n/react";
 import { InlineReference } from "../../i18n/InlineReference";
 
@@ -26,7 +27,7 @@ export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: 
  * marked at the rich boundary, keeping control labels and command literals distinct. */
 export function recoveryParams<V = never>(t: Translate, mark?: (value: string, monospace: boolean) => V): Record<string, string | V> {
   const values: Record<string, string> = {
-    appName: globalParam("appName")!, codex: "Codex", git: "Git", pathVar: "PATH", enter: "Enter",
+    appName: globalParam("appName")!, git: "Git", pathVar: "PATH", enter: "Enter",
     terminal: t("common.terminal"), reopen: t("sidebar.session.reopen"), viewArchive: t("sidebar.archive.consoleSessions"), newSession: t("sidebar.focus.newSession"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"), changeModel: t("sidebar.session.changeModel"),
     worktreeList: "git worktree list", branchList: "git branch",
     configToml: "config.toml", sqliteHome: "sqlite_home", codexSqliteHome: "CODEX_SQLITE_HOME", tilde: "~", home: "HOME",
@@ -35,11 +36,25 @@ export function recoveryParams<V = never>(t: Translate, mark?: (value: string, m
   return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, mark(value, ["pathVar", "enter", "worktreeList", "branchList", "configToml", "sqliteHome", "codexSqliteHome", "tilde", "home"].includes(name))]));
 }
 
+/** Whether `recovery` is worded by a provider's module (`provider.<id>.<code>.remedy`). */
+function isProviderRemedy(recovery: ErrorRecovery): recovery is ProviderRemedy {
+  return recovery.startsWith("provider.");
+}
+
+/** A remedy a provider's module words, with `{agent}` the provider named by the id in the key: it has a module, so its
+ * name is the module's, with no served label needed. */
+function ProviderRemedyGuidance({ remedy }: { remedy: ProviderRemedy }): ReactElement {
+  const t = useT();
+  const params = { ...recoveryParams(t, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>), agent: <InlineReference dir="auto" wrap>{providerLabel(t, [], remedy.split(".")[1])}</InlineReference> };
+  return <Message id={remedy as MessageKey} params={params as never} />;
+}
+
 /** A recovery's words; the button it may offer besides them is the alert's (see `recoveryAction`), never part
  * of the body. Nothing for the plain alert that has no remedy. */
 export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): ReactElement | null {
   const t = useT();
   if (recovery === "none") return null;
+  if (isProviderRemedy(recovery)) return <ProviderRemedyGuidance remedy={recovery} />;
   const id = `error.recovery.${recovery === "trash" ? "trashRetry" : recovery}` as const;
   const params = recoveryParams(t, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
   return <Message id={id} params={params as never} />;

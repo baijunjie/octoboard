@@ -4,16 +4,18 @@
 //! `docs/product/model-and-reasoning-effort.md`; this value stands in there for an effort the
 //! records leave unset.
 //!
-//! Only Codex needs it. A Codex turn's context record carries the effort its configuration
-//! resolved to, every layer included (the account's `config.toml`, a trusted project's own
-//! `.codex/config.toml`, a managed policy, a `-c` override), and leaves it out when none sets one;
-//! Codex then runs the model at the `default_reasoning_level` its catalogue gives that model, a
-//! catalogue it caches per account in `models_cache.json`. A context record that names a model and
-//! no effort therefore says exactly which entry applies. Before the first turn there is no such
-//! record, and the configuration layers are not read in its place: which of them apply depends on
-//! the project's trust and on policy this daemon cannot see. Claude Code records the effort on
-//! every reply and Grok Build's summary records it as configured, so neither leaves a gap for a
-//! default to fill.
+//! Only a provider whose records can name a model without the effort it runs at needs it, and says
+//! where its catalogue is and how it reads (`RecordStore::effort_defaults_file`,
+//! `RecordStore::effort_defaults`): Codex. A Codex turn's context record carries the effort its
+//! configuration resolved to, every layer included (the account's `config.toml`, a trusted
+//! project's own `.codex/config.toml`, a managed policy, a `-c` override), and leaves it out when
+//! none sets one; Codex then runs the model at the `default_reasoning_level` its catalogue gives
+//! that model, a catalogue it caches per account in `models_cache.json`. A context record that
+//! names a model and no effort therefore says exactly which entry applies. Before the first turn
+//! there is no such record, and the configuration layers are not read in its place: which of them
+//! apply depends on the project's trust and on policy this daemon cannot see. Claude Code records
+//! the effort on every reply and Grok Build's summary records it as configured, so neither leaves a
+//! gap for a default to fill.
 
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
@@ -21,11 +23,11 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::agents::layout::CODEX_MODELS_CACHE;
+use crate::adapter::provider;
 use crate::hostfs::read_regular_text;
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 use crate::records::line_file::{Signature, JSON_FILE_LIMIT};
-use crate::records::Locator;
+use crate::records::{Locator, RecordStore};
 
 /// Each account's catalogue defaults, read again when the file changes and looked at no more than
 /// once per pass of the collector.
@@ -58,19 +60,20 @@ impl DefaultEfforts {
     /// and whatever was found before still stands.
     pub fn of(
         &mut self,
-        agent: Agent,
+        agent: AgentId,
         config_dir: Option<&str>,
         model: Option<&str>,
         effort: Option<&str>,
         locator: &Locator,
     ) -> Option<Option<String>> {
-        let (Agent::Codex, Some(model), None) = (agent, model, effort) else {
+        let store = provider(agent).records();
+        let (Some(file), Some(model), None) = (store.effort_defaults_file(), model, effort) else {
             return Some(None);
         };
         let root = locator.root(agent, config_dir)?;
         let catalogue = self.catalogues.entry(root.clone()).or_default();
         if self.checked.insert(root.clone()) {
-            catalogue.refresh(&root.join(CODEX_MODELS_CACHE));
+            catalogue.refresh(&root.join(file), store);
         }
         let defaults = catalogue.defaults.as_ref()?;
         Some(defaults.get(model).cloned())
@@ -81,7 +84,7 @@ impl Catalogue {
     /// Rereads the file when its size or modification time changed. A file that is gone leaves no
     /// defaults, since the account no longer vouches for any; one that cannot be read or parsed
     /// leaves the last ones read, as it may be caught halfway through being rewritten.
-    fn refresh(&mut self, path: &Path) {
+    fn refresh(&mut self, path: &Path, store: &dyn RecordStore) {
         let metadata = match std::fs::metadata(path) {
             Ok(metadata) => metadata,
             Err(err) if err.kind() == ErrorKind::NotFound => {
@@ -106,32 +109,15 @@ impl Catalogue {
         };
         self.signature = Some(signature);
         if let Ok(catalogue) = serde_json::from_str::<Value>(&text) {
-            self.defaults = Some(codex_defaults(&catalogue));
+            self.defaults = Some(store.effort_defaults(&catalogue));
         }
     }
-}
-
-/// Each entry's `default_reasoning_level` by its `slug`, hidden entries included, since a session
-/// can run a model the pickers do not list.
-fn codex_defaults(catalogue: &Value) -> HashMap<String, String> {
-    let Some(entries) = catalogue.get("models").and_then(Value::as_array) else {
-        return HashMap::new();
-    };
-    entries
-        .iter()
-        .filter_map(|entry| {
-            let slug = entry.get("slug").and_then(Value::as_str)?;
-            let level = entry
-                .get("default_reasoning_level")
-                .and_then(Value::as_str)?;
-            (!slug.is_empty() && !level.is_empty()).then(|| (slug.to_owned(), level.to_owned()))
-        })
-        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::providers::codex::CODEX_MODELS_CACHE;
     use crate::test_support::ScratchDir;
 
     const CATALOGUE: &str = include_str!("../../testdata/codex_models_cache_0.162.1.json");
@@ -144,7 +130,7 @@ mod tests {
     ) -> Option<Option<String>> {
         let account = account.to_string_lossy();
         defaults.of(
-            Agent::Codex,
+            AgentId::CODEX,
             Some(&account),
             model,
             effort,
@@ -166,7 +152,7 @@ mod tests {
             assert_eq!(lookup(&mut defaults, &account, model, effort), Some(None));
         }
         let grok = defaults.of(
-            Agent::Grok,
+            AgentId::GROK,
             Some(&account.to_string_lossy()),
             Some("gpt-6.1-sol"),
             None,

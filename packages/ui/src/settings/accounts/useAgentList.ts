@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { listedAgents } from "../../agents/agents";
+import { listedAgents, servedAgents } from "../../agents/agents";
 import { alertAppDataFailure } from "../../components/alerts/raiseError";
 import { movedAgent } from "../../components/tabs/tabDrag";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
-import { useDaemon } from "../../store";
+import { useDaemon, useProviders } from "../../store";
 import { useOptimisticOrder } from "./useOptimisticOrder";
 
 /** The agents the strip lists, the tabs' elements and the means to reorder the agents. The strip shows the order a
@@ -26,9 +26,10 @@ export function useAgentList(added: Agent[] | null): {
 } {
   const t = useT();
   const { request } = useDaemon();
-  const { order: agents, propose } = useOptimisticOrder(added, listedAgents(added));
+  const providers = useProviders();
+  const { order: agents, propose } = useOptimisticOrder(added, listedAgents(added, servedAgents(providers)));
   const [tabs, setTabs] = useState<Partial<Record<Agent, HTMLElement>>>({});
-  const tabRefs = useMemo(() => Object.fromEntries(listedAgents(null).map((agent) => [
+  const tabRefs = useMemo(() => Object.fromEntries(providers.map(({ id: agent }) => [
     agent,
     (element: HTMLElement | null) => setTabs((current) => {
       if ((current[agent] ?? null) === element) return current;
@@ -37,7 +38,7 @@ export function useAgentList(added: Agent[] | null): {
       else delete next[agent];
       return next;
     }),
-  ])) as Record<Agent, (element: HTMLElement | null) => void>, []);
+  ])), [providers]);
   // The tab to give focus back to, until it has been given.
   const [moved, setMoved] = useState<Agent>();
   useEffect(() => {

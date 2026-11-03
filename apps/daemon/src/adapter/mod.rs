@@ -1,20 +1,22 @@
-//! Agent adapters: one per agent CLI, each assembling the launch of that CLI so Octoboard's
-//! capabilities are injected *additionally*, without modifying project files or the user's own
-//! configuration. The adapter trait covers launching, capability injection, status and resume;
-//! where each agent keeps its files is [`crate::agents::layout`], and the per-agent knowledge of
-//! how the agents otherwise behave lives with the modules that need it, among them their screens
-//! and dialogs, hook payloads, records, sign-in and quota protocols, tool naming and role text
-//! (`crate::session_tools`), launch and account switch (`crate::coordinator`), model catalogues
-//! (`crate::agents::models`) and the detection of a project's agent (`crate::agents::detect`).
+//! The provider behavior registry: one [`AgentProvider`] per agent CLI, beside the static facts of
+//! its descriptor (`crate::providers`). Each provider's module assembles the launch of its CLI so
+//! Octoboard's capabilities are injected *additionally*, without modifying project files or the
+//! user's own configuration, and reads the titles it shows and records; [`provider`] gives an
+//! agent's. Knowledge of how one provider behaves lives in its provider: its descriptor and its
+//! module here, how its hook events are read, how its records are found, read and watched, how its
+//! screens, dialogs and terminal title read, what its accounts can be asked (quota, sign-in, reset
+//! credits, shared configuration, thread registry), how its models are listed, and its status line
+//! and trust carrying included.
 //!
-//! Three things are injected into every agent: the status hooks, the Octoboard MCP server, and a role
-//! description, plus a status line for Claude Code ("What is injected on every launch" in
-//! `docs/product/launching-agents.md`). The mechanism for each differs per agent and is the adapter's
-//! own business; the conditions the three shared ones meet are below.
+//! Three things are injected into every agent: the status hooks, the Octoboard MCP server, and a
+//! role description, plus a status line for a provider that declares one
+//! (`Capabilities::status_line`; "What is injected on every launch" in
+//! `docs/product/launching-agents.md`). The mechanism for each differs per agent and is the
+//! adapter's own business; the conditions the shared ones meet are below.
 //!
 //! Three rules hold for every adapter, each of which fails silently if broken:
 //!
-//! - **Resume re-injects everything.** For all three agents, hooks and the MCP server are resolved
+//! - **Resume re-injects everything.** For every provider, hooks and the MCP server are resolved
 //!   from the launch arguments every time and are lost on a resume that omits them, leaving a
 //!   session nobody observes. Adapters therefore assemble the full injection on every launch,
 //!   resume included.
@@ -43,22 +45,28 @@ pub mod codex;
 pub(crate) mod files;
 pub mod grok;
 mod hooks;
+#[cfg(test)]
+mod test_provider;
 
 pub use account_cli::{
     account_command_of, account_dir, default_account_dir, resolve_account_binary,
 };
 pub use hooks::{hook_command, hook_script_path, hook_url, write_hook_script, HOOK_TIMEOUT_SECS};
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::agents::models::{ModelCatalogue, NoCatalogue};
+use crate::hooks::{HookInterpreter, NoHooks};
 use crate::protocol::{
-    error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, GitWorkflowSettings,
-    Notice, SessionKind, TerminalAppearance,
+    error_code, AgentId, CodedError, GitWorkflowSettings, Notice, SessionKind, TerminalAppearance,
 };
+use crate::providers::{ProviderDescriptor, ProviderSettings};
+use crate::records::{NoRecords, RecordStore};
+use crate::session::screen::{NoScreen, ScreenReader};
 use crate::session_tools::Owner;
 
 /// Everything an adapter needs to assemble one launch.
@@ -95,8 +103,8 @@ pub struct LaunchSpec<'a> {
     /// Per-session scratch directory, already created. Adapters may write into it whatever their
     /// injection needs; it is removed when the session's process is gone.
     pub scratch: &'a Path,
-    /// Absolute path of the hook script for this session. Written only for an adapter whose
-    /// [`AgentAdapter::uses_hook_script`] is true; for any other it is where the script would be,
+    /// Absolute path of the hook script for this session. Written only for a provider that
+    /// declares the `hook_script` capability; for any other it is where the script would be,
     /// and nothing is there.
     pub hook_script: &'a Path,
     /// The filtered snapshot of the user's shell environment this launch will use. Adapters read
@@ -110,16 +118,13 @@ pub struct LaunchSpec<'a> {
     /// through [`pinned_config_dir`], which refuses a directory that has vanished, and passes the
     /// result on to whatever else needs it.
     pub config_dir: Option<&'a Path>,
-    /// Codex-only override; absent follows its own configuration.
-    pub approval_reviewer: Option<ApprovalReviewer>,
-    /// Claude Code-only override; absent follows its own configuration and passes no flag.
-    pub approval_mode: Option<ClaudeApprovalMode>,
-    /// Whether this session of Codex or Grok Build is to load Claude Code's instructions, skills
-    /// and the rest: its setting is in effect (`Store::claude_compatibility_of`). Always false for
-    /// Claude Code. Codex is told in its instructions to read them (`claude_compatibility.md`) and
-    /// is given Claude Code's MCP servers (`codex::claude_mcp`); Grok Build is given its own
-    /// switches.
-    pub claude_compatibility: bool,
+    /// The session's own provider's settings in effect when the launch was assembled
+    /// (`Store::provider_settings_of`). A provider reads only the ids its descriptor declares.
+    pub settings: &'a ProviderSettings,
+    /// The compatibility source this session's provider reads, when one of its compatibility
+    /// switches (`SettingDescriptor::compatibility_with`) is on: the MCP servers and instructions
+    /// of the provider the switch names, offered through its [`CompatibilitySource`].
+    pub compatibility_source: Option<&'static dyn CompatibilitySource>,
     /// The default account's directory, fully resolved, when the session's account shares the
     /// default configuration (`crate::accounts::shared_config`); `None` for every other launch. An
     /// adapter whose agent keeps per-project memory in its conversation directory points that
@@ -136,7 +141,7 @@ pub struct LaunchSpec<'a> {
     /// it, to set `GROK_THEME`; absent means follow the operating system.
     pub terminal_appearance: Option<TerminalAppearance>,
     /// The version of the agent binary this launch starts, when it could be told without running
-    /// it (see [`AgentAdapter::installed_version`]); `None` makes an adapter fall back to what
+    /// it (see [`AgentProvider::installed_version`]); `None` makes an adapter fall back to what
     /// every version takes.
     pub agent_version: Option<AgentVersion>,
     /// The daemon binary, which is also the MCP server and the hook forwarder.
@@ -217,7 +222,7 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
 /// Checked here rather than left to the agent: Claude Code would quietly create the missing
 /// directory and come up logged out, without the conversation the resume was meant to continue —
 /// an outcome that looks like success — and Codex would exit.
-pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Option<&'a Path>> {
+pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: AgentId) -> Result<Option<&'a Path>> {
     match spec.config_dir {
         Some(dir) if !dir.is_dir() && spec.resume_agent_session_id.is_some() => {
             Err(CodedError::raised(
@@ -235,24 +240,12 @@ pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: Agent) -> Result<Opti
     }
 }
 
-/// Refuses an account directory this agent cannot launch against, ahead of anything being done in
-/// it: the same rule `plan` applies at launch, asked beforehand so a switch can refuse before it
-/// copies a conversation into the directory. The copy would otherwise create the directory's
-/// `sessions/` and so make a Grok home that was never initialized pass the check at launch, which
-/// is exactly the silent failure that check exists to prevent. `pinned` is the account's own
-/// directory; the default account pins nothing and is not checked.
-pub fn refuse_unlaunchable_account(agent: Agent, pinned: Option<&Path>) -> Result<()> {
-    match (agent, pinned) {
-        (Agent::Grok, Some(dir)) => grok::require_initialized_grok_home(dir),
-        _ => Ok(()),
-    }
-}
-
 #[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,
-    /// Codex's private server and the client arguments for an explicit remote connection.
-    pub codex_server: Option<codex::PrivateServerPlan>,
+    /// A server of the provider's own that the session's automatic messages go through, started
+    /// with the launch; the terminal is then started with the arguments it gives.
+    pub private_server: Option<Box<dyn crate::session::term::PrivateServer>>,
     /// Environment entries layered on top of the shell snapshot. The launch sets `TERM` after
     /// these, and in a project session `GIT_CONFIG_*`, `OCTOBOARD_SESSION_ID`,
     /// `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY` too, so an adapter can neither see nor
@@ -269,10 +262,11 @@ pub struct LaunchPlan {
     /// user's own configuration by itself, and so has to be carried there once the confirmation is
     /// accepted, by Octoboard's press or in the terminal. Only Grok, whose trust store lives in the
     /// per-session home.
-    pub carried_trust: Option<crate::session::trust::CarriedTrust>,
-    /// Grok's: keys to copy from the session's `config.toml` onto the shared file once the process
-    /// has exited. Only when that source file is a symlink.
-    pub shared_config_writeback: Option<grok::SharedConfigWriteback>,
+    pub carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
+    /// Work the launch leaves for once its process has exited, done before the session's scratch
+    /// directory is removed (Grok's copy of the settings a session changed onto the configuration
+    /// file its account shares).
+    pub after_exit: Option<Box<dyn crate::session::term::AfterExit>>,
 }
 
 /// A title an agent's own record gives its conversation. Of the titles one record gives, the
@@ -288,21 +282,91 @@ pub fn is_spinner(text: &str) -> bool {
     glyphs.peek().is_some() && glyphs.all(crate::terminal::title::is_braille_spinner_glyph)
 }
 
-pub trait AgentAdapter {
-    /// Binary name, resolved against the snapshotted shell `PATH`.
-    fn binary(&self) -> &'static str;
+/// What a provider offers the providers made compatible with it (`ProviderDescriptor::
+/// compatibility_source`): its configuration, read the way it reads it. A consuming provider
+/// takes these through this interface and knows nothing of the source's files.
+pub trait CompatibilitySource: Send + Sync {
+    /// The source's MCP servers in effect for `cwd`, by name, as its own configuration declares
+    /// them (scopes merged, approvals and disables applied), each in the common MCP configuration
+    /// format: `command`, `args` and `env` for a local server, `type: "http"` with `url` and
+    /// `headers` for a remote one.
+    fn mcp_servers(
+        &self,
+        shell_env: &HashMap<String, String>,
+        cwd: &Path,
+    ) -> BTreeMap<String, serde_json::Value>;
 
-    /// True when the agent accepts an id for a new session, which lets Octoboard use its own
-    /// session id as the agent's. Codex cannot, and its id only becomes known from the first hook
-    /// payload.
-    fn preallocates_session_id(&self) -> bool;
+    /// The guidance a consuming agent, named `consumer_label` in it, is given to read the source's
+    /// instruction files, skills, rules and settings, in the source's own layout.
+    fn instructions(&self, consumer_label: &str, shell_env: &HashMap<String, String>) -> String;
+}
+
+/// A provider's status line, the one its launch injects as `octoboardd status-line --provider <id>
+/// …` (`Capabilities::status_line`). Core only dispatches the command to it.
+pub trait StatusLine: Send + Sync {
+    /// Runs one update: reads what the provider wrote on stdin, reports the session's context
+    /// window to the daemon at `port` with `key`, runs the user's own status line in its place and
+    /// returns the exit status to leave with. `args` are the provider's own arguments after the
+    /// fixed ones.
+    fn run(&self, session: &str, port: u16, key: &str, args: &[String]) -> i32;
+}
+
+/// How one provider behaves: launching it and reading what it shows and writes, beside the static
+/// facts of its [`ProviderDescriptor`]. Every method but the core has a default, so a provider
+/// implements only what it has.
+pub trait AgentProvider: Send + Sync {
+    /// The provider's static facts.
+    fn descriptor(&self) -> &'static ProviderDescriptor;
+
+    /// How the provider's hook events are read.
+    fn hooks(&self) -> &'static dyn HookInterpreter {
+        &NoHooks
+    }
+
+    /// How the provider's own records of a session are found, read and watched.
+    fn records(&self) -> &'static dyn RecordStore {
+        &NoRecords
+    }
+
+    /// How the provider's terminal screens, input box and terminal title read.
+    fn screen(&self) -> &'static dyn ScreenReader {
+        &NoScreen
+    }
+
+    /// What the provider's accounts can be asked beyond launching: their quota, the email they
+    /// sign in with, signing in and the configuration they share. `None` for a provider whose
+    /// accounts are none of that.
+    fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {
+        None
+    }
+
+    /// How the provider's models are listed, and which of them a session gets by default.
+    fn catalogue(&self) -> &'static dyn ModelCatalogue {
+        &NoCatalogue
+    }
+
+    /// The provider's status line, when it shows one Octoboard can feed
+    /// (`Capabilities::status_line`).
+    fn status_line(&self) -> Option<&'static dyn StatusLine> {
+        None
+    }
+
+    /// What the provider offers a provider made compatible with it; `Some` exactly when its
+    /// descriptor declares `compatibility_source`.
+    fn compatibility_source(&self) -> Option<&'static dyn CompatibilitySource> {
+        None
+    }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan>;
 
-    /// True when the plan runs the per-session hook script ([`write_hook_script`]) for its hooks,
-    /// so a launch writes one only for such an agent.
-    fn uses_hook_script(&self) -> bool {
-        false
+    /// Refuses an account directory this provider cannot launch against, ahead of anything being
+    /// done in it: the same rule `plan` applies at launch, asked beforehand so a switch can refuse
+    /// before it copies a conversation into the directory. The copy would otherwise create files
+    /// that make a directory that was never set up pass the check at launch (a Grok home's
+    /// `sessions/`), which is exactly the silent failure that check exists to prevent. `pinned` is
+    /// the account's own directory; the default account pins nothing and is not checked.
+    fn refuse_unlaunchable_account(&self, _pinned: Option<&Path>) -> Result<()> {
+        Ok(())
     }
 
     /// The version of the resolved `binary`, read from where it is installed instead of by running
@@ -352,12 +416,41 @@ pub trait AgentAdapter {
     }
 }
 
-pub fn adapter_for(agent: Agent) -> Box<dyn AgentAdapter> {
-    match agent {
-        Agent::Claude => Box::new(claude::ClaudeAdapter),
-        Agent::Codex => Box::new(codex::CodexAdapter),
-        Agent::Grok => Box::new(grok::GrokAdapter),
-    }
+/// The behavior registry: each registered provider's behavior, by id. Registering a provider is
+/// one line here and one in `crate::providers`' descriptor registry; a test checks the two list
+/// the same providers.
+static PROVIDERS: &[(AgentId, &dyn AgentProvider)] = &[
+    (AgentId::CLAUDE, &claude::ClaudeProvider),
+    (AgentId::CODEX, &codex::CodexProvider),
+    (AgentId::GROK, &grok::GrokProvider),
+    #[cfg(test)]
+    (AgentId::TEST, &test_provider::TestProvider),
+];
+
+/// `agent`'s behavior.
+pub fn provider(agent: AgentId) -> &'static dyn AgentProvider {
+    PROVIDERS
+        .iter()
+        .find(|(id, _)| *id == agent)
+        .map(|(_, provider)| *provider)
+        .expect("every registered provider has a behavior")
+}
+
+/// The compatibility source `agent` reads under `settings`: that of the first of its
+/// compatibility switches (`SettingDescriptor::compatibility_with`) that is on, `None` while none
+/// is.
+pub fn compatibility_source_of(
+    agent: AgentId,
+    settings: &ProviderSettings,
+) -> Option<&'static dyn CompatibilitySource> {
+    agent
+        .descriptor()
+        .settings
+        .iter()
+        .filter(|setting| settings.switch(setting.id))
+        .find_map(|setting| {
+            provider(AgentId::from_wire_name(setting.compatibility_with?)?).compatibility_source()
+        })
 }
 
 /// An agent's version as major, minor, patch.
@@ -381,7 +474,7 @@ pub(crate) fn shell_quote(value: &str) -> String {
 #[cfg(test)]
 pub mod tests {
     use std::collections::HashMap;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use super::LaunchSpec;
     use crate::protocol::TerminalAppearance;
@@ -466,6 +559,8 @@ pub mod tests {
         pub hook_script: PathBuf,
         pub shell_env: HashMap<String, String>,
         pub config_dir: Option<PathBuf>,
+        pub settings: crate::providers::ProviderSettings,
+        pub compatibility_source: Option<&'static dyn super::CompatibilitySource>,
         pub shared_default_dir: Option<PathBuf>,
         pub model: Option<String>,
         pub effort: Option<String>,
@@ -492,9 +587,8 @@ pub mod tests {
                 hook_script: &self.hook_script,
                 shell_env: &self.shell_env,
                 config_dir: self.config_dir.as_deref(),
-                approval_reviewer: None,
-                approval_mode: None,
-                claude_compatibility: false,
+                settings: &self.settings,
+                compatibility_source: self.compatibility_source,
                 shared_default_dir: self.shared_default_dir.as_deref(),
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),
@@ -530,6 +624,8 @@ pub mod tests {
             hook_script,
             shell_env: HashMap::new(),
             config_dir: None,
+            settings: Default::default(),
+            compatibility_source: None,
             shared_default_dir: None,
             model: None,
             effort: None,
@@ -538,6 +634,108 @@ pub mod tests {
             self_exe: "/opt/octoboard/octoboardd".to_string(),
             mcp_token: "token-1".to_string(),
         }
+    }
+
+    /// Every registered provider's behavior is registered under the descriptor of its own agent.
+    #[test]
+    fn every_registered_provider_answers_with_its_own_descriptor() {
+        for agent in crate::protocol::AgentId::ALL {
+            let provider = super::provider(agent);
+            assert!(std::ptr::eq(provider.descriptor(), agent.descriptor()));
+        }
+    }
+
+    /// Every registered provider that keeps records reads them through a store of its own: each
+    /// names the share of a full context window used, which the store of a provider without
+    /// records (`NoRecords`) does not, and the test-only provider is the one that has none.
+    #[test]
+    fn every_registered_provider_reads_its_records_through_its_own_store() {
+        use crate::records::RecordStore;
+        assert_eq!(crate::records::NoRecords.used_percent(1_000, 1_000), None);
+        for agent in crate::protocol::AgentId::ALL {
+            let share = super::provider(agent)
+                .records()
+                .used_percent(1_000_000, 1_000_000);
+            if agent == crate::protocol::AgentId::TEST {
+                assert_eq!(share, None, "{agent:?}");
+            } else {
+                assert_eq!(share, Some(100), "{agent:?}");
+            }
+        }
+    }
+
+    /// A provider reads a compatibility source only through a switch of its descriptor that names
+    /// one: with none on, or none declared (the test-only provider declares none), it reads none.
+    #[test]
+    fn a_compatibility_source_is_read_only_through_a_switch_naming_one() {
+        use crate::providers::{ProviderSettings, SettingValue};
+        for agent in crate::protocol::AgentId::ALL {
+            let none = ProviderSettings::default();
+            assert!(
+                super::compatibility_source_of(agent, &none).is_none(),
+                "{agent:?}"
+            );
+            let all_on = ProviderSettings::new(
+                agent
+                    .descriptor()
+                    .settings
+                    .iter()
+                    .map(|setting| (setting.id.to_string(), Some(SettingValue::Switch(true)))),
+            );
+            let declares = agent
+                .descriptor()
+                .settings
+                .iter()
+                .any(|setting| setting.compatibility_with.is_some());
+            assert_eq!(
+                super::compatibility_source_of(agent, &all_on).is_some(),
+                declares,
+                "{agent:?}"
+            );
+        }
+        let test = crate::protocol::AgentId::TEST;
+        assert!(!test.descriptor().compatibility_source);
+        assert!(super::provider(test).compatibility_source().is_none());
+    }
+
+    /// A provider with only a launch plan launches with nothing of the optional kinds: no private
+    /// server, no carried trust, no work after its exit, no notice, no status line and no hook
+    /// script.
+    #[test]
+    fn the_test_provider_launches_without_any_optional_part() {
+        let fixture = spec_fixture();
+        let test = super::provider(crate::protocol::AgentId::TEST);
+        let plan = test.plan(&fixture.spec()).expect("a plan");
+        assert!(plan.args.is_empty() && plan.env.is_empty());
+        assert!(plan.private_server.is_none());
+        assert!(plan.carried_trust.is_none());
+        assert!(plan.after_exit.is_none());
+        assert!(plan.notice.is_none());
+        assert!(!plan.resolves_approvals_itself);
+        assert!(test.status_line().is_none());
+        assert!(test.accounts().is_none());
+        assert!(test
+            .refuse_unlaunchable_account(Some(Path::new("/nowhere")))
+            .is_ok());
+        assert_eq!(test.installed_version("octoboard-test-agent"), None);
+        assert_eq!(
+            test.task_title("  a title ", &[]).as_deref(),
+            Some("a title")
+        );
+        assert_eq!(test.task_title("   ", &[]), None);
+    }
+
+    /// The two registries list the same providers in the same order.
+    #[test]
+    fn the_descriptor_and_behavior_registries_agree() {
+        let behaviors: Vec<_> = super::PROVIDERS.iter().map(|(agent, _)| *agent).collect();
+        assert_eq!(behaviors, crate::protocol::AgentId::ALL);
+        let descriptors: Vec<_> = crate::providers::descriptors().map(|d| d.id).collect();
+        let ids: Vec<_> = crate::protocol::AgentId::ALL
+            .iter()
+            .map(|a| a.wire_name())
+            .collect();
+        assert_eq!(descriptors, ids);
     }
 
     /// The child starts its catalogue from its own arguments, so a worker has to say so there, and

@@ -206,7 +206,7 @@ it("tells of each application setting that was applied, and lists the values of 
       ],
     },
   });
-  render({ claude_compatibility: { codex: false, grok: true }, agent_tags: { codex: ["review", "ci"], grok: [] } });
+  render({ provider_settings: { codex: { claude_compatibility: false }, grok: { claude_compatibility: true } }, agent_tags: { codex: ["review", "ci"], grok: [] } });
   expect(settingLines(container)["Claude compatibility"]).toEqual({ badge: "Matches the file", values: ["Codex: Off", "Grok Build: On"] });
   expect(settingLines(container)["Agent tags"]).toEqual({ badge: "Matches the file", values: ["Codex: review, ci", "Grok Build: No tags"] });
 });

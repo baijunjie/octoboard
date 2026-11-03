@@ -1,7 +1,7 @@
 import { GripVertical } from "lucide-react";
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { AGENT_LABEL } from "../../agents/agents";
+import { providerLabel } from "../../agents/providers";
 import { useListMotion } from "../../components/motion/useListMotion";
 import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
@@ -22,6 +22,7 @@ import { AccountDisableSwitch } from "./AccountDisableSwitch";
 import { AccountLoginAnnouncer, useClearSucceededLogin, useSucceededAccountLogin } from "./AccountLogin";
 import { AccountLoginButton, type ReturnLoginFocus } from "./AccountLoginButton";
 import { useAccountDisabled } from "./useAccountDisabled";
+import { useProviders } from "../../store";
 
 /** The pinned cell's start edge while the table scrolls: a hairline, as a shadow since a cell's border is the
  * groove's. */
@@ -38,7 +39,8 @@ const HEADER = "px-2 pb-2 text-start text-xs font-medium whitespace-nowrap text-
  * view: its end scroll padding takes the column's measured width. */
 export function AccountsTable({ agent, children }: { agent: Agent; children: React.ReactNode }): React.ReactElement {
   const t = useT();
-  const region = useFadeRegion({ label: t("settings.accounts.table.scrollLabel", { agent: AGENT_LABEL[agent] }) });
+  const providers = useProviders();
+  const region = useFadeRegion({ label: t("settings.accounts.table.scrollLabel", { agent: isolate(providerLabel(t, providers, agent)) }) });
   const motion = useListMotion<HTMLTableSectionElement>();
   const pinned = useRef<HTMLTableCellElement>(null);
   const [pinnedWidth, setPinnedWidth] = useState(0);
@@ -55,7 +57,7 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
     <div className={`group/accounts rounded-lg ${region.ring}`} data-overflowing={region.overflows ? "" : undefined}>
       {/* The top padding is room for the focus ring of the help tip in the header. */}
       <FadedScroller orientation="horizontal" region={region} fade={false} endInset={pinnedWidth} className="pt-1">
-        <table aria-label={t("settings.accounts.table.label", { agent: AGENT_LABEL[agent] })} className="w-full min-w-[38rem] border-separate border-spacing-0 text-sm">
+        <table aria-label={t("settings.accounts.table.label", { agent: isolate(providerLabel(t, providers, agent)) })} className="w-full min-w-[38rem] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
               <th aria-hidden="true" className={`${HEADER} w-px`} />
@@ -105,6 +107,7 @@ export function AccountTableRow({ agent, account, name, menu, onLogin, onDragSta
   dragDisabled?: boolean;
 }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   const id = account?.id ?? null;
   const quota = useAccountQuota(agent, id);
   const exhausted = exhaustedQuotaWindow(quota, useNow());
@@ -140,7 +143,7 @@ export function AccountTableRow({ agent, account, name, menu, onLogin, onDragSta
       <td className={CELL}><AccountDisableSwitch agent={agent} account={id} name={name} /></td>
       <td className={`${CELL} ${PINNED_EDGE} sticky end-0 z-1 bg-overlay`}>
         <div ref={actions} data-row-actions="" className="flex items-center justify-end gap-1">
-          <ActionMenu label={t("settings.accounts.actionsLabel", { name: isolate(name), agent: AGENT_LABEL[agent] })} items={menu} />
+          <ActionMenu label={t("settings.accounts.actionsLabel", { name: isolate(name), agent: isolate(providerLabel(t, providers, agent)) })} items={menu} />
         </div>
       </td>
     </tr>

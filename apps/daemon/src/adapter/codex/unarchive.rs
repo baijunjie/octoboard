@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::adapter::account_cli::{self, NotRun, QueryFailure};
-use crate::protocol::{error_code, Agent, CodedError};
+use crate::protocol::{error_code, AgentId, Code, CodedError};
 
 /// How long `codex unarchive` may take; it only moves one file.
 const UNARCHIVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -23,13 +23,13 @@ pub fn unarchive(
 ) -> anyhow::Result<()> {
     let failed = |detail: String| {
         CodedError::raised(
-            error_code::CODEX_UNARCHIVE_FAILED,
+            Code::of_provider(crate::providers::codex::UNARCHIVE_FAILED),
             format!("`codex unarchive` failed: {detail}"),
             &[("detail", &detail)],
         )
     };
     let output = account_cli::query(
-        Agent::Codex,
+        AgentId::CODEX,
         shell_env,
         config_dir,
         &["unarchive", id],
@@ -74,7 +74,10 @@ mod tests {
             "echo first >&2; echo 'no such thread' >&2; exit 1",
         );
         let err = unarchive(&env, None, "t1").unwrap_err();
-        assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
+        assert_eq!(
+            code_of(&err),
+            Code::of_provider(crate::providers::codex::UNARCHIVE_FAILED)
+        );
         assert!(err.to_string().ends_with("no such thread"), "{err}");
     }
 
@@ -90,7 +93,10 @@ mod tests {
         );
         let err = unarchive(&env, None, "t1").unwrap_err();
         let coded = err.downcast_ref::<CodedError>().unwrap();
-        assert_eq!(coded.code, error_code::CODEX_UNARCHIVE_FAILED);
+        assert_eq!(
+            coded.code,
+            Code::of_provider(crate::providers::codex::UNARCHIVE_FAILED)
+        );
         assert_eq!(coded.params["detail"], "x".repeat(4096));
     }
 
@@ -105,6 +111,9 @@ mod tests {
             &format!("head -c {} /dev/zero; exit 0", OUTPUT_LIMIT + 1),
         );
         let err = unarchive(&env, None, "t1").unwrap_err();
-        assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
+        assert_eq!(
+            code_of(&err),
+            Code::of_provider(crate::providers::codex::UNARCHIVE_FAILED)
+        );
     }
 }

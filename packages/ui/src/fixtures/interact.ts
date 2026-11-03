@@ -1,4 +1,4 @@
-import { AGENT_OPTIONS } from "../agents/agents";
+import { FIXTURE_AGENTS } from "./fixtureProviders";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitStatusLabel";
 import { translatorFor, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
@@ -791,7 +791,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         ...(added && { settings: { ...current.settings, added_agents: added } }),
         ...(installed && {
           agentAvailability: new Map<Agent, AgentAvailability>(
-            AGENT_OPTIONS.map(({ value: agent }) => [
+            FIXTURE_AGENTS.map((agent) => [
               agent,
               { default_account_dir: `/Users/dev/.${agent}`, ...current.agentAvailability.get(agent), agent, availability: installed.includes(agent) ? "available" : "unavailable" },
             ]),

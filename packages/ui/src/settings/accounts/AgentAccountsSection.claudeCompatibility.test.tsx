@@ -19,15 +19,15 @@ it.each(["Codex", "Grok Build"] as const)("shows a Claude compatibility row abov
   const panel = container.querySelector('[role="tabpanel"]')!;
   const input = compatSwitch(container)!;
   expect(input.checked).toBe(true);
-  expect(input.getAttribute("aria-label")).toBe(`Claude compatibility for ${name}`);
-  expect(panel.textContent).toContain(`Applies to every ${name} account`);
+  expect(input.getAttribute("aria-label")).toBe(`Claude compatibility for \u2068${name}\u2069`);
+  expect(panel.textContent).toContain(`Applies to every \u2068${name}\u2069 account`);
   expect(panel.querySelectorAll('button[aria-label="About Claude compatibility"]')).toHaveLength(1);
   expect(input.compareDocumentPosition(panel.querySelector("table")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it("puts the Codex Claude compatibility row after the Permission approval control", () => {
   const { container } = mount("Codex");
-  const approval = container.querySelector('[role="tabpanel"] [aria-label="Permission approval for Codex"]')!;
+  const approval = container.querySelector('[role="tabpanel"] [aria-label^="Permission approval for"]')!;
   expect(approval).not.toBeNull();
   expect(approval.compareDocumentPosition(compatSwitch(container)!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
@@ -38,7 +38,7 @@ it("shows no Claude compatibility row for Claude Code", () => {
 });
 
 it("shows the stored choice of the agent in view", () => {
-  settings.claude_compatibility = { codex: false };
+  settings.provider_settings = { codex: { claude_compatibility: false } };
   expect(compatSwitch(mount("Codex").container)!.checked).toBe(false);
   expect(compatSwitch(mount("Grok Build").container)!.checked).toBe(true);
 });
@@ -46,7 +46,7 @@ it("shows the stored choice of the agent in view", () => {
 it("saves the agent's own value when toggled", async () => {
   const { container } = mount("Grok Build");
   await act(async () => compatSwitch(container)!.click());
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", claude_compatibility: { grok: false } });
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: false });
 });
 
 it("keeps the switch unavailable while saving, then reports a failed save", async () => {

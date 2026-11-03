@@ -44,8 +44,8 @@
 //! whose reading calls for one due instead, so that the poller's next tick reads it again and
 //! kicks it, as it would have after any other reading.
 //!
-//! A Codex reading also carries the account's rate limit reset credits. Using one
-//! (`reset_credit.rs`, `use_credit.rs`) is only ever the user's own request
+//! A reading of a provider that has them also carries the account's rate limit reset credits. Using
+//! one (`reset_credit.rs`, `use_credit.rs`) is only ever the user's own request
 //! ([`use_reset_credit`]): nothing in the poller, the kicks or the automatic account switch calls
 //! it.
 //!
@@ -54,13 +54,13 @@
 //! `poll.rs`'s: what makes an account due, the claims on the accounts that are, and the claim for
 //! a kick are all decided there, over the registry kept here.
 
-mod diagnostics;
-mod email;
+pub(crate) mod diagnostics;
+pub(crate) mod email;
 mod judgement;
-mod kick;
+pub(crate) mod kick;
 mod poll;
-mod probe;
-mod reset_credit;
+pub(crate) mod probe;
+pub(crate) mod reset_credit;
 mod use_credit;
 
 use std::collections::{HashMap, HashSet};
@@ -71,7 +71,7 @@ use std::time::Instant;
 use tokio::sync::Semaphore;
 
 use crate::protocol::{
-    quota_unavailable_code as code, AccountQuota, Agent, Event, QuotaWindow, QuotaWindowKind,
+    quota_unavailable_code as code, AccountQuota, AgentId, Event, QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
 #[cfg(test)]
@@ -90,7 +90,7 @@ pub(crate) use use_credit::use_reset_credit;
 /// pointed at another directory never inherits the reading of its old one.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Key {
-    agent: Agent,
+    agent: AgentId,
     /// The account's id; `None` for the default account.
     account: Option<String>,
     /// The account's directory; `None` for the default account, which pins nothing.
@@ -98,7 +98,7 @@ struct Key {
 }
 
 impl Key {
-    fn of(agent: Agent, account: Option<&str>, config_dir: Option<&str>) -> Self {
+    fn of(agent: AgentId, account: Option<&str>, config_dir: Option<&str>) -> Self {
         Self {
             agent,
             account: account.map(str::to_string),
@@ -151,7 +151,7 @@ impl Inner {
             .collect();
         quotas.sort_by_key(|quota| {
             (
-                Agent::ALL.iter().position(|agent| *agent == quota.agent),
+                AgentId::ALL.iter().position(|agent| *agent == quota.agent),
                 quota.account.clone(),
             )
         });
@@ -248,7 +248,7 @@ impl AccountQuotas {
     /// is usable.
     pub fn exhausted(
         &self,
-        agent: Agent,
+        agent: AgentId,
         account: Option<&str>,
         config_dir: Option<&str>,
         now: i64,
@@ -260,7 +260,7 @@ impl AccountQuotas {
     /// account-wide window below its limit even when an old reset time has passed.
     pub(crate) fn verified_available(
         &self,
-        agent: Agent,
+        agent: AgentId,
         account: Option<&str>,
         config_dir: Option<&str>,
         started_at: i64,
@@ -290,7 +290,7 @@ impl AccountQuotas {
     /// account's.
     pub fn held(
         &self,
-        agent: Agent,
+        agent: AgentId,
         account: Option<&str>,
         config_dir: Option<&str>,
     ) -> Option<AccountQuota> {
@@ -307,7 +307,7 @@ impl AccountQuotas {
     /// a timeout say, is a passing failure and is not this: it says nothing of the account.
     pub fn signed_out(
         &self,
-        agent: Agent,
+        agent: AgentId,
         account: Option<&str>,
         config_dir: Option<&str>,
     ) -> bool {
@@ -322,7 +322,7 @@ impl AccountQuotas {
     /// lock, so the reading and the judgement made from it cannot come from different moments.
     pub fn held_and_exhausted(
         &self,
-        agent: Agent,
+        agent: AgentId,
         account: Option<&str>,
         config_dir: Option<&str>,
         now: i64,
@@ -464,7 +464,7 @@ impl AccountQuotas {
 
     /// Whether a window of the account has been kicked in an episode that has not ended.
     #[cfg(test)]
-    pub fn is_kicked_for_test(&self, agent: Agent, account: Option<&str>) -> bool {
+    pub fn is_kicked_for_test(&self, agent: AgentId, account: Option<&str>) -> bool {
         self.lock()
             .kicked
             .keys()
@@ -473,7 +473,7 @@ impl AccountQuotas {
 
     /// Whether the held reading of the account is marked due.
     #[cfg(test)]
-    pub fn is_due_for_test(&self, agent: Agent, account: Option<&str>) -> bool {
+    pub fn is_due_for_test(&self, agent: AgentId, account: Option<&str>) -> bool {
         self.lock().entries.iter().any(|(key, entry)| {
             key.agent == agent && key.account.as_deref() == account && entry.due
         })
@@ -483,7 +483,7 @@ impl AccountQuotas {
     /// at once and a probe begun before a login ended cannot put its not-signed-in reading back
     /// over the new one. A kick running at the time is not stopped, so the account can be read
     /// while it still is. `account` is an account id, `None` for the default account.
-    pub fn make_due(&self, agent: Agent, account: Option<&str>) {
+    pub fn make_due(&self, agent: AgentId, account: Option<&str>) {
         let mut inner = self.lock();
         let is_it = |key: &Key| key.agent == agent && key.account.as_deref() == account;
         inner.in_flight.retain(|key, _| !is_it(key));

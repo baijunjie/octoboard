@@ -1,7 +1,8 @@
 import type { Reason } from "../format/reason";
 import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, Agent, QuotaUnavailable, QuotaWindow, ResetCredit, ResetCredits } from "../protocol";
+import type { AccountQuota, ProviderInfo, QuotaUnavailable, QuotaWindow, QuotaWindowNaming, ResetCredit, ResetCredits } from "../protocol";
+import { providerPlanName, servedProvider } from "../agents/providers";
 
 const MINUTE = 60_000;
 const DAY_MINUTES = 24 * 60;
@@ -58,26 +59,36 @@ export function remainingPercentAt(window: QuotaWindow, now: number): number {
   return window.resets_at != null && window.resets_at <= now ? 100 : remainingPercent(window);
 }
 
-/** What names a window besides its own kind: the agent, whose own interface the names follow, and the
- * account's other windows. Any `AccountQuota` serves. */
+/** What names a window besides its own kind: how the provider's own interface names its windows (`windowNaming`, as the
+ * daemon serves it; `undefined` while it has not, or for a provider it does not serve), and the account's other windows. */
 export interface QuotaNaming {
-  agent: Agent;
+  windowNaming: QuotaWindowNaming | undefined;
   windows: readonly QuotaWindow[];
 }
 
-/** Whether `window` is Claude's account-wide weekly window shown beside a model's own weekly one, which
- * Claude's interface then names "Weekly · all models". Alone, it is just "Weekly". */
+/** What names the windows of `quota`, from the `providers` the daemon serves. Any `AccountQuota` serves. */
+export function quotaNaming(quota: Pick<AccountQuota, "agent" | "windows">, providers: readonly ProviderInfo[]): QuotaNaming {
+  return { windowNaming: servedProvider(providers, quota.agent)?.quota_windows, windows: quota.windows };
+}
+
+/** Whether `window` is an account-wide weekly window shown beside a model's own weekly one, which the provider's
+ * interface then names "Weekly · all models" if it says so (`weekly_all_models`). Alone, it is just "Weekly". */
 function isWeeklyAllModels(naming: QuotaNaming, window: QuotaWindow): boolean {
-  return window.kind === "weekly" && naming.agent === "claude" && naming.windows.some((other) => other.kind === "weekly_model");
+  return window.kind === "weekly" && naming.windowNaming?.weekly_all_models === true && naming.windows.some((other) => other.kind === "weekly_model");
+}
+
+/** Whether the provider calls its short window "Session" rather than "5h". */
+function isSessionNamed(naming: QuotaNaming): boolean {
+  return naming.windowNaming?.session_window === "session";
 }
 
 /** The window's name: "Session" or "5h" (as the agent's own interface calls its short window), "Weekly",
- * "Weekly · all models" (Claude's account-wide one beside a model's own), "<Model> weekly". A credit pool is named for the length of its current period, which the agent bills over
+ * "Weekly · all models" (an account-wide one beside a model's own), "<Model> weekly". A credit pool is named for the length of its current period, which the agent bills over
  * (weekly on the measured account). */
 export function quotaWindowLabel(t: Translate, naming: QuotaNaming, window: QuotaWindow): string {
   switch (window.kind) {
     case "session":
-      return t(naming.agent === "claude" ? "quota.window.session" : "quota.window.fiveHour");
+      return t(isSessionNamed(naming) ? "quota.window.session" : "quota.window.fiveHour");
     case "weekly":
       return t(isWeeklyAllModels(naming, window) ? "quota.window.weeklyAll" : "quota.window.weekly");
     case "weekly_model":
@@ -141,11 +152,11 @@ export function resetCreditsSummary(t: Translate, resetCredits: ResetCredits, no
   return expiresAt == null ? available : t("quota.resetCredits.summary", { available, expiry: expiresIn(t, expiresAt, now) });
 }
 
-/** The plan in display case, with a short name for Codex's self-serve Business Pro Lite tier: a name that
- * already has a capital after its first letter keeps its own casing, any other has each word
- * capitalised. */
-export function planLabel(plan: string): string {
-  if (plan === "self_serve_business_prolite") return "Business Pro Lite";
+/** The plan of an account of provider `agent` in display case, or by the name the provider's module gives it: a name
+ * that already has a capital after its first letter keeps its own casing, any other has each word capitalised. */
+export function planLabel(agent: string, plan: string): string {
+  const named = providerPlanName(agent, plan);
+  if (named) return named;
   if (/.[A-Z]/.test(plan)) return plan;
   return plan
     .split(/[\s_-]+/)
@@ -185,7 +196,7 @@ export function exhaustedQuotaWindow(quota: AccountQuota | "loading" | undefined
 export function quotaWindowPhrase(t: Translate, naming: QuotaNaming, window: QuotaWindow): string {
   switch (window.kind) {
     case "session":
-      return t(naming.agent === "claude" ? "quota.windowPhrase.session" : "quota.windowPhrase.fiveHour");
+      return t(isSessionNamed(naming) ? "quota.windowPhrase.session" : "quota.windowPhrase.fiveHour");
     case "weekly":
       return t(isWeeklyAllModels(naming, window) ? "quota.windowPhrase.weeklyAll" : "quota.windowPhrase.weekly");
     case "weekly_model":
@@ -235,14 +246,20 @@ export interface QuotaBar {
   naming: QuotaNaming;
 }
 
-/** The windows a compact usage bar draws: the 5-hour window with the weekly one beneath it, else the
- * account's one primary window (a credit pool, or a weekly window with no 5-hour one). `undefined`
+/** The windows a compact usage bar draws, without what names them: the 5-hour window with the weekly one beneath it,
+ * else the account's one primary window (a credit pool, or a weekly window with no 5-hour one). `undefined`
  * for a reading with nothing to draw. */
+export function usageBarLayers(windows: readonly QuotaWindow[]): Omit<QuotaBar, "naming"> | undefined {
+  const layers = twoLayerWindows(windows);
+  if (layers) return { main: layers.session, thin: layers.weekly };
+  const main = primaryQuotaWindow([...windows]);
+  return main && { main };
+}
+
+/** `usageBarLayers` of a reading, with what names its windows. */
 export function usageBarWindows(quota: QuotaNaming): QuotaBar | undefined {
-  const layers = twoLayerWindows(quota.windows);
-  if (layers) return { main: layers.session, thin: layers.weekly, naming: quota };
-  const main = primaryQuotaWindow([...quota.windows]);
-  return main && { main, naming: quota };
+  const layers = usageBarLayers(quota.windows);
+  return layers && { ...layers, naming: quota };
 }
 
 /** What a compact usage bar shows, in words: "5h 82% remaining, Weekly 40% remaining". */

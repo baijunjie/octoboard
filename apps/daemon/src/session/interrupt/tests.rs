@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use super::*;
 use crate::messaging::delivery::{self, Delivery, WhenBlocked};
-use crate::protocol::{Agent, CodedError, Session, SessionStatus};
+use crate::protocol::{AgentId, CodedError, Session, SessionStatus};
 use crate::session::input_box::captures::*;
 use crate::state::AppState;
 use crate::test_support::{
@@ -13,11 +13,12 @@ use crate::test_support::{
 };
 
 /// A running title of each agent, as it sends one a turn.
-fn running_title(agent: Agent) -> &'static [u8] {
+fn running_title(agent: AgentId) -> &'static [u8] {
     match agent {
-        Agent::Claude => "\x1b]0;\u{25D0} Claude Code\x07".as_bytes(),
-        Agent::Codex => include_bytes!("../../../testdata/codex_working_title.bin"),
-        Agent::Grok => "\x1b]0;\u{280B} - Waiting for response\u{2026} - grok\x07".as_bytes(),
+        AgentId::CLAUDE => "\x1b]0;\u{25D0} Claude Code\x07".as_bytes(),
+        AgentId::CODEX => include_bytes!("../../../testdata/codex_working_title.bin"),
+        AgentId::GROK => "\x1b]0;\u{280B} - Waiting for response\u{2026} - grok\x07".as_bytes(),
+        other => panic!("no fixture for {other}"),
     }
 }
 
@@ -61,7 +62,7 @@ impl Fixture {
 /// A session `s` of `agent` at `status`, with a stand-in on a PTY in raw mode that keeps every byte
 /// written into its input, so a test can tell exactly what went in. `trust_watch` leaves its trust
 /// watch looking for the agent's screen, as a freshly launched session's is.
-fn fixture(name: &str, agent: Agent, status: SessionStatus, trust_watch: bool) -> Fixture {
+fn fixture(name: &str, agent: AgentId, status: SessionStatus, trust_watch: bool) -> Fixture {
     let (state, dir) = app_state(&format!("interrupt-{name}"));
     state.store.insert_console(&console(&dir)).unwrap();
     state
@@ -98,7 +99,7 @@ fn fixture(name: &str, agent: Agent, status: SessionStatus, trust_watch: bool) -
 }
 
 /// [`fixture`] in a turn: working by its hooks, with its title showing the turn running.
-fn working(name: &str, agent: Agent) -> Fixture {
+fn working(name: &str, agent: AgentId) -> Fixture {
     let fixture = fixture(name, agent, SessionStatus::Working, false);
     fixture.live.on_output(running_title(agent));
     fixture
@@ -144,16 +145,16 @@ fn back_at_prompt(state: &Arc<AppState>) -> Box<dyn FnOnce() + Send> {
 
 #[tokio::test]
 async fn codex_is_sent_one_esc_and_told_of_the_messages_its_cancel_dropped() {
-    let fixture = working("codex", Agent::Codex);
+    let fixture = working("codex", AgentId::CODEX);
     fixture.state.turn_started("s", None);
     fixture.state.note_written_mid_turn("s");
     fixture.state.note_written_mid_turn("s");
     draw(&fixture.live, "›\n\n  100% context left");
     assert_eq!(
-        input_box(Agent::Codex, &fixture.live.screen_text_undimmed()).as_deref(),
+        input_box(AgentId::CODEX, &fixture.live.screen_text_undimmed()).as_deref(),
         Some("")
     );
-    fixture.live.on_output(running_title(Agent::Codex));
+    fixture.live.on_output(running_title(AgentId::CODEX));
     let live = fixture.live();
     let state = fixture.state.clone();
     let agent = respond(
@@ -180,9 +181,26 @@ async fn codex_is_sent_one_esc_and_told_of_the_messages_its_cancel_dropped() {
     assert_eq!(fixture.keys_after_marker(), ESC);
 }
 
+/// A provider with no interrupt key known is sent none, and told so.
+#[tokio::test]
+async fn a_provider_with_no_known_interrupt_key_is_sent_nothing_and_told_so() {
+    let fixture = fixture("no-key", AgentId::TEST, SessionStatus::Working, false);
+    let interrupted = interrupt_session(&fixture.state, "s").await.unwrap();
+    assert!(!interrupted.interrupted);
+    assert!(
+        interrupted
+            .note
+            .starts_with("No key was sent: no key is known to interrupt a turn of"),
+        "{}",
+        interrupted.note
+    );
+    assert!(interrupted.note.contains("Test Agent"));
+    assert!(fixture.keys_after_marker().is_empty());
+}
+
 #[tokio::test]
 async fn grok_is_sent_ctrl_u_then_ctrl_c() {
-    let fixture = working("grok", Agent::Grok);
+    let fixture = working("grok", AgentId::GROK);
     let agent = respond(
         &fixture,
         vec![
@@ -203,7 +221,7 @@ async fn grok_is_sent_ctrl_u_then_ctrl_c() {
 /// that ended is what counts.
 #[tokio::test]
 async fn a_queued_message_running_right_after_the_cancel_does_not_hide_it() {
-    let fixture = working("grok-requeued", Agent::Grok);
+    let fixture = working("grok-requeued", AgentId::GROK);
     fixture.state.turn_started("s", None);
     fixture.state.note_written_mid_turn("s");
     let state = fixture.state.clone();
@@ -243,7 +261,7 @@ async fn a_queued_message_running_right_after_the_cancel_does_not_hide_it() {
 /// box; it is cleared with one Ctrl-U a press until the screen shows the box empty.
 #[tokio::test]
 async fn claude_is_sent_one_esc_and_the_prompt_it_restores_is_cleared() {
-    let fixture = working("claude-restored", Agent::Claude);
+    let fixture = working("claude-restored", AgentId::CLAUDE);
     draw(&fixture.live, CLEARED);
     let live = fixture.live();
     let (first, second) = (live.clone(), live.clone());
@@ -281,7 +299,7 @@ async fn claude_is_sent_one_esc_and_the_prompt_it_restores_is_cleared() {
 /// puts back is cleared as from an empty box.
 #[tokio::test]
 async fn a_faint_placeholder_does_not_keep_the_restored_prompt() {
-    let fixture = working("claude-placeholder", Agent::Claude);
+    let fixture = working("claude-placeholder", AgentId::CLAUDE);
     let placeholder = CLEARED.replacen(
         "\u{276F}\n",
         "\u{276F} \x1b[2mTry \"refactor <filepath>\"\x1b[22m\n",
@@ -324,7 +342,7 @@ async fn a_faint_placeholder_does_not_keep_the_restored_prompt() {
 /// rather than joining the prompt.
 #[tokio::test]
 async fn a_message_sent_during_the_clearing_goes_in_after_it() {
-    let fixture = working("claude-message-during-clear", Agent::Claude);
+    let fixture = working("claude-message-during-clear", AgentId::CLAUDE);
     draw(&fixture.live, CLEARED);
     let live = fixture.live();
     let (first, second) = (live.clone(), live.clone());
@@ -380,7 +398,7 @@ async fn a_message_sent_during_the_clearing_goes_in_after_it() {
 /// the caller is told it is there.
 #[tokio::test]
 async fn text_in_claude_s_input_box_before_the_esc_is_left_alone() {
-    let fixture = working("claude-draft", Agent::Claude);
+    let fixture = working("claude-draft", AgentId::CLAUDE);
     draw(&fixture.live, DRAFT);
     let live = fixture.live();
     let state = fixture.state.clone();
@@ -415,7 +433,7 @@ async fn text_in_claude_s_input_box_before_the_esc_is_left_alone() {
 /// cleared the same way as Claude Code's.
 #[tokio::test]
 async fn the_prompt_grok_restores_is_cleared() {
-    let fixture = working("grok-restored", Agent::Grok);
+    let fixture = working("grok-restored", AgentId::GROK);
     draw(&fixture.live, GROK_WORKING);
     let live = fixture.live();
     let (first, second) = (live.clone(), live.clone());
@@ -457,7 +475,7 @@ async fn the_prompt_grok_restores_is_cleared() {
 /// Grok then puts back is cleared too.
 #[tokio::test]
 async fn a_draft_in_grok_s_composer_is_cleared_before_the_ctrl_c() {
-    let fixture = working("grok-draft", Agent::Grok);
+    let fixture = working("grok-draft", AgentId::GROK);
     draw(&fixture.live, GROK_DRAFT);
     let live = fixture.live();
     let (first, second) = (live.clone(), live.clone());
@@ -505,7 +523,7 @@ async fn a_draft_in_grok_s_composer_is_cleared_before_the_ctrl_c() {
 /// screen shows the composer empty, or it would only clear the rest of the draft.
 #[tokio::test]
 async fn a_draft_of_several_lines_is_cleared_press_by_press() {
-    let fixture = working("grok-draft-lines", Agent::Grok);
+    let fixture = working("grok-draft-lines", AgentId::GROK);
     draw(&fixture.live, GROK_RESTORED_LINES);
     let live = fixture.live();
     let (first, second) = (live.clone(), live.clone());
@@ -539,7 +557,7 @@ async fn a_draft_of_several_lines_is_cleared_press_by_press() {
 /// A restored prompt the presses do not clear is said to be still there.
 #[tokio::test]
 async fn a_restored_prompt_that_will_not_clear_is_reported() {
-    let fixture = working("grok-left", Agent::Grok);
+    let fixture = working("grok-left", AgentId::GROK);
     draw(&fixture.live, GROK_WORKING);
     let live = fixture.live();
     let agent = respond(
@@ -581,7 +599,7 @@ async fn a_restored_prompt_that_will_not_clear_is_reported() {
 /// what did go in.
 #[tokio::test]
 async fn grok_s_ctrl_c_is_held_once_the_turn_has_ended() {
-    let fixture = working("grok-ended-between", Agent::Grok);
+    let fixture = working("grok-ended-between", AgentId::GROK);
     let agent = respond(&fixture, vec![(CTRL_U, back_at_prompt(&fixture.state))]);
 
     let result = interrupt_session(&fixture.state, "s").await.unwrap();
@@ -600,7 +618,7 @@ async fn grok_s_ctrl_c_is_held_once_the_turn_has_ended() {
 /// Someone else writing into the terminal between two keys stops the next one.
 #[tokio::test]
 async fn a_write_by_someone_else_between_the_keys_stops_the_next_one() {
-    let fixture = working("grok-touched", Agent::Grok);
+    let fixture = working("grok-touched", AgentId::GROK);
     let live = fixture.live();
     let agent = respond(
         &fixture,
@@ -624,7 +642,7 @@ async fn a_write_by_someone_else_between_the_keys_stops_the_next_one() {
 /// A key that goes in and leaves the session working is said to have done so.
 #[tokio::test]
 async fn a_session_still_working_after_the_key_is_reported() {
-    let fixture = working("codex-still-working", Agent::Codex);
+    let fixture = working("codex-still-working", AgentId::CODEX);
 
     // Nothing answers the key, so the window only has to run out; a short one shows that.
     SETTLE_OVERRIDE.with(|settle| settle.set(Some(Duration::from_millis(200))));
@@ -647,8 +665,8 @@ async fn a_session_still_working_after_the_key_is_reported() {
 /// A session at its prompt has nothing to interrupt, and nothing is written into it.
 #[tokio::test]
 async fn an_idle_session_is_left_alone() {
-    let fixture = fixture("idle", Agent::Codex, SessionStatus::Idle, false);
-    fixture.live.on_output(running_title(Agent::Codex));
+    let fixture = fixture("idle", AgentId::CODEX, SessionStatus::Idle, false);
+    fixture.live.on_output(running_title(AgentId::CODEX));
 
     let result = interrupt_session(&fixture.state, "s").await.unwrap();
 
@@ -664,11 +682,11 @@ async fn an_idle_session_is_left_alone() {
 async fn no_key_goes_in_unless_the_title_shows_the_turn_running() {
     let fixture = fixture(
         "title-at-prompt",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionStatus::Working,
         false,
     );
-    fixture.live.on_output(running_title(Agent::Claude));
+    fixture.live.on_output(running_title(AgentId::CLAUDE));
     fixture.live.on_output(CLAUDE_AT_PROMPT_TITLE);
 
     let result = interrupt_session(&fixture.state, "s").await.unwrap();
@@ -680,7 +698,7 @@ async fn no_key_goes_in_unless_the_title_shows_the_turn_running() {
 
 #[tokio::test]
 async fn a_second_interrupt_while_one_is_under_way_sends_nothing() {
-    let fixture = working("claimed", Agent::Codex);
+    let fixture = working("claimed", AgentId::CODEX);
     let _first = fixture.state.claim_interrupt("s").unwrap();
 
     let result = interrupt_session(&fixture.state, "s").await.unwrap();
@@ -721,7 +739,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
     /// set up, and the code and part of the message it is refused with.
     type Case = (
         &'static str,
-        Agent,
+        AgentId,
         SessionStatus,
         bool,
         Setup,
@@ -730,7 +748,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
     let cases: [Case; 11] = [
         (
             "archived",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Archived,
             false,
             |_| None,
@@ -738,7 +756,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "interrupted",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Interrupted,
             false,
             |_| None,
@@ -746,7 +764,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "starting",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Working,
             true,
             |_| None,
@@ -754,7 +772,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "trust",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Working,
             true,
             |f| {
@@ -766,7 +784,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "dialog",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Working,
             false,
             |f| {
@@ -780,7 +798,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "codex-action",
-            Agent::Codex,
+            AgentId::CODEX,
             SessionStatus::Working,
             false,
             |f| {
@@ -792,7 +810,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "hook-hand",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::WaitingUser,
             false,
             |_| None,
@@ -800,7 +818,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "request-hand",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Working,
             false,
             |f| {
@@ -811,7 +829,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "switching",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Working,
             false,
             |f| Some(Box::new(f.state.begin_switch("s").unwrap())),
@@ -819,7 +837,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "handoff",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Working,
             false,
             |f| Some(Box::new(f.state.hold_outbox("s"))),
@@ -827,7 +845,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         ),
         (
             "sharing-change",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Working,
             false,
             |f| Some(Box::new(f.state.hold_outbox_for_sharing("s"))),
@@ -862,4 +880,25 @@ async fn a_session_with_no_process_is_refused() {
     let (code, message) = refused_with(&state).await;
     assert_eq!(code, error_code::SESSION_NOT_RUNNING);
     assert!(message.contains("still starting"), "{message}");
+}
+
+/// The copy for a session waiting on the user names the title its own provider shows when only the
+/// user can act, and no other provider's.
+#[test]
+fn the_waiting_for_user_copy_names_the_title_the_sessions_provider_shows() {
+    assert_eq!(
+        waiting_for_user(AgentId::CODEX),
+        "No key was sent: the session's agent is showing something only the user can answer \
+         (a dialog of its own, or Codex's `Action Required`), which a key would answer in their \
+         place. It is theirs to clear in the terminal."
+    );
+    for agent in [AgentId::CLAUDE, AgentId::GROK, AgentId::TEST] {
+        assert_eq!(
+            waiting_for_user(agent),
+            "No key was sent: the session's agent is showing something only the user can answer \
+             (a dialog of its own), which a key would answer in their place. It is theirs to \
+             clear in the terminal.",
+            "{agent:?}"
+        );
+    }
 }

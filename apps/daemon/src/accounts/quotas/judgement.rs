@@ -8,7 +8,9 @@
 use std::collections::HashMap;
 
 use super::{Entry, Key};
-use crate::protocol::{quota_unavailable_code as code, Agent, Code, QuotaWindow, QuotaWindowKind};
+use crate::protocol::{
+    quota_unavailable_code as code, AgentId, Code, QuotaWindow, QuotaWindowKind,
+};
 
 /// The wire name of the session window, whichever agent it belongs to. Each agent's own interface
 /// calls it something else ([`Exhausted::named_for`]).
@@ -28,7 +30,7 @@ pub struct Exhausted {
     /// The window's length, if known; what names a credit pool.
     pub window_minutes: Option<u32>,
     /// Whether the same reading also has a model's own weekly window, which makes an account-wide
-    /// weekly window "Weekly · all models" in Claude Code's interface.
+    /// weekly window "Weekly · all models" in an interface that names it so.
     pub has_model_weekly: bool,
     /// When it resets, in milliseconds since the epoch; `None` when the agent does not say.
     pub resets_at: Option<i64>,
@@ -36,13 +38,14 @@ pub struct Exhausted {
 
 impl Exhausted {
     /// The window's name for a sentence about `agent`'s account, as that agent's own interface
-    /// calls it: Claude Code's `session` and `Weekly · all models` (beside a model's own weekly
-    /// window), Codex's `5h`; any other name as `window` has it.
-    pub fn named_for(&self, agent: Agent) -> &str {
-        match (self.kind, agent) {
-            (QuotaWindowKind::Session, Agent::Claude) => "session",
-            (QuotaWindowKind::Session, _) => "5h",
-            (QuotaWindowKind::Weekly, Agent::Claude) if self.has_model_weekly => {
+    /// calls it (`session` or `5h` for the five-hour window, `Weekly · all models` for the weekly
+    /// window beside a model's own, per [`crate::providers::QuotaWindowNaming`]); any other name as
+    /// `window` has it.
+    pub fn named_for(&self, agent: AgentId) -> &str {
+        let naming = &agent.descriptor().quota_windows;
+        match self.kind {
+            QuotaWindowKind::Session => naming.session_window.text(),
+            QuotaWindowKind::Weekly if self.has_model_weekly && naming.weekly_all_models => {
                 "Weekly · all models"
             }
             _ => &self.window,
@@ -60,7 +63,7 @@ impl Exhausted {
 /// The reading must be the account's under `config_dir`, as `Key` has it.
 pub(super) fn exhausted_in(
     entries: &HashMap<Key, Entry>,
-    agent: Agent,
+    agent: AgentId,
     account: Option<&str>,
     config_dir: Option<&str>,
     now: i64,

@@ -2,25 +2,26 @@ import { expect, it } from "vitest";
 
 import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/importPlan";
-import { type AccountFallback } from "../../protocol";
+import { type AccountFallback, type Agent, type ProviderInfo } from "../../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
 import { SCENARIOS } from ".";
-import { effectiveClaudeCompatibility } from "../../fixtures/builders";
+import { currentExportedProviderSettings, effectiveProviderSettings } from "../../fixtures/builders";
+import { FIXTURE_PROVIDERS } from "../../fixtures/fixtureProviders";
 import { carriedSettings, DEFAULT_CLONE_DIR, resolvedAccountDirectory } from "./configuration";
 
-type Shown<T> = { id: string; machine: NonNullable<NonNullable<(typeof SCENARIOS)[number]["state"]>["settings"]> | undefined } & T;
+type Shown<T> = { id: string; providers: readonly ProviderInfo[]; machine: NonNullable<NonNullable<(typeof SCENARIOS)[number]["state"]>["settings"]> | undefined } & T;
 
 /** Every inspection the scenarios answer with, and the machine (its settings) of the scenario that
  * answers it. */
 const inspected: Shown<{ inspection: Omit<Inspection, "type"> }>[] = SCENARIOS.flatMap((s) => {
   const inspection = s.configuration?.inspection;
-  return inspection && !("code" in inspection) ? [{ id: s.id, machine: s.state?.settings, inspection }] : [];
+  return inspection && !("code" in inspection) ? [{ id: s.id, providers: s.state?.providers ?? FIXTURE_PROVIDERS, machine: s.state?.settings, inspection }] : [];
 });
 /** Every import result the scenarios answer with, beside the inspection of the same scenario. */
 const imported: Shown<{ inspection: Omit<Inspection, "type">; result: Omit<Imported, "type"> }>[] = SCENARIOS.flatMap((s) => {
   const { inspection, imported: result } = s.configuration ?? {};
   return inspection && !("code" in inspection) && typeof result === "object" && !("code" in result)
-    ? [{ id: s.id, machine: s.state?.settings, inspection, result }]
+    ? [{ id: s.id, providers: s.state?.providers ?? FIXTURE_PROVIDERS, machine: s.state?.settings, inspection, result }]
     : [];
 });
 const projectsOf = (inspection: Omit<Inspection, "type">) => inspection.consoles.flatMap((console) => console.projects);
@@ -30,7 +31,7 @@ const projectsOf = (inspection: Omit<Inspection, "type">) => inspection.consoles
 const repoName = (url: string) => url.replace(/\/+$/, "").split(/[/:]/).at(-1)!.replace(/\.git$/, "");
 const lastSegment = (path: string) => path.split("/").filter(Boolean).at(-1);
 /** Where each agent's default account keeps its configuration on the machines of these scenarios. */
-const DEFAULT_ACCOUNT_DIRECTORY = { claude: "/Users/dev/.claude", codex: "/Users/dev/.codex", grok: "/Users/dev/.grok" };
+const DEFAULT_ACCOUNT_DIRECTORY: Record<Agent, string> = { claude: "/Users/dev/.claude", codex: "/Users/dev/.codex", grok: "/Users/dev/.grok" };
 const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 // What the fixture states by hand has to be what the daemon states: a gallery that shows a project
@@ -68,7 +69,7 @@ it("never offers a clone into a directory it also offers as one that exists", ()
 it("reports the setting this machine has now as the scenario's own state has it", () => {
   const withSettings = inspected.filter(({ inspection }) => inspection.settings);
   expect(withSettings.length).toBeGreaterThan(0);
-  for (const { id, machine, inspection } of withSettings) {
+  for (const { id, providers, machine, inspection } of withSettings) {
     const settings = inspection.settings!;
     expect(settings.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
     expect(settings.current_auto_delete_unresumable_archives, id).toBe(machine!.auto_delete_unresumable_archives);
@@ -83,7 +84,7 @@ it("reports the setting this machine has now as the scenario's own state has it"
     expect(settings.current_git_workflow, id).toEqual(machine!.git_workflow);
     expect(settings.current_agent_tags, id).toEqual(machine!.agent_tags ?? {});
     // The values in effect on this machine, not its explicit choices alone.
-    expect(settings.current_claude_compatibility, id).toEqual(effectiveClaudeCompatibility(machine!.claude_compatibility ?? {}, machine!.added_agents));
+    expect(settings.current_provider_settings, id).toEqual(currentExportedProviderSettings(effectiveProviderSettings(machine!.provider_settings ?? {}, machine!.added_agents, providers), providers));
   }
 });
 

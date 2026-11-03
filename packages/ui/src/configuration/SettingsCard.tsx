@@ -3,10 +3,15 @@ import React from "react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { DocumentSettings } from "../protocol";
+import { useProviders } from "../store";
 import { BOOLEAN_SETTINGS } from "./booleanSettings";
-import { hasAgentTags, hasClaudeCompatibilityChoices } from "./importPlan";
+import { hasAgentTags } from "./importPlan";
 import { Card, CARD_CLASS, CardHeading, SettingLine } from "./importParts";
-import { agentTagsValues, claudeCompatibilityValues, gitWorkflowValues, type SettingValue } from "./importValues";
+import { agentTagsValues, gitWorkflowValues, providerSettingLines, type CurrentProviderSettings, type SettingValue } from "./importValues";
+
+/** This machine's values of the settings a document carries, in the shape of the document's own, except that a provider
+ * setting left unset is `null`. */
+export type CurrentSettings = Omit<DocumentSettings, "provider_settings"> & { provider_settings: CurrentProviderSettings };
 
 /** A boolean application setting: what applying it would do against `current` (turns it on, off, or leaves it as it
  * is), or, with no `current`, what it was set to. */
@@ -48,12 +53,13 @@ export function SettingsCard({
   children,
 }: {
   settings: DocumentSettings;
-  current?: DocumentSettings;
+  current?: CurrentSettings;
   heading?: string;
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const providers = useProviders();
   const comparing = current !== undefined;
   const lines = (
     <ul className="flex flex-col px-4 py-1 [&>li]:groove-b [&>li:last-child]:border-b-0">
@@ -61,11 +67,11 @@ export function SettingsCard({
         <BooleanSettingLine key={field} label={t(label)} wanted={settings[field]} current={current?.[field]} consequence={consequence} />
       ))}
       <CompositeLine label={t("configuration.import.gitWorkflow")} values={gitWorkflowValues(t, settings.git_workflow, current?.git_workflow)} comparing={comparing} />
-      {hasClaudeCompatibilityChoices(settings.claude_compatibility) && (
-        <CompositeLine label={t("configuration.import.claudeCompatibility")} values={claudeCompatibilityValues(t, settings.claude_compatibility, current?.claude_compatibility)} comparing={comparing} />
-      )}
-      {hasAgentTags(settings.agent_tags) && (
-        <CompositeLine label={t("configuration.import.agentTags")} values={agentTagsValues(t, language, settings.agent_tags, current?.agent_tags)} comparing={comparing} />
+      {providerSettingLines(t, providers, settings.provider_settings, current?.provider_settings).map(({ label, values }) => (
+        <CompositeLine key={label} label={label} values={values} comparing={comparing} />
+      ))}
+      {hasAgentTags(providers, settings.agent_tags) && (
+        <CompositeLine label={t("configuration.import.agentTags")} values={agentTagsValues(t, language, providers, settings.agent_tags, current?.agent_tags)} comparing={comparing} />
       )}
       {children}
     </ul>

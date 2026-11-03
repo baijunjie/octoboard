@@ -1,6 +1,7 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import type { MessageParams } from "./codedError";
 import { pathLinkRefusedCause } from "./causes";
+import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
 
 /** Where a code comes from: the daemon declares it (`apps/daemon/src/protocol/codes.rs`), `daemon-client.ts` raises it
@@ -77,9 +78,13 @@ export interface CodeRecord extends MessageFacets {
   variants?: Record<string, MessageFacets>;
 }
 
-/** Every code the UI has anything to say about, daemon, client and UI-only. Keep a daemon code here in the same change
- * that has the daemon send it: `daemonCodes.test.ts` fails for one missing, and for one the daemon no longer declares. */
-export const CODES = {
+/** The operations `provider_unsupported` is worded under, as its variants. */
+const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {} };
+
+/** The codes of the core: every code the UI has anything to say about except a provider's own, which its presentation
+ * module owns (`providers/`). Keep a daemon code here in the same change that has the daemon send it:
+ * `daemonCodes.test.ts` fails for one missing, and for one the daemon no longer declares. */
+const CORE_CODES = {
   account_being_removed: { origin: "daemon", causeOnly: true, nameParams: ["name"] },
   account_directory_protected: { origin: "daemon", causeOnly: true },
   account_directory_shared: { origin: "daemon", causeOnly: true, variants: { account: { nameParams: ["name"] }, project: { nameParams: ["name"] } }, variantOf: (params) => params.kind === "account" || params.kind === "default_account" || params.kind === "project" ? params.kind : undefined },
@@ -103,14 +108,12 @@ export const CODES = {
   agent_already_added: { origin: "daemon", recovery: "addedAgents" },
   agent_availability_pending: { origin: "daemon", recovery: "availability" },
   agent_not_added: { origin: "daemon", recovery: "agentNotAdded" },
-  agent_not_available: { origin: "daemon", recovery: "tool", recoveryLine: true, codeParams: ["pathVar"], uiParams: { pathVar: "PATH", claude: "Claude Code", codex: "Codex", grokBuild: "Grok Build" } },
+  agent_not_available: { origin: "daemon", recovery: "tool", recoveryLine: true, codeParams: ["pathVar"], uiParams: { pathVar: "PATH" } },
   agent_not_installed: { origin: "daemon", recovery: "tool" },
   agent_order_invalid: { origin: "daemon", recovery: "addedAgents" },
   all_projects_already_added: { origin: "daemon", recovery: "existingProject" },
   binary_not_found: { origin: "daemon", recovery: "tool", codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH" } },
-  claude_workspace_untrusted: { origin: "daemon", codeParams: ["allow", "deny"], uiParams: { allow: "allow", deny: "deny", claude: "Claude Code" } },
   clean_filtered: { origin: "daemon", recovery: "scope", codeParams: ["path", "filter"] },
-  codex_unarchive_failed: { origin: "daemon", recovery: "unarchive", detailBlock: true, uiParams: { codex: "Codex" } },
   config_dir_not_absolute: { origin: "daemon", recovery: "path", codeParams: ["tilde"], uiParams: { tilde: "~/" } },
   config_dir_taken: { origin: "daemon", recovery: "accountDirectory", defaultAccountParams: ["name"], nameParams: ["name"] },
   config_dir_unreachable: { origin: "daemon", recovery: "path", recoveryLine: true, codeParams: ["path"] },
@@ -157,8 +160,6 @@ export const CODES = {
   // discards uncommitted changes by design, so its remedy names what can really refuse it.
   git_switch_failed: { origin: "daemon", recovery: "gitSwitchFailure", detailBlock: true, noSummary: true, uiParams: { git: "Git" } },
   git_unavailable: { origin: "daemon", recovery: "tool", detailBlock: true, uiParams: { git: "Git" } },
-  grok_home_not_initialized: { origin: "daemon", recovery: "account", recoveryLine: true, codeParams: ["path"], uiParams: { grok: "Grok" } },
-  grok_sandbox_unsupported: { origin: "daemon", recovery: "grokSandbox", codeParams: ["source", "profile"] },
   handoff_messages_dropped: { origin: "daemon", recovery: "lostMessages", failureNotice: true, alertTitle: true },
   // The archive of the original failed after the work moved: the failure it carries as `reason_code` is worded as a
   // failed launch's is. Its own remedy would say to retry, though the work is done, so `nested` is `failure` and the
@@ -187,9 +188,7 @@ export const CODES = {
   launch_failed: { origin: "daemon", unexpected: "shown as the failure its `reason_code` names", nested: "failureAndRemedy", failureNotice: true, alertTitle: true, nameParams: ["title"], variants: { title: { nameParams: ["title"] } } },
   limit_exceeded: { origin: "daemon", recovery: "limit" },
   login_already_running: { origin: "daemon", recovery: "none" },
-  // Has a step of its own (`recoveryLine`), and the login dialog takes up a login already running and ignores a
-  // cancel of one that has ended.
-  login_codex_busy: { origin: "daemon", recovery: "none", recoveryLine: true, uiParams: { codex: "Codex" } },
+  // The login dialog takes up a login already running and ignores a cancel of one that has ended.
   login_failed: { origin: "daemon", detailBlock: true },
   login_not_confirmed: { origin: "daemon" },
   login_not_running: { origin: "daemon", recovery: "none" },
@@ -232,6 +231,7 @@ export const CODES = {
   project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"], variants: { retryTrash: { nameParams: ["project"] } } },
   project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true, variantOf: (params) => params.cause === "unanswered" || params.cause === "unreadable" ? params.cause : undefined },
   project_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },
+  provider_unsupported: { origin: "daemon", recovery: "none", variants: UNSUPPORTED_OPERATIONS, variantOf: (params) => params.operation !== undefined && Object.hasOwn(UNSUPPORTED_OPERATIONS, params.operation) ? params.operation : undefined },
   // A push refused because the project's previous one is still running, and says so.
   push_in_progress: { origin: "daemon", recovery: "none" },
   queued_messages_dropped: { origin: "daemon", recovery: "refreshMessages", failureNotice: true, alertTitle: true, recoveryLine: true },
@@ -330,8 +330,11 @@ export const CODES = {
   worktree_unavailable: { origin: "daemon", recovery: "branch" },
 } satisfies Record<string, CodeRecord>;
 
-/** A code the registry holds. */
-export type Code = keyof typeof CODES;
+/** Every code the UI has anything to say about, daemon, client and UI-only: the core's and each provider's. */
+export const CODES: Readonly<Record<string, CodeRecord>> = { ...CORE_CODES, ...(PROVIDER_CODES satisfies Readonly<Record<string, CodeRecord>>) };
+
+/** A code of the core, which the registry names; a provider's codes are looked up by their strings. */
+export type Code = keyof typeof CORE_CODES;
 
 // The codes the client branches on as a group; a single one is named by `CODE`.
 
@@ -354,17 +357,28 @@ export const TRUST_FAILURE_CODES: ReadonlySet<string> = new Set<Code>(["trust_an
 
 /** Every code by its own name, for logic that checks for one: `CODE.trust_answer_failed` fails to type check once the
  * code is gone from the registry, where a string would go on comparing quietly. */
-export const CODE = Object.fromEntries(Object.keys(CODES).map((code) => [code, code])) as { readonly [C in Code]: C };
+export const CODE = Object.fromEntries(Object.keys(CORE_CODES).map((code) => [code, code])) as { readonly [C in Code]: C };
 
 /** The record of `code`, or nothing for a code the UI does not know (a daemon newer than this client). */
 export function codeRecord(code: string): CodeRecord | undefined {
-  return Object.hasOwn(CODES, code) ? (CODES as Record<string, CodeRecord>)[code] : undefined;
+  return Object.hasOwn(CODES, code) ? CODES[code] : undefined;
+}
+
+/** The prefix of a provider's code and of its messages: `provider.<id>.<code>`. */
+const PROVIDER_PREFIX = "provider.";
+
+/** The catalog key of a message worded under `messageCode` (`<code>`, `<code>.<variant>` and the like): a core code's is
+ * under `daemon.`, a provider's own code's is its code, which sits in the provider's namespace
+ * (`provider.<id>.<code>`) in the catalog the provider's presentation module supplies. */
+export function messageKey(messageCode: string): string {
+  return messageCode.startsWith(PROVIDER_PREFIX) ? messageCode : `daemon.${messageCode}`;
 }
 
 /** The params facets of a message worded under `messageCode`: the code's own, or those of the variant it names
- * (`<code>.<variant>`). */
+ * (`<code>.<variant>`). A provider's code has two dots of its own (`provider.<id>.<code>`). */
 export function messageFacets(messageCode: string): MessageFacets | undefined {
-  const dot = messageCode.indexOf(".");
-  if (dot < 0) return codeRecord(messageCode);
-  return codeRecord(messageCode.slice(0, dot))?.variants?.[messageCode.slice(dot + 1)];
+  const parts = messageCode.split(".");
+  const length = messageCode.startsWith(PROVIDER_PREFIX) ? 3 : 1;
+  if (parts.length <= length) return codeRecord(messageCode);
+  return codeRecord(parts.slice(0, length).join("."))?.variants?.[parts.slice(length).join(".")];
 }

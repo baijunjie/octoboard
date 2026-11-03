@@ -19,7 +19,7 @@ export function settledProjectAccount(reference: ProjectAccount, agent: Agent, a
 
 /** What the project says about `agent`'s account. */
 export function projectAccount(project: Project, agent: Agent, accounts: Account[]): ProjectAccount {
-  return settledProjectAccount(project.accounts[agent], agent, accounts);
+  return settledProjectAccount(project.accounts[agent] ?? { kind: "inherit" }, agent, accounts);
 }
 
 /** The account a project session of `agent` runs under when none is chosen for it, as the daemon

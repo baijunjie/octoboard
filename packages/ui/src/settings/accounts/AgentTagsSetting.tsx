@@ -1,12 +1,14 @@
 import React, { useRef, useState } from "react";
 
-import { AGENT_LABEL, listedAgents } from "../../agents/agents";
+import { listedAgents, servedAgents } from "../../agents/agents";
+import { providerLabel } from "../../agents/providers";
 import { alertAppDataFailure } from "../../components/alerts/raiseError";
 import { TagsInput } from "../../components/form/TagsInput";
 import { tagVocabulary } from "../../components/form/tagVocabulary";
+import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
+import { useDaemon, useDaemonStore, useProviders } from "../../store";
 import { sameValue } from "../../values/sameValue";
 import { SettingRow } from "../SettingRow";
 
@@ -28,6 +30,7 @@ export function AgentTagsSetting({ agent }: { agent: Agent }): React.ReactElemen
   const t = useT();
   const { request } = useDaemon();
   const added = useDaemonStore((s) => s.settings.added_agents);
+  const providers = useProviders();
   const allTags = useDaemonStore((s) => s.settings.agent_tags);
   const [asked, setAsked] = useState<string[]>();
   // The lists our outstanding and settled saves explain: the stored list the first one started
@@ -43,7 +46,7 @@ export function AgentTagsSetting({ agent }: { agent: Agent }): React.ReactElemen
     }
   }
   const shown = asked ?? stored;
-  const offered = tagVocabulary(listedAgents(added).map((listed) => allTags[listed] ?? []));
+  const offered = tagVocabulary(listedAgents(added, servedAgents(providers)).map((listed) => allTags[listed] ?? []));
   const change = (tags: string[]) => {
     setAsked(tags);
     setExpected((prior) => (prior.length ? [...prior, tags] : [stored, tags]));
@@ -65,11 +68,11 @@ export function AgentTagsSetting({ agent }: { agent: Agent }): React.ReactElemen
       },
     );
   };
-  const name = AGENT_LABEL[agent];
+  const name = isolate(providerLabel(t, providers, agent));
   return (
     <SettingRow
       label={t("settings.accounts.tags.heading")}
-      description={t("settings.accounts.approval.description", { agent: name })}
+      description={t("settings.accounts.setting.description", { agent: name })}
       below={
         <TagsInput
           hideLabel

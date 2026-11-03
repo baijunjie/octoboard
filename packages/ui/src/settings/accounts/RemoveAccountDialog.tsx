@@ -1,6 +1,5 @@
 import React, { useEffect, useId, useState } from "react";
 
-import { AGENT_LABEL } from "../../agents/agents";
 import { CodedError } from "../../errors/codedError";
 import { ErrorAlert } from "../../components/alerts/ErrorAlert";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
@@ -18,6 +17,7 @@ import { isLive } from "../../sessions/sessionStatus";
 import { compareSessions } from "../../sessions/order";
 import { indexSessions } from "../../sessions/sessionIndex";
 import { useDaemon, useDaemonStoreEqual } from "../../store";
+import { ProviderName } from "../../components/text/ProviderName";
 
 /** What removing account `accountId` with its directory moved to the Trash would be let or refused now, asked afresh
  * each time `asking` turns on (the option ticked) and each time `reinspect` is called, so what changed while it was off
@@ -119,7 +119,7 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
   const problem = trash && (refusal !== undefined || inspection.failure !== undefined);
   const blocked = trash && running.length > 0;
   const describedBy = [problem ? alertId : undefined, blocked ? runningId : undefined].filter(Boolean).join(" ");
-  const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[account.agent]}</InlineReference>;
+  const agent = <ProviderName agent={account.agent} />;
   return (
     <ConfirmDialog
       title={t("settings.accounts.removeTitle")}

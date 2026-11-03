@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_OPTIONS } from "../agents/agents";
+import { TEST_AGENTS } from "../test/testProviders";
 import { CodedError } from "../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -134,7 +134,7 @@ it("refuses an owner that is no longer live, as the dialog does, and sends nothi
 });
 
 it("sends nothing with no agent available", async () => {
-  const none = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
+  const none = new Map(TEST_AGENTS.map((value) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
   const { daemon, run } = mount({ agentAvailability: none });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();

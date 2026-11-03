@@ -11,8 +11,9 @@
 
 pub(crate) mod dialogs;
 mod draft;
-mod input_box;
+pub(crate) mod input_box;
 pub(crate) mod interrupt;
+pub(crate) mod screen;
 mod swap;
 pub(crate) mod term;
 pub(crate) mod title_activity;
@@ -27,8 +28,8 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 pub(crate) use swap::{HeldFragment, RecoveryPhase};
 
-use crate::protocol::Agent;
-use crate::session::trust::{CarriedTrust, TrustState};
+use crate::protocol::AgentId;
+use crate::session::trust::{TrustCarrier, TrustState};
 use crate::terminal::input_class::is_terminal_protocol;
 use crate::terminal::pty::{NewPty, PtyCore, PtyOwner, Spawned};
 use crate::terminal::ptyio;
@@ -87,11 +88,11 @@ impl TitleObserver {
 /// through it directly (it dereferences to it); what is here is the agent's own.
 pub struct LiveSession {
     pub id: String,
-    pub agent: Agent,
+    pub agent: AgentId,
     /// The launch this process is, as its processes are tagged with (`crate::processes::ledger`).
     pub launch_id: String,
     pty: PtyCore,
-    pub(crate) codex_transport: Option<Arc<crate::adapter::codex::transport::CodexTransport>>,
+    pub(crate) transport: Option<Arc<dyn term::MessageTransport>>,
     pub(crate) checks_composer: bool,
     title: Mutex<TitleObserver>,
     action_required: AtomicBool,
@@ -166,11 +167,11 @@ impl PtyOwner for LiveSession {
 /// all values the launch produced, and half of them are indistinguishable by type.
 pub struct NewSession {
     pub id: String,
-    pub agent: Agent,
+    pub agent: AgentId,
     /// See `LiveSession::launch_id`.
     pub launch_id: String,
     pub spawned: Spawned,
-    pub codex_transport: Option<Arc<crate::adapter::codex::transport::CodexTransport>>,
+    pub transport: Option<Arc<dyn term::MessageTransport>>,
     /// Real agents have a composer; stand-in PTYs can explicitly opt out of its screen check.
     pub checks_composer: bool,
     /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
@@ -179,7 +180,7 @@ pub struct NewSession {
     pub resolves_approvals_itself: bool,
     /// Grok's: where the trust it records when its confirmation is pressed is carried from and to;
     /// see `adapter::LaunchPlan::carried_trust`.
-    pub carried_trust: Option<CarriedTrust>,
+    pub carried_trust: Option<Arc<dyn TrustCarrier>>,
     /// Runs after the process is reaped and before its scratch directory is removed.
     pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
 }
@@ -194,7 +195,7 @@ impl LiveSession {
                 kill_session_leftovers: true,
                 before_scratch_removal: session.before_scratch_removal,
             }),
-            codex_transport: session.codex_transport,
+            transport: session.transport,
             checks_composer: session.checks_composer,
             id: session.id,
             agent: session.agent,
@@ -321,8 +322,8 @@ impl LiveSession {
     }
 
     pub(crate) fn observe_action_title(&self, title: Option<&str>) -> bool {
-        let waiting = self.agent == Agent::Codex
-            && title.is_some_and(crate::adapter::codex::action_required_title);
+        let screen = crate::adapter::provider(self.agent).screen();
+        let waiting = title.is_some_and(|title| screen.title_needs_user(title));
         self.action_required.swap(waiting, Ordering::AcqRel) != waiting
     }
 
@@ -763,7 +764,7 @@ mod tests {
     fn a_submit_retry_waits_for_a_dialog_without_resetting_its_deadline() {
         let live = crate::test_support::fake_live_session(
             "unsent-dialog",
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -789,7 +790,7 @@ mod tests {
     fn an_unconfirmed_submit_gets_one_bounded_enter_retry_without_repeating_text() {
         let live = crate::test_support::fake_live_session(
             "unsent-bounded",
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -837,7 +838,7 @@ mod tests {
             .unwrap();
         let live = crate::test_support::fake_live_session(
             "submit-retry-failed",
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             120,
             40,
             "trap '' HUP; echo ready; exec sleep 30",
@@ -884,7 +885,7 @@ mod tests {
     fn uncertain_native_acceptance_cannot_hold_later_messages_forever() {
         let live = crate::test_support::fake_live_session(
             "uncertain-bounded",
-            crate::protocol::Agent::Codex,
+            crate::protocol::AgentId::CODEX,
             120,
             40,
             "sleep 30",
@@ -902,10 +903,10 @@ mod tests {
 
     #[test]
     fn a_stale_empty_screen_cannot_send_keys_that_have_not_been_rendered() {
-        use crate::protocol::Agent;
+        use crate::protocol::AgentId;
         let live = crate::test_support::fake_live_session(
             "draft-gate",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -915,7 +916,7 @@ mod tests {
             "../../testdata/claude_input_placeholder.bin"
         ));
         assert_eq!(
-            super::input_box::input_box(Agent::Claude, &live.screen_text_undimmed()).as_deref(),
+            super::input_box::input_box(AgentId::CLAUDE, &live.screen_text_undimmed()).as_deref(),
             Some("")
         );
         live.write_terminal_input(b"unrendered draft").unwrap();
@@ -946,18 +947,18 @@ mod tests {
 
     #[test]
     fn a_known_draft_or_unknown_composer_prevents_a_message_for_all_three_agents() {
-        use crate::protocol::Agent;
+        use crate::protocol::AgentId;
         for (agent, draft) in [
             (
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &include_bytes!("../../testdata/claude_input_restored.bin")[..],
             ),
             (
-                Agent::Grok,
+                AgentId::GROK,
                 &include_bytes!("../../testdata/grok_composer_draft.bin")[..],
             ),
             (
-                Agent::Codex,
+                AgentId::CODEX,
                 &include_bytes!("../../testdata/codex_blank_first_draft.bin")[..],
             ),
         ] {

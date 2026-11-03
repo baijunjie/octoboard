@@ -4,7 +4,7 @@ import { DaemonErrorMessage, ShellTimeoutCommand } from "../components/alerts/Da
 import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
 import { RecoveryGuidance } from "../components/alerts/ErrorGuidance";
 import { InlineReference } from "../i18n/InlineReference";
-import { codeRecord } from "../errors/codes";
+import { codeRecord, messageKey } from "../errors/codes";
 import { messageCode } from "../errors/daemonMessage";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { CodedError } from "../errors/codedError";
@@ -42,7 +42,7 @@ function rawDetails(error: SwitchFailure["error"]): ((labelledBy: string) => Rea
 /** Whether the failure has a remedy sentence of its own (`daemon.<code>.recovery`), which says more than its kind's; a
  * shell-environment failure has one too. */
 function hasSpecificRecovery(error: SwitchFailure["error"]): boolean {
-  return hasShellTimeoutDetails(error) || (!!codeRecord(error.code)?.recoveryLine && isMessageKey(`daemon.${messageCode(error.code, error.params)}.recovery`) && hasCodeParams(error));
+  return hasShellTimeoutDetails(error) || (!!codeRecord(error.code)?.recoveryLine && isMessageKey(`${messageKey(messageCode(error.code, error.params))}.recovery`) && hasCodeParams(error));
 }
 
 function SessionTitle({ session }: { session: Session }): React.ReactElement {

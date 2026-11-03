@@ -205,7 +205,7 @@ it("opens a new session on the agent and account of a record, which are shown di
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  expect(resumeStatusText()).toBe(`Found a record on Claude Code · ${isolate("Work")}`);
+  expect(resumeStatusText()).toBe(`Found a record on ${isolate("Claude Code")} · ${isolate("Work")}`);
   // The launch settings below have pickers of their own, which stay enabled.
   expect(allDisabled(agentTriggers().slice(0, 2))).toBe(true);
   expect(agentTriggers().slice(0, 2).map((trigger) => trigger.textContent)).toEqual(["Claude Code", "Work"]);
@@ -303,7 +303,7 @@ it("announces exhausted quota only when the selected conversation requires a new
   typeResumeId("11111111-2222-3333-4444-555555555556");
   expect(quotaAlert()).toBeNull();
   await settle();
-  expect(resumeStatusText()).toBe(`Found a record on Claude Code · ${isolate("Work")}`);
+  expect(resumeStatusText()).toBe(`Found a record on ${isolate("Claude Code")} · ${isolate("Work")}`);
   assertQuotaAlert();
   await submit();
   expect(sentOpenSession(daemon)).toBeUndefined();
@@ -680,7 +680,7 @@ it("drops the answer for an ID since changed, and asks again for the new one", a
   expect(resumeAlert()).toBeNull();
   expect(resumeStatusText()).toBe("Looking up the conversation…");
   await act(async () => replies.get(other)!(record("claude", null)));
-  expect(resumeStatusText()).toBe(`Found a record on Claude Code · ${isolate("Default")}`);
+  expect(resumeStatusText()).toBe(`Found a record on ${isolate("Claude Code")} · ${isolate("Default")}`);
   await submit();
   expect(sentOpenSession(daemon)).toMatchObject({ agent: "claude", account: null, resume_agent_session_id: other });
 });

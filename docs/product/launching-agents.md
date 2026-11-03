@@ -1,8 +1,8 @@
 # Launching agents
 
 Every session is a native agent CLI process. Octoboard supports three agents — **Claude Code**, **Codex** and **Grok
-Build** — and starts each one's own binary, resolved from the user's `PATH`. What each agent's launch does differently
-is in `docs/product/per-agent-launch-specifics.md`.
+Build** (see `docs/product/supported-agents.md`) — and starts each one's own binary, resolved from the user's `PATH`.
+What each agent's launch does differently is in `docs/product/per-agent-launch-specifics.md`.
 
 ## What Octoboard never modifies
 

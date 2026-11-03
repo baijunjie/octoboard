@@ -199,7 +199,7 @@ mod tests {
     use super::*;
     use crate::mcp::dispatch::call;
     use crate::mcp::test_support::{arguments, peer_state};
-    use crate::protocol::Agent;
+    use crate::protocol::AgentId;
     use crate::test_support::{fake_live_session, heard_after_marker, output_containing, running};
 
     /// A transfer moves the session to its new owner, tells it whose it now is, and sends the new
@@ -379,7 +379,7 @@ mod tests {
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("no longer yours"));
         assert!(
-            note.contains(&qualified_tool_name(Agent::Claude, "inform_session")),
+            note.contains(&qualified_tool_name(AgentId::CLAUDE, "inform_session")),
             "{note}"
         );
         let released = state.store.get_session("of-a").unwrap().unwrap();
@@ -430,7 +430,7 @@ mod tests {
         // is longer than: this stand-in reads it all.
         let released = fake_live_session(
             "other-project",
-            Agent::Claude,
+            AgentId::CLAUDE,
             80,
             24,
             "stty -icanon; echo ready; cat",

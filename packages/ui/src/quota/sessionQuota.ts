@@ -1,11 +1,12 @@
 import { accountDisabled } from "../accounts/choiceEntries";
-import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
+import { defaultAccountName } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Session, type Settings } from "../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type ProviderInfo, type Session, type Settings } from "../protocol";
 import { isLive } from "../sessions/sessionStatus";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
-import { usageBarSummary, usageBarWindows, type QuotaBar } from "../accounts/quotaFormat";
+import { quotaNaming, usageBarSummary, usageBarWindows, type QuotaBar } from "../accounts/quotaFormat";
 
 export interface SessionQuotaSource {
   accounts: Account[];
@@ -13,6 +14,8 @@ export interface SessionQuotaSource {
   disabledDefaultAccounts?: Settings["disabled_default_accounts"];
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
+  /** The providers the daemon serves, which name the quota windows. */
+  providers: readonly ProviderInfo[];
 }
 
 /** Sessions retain their launch directory when an account is edited or removed. Its current
@@ -30,7 +33,7 @@ export function sessionQuotaBarOf(session: Session | undefined, source: SessionQ
   }
   if (!isLive(session.status) && accountDisabled(source.accounts, source.disabledDefaultAccounts, session.agent, session.account_id ?? null)) return undefined;
   const quota = accountQuotaOf(source.accountQuotas, session.agent, session.account_id ?? null);
-  return quota && !quota.unavailable ? usageBarWindows(quota) : undefined;
+  return quota && !quota.unavailable ? usageBarWindows(quotaNaming(quota, source.providers)) : undefined;
 }
 
 /** The account a turned-off account's exception is for: the one `session` runs on while it is running, which the rail's
@@ -44,6 +47,7 @@ export function accountInUse(session: Session | undefined): { agent: Agent; acco
  * name the user gave it in `defaultNames`, if any. */
 export function accountQuotaLabel(
   t: Translate,
+  providers: readonly ProviderInfo[],
   agent: Agent,
   accountName: string | undefined,
   bar: QuotaBar,
@@ -51,7 +55,7 @@ export function accountQuotaLabel(
   now: number,
 ): string {
   return t("rail.quota.selected", {
-    agent: AGENT_LABEL[agent],
+    agent: isolate(providerLabel(t, providers, agent)),
     account: isolate(accountName ?? defaultAccountName(t, defaultNames, agent)),
     quota: usageBarSummary(t, bar, now),
   });

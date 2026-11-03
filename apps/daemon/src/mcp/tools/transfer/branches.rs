@@ -273,7 +273,7 @@ mod tests {
     use super::*;
     use crate::branch_origin::repo_key;
     use crate::mcp::test_support::{arguments, project_session, shared_console_state};
-    use crate::protocol::Agent;
+    use crate::protocol::AgentId;
     use crate::test_support::{
         branch_made_by, git, heard_after_marker, output_containing, repo_with, running, ScratchDir,
     };
@@ -335,9 +335,9 @@ mod tests {
                     project_id: Some("repo".to_string()),
                     status,
                     agent: if id == "codex-kid" {
-                        Agent::Codex
+                        AgentId::CODEX
                     } else {
-                        Agent::Claude
+                        AgentId::CLAUDE
                     },
                     ..project_session(id, "console-1", owner)
                 })
@@ -534,7 +534,7 @@ mod tests {
         fixture.branch("prompted", "codex-kid");
         // The record says idle, while the terminal shows Codex's prompt for the user.
         let codex =
-            crate::test_support::fake_live_session("codex-kid", Agent::Codex, 80, 24, "sleep 30");
+            crate::test_support::fake_live_session("codex-kid", AgentId::CODEX, 80, 24, "sleep 30");
         fixture.state.register_live(codex.clone());
         assert!(codex.observe_action_title(Some("[ ! ] Action Required | repo")));
         fixture.branch("theirs", "kid-of-b");

@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::env_shell;
 use crate::protocol::{
-    nested_params, notice_code, Agent, CodedError, Console, Notice, Origin, Project, Role, Session,
-    SessionKind, SessionStatus, TerminalAppearance,
+    nested_params, notice_code, AgentId, CodedError, Console, Notice, Origin, Project, Role,
+    Session, SessionKind, SessionStatus, TerminalAppearance,
 };
 use crate::session::term;
 use crate::state::AppState;
@@ -38,7 +38,7 @@ use crate::accounts::choice::{
 pub struct OpenRequest {
     pub console_id: String,
     pub project_id: Option<String>,
-    pub agent: Option<Agent>,
+    pub agent: Option<AgentId>,
     /// The account chosen for this session: `None` leaves it to the project's reference for the
     /// session's agent, else the console's; `Some(None)` chooses the default account outright. See
     /// [`session_account`].
@@ -187,7 +187,7 @@ pub(super) struct ResolvedOpen {
     resume_agent_session_id: Option<String>,
     bound_to: Option<String>,
     role: Role,
-    pub(super) agent: Agent,
+    pub(super) agent: AgentId,
     pub(super) account_id: Option<String>,
     config_dir: Option<String>,
 }
@@ -599,7 +599,7 @@ fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> R
 /// or effort the agent does not offer. For a session whose opening waits on the user's answer, so
 /// that a request which could never be carried out is refused to the asker rather than put to the
 /// user. Returns the agent the session would be of.
-pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Agent> {
+pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<AgentId> {
     Ok(check_open_with(state, request, true).await?.0)
 }
 
@@ -619,7 +619,7 @@ async fn check_open_with(
     state: &Arc<AppState>,
     request: &OpenRequest,
     enforce_quota: bool,
-) -> Result<(Agent, Option<String>)> {
+) -> Result<(AgentId, Option<String>)> {
     let ResolvedOpen {
         project,
         console,

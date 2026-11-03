@@ -1,16 +1,13 @@
 //! The entries of an agent's configuration directory that an account may share with the default
-//! account's, each marked as a file or a directory and as configuration or conversation history
-//! (the two are brought under the shared directory differently). Anything not listed here is
-//! never shared: credentials, the agent's own caches and process registries, and files the agent
-//! replaces rather than writes through when a link stands in for them. The measurements are in
-//! `docs/agent-cli-reference.md`'s "Sharing a configuration directory between accounts" section.
+//! account's, each marked as a file or a directory and as configuration or one of the kinds of
+//! conversation history (they are brought under the shared directory differently). Each provider
+//! lists its own (`AccountOps::shared_items`); anything not listed is never shared: credentials,
+//! the agent's own caches and process registries, and files the agent replaces rather than writes
+//! through when a link stands in for them. The measurements are in `docs/agent-cli-reference.md`'s
+//! "Sharing a configuration directory between accounts" section.
 
-use crate::agents::layout::{
-    CLAUDE_CHECKPOINTS_DIR, CLAUDE_KEY_BINDINGS, CLAUDE_PROMPT_HISTORY, CLAUDE_RECORDS_DIR,
-    CLAUDE_SETTINGS_FILE, CODEX_ARCHIVED_DIR, CODEX_CONFIG_FILE, CODEX_PROMPT_HISTORY,
-    CODEX_RECORDS_DIR, CODEX_TITLE_INDEX, GROK_CONFIG_FILE, GROK_RECORDS_DIR,
-};
-use crate::protocol::Agent;
+use crate::adapter::provider;
+use crate::protocol::AgentId;
 
 /// Whether an item is a single file or a directory. A missing directory item is created in the
 /// default directory; a missing file item is skipped.
@@ -23,11 +20,28 @@ pub enum ItemKind {
 /// What an item holds: configuration the account already has is backed up and then linked, while
 /// conversation history is carried into the default directory before it is linked, so earlier
 /// conversations stay resumable. A history file the default directory already holds — a prompt
-/// history, a thread index, Codex's state database — cannot simply be moved over it.
+/// history, a thread index, a thread database — cannot simply be moved over it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemClass {
     Configuration,
+    /// Conversation history carried into the default directory before it is linked.
     ConversationHistory,
+    /// A history of one line per entry (prompt histories, a thread-name index), merged into the
+    /// default directory's copy rather than set aside, so the recall and the names of the
+    /// account's earlier conversations survive. A name that is lost can make a provider start a
+    /// new session where a resume by that name was asked for.
+    LineHistory,
+    /// The provider's thread database, whose rows name where records are
+    /// ([`ThreadRegistry`](crate::accounts::thread_registry::ThreadRegistry)).
+    ThreadDatabase,
+}
+
+impl ItemClass {
+    /// Whether the item holds conversation history of any kind, which is carried into the default
+    /// directory rather than backed up.
+    pub fn is_history(self) -> bool {
+        self != Self::Configuration
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +52,7 @@ pub struct SharedItem {
     pub class: ItemClass,
 }
 
-const fn config_file(name: &'static str) -> SharedItem {
+pub(crate) const fn config_file(name: &'static str) -> SharedItem {
     SharedItem {
         name,
         kind: ItemKind::File,
@@ -46,7 +60,7 @@ const fn config_file(name: &'static str) -> SharedItem {
     }
 }
 
-const fn config_dir(name: &'static str) -> SharedItem {
+pub(crate) const fn config_dir(name: &'static str) -> SharedItem {
     SharedItem {
         name,
         kind: ItemKind::Directory,
@@ -54,15 +68,7 @@ const fn config_dir(name: &'static str) -> SharedItem {
     }
 }
 
-const fn history_file(name: &'static str) -> SharedItem {
-    SharedItem {
-        name,
-        kind: ItemKind::File,
-        class: ItemClass::ConversationHistory,
-    }
-}
-
-const fn history_dir(name: &'static str) -> SharedItem {
+pub(crate) const fn history_dir(name: &'static str) -> SharedItem {
     SharedItem {
         name,
         kind: ItemKind::Directory,
@@ -70,104 +76,46 @@ const fn history_dir(name: &'static str) -> SharedItem {
     }
 }
 
-// Left out on purpose: `plans` (plan mode's writes lose their automatic permission through a
-// link) and `sessions` (a registry of running processes, not history).
-const CLAUDE_ITEMS: &[SharedItem] = &[
-    config_file(CLAUDE_SETTINGS_FILE),
-    config_file("CLAUDE.md"),
-    config_file(CLAUDE_KEY_BINDINGS),
-    config_file("loop.md"),
-    config_dir("agents"),
-    config_dir("commands"),
-    config_dir("skills"),
-    config_dir("output-styles"),
-    config_dir("rules"),
-    config_dir("plugins"),
-    config_dir("workflows"),
-    config_dir("routines"),
-    config_dir("themes"),
-    config_dir("hooks"),
-    config_dir("agent-memory"),
-    history_dir(CLAUDE_RECORDS_DIR),
-    history_dir(CLAUDE_CHECKPOINTS_DIR),
-    history_dir("paste-cache"),
-    history_dir("image-cache"),
-    history_dir("session-env"),
-    history_dir("todos"),
-    history_dir("tasks"),
-    history_file(CLAUDE_PROMPT_HISTORY),
-];
+pub(crate) const fn history_lines(name: &'static str) -> SharedItem {
+    SharedItem {
+        name,
+        kind: ItemKind::File,
+        class: ItemClass::LineHistory,
+    }
+}
 
-// The thread state database is a file item: SQLite opened through a link keeps its `-wal` and
-// `-shm` beside the target, so those are not items. Codex versions it by name (0.162.1 uses
-// `state_5.sqlite`), and a new schema generation is a new file beside the old one. Only this one
-// generation is listed on purpose; a database of another generation is reported by `repair` as
-// unshared (`Repaired::unshared_databases`) until the catalog is updated.
-const CODEX_ITEMS: &[SharedItem] = &[
-    config_file(CODEX_CONFIG_FILE),
-    config_file("AGENTS.md"),
-    config_file("AGENTS.override.md"),
-    config_file("hooks.json"),
-    config_dir("rules"),
-    config_dir("skills"),
-    config_dir("prompts"),
-    config_dir("plugins"),
-    config_dir("themes"),
-    config_dir("agents"),
-    history_dir(CODEX_RECORDS_DIR),
-    history_dir(CODEX_ARCHIVED_DIR),
-    history_file(CODEX_TITLE_INDEX),
-    history_file(CODEX_PROMPT_HISTORY),
-    history_file("state_5.sqlite"),
-];
-
-// Left out on purpose: `trusted_folders.toml` (Grok replaces a linked one with a plain file on
-// save) and `hooks-paths` (Grok refuses to write it through a link).
-const GROK_ITEMS: &[SharedItem] = &[
-    config_file(GROK_CONFIG_FILE),
-    config_file("AGENTS.md"),
-    config_file("pager.toml"),
-    config_file("lsp.json"),
-    config_file("settings.json"),
-    config_file("sandbox.toml"),
-    config_file("statusline.sh"),
-    config_file("disabled-hooks"),
-    config_dir("rules"),
-    config_dir("skills"),
-    config_dir("commands"),
-    config_dir("agents"),
-    config_dir("personas"),
-    config_dir("workflows"),
-    config_dir("plugins"),
-    config_dir("hooks"),
-    config_dir("installed-plugins"),
-    history_dir(GROK_RECORDS_DIR),
-];
+pub(crate) const fn thread_database(name: &'static str) -> SharedItem {
+    SharedItem {
+        name,
+        kind: ItemKind::File,
+        class: ItemClass::ThreadDatabase,
+    }
+}
 
 /// The items `agent` shares between accounts.
-pub fn shared_items(agent: Agent) -> &'static [SharedItem] {
-    match agent {
-        Agent::Claude => CLAUDE_ITEMS,
-        Agent::Codex => CODEX_ITEMS,
-        Agent::Grok => GROK_ITEMS,
-    }
+pub fn shared_items(agent: AgentId) -> &'static [SharedItem] {
+    provider(agent)
+        .accounts()
+        .map_or(&[], |ops| ops.shared_items())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use ItemClass::{Configuration as C, ConversationHistory as H};
+    use ItemClass::{
+        Configuration as C, ConversationHistory as H, LineHistory as L, ThreadDatabase as T,
+    };
     use ItemKind::{Directory as D, File as F};
 
-    fn listed(agent: Agent) -> Vec<(&'static str, ItemKind, ItemClass)> {
+    fn listed(agent: AgentId) -> Vec<(&'static str, ItemKind, ItemClass)> {
         shared_items(agent)
             .iter()
             .map(|item| (item.name, item.kind, item.class))
             .collect()
     }
 
-    fn assert_absent(agent: Agent, never_shared: &[&str]) {
+    fn assert_absent(agent: AgentId, never_shared: &[&str]) {
         for name in never_shared {
             assert!(
                 shared_items(agent).iter().all(|item| item.name != *name),
@@ -176,10 +124,31 @@ mod tests {
         }
     }
 
+    /// A thread database is catalogued only where a registry keeps its rows in step, and a
+    /// provider with no account operations shares nothing and keeps no registry.
+    #[test]
+    fn a_thread_database_is_catalogued_only_with_a_registry_for_its_rows() {
+        for agent in AgentId::ALL {
+            let has_database = shared_items(agent)
+                .iter()
+                .any(|item| item.class == ItemClass::ThreadDatabase);
+            if has_database {
+                assert!(
+                    crate::accounts::thread_registry::thread_registry(agent).is_some(),
+                    "{agent:?}"
+                );
+            }
+        }
+        assert!(provider(AgentId::TEST).accounts().is_none());
+        assert!(shared_items(AgentId::TEST).is_empty());
+        assert!(crate::accounts::thread_registry::thread_registry(AgentId::TEST).is_none());
+        assert!(super::super::registries::registries(AgentId::TEST).is_empty());
+    }
+
     #[test]
     fn claude_catalog() {
         assert_eq!(
-            listed(Agent::Claude),
+            listed(AgentId::CLAUDE),
             vec![
                 ("settings.json", F, C),
                 ("CLAUDE.md", F, C),
@@ -203,7 +172,7 @@ mod tests {
                 ("session-env", D, H),
                 ("todos", D, H),
                 ("tasks", D, H),
-                ("history.jsonl", F, H),
+                ("history.jsonl", F, L),
             ]
         );
     }
@@ -211,7 +180,7 @@ mod tests {
     #[test]
     fn codex_catalog() {
         assert_eq!(
-            listed(Agent::Codex),
+            listed(AgentId::CODEX),
             vec![
                 ("config.toml", F, C),
                 ("AGENTS.md", F, C),
@@ -225,9 +194,9 @@ mod tests {
                 ("agents", D, C),
                 ("sessions", D, H),
                 ("archived_sessions", D, H),
-                ("session_index.jsonl", F, H),
-                ("history.jsonl", F, H),
-                ("state_5.sqlite", F, H),
+                ("session_index.jsonl", F, L),
+                ("history.jsonl", F, L),
+                ("state_5.sqlite", F, T),
             ]
         );
     }
@@ -235,7 +204,7 @@ mod tests {
     #[test]
     fn grok_catalog() {
         assert_eq!(
-            listed(Agent::Grok),
+            listed(AgentId::GROK),
             vec![
                 ("config.toml", F, C),
                 ("AGENTS.md", F, C),
@@ -262,7 +231,7 @@ mod tests {
     #[test]
     fn claude_never_shares_credentials_or_per_machine_state() {
         assert_absent(
-            Agent::Claude,
+            AgentId::CLAUDE,
             &[
                 ".credentials.json",
                 "hfi-auth.json",
@@ -290,7 +259,7 @@ mod tests {
     #[test]
     fn codex_never_shares_credentials_or_per_machine_state() {
         assert_absent(
-            Agent::Codex,
+            AgentId::CODEX,
             &[
                 "auth.json",
                 ".credentials.json",
@@ -317,7 +286,7 @@ mod tests {
     #[test]
     fn grok_never_shares_credentials_or_per_machine_state() {
         assert_absent(
-            Agent::Grok,
+            AgentId::GROK,
             &[
                 "auth.json",
                 "mcp_credentials.json",

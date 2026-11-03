@@ -4,9 +4,12 @@
 use serde_json::{json, Value};
 
 use super::schemas::{
-    agent_enum, agent_enum_or_null, object_schema, started_by_a_session, STARTED_BY_A_SESSION,
+    agent_enum, agent_enum_or_null, agent_id_list, object_schema, started_by_a_session,
+    STARTED_BY_A_SESSION,
 };
 use super::ToolDef;
+use crate::adapter::provider;
+use crate::protocol::AgentId;
 
 pub(super) const ADD_PROJECT: ToolDef = ToolDef {
     name: "add_project",
@@ -200,16 +203,19 @@ pub(super) const GET_SETTINGS: ToolDef = ToolDef {
                   `interface_language` (the user's language, a tag; `null` until a window \
                   reported one), `sidebar_order_by_status`, `default_clone_dir`, the \
                   `git_workflow` settings, \
-                  `claude_compatibility` (per agent other than Claude Code, whether its \
-                  sessions load Claude Code's instructions (CLAUDE.md and rules), skills, \
-                  agents, commands, MCP servers, hooks and permissions; until the user \
-                  chooses, Grok Build is on and Codex is on while Claude Code is an added \
-                  agent), `agent_tags` (the tags the user put on each added agent, by agent, which \
+                  `provider_settings` (the settings the user made for each agent's \
+                  provider that you may read, by agent and then setting id, with the value \
+                  in effect: a switch is `true` or `false`, a choice is its text or `null`. \
+                  Among them are the switches that make an agent's sessions load another \
+                  agent's instructions, skills, agents, commands, MCP servers, hooks and \
+                  permissions; until the user chooses, such a switch follows its default \
+                  rule, which depends on which agents are added), \
+                  `agent_tags` (the tags the user put on each added agent, by agent, which \
                   say what it is good for; an agent without tags, and a removed agent, has no \
                   entry), the `accounts` (each agent also has a default account, listed with \
                   the id `default`; `disabled` marks one the user turned off for new \
                   sessions), and the `trusted_directories`. `auto_select_account`, \
-                  `claude_compatibility`, `agent_tags`, the accounts and the trusted \
+                  `provider_settings`, `agent_tags`, the accounts and the trusted \
                   directories are the user's own and read-only here.",
     schema: || object_schema(json!({}), &[]),
 };
@@ -274,19 +280,24 @@ fn tags_schema(description: &str) -> Value {
 /// can also be `inherit`, which takes the console's; a console has no one to inherit from, so its
 /// `null` is the default account too.
 fn accounts_schema(project: bool) -> Value {
+    let agents = agent_id_list();
     let (values, description) = if project {
         (
             "`inherit` (the console's account), `default` (the agent's default account), or an \
              account's id or name (see `get_settings`)",
-            "Each agent's account for sessions opened here, keyed by agent (`claude`, `codex`, \
-             `grok`); an agent left out is left as it is.",
+            format!(
+                "Each agent's account for sessions opened here, keyed by agent ({agents}); an \
+                 agent left out is left as it is."
+            ),
         )
     } else {
         (
             "`default` or `null` (the agent's default account), or an account's id or name (see \
              `get_settings`)",
-            "Each agent's account for sessions opened in this console, keyed by agent (`claude`, \
-             `codex`, `grok`); an agent left out is left as it is.",
+            format!(
+                "Each agent's account for sessions opened in this console, keyed by agent \
+                 ({agents}); an agent left out is left as it is."
+            ),
         )
     };
     json!({
@@ -304,17 +315,13 @@ fn launch_schema(whose: &str) -> Value {
     json!({
         "type": "object",
         "description": format!(
-            "Each agent's model and reasoning effort for {whose}, keyed by agent (`claude`, \
-             `codex`, `grok`) as `{{\"model\": ..., \"effort\": ...}}`; a field left out is left \
-             as it is, and `null` or blank is unset (the default model, which `list_agent_models` \
-             names, and the agent's own default effort). They must be ones the \
-             agent offers: `list_agent_models` lists them, with the efforts of each. Claude Code's \
-             models are always {}.",
-            crate::agents::models::claude_model_ids()
-                .iter()
-                .map(|id| format!("`{id}`"))
-                .collect::<Vec<_>>()
-                .join(", ")
+            "Each agent's model and reasoning effort for {whose}, keyed by agent ({}) as \
+             `{{\"model\": ..., \"effort\": ...}}`; a field left out is left as it is, and \
+             `null` or blank is unset (the default model, which `list_agent_models` names, and the \
+             agent's own default effort). They must be ones the agent offers: `list_agent_models` \
+             lists them, with the efforts of each.{}",
+            agent_id_list(),
+            fixed_models_sentences()
         ),
         "additionalProperties": {
             "type": "object",
@@ -324,6 +331,21 @@ fn launch_schema(whose: &str) -> Value {
             },
         },
     })
+}
+
+/// What the providers whose models never change say of them ("Claude Code's models are always
+/// `fable`, `opus`, `sonnet`, `haiku`."), each sentence after a space; empty when no provider has
+/// such models.
+fn fixed_models_sentences() -> String {
+    AgentId::ALL
+        .into_iter()
+        .filter_map(|agent| {
+            let ids = provider(agent).catalogue().fixed_model_ids();
+            let ids: Vec<String> = ids.iter().map(|id| format!("`{id}`")).collect();
+            (!ids.is_empty())
+                .then(|| format!(" {}'s models are always {}.", agent.label(), ids.join(", ")))
+        })
+        .collect()
 }
 
 /// When a change to an item of the development rule takes effect. The rule is part of the role

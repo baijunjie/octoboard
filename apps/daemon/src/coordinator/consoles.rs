@@ -8,7 +8,8 @@ use uuid::Uuid;
 
 use crate::agents::launch_settings::{self, normalized_launches, LaunchCheck};
 use crate::protocol::{
-    error_code, Agent, CodedError, Console, Event, Launch, LaunchChange, PerAgent, Present, Project,
+    error_code, AgentId, CodedError, Console, Event, Launch, LaunchChange, PerAgent, Present,
+    Project,
 };
 use crate::state::refusals::ensure_unlocked;
 use crate::state::AppState;
@@ -27,8 +28,8 @@ use crate::accounts::choice::checked_account_reference;
 /// as typed.
 pub struct NewConsole {
     pub name: String,
-    pub default_agent: Agent,
-    pub project_session_agent: Option<Agent>,
+    pub default_agent: AgentId,
+    pub project_session_agent: Option<AgentId>,
     pub accounts: PerAgent<Option<String>>,
     pub launch: PerAgent<Launch>,
     pub project_session_launch: PerAgent<Launch>,
@@ -119,14 +120,14 @@ pub(super) fn store_new_console(
 #[derive(Default)]
 pub struct ConsoleChanges {
     pub name: Option<String>,
-    pub default_agent: Option<Agent>,
+    pub default_agent: Option<AgentId>,
     /// `Some(None)` makes project sessions follow `default_agent` again.
-    pub project_session_agent: Present<Agent>,
+    pub project_session_agent: Present<AgentId>,
     /// Each agent's account by id; `Some(None)` is back to that agent's default account.
-    pub accounts: HashMap<Agent, Option<String>>,
-    pub launch: HashMap<Agent, LaunchChange>,
+    pub accounts: HashMap<AgentId, Option<String>>,
+    pub launch: HashMap<AgentId, LaunchChange>,
     /// Each agent's project session model and effort.
-    pub project_launch: HashMap<Agent, LaunchChange>,
+    pub project_launch: HashMap<AgentId, LaunchChange>,
     /// `Some(None)` clears the avatar.
     pub icon: Present<String>,
     /// `Some(None)` clears the user's addition to the console session's instructions.
@@ -223,9 +224,10 @@ pub async fn update_console(
             console: stored.clone(),
         });
         // After the record is stored, so the file never holds text that was not saved. Every
-        // agent's new console sessions read the change, and a resumed one does on Claude Code and
-        // Codex, never on Grok. A failure here is logged, not returned, since the change is saved
-        // and told to every client: the next launch's refresh writes the file.
+        // agent's new console sessions read the change, and a resumed one does where its agent
+        // reads its instruction file again on a resume (Grok does not). A failure here is logged,
+        // not returned, since the change is saved and told to every client: the next launch's
+        // refresh writes the file.
         if let Err(err) = refresh_console_session_instructions(&state.store, id) {
             tracing::warn!(console = %id, %err, "refreshing the console's instruction file failed");
         }

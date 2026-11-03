@@ -200,3 +200,33 @@ it("a go-ahead whose trust entry is not carried over keeps the code's title", as
   await confirm();
   expect(dialog.alerts()).toEqual([{ error: failure, title: "Trust not carried over", session: "s-1" }]);
 });
+
+const body = () => document.body.querySelector("[role=alertdialog]")!;
+const referencesIn = (): { text: string | null; dir: string | null; monospace: boolean }[] =>
+  [...body().querySelectorAll("[data-inline-reference]")].map((chip) => ({ text: chip.textContent, dir: chip.getAttribute("dir"), monospace: chip.querySelector("code") !== null }));
+
+// What trusting lets an agent do is the provider's to say; one with no words for it gets the generic caution.
+it("words the caution of each provider from its presentation module, with the file it names as a monospace reference", () => {
+  mount([prompt]);
+  expect(body().textContent).toContain("its .claude/settings.json may pre-approve tool permissions");
+  expect(referencesIn()).toContainEqual({ text: ".claude/settings.json", dir: "ltr", monospace: true });
+});
+
+it("adds the scope of the trust Codex records beyond the project asked about", () => {
+  mount([{ ...prompt, agent: "codex" }]);
+  expect(body().textContent).toContain("Codex records trust for the root of the Git repository containing this folder.");
+  expect(body().textContent).not.toContain("pre-approve");
+  expect(body().textContent).toContain("Trusting lets Codex load this project's own configuration, hooks and command rules");
+});
+
+it("says only the caution Grok has, with no scope sentence", () => {
+  mount([{ ...prompt, agent: "grok" }]);
+  expect(body().textContent).toContain("Trusting lets Grok Build load this project's own instructions, hooks and MCP servers.");
+  expect(body().textContent).not.toContain("records trust for");
+});
+
+it("words the caution of a provider with none of its own generically", () => {
+  mount([{ ...prompt, agent: "test_agent" }]);
+  expect(body().textContent).toContain("Trusting lets Test Agent load this project's own configuration.");
+  expect(body().textContent).not.toContain("records trust for");
+});

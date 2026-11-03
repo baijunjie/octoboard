@@ -10,8 +10,9 @@ import type { QuotaUnavailable } from "../protocol";
 import { formatRelativeTime, isJustNow } from "../format/relativeTime";
 import { useNow } from "../format/useNow";
 import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
-import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, twoLayerWindows } from "../accounts/quotaFormat";
+import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, quotaNaming, twoLayerWindows } from "../accounts/quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
+import { useProviders } from "../store";
 
 /** Why a reading failed, in the current language with the technical literals of its message set
  * apart. None of the quota messages names a record, so none is given. `inMark` is for a popover: the
@@ -26,7 +27,7 @@ function QuotaFailure({ unavailable, inMark = false }: { unavailable: QuotaUnava
  * not say. */
 export function QuotaPlan({ quota }: { quota: QuotaReading }): React.ReactElement | null {
   if (typeof quota !== "object" || !quota.plan) return null;
-  return <StatusBadge>{planLabel(quota.plan)}</StatusBadge>;
+  return <StatusBadge>{planLabel(quota.agent, quota.plan)}</StatusBadge>;
 }
 
 /** The badge of an account's login state: "Logged in" or "Not logged in" as its reading says (`loginStateOf`); nothing
@@ -159,8 +160,10 @@ export function AccountQuotaSummary({ quota, single, usedUp }: {
   /** The account is used up: its meters recede (`QuotaMeter`). */
   usedUp?: boolean;
 }): React.ReactElement | null {
+  const providers = useProviders();
   if (quota === "loading" || !quota || quota.windows.length === 0) return <AccountQuotaNotice quota={quota} />;
   const { windows } = quota;
+  const naming = quotaNaming(quota, providers);
   // An account with a 5-hour window shows it with the weekly window as one two-layer meter; the
   // other windows (a model's weekly limit) keep a meter of their own.
   const layers = twoLayerWindows(windows);
@@ -170,8 +173,8 @@ export function AccountQuotaSummary({ quota, single, usedUp }: {
         if (layers?.weekly && window === layers.weekly) return null;
         const key = `${window.kind}:${window.label ?? ""}`;
         return layers?.weekly && window === layers.session
-          ? <QuotaMeterPair key={key} naming={quota} session={window} weekly={layers.weekly} usedUp={usedUp} />
-          : <QuotaMeter key={key} naming={quota} window={window} usedUp={usedUp} />;
+          ? <QuotaMeterPair key={key} agent={quota.agent} naming={naming} session={window} weekly={layers.weekly} usedUp={usedUp} />
+          : <QuotaMeter key={key} agent={quota.agent} naming={naming} window={window} usedUp={usedUp} />;
       })}
     </div>
   );

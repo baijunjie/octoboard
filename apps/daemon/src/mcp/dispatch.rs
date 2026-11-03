@@ -173,7 +173,7 @@ mod tests {
     use crate::mcp::test_support::{
         arguments, bound_coordinator_state, peer_state, shared_console_state,
     };
-    use crate::protocol::{Agent, AgentAvailability, Availability};
+    use crate::protocol::{AgentAvailability, AgentId, Availability};
     use crate::test_support::{output_containing, running};
     use serde_json::json;
 
@@ -254,7 +254,7 @@ mod tests {
     async fn a_bound_coordinator_keeps_its_tools_and_its_sessions_still_cannot_start_any() {
         let (state, _dir) = bound_coordinator_state("coordinator-tools");
         state.set_agent_availability(vec![AgentAvailability {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             availability: Availability::Unavailable,
             default_account_dir: Some("/home/user/.claude".to_string()),
         }]);

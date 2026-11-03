@@ -15,7 +15,7 @@ use crate::config_document::export;
 use crate::coordinator;
 use crate::hostfs::dir_key;
 use crate::protocol::{
-    error_code, AccountOutcome, AccountResolution, AccountStatus, Agent, CodedError,
+    error_code, AccountOutcome, AccountResolution, AccountStatus, AgentId, CodedError,
     DocumentAccount, DocumentAccounts, ImportFailure, ImportedAccount, ImportedAccounts,
     ImportedAgentAccounts, InspectedAccount, InspectedAccounts, InspectedAgentAccounts,
 };
@@ -24,7 +24,7 @@ use crate::state::AppState;
 /// One agent's part of a document's accounts. A hand-edited document may list an agent twice:
 /// the parts are read as one, the accounts in the order they are listed.
 struct AgentAccounts<'a> {
-    agent: Agent,
+    agent: AgentId,
     default_name: Option<&'a str>,
     accounts: Vec<&'a DocumentAccount>,
 }
@@ -75,7 +75,7 @@ struct Judged {
 
 fn judge_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account: &DocumentAccount,
     earlier: &[Earlier],
 ) -> Result<Judged> {
@@ -137,9 +137,9 @@ fn judge_account(
 /// `created`, an account the import is about to create).
 fn default_name_applies(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: &str,
-    created: &HashSet<(Agent, String)>,
+    created: &HashSet<(AgentId, String)>,
 ) -> Result<bool> {
     let key = crate::accounts::account_name_key(name);
     if crate::accounts::clears_default_account_name(name)
@@ -241,7 +241,7 @@ pub(super) enum AccountChoice {
 pub(super) fn index_account_resolutions(
     document: &DocumentAccounts,
     resolutions: Vec<AccountResolution>,
-) -> Result<HashMap<(Agent, usize), AccountChoice>> {
+) -> Result<HashMap<(AgentId, usize), AccountChoice>> {
     let groups = group_accounts(document);
     let mut chosen = HashMap::new();
     for resolution in resolutions {
@@ -299,7 +299,7 @@ pub(super) fn index_account_resolutions(
 pub(super) async fn apply_accounts(
     state: &Arc<AppState>,
     document: &DocumentAccounts,
-    mut chosen: HashMap<(Agent, usize), AccountChoice>,
+    mut chosen: HashMap<(AgentId, usize), AccountChoice>,
 ) -> Result<ImportedAccounts> {
     let host = state.store.list_accounts()?;
     let before = Rebinder { accounts: host };
@@ -411,7 +411,7 @@ fn is_name_taken(err: &anyhow::Error) -> bool {
 /// since the order of accounts created in one instant is otherwise left to the query. Another
 /// change of the accounts that gets in between makes the write refuse, which leaves the order as
 /// the client derives it.
-fn place_after_existing(state: &Arc<AppState>, agent: Agent, created: &[String]) {
+fn place_after_existing(state: &Arc<AppState>, agent: AgentId, created: &[String]) {
     let placed = || -> Result<bool> {
         let owned: Vec<String> = state
             .store
@@ -492,7 +492,7 @@ mod tests {
     fn account_state(label: &str, area: &Path) -> (Arc<AppState>, ScratchDir) {
         let (state, dir) = app_state(label);
         state.set_agent_availability(
-            Agent::ALL
+            AgentId::ALL
                 .into_iter()
                 .map(|agent| {
                     let default = directory(area, &format!("default-{}", agent.wire_name()));
@@ -508,7 +508,7 @@ mod tests {
     }
 
     fn claude_account(state: &Arc<AppState>, id: &str, name: &str, dir: &Path) {
-        let mut stored = account(id, Agent::Claude, name);
+        let mut stored = account(id, AgentId::CLAUDE, name);
         stored.config_dir = path_text(dir);
         state.store.insert_account(&stored).unwrap();
     }
@@ -600,7 +600,7 @@ mod tests {
         let (state, _state_dir) = account_state("import-inspect-agents", &area);
         state
             .store
-            .set_added_agents_if_undecided(&[Agent::Claude])
+            .set_added_agents_if_undecided(&[AgentId::CLAUDE])
             .unwrap();
         let mut shared = doc_account("Shared", &path_text(&area.join("shared")));
         shared["share_default_config"] = json!(true);
@@ -616,7 +616,7 @@ mod tests {
             .accounts
             .unwrap();
 
-        assert_eq!(accounts.agents_to_add, [Agent::Codex, Agent::Grok]);
+        assert_eq!(accounts.agents_to_add, [AgentId::CODEX, AgentId::GROK]);
         let row = &accounts.agents[0].accounts[0];
         assert!(row.share_default_config && row.disabled);
     }
@@ -625,7 +625,7 @@ mod tests {
     async fn the_default_account_name_applies_only_while_nothing_stands_in_its_way() {
         let area = ScratchDir::new("import-inspect-default-names-area");
         let (state, _state_dir) = account_state("import-inspect-default-names", &area);
-        let mut taken = account("grok-taken", Agent::Grok, "Taken");
+        let mut taken = account("grok-taken", AgentId::GROK, "Taken");
         taken.config_dir = path_text(&area.join("taken"));
         state.store.insert_account(&taken).unwrap();
         let unnamed = with_accounts(
@@ -657,7 +657,7 @@ mod tests {
         // keeps it out).
         state
             .store
-            .set_default_account_name(Agent::Claude, Some("Mine"))
+            .set_default_account_name(AgentId::CLAUDE, Some("Mine"))
             .unwrap();
         let named = with_accounts(
             document(Vec::new()),
@@ -685,17 +685,17 @@ mod tests {
         let (state, _state_dir) = account_state("import-inspect-references", &area);
         claude_account(&state, "claude-work", "Work", &area.join("work"));
         let mut hub = project("p", "/p");
-        hub.accounts.claude = ProjectAccountRef::Account {
+        hub.accounts[AgentId::CLAUDE] = ProjectAccountRef::Account {
             name: "work".to_string(),
         };
-        hub.accounts.codex = ProjectAccountRef::Account {
+        hub.accounts[AgentId::CODEX] = ProjectAccountRef::Account {
             name: "Fresh".to_string(),
         };
-        hub.accounts.grok = ProjectAccountRef::Account {
+        hub.accounts[AgentId::GROK] = ProjectAccountRef::Account {
             name: "Nowhere".to_string(),
         };
         let mut hub = console("Hub", vec![hub]);
-        hub.accounts.codex = Some(AccountName {
+        hub.accounts[AgentId::CODEX] = Some(AccountName {
             name: "fresh".to_string(),
         });
         let document = with_accounts(
@@ -718,19 +718,22 @@ mod tests {
             name: name.to_string(),
         };
         let console = &inspection.consoles[0];
-        assert_eq!(console.account_fallbacks, [fallback(Agent::Codex, "fresh")]);
+        assert_eq!(
+            console.account_fallbacks,
+            [fallback(AgentId::CODEX, "fresh")]
+        );
         assert_eq!(
             console.projects[0].account_fallbacks,
             [
-                fallback(Agent::Codex, "Fresh"),
-                fallback(Agent::Grok, "Nowhere")
+                fallback(AgentId::CODEX, "Fresh"),
+                fallback(AgentId::GROK, "Nowhere")
             ],
             "an existing account is no fallback"
         );
     }
 
     fn resolve(
-        agent: Agent,
+        agent: AgentId,
         account: usize,
         directory: Option<&str>,
         leave_out: bool,
@@ -755,19 +758,19 @@ mod tests {
         );
         state
             .store
-            .set_added_agents_if_undecided(&[Agent::Claude])
+            .set_added_agents_if_undecided(&[AgentId::CLAUDE])
             .unwrap();
         let mut disabled = doc_account("New", &path_text(&area.join("new")));
         disabled["disabled"] = json!(true);
         let mut project_using = project("p", &path_text(&directory(&area, "p")));
-        project_using.accounts.claude = ProjectAccountRef::Account {
+        project_using.accounts[AgentId::CLAUDE] = ProjectAccountRef::Account {
             name: "new".to_string(),
         };
-        project_using.accounts.codex = ProjectAccountRef::Account {
+        project_using.accounts[AgentId::CODEX] = ProjectAccountRef::Account {
             name: "Left".to_string(),
         };
         let mut hub = console("Hub", vec![project_using]);
-        hub.accounts.claude = Some(AccountName {
+        hub.accounts[AgentId::CLAUDE] = Some(AccountName {
             name: "NEW".to_string(),
         });
         let document = with_accounts(
@@ -802,9 +805,9 @@ mod tests {
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
             false,
             Some(vec![
-                resolve(Agent::Claude, 2, None, true),
-                resolve(Agent::Claude, 3, Some(&path_text(&moved_to)), false),
-                resolve(Agent::Codex, 0, None, true),
+                resolve(AgentId::CLAUDE, 2, None, true),
+                resolve(AgentId::CLAUDE, 3, Some(&path_text(&moved_to)), false),
+                resolve(AgentId::CODEX, 0, None, true),
             ]),
             true,
         )
@@ -812,10 +815,10 @@ mod tests {
         .unwrap();
 
         let accounts = imported.accounts.unwrap();
-        assert_eq!(accounts.agents_added, [Agent::Codex]);
+        assert_eq!(accounts.agents_added, [AgentId::CODEX]);
         assert_eq!(
             state.store.added_agents().unwrap(),
-            Some(vec![Agent::Claude, Agent::Codex])
+            Some(vec![AgentId::CLAUDE, AgentId::CODEX])
         );
         let claude = &accounts.agents[0];
         use AccountOutcome::{Created, Existing, Failed, LeftOut};
@@ -858,7 +861,7 @@ mod tests {
         assert_eq!(stored.len(), 4);
 
         // Placed after the account the machine had, in the document's order.
-        let order = state.store.account_order(Agent::Claude).unwrap();
+        let order = state.store.account_order(AgentId::CLAUDE).unwrap();
         assert_eq!(
             order,
             [
@@ -874,20 +877,20 @@ mod tests {
         // fell back, and is reported so.
         let console = &state.store.list_consoles().unwrap()[0];
         assert_eq!(
-            console.accounts.claude.as_deref(),
+            console.accounts[AgentId::CLAUDE].as_deref(),
             Some(created.id.as_str())
         );
         let project = &stored_projects(&state)[0];
         assert_eq!(
-            project.accounts.claude,
+            project.accounts[AgentId::CLAUDE],
             ProjectAccount::Account { id: created.id }
         );
-        assert_eq!(project.accounts.codex, ProjectAccount::Default);
+        assert_eq!(project.accounts[AgentId::CODEX], ProjectAccount::Default);
         assert_eq!(imported.consoles[0].account_fallbacks, []);
         assert_eq!(
             imported.consoles[0].projects[0].account_fallbacks,
             [AccountFallback {
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 name: "Left".to_string(),
             }]
         );
@@ -950,7 +953,7 @@ mod tests {
         let (state, _state_dir) = account_state("import-apply-default-name", &area);
         state
             .store
-            .set_default_account_name(Agent::Grok, Some("Mine"))
+            .set_default_account_name(AgentId::GROK, Some("Mine"))
             .unwrap();
         let document = with_accounts(
             document(Vec::new()),
@@ -992,14 +995,14 @@ mod tests {
 
         assert!(coordinator::accounts::name_unnamed_default_account(
             &state,
-            Agent::Claude,
+            AgentId::CLAUDE,
             " Personal "
         )
         .unwrap());
         // A rename made since the check an inspection reports leaves the machine's name alone.
         assert!(!coordinator::accounts::name_unnamed_default_account(
             &state,
-            Agent::Claude,
+            AgentId::CLAUDE,
             "Other"
         )
         .unwrap());
@@ -1010,7 +1013,7 @@ mod tests {
         for name in ["  ", "DEFAULT"] {
             assert!(!coordinator::accounts::name_unnamed_default_account(
                 &state,
-                Agent::Grok,
+                AgentId::GROK,
                 name
             )
             .unwrap());
@@ -1019,10 +1022,11 @@ mod tests {
         // A name an account has meanwhile taken is refused, the one refusal an import expects.
         state
             .store
-            .insert_account(&account("codex-work", Agent::Codex, "Work"))
+            .insert_account(&account("codex-work", AgentId::CODEX, "Work"))
             .unwrap();
-        let err = coordinator::accounts::name_unnamed_default_account(&state, Agent::Codex, "work")
-            .expect_err("the name is taken");
+        let err =
+            coordinator::accounts::name_unnamed_default_account(&state, AgentId::CODEX, "work")
+                .expect_err("the name is taken");
         assert!(is_name_taken(&err));
         assert!(!state
             .store
@@ -1142,15 +1146,15 @@ mod tests {
             )],
         );
         let cases = [
-            vec![resolve(Agent::Claude, 1, None, true)],
-            vec![resolve(Agent::Codex, 0, None, true)],
+            vec![resolve(AgentId::CLAUDE, 1, None, true)],
+            vec![resolve(AgentId::CODEX, 0, None, true)],
             vec![
-                resolve(Agent::Claude, 0, None, true),
-                resolve(Agent::Claude, 0, Some("/elsewhere"), false),
+                resolve(AgentId::CLAUDE, 0, None, true),
+                resolve(AgentId::CLAUDE, 0, Some("/elsewhere"), false),
             ],
-            vec![resolve(Agent::Claude, 0, Some("relative/dir"), false)],
-            vec![resolve(Agent::Claude, 0, Some("/elsewhere"), true)],
-            vec![resolve(Agent::Claude, 0, None, false)],
+            vec![resolve(AgentId::CLAUDE, 0, Some("relative/dir"), false)],
+            vec![resolve(AgentId::CLAUDE, 0, Some("/elsewhere"), true)],
+            vec![resolve(AgentId::CLAUDE, 0, None, false)],
         ];
         for resolutions in cases {
             let err = apply(
@@ -1180,14 +1184,14 @@ mod tests {
         let (target, _target_dir) =
             account_state("import-accounts-round-trip-target-state", &target_area);
         claude_account(&source, "claude-1", "Work", &work);
-        let mut team = account("claude-2", Agent::Claude, "Team");
+        let mut team = account("claude-2", AgentId::CLAUDE, "Team");
         team.config_dir = path_text(&area.join("team"));
         team.disabled = true;
         source.store.insert_account(&team).unwrap();
         source
             .store
             .reorder_accounts(
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &[
                     Some("claude-2".to_string()),
                     None,
@@ -1197,15 +1201,15 @@ mod tests {
             .unwrap();
         source
             .store
-            .set_default_account_name(Agent::Claude, Some("Personal"))
+            .set_default_account_name(AgentId::CLAUDE, Some("Personal"))
             .unwrap();
         source
             .store
-            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude])
+            .set_added_agents_if_undecided(&[AgentId::CODEX, AgentId::CLAUDE])
             .unwrap();
         target
             .store
-            .set_added_agents_if_undecided(&[Agent::Claude])
+            .set_added_agents_if_undecided(&[AgentId::CLAUDE])
             .unwrap();
         let exported = serde_json::to_value(
             export::build(
@@ -1235,7 +1239,7 @@ mod tests {
         let stored = target.store.list_accounts().unwrap();
         let ids: Vec<_> = target
             .store
-            .account_order(Agent::Claude)
+            .account_order(AgentId::CLAUDE)
             .unwrap()
             .into_iter()
             .map(|id| id.map(|id| stored.iter().find(|a| a.id == id).unwrap().name.clone()))
@@ -1250,10 +1254,10 @@ mod tests {
         assert_eq!(team.config_dir, path_text(&area.join("team")));
         assert_eq!(
             target.store.added_agents().unwrap(),
-            Some(vec![Agent::Claude, Agent::Codex])
+            Some(vec![AgentId::CLAUDE, AgentId::CODEX])
         );
         assert_eq!(
-            target.store.default_account_name(Agent::Claude).unwrap(),
+            target.store.default_account_name(AgentId::CLAUDE).unwrap(),
             "Personal"
         );
     }

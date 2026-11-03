@@ -18,6 +18,7 @@ import { useDialogAction } from "../dialog/dialogHooks";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
+import { TEST_PROVIDERS, UNPRESENTED_PROVIDER } from "../../test/testProviders";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
 import { ErrorAlert } from "./ErrorAlert";
@@ -347,7 +348,7 @@ it.each([
   "project_branches_not_determined", "git_failed", "git_clone_failed", "git_remote_unreachable",
   "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed",
-  "codex_unarchive_failed", "login_failed",
+  "provider.codex.unarchive_failed", "login_failed",
 ])("keeps %s diagnostics byte-for-byte once outside rich summaries and in plain text", (code) => {
   const detail = "fatal: /tmp/مراجعة/one\n    indented diagnostic\n" + "x".repeat(400);
   const params = { detail, agent: "Codex", name: "Docs" };
@@ -563,10 +564,39 @@ describe("a failed automatic account switch", () => {
 
 it("uses name chips for fixed agent and product references while leaving plain messages usable", () => {
   const error = new CodedError("fallback", "agent_not_available", { agent: "Codex" });
-  const container = mount(<DaemonErrorMessage error={error} />);
-  expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Codex", "Claude Code", "Codex", "Grok Build"]);
-  const plain = daemonMessage("en", error.code, error.params, error.message, createStateStore({}).getState());
-  expect(plain.replace(/[\u2066-\u2069]/g, "")).toContain("Supported agents are Claude Code, Codex and Grok Build");
+  const daemon = testDaemon();
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Codex"]);
+  // The supported agents are the providers the daemon serves, each named as the daemon's registry has it, listed one
+  // to an item under the sentence that introduces them.
+  const list = container.querySelector("[role=list]")!;
+  expect(document.getElementById(list.getAttribute("aria-labelledby")!)?.textContent).toBe("To open a session, make sure one of these supported agents is on your PATH:");
+  expect(Array.from(list.querySelectorAll("[role=listitem] bdi"), (item) => item.textContent)).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
+  // Read as part of the alert's description, the names keep the language's separators between them.
+  expect(Array.from(list.querySelectorAll("[role=listitem]"), (item) => item.textContent)).toEqual(["Claude Code, ", "Codex, ", "Grok Build, ", "Test Agent"]);
+  // The remedy alone stays phrasing content, as the paragraphs and Alert descriptions that hold it require.
+  const remedy = mount(<DaemonProvider value={daemon}><p data-remedy><DaemonErrorMessage error={error} part="remedy" /></p></DaemonProvider>).querySelector("[data-remedy]")!;
+  expect(remedy.querySelectorAll("[role=listitem]")).toHaveLength(4);
+  expect(remedy.querySelector("div,p,ul,li")).toBeNull();
+  const plain = daemonMessage("en", error.code, error.params, error.message, daemon.store.getState());
+  expect(plain.replace(/[\u2066-\u2069]/g, "")).toContain("make sure one of these supported agents is on your PATH: Claude Code, Codex, Grok Build, Test Agent.");
+});
+
+it("names the agent of a refused operation by the label the daemon serves when it has no presentation module", () => {
+  const error = new CodedError("fallback", "provider_unsupported", { agent: UNPRESENTED_PROVIDER.id, operation: "sign_in" });
+  const daemon = testDaemon({ state: { providers: [...TEST_PROVIDERS, UNPRESENTED_PROVIDER] } });
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(container.textContent).toContain("Unpresented Agent");
+  expect(container.textContent).not.toContain(UNPRESENTED_PROVIDER.id);
+});
+
+it.each([
+  ["provider.codex.unarchive_failed.remedy", "Check that Codex runs in the login shell"],
+  ["provider.grok.sandbox_unsupported.remedy", "continue that one in Grok Build itself"],
+] as const)("words the remedy %s from its provider's module, naming the provider", (remedy, text) => {
+  const container = mount(<DaemonProvider value={testDaemon()}><RecoveryGuidance recovery={remedy} /></DaemonProvider>);
+  expect(container.textContent).toContain(text);
+  expect(container.textContent).not.toMatch(/\{\w+\}/);
 });
 
 it("retains a named quota window as a rich name and a plain isolated value", () => {
@@ -598,9 +628,12 @@ it.each(["path_not_absolute", "project_directory_shared", "agent_not_available",
   // A held fragment's Details never warn that the next message runs together with it.
   expect(details.textContent?.includes("run together")).toBe(further && !variant);
   const whole = () => normalize((summary.textContent ?? "") + details.textContent + remedy.textContent);
-  expect(whole()).toBe(normalize(plain));
+  // Plain text closes the supported agents' sentence with the joined list, which the rich remedy lists instead; with no
+  // providers served that list is empty, leaving only the plain sentence's full stop.
+  const plainOf = (text: string) => (code === "agent_not_available" ? text.replace(/[.。]$/, "") : text);
+  expect(whole()).toBe(normalize(plainOf(plain)));
   act(() => setLanguage("zh-Hans"));
-  expect(whole()).toBe(normalize(daemonMessage("zh-Hans", code, params, error.message, createStateStore({}).getState())));
+  expect(whole()).toBe(normalize(plainOf(daemonMessage("zh-Hans", code, params, error.message, createStateStore({}).getState()))));
 });
 
 

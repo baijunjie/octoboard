@@ -150,7 +150,9 @@ it("shows each account with its status, what it shares and the directory the fil
   expect(row("Home").querySelector("button[aria-haspopup=listbox]")).toBeNull();
   expect(row("Team").textContent).toContain("Disabled");
   expect(row("Team").textContent).toContain("~/.team");
-  expect(document.body.textContent).toContain("Codex will be added to the agent list.");
+  // The agents to add are listed under their sentence, one to an item.
+  const toAdd = [...document.querySelectorAll("[role=list]")].find((list) => list.getAttribute("aria-labelledby") && document.getElementById(list.getAttribute("aria-labelledby")!)?.textContent === "This agent will be added to the agent list:");
+  expect(Array.from(toAdd?.querySelectorAll("[role=listitem] bdi") ?? [], (item) => item.textContent)).toEqual(["Codex"]);
   expect(document.body.textContent).toContain("The default account of Claude Code will be named Main.");
   expect(document.body.textContent).toContain("The accounts are created without being logged in.");
 });
@@ -334,7 +336,8 @@ it("tells of each account's outcome in the result, with a note that the new ones
   // The sentence says it once: the failure's own summary under it would repeat it, and the account's name.
   expect(rowText("Work")).not.toContain("Could not finish the sharing change");
   expect(card.querySelector("button[data-status-mark]")).toBeNull();
-  expect(text).toContain("Codex was added to the agent list.");
+  const added = [...document.querySelectorAll("[role=list]")].find((list) => list.getAttribute("aria-labelledby") && document.getElementById(list.getAttribute("aria-labelledby")!)?.textContent === "This agent was added to the agent list:");
+  expect(Array.from(added?.querySelectorAll("[role=listitem] bdi") ?? [], (item) => item.textContent)).toEqual(["Codex"]);
   expect(text).toContain("The default account of Claude Code is now named as in the file.");
   expect(text).toContain("The new accounts are not logged in yet.");
   expect(Array.from(document.body.querySelectorAll("button")).map((button) => button.textContent)).not.toContain("Log in");

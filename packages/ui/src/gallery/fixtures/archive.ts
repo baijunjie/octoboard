@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Scenario } from "../scenario";
 import { archiveProject as project, archivedCoordinator, boundArchived, boundConsoleSession, console_, otherConsoleSession, otherOwnerArchived, unboundArchived, underArchivedCoordinator } from "../../fixtures/archiveSessions";
 import { accountOf, branchItemOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
@@ -7,9 +7,24 @@ import { accountOf, branchItemOf, contextOf, minutesAgo, projectOf, sessionOf, s
 const GROUP = "Archive view";
 
 
+/** The model each archived session last ran, as its records named it: Claude Code's by the id (a version and a dated one)
+ * or the alias it was chosen by, Codex's and Grok Build's as they are. */
+const OBSERVED_MODELS: Record<string, string[]> = {
+  claude: ["claude-opus-5-5", "claude-haiku-4-5-20251001", "sonnet"],
+  codex: ["gpt-6.1-sol"],
+  grok: ["grok-4.7"],
+};
+
+/** The model of the `i`th archived session, the models of its agent in turn. */
+const observedModel = (i: number) => {
+  const models = OBSERVED_MODELS[FIXTURE_AGENTS[i % FIXTURE_AGENTS.length]];
+  return models[Math.floor(i / FIXTURE_AGENTS.length) % models.length];
+};
+
 const archived = Array.from({ length: 70 }, (_, i) =>
   sessionOf(`s-a${i}`, console_.id, project.id, i % 7 === 3 ? `Audit the retry path ${i}` : i % 11 === 5 ? `A very long archived session title that does not fit one row ${i}` : `Archived session ${i}`, "archived", {
-    agent: AGENTS[i % AGENTS.length],
+    agent: FIXTURE_AGENTS[i % FIXTURE_AGENTS.length],
+    observed_model: observedModel(i),
     ...(i === 0 ? { terminal_title: "Explain the differences between the three galleries" } : i === 1 ? { terminal_title: "Review a very long archived agent task title and preserve its original session name" } : {}),
     started_at: minutesAgo(120 + i * 400),
     ended_at: minutesAgo(20 + i * 400),
@@ -92,7 +107,7 @@ const longArchiveState = {
     ...archiveState.sessions,
     ...Array.from({ length: 6 }, (_, i) => {
       const session = sessionOf(`s-older${i}`, console_.id, boundProject.id, `Older archived session ${i + 1}`, "archived", {
-        agent: AGENTS[i % AGENTS.length],
+        agent: FIXTURE_AGENTS[i % FIXTURE_AGENTS.length],
         ended_at: minutesAgo(200 + i * 30),
         ...(i === 0 ? { context: contextOf(91) } : i % 2 === 0 ? { context: { tokens: 12_345 + i * 98_000 } } : {}),
       });
@@ -200,7 +215,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first shows a compact-size badge (430K, led by a small accent ring as the agent reported a window; hover it for the card with the meter at 43%, accent) and the second, whose size is zero, no mark. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
+    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first shows a compact-size badge (430K, led by a small accent ring as the agent reported a window; hover it for the card with the meter at 43%, accent) and the second, whose size is zero, no mark. The line under each title names the account, the model and the effort, the model worded by its provider's display rule: Claude Code's ids as \"Opus 5.5\" and \"Haiku 4.5\" and its alias as \"Sonnet\", while Codex's gpt-6.1-sol and Grok Build's grok-4.7 stay as they are. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

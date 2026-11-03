@@ -7,10 +7,11 @@ import { currentLanguage, t } from "../i18n/language";
 import type { State, NotificationRequest } from "../store";
 import { broadcastNotification } from "../store/notifications";
 
-import type { Agent, ClientRequestBody } from "../protocol";
+import type { Agent, ClientRequestBody, Settings } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { SAMPLE_CLAUDE_MODELS, SAMPLE_CLAUDE_MODELS_PRO } from "./agentModels";
 import { createFixtureDaemon } from "./fixtureDaemon";
+import { FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "./fixtureProviders";
 import type { Fixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restoreSample";
@@ -593,6 +594,16 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 });
 
 
+/** Every provider's every setting in effect: Codex's Claude compatibility off and Grok Build's on, no permission approval
+ * chosen, except what `compatibility` and the approvals say. */
+function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {}, claude: { approval_mode?: string } = {}, codex: { approval_reviewer?: string } = {}): Settings["provider_settings"] {
+  return {
+    claude: { approval_mode: claude.approval_mode ?? null },
+    codex: { approval_reviewer: codex.approval_reviewer ?? null, claude_compatibility: compatibility.codex ?? false },
+    grok: { claude_compatibility: compatibility.grok ?? true },
+  };
+}
+
 describe("the fixture daemon's settings and trusted folders", () => {
   it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
     const accounts = [accountOf("work", "claude", "Work", "/Users/dev/.claude-work")];
@@ -600,9 +611,9 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
     expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "~/work/../repos" });
-    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/Users/dev/repos", accounts, claude_compatibility: { codex: false, grok: true } });
+    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/Users/dev/repos", accounts, provider_settings: providerSettings() });
     await daemon.request({ type: "update_settings", auto_pull_repositories: false, default_clone_dir: " " });
-    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts, claude_compatibility: { codex: false, grok: true } });
+    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts, provider_settings: providerSettings() });
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
@@ -665,23 +676,29 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
   });
 
-  it("exports only the Claude compatibility the user chose, refuses a name that has none and leaves the request unapplied", async () => {
+  it("exports only the exported provider settings the user chose, refuses what a provider does not take and leaves the choices unchanged", async () => {
     const daemon = createFixtureDaemon({ state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) });
-    const exported = async () => ((await daemon.request({ type: "export_configuration" })) as { document: ReturnType<typeof exportedDocument> }).document.settings?.claude_compatibility;
+    const exported = async () => ((await daemon.request({ type: "export_configuration" })) as { document: ReturnType<typeof exportedDocument> }).document.settings?.provider_settings;
     // The values in effect follow the added agents; none has been chosen, so the export carries none.
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: true });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }));
     expect(await exported()).toEqual({});
-    await daemon.request({ type: "update_settings", claude_compatibility: { grok: false } });
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
-    expect(await exported()).toEqual({ grok: false });
-    await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, claude_compatibility: { codex: false, claude: true } })).rejects.toMatchObject({ code: "internal_error" });
-    expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
-    expect(await exported()).toEqual({ grok: false });
-    // A later refusal leaves the choices unapplied too, whatever the request carries before it.
-    await expect(daemon.request({ type: "update_settings", claude_compatibility: { codex: false }, default_clone_dir: "relative/dir" })).rejects.toMatchObject({ code: "path_not_absolute" });
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
-    expect(daemon.store.getState().settings.default_clone_dir).toBe("/Users/dev/Projects");
-    expect(await exported()).toEqual({ grok: false });
+    await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: false });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }));
+    expect(await exported()).toEqual({ grok: { claude_compatibility: false } });
+    // A choice of a setting no export carries is kept but never exported.
+    await daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "manual" });
+    expect(await exported()).toEqual({ grok: { claude_compatibility: false } });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "claude_compatibility", value: true })).rejects.toMatchObject({ code: "unreadable_request" });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "codex", setting: "claude_compatibility", value: "on" })).rejects.toMatchObject({ code: "unreadable_request" });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "sometimes" })).rejects.toMatchObject({ code: "unreadable_request" });
+    expect(await exported()).toEqual({ grok: { claude_compatibility: false } });
+    // A refusal of the rest of an `update_settings` leaves the choices as they were.
+    await expect(daemon.request({ type: "update_settings", default_clone_dir: "relative/dir" })).rejects.toMatchObject({ code: "path_not_absolute" });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }, { approval_mode: "manual" }));
+    // A null clears the choice, which goes back to the default rule.
+    await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: null });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }, { approval_mode: "manual" }));
+    expect(await exported()).toEqual({});
   });
 });
 
@@ -1117,7 +1134,7 @@ describe("the fixture daemon's scenario notifications", () => {
   });
 
   it("shows a session notice that is no failure as a timed notice, and a broadcast error as an alert naming no session", async () => {
-    const { got: [notice, failure] } = await raised([sessionNoticeNotification("s-1", "claude_workspace_untrusted"), broadcastErrorNotification("internal_error", { detail: "boom" }, "boom")]);
+    const { got: [notice, failure] } = await raised([sessionNoticeNotification("s-1", "provider.claude.workspace_untrusted"), broadcastErrorNotification("internal_error", { detail: "boom" }, "boom")]);
     expect(notice).toMatchObject({ kind: "notice", session: "s-1" });
     expect(failure).toMatchObject({ kind: "error", daemonError: { code: "internal_error" } });
     expect(failure).not.toHaveProperty("session");
@@ -1210,20 +1227,21 @@ describe("the fixture daemon's permission approval", () => {
 
   it("saves and clears Codex's reviewer and Claude Code's mode, one for the agent, without changing other settings", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await daemon.request({ type: "set_codex_approval_reviewer", reviewer: "auto_review" });
-    await daemon.request({ type: "set_claude_approval_mode", mode: "bypass" });
-    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, claude_compatibility: { codex: false, grok: true }, codex_approval_reviewer: "auto_review", claude_approval_mode: "bypass" });
-    await daemon.request({ type: "set_codex_approval_reviewer", reviewer: null });
-    await daemon.request({ type: "set_claude_approval_mode", mode: null });
-    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, claude_compatibility: { codex: false, grok: true }, codex_approval_reviewer: null, claude_approval_mode: null });
+    await daemon.request({ type: "set_provider_setting", agent: "codex", setting: "approval_reviewer", value: "auto_review" });
+    await daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "bypass" });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, provider_settings: providerSettings({}, { approval_mode: "bypass" }, { approval_reviewer: "auto_review" }) });
+    await daemon.request({ type: "set_provider_setting", agent: "codex", setting: "approval_reviewer", value: null });
+    await daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: null });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, provider_settings: providerSettings() });
   });
 
   it("retains every selection when saving fails", async () => {
     const error = { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" };
     const daemon = createFixtureDaemon({ ...scenario, accountApprovalError: error });
     const before = daemon.store.getState().settings;
-    await expect(daemon.request({ type: "set_codex_approval_reviewer", reviewer: "auto_review" })).rejects.toMatchObject({ code: error.code, params: error.params });
-    await expect(daemon.request({ type: "set_claude_approval_mode", mode: "bypass" })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "codex", setting: "approval_reviewer", value: "auto_review" })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "bypass" })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: false })).rejects.toMatchObject({ code: error.code, params: error.params });
     expect(daemon.store.getState().settings).toEqual(before);
   });
 });
@@ -1249,26 +1267,27 @@ describe("the fixture daemon's agent tags", () => {
 });
 
 describe("the fixture daemon's Claude compatibility", () => {
-  const settings = (added_agents: Agent[], claude_compatibility?: Partial<Record<Agent, boolean>>) => ({ ...DEFAULT_SETTINGS, added_agents, default_clone_dir: "/Users/dev/Projects", accounts: [], ...(claude_compatibility && { claude_compatibility }) });
-  const daemonOf = (added: Agent[], choices?: Partial<Record<Agent, boolean>>) => createFixtureDaemon({ state: snapshotState({ settings: settings(added, choices) }) });
+  const settings = (added_agents: Agent[], provider_settings?: Settings["provider_settings"]) => ({ ...DEFAULT_SETTINGS, added_agents, default_clone_dir: "/Users/dev/Projects", accounts: [], ...(provider_settings && { provider_settings }) });
+  const daemonOf = (added: Agent[], choices?: Settings["provider_settings"]) => createFixtureDaemon({ state: snapshotState({ settings: settings(added, choices) }) });
+  const setCompatibility = (daemon: ReturnType<typeof daemonOf>, agent: Agent, value: boolean) => daemon.request({ type: "set_provider_setting", agent, setting: "claude_compatibility", value });
 
   it("reports Codex on only while Claude Code is added, and Grok Build on, until the user chooses", () => {
     const daemon = daemonOf(["codex", "grok"]);
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: false, grok: true });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings());
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: ["claude", "codex", "grok"] } });
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: true });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }));
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: null } });
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: false, grok: true });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings());
   });
 
   it("keeps the user's choice whatever agents are added, and reads a scenario's value as a choice", async () => {
-    const daemon = daemonOf(["codex"], { grok: false });
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: false, grok: false });
-    await daemon.request({ type: "update_settings", claude_compatibility: { codex: true } });
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
+    const daemon = daemonOf(["codex"], { grok: { claude_compatibility: false } });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ grok: false }));
+    await setCompatibility(daemon, "codex", true);
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }));
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: ["claude"] } });
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: [] } });
-    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }));
   });
 });
 
@@ -2357,21 +2376,21 @@ describe("the fixture daemon's rate limit reset credits", () => {
   it("takes the used credit off the held reading at once and reads the quota again after, with the windows full", async () => {
     const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)])));
     const fetched = reading(daemon).fetched_at;
-    await expect(daemon.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toEqual({ type: "reset_credit_used", id: null, outcome: "reset" });
+    await expect(daemon.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toEqual({ type: "reset_credit_used", id: null, outcome: "reset" });
     expect(reading(daemon)).toMatchObject({ fetched_at: fetched, windows: [{ used_percent: 40 }, { used_percent: 100 }], reset_credits: { available_count: 1, credits: [expect.objectContaining({ id: "b" })] } });
     await rereadDone();
     expect(reading(daemon).windows.map((window) => window.used_percent)).toEqual([0, 0]);
     expect(reading(daemon).fetched_at).toBeGreaterThan(fetched);
-    await daemon.request({ type: "use_codex_reset_credit", account: "personal" });
+    await daemon.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     expect(reading(daemon).reset_credits).toBeUndefined();
   });
 
   it("takes the first credit that has not expired, and says none is left where only expired ones remain", async () => {
     const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("old", -5), resetCreditOf("b", 600)])));
-    await daemon.request({ type: "use_codex_reset_credit", account: "personal" });
+    await daemon.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     expect(reading(daemon).reset_credits).toEqual({ available_count: 1, credits: [expect.objectContaining({ id: "old" })] });
     const expired = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("old", -5)])));
-    await expect(expired.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
+    await expect(expired.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
   });
 
   it("spends a credit only on reset: already_redeemed and nothing_to_reset leave the credits and refill nothing", async () => {
@@ -2379,7 +2398,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
     for (const outcome of ["already_redeemed", "nothing_to_reset"] as const) {
       const daemon = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: outcome });
       const fetched = reading(daemon).fetched_at;
-      await expect(daemon.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome });
+      await expect(daemon.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toMatchObject({ outcome });
       expect(reading(daemon).reset_credits).toEqual(credits);
       await rereadDone();
       expect(reading(daemon)).toMatchObject({ reset_credits: credits, windows: [{ used_percent: 40 }, { used_percent: 100 }] });
@@ -2389,11 +2408,11 @@ describe("the fixture daemon's rate limit reset credits", () => {
 
   it("keeps the count and drops the list where the credit used was not named, and reads again after a refusal", async () => {
     const unnamed = createFixtureDaemon(withCredits(resetCreditsOf(null, 3)));
-    await unnamed.request({ type: "use_codex_reset_credit", account: "personal" });
+    await unnamed.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     expect(reading(unnamed).reset_credits).toEqual({ available_count: 2, credits: null });
     const refused = createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: { code: "reset_credit_failed", params: { agent: "Codex", detail: "x" }, message: "x" } });
     const fetched = reading(refused).fetched_at;
-    await expect(refused.request({ type: "use_codex_reset_credit", account: "personal" })).rejects.toMatchObject({ code: "reset_credit_failed" });
+    await expect(refused.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).rejects.toMatchObject({ code: "reset_credit_failed" });
     await rereadDone();
     expect(reading(refused).fetched_at).toBeGreaterThan(fetched);
     expect(reading(refused).reset_credits?.available_count).toBe(1);
@@ -2401,7 +2420,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
       const staged = { code, params: { agent: "Codex" }, message: "x" };
       const early = createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: staged });
       const before = reading(early).fetched_at;
-      const request = early.request({ type: "use_codex_reset_credit", account: "personal" });
+      const request = early.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
       await expect(request).rejects.toMatchObject({ code });
       await rereadDone();
       expect(reading(early).fetched_at).toBe(before);
@@ -2412,18 +2431,18 @@ describe("the fixture daemon's rate limit reset credits", () => {
     const credits = resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)]);
     const failure = quotaFailure("quota_timed_out", { agent: "Codex" }, "Codex took too long to report its usage.");
     const later = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: { after: 300 } });
-    await later.request({ type: "use_codex_reset_credit", account: "personal" });
+    await later.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     await rereadDone();
     expect(reading(later).windows[1]!.used_percent).toBe(100);
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(reading(later).windows[1]!.used_percent).toBe(0);
     const never = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: "never" });
-    await never.request({ type: "use_codex_reset_credit", account: "personal" });
+    await never.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     await rereadDone();
     expect(reading(never).windows[1]!.used_percent).toBe(100);
     const failed = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: { unavailable: failure } });
     const before = reading(failed).fetched_at;
-    await failed.request({ type: "use_codex_reset_credit", account: "personal" });
+    await failed.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     await rereadDone();
     expect(reading(failed)).toMatchObject({ fetched_at: before, unavailable: failure, reset_credits: { available_count: 1, credits: [expect.objectContaining({ id: "b" })] }, windows: [{ used_percent: 40 }, { used_percent: 100 }] });
   });
@@ -2431,24 +2450,48 @@ describe("the fixture daemon's rate limit reset credits", () => {
   it("keeps the reading for nothing_to_reset, drops the credits for no_credit, and answers no_credit where none is held", async () => {
     const credits = resetCreditsOf([resetCreditOf("a", 60)]);
     const kept = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: "nothing_to_reset" });
-    await expect(kept.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "nothing_to_reset" });
+    await expect(kept.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toMatchObject({ outcome: "nothing_to_reset" });
     await rereadDone();
     expect(reading(kept)).toMatchObject({ reset_credits: credits, windows: [{ used_percent: 40 }, { used_percent: 100 }] });
     const gone = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: "no_credit" });
-    await expect(gone.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
+    await expect(gone.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
     await rereadDone();
     expect(reading(gone).reset_credits).toBeUndefined();
-    await expect(createFixtureDaemon(withCredits(undefined)).request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
+    await expect(createFixtureDaemon(withCredits(undefined)).request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
   });
 
   it("refuses an account that is not a Codex one, a staged failure, and keeps a staged request pending", async () => {
     const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("a", 60)])));
-    await expect(daemon.request({ type: "use_codex_reset_credit", account: "work" })).rejects.toMatchObject({ code: "unknown_account" });
+    await expect(daemon.request({ type: "use_reset_credit", agent: "codex", account: "work" })).rejects.toMatchObject({ code: "unknown_account" });
+    await expect(daemon.request({ type: "use_reset_credit", agent: "claude", account: null })).rejects.toMatchObject({ code: "provider_unsupported", params: { agent: "claude", operation: "reset_credit" } });
     const failing = createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: { code: "reset_credit_failed", params: { agent: "Codex", detail: "x" }, message: "x" } });
-    await expect(failing.request({ type: "use_codex_reset_credit", account: "personal" })).rejects.toMatchObject({ code: "reset_credit_failed" });
+    await expect(failing.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).rejects.toMatchObject({ code: "reset_credit_failed" });
     const answered = vi.fn();
-    void createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: "pending" }).request({ type: "use_codex_reset_credit", account: "personal" }).then(answered, answered);
+    void createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: "pending" }).request({ type: "use_reset_credit", agent: "codex", account: "personal" }).then(answered, answered);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(answered).not.toHaveBeenCalled();
+  });
+});
+
+describe("the fixture daemon's providers", () => {
+  it("serves the providers the real daemon registers, in its order, to a scenario that gives no state as to one that does", () => {
+    const served = (daemon: ReturnType<typeof createFixtureDaemon>) => daemon.store.getState().providers.map(({ id, label, short_name, install_url, default_config_dir }) => [id, label, short_name, install_url, default_config_dir]);
+    const expected = [
+      ["claude", "Claude Code", "Claude", "https://code.claude.com/docs/en/setup", ".claude"],
+      ["codex", "Codex", "Codex", "https://github.com/openai/codex", ".codex"],
+      ["grok", "Grok Build", "Grok", "https://docs.x.ai/build/overview", ".grok"],
+    ];
+    expect(served(createFixtureDaemon({}))).toEqual(expected);
+    expect(served(createFixtureDaemon({ state: snapshotState({}) }))).toEqual(expected);
+  });
+
+  it("reports, takes and exports the settings of a provider it serves beside the registered ones", async () => {
+    const daemon = createFixtureDaemon({ state: { providers: [...FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER] } });
+    const exported = async () => ((await daemon.request({ type: "export_configuration" })) as { document: ReturnType<typeof exportedDocument> }).document.settings?.provider_settings;
+    expect(daemon.store.getState().settings.provider_settings[UNPRESENTED_PROVIDER.id]).toEqual({ review_mode: null });
+    await daemon.request({ type: "set_provider_setting", agent: UNPRESENTED_PROVIDER.id, setting: "review_mode", value: "fast" });
+    expect(daemon.store.getState().settings.provider_settings[UNPRESENTED_PROVIDER.id]).toEqual({ review_mode: "fast" });
+    expect((await exported())?.[UNPRESENTED_PROVIDER.id]).toEqual({ review_mode: "fast" });
+    await expect(daemon.request({ type: "set_provider_setting", agent: UNPRESENTED_PROVIDER.id, setting: "review_mode", value: "sloppy" })).rejects.toMatchObject({ code: "unreadable_request" });
   });
 });

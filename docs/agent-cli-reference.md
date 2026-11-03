@@ -38,8 +38,8 @@ the Grok Build section's "Leader mode leaves the TUI's stop to a `SIGKILL` of th
 **Grok Build 1.0.70** on 2026-11-02. All three rewrite their hook surface, their payload fields, their configuration
 layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
-How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks/mod.rs`; the product behavior
-built on them is in the product docs.
+How Octoboard's status mapping handles these traps is encoded in each provider's hook interpreter,
+`apps/daemon/src/adapter/<provider>/hooks.rs`; the product behavior built on them is in the product docs.
 
 ## Claude Code
 
@@ -2024,7 +2024,7 @@ image_to_video,reference_to_video,write,web_search,web_fetch,Agent
 ```
 
 How each was chosen, from the installed CLIs' `--help`, their on-disk documentation and requests captured by a local
-stand-in endpoint on a scratch configuration directory with a fake key (so nothing reached the vendor); sizes are the
+stand-in endpoint on a scratch configuration directory with a fake key (so nothing reached the provider); sizes are the
 request body in characters (2026-10-22):
 
 - **Claude Code** takes `haiku`, the alias for the newest Haiku (see "Discovering models"), so no version is written

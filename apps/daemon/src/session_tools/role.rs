@@ -30,7 +30,7 @@
 //! And for the section naming the language the user set the interface to, which a project session
 //! is given only when a language is stored and it is not English (see [`user_language_guidance`]).
 
-use crate::protocol::{Agent, GitDelivery, GitDevelopment, GitWorkflowSettings, SessionKind};
+use crate::protocol::{AgentId, GitDelivery, GitDevelopment, GitWorkflowSettings, SessionKind};
 
 use super::catalogue::qualified_tool_name;
 use super::console_instructions::console_session_instruction_filename;
@@ -66,7 +66,7 @@ pub struct RoleOptions<'a> {
 pub fn role_description(
     kind: SessionKind,
     owner: Option<&Owner>,
-    agent: Agent,
+    agent: AgentId,
     options: &RoleOptions,
 ) -> String {
     let mut text = match (kind, owner) {
@@ -232,7 +232,7 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
 /// What a console session is told in its system prompt: which side of the orchestration it is on,
 /// and where the rest of its instructions are. The boundary is stated here too, so that the
 /// user's own text in the file is held to it by two places rather than one.
-fn console_session_pointer(agent: Agent) -> String {
+fn console_session_pointer(agent: AgentId) -> String {
     format!(
         "You are the console session of an Octoboard console: you decompose the user's requests \
          on this console's projects, dispatch them to sessions there, follow those up and \
@@ -249,15 +249,30 @@ fn console_session_pointer(agent: Agent) -> String {
 
 /// How a session puts a question that needs the user's decision or answer to them: through the
 /// agent's tool for asking with options to pick from, or, where it has none, as numbered questions
-/// at the end of its reply. Claude Code's and Grok Build's tools are named, being the ones whose
-/// names are known; Codex's structured-question features are off in the measured version, so it is
-/// told generically. `agent` is `None` in the console instruction file, which serves every agent.
-pub(super) fn asking_guidance(agent: Option<Agent>) -> String {
+/// at the end of its reply. The tool is named for an agent whose descriptor names it
+/// (`ProviderDescriptor::ask_question_tool`), and told of generically to one whose descriptor
+/// names none. `agent` is `None` in the console instruction file, which serves every agent and
+/// names the tool of each agent whose descriptor names one.
+pub(super) fn asking_guidance(agent: Option<AgentId>) -> String {
     let tool = match agent {
-        Some(Agent::Claude) => " (`AskUserQuestion`)",
-        Some(Agent::Grok) => " (`ask_user_question`)",
-        Some(Agent::Codex) => "",
-        None => " (`AskUserQuestion` in Claude Code, `ask_user_question` in Grok Build)",
+        Some(agent) => agent
+            .descriptor()
+            .ask_question_tool
+            .map(|tool| format!(" (`{tool}`)"))
+            .unwrap_or_default(),
+        None => {
+            let named: Vec<String> = crate::providers::descriptors()
+                .filter_map(|descriptor| {
+                    let tool = descriptor.ask_question_tool?;
+                    Some(format!("`{tool}` in {}", descriptor.label))
+                })
+                .collect();
+            if named.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", named.join(", "))
+            }
+        }
     };
     format!(
         "## Asking the user\n\n\
@@ -299,7 +314,7 @@ pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
 /// Shared intent rules use qualified tool names in project prompts and bare names in the
 /// console instruction file, which serves every agent. A session that cannot start sessions of
 /// its own (`directs_sessions` false) is not told of the tools that do, which it does not have.
-pub(super) fn continuation_guidance(agent: Option<Agent>, directs_sessions: bool) -> String {
+pub(super) fn continuation_guidance(agent: Option<AgentId>, directs_sessions: bool) -> String {
     let tool = |name: &str| match agent {
         Some(agent) => qualified_tool_name(agent, name),
         None => name.to_string(),
@@ -344,7 +359,7 @@ pub(super) fn continuation_guidance(agent: Option<Agent>, directs_sessions: bool
 /// How a project session that can own sessions decides whether to start any and which one gets a
 /// piece of work, as one bullet. The one place the share of the window that counts as heavily
 /// used is written down.
-fn session_choice_guidance(agent: Agent) -> String {
+fn session_choice_guidance(agent: AgentId) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     format!(
         "- You do not need sessions of your own: an ordinary task is yours to do, with subagents \
@@ -375,7 +390,7 @@ fn session_choice_guidance(agent: Agent) -> String {
 /// session that owns none, which has no other line naming it), the reads every session has
 /// (sessions, histories, consoles, projects, archives), the list of models, then information,
 /// which needs none.
-fn relationships(agent: Agent, owns: bool) -> String {
+fn relationships(agent: AgentId, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
     if owns {
@@ -569,7 +584,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
 /// session id which session dispatched it when that is a project session, since a title can
 /// change after this text is recorded for good, and that it takes work from its owner (or from the
 /// user) alone — the owner it has now, which a transfer can change.
-fn project_session_description(agent: Agent, owner: &Owner) -> String {
+fn project_session_description(agent: AgentId, owner: &Owner) -> String {
     let report = qualified_tool_name(agent, "report");
     let inform_session = qualified_tool_name(agent, "inform_session");
     let get_project = qualified_tool_name(agent, "get_project");
@@ -631,7 +646,7 @@ const WEIGH_INFORMATION: &str =
 
 /// The bullet telling a session that reports to a parent how to notice its account running out of
 /// plan quota, which its parent decides what to do about.
-fn quota_bullet(agent: Agent) -> String {
+fn quota_bullet(agent: AgentId) -> String {
     let report = qualified_tool_name(agent, "report");
     let get_session = qualified_tool_name(agent, "get_session");
     let list_agents = qualified_tool_name(agent, "list_agents");
@@ -655,7 +670,7 @@ fn quota_bullet(agent: Agent) -> String {
 /// console `parent` (`Owner::ConsoleOfCoordinator`), the text of every launch after that binding
 /// or of a coordinator the console session opened, it names the console session as the one
 /// waiting on its result, with the reporting rules of a worker's text.
-fn coordinator_project_session_description(agent: Agent, parent: bool) -> String {
+fn coordinator_project_session_description(agent: AgentId, parent: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let intro = if parent {
         format!(
@@ -795,7 +810,7 @@ mod tests {
     /// named in it by that name.
     #[test]
     fn tool_names_in_the_role_text_carry_that_agents_prefix() {
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             let console_session =
                 role_description(SessionKind::Console, None, agent, &RoleOptions::default());
             let project_session = role_description(
@@ -834,7 +849,7 @@ mod tests {
                     );
                 }
             }
-            if agent == Agent::Grok {
+            if agent == AgentId::GROK {
                 // Grok's names have no `mcp__` prefix at all, so a leftover one is a wrong name
                 // rather than a cosmetic difference.
                 assert!(!console_session.contains("mcp__"));
@@ -857,7 +872,7 @@ mod tests {
             crate::session_tools::catalogue::tools_for(SessionKind::Project, false),
         ]
         .concat();
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             let prefix = qualified_tool_name(agent, "");
             let project_session = role_description(
                 SessionKind::Project,
@@ -910,7 +925,7 @@ mod tests {
     /// account's quota runs low.
     #[test]
     fn a_project_session_learns_its_own_id_and_a_bound_one_reports_a_low_quota() {
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             let bound = role_description(
                 SessionKind::Project,
                 Some(&Owner::Console),
@@ -944,7 +959,7 @@ mod tests {
     /// launch and so reaches at least every new session.
     #[test]
     fn the_detail_goes_in_the_file_and_the_pointer_names_it() {
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             let role = role_description(SessionKind::Console, None, agent, &RoleOptions::default());
             assert!(
                 role.len()
@@ -967,7 +982,7 @@ mod tests {
     /// `open_session` included.
     #[test]
     fn a_coordinator_under_a_console_is_told_to_report_and_may_open_sessions() {
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             let under = role_description(
                 SessionKind::Project,
                 Some(&Owner::ConsoleOfCoordinator),
@@ -1026,19 +1041,19 @@ mod tests {
         let console = role_description(
             SessionKind::Project,
             Some(&Owner::Console),
-            Agent::Claude,
+            AgentId::CLAUDE,
             &RoleOptions::default(),
         );
         let project = role_description(
             SessionKind::Project,
             Some(&project_owner),
-            Agent::Claude,
+            AgentId::CLAUDE,
             &RoleOptions::default(),
         );
         let unbound = role_description(
             SessionKind::Project,
             None,
-            Agent::Claude,
+            AgentId::CLAUDE,
             &RoleOptions::default(),
         );
         assert!(console.contains("A console session dispatched this task"));
@@ -1047,7 +1062,7 @@ mod tests {
         assert!(!unbound.contains("dispatched this task"));
         assert!(unbound.contains(&format!(
             "Do not call `{}`",
-            qualified_tool_name(Agent::Claude, "report")
+            qualified_tool_name(AgentId::CLAUDE, "report")
         )));
         assert!(unbound.contains("open_session"));
     }
@@ -1061,13 +1076,13 @@ mod tests {
             role_description(
                 SessionKind::Project,
                 Some(&Owner::Console),
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &RoleOptions::default(),
             ),
             role_description(
                 SessionKind::Project,
                 Some(&project_owner),
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &RoleOptions::default(),
             ),
         ] {
@@ -1083,7 +1098,7 @@ mod tests {
         let unbound = role_description(
             SessionKind::Project,
             None,
-            Agent::Claude,
+            AgentId::CLAUDE,
             &RoleOptions::default(),
         );
         assert!(unbound.starts_with(PROJECT_WORK));
@@ -1099,7 +1114,7 @@ mod tests {
     /// session that owns none has no such choice to make.
     #[test]
     fn an_owner_is_told_to_start_sessions_only_for_parallel_branch_work() {
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             let unbound =
                 role_description(SessionKind::Project, None, agent, &RoleOptions::default());
             let bullet = session_choice_guidance(agent);
@@ -1161,7 +1176,7 @@ mod tests {
             development: GitDevelopment::InPlace,
             ..on
         };
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             for owner in every_owner() {
                 let plain = role_description(
                     SessionKind::Project,
@@ -1239,7 +1254,7 @@ mod tests {
                 .expect("the rest is unchanged")
                 .to_string()
         };
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             for owner in every_owner() {
                 let rule = rule_of(agent, owner.as_ref(), &branch);
                 assert!(rule.starts_with(
@@ -1280,7 +1295,7 @@ mod tests {
     /// A console session never changes a project, so its text is the same whatever the settings.
     #[test]
     fn a_console_session_is_told_no_development_rule() {
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             let plain =
                 role_description(SessionKind::Console, None, agent, &RoleOptions::default());
             for delivery in [
@@ -1319,7 +1334,7 @@ mod tests {
             ),
             (GitDelivery::PullRequest, "push it and open a pull request."),
         ];
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             for owner in every_owner() {
                 let who = if owner.is_some() {
                     "as the user or your parent session says"
@@ -1458,7 +1473,7 @@ mod tests {
         let text = role_description(
             SessionKind::Project,
             None,
-            Agent::Claude,
+            AgentId::CLAUDE,
             &RoleOptions {
                 git_workflow: Some(&GitWorkflowSettings::default()),
                 ..Default::default()
@@ -1478,7 +1493,7 @@ mod tests {
     #[test]
     fn a_project_session_is_told_to_ask_with_options_only_with_the_setting_on() {
         let worktrees = GitWorkflowSettings::default();
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             for owner in every_owner() {
                 let off = role_description(
                     SessionKind::Project,
@@ -1511,11 +1526,11 @@ mod tests {
                 assert!(section.starts_with("## Asking the user\n\n"));
                 assert_eq!(
                     section.contains("`AskUserQuestion`"),
-                    agent == Agent::Claude
+                    agent == AgentId::CLAUDE
                 );
                 assert_eq!(
                     section.contains("`ask_user_question`"),
-                    agent == Agent::Grok
+                    agent == AgentId::GROK
                 );
                 assert!(
                     on.find("## Developing in a worktree").unwrap()
@@ -1556,7 +1571,7 @@ mod tests {
                 },
             )
         };
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             for owner in every_owner() {
                 let none = with(None, agent, owner.as_ref());
                 assert!(!none.contains("## The user's language"));

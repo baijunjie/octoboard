@@ -2,13 +2,15 @@ import { useState } from "react";
 
 import { agentOpeningChoice, currentChoice, openingChoice } from "../accounts/openingChoice";
 import { choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, findEntry, type AccountChoice, type ChoiceGroup } from "../accounts/choiceEntries";
-import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents/agents";
+import { agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent, servedAgents } from "../agents/agents";
+import { providerLabel, providerModelDisplay } from "../agents/providers";
 import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
+import { quotaNaming } from "../accounts/quotaFormat";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
-import { useDaemonStore } from "../store";
+import { useDaemonStore, useProviders } from "../store";
 import { useNow } from "../format/useNow";
 import { accountOption } from "./accountOptions";
 import { accountRefusalMessage } from "./accountRefusalMessage";
@@ -27,8 +29,9 @@ export function useChoiceGroups(): ChoiceGroup[] {
   const sharing = useDaemonStore((s) => s.accountSharing);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const accountOrder = useDaemonStore((s) => s.settings.account_order);
+  const providers = useProviders();
   const now = useNow();
-  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing, disabledDefaults, accountOrder);
+  return choiceGroups(accounts, agentAvailability, addedAgents, providers, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing, disabledDefaults, accountOrder);
 }
 
 /**
@@ -64,6 +67,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const providers = useProviders();
   const autoSelect = useDaemonStore((s) => s.settings.auto_select_account) ?? false;
   const now = useNow();
   const [pickedAgent, setPickedAgentValue] = useState<Agent | undefined>(preset?.choice.agent);
@@ -95,18 +99,18 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
       : agentOpeningChoice(parentConsole, project, pickedAgent, accounts, groups, autoSelect ? { now } : undefined)
     : undefined;
 
-  const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => groups.some((group) => group.agent === agent && group.selectable));
+  const selectable = pickableAgents(agentAvailability, addedAgents, providers).filter((agent) => groups.some((group) => group.agent === agent && group.selectable));
   const wanted = project ? project.default_agent ?? projectSessionAgent(parentConsole) : parentConsole.default_agent;
   // Keep a value for the refusal when no agent can be chosen, without returning the excluded agent.
   const initialAgent = selectable.includes(wanted) ? wanted : selectable[0]
-    ?? agentsInListingOrder(addedAgents).find((agent) => agent !== exclude)!;
+    ?? agentsInListingOrder(addedAgents, servedAgents(providers)).find((agent) => agent !== exclude)!;
   const initial = openingChoice(parentConsole, project, initialAgent, accounts, groups, addedAgents, autoSelect ? { now } : undefined);
   const forcedEntry = forced && findEntry(allGroups, choiceKey(forced));
   const choice = forced && forcedEntry?.selectable ? forced : currentChoice(picked, initial, groups);
   // A fixed conversation can still name a turned-off account; keep its value so the refusal names it.
   const accountEntries = (groups.find((group) => group.agent === choice.agent)?.entries ?? []).filter((entry) => !entry.disabled || entry.key === choiceKey(choice));
   const overrides = launchSettings[choice.agent];
-  const { model, effort } = launchWithOverrides(inheritedSessionLaunch(parentConsole, project, choice.agent), overrides);
+  const { model, effort } = launchWithOverrides(inheritedSessionLaunch(parentConsole, project, choice.agent, providerModelDisplay(providers, choice.agent)), overrides);
   const blocked = selectable.length === 0;
   const exhaustedBy = choiceExhaustion(choice, groups);
   const chosenEntry = findEntry(groups, choiceKey(choice));
@@ -130,18 +134,18 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
       : signedOut && chosenEntry
         ? accountRefusalMessage("accountChoice.signedOut.description", chosenEntry.name)
         : exhaustedBy && chosenEntry?.quota
-          ? quotaUsedUpMessage(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
+          ? quotaUsedUpMessage(t, quotaNaming(chosenEntry.quota, providers), chosenEntry.name, exhaustedBy, now)
           : changingSharing && chosenEntry
             ? t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) })
             : undefined,
     overrides,
-    agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude && groups.some((group) => group.agent === option.value && group.entries.some((entry) => !entry.disabled))),
+    agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, providers, choice.agent).filter((option) => option.value !== exclude && groups.some((group) => group.agent === option.value && group.entries.some((entry) => !entry.disabled))),
     setPickedAgent,
     /** The account half of the joined agent and account field, shown even for one account: every agent
      * has its default account. */
     account: {
-      label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[choice.agent] }),
-      options: accountEntries.map((entry) => accountOption(t, entry, now, blocked)),
+      label: t("dialog.agentSettings.account", { agent: isolate(providerLabel(t, providers, choice.agent)) }),
+      options: accountEntries.map((entry) => accountOption(t, providers, entry, now, blocked)),
       value: choiceKey(choice),
       onChange: (key: string) => {
         const entry = findEntry(groups, key);

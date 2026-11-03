@@ -22,13 +22,14 @@ use anyhow::Result;
 use crate::coordinator::{self, consoles::NewConsole, settings::SettingsChanges};
 use crate::project_git::remote_url;
 use crate::protocol::{
-    error_code, Account, AccountFallback, AccountName, AccountResolution, Agent, CodedError,
+    error_code, Account, AccountFallback, AccountName, AccountResolution, AgentId, CodedError,
     ConfigurationDocument, DirectoryChoice, DocumentConsole, DocumentProject, DocumentSettings,
     ImportFailure, ImportStatus, ImportedAccounts, ImportedConsole, ImportedProject,
     InspectedAccounts, InspectedConsole, InspectedProject, InspectedSettings, PerAgent,
     ProjectAccount, ProjectAccountRef, ProjectResolution, CONFIGURATION_FORMAT,
     CONFIGURATION_VERSION,
 };
+use crate::providers::SettingValue;
 use crate::state::AppState;
 
 use accounts::{apply_accounts, index_account_resolutions, inspect_accounts};
@@ -119,7 +120,7 @@ struct ProjectAccounts {
 impl Rebinder {
     /// The id of the account of `agent` named `name`, compared as account names are unique, without
     /// regard to case.
-    fn find(&self, agent: Agent, name: &str) -> Option<String> {
+    fn find(&self, agent: AgentId, name: &str) -> Option<String> {
         let wanted = crate::accounts::account_name_key(name);
         self.accounts
             .iter()
@@ -133,7 +134,7 @@ impl Rebinder {
     /// reference and, listed in `fallbacks`, for a name that matches none.
     fn console_reference(
         &self,
-        agent: Agent,
+        agent: AgentId,
         reference: &Option<AccountName>,
         fallbacks: &mut Vec<AccountFallback>,
     ) -> Option<String> {
@@ -152,7 +153,7 @@ impl Rebinder {
     /// `Inherit`) for a name that matches none, listed in `fallbacks`.
     fn project_reference(
         &self,
-        agent: Agent,
+        agent: AgentId,
         reference: &ProjectAccountRef,
         fallbacks: &mut Vec<AccountFallback>,
     ) -> ProjectAccount {
@@ -193,17 +194,11 @@ impl Rebinder {
     }
 }
 
-/// The entries of an exported `claude_compatibility` object that name an agent with the setting; a
-/// document from a build that knows more agents lists keys this one skips.
-fn known_claude_compatibility(
-    choices: &BTreeMap<String, bool>,
-) -> impl Iterator<Item = (String, bool)> + '_ {
-    choices
-        .iter()
-        .filter(|(name, _)| {
-            Agent::from_wire_name(name).is_some_and(Agent::has_claude_compatibility)
-        })
-        .map(|(name, enabled)| (name.clone(), *enabled))
+/// The values in effect of the settings a document carries, out of every provider's.
+fn exported_in_effect(
+    in_effect: BTreeMap<String, BTreeMap<String, Option<SettingValue>>>,
+) -> BTreeMap<String, BTreeMap<String, Option<SettingValue>>> {
+    crate::providers::settings_where(in_effect, |setting, _| setting.exported)
 }
 
 /// The entries of an exported `agent_tags` object that name an agent this build knows; a document
@@ -212,7 +207,7 @@ fn known_agent_tags(
     tags: &BTreeMap<String, Vec<String>>,
 ) -> impl Iterator<Item = (String, Vec<String>)> + '_ {
     tags.iter()
-        .filter(|(name, _)| Agent::from_wire_name(name).is_some())
+        .filter(|(name, _)| AgentId::from_wire_name(name).is_some())
         .map(|(name, tags)| (name.clone(), tags.clone()))
 }
 
@@ -280,9 +275,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
             git_workflow: settings.git_workflow,
             current_git_workflow: state.store.git_workflow_settings()?,
-            claude_compatibility: known_claude_compatibility(&settings.claude_compatibility)
-                .collect(),
-            current_claude_compatibility: state.store.claude_compatibility()?,
+            provider_settings: super::exported_provider_settings(&settings.provider_settings),
+            current_provider_settings: exported_in_effect(state.store.provider_settings()?),
             agent_tags: known_agent_tags(&settings.agent_tags).collect(),
             current_agent_tags: state.store.agent_tags()?,
         }),
@@ -543,10 +537,9 @@ pub async fn apply(
             auto_start_quota_windows: Some(settings.auto_start_quota_windows),
             default_clone_dir: None,
             git_workflow: settings.git_workflow.into(),
-            // An agent this build has no such setting for is skipped, so a document from a build
-            // that knows more agents still applies the rest of its settings.
-            claude_compatibility: known_claude_compatibility(&settings.claude_compatibility)
-                .collect(),
+            // A setting this build does not carry is skipped, so a document from a build that
+            // knows more providers still applies the rest of its settings.
+            provider_settings: super::exported_provider_settings(&settings.provider_settings),
             agent_tags: known_agent_tags(&settings.agent_tags).collect(),
         };
         match coordinator::settings::update_settings(state, changes) {

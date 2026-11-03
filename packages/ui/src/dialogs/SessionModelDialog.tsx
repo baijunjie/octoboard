@@ -2,6 +2,7 @@ import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { ActionableError } from "../errors/actionableError";
+import { providerModelDisplay } from "../agents/providers";
 import { shownModel } from "../agents/agentLaunchSettings";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
@@ -14,7 +15,7 @@ import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
 import type { AcknowledgementView } from "../components/alerts/errorAlerts";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
-import { useAccountSwitchHeld, useDaemonStore } from "../store";
+import { useAccountSwitchHeld, useDaemonStore, useProviders } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { LaunchPickers, useLaunchModels } from "./LaunchSettingsFields";
@@ -67,6 +68,7 @@ export function SessionModelDialog({
   const session = stored ?? latest;
   const parentConsole = useDaemonStore((s) => s.consoles.get(session.console_id));
   const project = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id) : undefined));
+  const display = providerModelDisplay(useProviders(), session.agent);
   // Held from the moment it happens, with the title the session had.
   const gone = stored === undefined;
   const title = isolate(sessionDisplayTitle(t, session));
@@ -76,10 +78,10 @@ export function SessionModelDialog({
     t("dialog.sessionModel.blockedTitle"),
   );
   if (!parentConsole && !failure) return null;
-  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent) : { model: null, effort: null };
+  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent, display) : { model: null, effort: null };
   const own = launchWithOverrides(inherited, { model: session.model, effort: session.effort });
   // A stored retired `best` is no model, so clearing the picker back to unset over it is no edit.
-  const start = { ...own, model: shownModel(session.agent, own.model) };
+  const start = { ...own, model: shownModel(display, own.model) };
   return <SessionModelForm session={session} start={start} failure={failure} onClose={onClose} onChangeModel={onChangeModel} />;
 }
 

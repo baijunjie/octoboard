@@ -3,7 +3,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_OPTIONS } from "../agents/agents";
+import { TEST_AGENTS } from "../test/testProviders";
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
@@ -167,7 +167,7 @@ it("a console session's focus mode shows only its projects and sessions", () => 
 });
 
 const hold = () => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", IS_MAC ? { metaKey: true } : { ctrlKey: true })));
-const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
+const noAgent = new Map(TEST_AGENTS.map((value) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
 const bound = { kind: "bound", to: hub1 } as const;
 
 function createShortcut(quick = false, repeat = false): KeyboardEvent {

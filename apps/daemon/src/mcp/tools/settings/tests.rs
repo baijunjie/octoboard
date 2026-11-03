@@ -2,7 +2,7 @@ use crate::mcp::dispatch::call;
 use crate::mcp::test_support::{
     arguments, refused, settings_state, shared_console_state, RepoState,
 };
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 use serde_json::{json, Map, Value};
 
 /// `update_project` sets a description to the given text, leaves it alone when absent, clears
@@ -128,7 +128,10 @@ async fn update_project_changes_only_what_it_is_given() {
     }
     let stored = state.store.get_project("project-1").unwrap().unwrap();
     assert_eq!(stored.tags, ["api", "docs"]);
-    assert_eq!(stored.launch.claude.model.as_deref(), Some("opus"));
+    assert_eq!(
+        stored.launch[AgentId::CLAUDE].model.as_deref(),
+        Some("opus")
+    );
 
     let message = refused(
         &state,
@@ -316,13 +319,13 @@ async fn the_git_workflow_settings_are_read_and_changed_through_the_tools() {
 async fn get_project_gives_the_settings_resolved_against_the_console() {
     let (state, _dir) = shared_console_state("get-project-effective");
     let mut console = state.store.get_console("console-1").unwrap().unwrap();
-    console.project_session_agent = Some(Agent::Codex);
-    console.project_session_launch.claude.model = Some("console-model".to_string());
-    console.project_session_launch.claude.effort = Some("console-effort".to_string());
+    console.project_session_agent = Some(AgentId::CODEX);
+    console.project_session_launch[AgentId::CLAUDE].model = Some("console-model".to_string());
+    console.project_session_launch[AgentId::CLAUDE].effort = Some("console-effort".to_string());
     state.store.update_console(&console).unwrap();
     let mut project = state.store.get_project("project-1").unwrap().unwrap();
     project.default_agent = None;
-    project.launch.get_mut(Agent::Claude).model = Some("project-model".to_string());
+    project.launch.get_mut(AgentId::CLAUDE).model = Some("project-model".to_string());
     state.store.update_project(&project).unwrap();
 
     let own = call(&state, "of-a", "get_project", &Map::new())
@@ -392,7 +395,9 @@ async fn the_console_session_reads_and_changes_its_own_console() {
     assert_eq!(pair["launch"]["claude"]["model"], "sonnet");
     let stored = state.store.get_console("console-1").unwrap().unwrap();
     assert_eq!(
-        stored.project_session_launch.claude.model.as_deref(),
+        stored.project_session_launch[AgentId::CLAUDE]
+            .model
+            .as_deref(),
         Some("sonnet")
     );
     let cleared_pair = call(
@@ -597,22 +602,57 @@ async fn the_interface_language_is_read_and_changed_through_the_tools() {
     );
 }
 
-/// The settings of the Agent accounts section, automatic account selection, Claude Code
-/// compatibility and the agents' tags, are read through the tools but never changed by them,
-/// whatever an agent passes.
+/// The settings of the Agent accounts section, automatic account selection, the providers'
+/// settings and the agents' tags, are read through the tools but never changed by them, whatever
+/// an agent passes. Of the providers' settings only those declared `shown_to_agents` are read:
+/// not the approval settings, which stay the user's alone.
 #[tokio::test]
 async fn the_agent_account_settings_are_read_only_to_agents() {
     let (state, _dir) = settings_state("app-settings-agent-accounts");
     state
         .store
-        .set_agent_tags(Agent::Codex, vec!["review".to_string()])
+        .set_agent_tags(AgentId::CODEX, vec!["review".to_string()])
         .unwrap();
     let before = call(&state, "a", "get_settings", &Map::new())
         .await
         .unwrap();
     assert_eq!(before["auto_select_account"], false);
     assert_eq!(before["agent_tags"], json!({ "codex": ["review"] }));
-    assert!(before["claude_compatibility"].is_object());
+    // Every provider's switches are shown with the value in effect; the approval settings and a
+    // provider with nothing to show are not.
+    assert_eq!(
+        before["provider_settings"],
+        json!({
+            "codex": { "claude_compatibility": false },
+            "grok": { "claude_compatibility": true },
+        })
+    );
+    state
+        .store
+        .set_provider_setting(
+            AgentId::CODEX,
+            "approval_reviewer",
+            Some(&crate::providers::SettingValue::Choice(
+                "auto_review".into(),
+            )),
+        )
+        .unwrap();
+    state
+        .store
+        .set_provider_setting(
+            AgentId::CLAUDE,
+            "approval_mode",
+            Some(&crate::providers::SettingValue::Choice("bypass".into())),
+        )
+        .unwrap();
+    let with_approvals = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(
+        with_approvals["provider_settings"],
+        before["provider_settings"]
+    );
+    assert!(!with_approvals.to_string().contains("approval"));
 
     let updated = call(
         &state,
@@ -620,6 +660,7 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
         "update_settings",
         &arguments(json!({
             "auto_select_account": true,
+            "provider_settings": { "codex": { "claude_compatibility": true } },
             "claude_compatibility": { "codex": true, "grok": false },
             "agent_tags": { "codex": [], "grok": ["research"] },
             "default_clone_dir": "/tmp/clones",
@@ -632,10 +673,7 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
         updated["auto_select_account"],
         before["auto_select_account"]
     );
-    assert_eq!(
-        updated["claude_compatibility"],
-        before["claude_compatibility"]
-    );
+    assert_eq!(updated["provider_settings"], before["provider_settings"]);
     assert_eq!(updated["agent_tags"], before["agent_tags"]);
     assert!(!state.store.auto_select_account().unwrap());
     assert_eq!(state.store.agent_tags().unwrap()["codex"], ["review"]);
@@ -643,9 +681,9 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
     // A removed agent's tags are no longer shown; the store keeps them.
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE, AgentId::CODEX])
         .unwrap();
-    state.store.remove_added_agent(Agent::Codex).unwrap();
+    state.store.remove_added_agent(AgentId::CODEX).unwrap();
     let read = call(&state, "a", "get_settings", &Map::new())
         .await
         .unwrap();
@@ -681,7 +719,7 @@ async fn get_settings_marks_the_accounts_that_are_turned_off() {
 
     state
         .store
-        .set_default_account_disabled(Agent::Codex, true)
+        .set_default_account_disabled(AgentId::CODEX, true)
         .unwrap();
     let first = state.store.list_accounts().unwrap().remove(0);
     state.store.set_account_disabled(&first.id, true).unwrap();
@@ -785,7 +823,11 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
     .unwrap();
     assert_eq!(ordered["sidebar_order_by_status"], false);
     assert!(!state.store.sidebar_order_by_status().unwrap());
-    assert_eq!(read["accounts"].as_array().unwrap().len(), 4);
+    // Each agent's default account, and the one account the state holds.
+    assert_eq!(
+        read["accounts"].as_array().unwrap().len(),
+        AgentId::ALL.len() + 1
+    );
     assert_eq!(read["accounts"][0]["id"], "default");
     assert_eq!(read["accounts"][0]["default"], true);
     assert!(read["trusted_directories"].is_array());

@@ -11,17 +11,17 @@ async fn an_exported_configuration_is_imported_as_it_is() {
         id: "console-1".to_string(),
         name: "Hub".to_string(),
         workdir: "/consoles/console-1".to_string(),
-        default_agent: Agent::Claude,
-        project_session_agent: Some(Agent::Grok),
+        default_agent: AgentId::CLAUDE,
+        project_session_agent: Some(AgentId::GROK),
         accounts: Default::default(),
         launch: Default::default(),
-        project_session_launch: crate::protocol::PerAgent {
-            claude: crate::protocol::Launch {
+        project_session_launch: crate::protocol::PerAgent::default().with(
+            AgentId::CLAUDE,
+            crate::protocol::Launch {
                 model: Some("opus".to_string()),
                 effort: Some("high".to_string()),
             },
-            ..Default::default()
-        },
+        ),
         icon: None,
         console_session_prompt: None,
         created_at: 1,
@@ -44,7 +44,7 @@ async fn an_exported_configuration_is_imported_as_it_is() {
         description: Some("Round trip.".to_string()),
         git_workflow: Default::default(),
     };
-    stored.default_agent = Some(Agent::Codex);
+    stored.default_agent = Some(AgentId::CODEX);
     source.store.insert_project(&stored).unwrap();
     let exported =
         serde_json::to_value(export::build(&source.store, &export::Selection::full(true)).unwrap())
@@ -67,19 +67,23 @@ async fn an_exported_configuration_is_imported_as_it_is() {
     let created = stored_projects(&target).remove(0);
     assert_eq!(
         (created.name.as_str(), created.default_agent),
-        ("repo", Some(Agent::Codex))
+        ("repo", Some(AgentId::CODEX))
     );
     assert_eq!(created.tags, ["t"]);
     assert_eq!(created.description.as_deref(), Some("Round trip."));
     assert!(!created.trust_consent, "trust is not carried over");
     let console = target.store.list_consoles().unwrap().remove(0);
-    assert_eq!(console.project_session_agent, Some(Agent::Grok));
+    assert_eq!(console.project_session_agent, Some(AgentId::GROK));
     assert_eq!(
-        console.project_session_launch.claude.model.as_deref(),
+        console.project_session_launch[AgentId::CLAUDE]
+            .model
+            .as_deref(),
         Some("opus")
     );
     assert_eq!(
-        console.project_session_launch.claude.effort.as_deref(),
+        console.project_session_launch[AgentId::CLAUDE]
+            .effort
+            .as_deref(),
         Some("high")
     );
 
@@ -100,7 +104,7 @@ async fn an_exported_configuration_is_imported_as_it_is() {
     .unwrap();
     let console = other.store.list_consoles().unwrap().remove(0);
     assert_eq!(console.project_session_agent, None);
-    assert_eq!(console.project_session_default(), Agent::Claude);
+    assert_eq!(console.project_session_default(), AgentId::CLAUDE);
 }
 
 #[tokio::test]
@@ -149,7 +153,7 @@ async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_as
             auto_approve_handoffs: false,
             ask_questions_as_choices: true,
             git_workflow: GitWorkflowSettings::default(),
-            claude_compatibility: BTreeMap::new(),
+            provider_settings: BTreeMap::new(),
             agent_tags: BTreeMap::new(),
             keyboard_shortcuts: None,
         })
@@ -303,16 +307,38 @@ async fn turning_off_asking_questions_as_choices_round_trips_in_a_full_export() 
     assert!(!target.store.ask_questions_as_choices().unwrap());
 }
 
-/// What travels is the user's choice for an agent, not the value in effect: an agent never
-/// chosen for is not exported. The importing machine takes the choices only when settings are
-/// applied, per agent.
+/// What travels is the user's choice, not the value in effect: a setting never chosen for is not
+/// exported. The importing machine takes the choices only when settings are applied, per setting.
+/// The approval settings are never exported, whatever the user chose; a document that lists them,
+/// or a provider or setting this build does not declare, or a value a setting does not take, has
+/// those entries skipped and the rest applied.
 #[tokio::test]
-async fn turning_off_an_agents_claude_compatibility_round_trips_in_a_full_export() {
-    let (source, source_dir) = app_state("import-claude-compat-source");
-    source
-        .store
-        .set_claude_compatibility(Agent::Codex, false)
-        .unwrap();
+async fn provider_settings_round_trip_in_a_full_export_and_approval_settings_stay_out() {
+    let (source, source_dir) = app_state("import-provider-settings-source");
+    let set = |state: &Arc<AppState>, agent, setting: &str, value| {
+        state
+            .store
+            .set_provider_setting(agent, setting, Some(&value))
+            .unwrap()
+    };
+    set(
+        &source,
+        AgentId::CODEX,
+        "claude_compatibility",
+        SettingValue::Switch(false),
+    );
+    set(
+        &source,
+        AgentId::CODEX,
+        "approval_reviewer",
+        SettingValue::Choice("auto_review".into()),
+    );
+    set(
+        &source,
+        AgentId::CLAUDE,
+        "approval_mode",
+        SettingValue::Choice("bypass".into()),
+    );
     source
         .store
         .insert_console(&crate::test_support::console(&source_dir))
@@ -323,33 +349,92 @@ async fn turning_off_an_agents_claude_compatibility_round_trips_in_a_full_export
     )
     .unwrap();
     assert_eq!(
-        full["settings"]["claude_compatibility"],
-        serde_json::json!({ "codex": false })
+        full["settings"]["provider_settings"],
+        serde_json::json!({ "codex": { "claude_compatibility": false } })
     );
+    assert!(!full.to_string().contains("approval"));
 
-    let (target, _target_dir) = app_state("import-claude-compat-target");
-    target
-        .store
-        .set_claude_compatibility(Agent::Grok, false)
-        .unwrap();
-    target
-        .store
-        .set_claude_compatibility(Agent::Codex, true)
-        .unwrap();
-    let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
-    assert!(!settings.claude_compatibility["codex"]);
-    assert!(!settings.current_claude_compatibility["grok"]);
+    let (target, _target_dir) = app_state("import-provider-settings-target");
+    set(
+        &target,
+        AgentId::GROK,
+        "claude_compatibility",
+        SettingValue::Switch(false),
+    );
+    set(
+        &target,
+        AgentId::CODEX,
+        "claude_compatibility",
+        SettingValue::Switch(true),
+    );
+    set(
+        &target,
+        AgentId::CODEX,
+        "approval_reviewer",
+        SettingValue::Choice("user".into()),
+    );
+    // Entries a document may carry that this build does not take.
+    let mut hostile = full.clone();
+    hostile["settings"]["provider_settings"] = serde_json::json!({
+        "codex": {
+            "claude_compatibility": false,
+            "approval_reviewer": "auto_review",
+            "invented": true
+        },
+        "claude": { "approval_mode": "bypass" },
+        "grok": { "claude_compatibility": "yes" },
+        "future": { "thing": true }
+    });
+    let inspected = inspect(&target, &hostile).await.unwrap().settings.unwrap();
+    assert_eq!(
+        inspected.provider_settings,
+        [(
+            "codex".to_string(),
+            [(
+                "claude_compatibility".to_string(),
+                SettingValue::Switch(false)
+            )]
+            .into()
+        )]
+        .into()
+    );
+    let current = &inspected.current_provider_settings;
+    assert_eq!(
+        current["grok"]["claude_compatibility"],
+        Some(SettingValue::Switch(false))
+    );
+    assert_eq!(
+        current["codex"]["claude_compatibility"],
+        Some(SettingValue::Switch(true))
+    );
+    assert!(!current["codex"].contains_key("approval_reviewer"));
+    assert!(!current.contains_key("claude"));
 
-    apply(&target, &full, Vec::new(), false, None, true)
+    let on = |agent| {
+        target
+            .store
+            .provider_settings_of(agent)
+            .unwrap()
+            .switch("claude_compatibility")
+    };
+    apply(&target, &hostile, Vec::new(), false, None, true)
         .await
         .unwrap();
-    assert!(target.store.claude_compatibility_of(Agent::Codex).unwrap());
-    apply(&target, &full, Vec::new(), true, None, true)
+    assert!(on(AgentId::CODEX));
+    apply(&target, &hostile, Vec::new(), true, None, true)
         .await
         .unwrap();
-    assert!(!target.store.claude_compatibility_of(Agent::Codex).unwrap());
-    // The document makes no choice for Grok Build, so the target's stays.
-    assert!(!target.store.claude_compatibility_of(Agent::Grok).unwrap());
+    assert!(!on(AgentId::CODEX));
+    // The document makes no valid choice for Grok Build, so the target's stays.
+    assert!(!on(AgentId::GROK));
+    // Nothing the document held about approvals reached the target.
+    let choices = target.store.provider_setting_choices().unwrap();
+    assert_eq!(
+        choices["codex"]["approval_reviewer"],
+        SettingValue::Choice("user".into())
+    );
+    assert!(!choices.contains_key("claude"));
+    assert!(!choices.contains_key("future"));
 }
 
 /// The tags of every agent travel in a full export, removed agents' included, and an import
@@ -361,7 +446,7 @@ async fn agent_tags_round_trip_in_a_full_export() {
     source
         .store
         .set_agent_tags(
-            Agent::Codex,
+            AgentId::CODEX,
             vec!["review".to_string(), "tests".to_string()],
         )
         .unwrap();
@@ -382,11 +467,11 @@ async fn agent_tags_round_trip_in_a_full_export() {
     let (target, _target_dir) = app_state("import-agent-tags-target");
     target
         .store
-        .set_agent_tags(Agent::Codex, vec!["old".to_string()])
+        .set_agent_tags(AgentId::CODEX, vec!["old".to_string()])
         .unwrap();
     target
         .store
-        .set_agent_tags(Agent::Grok, vec!["research".to_string()])
+        .set_agent_tags(AgentId::GROK, vec!["research".to_string()])
         .unwrap();
     let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
     assert_eq!(settings.agent_tags["codex"], ["review", "tests"]);

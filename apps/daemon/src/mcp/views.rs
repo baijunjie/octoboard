@@ -13,7 +13,7 @@ use crate::coordinator;
 use crate::git_workflow;
 use crate::messaging::idle_children;
 use crate::project_git::remote_url;
-use crate::protocol::{Agent, Console, Project, ProjectAccount, Session, SessionStatus};
+use crate::protocol::{AgentId, Console, Project, ProjectAccount, Session, SessionStatus};
 use crate::state::{bindings, AppState, WriteHold};
 
 /// How many sessions are bound to each session, by id, for the sessions of a listing to be
@@ -39,7 +39,7 @@ pub(super) async fn branch_names_of(
 /// `default` is the agent's default account. Never its directory, which is the user's.
 pub(super) fn account_fields(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
 ) -> Result<(String, String)> {
     let name = state.store.account_display_name(agent, account_id)?;
@@ -231,9 +231,9 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
 }
 
 /// An object keyed by agent, one entry for each.
-fn per_agent_object(entry: impl Fn(Agent) -> Value) -> Value {
+fn per_agent_object(entry: impl Fn(AgentId) -> Value) -> Value {
     Value::Object(
-        Agent::ALL
+        AgentId::ALL
             .iter()
             .map(|agent| (agent.wire_name().to_string(), entry(*agent)))
             .collect(),

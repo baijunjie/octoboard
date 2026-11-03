@@ -1,7 +1,7 @@
 import { ActionableError } from "../../errors/actionableError";
 import { leftBranchItems, type LeftBranchItem } from "../../errors/branchCleanupItems";
 import { CodedError, type MessageParams } from "../../errors/codedError";
-import { codeRecord } from "../../errors/codes";
+import { codeRecord, messageKey } from "../../errors/codes";
 import { furtherKey, hasRichMessage, hasTrustDiagnostic, messageCode } from "../../errors/daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason } from "../../errors/errorPresentation";
 import { sharingFailureItems, sharingRawReason, sharingReasonKey, type SharingFailureItem } from "../../errors/sharingFailure";
@@ -63,7 +63,7 @@ export function daemonErrorParts(error: Failure): DaemonErrorParts {
   const record = codeRecord(error.code);
   const reason = sharingRawReason(error);
   const unwordedRaw = unwordedReason(error.code, error.params);
-  const recovery = `daemon.${messageCode(error.code, error.params)}.recovery`;
+  const recovery = `${messageKey(messageCode(error.code, error.params))}.recovery`;
   const diagnostic = !reason && (record?.detailBlock || hasTrustDiagnostic(error.code, error.params)) && error.params.detail ? error.params.detail : undefined;
   return {
     uncatalogued,

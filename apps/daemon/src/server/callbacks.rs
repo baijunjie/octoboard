@@ -13,8 +13,8 @@ use crate::hooks::queue::Push;
 use crate::state::AppState;
 
 /// The hook callback. It answers `200` with an empty body at once whatever happens, and applies the
-/// event afterwards on the session's own queue, in the order the events arrived. Every one of the
-/// three agents renders a failing hook to the user, and the daemon being busy or confused is not
+/// event afterwards on the session's own queue, in the order the events arrived. Every registered
+/// provider renders a failing hook to the user, and the daemon being busy or confused is not
 /// something to show them; for Claude Code's own HTTP hook, which is synchronous, an answer that
 /// waited would also hold the turn, and one that never came (an unreachable daemon, the hook's
 /// timeout) shows a non-blocking error notice in the transcript. An empty `200` is read there as

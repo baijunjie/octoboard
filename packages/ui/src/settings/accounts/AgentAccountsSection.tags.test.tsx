@@ -3,6 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { isolate } from "../../i18n/isolate";
 import { request, settings } from "./agentAccountsSectionTestState";
 import { mount } from "./agentAccountsSectionTestSupport";
 
@@ -13,7 +14,7 @@ vi.mock("../useSectionRefocus", async (importOriginal) => (await import("./agent
 vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
 
 const tagsInput = (container: HTMLElement, name = "Codex") =>
-  [...container.querySelectorAll<HTMLLabelElement>('[role="tabpanel"] label')].find((label) => label.textContent === `Tags for ${name}`)?.control as HTMLInputElement;
+  [...container.querySelectorAll<HTMLLabelElement>('[role="tabpanel"] label')].find((label) => label.textContent === `Tags for ${isolate(name)}`)?.control as HTMLInputElement;
 const type = (input: HTMLInputElement, text: string) => act(() => {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);
   input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -28,7 +29,7 @@ it.each(["Claude Code", "Codex", "Grok Build"] as const)("puts the Tags row firs
   const panel = container.querySelector('[role="tabpanel"]')!;
   const input = tagsInput(container, name);
   expect(input).not.toBeNull();
-  expect(panel.textContent).toContain(`Applies to every ${name} account`);
+  expect(panel.textContent).toContain(`Applies to every ${isolate(name)} account`);
   const following = (other: Element | null) => other === null || (input.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
   expect(following(panel.querySelector("table"))).toBe(true);
   expect(following(panel.querySelector('[aria-label^="Permission approval"]'))).toBe(true);

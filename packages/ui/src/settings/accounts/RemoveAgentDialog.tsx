@@ -1,6 +1,5 @@
 import React from "react";
 
-import { AGENT_LABEL } from "../../agents/agents";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { appDataRecovery } from "../../errors/errorRecovery";
 import { InlineReference } from "../../i18n/InlineReference";
@@ -9,6 +8,7 @@ import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useDaemon, useDaemonStoreEqual } from "../../store";
+import { ProviderName } from "../../components/text/ProviderName";
 import { agentUsage } from "./agentUsage";
 
 /** The confirmation of taking an agent off the added list. It says the agent's accounts are kept and, when consoles,
@@ -40,10 +40,10 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
       errorRecovery={appDataRecovery}
       message={
         <>
-          <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>
+          <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <ProviderName agent={agent} /> }} /></p>
           {uses.length > 0 && (
             <>
-              <p><Message id="settings.accounts.removeAgentInUse" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>
+              <p><Message id="settings.accounts.removeAgentInUse" params={{ agent: <ProviderName agent={agent} /> }} /></p>
               <ul className="list-disc ps-5">
                 {uses.map((use, at) => <li key={at}>{use}</li>)}
               </ul>

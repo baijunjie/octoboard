@@ -25,7 +25,9 @@ agent is chosen for that session. The **default agent for project sessions** is 
 the session nor its project names an agent (see "The project's default agent" in `docs/product/projects.md`). It may be
 left unset — "Same as console sessions" — and then it is whatever the default agent for console sessions is at the time,
 following it when it changes. A new console starts unset. The
-full order is in "Which agent a session uses" in `docs/product/opening-sessions.md`.
+full order is in "Which agent a session uses" in `docs/product/opening-sessions.md`. A default agent this build does not
+support, stored by a build that did, is read as in "Data of an agent this build does not support" in
+`docs/product/supported-agents.md`.
 
 The console dialog, at most 768 px wide, shows both in one **Default agent** group, as two fields, **Console sessions**
 and **Project sessions**, under a note that a project with its own default agent uses that instead. The two fields sit

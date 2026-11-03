@@ -7,7 +7,7 @@ use crate::mcp::test_support::{
     RepoState, Started,
 };
 use crate::protocol::{
-    AccountQuota, Agent, AgentAvailability, Availability, Event, Project, ProjectAccount,
+    AccountQuota, AgentAvailability, AgentId, Availability, Event, Project, ProjectAccount,
     ProjectSource, QuotaWindow, QuotaWindowKind, Session, SessionKind, SessionStatus,
 };
 use crate::session_request;
@@ -52,7 +52,7 @@ async fn an_unavailable_agent_refuses_the_console_sessions_own_open_session_tool
     let owner = console_session("owner");
     state.store.insert_session(&owner).unwrap();
     state.set_agent_availability(vec![AgentAvailability {
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         availability: Availability::Unavailable,
         default_account_dir: Some("/home/user/.claude".to_string()),
     }]);
@@ -78,7 +78,7 @@ async fn an_agent_that_is_not_added_is_refused_to_open_session_and_request_sessi
     let (state, _dir) = shared_console_state("new-session-agent-not-added");
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Codex])
+        .set_added_agents_if_undecided(&[AgentId::CODEX])
         .unwrap();
     let brief = json!({ "brief": { "goal": "do the thing" }, "agent": "claude" });
     let mut new = arguments(brief.clone());
@@ -102,7 +102,7 @@ async fn an_agent_that_is_not_added_is_refused_to_open_session_and_request_sessi
 async fn a_session_request_is_refused_before_the_user_is_asked() {
     let (state, _dir) = shared_console_state("request-refused-early");
     state.set_agent_availability(vec![AgentAvailability {
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         availability: Availability::Unavailable,
         default_account_dir: Some("/home/user/.claude".to_string()),
     }]);
@@ -590,7 +590,7 @@ async fn an_unbound_project_session_cannot_start_a_session_in_another_project() 
 async fn an_unbound_project_sessions_open_session_reaches_the_launch_in_its_own_project() {
     let (state, _dir) = peer_state("peer-start-launch");
     state.set_agent_availability(vec![AgentAvailability {
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         availability: Availability::Unavailable,
         default_account_dir: Some("/home/user/.claude".to_string()),
     }]);
@@ -699,13 +699,13 @@ fn codex_caller_state(name: &str) -> (Arc<AppState>, ScratchDir, Session) {
         .store
         .insert_account(&account(
             "codex-work",
-            Agent::Codex,
+            AgentId::CODEX,
             "Work",
             "/tmp/codex-work",
         ))
         .unwrap();
     let caller = Session {
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         kind: SessionKind::Project,
         project_id: Some("project-1".to_string()),
         account_id: Some("codex-work".to_string()),
@@ -723,7 +723,7 @@ fn agent_and_account(
     console: &str,
     project: &str,
     args: Value,
-) -> (Option<Agent>, Option<Option<String>>) {
+) -> (Option<AgentId>, Option<Option<String>>) {
     let console = state.store.get_console(console).unwrap().unwrap();
     let project = state.store.get_project(project).unwrap();
     let mut args = arguments(args);
@@ -740,23 +740,23 @@ fn a_started_session_defaults_to_the_callers_agent_and_account() {
     let codex_work = Some(Some("codex-work".to_string()));
 
     let omitted = agent_and_account(&state, &caller, "console-1", "project-1", json!({}));
-    assert_eq!(omitted, (Some(Agent::Codex), codex_work.clone()));
+    assert_eq!(omitted, (Some(AgentId::CODEX), codex_work.clone()));
     // Naming the caller's own agent keeps the caller's account too.
     let same_agent = json!({ "agent": "codex" });
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", same_agent),
-        (Some(Agent::Codex), codex_work)
+        (Some(AgentId::CODEX), codex_work)
     );
     // Another agent takes what the project and console set for it.
     let other_agent = json!({ "agent": "claude" });
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", other_agent),
-        (Some(Agent::Claude), None)
+        (Some(AgentId::CLAUDE), None)
     );
     let named = json!({ "account": "default" });
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", named),
-        (Some(Agent::Codex), Some(None))
+        (Some(AgentId::CODEX), Some(None))
     );
 }
 
@@ -774,7 +774,7 @@ fn a_console_session_starts_sessions_on_the_projects_default_agent() {
     let project = state.store.get_project("project-1").unwrap().unwrap();
     let console = state.store.get_console("console-1").unwrap().unwrap();
     let expected = choice::session_agent(None, Some(&project), &console);
-    assert_ne!(expected, Agent::Codex);
+    assert_ne!(expected, AgentId::CODEX);
 
     // An omitted agent resolves later, from the project: the request names none.
     assert_eq!(
@@ -785,23 +785,23 @@ fn a_console_session_starts_sessions_on_the_projects_default_agent() {
     let codex = json!({ "agent": "codex" });
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", codex),
-        (Some(Agent::Codex), Some(Some("codex-work".to_string())))
+        (Some(AgentId::CODEX), Some(Some("codex-work".to_string())))
     );
     let claude = json!({ "agent": "claude" });
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", claude),
-        (Some(Agent::Claude), None)
+        (Some(AgentId::CLAUDE), None)
     );
     // A project session keeps following its own agent.
     assert_eq!(
         agent_and_account(&state, &project_caller, "console-1", "project-1", json!({})).0,
-        Some(Agent::Codex)
+        Some(AgentId::CODEX)
     );
     // A project whose default agent is the caller's own brings the caller's account along.
     state
         .store
         .update_project(&Project {
-            default_agent: Some(Agent::Codex),
+            default_agent: Some(AgentId::CODEX),
             ..project
         })
         .unwrap();
@@ -822,7 +822,7 @@ fn the_callers_account_or_agent_is_passed_over_when_it_could_not_open_a_session(
     state.account_quotas.hold_in_dir_for_test(
         &AccountQuota {
             reset_credits: None,
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: Some("codex-work".to_string()),
             fetched_at: 1,
             plan: None,
@@ -840,7 +840,7 @@ fn the_callers_account_or_agent_is_passed_over_when_it_could_not_open_a_session(
     );
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
-        (Some(Agent::Codex), None)
+        (Some(AgentId::CODEX), None)
     );
 
     let (state, _dir, caller) = codex_caller_state("defaults-account-disabled");
@@ -850,7 +850,7 @@ fn the_callers_account_or_agent_is_passed_over_when_it_could_not_open_a_session(
         .unwrap();
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
-        (Some(Agent::Codex), None)
+        (Some(AgentId::CODEX), None)
     );
     state
         .store
@@ -858,20 +858,20 @@ fn the_callers_account_or_agent_is_passed_over_when_it_could_not_open_a_session(
         .unwrap();
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
-        (Some(Agent::Codex), Some(Some("codex-work".to_string())))
+        (Some(AgentId::CODEX), Some(Some("codex-work".to_string())))
     );
 
     let (state, _dir, caller) = codex_caller_state("defaults-account-removed");
     state.store.delete_account("codex-work").unwrap();
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
-        (Some(Agent::Codex), None)
+        (Some(AgentId::CODEX), None)
     );
 
     let (state, _dir, caller) = codex_caller_state("defaults-agent-not-added");
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Grok])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE, AgentId::GROK])
         .unwrap();
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
@@ -893,7 +893,7 @@ fn a_session_in_another_console_does_not_follow_the_caller() {
 fn insert_codex(state: &Arc<AppState>, id: &str, dir: &str) {
     state
         .store
-        .insert_account(&account(id, Agent::Codex, id, dir))
+        .insert_account(&account(id, AgentId::CODEX, id, dir))
         .unwrap();
 }
 
@@ -923,7 +923,7 @@ fn auto_select_account_uses_the_project_pin_when_the_callers_sharing_change_runs
     let (state, _dir, caller) = codex_caller_state("auto-select-sharing-caller-project-pin");
     insert_codex(&state, "project-pin", "/tmp/codex-project-pin");
     let mut project = state.store.get_project("project-1").unwrap().unwrap();
-    project.accounts.codex = ProjectAccount::Account {
+    project.accounts[AgentId::CODEX] = ProjectAccount::Account {
         id: "project-pin".to_string(),
     };
     state.store.update_project(&project).unwrap();
@@ -946,11 +946,11 @@ fn auto_select_account_falls_back_across_agents_only_for_unnamed_choices() {
     state.store.set_auto_select_account(true).unwrap();
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Codex, Agent::Grok, Agent::Claude])
+        .set_added_agents_if_undecided(&[AgentId::CODEX, AgentId::GROK, AgentId::CLAUDE])
         .unwrap();
     state
         .store
-        .set_default_account_disabled(Agent::Codex, true)
+        .set_default_account_disabled(AgentId::CODEX, true)
         .unwrap();
     state
         .store
@@ -958,7 +958,7 @@ fn auto_select_account_falls_back_across_agents_only_for_unnamed_choices() {
         .unwrap();
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
-        (Some(Agent::Grok), Some(None)),
+        (Some(AgentId::GROK), Some(None)),
     );
     assert_eq!(
         agent_and_account(
@@ -969,7 +969,7 @@ fn auto_select_account_falls_back_across_agents_only_for_unnamed_choices() {
             json!({"agent": "codex"})
         )
         .0,
-        Some(Agent::Codex),
+        Some(AgentId::CODEX),
     );
     assert_eq!(
         agent_and_account(
@@ -979,16 +979,16 @@ fn auto_select_account_falls_back_across_agents_only_for_unnamed_choices() {
             "project-1",
             json!({"account": "Work"})
         ),
-        (Some(Agent::Codex), Some(Some("codex-work".to_string()))),
+        (Some(AgentId::CODEX), Some(Some("codex-work".to_string()))),
     );
     // The shared builder also resolves requests made in another console.
     state
         .store
-        .set_default_account_disabled(Agent::Claude, true)
+        .set_default_account_disabled(AgentId::CLAUDE, true)
         .unwrap();
     assert_eq!(
         agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
-        (Some(Agent::Grok), Some(None)),
+        (Some(AgentId::GROK), Some(None)),
     );
 }
 
@@ -1000,19 +1000,19 @@ fn auto_select_account_fallback_to_callers_agent_keeps_its_usable_account() {
     state.store.set_auto_select_account(true).unwrap();
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE, AgentId::CODEX])
         .unwrap();
     state
         .store
-        .set_default_account_disabled(Agent::Claude, true)
+        .set_default_account_disabled(AgentId::CLAUDE, true)
         .unwrap();
     assert_eq!(
         agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
-        (Some(Agent::Codex), Some(Some("codex-work".to_string()))),
+        (Some(AgentId::CODEX), Some(Some("codex-work".to_string()))),
     );
     assert_eq!(
         agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
-        (Some(Agent::Codex), Some(None)),
+        (Some(AgentId::CODEX), Some(None)),
     );
 }
 
@@ -1025,14 +1025,14 @@ fn auto_select_account_off_keeps_the_callers_account() {
     insert_codex(&state, "sooner", "/tmp/codex-sooner");
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("sooner"),
         Some("/tmp/codex-sooner"),
         vec![weekly(80.0, soon)],
     );
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("codex-work"),
         Some("/tmp/codex-work"),
         vec![weekly(10.0, soon + 3_600_000)],
@@ -1053,10 +1053,16 @@ fn auto_select_account_on_chooses_the_soonest_weekly_reset_including_the_default
     let (state, _dir, caller) = codex_caller_state("auto-select-soonest-stored");
     state.store.set_auto_select_account(true).unwrap();
     insert_codex(&state, "sooner", "/tmp/codex-sooner");
-    hold(&state, Agent::Codex, None, None, vec![weekly(10.0, later)]);
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
+        None,
+        None,
+        vec![weekly(10.0, later)],
+    );
+    hold(
+        &state,
+        AgentId::CODEX,
         Some("sooner"),
         Some("/tmp/codex-sooner"),
         vec![weekly(80.0, soon)],
@@ -1068,10 +1074,10 @@ fn auto_select_account_on_chooses_the_soonest_weekly_reset_including_the_default
 
     let (state, _dir, caller) = codex_caller_state("auto-select-soonest-default");
     state.store.set_auto_select_account(true).unwrap();
-    hold(&state, Agent::Codex, None, None, vec![weekly(80.0, soon)]);
+    hold(&state, AgentId::CODEX, None, None, vec![weekly(80.0, soon)]);
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("codex-work"),
         Some("/tmp/codex-work"),
         vec![weekly(10.0, later)],
@@ -1088,7 +1094,7 @@ fn auto_select_account_on_a_named_account_still_wins() {
     insert_codex(&state, "sooner", "/tmp/codex-sooner");
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("sooner"),
         Some("/tmp/codex-sooner"),
         vec![weekly(10.0, soon)],
@@ -1124,7 +1130,7 @@ fn auto_select_account_on_without_a_rankable_weekly_window_keeps_the_callers_acc
         if let Some(windows) = windows {
             hold(
                 &state,
-                Agent::Codex,
+                AgentId::CODEX,
                 Some("other"),
                 Some("/tmp/codex-other"),
                 windows.clone(),
@@ -1153,7 +1159,7 @@ fn auto_select_account_on_without_a_rankable_window_inherits_otherwise() {
     state.store.set_auto_select_account(true).unwrap();
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("codex-work"),
         Some("/tmp/codex-work"),
         vec![QuotaWindow {
@@ -1178,35 +1184,35 @@ fn auto_select_account_on_in_another_console_picks_or_inherits_the_account() {
         .store
         .insert_account(&account(
             "claude-soon",
-            Agent::Claude,
+            AgentId::CLAUDE,
             "Soon",
             "/tmp/claude-soon",
         ))
         .unwrap();
     hold(
         &state,
-        Agent::Claude,
+        AgentId::CLAUDE,
         Some("claude-soon"),
         Some("/tmp/claude-soon"),
         vec![weekly(20.0, soon)],
     );
     assert_eq!(
         agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
-        (Some(Agent::Claude), Some(Some("claude-soon".to_string())))
+        (Some(AgentId::CLAUDE), Some(Some("claude-soon".to_string())))
     );
 
     let (state, _dir, caller) = codex_caller_state("auto-select-other-console-none");
     state.store.set_auto_select_account(true).unwrap();
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("codex-work"),
         Some("/tmp/codex-work"),
         vec![weekly(10.0, soon)],
     );
     assert_eq!(
         agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
-        (Some(Agent::Claude), Some(None))
+        (Some(AgentId::CLAUDE), Some(None))
     );
 }
 
@@ -1220,14 +1226,14 @@ fn auto_select_account_ignores_a_reading_from_another_config_dir() {
     insert_codex(&state, "later", "/tmp/codex-later");
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("sooner"),
         Some("/tmp/codex-elsewhere"),
         vec![weekly(10.0, soon)],
     );
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("later"),
         Some("/tmp/codex-later"),
         vec![weekly(80.0, soon + 3_600_000)],
@@ -1248,7 +1254,7 @@ fn auto_select_account_skips_an_account_whose_five_hour_window_is_used_up() {
     insert_codex(&state, "later", "/tmp/codex-later");
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("sooner"),
         Some("/tmp/codex-sooner"),
         vec![
@@ -1264,7 +1270,7 @@ fn auto_select_account_skips_an_account_whose_five_hour_window_is_used_up() {
     );
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("later"),
         Some("/tmp/codex-later"),
         vec![weekly(80.0, soon + 3_600_000)],
@@ -1285,14 +1291,14 @@ fn auto_select_account_skips_an_account_whose_sharing_change_is_running() {
     insert_codex(&state, "sooner", "/tmp/codex-sooner");
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("sooner"),
         Some("/tmp/codex-sooner"),
         vec![weekly(10.0, soon)],
     );
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
         Some("codex-work"),
         Some("/tmp/codex-work"),
         vec![weekly(80.0, soon + 3_600_000)],
@@ -1317,10 +1323,16 @@ fn auto_select_account_breaks_a_reset_tie_by_remaining_then_by_candidate_order()
 
     let (state, _dir, caller) = codex_caller_state("auto-select-more-remaining");
     state.store.set_auto_select_account(true).unwrap();
-    hold(&state, Agent::Codex, None, None, vec![weekly(80.0, reset)]);
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
+        None,
+        None,
+        vec![weekly(80.0, reset)],
+    );
+    hold(
+        &state,
+        AgentId::CODEX,
         Some("codex-work"),
         Some("/tmp/codex-work"),
         vec![weekly(10.0, reset)],
@@ -1332,10 +1344,16 @@ fn auto_select_account_breaks_a_reset_tie_by_remaining_then_by_candidate_order()
 
     let (state, _dir, caller) = codex_caller_state("auto-select-equal-remaining");
     state.store.set_auto_select_account(true).unwrap();
-    hold(&state, Agent::Codex, None, None, vec![weekly(40.0, reset)]);
     hold(
         &state,
-        Agent::Codex,
+        AgentId::CODEX,
+        None,
+        None,
+        vec![weekly(40.0, reset)],
+    );
+    hold(
+        &state,
+        AgentId::CODEX,
         Some("codex-work"),
         Some("/tmp/codex-work"),
         vec![weekly(40.0, reset)],
@@ -1380,7 +1398,7 @@ async fn open_session_returns_the_account_it_opened_on() {
         .store
         .insert_account(&account(
             "claude-b",
-            Agent::Claude,
+            AgentId::CLAUDE,
             "Second",
             "/tmp/octoboard-new-session-account",
         ))
@@ -1552,20 +1570,20 @@ async fn open_session_returns_the_account_automatic_selection_picked() {
         .store
         .insert_account(&account(
             "claude-b",
-            Agent::Claude,
+            AgentId::CLAUDE,
             "Second",
             config_dir.clone(),
         ))
         .unwrap();
     state.store.set_auto_select_account(true).unwrap();
     let mut project = state.store.get_project("project-1").unwrap().unwrap();
-    project.launch.claude.model = Some("sonnet".to_string());
-    project.launch.claude.effort = Some("high".to_string());
+    project.launch[AgentId::CLAUDE].model = Some("sonnet".to_string());
+    project.launch[AgentId::CLAUDE].effort = Some("high".to_string());
     state.store.update_project(&project).unwrap();
     let hold = |account: Option<&str>, used_percent: f64| {
         let quota = AccountQuota {
             reset_credits: None,
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: account.map(str::to_string),
             fetched_at: 1,
             plan: None,
@@ -1620,12 +1638,12 @@ async fn open_session_with_no_usable_account_is_refused_on_the_soonest_one() {
     state.store.set_auto_select_account(true).unwrap();
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE])
         .unwrap();
     let hold = |account: Option<&str>, resets_in: i64| {
         let quota = AccountQuota {
             reset_credits: None,
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: account.map(str::to_string),
             fetched_at: 1,
             plan: None,
@@ -1650,7 +1668,7 @@ async fn open_session_with_no_usable_account_is_refused_on_the_soonest_one() {
         .store
         .insert_account(&account(
             "claude-b",
-            Agent::Claude,
+            AgentId::CLAUDE,
             "Second",
             "/tmp/claude-b",
         ))
@@ -1683,13 +1701,13 @@ async fn open_session_automatic_agent_fallback_inherits_the_final_agents_launch_
     state.store.set_auto_select_account(true).unwrap();
     state
         .store
-        .set_default_account_disabled(Agent::Claude, true)
+        .set_default_account_disabled(AgentId::CLAUDE, true)
         .unwrap();
-    crate::test_support::offer_models(&state, Agent::Codex, &[("fallback-model", &["high"])]);
+    crate::test_support::offer_models(&state, AgentId::CODEX, &[("fallback-model", &["high"])]);
     let mut project = state.store.get_project("project-1").unwrap().unwrap();
-    project.launch.claude.model = Some("sonnet".to_string());
-    project.launch.codex.model = Some("fallback-model".to_string());
-    project.launch.codex.effort = Some("high".to_string());
+    project.launch[AgentId::CLAUDE].model = Some("sonnet".to_string());
+    project.launch[AgentId::CODEX].model = Some("fallback-model".to_string());
+    project.launch[AgentId::CODEX].effort = Some("high".to_string());
     state.store.update_project(&project).unwrap();
     let caller = state.session_record("a").unwrap();
     let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
@@ -1709,10 +1727,10 @@ async fn open_session_automatic_agent_fallback_inherits_the_final_agents_launch_
     let session = state
         .session_record(answer["session"].as_str().unwrap())
         .unwrap();
-    assert_eq!(session.agent, Agent::Codex);
+    assert_eq!(session.agent, AgentId::CODEX);
 }
 
-fn quota(agent: Agent, account: Option<&str>, windows: Vec<QuotaWindow>) -> AccountQuota {
+fn quota(agent: AgentId, account: Option<&str>, windows: Vec<QuotaWindow>) -> AccountQuota {
     AccountQuota {
         reset_credits: None,
         agent,
@@ -1727,7 +1745,7 @@ fn quota(agent: Agent, account: Option<&str>, windows: Vec<QuotaWindow>) -> Acco
 
 fn hold(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account: Option<&str>,
     config_dir: Option<&str>,
     windows: Vec<QuotaWindow>,

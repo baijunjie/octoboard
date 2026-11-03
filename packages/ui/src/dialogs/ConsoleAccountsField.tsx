@@ -4,16 +4,18 @@ import React, { useId, useRef, useState } from "react";
 import { Button } from "../components/controls/Button";
 import { choiceGroups, choiceKey, findEntry } from "../accounts/choiceEntries";
 import { storedAccount } from "../accounts/accountInheritance";
-import { AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, listedPickerAgents } from "../agents/agents";
+import { agentChoiceBadge, defaultAccountName, isAgentPickable, listedPickerAgents } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { HELP_TIP_BUTTON_CLASS } from "../components/hint/HelpTip";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, PerAgent } from "../protocol";
-import { useDaemonStore } from "../store";
+import { useDaemonStore, useProviders } from "../store";
 import { offeredAccountOptions } from "./accountOptions";
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { OptionSelect } from "../components/form/OptionSelect";
@@ -45,6 +47,7 @@ export function ConsoleAccountsField({
   onManageAccounts: (opener: HTMLButtonElement) => void;
 }): React.ReactElement | null {
   const t = useT();
+  const providers = useProviders();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -54,9 +57,9 @@ export function ConsoleAccountsField({
   // What the console pinned when the field opened: a turned-off account kept in the list from then on, so the user can
   // pick it back after choosing another.
   const [saved] = useState(values);
-  const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), undefined, undefined, disabledDefaults, accountOrder);
+  const groups = choiceGroups(accounts, agentAvailability, addedAgents, providers, (agent) => defaultAccountName(t, defaultNames, agent), undefined, undefined, disabledDefaults, accountOrder);
   const pinned = (agent: Agent) => storedAccount(values[agent], agent, accounts);
-  const rows = listedPickerAgents(agentAvailability, addedAgents, (agent) => pinned(agent) !== null).map((agent) => ({
+  const rows = listedPickerAgents(agentAvailability, addedAgents, providers, (agent) => pinned(agent) !== null).map((agent) => ({
     agent,
     entries: groups.find((group) => group.agent === agent)?.entries ?? [],
     picked: pinned(agent),
@@ -106,7 +109,7 @@ export function ConsoleAccountsField({
               <div className="min-w-0">
                 <OptionSelect
                   hideLabel
-                  label={t("dialog.agentSettings.account", { agent: AGENT_LABEL[agent] })}
+                  label={t("dialog.agentSettings.account", { agent: isolate(providerLabel(t, providers, agent)) })}
                   // The row's name is hidden from assistive technology, and says here that the
                   // agent is not installed or not added.
                   describedBy={marked ? nameId : undefined}
@@ -133,11 +136,13 @@ export function ConsoleAccountsField({
  * that may not be picked, has its name in the secondary colour (4.8:1 or better, against the foreground
  * colour of the others) and its mark faded. */
 function AgentName({ id, agent, badge, dimmed }: { id: string; agent: Agent; badge?: string; dimmed: boolean }): React.ReactElement {
+  const t = useT();
+  const providers = useProviders();
   return (
     <>
       <AgentIcon agent={agent} className={dimmed ? "size-4 fill-current text-app-muted opacity-60" : "size-4"} />
       <span id={id} className="flex min-w-0 items-center gap-2">
-        <FadeOverflow as="span" className={`min-w-0 ${dimmed ? "text-app-muted" : "text-foreground"}`} titleWhenClipped={AGENT_LABEL[agent]}>{AGENT_LABEL[agent]}</FadeOverflow>
+        <FadeOverflow as="span" className={`min-w-0 ${dimmed ? "text-app-muted" : "text-foreground"}`} titleWhenClipped={providerLabel(t, providers, agent)}>{providerLabel(t, providers, agent)}</FadeOverflow>
         {badge && <StatusBadge>{badge}</StatusBadge>}
       </span>
     </>

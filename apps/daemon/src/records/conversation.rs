@@ -6,6 +6,9 @@
 //! it compacts its context is kept as a summary where the agent rewrote its history (Grok Build);
 //! where the earlier messages stay in the record (Claude Code, Codex) it is dropped.
 //!
+//! How one provider's lines say each of these is its record store's (`RecordStore::entries`);
+//! what is common to them is here.
+//!
 //! Nothing is written, and nothing is taken from any file but the record itself. A line that does
 //! not parse is skipped, so a record still being written, or one in a shape this does not know,
 //! yields what could be read rather than a failure.
@@ -14,7 +17,8 @@ use std::ops::ControlFlow;
 
 use serde_json::Value;
 
-use crate::protocol::Agent;
+use crate::adapter::provider;
+use crate::protocol::AgentId;
 use crate::records::line_file;
 use crate::records::Stretch;
 
@@ -102,11 +106,13 @@ impl Conversation {
     }
 }
 
-/// Reads the conversation made of `stretches` in order, see [`for_each_line`].
-pub fn read_stretches(agent: Agent, stretches: &[Stretch]) -> std::io::Result<Conversation> {
+/// Reads the conversation made of `stretches` in order, see [`for_each_line`], as `agent`'s store
+/// reads each line (`RecordStore::entries`).
+pub fn read_stretches(agent: AgentId, stretches: &[Stretch]) -> std::io::Result<Conversation> {
+    let store = provider(agent).records();
     let mut conversation = Conversation::default();
     for_each_line(stretches, |value| {
-        for entry in line_entries(agent, value) {
+        for entry in store.entries(value) {
             conversation.fold(entry);
         }
     })?;
@@ -136,22 +142,14 @@ pub fn for_each_line(stretches: &[Stretch], mut visit: impl FnMut(&Value)) -> st
     Ok(())
 }
 
-/// The entries one line of a record holds.
-pub fn line_entries(agent: Agent, line: &Value) -> Vec<Entry> {
-    match agent {
-        Agent::Claude => claude(line),
-        Agent::Codex => codex(line),
-        Agent::Grok => grok(line),
-    }
-}
-
-fn text_of(value: &Value, key: &str) -> Option<String> {
+/// The text `value` holds at `key`, trimmed, when that is not nothing.
+pub(crate) fn text_of(value: &Value, key: &str) -> Option<String> {
     let text = value.get(key)?.as_str()?.trim();
     (!text.is_empty()).then(|| text.to_owned())
 }
 
 /// The text blocks of a message's `content` joined, or the string itself when it is one.
-fn joined_text(content: &Value, kinds: &[&str]) -> Option<String> {
+pub(crate) fn joined_text(content: &Value, kinds: &[&str]) -> Option<String> {
     let text = match content {
         Value::String(text) => text.trim().to_owned(),
         Value::Array(blocks) => blocks
@@ -172,7 +170,9 @@ fn joined_text(content: &Value, kinds: &[&str]) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-fn todos<'a>(
+/// The items of a todo `list`, each with its id at `id` (for a list updated item by item) and its
+/// text at `text`.
+pub(crate) fn todos<'a>(
     list: &'a Value,
     id: Option<&'a str>,
     text: &'a str,
@@ -189,301 +189,12 @@ fn todos<'a>(
         })
 }
 
-// -- Claude Code ---------------------------------------------------------------
-
-/// Claude Code's transcript: one JSON object a line, `type` `user` or `assistant`, the message
-/// under `message`. A user line carrying a tool result is not something the user said, and a
-/// subagent's lines (`isSidechain`) are another conversation.
-fn claude(line: &Value) -> Vec<Entry> {
-    let flag = |key| line.get(key).and_then(Value::as_bool).unwrap_or(false);
-    if flag("isSidechain") {
-        return Vec::new();
-    }
-    if line.get("type").and_then(Value::as_str) == Some("attachment") {
-        return claude_queued(line).into_iter().collect();
-    }
-    let Some(message) = line.get("message") else {
-        return Vec::new();
-    };
-    match line.get("type").and_then(Value::as_str) {
-        Some("user") if !flag("isMeta") && !flag("isCompactSummary") && from_user(line) => {
-            let text = message
-                .get("content")
-                .and_then(|content| joined_text(content, &["text"]))
-                .filter(|text| {
-                    !text.starts_with("<local-command-") && !text.starts_with("<task-notification>")
-                });
-            text.map(Entry::User).into_iter().collect()
-        }
-        // Claude Code writes a stand-in assistant line for an API error or an empty turn.
-        Some("assistant")
-            if message.get("model").and_then(Value::as_str) != Some("<synthetic>") =>
-        {
-            let blocks = message
-                .get("content")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten();
-            let mut entries = Vec::new();
-            for block in blocks {
-                match block.get("type").and_then(Value::as_str) {
-                    Some("text") => entries.extend(text_of(block, "text").map(Entry::Assistant)),
-                    Some("tool_use") => entries.extend(claude_tool(block)),
-                    _ => {}
-                }
-            }
-            entries
-        }
-        _ => Vec::new(),
-    }
-}
-
-/// Whether a line says it carries what a person typed. Claude Code 2.1.295 and later mark who
-/// produced a user line in `origin.kind`: `human` for the person, otherwise a background task's
-/// notification, another session's message and the like. Earlier lines carry no origin.
-fn from_user(line: &Value) -> bool {
-    line.get("origin")
-        .and_then(|origin| origin.get("kind"))
-        .and_then(Value::as_str)
-        .is_none_or(|kind| kind == "human")
-}
-
-/// A message typed while the model was working. Claude Code 2.1.295 to 2.1.302 records it only as
-/// a `queued_command` attachment, with no user line of its own.
-fn claude_queued(line: &Value) -> Option<Entry> {
-    let attachment = line.get("attachment")?;
-    if attachment.get("type")?.as_str()? != "queued_command" {
-        return None;
-    }
-    // An attachment with no origin is no proof of a person; only an explicit `human` counts.
-    (attachment.get("origin")?.get("kind")?.as_str()? == "human")
-        .then(|| joined_text(attachment.get("prompt")?, &["text"]))
-        .flatten()
-        .map(Entry::User)
-}
-
-fn claude_tool(block: &Value) -> Option<Entry> {
-    let input = block.get("input")?;
-    match block.get("name")?.as_str()? {
-        "TodoWrite" => Some(Entry::Todos {
-            items: todos(input.get("todos")?, None, "content").collect(),
-            merge: false,
-        }),
-        "Edit" | "MultiEdit" | "Write" => Some(Entry::Changed(vec![text_of(input, "file_path")?])),
-        "NotebookEdit" => Some(Entry::Changed(vec![text_of(input, "notebook_path")?])),
-        _ => None,
-    }
-}
-
-// -- Codex ---------------------------------------------------------------------
-
-/// Codex's rollout. What was said comes from the `event_msg` lines, which hold what the user typed
-/// and what the model answered (`user_message` and `agent_message` in older Codex, `item_completed`
-/// of a `UserMessage` or `AgentMessage` item in newer); the `response_item` messages beside them
-/// include the instructions and environment context Codex adds itself. Files changed come from the
-/// `FileChange` item of newer Codex, or an `apply_patch` call in the response items of older.
-fn codex(line: &Value) -> Vec<Entry> {
-    let Some(payload) = line.get("payload") else {
-        return Vec::new();
-    };
-    if let Some(typed) = crate::adapter::codex::typed_text(line) {
-        let typed = typed.trim();
-        return if typed.is_empty() {
-            Vec::new()
-        } else {
-            vec![Entry::User(typed.to_owned())]
-        };
-    }
-    match line.get("type").and_then(Value::as_str) {
-        Some("event_msg") => match payload.get("type").and_then(Value::as_str) {
-            Some("agent_message") => text_of(payload, "message")
-                .map(Entry::Assistant)
-                .into_iter()
-                .collect(),
-            Some("item_completed") => payload.get("item").map(codex_item).unwrap_or_default(),
-            _ => Vec::new(),
-        },
-        Some("response_item") => match payload.get("type").and_then(Value::as_str) {
-            Some("function_call") => codex_call(payload, "arguments"),
-            Some("custom_tool_call") => codex_call(payload, "input"),
-            _ => Vec::new(),
-        },
-        _ => Vec::new(),
-    }
-}
-
-fn codex_item(item: &Value) -> Vec<Entry> {
-    match item.get("type").and_then(Value::as_str) {
-        Some("AgentMessage") => item
-            .get("content")
-            .and_then(|content| joined_text(content, &["Text", "text"]))
-            .map(Entry::Assistant)
-            .into_iter()
-            .collect(),
-        // A change that did not go through changed nothing.
-        Some("FileChange")
-            if item
-                .get("status")
-                .and_then(Value::as_str)
-                .is_none_or(|status| status == "completed") =>
-        {
-            let paths: Vec<String> = item
-                .get("changes")
-                .and_then(Value::as_object)
-                .into_iter()
-                .flat_map(|changes| {
-                    changes.iter().flat_map(|(path, change)| {
-                        [Some(path.clone()), text_of(change, "move_path")]
-                            .into_iter()
-                            .flatten()
-                    })
-                })
-                .collect();
-            if paths.is_empty() {
-                Vec::new()
-            } else {
-                vec![Entry::Changed(paths)]
-            }
-        }
-        _ => Vec::new(),
-    }
-}
-
-/// A tool call of the response items: the plan the model keeps (`update_plan`, whose arguments
-/// are a JSON string) and a patch (`apply_patch`, whose input is the patch text).
-fn codex_call(call: &Value, field: &str) -> Vec<Entry> {
-    let Some(input) = call.get(field).and_then(Value::as_str) else {
-        return Vec::new();
-    };
-    match call.get("name").and_then(Value::as_str) {
-        Some("update_plan") => serde_json::from_str::<Value>(input)
-            .ok()
-            .and_then(|arguments| {
-                Some(Entry::Todos {
-                    items: todos(arguments.get("plan")?, None, "step").collect(),
-                    merge: false,
-                })
-            })
-            .into_iter()
-            .collect(),
-        Some("apply_patch") => {
-            let paths: Vec<String> = input
-                .lines()
-                .filter_map(|line| {
-                    [
-                        "*** Add File: ",
-                        "*** Update File: ",
-                        "*** Delete File: ",
-                        "*** Move to: ",
-                    ]
-                    .iter()
-                    .find_map(|prefix| line.strip_prefix(prefix))
-                })
-                .map(|path| path.trim().to_owned())
-                .collect();
-            if paths.is_empty() {
-                Vec::new()
-            } else {
-                vec![Entry::Changed(paths)]
-            }
-        }
-        _ => Vec::new(),
-    }
-}
-
-// -- Grok Build ----------------------------------------------------------------
-
-/// Grok Build's `chat_history.jsonl`: `user` and `assistant` lines, the latter carrying the tool
-/// calls the model made. A user line with a `synthetic_reason` is something Grok put in the
-/// conversation itself (project instructions, system reminders, a compaction note), and a real
-/// prompt is sometimes wrapped in `<user_query>`.
-/// How the summary Grok Build writes at a compaction begins.
-const COMPACTION_SUMMARY: &str = "This session is being continued from a previous conversation";
-
-fn grok(line: &Value) -> Vec<Entry> {
-    match line.get("type").and_then(Value::as_str) {
-        Some("user")
-            if line.get("synthetic_reason").and_then(Value::as_str) == Some("compaction_meta") =>
-        {
-            // Grok rewrites its history when it compacts: the summary stands in for what came
-            // before. The other compaction line it adds restates the rules and environment.
-            line.get("content")
-                .and_then(|content| joined_text(content, &["text"]))
-                .filter(|text| text.starts_with(COMPACTION_SUMMARY))
-                .map(Entry::Summary)
-                .into_iter()
-                .collect()
-        }
-        Some("user") if line.get("synthetic_reason").is_none() => {
-            let blocks = line.get("content").and_then(Value::as_array);
-            let texts: Vec<String> = blocks
-                .into_iter()
-                .flatten()
-                .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-                .filter_map(|block| block.get("text")?.as_str())
-                .filter(|text| {
-                    !["<user_info>", "<image_files>", "<system-reminder>"]
-                        .iter()
-                        .any(|tag| text.trim_start().starts_with(tag))
-                })
-                .map(|text| {
-                    let text = text.trim();
-                    text.strip_prefix("<user_query>")
-                        .and_then(|inner| inner.strip_suffix("</user_query>"))
-                        .unwrap_or(text)
-                        .trim()
-                        .to_owned()
-                })
-                .filter(|text| !text.is_empty())
-                .collect();
-            if texts.is_empty() {
-                Vec::new()
-            } else {
-                vec![Entry::User(texts.join("\n\n"))]
-            }
-        }
-        Some("assistant") => {
-            let mut entries = Vec::new();
-            entries.extend(
-                line.get("content")
-                    .and_then(|content| joined_text(content, &["text"]))
-                    .map(Entry::Assistant),
-            );
-            for call in line
-                .get("tool_calls")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-            {
-                entries.extend(grok_call(call));
-            }
-            entries
-        }
-        _ => Vec::new(),
-    }
-}
-
-fn grok_call(call: &Value) -> Option<Entry> {
-    let arguments: Value = serde_json::from_str(call.get("arguments")?.as_str()?).ok()?;
-    match call.get("name")?.as_str()? {
-        "todo_write" => Some(Entry::Todos {
-            items: todos(arguments.get("todos")?, Some("id"), "content").collect(),
-            merge: arguments
-                .get("merge")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
-        }),
-        "search_replace" | "write" => Some(Entry::Changed(vec![text_of(&arguments, "file_path")?])),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::Path;
 
-    fn read(agent: Agent, path: &Path) -> std::io::Result<Conversation> {
+    fn read(agent: AgentId, path: &Path) -> std::io::Result<Conversation> {
         let path = path.to_path_buf();
         read_stretches(agent, &[Stretch { path, cut: None }])
     }
@@ -521,7 +232,7 @@ mod tests {
 
     #[test]
     fn claude_keeps_what_was_said_and_the_last_todo_list_and_the_files_changed() {
-        let conversation = read(Agent::Claude, &capture("handoff_claude_2.1.302.jsonl")).unwrap();
+        let conversation = read(AgentId::CLAUDE, &capture("handoff_claude_2.1.302.jsonl")).unwrap();
         // The second user message was typed mid-turn, which this version records only as a queued
         // attachment; a background task's notification, as a user line and as an attachment, is
         // no one's message.
@@ -553,7 +264,7 @@ mod tests {
     #[test]
     fn codex_keeps_what_was_said_and_the_last_plan_and_the_files_changed() {
         let conversation = read(
-            Agent::Codex,
+            AgentId::CODEX,
             &capture("handoff_codex_0.162.1_rollout.jsonl"),
         )
         .unwrap();
@@ -592,7 +303,7 @@ mod tests {
     #[test]
     fn grok_keeps_what_was_said_and_merges_its_todo_updates_and_lists_the_files_changed() {
         let conversation = read(
-            Agent::Grok,
+            AgentId::GROK,
             &capture("handoff_grok_1.0.62_chat_history.jsonl"),
         )
         .unwrap();
@@ -643,9 +354,9 @@ mod tests {
             "not json\n{\"type\":\"user\",\"message\":{\"content\":\"hello\"}}\n{\"type\":\"user\",\"mess",
         )
         .unwrap();
-        let conversation = read(Agent::Claude, &path).unwrap();
+        let conversation = read(AgentId::CLAUDE, &path).unwrap();
         assert_eq!(conversation.messages, [say(Speaker::User, "hello")]);
-        assert!(read(Agent::Claude, &dir.join("missing.jsonl")).is_err());
+        assert!(read(AgentId::CLAUDE, &dir.join("missing.jsonl")).is_err());
     }
 
     /// A compressed record cut short yields the messages before the cut, not a failure.
@@ -660,7 +371,7 @@ mod tests {
         packed.truncate(packed.len() / 2);
         std::fs::write(&path, packed).unwrap();
 
-        let conversation = read(Agent::Claude, &path).unwrap();
+        let conversation = read(AgentId::CLAUDE, &path).unwrap();
 
         assert!(!conversation.messages.is_empty());
         assert!(conversation.messages.len() < 40_000);
@@ -686,7 +397,7 @@ mod tests {
             },
         ];
 
-        let conversation = read_stretches(Agent::Claude, &stretches).unwrap();
+        let conversation = read_stretches(AgentId::CLAUDE, &stretches).unwrap();
 
         assert_eq!(conversation.messages, [say(Speaker::User, "after")]);
     }
@@ -703,7 +414,7 @@ mod tests {
             cut: None,
         }];
 
-        assert!(read_stretches(Agent::Claude, &stretches).is_err());
+        assert!(read_stretches(AgentId::CLAUDE, &stretches).is_err());
     }
 
     /// A zstd record that decompresses to `content` and then fails: one whole frame holding
@@ -731,7 +442,7 @@ mod tests {
                 path: path.to_path_buf(),
                 cut,
             }];
-            let conversation = read_stretches(Agent::Claude, &stretches).unwrap();
+            let conversation = read_stretches(AgentId::CLAUDE, &stretches).unwrap();
             conversation.messages
         };
         assert_eq!(
@@ -752,7 +463,7 @@ mod tests {
             path: missing,
             cut: None,
         }];
-        assert!(read_stretches(Agent::Claude, &stretches).is_err());
+        assert!(read_stretches(AgentId::CLAUDE, &stretches).is_err());
     }
 
     /// A line past the line limit is skipped like one that does not parse, and the lines after it
@@ -766,7 +477,7 @@ mod tests {
             format!("{}\n{long}\n{}\n", user_line("one"), user_line("two")),
         )
         .unwrap();
-        let conversation = read(Agent::Claude, &path).unwrap();
+        let conversation = read(AgentId::CLAUDE, &path).unwrap();
         assert_eq!(
             conversation.messages,
             [say(Speaker::User, "one"), say(Speaker::User, "two")]

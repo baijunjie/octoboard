@@ -12,7 +12,7 @@ use serde_json::{json, Map, Value};
 
 use crate::accounts::choice::{self, CannotOpen};
 use crate::accounts::quotas::{self, ShellSource};
-use crate::protocol::{Agent, QuotaWindow};
+use crate::protocol::{AgentId, QuotaWindow};
 use crate::state::AppState;
 use crate::time::now_millis;
 
@@ -83,7 +83,7 @@ async fn list_agents_with(
     let added = state
         .store
         .added_agents()?
-        .unwrap_or_else(|| Agent::ALL.to_vec());
+        .unwrap_or_else(|| AgentId::ALL.to_vec());
     let tags = state.store.agent_tags()?;
     let mut listed = Vec::new();
     for agent in added {
@@ -107,7 +107,7 @@ async fn list_agents_with(
 
 /// The accounts of `agent` a session could be opened on, with the reading held for each, as
 /// [`list_agents`] describes them.
-fn agent_accounts(state: &Arc<AppState>, agent: Agent, now: i64) -> Result<Vec<Value>> {
+fn agent_accounts(state: &Arc<AppState>, agent: AgentId, now: i64) -> Result<Vec<Value>> {
     let mut listed = Vec::new();
     for candidate in choice::candidate_accounts(state, agent)? {
         if candidate.disabled {
@@ -172,7 +172,7 @@ mod tests {
         AccountQuota, AgentAvailability, Availability, QuotaUnavailable, DEFAULT_ACCOUNT_NAME,
     };
 
-    fn available(state: &Arc<AppState>, agents: &[Agent]) {
+    fn available(state: &Arc<AppState>, agents: &[AgentId]) {
         state.set_agent_availability(
             agents
                 .iter()
@@ -185,7 +185,7 @@ mod tests {
         );
     }
 
-    fn insert_account(state: &Arc<AppState>, agent: Agent, id: &str) {
+    fn insert_account(state: &Arc<AppState>, agent: AgentId, id: &str) {
         state
             .store
             .insert_account(&account(
@@ -197,7 +197,7 @@ mod tests {
             .unwrap();
     }
 
-    fn quota(agent: Agent, account: Option<&str>, windows: Vec<QuotaWindow>) -> AccountQuota {
+    fn quota(agent: AgentId, account: Option<&str>, windows: Vec<QuotaWindow>) -> AccountQuota {
         AccountQuota {
             reset_credits: None,
             agent,
@@ -248,14 +248,20 @@ mod tests {
     #[tokio::test]
     async fn every_account_is_listed_with_its_reading_or_a_note_that_there_is_none() {
         let (state, _dir) = shared_console_state("quotas-listed");
-        available(&state, &[Agent::Claude]);
-        insert_account(&state, Agent::Claude, "claude-a");
-        insert_account(&state, Agent::Claude, "claude-b");
+        available(&state, &[AgentId::CLAUDE]);
+        insert_account(&state, AgentId::CLAUDE, "claude-a");
+        insert_account(&state, AgentId::CLAUDE, "claude-b");
         let future = now_millis() + 3_600_000;
-        state
-            .account_quotas
-            .hold_for_test(&quota(Agent::Claude, None, vec![weekly(30.5, future)]));
-        let mut failed = quota(Agent::Claude, Some("claude-b"), vec![weekly(120.0, future)]);
+        state.account_quotas.hold_for_test(&quota(
+            AgentId::CLAUDE,
+            None,
+            vec![weekly(30.5, future)],
+        ));
+        let mut failed = quota(
+            AgentId::CLAUDE,
+            Some("claude-b"),
+            vec![weekly(120.0, future)],
+        );
         failed.unavailable = Some(QuotaUnavailable::new(
             crate::protocol::quota_unavailable_code::COMMAND_FAILED,
             "it failed",
@@ -309,16 +315,16 @@ mod tests {
     #[tokio::test]
     async fn an_account_with_a_used_up_window_that_has_not_reset_is_exhausted() {
         let (state, _dir) = shared_console_state("quotas-exhausted");
-        available(&state, &[Agent::Codex]);
-        insert_account(&state, Agent::Codex, "codex-a");
-        insert_account(&state, Agent::Codex, "codex-b");
+        available(&state, &[AgentId::CODEX]);
+        insert_account(&state, AgentId::CODEX, "codex-a");
+        insert_account(&state, AgentId::CODEX, "codex-b");
         let future = now_millis() + 3_600_000;
         for (id, window) in [
             ("codex-a", weekly(100.0, future)),
             ("codex-b", weekly(100.0, 1)),
         ] {
             state.account_quotas.hold_in_dir_for_test(
-                &quota(Agent::Codex, Some(id), vec![window]),
+                &quota(AgentId::CODEX, Some(id), vec![window]),
                 &format!("/tmp/{id}"),
             );
         }
@@ -343,13 +349,13 @@ mod tests {
     #[tokio::test]
     async fn accounts_are_listed_in_the_order_the_user_keeps_them_in() {
         let (state, _dir) = shared_console_state("quotas-order");
-        available(&state, &[Agent::Claude]);
-        insert_account(&state, Agent::Claude, "claude-a");
-        insert_account(&state, Agent::Claude, "claude-b");
+        available(&state, &[AgentId::CLAUDE]);
+        insert_account(&state, AgentId::CLAUDE, "claude-a");
+        insert_account(&state, AgentId::CLAUDE, "claude-b");
         state
             .store
             .reorder_accounts(
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &[
                     Some("claude-b".to_string()),
                     None,
@@ -370,13 +376,13 @@ mod tests {
     #[tokio::test]
     async fn a_turned_off_account_is_not_listed() {
         let (state, _dir) = shared_console_state("quotas-disabled");
-        available(&state, &[Agent::Claude]);
-        insert_account(&state, Agent::Claude, "claude-a");
-        insert_account(&state, Agent::Claude, "claude-b");
+        available(&state, &[AgentId::CLAUDE]);
+        insert_account(&state, AgentId::CLAUDE, "claude-a");
+        insert_account(&state, AgentId::CLAUDE, "claude-b");
         state.store.set_account_disabled("claude-a", true).unwrap();
         state
             .store
-            .set_default_account_disabled(Agent::Claude, true)
+            .set_default_account_disabled(AgentId::CLAUDE, true)
             .unwrap();
 
         let result = list_agents(&state, &arguments(json!({ "agent": "claude" })))
@@ -399,12 +405,12 @@ mod tests {
     #[tokio::test]
     async fn can_open_says_whether_a_session_could_open_on_the_account_and_why_not() {
         let (state, _dir) = shared_console_state("quotas-can-open");
-        available(&state, &[Agent::Codex]);
-        insert_account(&state, Agent::Codex, "codex-a");
-        insert_account(&state, Agent::Codex, "codex-b");
+        available(&state, &[AgentId::CODEX]);
+        insert_account(&state, AgentId::CODEX, "codex-a");
+        insert_account(&state, AgentId::CODEX, "codex-b");
         let future = now_millis() + 3_600_000;
         state.account_quotas.hold_in_dir_for_test(
-            &quota(Agent::Codex, Some("codex-a"), vec![weekly(100.0, future)]),
+            &quota(AgentId::CODEX, Some("codex-a"), vec![weekly(100.0, future)]),
             "/tmp/codex-a",
         );
         let account = state.store.get_account("codex-b").unwrap().unwrap();
@@ -437,9 +443,9 @@ mod tests {
     #[tokio::test]
     async fn can_open_is_false_for_an_account_that_is_not_logged_in() {
         let (state, _dir) = shared_console_state("quotas-not-signed-in");
-        available(&state, &[Agent::Codex]);
-        insert_account(&state, Agent::Codex, "codex-a");
-        insert_account(&state, Agent::Codex, "codex-b");
+        available(&state, &[AgentId::CODEX]);
+        insert_account(&state, AgentId::CODEX, "codex-a");
+        insert_account(&state, AgentId::CODEX, "codex-b");
         let unavailable = |code: crate::protocol::Code| {
             Some(QuotaUnavailable::new(code, "x", &[("agent", "Codex")]))
         };
@@ -453,7 +459,7 @@ mod tests {
                 crate::protocol::quota_unavailable_code::TIMED_OUT,
             ),
         ] {
-            let mut held = quota(Agent::Codex, Some(id), Vec::new());
+            let mut held = quota(AgentId::CODEX, Some(id), Vec::new());
             held.unavailable = unavailable(code);
             state
                 .account_quotas
@@ -474,7 +480,7 @@ mod tests {
     #[tokio::test]
     async fn the_result_carries_the_auto_select_account_setting() {
         let (state, _dir) = shared_console_state("quotas-auto-select");
-        available(&state, &[Agent::Claude]);
+        available(&state, &[AgentId::CLAUDE]);
 
         let off = list_agents(&state, &arguments(json!({}))).await.unwrap();
         assert_eq!(off["auto_select_account"], false);
@@ -489,12 +495,17 @@ mod tests {
     #[tokio::test]
     async fn the_agent_argument_filters_and_an_uninstalled_agent_is_not_listed() {
         let (state, _dir) = shared_console_state("agents-filter");
-        state.set_agent_availability(vec![AgentAvailability {
-            agent: Agent::Grok,
-            availability: Availability::Unavailable,
-            default_account_dir: None,
-        }]);
-        insert_account(&state, Agent::Grok, "grok-a");
+        state.set_agent_availability(
+            [AgentId::GROK, AgentId::TEST]
+                .into_iter()
+                .map(|agent| AgentAvailability {
+                    agent,
+                    availability: Availability::Unavailable,
+                    default_account_dir: None,
+                })
+                .collect(),
+        );
+        insert_account(&state, AgentId::GROK, "grok-a");
 
         let all = list_agents(&state, &arguments(json!({}))).await.unwrap();
         let agents: Vec<&Value> = agents_of(&all)
@@ -517,7 +528,7 @@ mod tests {
 
         state
             .store
-            .set_added_agents_if_undecided(&[Agent::Claude])
+            .set_added_agents_if_undecided(&[AgentId::CLAUDE])
             .unwrap();
         let added = list_agents(&state, &arguments(json!({}))).await.unwrap();
         assert_eq!(agents_of(&added).len(), 1);
@@ -535,21 +546,21 @@ mod tests {
     #[tokio::test]
     async fn the_agents_carry_their_tags_in_the_added_order_and_a_removed_agent_is_not_listed() {
         let (state, _dir) = shared_console_state("agents-tags");
-        available(&state, &[Agent::Claude, Agent::Codex, Agent::Grok]);
+        available(&state, &[AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK]);
         state
             .store
-            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude, Agent::Grok])
+            .set_added_agents_if_undecided(&[AgentId::CODEX, AgentId::CLAUDE, AgentId::GROK])
             .unwrap();
         state
             .store
             .set_agent_tags(
-                Agent::Codex,
+                AgentId::CODEX,
                 vec!["review".to_string(), "tests".to_string()],
             )
             .unwrap();
         state
             .store
-            .set_agent_tags(Agent::Grok, vec!["search".to_string()])
+            .set_agent_tags(AgentId::GROK, vec!["search".to_string()])
             .unwrap();
 
         let result = list_agents(&state, &arguments(json!({}))).await.unwrap();
@@ -566,12 +577,12 @@ mod tests {
         assert_eq!(agent_entry(&result, "grok")["tags"], json!(["search"]));
         assert_eq!(account_ids(&result, "codex"), ["default"]);
 
-        state.store.remove_added_agent(Agent::Grok).unwrap();
+        state.store.remove_added_agent(AgentId::GROK).unwrap();
         let removed = list_agents(&state, &arguments(json!({}))).await.unwrap();
         assert_eq!(agents_of(&removed).len(), 2);
         assert!(!removed.to_string().contains("search"), "{removed}");
 
-        state.store.add_added_agent(Agent::Grok).unwrap();
+        state.store.add_added_agent(AgentId::GROK).unwrap();
         let back = list_agents(&state, &arguments(json!({ "agent": "grok" })))
             .await
             .unwrap();
@@ -584,7 +595,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_reads_an_account_once_a_minute_and_answers_from_the_cache_in_between() {
         let (state, _dir) = shared_console_state("quotas-refresh");
-        available(&state, &[Agent::Claude]);
+        available(&state, &[AgentId::CLAUDE]);
         let reads = Arc::new(AtomicUsize::new(0));
         let shell: ShellSource = {
             let reads = reads.clone();

@@ -46,7 +46,7 @@ export const SessionRow = memo(function SessionRow({
   const badgeOwner = session.kind === "console" ? session : owner?.kind === "console" ? owner : undefined;
   const status = useSessionShownStatus(session);
   // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
-  const { accounts, defaultNames, launch, name } = useSessionRowModel(session, [owner], status);
+  const { accounts, defaultNames, launch, name, providers } = useSessionRowModel(session, [owner], status);
   return (
     <TreeRow
       ref={rowRef}
@@ -58,7 +58,7 @@ export const SessionRow = memo(function SessionRow({
     >
       {/* No touch popover on the marks of a pressable row: a tap on one is the row's press. */}
       <StatusIcon status={status} decorative withTooltip touchPopover={false} />
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
+      <SessionAgentIcon providers={providers} session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
         {hasVisibleContext(session.context) && <span id={metadataId} className="shrink-0"><SessionContextLabel context={session.context} touchPopover={false} /></span>}

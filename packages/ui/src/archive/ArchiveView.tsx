@@ -17,8 +17,9 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { Account, Console, Project, Session, Settings } from "../protocol";
+import type { Account, Console, Project, ProviderInfo, Session, Settings } from "../protocol";
 import { sessionAccountModelLine, sessionDisplayTitle } from "../sessions/sessionLabel";
+import { providerModelDisplay } from "../agents/providers";
 import { inheritedLaunch, sessionModelEffort } from "../sessions/sessionModel";
 import { archivedSessionRows, boundArchivedSessions } from "../sessions/order";
 import { HOVER_ACTIONS_CLASS } from "../components/rows/hoverActions";
@@ -55,6 +56,7 @@ export function ArchiveView({
   projects,
   accounts,
   defaultNames,
+  providers,
   selectedSessionId,
   onSelect,
   onReopen,
@@ -81,6 +83,8 @@ export function ArchiveView({
   accounts: Account[];
   /** The names the user gave the default accounts, by agent. */
   defaultNames: Settings["default_account_names"];
+  /** The providers the daemon serves, which say how each row's model is shown. */
+  providers: ProviderInfo[];
   /** The selected session, whose row is marked. */
   selectedSessionId?: string;
   /** Selects a row's session, whose saved terminal then shows read-only in place of the view; the
@@ -224,6 +228,7 @@ export function ArchiveView({
                   projects={projects}
                   accounts={accounts}
                   defaultNames={defaultNames}
+                  providers={providers}
                   selected={session.id === selectedSessionId}
                   onSelect={onSelect}
                   onReopen={onReopen}
@@ -255,6 +260,7 @@ function ArchiveRow({
   projects,
   accounts,
   defaultNames,
+  providers,
   selected,
   onSelect,
   onReopen,
@@ -266,6 +272,7 @@ function ArchiveRow({
   projects: Map<string, Project>;
   accounts: Account[];
   defaultNames: Settings["default_account_names"];
+  providers: ProviderInfo[];
   selected: boolean;
   onSelect: (session: Session) => void;
   onReopen: (session: Session) => void;
@@ -276,8 +283,9 @@ function ArchiveRow({
   const contextId = useId();
   const datesId = useId();
   const context = hasVisibleContext(session.context);
-  const launch = sessionModelEffort(session, inheritedLaunch(session, consoles, projects));
-  const { modelLabel, name } = sessionRowModel(t, language, session, [under], "archived", { accounts, defaultNames, launch });
+  const display = providerModelDisplay(providers, session.agent);
+  const launch = sessionModelEffort(session, inheritedLaunch(session, consoles, projects, providers), display);
+  const { modelLabel, name } = sessionRowModel(t, language, session, [under], "archived", { accounts, defaultNames, launch, providers });
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   return (
     <TreeRow
@@ -287,7 +295,7 @@ function ArchiveRow({
       onActivate={() => onSelect(session)}
       className="min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2"
     >
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
+      <SessionAgentIcon providers={providers} session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <div className="min-w-24 flex-1">
         <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
           {sessionDisplayTitle(t, session)}

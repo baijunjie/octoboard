@@ -2,7 +2,7 @@ import { AlertDialog, Spinner } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../../components/controls/Button";
-import { AGENT_LABEL, defaultAccountName } from "../../agents/agents";
+import { defaultAccountName } from "../../agents/agents";
 import { DaemonErrorMessage } from "../../components/alerts/DaemonErrorMessage";
 import { DetailsDisclosure } from "../../components/alerts/ErrorDetailsDisclosure";
 import { errorRemedy, rawErrorDetails } from "../../components/alerts/errorParts";
@@ -21,6 +21,7 @@ import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { AccountLogin, Agent } from "../../protocol";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
+import { ProviderName } from "../../components/text/ProviderName";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import { useAccountLoginActions } from "./AccountLogin";
@@ -134,7 +135,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const code = login?.status === "waiting" ? login.device_code : null;
   const progress = t(login?.status === "waiting" ? "settings.accounts.login.waiting" : "settings.accounts.login.starting");
   const timedOut = login?.status === "timed_out" && !refusal;
-  const agentChip = <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference>;
+  const agentChip = <ProviderName agent={agent} />;
 
   const presentation = failure && reason !== undefined ? new CodedError(reason, failure.code, failure.params) : undefined;
   // A failure the application has no words for is its generic sentence as the cause, and where it is classified

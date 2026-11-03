@@ -5,18 +5,21 @@
 //!
 //! The lines come from the conversation reader (`records::conversation`), which already drops what
 //! an agent injects on its own; what it keeps for the package and this does not want is filtered
-//! here. Nothing is written. A session that has had no conversation has an empty history; a record
-//! that cannot be found or read is `None`, which the caller reports as unavailable.
+//! here, with the provider's store saying which lines a history leaves out
+//! (`RecordStore::hidden_from_history`) and how a user line reads as typed, if it reads as typed at
+//! all (`RecordStore::user_text`). Nothing is written. A session that has had no conversation has
+//! an empty history; a record that cannot be found or read is `None`, which the caller reports as
+//! unavailable.
 
 use std::sync::Arc;
 
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::hooks::without_paste_wrapper;
+use crate::adapter::provider;
 use crate::messaging::{sharing, texts};
-use crate::protocol::{Account, Agent, HistoryMessage, HistorySpeaker, Session};
-use crate::records::conversation::{for_each_line, line_entries, Entry};
+use crate::protocol::{Account, AgentId, HistoryMessage, HistorySpeaker, Session};
+use crate::records::conversation::{for_each_line, Entry};
 use crate::records::{history_branch, Branch, Hints, Locator};
 use crate::state::AppState;
 use crate::time;
@@ -33,25 +36,6 @@ const OCTOBOARD_OPENINGS: [&str; 8] = [
     sharing::INFO_OPENING,
     sharing::INFO_COPY_OPENING,
 ];
-
-/// A user line Claude Code writes that starts no turn: the note left when a turn was interrupted.
-const NOT_TYPED: [&str; 1] = ["[Request interrupted by user"];
-
-/// The slash command the user invoked, as typed (`/name args`), from the line Claude Code writes
-/// for it (`<command-message>…</command-message>\n<command-name>/x</command-name>\n
-/// <command-args>…</command-args>`). The prompt it expands to is a separate line the reader drops.
-fn slash_command(text: &str) -> Option<String> {
-    let name = tagged(text, "command-name")?;
-    let args = tagged(text, "command-args").unwrap_or_default();
-    Some(format!("{name} {args}").trim().to_owned())
-}
-
-/// What sits between `<tag>` and `</tag>` in `text`, trimmed, when that is not nothing.
-fn tagged<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
-    let after = &text[text.find(&format!("<{tag}>"))? + tag.len() + 2..];
-    let inner = after[..after.find(&format!("</{tag}>"))?].trim();
-    (!inner.is_empty()).then_some(inner)
-}
 
 /// Whether `text` is a message Octoboard wrote into a session. The branches prompt begins like
 /// something a user could type, so it is told by the fixed phrase after the title too.
@@ -101,9 +85,10 @@ pub async fn of_session_blocking(
 }
 
 fn read(
-    agent: Agent,
+    agent: AgentId,
     stretches: &[crate::records::Stretch],
 ) -> std::io::Result<Vec<HistoryMessage>> {
+    let store = provider(agent).records();
     let mut messages = Vec::new();
     let mut turn = 0;
     // The last reply seen since the turn's opening message: the final one when the turn ends.
@@ -123,23 +108,17 @@ fn read(
             .get("timestamp")
             .and_then(Value::as_str)
             .and_then(time::parse_rfc3339_millis);
-        if agent == Agent::Codex && commentary(line) {
+        if store.hidden_from_history(line) {
             return;
         }
-        for entry in line_entries(agent, line) {
+        for entry in store.entries(line) {
             match entry {
                 Entry::User(text) => {
-                    let text = without_paste_wrapper(&text).trim();
-                    let text = if text.starts_with("<command-") {
-                        match slash_command(text) {
-                            Some(command) => command,
-                            None => continue,
-                        }
-                    } else {
-                        text.to_owned()
+                    let Some(text) = store.user_text(&text) else {
+                        continue;
                     };
-                    let text = text.as_str();
-                    if text.is_empty() || NOT_TYPED.iter().any(|lead| text.starts_with(lead)) {
+                    let text = text.trim();
+                    if text.is_empty() {
                         continue;
                     }
                     close_turn(&mut messages, turn, &mut reply);
@@ -163,19 +142,6 @@ fn read(
     })?;
     close_turn(&mut messages, turn, &mut reply);
     Ok(messages)
-}
-
-/// Whether a Codex line is a progress note the model wrote on the way (`commentary`), as opposed to
-/// its answer (`final_answer`; older Codex wrote no phase at all). The phase sits on the message
-/// itself, or on the item an `item_completed` event carries.
-fn commentary(line: &Value) -> bool {
-    let Some(payload) = line.get("payload") else {
-        return false;
-    };
-    let phase = payload
-        .get("phase")
-        .or_else(|| payload.get("item")?.get("phase"));
-    phase.and_then(Value::as_str) == Some("commentary")
 }
 
 #[cfg(test)]
@@ -246,7 +212,7 @@ mod tests {
         assert!(checked >= 5, "found only {checked} openings");
     }
 
-    fn history(agent: Agent, fixture: &str) -> Vec<HistoryMessage> {
+    fn history(agent: AgentId, fixture: &str) -> Vec<HistoryMessage> {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("testdata")
             .join(fixture);
@@ -266,7 +232,7 @@ mod tests {
     #[test]
     fn claude_history_keeps_turns_final_replies_and_labels_octoboard_messages() {
         use HistorySpeaker::{Agent, Octoboard, User};
-        let messages = history(crate::protocol::Agent::Claude, "history_claude.jsonl");
+        let messages = history(crate::protocol::AgentId::CLAUDE, "history_claude.jsonl");
         assert_eq!(
             shown(&messages),
             [
@@ -297,7 +263,10 @@ mod tests {
     #[test]
     fn codex_history_drops_commentary_and_keeps_the_final_answer() {
         use HistorySpeaker::{Agent, Octoboard, User};
-        let messages = history(crate::protocol::Agent::Codex, "history_codex_rollout.jsonl");
+        let messages = history(
+            crate::protocol::AgentId::CODEX,
+            "history_codex_rollout.jsonl",
+        );
         assert_eq!(
             shown(&messages),
             [
@@ -315,12 +284,15 @@ mod tests {
         );
     }
 
-    /// A paste wrapper is taken off, and the reply to a turn is the last text of the agent's lines.
+    /// A prompt is read out of its `<user_query>` and, should it carry a paste wrapper such as
+    /// Claude Code records (the fixture's first prompt, made up: none has been observed in Grok
+    /// Build's records), out of that too; the reply to a turn is the last text of the agent's
+    /// lines.
     #[test]
-    fn grok_history_unwraps_pastes_and_prompts() {
+    fn grok_history_unwraps_prompts_and_a_paste_wrapper_it_is_guarded_against() {
         use HistorySpeaker::{Agent, User};
         let messages = history(
-            crate::protocol::Agent::Grok,
+            crate::protocol::AgentId::GROK,
             "history_grok_chat_history.jsonl",
         );
         assert_eq!(
@@ -340,7 +312,7 @@ mod tests {
         use crate::branch_origin::transfer::BranchTransfer;
         use crate::protocol::SessionStatus;
         let caller =
-            crate::test_support::project_session("s-1", Agent::Claude, SessionStatus::Idle);
+            crate::test_support::project_session("s-1", AgentId::CLAUDE, SessionStatus::Idle);
         let transfer = BranchTransfer {
             repository: "/repo/.git".into(),
             branches: vec!["feat/a".to_owned()],
@@ -365,7 +337,7 @@ mod tests {
     fn a_session_with_no_conversation_is_empty_and_one_with_no_record_is_unavailable() {
         let mut session = crate::test_support::project_session(
             "s-1",
-            Agent::Claude,
+            AgentId::CLAUDE,
             crate::protocol::SessionStatus::Idle,
         );
         let history = |session: &Session| {
@@ -379,30 +351,12 @@ mod tests {
     }
 
     #[test]
-    fn a_slash_command_reads_as_typed() {
-        assert_eq!(
-            slash_command(
-                "<command-message>x</command-message>\n<command-name>/x</command-name>\n\
-                 <command-args>a b</command-args>"
-            )
-            .as_deref(),
-            Some("/x a b")
-        );
-        assert_eq!(
-            slash_command("<command-name>/clear</command-name>\n<command-args></command-args>")
-                .as_deref(),
-            Some("/clear")
-        );
-        assert_eq!(slash_command("<command-message>x</command-message>"), None);
-    }
-
-    #[test]
     fn a_record_that_is_missing_is_an_error_not_an_empty_history() {
         let missing = Stretch {
             path: Path::new("/nonexistent/history.jsonl").to_path_buf(),
             cut: None,
         };
-        assert!(read(Agent::Claude, &[missing]).is_err());
+        assert!(read(AgentId::CLAUDE, &[missing]).is_err());
     }
 
     #[test]
@@ -414,7 +368,7 @@ mod tests {
             "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n",
         )
         .unwrap();
-        assert!(read(Agent::Claude, &[Stretch { path, cut: None }])
+        assert!(read(AgentId::CLAUDE, &[Stretch { path, cut: None }])
             .unwrap()
             .is_empty());
     }

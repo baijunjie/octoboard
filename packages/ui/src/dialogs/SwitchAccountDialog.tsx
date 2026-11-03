@@ -4,19 +4,19 @@ import { useShallow } from "zustand/react/shallow";
 
 import { accountDisabled, quotaSignedOut } from "../accounts/choiceEntries";
 import { canSwitchTo } from "./accountSwitchBatch";
-import { AGENT_LABEL } from "../agents/agents";
 import { InlineReference } from "../i18n/InlineReference";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
-import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../accounts/quotaFormat";
+import { exhaustedQuotaWindow, quotaNaming, quotaUsedUpSentence } from "../accounts/quotaFormat";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { sessionWithDescendants } from "../sessions/order";
 import { holdsAccountSwitch } from "../sessions/sessionStatus";
-import { useDaemon, useDaemonStore, type State } from "../store";
+import { useDaemon, useDaemonStore, useProviders, type State } from "../store";
+import { ProviderName } from "../components/text/ProviderName";
 import { useNow } from "../format/useNow";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
@@ -43,6 +43,7 @@ export function SwitchAccountDialog({
   const t = useT();
   const { store } = useDaemon();
   const quotas = useDaemonStore((s) => s.accountQuotas);
+  const providers = useProviders();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const now = useNow();
@@ -64,7 +65,7 @@ export function SwitchAccountDialog({
   };
   const counts = useDaemonStore(useShallow((s) => ({ session: targetsIn(s, "session").length, console: targetsIn(s, "console").length })));
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
-  const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineReference>;
+  const agent = <ProviderName agent={session.agent} />;
   const several = scope === "console" || counts.session > 1;
   return (
     <ConfirmDialog
@@ -90,7 +91,7 @@ export function SwitchAccountDialog({
               content: <Message id="accountChoice.signedOut.refusal" params={{ name: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
               recovery: "accountNotSignedIn" as const,
             }
-            : quota && exhaustedBy && { message: quotaUsedUpSentence(t, quota, accountName, exhaustedBy, now), content: quotaUsedUpMessage(t, quota, accountName, exhaustedBy, now), recovery: "none" as const };
+            : quota && exhaustedBy && { message: quotaUsedUpSentence(t, quotaNaming(quota, providers), accountName, exhaustedBy, now), content: quotaUsedUpMessage(t, quotaNaming(quota, providers), accountName, exhaustedBy, now), recovery: "none" as const };
         if (refusal) {
           errorAlerts.report({ ...refusal, title: <Message id="dialog.switchAccount.failedTitle" />, details: null });
           return Promise.resolve();

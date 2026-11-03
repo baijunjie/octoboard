@@ -4,10 +4,10 @@
 // What the daemon would work out from the filesystem is written out here by hand.
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import { effectiveClaudeCompatibility } from "./builders";
+import { currentExportedProviderSettings, effectiveProviderSettings } from "./builders";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { type AccountFallback, type Agent, type GitWorkflowSettings, type InspectedProject } from "../protocol";
-import { AGENTS } from "../agents/agents";
+import { FIXTURE_AGENTS } from "./fixtureProviders";
 
 /** A reference to an account this machine has none by that name of. The inspection lists it whether or not the document's
  * own accounts would create one of that name: the review decides from the accounts and the user's choices whether it
@@ -25,16 +25,17 @@ export const inspectedProject = (extra: Partial<InspectedProject> & Pick<Inspect
 /** The git workflow settings the full export carries: not the ones this machine starts with. */
 const FILE_GIT_WORKFLOW: GitWorkflowSettings = { development: "branch", squash_before_delivery: false, rebase_before_delivery: false, delivery: "merge", revert_gate: true };
 
-/** The Claude compatibility the full export carries: only what the user chose on the exporting machine, here Codex's off,
- * where this machine has every agent's on. */
-const FILE_CLAUDE_COMPATIBILITY = { codex: false };
+/** The provider settings the full export carries: only what the user chose on the exporting machine, of the settings that
+ * are exported, here Codex's Claude compatibility off, where this machine has every agent's on. */
+const FILE_PROVIDER_SETTINGS = { codex: { claude_compatibility: false } };
 
 /** The agent tags the full export carries: Codex with several. */
 const FILE_AGENT_TAGS = { codex: ["review", "backend", "nightly"] };
 
-/** This machine's Claude compatibility as an import's review reports it: the values in effect for both agents. The
- * machines the document is set up on have every agent added and no explicit choice, so both are on. */
-export const THIS_CLAUDE_COMPATIBILITY = effectiveClaudeCompatibility({}, AGENTS);
+/** This machine's exported provider settings as an import's review reports them: the values in effect of both agents'
+ * Claude compatibility. The machines the document is set up on have every agent added and no explicit choice, so both
+ * are on. */
+export const THIS_PROVIDER_SETTINGS = currentExportedProviderSettings(effectiveProviderSettings({}, FIXTURE_AGENTS));
 
 /** An inspection of a document that carries no settings and no accounts unless `parts` gives them: the regions a document
  * does not carry are `null`, as the daemon sends them. */
@@ -77,8 +78,8 @@ export const REVIEW = inspected({
     current_ask_questions_as_choices: true,
     git_workflow: FILE_GIT_WORKFLOW,
     current_git_workflow: DEFAULT_GIT_WORKFLOW,
-    claude_compatibility: FILE_CLAUDE_COMPATIBILITY,
-    current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
+    provider_settings: FILE_PROVIDER_SETTINGS,
+    current_provider_settings: THIS_PROVIDER_SETTINGS,
     agent_tags: FILE_AGENT_TAGS,
     current_agent_tags: {},
   },
@@ -145,7 +146,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT = imported({
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW, claude_compatibility: FILE_CLAUDE_COMPATIBILITY, agent_tags: FILE_AGENT_TAGS },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW, provider_settings: FILE_PROVIDER_SETTINGS, agent_tags: FILE_AGENT_TAGS },
   consoles: [
     {
       name: "Work laptop",

@@ -116,7 +116,7 @@ or reopen a project session, by its conversation's session ID, with `request_res
   (`config_dir_unreachable`).
 - **A Codex conversation that Codex itself archived is brought back first.** When the session's rollout is only in the
   account's `archived_sessions/`, Octoboard runs `codex unarchive` for it under the session's account, then resumes it.
-  If that fails, the reopen is refused with `codex_unarchive_failed`, carrying Codex's own message, and the session is
+  If that fails, the reopen is refused with `provider.codex.unarchive_failed`, carrying Codex's own message, and the session is
   left as it was. Its error alert is an actionable failure too, whose next step is to check that Codex runs in the
   login shell and can read its account directory, then reopen the session, and if it still fails, delete it and start
   a new one.

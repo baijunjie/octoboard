@@ -16,7 +16,7 @@ fn testdata(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn session(id: &str, agent: Agent, config_dir: Option<&Path>) -> Session {
+fn session(id: &str, agent: AgentId, config_dir: Option<&Path>) -> Session {
     let mut session: Session = serde_json::from_value(serde_json::json!({
         "id": id, "agent": "claude", "agent_session_id": AGENT_ID, "console_id": "console-1",
         "project_id": "p1", "host_id": crate::store::LOCAL_HOST_ID, "kind":"project",
@@ -37,15 +37,15 @@ fn locator(dir: &Path) -> Locator {
 }
 
 /// Puts the fixture `name` where `agent` keeps a record of the session `AGENT_ID`, in `account`.
-fn place_record(agent: Agent, account: &Path, name: &str) {
+fn place_record(agent: AgentId, account: &Path, name: &str) {
     let target = match agent {
-        Agent::Claude => account
+        AgentId::CLAUDE => account
             .join("projects/work")
             .join(format!("{AGENT_ID}.jsonl")),
-        Agent::Codex => account
+        AgentId::CODEX => account
             .join("sessions/2026/10/18")
             .join(format!("rollout-2026-10-18T03-00-00-{AGENT_ID}.jsonl")),
-        Agent::Grok => {
+        AgentId::GROK => {
             let directory = account.join("sessions/work").join(AGENT_ID);
             std::fs::create_dir_all(&directory).unwrap();
             std::fs::write(directory.join("usage.json"), "{}").unwrap();
@@ -56,6 +56,7 @@ fn place_record(agent: Agent, account: &Path, name: &str) {
             }
             directory.join("chat_history.jsonl")
         }
+        other => panic!("no fixture for {other}"),
     };
     std::fs::create_dir_all(target.parent().unwrap()).unwrap();
     std::fs::copy(testdata(name), target).unwrap();
@@ -76,7 +77,7 @@ fn a_compressed_codex_rollout_is_read_for_the_package() {
     std::fs::create_dir_all(record.parent().unwrap()).unwrap();
     let plain = std::fs::read(testdata("handoff_codex_0.162.1_rollout.jsonl")).unwrap();
     std::fs::write(&record, zstd::encode_all(plain.as_slice(), 0).unwrap()).unwrap();
-    let original = session("compressed", Agent::Codex, Some(&account));
+    let original = session("compressed", AgentId::CODEX, Some(&account));
     state.store.insert_session(&original).unwrap();
 
     let text = build_with(&state, &original, None, &mut locator(&dir))
@@ -104,7 +105,7 @@ fn a_reverted_codex_threads_whole_branch_is_read_for_the_package() {
         let account = dir.join("account");
         let id = "019a0000-0000-7000-8000-000000000001";
         crate::test_support::codex_chain(&account, id, compressed);
-        let mut original = session("chain", Agent::Codex, Some(&account));
+        let mut original = session("chain", AgentId::CODEX, Some(&account));
         original.agent_session_id = Some(id.to_owned());
         state.store.insert_session(&original).unwrap();
 
@@ -133,9 +134,9 @@ fn the_package_of_each_agent_holds_the_conversation() {
     let repo = repo_with("handoff-agents-repo", &[(b"a.txt", b"one\n")]);
     insert_project(&state, &repo);
     for (agent, name) in [
-        (Agent::Claude, "handoff_claude_2.1.302.jsonl"),
-        (Agent::Codex, "handoff_codex_0.162.1_rollout.jsonl"),
-        (Agent::Grok, "handoff_grok_1.0.62_chat_history.jsonl"),
+        (AgentId::CLAUDE, "handoff_claude_2.1.302.jsonl"),
+        (AgentId::CODEX, "handoff_codex_0.162.1_rollout.jsonl"),
+        (AgentId::GROK, "handoff_grok_1.0.62_chat_history.jsonl"),
     ] {
         let account = dir.join(format!("account-{agent:?}"));
         place_record(agent, &account, name);
@@ -163,7 +164,7 @@ fn the_package_of_each_agent_holds_the_conversation() {
                 "{agent:?} lacks {expected:?}:\n{text}"
             );
         }
-        if agent == Agent::Grok {
+        if agent == AgentId::GROK {
             // The record was rewritten at a compaction: the summary stands in for the rest, and
             // the files holding the rest are named.
             for expected in [
@@ -194,12 +195,12 @@ fn the_package_names_the_session_its_owner_and_the_sessions_it_owns() {
     state.store.insert_console(&console(&dir)).unwrap();
     let repo = repo_with("handoff-identity-repo", &[(b"a.txt", b"one\n")]);
     insert_project(&state, &repo);
-    let mut owner = session("owner", Agent::Codex, None);
+    let mut owner = session("owner", AgentId::CODEX, None);
     owner.agent_session_id = None;
-    let mut original = session("original", Agent::Claude, Some(&dir.join("account")));
+    let mut original = session("original", AgentId::CLAUDE, Some(&dir.join("account")));
     original.bound_to = Some("owner".to_owned());
     original.role = Role::Worker;
-    let mut child = session("child", Agent::Claude, None);
+    let mut child = session("child", AgentId::CLAUDE, None);
     child.agent_session_id = None;
     child.bound_to = Some("original".to_owned());
     child.role = Role::Worker;
@@ -231,8 +232,8 @@ fn a_package_points_at_the_package_its_session_once_took_over_from() {
     state.store.insert_console(&console(&dir)).unwrap();
     let repo = repo_with("handoff-chain-repo", &[(b"a.txt", b"one\n")]);
     insert_project(&state, &repo);
-    let chained = session("chained", Agent::Claude, Some(&dir.join("account")));
-    let plain = session("plain", Agent::Claude, Some(&dir.join("account")));
+    let chained = session("chained", AgentId::CLAUDE, Some(&dir.join("account")));
+    let plain = session("plain", AgentId::CLAUDE, Some(&dir.join("account")));
     for stored in [&chained, &plain] {
         state.store.insert_session(stored).unwrap();
     }
@@ -266,7 +267,7 @@ fn each_branch_a_session_is_responsible_for_shows_its_worktree_head_and_changes_
     state.store.insert_console(&console(&dir)).unwrap();
     let repo = repo_with("handoff-branches-repo", &[(b"a.txt", b"one\n")]);
     insert_project(&state, &repo);
-    let original = session("original", Agent::Claude, Some(&dir.join("account")));
+    let original = session("original", AgentId::CLAUDE, Some(&dir.join("account")));
     state.store.insert_session(&original).unwrap();
 
     let worktrees = ScratchDir::new("handoff-branches-worktrees");
@@ -353,7 +354,7 @@ fn the_main_working_copys_branch_is_compared_with_its_remote_branch_as_the_git_m
     state.store.insert_console(&console(&dir)).unwrap();
     let repo = repo_with("handoff-main-branch-repo", &[(b"a.txt", b"one\n")]);
     insert_project(&state, &repo);
-    let original = session("original", Agent::Claude, Some(&dir.join("account")));
+    let original = session("original", AgentId::CLAUDE, Some(&dir.join("account")));
     state.store.insert_session(&original).unwrap();
     // The branch the main working copy has checked out is the session's own.
     branch_made_by(&state, &repo, "work", "original");
@@ -437,7 +438,7 @@ fn text_cannot_forge_the_structure_of_the_package() {
         session: Identity {
             id: "s".to_owned(),
             title: "Title\n## Forged".to_owned(),
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             account: "the default account".to_owned(),
             kind: SessionKind::Project,
             place: "project P".to_owned(),
@@ -476,7 +477,7 @@ fn the_sweep_removes_packages_of_no_session_and_half_written_files() {
     insert_project(&state, &repo);
     state
         .store
-        .insert_session(&session("kept", Agent::Claude, None))
+        .insert_session(&session("kept", AgentId::CLAUDE, None))
         .unwrap();
     let directory = state.handoff_dir().to_path_buf();
     let kept = write_in(&directory, "kept", "x").unwrap();

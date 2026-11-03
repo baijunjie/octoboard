@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{console, console_workdir_in};
-use crate::protocol::{error_code, Agent, Event, RequestBody, Role, SessionKind};
+use crate::protocol::{error_code, AgentId, Event, RequestBody, Role, SessionKind};
 use crate::test_support::code_of;
 use crate::test_support::{bare_session, idle_stand_in};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ async fn a_page_submission_reaches_the_console_session_that_pushed_it() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let mut live = HashMap::new();
     for id in ["owner-a", "owner-b"] {

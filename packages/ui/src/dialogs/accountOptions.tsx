@@ -1,4 +1,5 @@
 import { accountDisabledPickable, accountDisabledUnavailable, accountSignedOutUnavailable, type ChoiceEntry } from "../accounts/choiceEntries";
+import type { ProviderInfo } from "../protocol";
 import type { Translate } from "../i18n/catalog";
 import { accountUsage } from "../quota/accountUsage";
 import type { Option } from "../components/form/OptionSelect";
@@ -8,8 +9,8 @@ import type { Option } from "../components/form/OptionSelect";
  * under its name and in full as its description (`accountDisabledUnavailable`, `accountSignedOutUnavailable`), in place
  * of what remains of its quota; a used-up one says so through its usage (see `accountUsage`); a sharing change, which
  * ends on its own, says nothing. */
-export function accountOption(t: Translate, entry: ChoiceEntry, now: number, isDisabled: boolean): Option<string> {
-  const usage = accountUsage(t, entry.agent, entry.quota, entry.exhaustedBy, now);
+export function accountOption(t: Translate, providers: readonly ProviderInfo[], entry: ChoiceEntry, now: number, isDisabled: boolean): Option<string> {
+  const usage = accountUsage(t, providers, entry.agent, entry.quota, entry.exhaustedBy, now);
   return {
     value: entry.key,
     label: entry.name,

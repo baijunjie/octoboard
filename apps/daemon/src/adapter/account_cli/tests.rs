@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::{account_dir, admitted_command, default_account_dir, NotRun};
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 use crate::test_support::ScratchDir;
 
 /// Each agent's configuration directory: the variable it reads it from, set in the shell
@@ -11,11 +11,11 @@ use crate::test_support::ScratchDir;
 #[test]
 fn each_agents_default_account_is_its_variable_or_its_directory_under_home() {
     for (agent, var, dir) in [
-        (Agent::Claude, "CLAUDE_CONFIG_DIR", ".claude"),
-        (Agent::Codex, "CODEX_HOME", ".codex"),
-        (Agent::Grok, "GROK_HOME", ".grok"),
+        (AgentId::CLAUDE, "CLAUDE_CONFIG_DIR", ".claude"),
+        (AgentId::CODEX, "CODEX_HOME", ".codex"),
+        (AgentId::GROK, "GROK_HOME", ".grok"),
     ] {
-        assert_eq!(crate::agents::layout::layout(agent).config_dir_var, var);
+        assert_eq!(crate::providers::layout::layout(agent).config_dir_var, var);
         let home = HashMap::from([("HOME".to_string(), "/home/user".to_string())]);
         assert_eq!(
             default_account_dir(agent, &home),
@@ -44,11 +44,15 @@ fn a_pinned_account_dir_wins_over_the_default_one() {
         ("CLAUDE_CONFIG_DIR".to_string(), "/exported".to_string()),
     ]);
     assert_eq!(
-        account_dir(Agent::Claude, Some(std::path::Path::new("/pinned")), &shell),
+        account_dir(
+            AgentId::CLAUDE,
+            Some(std::path::Path::new("/pinned")),
+            &shell
+        ),
         PathBuf::from("/pinned")
     );
     assert_eq!(
-        account_dir(Agent::Claude, None, &shell),
+        account_dir(AgentId::CLAUDE, None, &shell),
         PathBuf::from("/exported")
     );
 }
@@ -67,7 +71,7 @@ fn no_agents(dir: &Path) -> HashMap<String, String> {
 fn a_missing_directory_is_refused_before_the_binary_is_resolved() {
     let dir = ScratchDir::new("cli-run-missing");
     let gone = dir.join("gone");
-    let refused = admitted_command(Agent::Codex, &no_agents(&dir), Some(&gone), &[])
+    let refused = admitted_command(AgentId::CODEX, &no_agents(&dir), Some(&gone), &[])
         .err()
         .expect("refused");
     assert!(matches!(&refused, NotRun::DirMissing(missing) if *missing == gone));
@@ -83,7 +87,7 @@ fn a_missing_directory_is_refused_before_the_binary_is_resolved() {
 #[test]
 fn a_binary_off_the_path_is_named() {
     let dir = ScratchDir::new("cli-run-no-binary");
-    let refused = admitted_command(Agent::Grok, &no_agents(&dir), Some(&dir), &[])
+    let refused = admitted_command(AgentId::GROK, &no_agents(&dir), Some(&dir), &[])
         .err()
         .expect("refused");
     assert!(matches!(refused, NotRun::BinaryNotFound("grok")));

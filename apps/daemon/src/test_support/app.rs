@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::{isolated_git_env, ScratchDir, SYSTEM_GIT};
-use crate::protocol::{Account, Agent, Console, Project, ProjectSource};
+use crate::protocol::{Account, AgentId, Console, Project, ProjectSource};
 use crate::state::AppState;
 use crate::store::Store;
 
@@ -98,7 +98,7 @@ pub(crate) fn console(dir: &Path) -> crate::protocol::Console {
         id: "console-1".to_string(),
         name: "Console".to_string(),
         workdir: dir.join("workdir").to_string_lossy().into_owned(),
-        default_agent: Agent::Claude,
+        default_agent: AgentId::CLAUDE,
         project_session_agent: None,
         accounts: Default::default(),
         launch: Default::default(),
@@ -124,7 +124,7 @@ pub(crate) fn insert_project(state: &AppState, path: &Path) -> crate::protocol::
 /// Seeds the models `agent` offers under its default account as `(id, efforts)`, so that a test
 /// that gives a model or an effort is checked against this list and not against the agent
 /// installed on the machine, which running its catalogue command would make it depend on.
-pub(crate) fn offer_models(state: &AppState, agent: Agent, models: &[(&str, &[&str])]) {
+pub(crate) fn offer_models(state: &AppState, agent: AgentId, models: &[(&str, &[&str])]) {
     let models = models
         .iter()
         .map(|(id, efforts)| crate::protocol::AgentModel {
@@ -139,9 +139,13 @@ pub(crate) fn offer_models(state: &AppState, agent: Agent, models: &[(&str, &[&s
         models,
         unavailable: None,
     };
-    // Claude Code's listing is never cached, so it is put in place another way.
-    if agent == Agent::Claude {
-        state.agent_models.seed(None, listing);
+    // The listing of a provider that names a default model is never cached, so it is put in place
+    // another way.
+    if crate::adapter::provider(agent)
+        .catalogue()
+        .names_default_model()
+    {
+        state.agent_models.seed(agent, None, listing);
     } else {
         state.agent_models.get_or_load(agent, None, || listing);
     }
@@ -180,9 +184,9 @@ pub(crate) fn console_with_project_and_accounts(prefix: &str) -> (Arc<AppState>,
         })
         .unwrap();
     for (id, agent) in [
-        ("claude-a", Agent::Claude),
-        ("codex-a", Agent::Codex),
-        ("grok-a", Agent::Grok),
+        ("claude-a", AgentId::CLAUDE),
+        ("codex-a", AgentId::CODEX),
+        ("grok-a", AgentId::GROK),
     ] {
         state
             .store

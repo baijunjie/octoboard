@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::Path;
 
-use crate::adapter::AgentAdapter;
+use crate::adapter::AgentProvider;
 use crate::protocol::RecordTitles;
 use crate::records::line_file::{self, Change, LineFile};
 
@@ -27,7 +27,7 @@ pub struct Titles {
 
 impl Titles {
     /// Takes what one line of the conversation's record says.
-    pub fn fold_line(&mut self, adapter: &dyn AgentAdapter, line: &str) {
+    pub fn fold_line(&mut self, adapter: &dyn AgentProvider, line: &str) {
         if let Some(title) = adapter.named_title(line) {
             let current = self.named.as_ref().map(|(precedence, _)| *precedence);
             if current.is_none_or(|current| title.precedence >= current) {
@@ -44,7 +44,7 @@ impl Titles {
     /// The opening prompt of the record file at `path` (read through its decompression when
     /// Codex compressed it, a line past the line limit skipped), for a conversation whose record
     /// continues in a later file.
-    pub fn first_prompt_of(adapter: &dyn AgentAdapter, path: &Path) -> Option<String> {
+    pub fn first_prompt_of(adapter: &dyn AgentProvider, path: &Path) -> Option<String> {
         let mut found = None;
         line_file::read_whole_until(path, None, |line| {
             found = prompt_of(adapter, line);
@@ -59,7 +59,7 @@ impl Titles {
     }
 
     /// Takes the small JSON file that names a conversation.
-    pub fn fold_summary(&mut self, adapter: &dyn AgentAdapter, summary: &serde_json::Value) {
+    pub fn fold_summary(&mut self, adapter: &dyn AgentProvider, summary: &serde_json::Value) {
         if let Some(text) = adapter
             .summary_title(summary)
             .and_then(|title| named_title(&title))
@@ -87,7 +87,7 @@ impl Titles {
 }
 
 /// The stand-in title one line of a record gives, when it is the user's prompt.
-fn prompt_of(adapter: &dyn AgentAdapter, line: &str) -> Option<String> {
+fn prompt_of(adapter: &dyn AgentProvider, line: &str) -> Option<String> {
     adapter
         .prompt_text(line)
         .and_then(|prompt| prompt_title(&prompt))
@@ -105,7 +105,7 @@ pub struct SharedTitles {
 impl SharedTitles {
     /// Reads what the file gained, for the conversations `wanted`. A conversation not asked for
     /// before may have been named already, so the file is read again from its start.
-    pub fn refresh(&mut self, adapter: &dyn AgentAdapter, path: &Path, wanted: HashSet<String>) {
+    pub fn refresh(&mut self, adapter: &dyn AgentProvider, path: &Path, wanted: HashSet<String>) {
         if !wanted.is_subset(&self.wanted) {
             self.file = LineFile::default();
             self.names.clear();
@@ -170,8 +170,8 @@ fn tidy(text: &str, max: usize) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::adapter_for;
-    use crate::protocol::Agent;
+    use crate::adapter::provider;
+    use crate::protocol::AgentId;
 
     fn capture(name: &str) -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -179,11 +179,11 @@ mod tests {
             .join(name)
     }
 
-    fn replay(agent: Agent, name: &str) -> Titles {
-        let adapter = adapter_for(agent);
+    fn replay(agent: AgentId, name: &str) -> Titles {
+        let adapter = provider(agent);
         let mut titles = Titles::default();
         for line in std::fs::read_to_string(capture(name)).unwrap().lines() {
-            titles.fold_line(adapter.as_ref(), line);
+            titles.fold_line(adapter, line);
         }
         titles
     }
@@ -192,7 +192,7 @@ mod tests {
     fn committed_captures_replay_through_each_agents_readers() {
         // Claude: the user's rename, the last line of the transcript, outranks the generated title
         // before it; the `last-prompt` line gives no prompt stand-in.
-        let claude = replay(Agent::Claude, "titles_claude_2.1.301.jsonl");
+        let claude = replay(AgentId::CLAUDE, "titles_claude_2.1.301.jsonl");
         let stored = RecordTitles::default();
         assert_eq!(
             claude.merged(None, &stored),
@@ -208,10 +208,10 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         let mut titles = Titles::default();
-        let adapter = adapter_for(Agent::Claude);
+        let adapter = provider(AgentId::CLAUDE);
         generated
             .lines()
-            .for_each(|line| titles.fold_line(adapter.as_ref(), line));
+            .for_each(|line| titles.fold_line(adapter, line));
         assert_eq!(
             titles.merged(None, &stored).named.as_deref(),
             Some("Pseudo terminal explanation")
@@ -219,7 +219,7 @@ mod tests {
 
         // Claude, opened with a slash command: no generated title, so the command as typed stands
         // in, and not the `/clear` before it or the skill body after it.
-        let command = replay(Agent::Claude, "titles_claude_2.1.308_command.jsonl");
+        let command = replay(AgentId::CLAUDE, "titles_claude_2.1.308_command.jsonl");
         let command = command.merged(None, &stored);
         assert_eq!(command.named, None);
         assert_eq!(command.prompt.as_deref(), Some("/scratch-skill"));
@@ -233,17 +233,17 @@ mod tests {
             ),
             ("titles_codex_0.142.5_rollout.jsonl", "Fix the flaky test"),
         ] {
-            let codex = replay(Agent::Codex, name).merged(None, &stored);
+            let codex = replay(AgentId::CODEX, name).merged(None, &stored);
             assert_eq!(codex.prompt.as_deref(), Some(prompt), "{name}");
             assert_eq!(codex.named, None, "{name}");
         }
 
         // Grok: the summary's generated title, and no title from one that has none.
-        let adapter = adapter_for(Agent::Grok);
+        let adapter = provider(AgentId::GROK);
         let summary = |text: &str| serde_json::from_str(text).unwrap();
         let mut grok = Titles::default();
         grok.fold_summary(
-            adapter.as_ref(),
+            adapter,
             &summary(&std::fs::read_to_string(capture("titles_grok_1.0.60_summary.json")).unwrap()),
         );
         assert_eq!(
@@ -252,14 +252,11 @@ mod tests {
         );
         let mut grok = Titles::default();
         grok.fold_summary(
-            adapter.as_ref(),
+            adapter,
             &summary(r#"{"session_summary":"A prompt, no title"}"#),
         );
         assert_eq!(grok.merged(None, &stored), stored);
-        grok.fold_summary(
-            adapter.as_ref(),
-            &summary(r#"{"generated_title":"Now titled"}"#),
-        );
+        grok.fold_summary(adapter, &summary(r#"{"generated_title":"Now titled"}"#));
         assert_eq!(
             grok.merged(None, &stored).named.as_deref(),
             Some("Now titled")
@@ -268,7 +265,7 @@ mod tests {
 
     #[test]
     fn a_shared_file_keeps_the_names_of_the_conversations_asked_for_only() {
-        let adapter = adapter_for(Agent::Codex);
+        let adapter = provider(AgentId::CODEX);
         let path = capture("titles_codex_0.163.0_index.jsonl");
         let (renamed, mutex) = (
             "01a143fc-9184-7b70-9728-4b5e3cefaefd",
@@ -276,13 +273,13 @@ mod tests {
         );
         let wanted = |ids: &[&str]| ids.iter().map(|id| id.to_string()).collect();
         let mut shared = SharedTitles::default();
-        shared.refresh(adapter.as_ref(), &path, wanted(&[mutex]));
+        shared.refresh(adapter, &path, wanted(&[mutex]));
         assert_eq!(shared.name(mutex), Some("Explain mutex briefly"));
         assert_eq!(shared.name(renamed), None, "not asked for, so not kept");
         // Asked for later: the file is read again, and the last line of an id wins.
-        shared.refresh(adapter.as_ref(), &path, wanted(&[mutex, renamed]));
+        shared.refresh(adapter, &path, wanted(&[mutex, renamed]));
         assert_eq!(shared.name(renamed), Some("Renamed with /rename"));
-        shared.refresh(adapter.as_ref(), &path, wanted(&[renamed]));
+        shared.refresh(adapter, &path, wanted(&[renamed]));
         assert_eq!(shared.name(mutex), None, "no longer asked for");
         assert_eq!(shared.name(renamed), Some("Renamed with /rename"));
     }
@@ -302,7 +299,7 @@ mod tests {
     fn first_prompt(content: &str) -> Option<String> {
         let path = crate::test_support::ScratchFile::new("titles-first-prompt", "session.jsonl");
         std::fs::write(&path, content).unwrap();
-        Titles::first_prompt_of(adapter_for(Agent::Claude).as_ref(), &path)
+        Titles::first_prompt_of(provider(AgentId::CLAUDE), &path)
     }
 
     fn user_line(text: &str) -> String {
@@ -317,8 +314,8 @@ mod tests {
         assert_eq!(first_prompt(&user_line("Only")).as_deref(), Some("Only"));
         assert_eq!(first_prompt("not json\n"), None);
         let missing = std::env::temp_dir().join("octoboard-titles-missing.jsonl");
-        let adapter = adapter_for(Agent::Claude);
-        assert_eq!(Titles::first_prompt_of(adapter.as_ref(), &missing), None);
+        let adapter = provider(AgentId::CLAUDE);
+        assert_eq!(Titles::first_prompt_of(adapter, &missing), None);
     }
 
     /// A line that is not UTF-8 is skipped, and the prompt after it is still found.
@@ -328,7 +325,7 @@ mod tests {
         let mut content = b"\xff\xfe\n".to_vec();
         content.extend_from_slice(user_line("After").as_bytes());
         std::fs::write(&path, content).unwrap();
-        let prompt = Titles::first_prompt_of(adapter_for(Agent::Claude).as_ref(), &path);
+        let prompt = Titles::first_prompt_of(provider(AgentId::CLAUDE), &path);
         assert_eq!(prompt.as_deref(), Some("After"));
     }
 

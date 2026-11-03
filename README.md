@@ -21,7 +21,7 @@ Octoboard brings two goals together:
 
 Choose **Claude Code**, **Codex**, or **Grok Build** independently for the coordinator and each project. Each
 keeps its own toolchain, while Octoboard passes tasks, relevant context, and reports between sessions. Individual
-steps within a project can also be delegated to an agent from another brand when needed.
+steps within a project can also be delegated to an agent from another provider when needed.
 
 Octoboard stores its application data locally and does not upload your code or conversations to servers operated
 by its developer. Your configured agents and tools may send data to their providers, and collaboration may share

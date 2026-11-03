@@ -7,18 +7,19 @@ import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Account } from "../protocol";
 import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionRowName, sessionWithLocation, statusLabel } from "./sessionLabel";
+import { TEST_PROVIDERS } from "../test/testProviders";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const accounts: Account[] = [accountOf("w", "claude", "Work", "/home/w")];
 
 describe("sessionAgentLabel", () => {
   it.each([
-    ["the default account by its own name, not a path", {}, `Claude Code (${isolate("Default")})`],
-    ["a stored account by its name", { account_id: "w", config_dir: "/home/w" }, `Claude Code (${isolate("Work")})`],
-    ["a removed account by the directory it recorded", { account_id: "gone", config_dir: "/home/old" }, `Claude Code (${isolate("/home/old")})`],
+    ["the default account by its own name, not a path", {}, `${isolate("Claude Code")} (${isolate("Default")})`],
+    ["a stored account by its name", { account_id: "w", config_dir: "/home/w" }, `${isolate("Claude Code")} (${isolate("Work")})`],
+    ["a removed account by the directory it recorded", { account_id: "gone", config_dir: "/home/old" }, `${isolate("Claude Code")} (${isolate("/home/old")})`],
     ["a removed account that recorded no directory by the agent alone", { account_id: "gone" }, "Claude Code"],
   ] as const)("names %s", (_, extra, expected) => {
-    expect(sessionAgentLabel(t, sessionOf("s", "c", "p", "Title", "idle", extra), accounts, {})).toBe(expected);
+    expect(sessionAgentLabel(t, TEST_PROVIDERS, sessionOf("s", "c", "p", "Title", "idle", extra), accounts, {})).toBe(expected);
   });
 });
 
@@ -32,7 +33,12 @@ describe("sessionAriaLabel", () => {
     ["dormant", "Dormant"],
   ] as const)("puts the %s status into the row's accessible name", (status, text) => {
     const session = sessionOf("s", "c", "p", "T", "idle");
-    expect(sessionAriaLabel(t, "en", session, accounts, undefined, {}, status)).toContain(text);
+    expect(sessionAriaLabel(t, "en", TEST_PROVIDERS, session, accounts, undefined, {}, status)).toContain(text);
+  });
+
+  it("isolates the agent alone when a removed account recorded no directory", () => {
+    const session = sessionOf("s", "c", "p", "T", "idle", { account_id: "gone" });
+    expect(sessionAriaLabel(t, "en", TEST_PROVIDERS, session, accounts, undefined, {}, "idle")).toContain(isolate("Claude Code"));
   });
 });
 
@@ -58,7 +64,7 @@ describe("sessionDisplayTitle", () => {
     const session = sessionOf("s", "c", "p", "octoboard", "working", { terminal_title: "  شرح المعرض  " });
     const title = `${isolate("شرح المعرض")}｜${isolate("octoboard")}`;
     expect(sessionDisplayTitle(t, session)).toBe(title);
-    expect(sessionAriaLabel(t, "en", session, [], undefined, {}, "idle")).toContain(isolate(title));
+    expect(sessionAriaLabel(t, "en", TEST_PROVIDERS, session, [], undefined, {}, "idle")).toContain(isolate(title));
     expect(sessionWithLocation(t, session, new Map(), new Map())).toContain(isolate(title));
     const zh: Translate = ((key: string, ...args: unknown[]) => format("zh-Hans", key as never, args[0] as never)) as Translate;
     expect(sessionDisplayTitle(zh, session)).toBe(title);
@@ -100,8 +106,8 @@ describe("sessionRowName", () => {
   const session = sessionOf("s", "c", "p", "Work", "idle");
   const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "idle");
   const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { kind: "console" });
-  const name = (owners: (typeof session | undefined)[]) => sessionRowName(t, "en", session, { accounts, defaultNames: {}, owners, modelLabel: "Opus 5.5 · high", status: "idle" });
-  const base = sessionAriaLabel(t, "en", session, accounts, undefined, {}, "idle");
+  const name = (owners: (typeof session | undefined)[]) => sessionRowName(t, "en", session, { accounts, defaultNames: {}, owners, modelLabel: "Opus 5.5 · high", status: "idle", providers: TEST_PROVIDERS });
+  const base = sessionAriaLabel(t, "en", TEST_PROVIDERS, session, accounts, undefined, {}, "idle");
 
   it("names no owner, one owner or two, with the model line last", () => {
     expect(name([])).toBe(`${base}, Opus 5.5 · high`);

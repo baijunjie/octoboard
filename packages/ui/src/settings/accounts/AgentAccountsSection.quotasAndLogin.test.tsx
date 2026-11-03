@@ -362,7 +362,7 @@ it("offers a Codex account's reset credit in its details, and asks for the confi
   request.mockClear();
   request.mockResolvedValueOnce({ type: "reset_credit_used", id: null, outcome: "reset" } as never);
   await act(async () => confirmation.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
-  expect(request).toHaveBeenCalledWith({ type: "use_codex_reset_credit", account: "codex-work" });
+  expect(request).toHaveBeenCalledWith({ type: "use_reset_credit", agent: "codex", account: "codex-work" });
   expect(confirmation.textContent).toContain("Usage of");
   await act(async () => [...confirmation.querySelectorAll("button")].find((button) => button.textContent === "Done")!.click());
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();

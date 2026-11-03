@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_OPTIONS } from "../agents/agents";
+import { TEST_AGENTS } from "../test/testProviders";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { consoleOf } from "../fixtures/builders";
 import type { State } from "../store";
@@ -43,7 +43,7 @@ function mount(initial: Partial<State> = {}, shortcut = false) {
   return { button, key, click, onOpen, onQuickCreate };
 }
 
-const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
+const noAgent = new Map(TEST_AGENTS.map((value) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
 
 it("does not register creation shortcuts outside a focus header", () => {
   const { onOpen, onQuickCreate } = mount();
@@ -100,8 +100,8 @@ it("is a disabled \"+\" that opens nothing, even on a modified press, with no ag
   expect(onQuickCreate).not.toHaveBeenCalled();
 });
 
-const available = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "available" as const, default_account_dir: null }]));
-const spent = AGENT_OPTIONS.map(({ value }) => ({
+const available = new Map(TEST_AGENTS.map((value) => [value, { agent: value, availability: "available" as const, default_account_dir: null }]));
+const spent = TEST_AGENTS.map((value) => ({
   agent: value, account: null, fetched_at: 0, plan: null, unavailable: null,
   windows: [{ kind: "weekly" as const, label: null, used_percent: 100, resets_at: null, window_minutes: null }], email: null,
 }));

@@ -49,3 +49,23 @@ application setting that is not machine-local is added, in the same change, to:
   in both `packages/ui/src/configuration/ImportSettings.tsx` (the review's Application settings tab) and
   `ImportResult.tsx`: always shown for a required field (like the git workflow line), shown only when the document
   carries the setting for an optional one.
+
+## A new provider setting is declared only in its provider's schema, with its flags set by whether it is a permission setting
+
+Applies to a setting of one agent provider (a row of that agent's tab in Settings' Agent accounts section), not to an
+application, console or project setting. Where its declaration, its reading at launch and its copy go is in
+`docs/structure/daemon.md` and `docs/structure/ui.md`, section "Where new code goes" of each; add no field, request,
+store column, document field, MCP field or UI component for it. Decide its flags in its `SettingDescriptor`
+(`apps/daemon/src/providers/mod.rs`):
+
+- A permission setting, one that decides what the agent's sessions may do without asking the user (like
+  `approval_mode` and `approval_reviewer`), is `exported: false` and `shown_to_agents: false`, and a choice of it that
+  lets sessions run every action without asking has `confirm: true`. This is unlike an application setting, whose
+  automatic approvals do travel: imported, a provider's permission choice would turn on silently, skipping the
+  confirmation (`docs/product/configuration-export-and-import.md`, "What is not configuration and never travels";
+  `docs/product/agent-settings-tools.md`, "Who reads and changes what").
+- Any other is `exported: true`, unless it is valid only on this machine, and `shown_to_agents: true`. Agents never
+  change a provider setting, whichever flags it has. If you are unsure whether it is a permission setting, ask.
+- Its copy, `provider.<id>.setting.<setting>.heading` at the least, in every language of the provider's presentation
+  module, lands in the same change: a setting without a heading is silently left out of Settings and of the import
+  review and result, and no test catches it.

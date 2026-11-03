@@ -1,53 +1,55 @@
-//! Each agent's trust screen as it reads off the terminal, and one session's watch for it
-//! ([`TrustState`]): when it is sighted, whether it is still waiting, and whether messages for the
-//! session have to be held meanwhile.
+//! How a trust screen reads off the terminal, each provider's being its screen reader's, and one
+//! session's watch for it ([`TrustState`]): when it is sighted, whether it is still waiting, and
+//! whether messages for the session have to be held meanwhile.
 
 use super::*;
 
 /// One agent's folder-trust confirmation as [`normalise`] leaves its text, and how it is pressed.
-pub(super) struct Screen {
+pub(crate) struct Screen {
     /// The known first drawings: any one sequence of pieces, in order, anything between them.
-    /// Only complete first drawings are accepted, including across CLI versions.
-    pub(super) first_draw: &'static [&'static [&'static str]],
+    /// Only complete first drawings are accepted, including across CLI versions. Empty for a
+    /// screen that has not been measured, which is then never looked for.
+    pub(crate) first_draw: &'static [&'static [&'static str]],
     /// The option that trusts the folder and the options that decline it: both for reading where a
     /// cursor is, and for telling whether the screen is still drawn after a key the person typed
     /// ([`Self::replaced_in`]); only the one that trusts after Octoboard's own key
     /// ([`Self::gone_in`]), since a later screen can say the same words as the one that declines.
-    pub(super) accept: &'static str,
-    pub(super) decline: &'static [&'static str],
+    /// `None` for a screen that has not been measured.
+    pub(crate) accept: Option<&'static str>,
+    pub(crate) decline: &'static [&'static str],
     /// The glyph in front of the option the cursor is on, for a screen that has a cursor.
-    pub(super) cursor: Option<char>,
-    pub(super) press: Press,
+    pub(crate) cursor: Option<char>,
+    pub(crate) press: Press,
     /// Text that the agent's next screen holds once this one is gone, where the agent draws one
     /// that can be told apart, for judging a key the person typed ([`Self::replaced_in`]): Codex
     /// answers a key it ignores at its trust screen with an empty frame, which shows nothing of
     /// the screen either, so only the screen that follows says it has gone.
-    pub(super) next_screen: Option<&'static str>,
+    pub(crate) next_screen: Option<&'static str>,
     /// Anything written into the session's input since the screen was sighted means it is no
     /// longer waiting for Octoboard: the person is answering it in the terminal. For an agent that
     /// runs no hook right after its screen is answered, this is the only way to tell.
-    pub(super) input_ends_wait: bool,
+    pub(crate) input_ends_wait: bool,
     /// What the agent does first once it is past its startup, which ends the watch for the screen:
     /// everything before it, however long, may still be the screen's to come.
-    pub(super) start_signal: StartSignal,
+    pub(crate) start_signal: StartSignal,
     /// For a [`StartSignal::Hook`] agent whose hook cannot be relied on to come at all: how long
     /// after the launch its messages stay held for a hook before they are let through anyway,
     /// provided no screen has been sighted ([`super::release_when_no_hook_comes`]); a screen that
     /// has been is held until it is seen to go ([`super::release_when_the_sighted_screen_goes`]).
     /// `None` holds them for as long as the session runs.
-    pub(super) hook_fallback: Option<Duration>,
+    pub(crate) hook_fallback: Option<Duration>,
     /// Whether the hook alone is not enough to say the agent reads its input: it must also have
     /// turned bracketed paste on (`ESC [ ? 2004 h`), which it keeps on from the moment its real
     /// input handling starts; the brief toggle of its terminal probe at start, on and straight
     /// off again, does not count. Claude Code's fullscreen renderer runs `SessionStart` before
     /// that, while an early-input capture still reads the terminal itself, drops the paste markers
     /// and turns the Enter into a newline, so a message written in between is never sent.
-    pub(super) waits_for_paste_mode: bool,
+    pub(crate) waits_for_paste_mode: bool,
 }
 
 /// How an agent shows that its startup, the trust screen included, is behind it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum StartSignal {
+pub(crate) enum StartSignal {
     /// It runs a hook as it starts, once it is past the screen. Its messages are held at least until
     /// that hook, whatever else happens: after Claude Code's trust screen another startup modal
     /// can follow (approving a project's `.mcp.json` servers, say), which a message's Enter would
@@ -63,7 +65,7 @@ pub(super) enum StartSignal {
 
 /// The keys that accept a screen, and what is checked around them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Press {
+pub(crate) enum Press {
     /// The cursor starts on the decline option: a Down, then an Enter once the cursor is seen on
     /// the accept option.
     DownThenEnter,
@@ -73,77 +75,25 @@ pub(super) enum Press {
     Yes,
 }
 
-/// Claude Code 2.1.289: the cursor on "No, exit", then "Yes, I trust this folder".
-pub(super) const CLAUDE: Screen = Screen {
-    first_draw: &[&["\u{276F}No,exitYes,Itrustthisfolder"]],
-    accept: "Yes,Itrustthisfolder",
-    decline: &["No,exit"],
-    cursor: Some('\u{276F}'),
-    press: Press::DownThenEnter,
-    next_screen: None,
-    // Claude Code's first hook follows an answer in the terminal at once, and its press looks at
-    // the cursor again right before each key; a key the person pressed without answering, such as
-    // a Down, is caught there.
-    input_ends_wait: false,
-    start_signal: StartSignal::Hook,
-    hook_fallback: None,
-    waits_for_paste_mode: true,
-};
-
-/// Codex trust screens offer "› 1. Trust and continue" and either "2. Quit" (0.161.0) or
-/// "2. Back to Agent Command Center" (the folder-access form). Codex redraws only
-/// the cells that changed, so its text can lose characters wherever the frame before held the
-/// same one; only phrases measured intact in its first drawing are matched. Its hook-review modal
-/// ("Trust all and continue") holds neither piece.
-pub(super) const CODEX: Screen = Screen {
-    first_draw: &[
-        &["Trustthisfolder?", "\u{203A}1.Trustandcontinue2.Quit"],
-        &[
-            "Folderaccess",
-            "Trustthisfolder?",
-            "\u{203A}1.Trustandcontinue2.BacktoAgentCommandCenter",
-        ],
-    ],
-    accept: "1.Trustandcontinue",
-    decline: &["2.Quit", "2.BacktoAgentCommandCenter"],
-    cursor: Some('\u{203A}'),
-    press: Press::Enter,
-    // Its banner, ">_ OpenAI Codex (v…)", drawn whole over the screen it replaces.
-    next_screen: Some("OpenAICodex"),
-    // Codex runs no hook until its first prompt, so an Enter pressed in the terminal would
-    // otherwise leave the screen looking unanswered until then.
-    input_ends_wait: true,
-    start_signal: StartSignal::TerminalTitle,
-    hook_fallback: None,
-    waits_for_paste_mode: false,
-};
-
-/// Grok Build 1.0.50: the question, then "Yes, proceed y" and "No, quit n", with no cursor.
-pub(super) const GROK: Screen = Screen {
-    first_draw: &[&[
-        "Doyoutrustthecontentsofthisdirectory?",
-        "Yes,proceedyNo,quitn",
-    ]],
-    accept: "Yes,proceedy",
-    decline: &["No,quitn"],
+/// The screen of a provider whose trust confirmation has not been measured: never looked for, and
+/// its messages held for a hook up to [`HOOK_FALLBACK`] after the launch — the whole of it for a
+/// provider without hooks, whose launch-time messages go in only then.
+pub(crate) const NO_SCREEN: Screen = Screen {
+    first_draw: &[],
+    accept: None,
+    decline: &[],
     cursor: None,
     press: Press::Yes,
     next_screen: None,
     input_ends_wait: true,
     start_signal: StartSignal::Hook,
-    // Its `SessionStart` normally comes within a second, but a managed policy that allows only
-    // managed hooks (`allow_managed_hooks_only`) runs none of Octoboard's, and the session would
-    // hold its messages for good.
     hook_fallback: Some(HOOK_FALLBACK),
     waits_for_paste_mode: false,
 };
 
-pub(super) fn screen_of(agent: Agent) -> &'static Screen {
-    match agent {
-        Agent::Claude => &CLAUDE,
-        Agent::Codex => &CODEX,
-        Agent::Grok => &GROK,
-    }
+/// The screen `agent`'s provider shows ([`crate::session::screen::ScreenReader::trust_screen`]).
+pub(super) fn screen_of(agent: AgentId) -> &'static Screen {
+    crate::adapter::provider(agent).screen().trust_screen()
 }
 
 /// How much recent output is searched for the screen. Each screen's first drawing is a few KiB at
@@ -216,6 +166,12 @@ impl Screen {
         self.start_signal == StartSignal::Hook
     }
 
+    /// Whether the screen can be sighted at all: one that has not been measured has no first
+    /// drawing to look for, and nothing of the terminal's output is kept or read for it.
+    pub(super) fn can_be_sighted(&self) -> bool {
+        !self.first_draw.is_empty()
+    }
+
     /// Whether this output holds the screen as it is first drawn.
     pub(super) fn is_shown_in(&self, raw: &[u8]) -> bool {
         let text = normalise(raw);
@@ -251,7 +207,8 @@ impl Screen {
     /// redraw of the screen that matters — the cursor moved, the whole screen again — holds the
     /// option that trusts.
     fn last_drawn(&self, text: &str) -> Option<usize> {
-        std::iter::once(self.accept)
+        self.accept
+            .into_iter()
             .chain(
                 self.first_draw
                     .iter()
@@ -297,7 +254,7 @@ impl Screen {
         let after = &text[text.rfind(glyph)? + glyph.len_utf8()..];
         if self.decline.iter().any(|piece| after.starts_with(piece)) {
             Some(Cursor::Decline)
-        } else if after.starts_with(self.accept) {
+        } else if self.accept.is_some_and(|accept| after.starts_with(accept)) {
             Some(Cursor::Accept)
         } else {
             None
@@ -329,8 +286,9 @@ pub(super) struct CarryRendezvous {
 pub struct TrustState {
     /// The screen this session's agent shows, and how it is pressed.
     pub(super) screen: &'static Screen,
-    /// Grok's: where its trust entry is carried from and to after a press.
-    pub(super) carried: Option<CarriedTrust>,
+    /// Where the trust entry is carried from and to after a press, for a provider that records
+    /// the trust in a store of the session's own (`Capabilities::per_session_trust`, Grok Build).
+    pub(super) carried: Option<Arc<dyn TrustCarrier>>,
     /// The output not yet identified as anything, at most [`WINDOW`] bytes of it. Released when the
     /// watch ends.
     pub(super) window: Mutex<Vec<u8>>,
@@ -374,11 +332,13 @@ pub struct TrustState {
 }
 
 impl TrustState {
-    pub fn new(agent: Agent, carried: Option<CarriedTrust>) -> Self {
+    /// The watch for `agent`'s screen; `carried` is what its launch says about carrying the trust
+    /// entry, kept only where the provider's trust is per session.
+    pub fn new(agent: AgentId, carried: Option<Arc<dyn TrustCarrier>>) -> Self {
         let (sightings, receiver) = unbounded_channel();
         Self {
             screen: screen_of(agent),
-            carried,
+            carried: carried.filter(|_| agent.descriptor().capabilities.per_session_trust),
             window: Mutex::new(Vec::new()),
             expired: AtomicBool::new(false),
             released_without_hook: AtomicBool::new(false),
@@ -404,7 +364,8 @@ impl TrustState {
     /// of foreign writes as it stands, and `output_total` how much it has printed, this chunk
     /// included. Signals a sighting the first time the screen is complete in what has been seen.
     pub fn feed(&self, chunk: &[u8], input_writes: u64, output_total: u64) {
-        if self.hook_seen.load(Ordering::Acquire)
+        if !self.screen.can_be_sighted()
+            || self.hook_seen.load(Ordering::Acquire)
             || self.sighted.load(Ordering::Acquire)
             || self.expired.load(Ordering::Acquire)
         {

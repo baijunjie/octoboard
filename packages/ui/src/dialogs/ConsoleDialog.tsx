@@ -2,17 +2,15 @@ import { ActionableError } from "../errors/actionableError";
 import React, { useEffect, useRef, useState } from "react";
 
 import { changedAccounts, changedLaunch, readAccounts, readLaunch } from "../agents/agentFields";
-import {
-  AGENT_LABEL,
-  selectableAgent,
-} from "../agents/agents";
+import { selectableAgent, servedAgents } from "../agents/agents";
+import { defaultProviderAgent, providerLabel } from "../agents/providers";
 import { imageToAvatar } from "./avatarImage";
 import { focusOpenDialog } from "../components/focus/modalFocus";
 import { AgentIcon, agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console } from "../protocol";
 import { SettingsDialog } from "../settings/SettingsDialog";
-import { useDaemon, useDaemonStore } from "../store";
+import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { AvatarField } from "./AvatarField";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { type ConsoleAgentSettings, ConsoleLaunchFields } from "./ConsoleLaunchFields";
@@ -37,10 +35,12 @@ export function ConsoleDialog({
   const { request } = useDaemon();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
+  const providers = useProviders();
+  const served = servedAgents(providers);
   const [name, setName] = useState(editing?.name ?? "");
-  // A new console opens on Claude Code, or on the first agent that may be picked when that one is
+  // A new console opens on the first registered agent, or on the first agent that may be picked when that one is
   // known to be missing or not added, so the agent never starts on an entry the picker would refuse.
-  const initialAgent = selectableAgent(agentAvailability, addedAgents, "claude");
+  const initialAgent = selectableAgent(agentAvailability, addedAgents, providers, defaultProviderAgent(providers));
   const [defaultAgent, setDefaultAgent] = useState<Agent>(editing?.default_agent ?? initialAgent);
   // `""` is "Same as console sessions": the console sets no agent of its own for its project
   // sessions and they follow the console sessions' agent, which on the wire is an explicit `null`
@@ -51,9 +51,9 @@ export function ConsoleDialog({
   // being the agent's own default), kept per agent as the values are the agent's own, so a value set
   // for one says nothing about another.
   const [initial] = useState<ConsoleAgentSettings>(() => ({
-    accounts: readAccounts(editing?.accounts),
-    launch: readLaunch(editing?.launch),
-    project_session_launch: readLaunch(editing?.project_session_launch),
+    accounts: readAccounts(editing?.accounts, served),
+    launch: readLaunch(editing?.launch, served),
+    project_session_launch: readLaunch(editing?.project_session_launch, served),
   }));
   const [settings, setSettings] = useState(initial);
   const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
@@ -172,7 +172,7 @@ export function ConsoleDialog({
               <OptionSelect
                 hideLabel
                 label={t("dialog.console.defaultAgentConsole")}
-                options={agentIconPickerOptions(t, agentAvailability, addedAgents, defaultAgent)}
+                options={agentIconPickerOptions(t, agentAvailability, addedAgents, providers, defaultAgent)}
                 value={defaultAgent}
                 onChange={setDefaultAgent}
               />
@@ -185,10 +185,10 @@ export function ConsoleDialog({
                   {
                     value: "",
                     label: t("dialog.console.projectAgentSame"),
-                    badge: AGENT_LABEL[defaultAgent],
+                    badge: providerLabel(t, providers, defaultAgent),
                     icon: <AgentIcon agent={defaultAgent} className="size-4 opacity-50" />,
                   },
-                  ...agentIconPickerOptions(t, agentAvailability, addedAgents, projectAgent || undefined),
+                  ...agentIconPickerOptions(t, agentAvailability, addedAgents, providers, projectAgent || undefined),
                 ]}
                 value={projectAgent}
                 onChange={setProjectAgent}

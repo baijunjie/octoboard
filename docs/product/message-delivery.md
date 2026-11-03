@@ -349,7 +349,9 @@ one is checked too.
 
 A background task's completion does not count as a prompt sent. Claude Code reports a finished background task to
 itself as a `UserPromptSubmit` whose prompt contains `<task-notification>`; that prompt neither confirms a message
-written during the wait nor lifts the hold below. Any other prompt counts, whoever sends it.
+written during the wait nor lifts the hold below. Neither does the report a subagent resumed with `SendMessage` hands
+back, which Claude Code submits to itself as a prompt holding an `<agent-message from="…">` block. Any other prompt
+counts, whoever sends it.
 
 **What a message left unsent does:**
 

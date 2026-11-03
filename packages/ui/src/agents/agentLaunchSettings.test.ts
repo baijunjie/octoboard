@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { providerModelDisplay } from "./providers";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { effortLevels, launchSettingOptions, shownModel } from "./agentLaunchSettings";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
@@ -75,10 +77,12 @@ describe("effortLevels", () => {
 });
 
 describe("shownModel", () => {
+  const display = (agent: "claude" | "codex") => providerModelDisplay(TEST_PROVIDERS, agent);
+
   it("shows the retired Claude alias best as unset and everything else as stored", () => {
-    expect(shownModel("claude", "best")).toBeNull();
-    expect(shownModel("claude", "opus")).toBe("opus");
-    expect(shownModel("claude", null)).toBeNull();
-    expect(shownModel("codex", "best")).toBe("best");
+    expect(shownModel(display("claude"), "best")).toBeNull();
+    expect(shownModel(display("claude"), "opus")).toBe("opus");
+    expect(shownModel(display("claude"), null)).toBeNull();
+    expect(shownModel(display("codex"), "best")).toBe("best");
   });
 });

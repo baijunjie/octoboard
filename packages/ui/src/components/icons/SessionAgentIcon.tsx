@@ -1,8 +1,8 @@
 import React from "react";
 
-import { AGENT_LABEL } from "../../agents/agents";
+import { providerLabel, providerModelDisplay } from "../../agents/providers";
 import { useT } from "../../i18n/react";
-import type { Account, Launch, Session, Settings } from "../../protocol";
+import type { Account, Launch, Session, Settings, ProviderInfo } from "../../protocol";
 import { sessionAccount } from "../../sessions/sessionLabel";
 import { sessionModelValues } from "../../sessions/sessionModel";
 import { AgentIcon } from "./AgentIcon";
@@ -14,7 +14,9 @@ import { StatusBadge } from "../status/StatusBadge";
  * context size's tooltip is. A long name or a recorded path wraps, so nothing runs past the
  * tooltip's width. The account takes the direction of its own text: a name
  * the user typed is `auto`, a recorded directory `ltr`. */
-export function SessionAgentTooltip({ session, accounts, defaultNames, launch }: {
+export function SessionAgentTooltip({ providers, session, accounts, defaultNames, launch }: {
+  /** The providers the daemon serves, which name a provider that has no presentation module. */
+  providers: readonly ProviderInfo[];
   session: Session;
   accounts: Account[];
   defaultNames: Settings["default_account_names"];
@@ -24,7 +26,7 @@ export function SessionAgentTooltip({ session, accounts, defaultNames, launch }:
   const account = sessionAccount(t, session, accounts, defaultNames);
   const accountName = account && (account.isPath ? <code dir="ltr">{account.name}</code> : account.name);
   if (launch) {
-    const { model, effort } = sessionModelValues(t, session.agent, launch);
+    const { model, effort } = sessionModelValues(t, providerModelDisplay(providers, session.agent), launch);
     const rows: { label: string; value: React.ReactNode; dir: "ltr" | "auto" }[] = [
       { label: t("session.agentTooltip.model"), value: model, dir: "auto" },
       { label: t("session.agentTooltip.effort"), value: effort, dir: "auto" },
@@ -32,7 +34,7 @@ export function SessionAgentTooltip({ session, accounts, defaultNames, launch }:
     if (account) rows.unshift({ label: t("session.agentTooltip.account"), value: accountName, dir: account.isPath ? "ltr" : "auto" });
     return (
       <div className="flex flex-col gap-1.5">
-        <div dir="auto" className="font-medium">{AGENT_LABEL[session.agent]}</div>
+        <div dir="auto" className="font-medium">{providerLabel(t, providers, session.agent)}</div>
         <hr className="groove-t" />
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-0.5">
           {rows.map(({ label, value, dir }) => (
@@ -47,7 +49,7 @@ export function SessionAgentTooltip({ session, accounts, defaultNames, launch }:
   }
   return (
     <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-      <span dir="auto">{AGENT_LABEL[session.agent]}</span>
+      <span dir="auto">{providerLabel(t, providers, session.agent)}</span>
       {account !== undefined && <StatusBadge overflow="wrap" dir={account.isPath ? "ltr" : "auto"}>{accountName}</StatusBadge>}
     </span>
   );
@@ -56,6 +58,7 @@ export function SessionAgentTooltip({ session, accounts, defaultNames, launch }:
 /** A session's agent mark with the tooltip `SessionAgentTooltip` draws. It lives apart from `AgentIcon` so that one
  * stays free of the i18n state (the native menus build their icons in a node test). */
 export function SessionAgentIcon(props: {
+  providers: readonly ProviderInfo[];
   session: Session;
   accounts: Account[];
   defaultNames: Settings["default_account_names"];

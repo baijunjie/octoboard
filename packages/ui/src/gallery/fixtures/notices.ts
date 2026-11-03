@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
-import { AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState, broadcastErrorNotification, sessionNoticeNotification } from "../../fixtures/builders";
@@ -67,7 +67,7 @@ const accounts: Account[] = [
 ];
 const resumeSettings: Settings = {
   ...DEFAULT_SETTINGS,
-  added_agents: [...AGENTS],
+  added_agents: [...FIXTURE_AGENTS],
   default_clone_dir: "/Users/dev/Projects",
   accounts,
 };
@@ -454,7 +454,7 @@ export const noticeScenarios: Scenario[] = [
       {
         kind: "raised",
         title: failureTitle("sidebar.session.reopenFailedTitle"),
-        code: "codex_unarchive_failed",
+        code: "provider.codex.unarchive_failed",
         params: { detail: "no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7" },
         message: "`codex unarchive` failed: no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7",
       },
@@ -747,7 +747,7 @@ export const noticeScenarios: Scenario[] = [
     description: "Deliberate warning notices, not alerts: an untrusted workspace workaround naming its allow and deny settings as code, a trust entry blocked by a locked store, and a request that was not carried out because the session was no longer waiting for an answer. Session links identify where recovery is needed. The trust file's path is set as code.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     notifications: [
-      sessionNoticeNotification("s-web-1", "claude_workspace_untrusted"),
+      sessionNoticeNotification("s-web-1", "provider.claude.workspace_untrusted"),
       sessionNoticeNotification("s-web-1", "session_request_not_waiting", { session: "s-web-1" }),
       sessionNoticeNotification(grokSession.id, "trust_not_carried_over", {
         agent: "Grok Build",

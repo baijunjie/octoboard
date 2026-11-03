@@ -3,9 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use super::move_modification_time_back;
-use crate::protocol::{Agent, Origin, Page, Role, Session, SessionKind, SessionStatus};
+use crate::protocol::{AgentId, Origin, Page, Role, Session, SessionKind, SessionStatus};
 
-pub(crate) fn project_session(id: &str, agent: Agent, status: SessionStatus) -> Session {
+pub(crate) fn project_session(id: &str, agent: AgentId, status: SessionStatus) -> Session {
     Session {
         agent,
         project_id: Some("project-1".to_string()),
@@ -18,7 +18,7 @@ pub(crate) fn project_session(id: &str, agent: Agent, status: SessionStatus) -> 
 pub(crate) fn bare_session(id: &str, kind: SessionKind) -> Session {
     Session {
         id: id.to_string(),
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         agent_session_id: None,
         console_id: "console-1".to_string(),
         project_id: None,

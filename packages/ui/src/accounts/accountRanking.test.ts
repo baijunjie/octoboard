@@ -4,11 +4,12 @@ import { choiceGroups } from "./choiceEntries";
 import { expiringWeekly, preferExpiringWeekly } from "./accountRanking";
 import type { AccountQuota, QuotaWindow } from "../protocol";
 import { availability, account, NOW, HOUR, DAY, windowOf, reading } from "./accountChoicesTestSupport";
+import { TEST_PROVIDERS } from "../test/testProviders";
 
 describe("preferExpiringWeekly", () => {
   const stored = [account("w", "claude", "Work"), account("soon", "claude", "Soon")];
   const entries = (quotas: AccountQuota[]) =>
-    choiceGroups(stored, availability({}), null, () => "Default", { quotas, now: NOW }).find((group) => group.agent === "claude")!.entries;
+    choiceGroups(stored, availability({}), null, TEST_PROVIDERS, () => "Default", { quotas, now: NOW }).find((group) => group.agent === "claude")!.entries;
 
   it("prefers the soonest reset over a larger remainder", () => {
     const ranked = preferExpiringWeekly(entries([
@@ -88,7 +89,7 @@ describe("preferExpiringWeekly and the session window", () => {
   const stored = [account("w", "claude", "Work"), account("soon", "claude", "Soon")];
   const session = (patch: Partial<QuotaWindow> = {}) => windowOf({ kind: "session", window_minutes: 300, used_percent: 10, resets_at: NOW + 3 * HOUR, ...patch });
   const pick = (quotas: AccountQuota[]) =>
-    preferExpiringWeekly(choiceGroups(stored, availability({}), null, () => "Default", { quotas, now: NOW }).find((group) => group.agent === "claude")!.entries, NOW)?.account;
+    preferExpiringWeekly(choiceGroups(stored, availability({}), null, TEST_PROVIDERS, () => "Default", { quotas, now: NOW }).find((group) => group.agent === "claude")!.entries, NOW)?.account;
 
   it("prefers a running session window when the weekly resets are within a session window of each other", () => {
     expect(pick([
@@ -112,7 +113,7 @@ describe("preferExpiringWeekly and the session window", () => {
 
   it("measures the tie against the soonest reset rather than chaining", () => {
     const third = [...stored, account("far", "claude", "Far")];
-    const entries = choiceGroups(third, availability({}), null, () => "Default", {
+    const entries = choiceGroups(third, availability({}), null, TEST_PROVIDERS, () => "Default", {
       quotas: [
         reading("w", [windowOf({ resets_at: NOW + 24 * HOUR })]),
         reading("soon", [windowOf({ resets_at: NOW + 27 * HOUR })]),

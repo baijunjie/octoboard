@@ -99,7 +99,7 @@ it("leaves the screen-reader-only name of the agent beside the icon as it was, s
   mount({ kind: "archive-session", session: owner }, [owner, listed], [account]);
   const row = document.body.querySelector("[role=alertdialog] li")!;
   const name = row.querySelector(".sr-only")!;
-  expect(name.textContent).toBe(`Claude Code (${isolate("Work")}), `);
+  expect(name.textContent).toBe(`${isolate(`${isolate("Claude Code")} (${isolate("Work")})`)}, `);
   expect(name.childNodes).toHaveLength(1);
   expect(agentIcon().hasAttribute("aria-label")).toBe(false);
 });

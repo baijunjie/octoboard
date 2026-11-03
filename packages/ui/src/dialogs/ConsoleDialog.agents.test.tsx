@@ -4,6 +4,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { accountOf, consoleOf } from "../fixtures/builders";
 import type { Account } from "../protocol";
+import { withoutIsolates } from "../test/dom";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { work, lastStore, render, buttons, click, clickButton, choose, sent, asked, type, openAdvanced, clickTab, groupPicker, optionTexts, picker, tabNames } from "./consoleDialogTestSupport";
 
@@ -178,17 +179,17 @@ it("lists only the agents that may be picked, and the accounts of those", () => 
   render(undefined, [work, codexWork], undefined, { codex: "unavailable" });
   expect(picker("Console sessions")).toBeDefined();
   expect(picker("Claude Code account")).toBeDefined();
-  expect(buttons().some((b) => b.getAttribute("aria-label") === "Codex account")).toBe(false);
+  expect(buttons().some((b) => withoutIsolates(b.getAttribute("aria-label")) === "Codex account")).toBe(false);
   expect(document.body.textContent).not.toContain("Codex, Not installed");
 });
 
 it("leaves the missing agents out of both default agent pickers", async () => {
   render(undefined, [], undefined, { codex: "unavailable" });
   await click(picker("Console sessions"));
-  expect(optionTexts()).toEqual(["Claude Code", "Grok Build"]);
+  expect(optionTexts()).toEqual(["Claude Code", "Grok Build", "Test Agent"]);
   await choose("Claude Code");
   await click(picker("Project sessions"));
-  expect(optionTexts()).toEqual(["Same as console sessions, Claude Code", "Claude Code", "Grok Build"]);
+  expect(optionTexts()).toEqual(["Same as console sessions, Claude Code", "Claude Code", "Grok Build", "Test Agent"]);
 });
 
 it("keeps the stored agent in its picker as not installed while it is the value, and drops it once moved off", async () => {
@@ -199,7 +200,7 @@ it("keeps the stored agent in its picker as not installed while it is the value,
   expect(codex?.getAttribute("aria-selected")).toBe("true");
   await choose("Claude Code");
   await click(picker("Console sessions"));
-  expect(optionTexts()).toEqual(["Claude Code", "Grok Build"]);
+  expect(optionTexts()).toEqual(["Claude Code", "Grok Build", "Test Agent"]);
 });
 
 it("keeps a missing agent's row while the console pins a named account for it, and drops it once moved off", async () => {
@@ -213,7 +214,7 @@ it("keeps a missing agent's row while the console pins a named account for it, a
 
 it("lists only the added agents, in the order they were added, in the agent pickers, the account rows and the Advanced tabs", async () => {
   render(undefined, [work, codexWork], undefined, {}, ["grok", "claude"]);
-  expect(buttons().some((b) => b.getAttribute("aria-label") === "Codex account")).toBe(false);
+  expect(buttons().some((b) => withoutIsolates(b.getAttribute("aria-label")) === "Codex account")).toBe(false);
   await click(picker("Console sessions"));
   expect(optionTexts()).toEqual(["Grok Build", "Claude Code"]);
   await choose("Grok Build");
@@ -222,7 +223,7 @@ it("lists only the added agents, in the order they were added, in the agent pick
   await choose("Claude Code");
   await openAdvanced();
   expect(tabNames()).toEqual(["Grok Build", "Claude Code"]);
-  expect(buttons().filter((b) => /^(Grok Build|Claude Code) account$/.test(b.getAttribute("aria-label") ?? "")).map((b) => b.getAttribute("aria-label"))).toEqual(["Grok Build account", "Claude Code account"]);
+  expect(buttons().map((b) => withoutIsolates(b.getAttribute("aria-label")) ?? "").filter((label) => /^(Grok Build|Claude Code) account$/.test(label))).toEqual(["Grok Build account", "Claude Code account"]);
 });
 
 it("opens a new console on the first added agent that may be picked when Claude Code is not added", () => {
@@ -272,5 +273,5 @@ it("keeps the Advanced tab of an agent that is not added while the console store
 it("lists every agent before availability has been determined", async () => {
   render();
   await click(picker("Console sessions"));
-  expect(optionTexts()).toEqual(["Claude Code", "Codex", "Grok Build"]);
+  expect(optionTexts()).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
 });

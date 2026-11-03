@@ -6,10 +6,11 @@ import { StatusIcon } from "../status/StatusIcon";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
 import { useListMotion } from "../motion/useListMotion";
+import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import type { Session } from "../../protocol";
 import { sessionAgentLabel, sessionDisplayTitle } from "../../sessions/sessionLabel";
-import { useDaemonStore, useSessionShownStatus } from "../../store";
+import { useDaemonStore, useProviders, useSessionShownStatus } from "../../store";
 
 /** A line the dialog's consequences add while an option is ticked: `key` names its kind, so a line
  * whose count changes stays the same line. */
@@ -26,16 +27,17 @@ export function SessionList({ sessions }: { sessions: Session[] }): React.ReactE
   const sessionsRef = useListMotion<HTMLUListElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
+  const providers = useProviders();
   return (
     <ul ref={sessionsRef} className="relative flex min-w-0 flex-col gap-1">
       {sessions.map((session) => (
         <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
           {/* The list items are not pressable, so a tap on a mark opens the popover. */}
           {session.status !== "archived" && <SessionStatusIcon session={session} />}
-          <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
+          <SessionAgentIcon providers={providers} session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
           {/* The icon is decorative, and nothing else here names the agent. The comma keeps the name apart from the
               title when the row is read as one phrase: a hidden element's trailing space is dropped in rendering. */}
-          <span className="sr-only">{`${sessionAgentLabel(t, session, accounts, defaultNames)}, `}</span>
+          <span className="sr-only">{`${isolate(sessionAgentLabel(t, providers, session, accounts, defaultNames))}, `}</span>
           <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
             {sessionDisplayTitle(t, session)}
           </FadeOverflow>

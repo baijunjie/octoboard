@@ -59,8 +59,9 @@ modal body's text colour, below, is the one exception).
 | Secondary text | The project's `--app-muted`, HeroUI's `--muted` missing 4.5:1 on a selected sidebar row |
 | Help, the project's purple for help and hints | A project token (`--help`), HeroUI having none, with its soft fill, text and edge derived like the others |
 
-Native colours that cannot read CSS — the menu bar icon's status colours, and the agent colours of its quota bars — are
-generated from or read back from the same values rather than written down separately. The terminal's ANSI palette, syntax highlighting, agent brand colours and identity
+Native colours that cannot read CSS — the menu bar icon's status colours, and the provider colours of its quota bars — are
+generated from or read back from the same values rather than written down separately (a provider's colour is written down
+once, in its presentation module under `packages/ui/src/providers/`). The terminal's ANSI palette, syntax highlighting, provider colours and identity
 colours (avatars, session dots) are not semantic and keep their own palettes.
 
 Secondary text is a choice made where the text is written, never a default inherited from a container. A modal's body
@@ -168,11 +169,11 @@ by the user's decision (see "Do not change how a HeroUI component looks").
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 5.7:1 dark on the panel's popover), a
 warning-coloured "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
-(`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table marks
+(`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the provider colours. Settings' accounts table marks
 such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu bar icon's
 quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the menu's appearance,
-while the account's heading says "Limit reached" in words; every other account's bars take its agent's `--meter-fill`,
-read back the same way. A veil over the row is not used for that state: it would take
+while the account's heading says "Limit reached" in words; every other account's bars take their provider's colour from its
+presentation module, for the menu's appearance. A veil over the row is not used for that state: it would take
 its text below AA.
 
 A disabled account is left out of that panel and of the menu bar icon's quota submenus, except the one the selected
@@ -780,7 +781,9 @@ or branch name, no path, count or quoted value, and no reference chip (`InlineRe
 in its body, its first sentence naming it there ("Fix search will be switched to Work."), with everything else that
 follows. The title is the modal's accessible name, read whole each time it opens and each time focus comes back into
 it; a long or variable one wraps into a block that no longer reads as a heading, and puts the name of a subject ahead
-of what is being asked about it.
+of what is being asked about it. The confirmation of a setting choice that raises risk is the one exception: its title is
+the short question ("Approve everything?"), still with no variable content (see "A dialog's title" in
+`docs/product/dialogs.md`).
 
 The rule is for these general modals — forms, confirmations, warnings, errors and failures. A dedicated component
 that shows one piece of content in a modal layer, such as the file viewer, is not one of them: its title is the name of
@@ -1927,10 +1930,10 @@ from assistive technology, and the option's description or the cell's hidden tex
 states it in its own accessible name and value, while its drawn headline is hidden. Its track is `--default`, which
 inside `.control-fills` (Settings, the dialogs, the rail panel) is `--control-fill`; in dark the compact bar's
 `.quota-bar-track` is a step lighter than its `--default`, so it can be seen on a dark popover. The
-track is not held to 3:1 against its surface. The fill's agent colour is kept at 3:1 or better against every track the UI draws it
+track is not held to 3:1 against its surface. The fill's provider colour is kept at 3:1 or better against every track the UI draws it
 on at full opacity, in both appearances, though nothing requires it (the menu bar icon's native track,
 `tertiaryLabelColor` over the menu material, is not measured): a bar's state never rests on its colour
-alone. The grey of a used-up account is not: it is meant to recede, a step fainter than the agent colours, and its badge
+alone. The grey of a used-up account is not: it is meant to recede, a step fainter than the provider colours, and its badge
 says why.
 
 ### Row action menu buttons

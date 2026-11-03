@@ -5,9 +5,11 @@ use super::Result;
 use rusqlite::{params, Connection};
 
 use super::rows::enum_to_text;
-use super::settings::{read_json_setting, read_json_setting_opt, write_json_setting};
+use super::settings::{
+    read_json_setting, read_json_setting_opt, registered_keys, write_json_setting,
+};
 use super::Store;
-use crate::protocol::{error_code, Agent, CodedError};
+use crate::protocol::{error_code, AgentId, CodedError};
 
 /// What `Store::reorder_added_agents` did.
 #[derive(Debug, PartialEq, Eq)]
@@ -26,12 +28,12 @@ impl Store {
     /// `None` while the list has never been decided (a fresh database, until
     /// `availability::fill_added_agents` fills it). A list saved empty on purpose is `Some` of
     /// nothing, which is what tells the two apart.
-    pub fn added_agents(&self) -> Result<Option<Vec<Agent>>> {
+    pub fn added_agents(&self) -> Result<Option<Vec<AgentId>>> {
         read_added_agents(&self.lock())
     }
 
     /// Whether `agent` is on the added list; while the list is undecided every agent is.
-    pub fn agent_is_added(&self, agent: Agent) -> Result<bool> {
+    pub fn agent_is_added(&self, agent: AgentId) -> Result<bool> {
         Ok(self
             .added_agents()?
             .is_none_or(|added| added.contains(&agent)))
@@ -40,7 +42,7 @@ impl Store {
     /// Stores the list only while it is still undecided (unset, or unreadable), so a list the user
     /// has since edited is never overwritten. Whether it was stored. The read and the write are
     /// one step under the store's lock.
-    pub fn set_added_agents_if_undecided(&self, agents: &[Agent]) -> Result<bool> {
+    pub fn set_added_agents_if_undecided(&self, agents: &[AgentId]) -> Result<bool> {
         let conn = self.lock();
         if read_added_agents(&conn)?.is_some() {
             return Ok(false);
@@ -53,7 +55,7 @@ impl Store {
     /// there. Refused with an error while the list is undecided, since appending would decide it
     /// as just this agent; the caller fills it first. The read and the write are one step under
     /// the store's lock.
-    pub fn add_added_agent(&self, agent: Agent) -> Result<bool> {
+    pub fn add_added_agent(&self, agent: AgentId) -> Result<bool> {
         let conn = self.lock();
         let mut agents = read_added_agents(&conn)?
             .ok_or_else(|| anyhow::anyhow!("the added agents are not decided yet"))?;
@@ -67,7 +69,7 @@ impl Store {
 
     /// Puts a decided list in the given order, and says what came of it. The read and the write are
     /// one step under the store's lock.
-    pub fn reorder_added_agents(&self, order: &[Agent]) -> Result<ReorderOutcome> {
+    pub fn reorder_added_agents(&self, order: &[AgentId]) -> Result<ReorderOutcome> {
         let conn = self.lock();
         let Some(current) = read_added_agents(&conn)? else {
             return Ok(ReorderOutcome::Undecided);
@@ -86,7 +88,7 @@ impl Store {
         Ok(ReorderOutcome::Reordered)
     }
 
-    pub fn account_order(&self, agent: Agent) -> Result<Vec<Option<String>>> {
+    pub fn account_order(&self, agent: AgentId) -> Result<Vec<Option<String>>> {
         Ok(read_account_order(&self.lock())?
             .remove(agent.wire_name())
             .unwrap_or_default())
@@ -94,7 +96,7 @@ impl Store {
 
     /// Validates and saves an agent's display order under one lock, so an account edit cannot
     /// race the validation. Other agents' orders and the accounts' storage order stay untouched.
-    pub fn reorder_accounts(&self, agent: Agent, order: &[Option<String>]) -> Result<bool> {
+    pub fn reorder_accounts(&self, agent: AgentId, order: &[Option<String>]) -> Result<bool> {
         let conn = self.lock();
         let mut current_accounts = conn
             .prepare("SELECT id FROM accounts WHERE agent = ?1")?
@@ -114,7 +116,7 @@ impl Store {
             )
             .into());
         }
-        let mut orders = read_account_order(&conn)?;
+        let mut orders = read_stored_account_order(&conn)?;
         if orders
             .get(agent.wire_name())
             .is_some_and(|current| current == order)
@@ -128,7 +130,7 @@ impl Store {
 
     /// Takes the agent off the list, leaving its accounts alone. Whether it was on it. Refused with
     /// an error while the list is undecided, as `add_added_agent` is.
-    pub fn remove_added_agent(&self, agent: Agent) -> Result<bool> {
+    pub fn remove_added_agent(&self, agent: AgentId) -> Result<bool> {
         let conn = self.lock();
         let mut agents = read_added_agents(&conn)?
             .ok_or_else(|| anyhow::anyhow!("the added agents are not decided yet"))?;
@@ -142,19 +144,46 @@ impl Store {
     }
 }
 
-pub(super) fn read_account_order(
+/// The stored account orders, with those of providers this build does not register, which a
+/// rewrite keeps.
+fn read_stored_account_order(
     conn: &Connection,
 ) -> Result<std::collections::BTreeMap<String, Vec<Option<String>>>> {
     read_json_setting(conn, "account_order")
 }
 
-/// A malformed value reads as an undecided list, so the next fill replaces it.
-pub(super) fn read_added_agents(conn: &Connection) -> Result<Option<Vec<Agent>>> {
-    read_json_setting_opt(conn, "added_agents")
+/// The account orders of the registered providers.
+pub(super) fn read_account_order(
+    conn: &Connection,
+) -> Result<std::collections::BTreeMap<String, Vec<Option<String>>>> {
+    Ok(registered_keys(read_stored_account_order(conn)?))
 }
 
-fn write_added_agents(conn: &Connection, agents: &[Agent]) -> Result<()> {
-    write_json_setting(conn, "added_agents", Some(&agents))
+/// The registered providers on the stored list, which also names providers this build does not
+/// register. A malformed value reads as an undecided list, so the next fill replaces it.
+pub(super) fn read_added_agents(conn: &Connection) -> Result<Option<Vec<AgentId>>> {
+    let stored: Option<Vec<String>> = read_json_setting_opt(conn, "added_agents")?;
+    Ok(stored.map(|ids| {
+        ids.iter()
+            .filter_map(|id| AgentId::from_wire_name(id))
+            .collect()
+    }))
+}
+
+/// Stores the list, followed by the providers this build does not register that the stored list
+/// names, so that a build which knows them finds them still added.
+fn write_added_agents(conn: &Connection, agents: &[AgentId]) -> Result<()> {
+    let stored: Vec<String> = read_json_setting_opt(conn, "added_agents")?.unwrap_or_default();
+    let unregistered = stored
+        .iter()
+        .filter(|id| AgentId::from_wire_name(id).is_none())
+        .map(String::as_str);
+    let list: Vec<&str> = agents
+        .iter()
+        .map(|agent| agent.wire_name())
+        .chain(unregistered)
+        .collect();
+    write_json_setting(conn, "added_agents", Some(&list))
 }
 
 #[cfg(test)]
@@ -169,9 +198,9 @@ mod tests {
         let store = Store::open(&path).unwrap();
         assert!(store.get_settings().unwrap().account_order.is_empty());
         for (id, agent) in [
-            ("one", Agent::Claude),
-            ("two", Agent::Claude),
-            ("other", Agent::Codex),
+            ("one", AgentId::CLAUDE),
+            ("two", AgentId::CLAUDE),
+            ("other", AgentId::CODEX),
         ] {
             store
                 .insert_account(&account(id, agent, &format!("/accounts/{id}")))
@@ -187,10 +216,10 @@ mod tests {
         };
         let original_ids = stored_ids();
         let order = vec![Some("two".to_string()), None, Some("one".to_string())];
-        assert!(store.reorder_accounts(Agent::Claude, &order).unwrap());
-        assert!(!store.reorder_accounts(Agent::Claude, &order).unwrap());
+        assert!(store.reorder_accounts(AgentId::CLAUDE, &order).unwrap());
+        assert!(!store.reorder_accounts(AgentId::CLAUDE, &order).unwrap());
         assert!(store
-            .reorder_accounts(Agent::Codex, &[None, Some("other".to_string())])
+            .reorder_accounts(AgentId::CODEX, &[None, Some("other".to_string())])
             .unwrap());
         assert_eq!(stored_ids(), original_ids);
         let before = store.get_settings().unwrap().account_order;
@@ -204,7 +233,7 @@ mod tests {
             vec![],
         ] {
             let err: anyhow::Error = store
-                .reorder_accounts(Agent::Claude, &invalid)
+                .reorder_accounts(AgentId::CLAUDE, &invalid)
                 .unwrap_err()
                 .into();
             assert_eq!(
@@ -217,15 +246,15 @@ mod tests {
         let store = Store::open(&path).unwrap();
         assert_eq!(store.get_settings().unwrap().account_order, before);
         store.delete_account("one").unwrap();
-        assert!(store.reorder_accounts(Agent::Claude, &order).is_err());
+        assert!(store.reorder_accounts(AgentId::CLAUDE, &order).is_err());
         assert!(store
-            .reorder_accounts(Agent::Claude, &[Some("two".to_string()), None])
+            .reorder_accounts(AgentId::CLAUDE, &[Some("two".to_string()), None])
             .unwrap());
         store
-            .insert_account(&account("new", Agent::Claude, "/accounts/new"))
+            .insert_account(&account("new", AgentId::CLAUDE, "/accounts/new"))
             .unwrap();
         assert!(store
-            .reorder_accounts(Agent::Claude, &[Some("two".to_string()), None])
+            .reorder_accounts(AgentId::CLAUDE, &[Some("two".to_string()), None])
             .is_err());
         assert_eq!(
             store.get_settings().unwrap().account_order["codex"],
@@ -243,28 +272,30 @@ mod tests {
         assert_eq!(store.get_settings().unwrap().added_agents, None);
 
         assert!(store
-            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude])
+            .set_added_agents_if_undecided(&[AgentId::CODEX, AgentId::CLAUDE])
             .unwrap());
         assert!(
-            !store.set_added_agents_if_undecided(&[Agent::Grok]).unwrap(),
+            !store
+                .set_added_agents_if_undecided(&[AgentId::GROK])
+                .unwrap(),
             "decided"
         );
-        assert!(store.add_added_agent(Agent::Grok).unwrap());
-        assert!(!store.add_added_agent(Agent::Grok).unwrap());
+        assert!(store.add_added_agent(AgentId::GROK).unwrap());
+        assert!(!store.add_added_agent(AgentId::GROK).unwrap());
         drop(store);
         let store = Store::open(&path).unwrap();
         assert_eq!(
             store.get_settings().unwrap().added_agents,
-            Some(vec![Agent::Codex, Agent::Claude, Agent::Grok])
+            Some(vec![AgentId::CODEX, AgentId::CLAUDE, AgentId::GROK])
         );
 
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             store.remove_added_agent(agent).unwrap();
         }
         drop(store);
         let store = Store::open(&path).unwrap();
         assert_eq!(store.added_agents().unwrap(), Some(vec![]));
-        assert!(!store.set_added_agents_if_undecided(&Agent::ALL).unwrap());
+        assert!(!store.set_added_agents_if_undecided(&AgentId::ALL).unwrap());
     }
 
     /// A stored value that does not read as a list counts as undecided, so the fill replaces it,
@@ -278,11 +309,11 @@ mod tests {
             .execute("UPDATE settings SET added_agents = 'not json'", [])
             .unwrap();
         assert_eq!(store.added_agents().unwrap(), None);
-        assert!(store.add_added_agent(Agent::Claude).is_err());
+        assert!(store.add_added_agent(AgentId::CLAUDE).is_err());
 
         assert!(store
-            .set_added_agents_if_undecided(&[Agent::Codex])
+            .set_added_agents_if_undecided(&[AgentId::CODEX])
             .unwrap());
-        assert_eq!(store.added_agents().unwrap(), Some(vec![Agent::Codex]));
+        assert_eq!(store.added_agents().unwrap(), Some(vec![AgentId::CODEX]));
     }
 }

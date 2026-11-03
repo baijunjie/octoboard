@@ -29,6 +29,7 @@ import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { accountOf, gitStatusOf, sessionOf } from "./builders";
 import { createUi } from "./interact";
+import { FIXTURE_PROVIDERS } from "./fixtureProviders";
 
 /** The tooltip of a Claude Code session's agent mark, drawn by the app's own `SessionAgentTooltip`: the
  * agent's name, then the account the session runs under as a badge or, given `launch`, a list of the
@@ -37,7 +38,7 @@ function agentTooltip(account: string, launch?: Launch): React.ReactElement {
   const stored: Account = accountOf("account", "claude", account, "/Users/dev/.claude-work");
   return (
     <LanguageProvider>
-      <SessionAgentTooltip session={sessionOf("s-tooltip", "c", "p", "Tooltip", "idle", { account_id: stored.id })} accounts={[stored]} defaultNames={{}} launch={launch} />
+      <SessionAgentTooltip providers={FIXTURE_PROVIDERS} session={sessionOf("s-tooltip", "c", "p", "Tooltip", "idle", { account_id: stored.id })} accounts={[stored]} defaultNames={{}} launch={launch} />
     </LanguageProvider>
   );
 }

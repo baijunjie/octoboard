@@ -17,7 +17,7 @@ import { createFileReplies, FILE_REQUESTS } from "./fixtureFiles";
 import { createProcessLedger, createProcessReplies } from "./fixtureProcesses";
 import { createProjectReplies } from "./fixtureProjects";
 import { createSessionReplies } from "./fixtureSessions";
-import { createSettingsReplies, keepClaudeCompatibilityInEffect } from "./fixtureSettings";
+import { createSettingsReplies, keepProviderSettingsInEffect } from "./fixtureSettings";
 
 /** How long after the app subscribes to notifications the scenario's own are raised, for the stack to be
  * on screen to receive them. */
@@ -46,8 +46,8 @@ export const BROWSE_REQUESTS: ReadonlySet<string> = new Set<string>([...GIT_REQU
  */
 export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   const context = createFixtureContext(scenario);
-  const { store, git, restored, fail, claudeCompatibilityChoices } = context;
-  keepClaudeCompatibilityInEffect(context);
+  const { store, git, restored, fail, providerSettingChoices } = context;
+  keepProviderSettingsInEffect(context);
   const notificationListeners = new Set<(notification: NotificationRequest) => void>();
   const emitNotification = (notification: NotificationRequest) => notificationListeners.forEach((listener) => listener(notification));
   let notificationsRaised = false;
@@ -87,7 +87,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   };
 
   const gitReply = createGitReplies(git, fail);
-  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => claudeCompatibilityChoices.current);
+  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => providerSettingChoices.current);
   const guards = createAccountGuards(context);
   const ledger = createProcessLedger(context);
   const replies = mergeHandlers(

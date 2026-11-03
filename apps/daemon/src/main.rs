@@ -34,6 +34,7 @@ mod paths;
 mod processes;
 mod project_git;
 mod protocol;
+mod providers;
 mod records;
 mod removal_safety;
 mod revert_gate;

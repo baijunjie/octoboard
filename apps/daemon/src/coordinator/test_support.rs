@@ -7,7 +7,7 @@ use crate::coordinator::launch::relaunch_session_with;
 use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::open::OpenRequest;
 use crate::protocol::{
-    error_code, Account, Agent, Availability, Console, Origin, Project, ProjectAccount,
+    error_code, Account, AgentId, Availability, Console, Origin, Project, ProjectAccount,
     ProjectSource, RequestBody, Role, Session, SessionKind, SessionStatus,
 };
 use crate::session::term;
@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub(super) fn console(default_agent: Agent, workdir: &Path) -> Console {
+pub(super) fn console(default_agent: AgentId, workdir: &Path) -> Console {
     Console {
         id: "console-1".to_string(),
         name: "Console".to_string(),
@@ -78,7 +78,7 @@ pub(super) fn pins(id: &str) -> ProjectAccount {
     ProjectAccount::Account { id: id.to_string() }
 }
 
-pub(super) fn create_account_request(agent: Agent, name: &str, config_dir: &str) -> RequestBody {
+pub(super) fn create_account_request(agent: AgentId, name: &str, config_dir: &str) -> RequestBody {
     RequestBody::CreateAccount {
         agent,
         name: name.to_string(),
@@ -86,7 +86,7 @@ pub(super) fn create_account_request(agent: Agent, name: &str, config_dir: &str)
     }
 }
 
-pub(super) fn set_availability(state: &Arc<AppState>, agent: Agent, availability: Availability) {
+pub(super) fn set_availability(state: &Arc<AppState>, agent: AgentId, availability: Availability) {
     state.set_agent_availability(vec![crate::protocol::AgentAvailability {
         agent,
         availability,
@@ -242,7 +242,7 @@ pub(super) fn bound_session(id: &str, status: SessionStatus, owner: &str) -> Ses
         title: id.to_string(),
         bound_to: Some(owner.to_string()),
         role: Role::Worker,
-        ..project_session(id, Agent::Claude, status)
+        ..project_session(id, AgentId::CLAUDE, status)
     }
 }
 
@@ -271,7 +271,7 @@ pub(super) fn binding_fixture(
         .store
         .insert_console(&Console {
             id: "console-2".to_string(),
-            ..console(Agent::Claude, &dir.join("no-such-workdir-2"))
+            ..console(AgentId::CLAUDE, &dir.join("no-such-workdir-2"))
         })
         .unwrap();
     let project_1 = state.store.get_project("project-1").unwrap().unwrap();
@@ -321,7 +321,7 @@ pub(super) async fn relaunch_stand_in(
     Ok((prompt, state.take_queued(id)))
 }
 
-pub(super) fn no_process_with_conversation(id: &str, agent: Agent, owner: &str) -> Session {
+pub(super) fn no_process_with_conversation(id: &str, agent: AgentId, owner: &str) -> Session {
     Session {
         agent,
         agent_session_id: Some(format!("conversation-{id}")),
@@ -354,7 +354,7 @@ pub(super) fn state_for_opening(name: &str) -> (Arc<AppState>, ScratchDir) {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     (state, dir)
 }

@@ -44,6 +44,24 @@ that renders its children as bare text, as the `AgentAccountsSection` tests' `Fa
 Assert that the lookup found something before asserting about it, or assert on the text of an element the markup
 still has (the row, the name line) rather than on a leaf found by its text.
 
+## Under test there is a fourth provider with nothing of its own: never hard-code the provider list
+
+Applies to any daemon or `packages/ui` test that loops over the providers or picks some of them. Tests register a
+test-only provider (`AgentId::TEST`, id `test_agent`) beside Claude, Codex and Grok in both daemon registries, and the
+UI's `TEST_PROVIDERS` (`packages/ui/src/test/testProviders.ts`) serves it last with its presentation module registered
+under the test runner; it declares no capability, no compatibility, no codes and no account operations. So
+`AgentId::ALL`, `TEST_PROVIDERS` and `TEST_AGENTS` hold four providers, not the three the app ships.
+
+- A test of a rule every provider follows iterates them all and derives each expectation from that provider's
+  descriptor or served facts (what it declares, which capability it has), not from a fixed answer per id.
+- A test that needs a real provider's fixtures — a fake CLI's replies, a captured screen — picks providers by the
+  capability or sub-interface the code under test reads (`provider(agent).accounts().and_then(|ops| ops.quota_probe())
+  .is_some()`), not by a hard-coded list of ids, so a provider added later is covered or skipped by what it declares.
+- A `match` over provider ids in a test ends in a fallback arm that panics (`other => panic!("no fixture for {other}")`),
+  never one that quietly returns a default.
+- The gallery's fixture daemon serves only the three shipped providers (`FIXTURE_PROVIDERS`), so gallery scenarios
+  never show the test provider.
+
 ## Verify behaviour derived from an agent's output by replaying a committed capture
 
 Anything the daemon derives from what an agent CLI emits — a hook payload, the transcript it writes,

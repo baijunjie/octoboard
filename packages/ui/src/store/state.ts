@@ -2,8 +2,7 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type Console, type GitStatus, type Host, type Page, type Project, type Session, type Settings, type ShellTerminal } from "../protocol";
-import { AGENTS } from "../agents/agents";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type Console, type GitStatus, type Host, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A session waiting at its agent's folder-trust confirmation for the user's say-so. */
@@ -64,9 +63,12 @@ export interface State {
   gitStatuses: Map<string, GitStatus>;
   /** The app-wide settings the daemon stores, as the last `snapshot` or `settings_updated` said. */
   settings: Settings;
+  /** The providers the daemon has registered, in its registry order, as the last `snapshot` said: `[]` until the first
+   * one arrives. They do not change while the daemon runs, so no event updates them. */
+  providers: ProviderInfo[];
   /** Every agent's availability, keyed by agent, as the last `snapshot` or
-   * `agent_availability_updated` said. Always holds all three agents, each `not_determined`
-   * until the daemon's one-time determination for this run lands. */
+   * `agent_availability_updated` said. Holds every registered agent, in the registry's order, each `not_determined`
+   * until the daemon's one-time determination for this run lands; empty until the first snapshot. */
   agentAvailability: Map<Agent, AgentAvailability>;
   /** The plan quota of every account of every available agent, as the last `snapshot` or
    * `account_quotas_updated` said. Runtime state of the daemon, so it starts empty and is never
@@ -99,13 +101,6 @@ export interface State {
   queuedAccountSwitches: ReadonlySet<string>;
 }
 
-/** The three entries every run begins with, before the daemon's one-time determination lands. */
-const INITIAL_AGENT_AVAILABILITY: AgentAvailability[] = AGENTS.map((agent) => ({
-  agent,
-  availability: "not_determined",
-  default_account_dir: null,
-}));
-
 const initialState: State = {
   connectionState: "connecting",
   daemon: null,
@@ -120,7 +115,8 @@ const initialState: State = {
   sessionRequests: [],
   gitStatuses: new Map(),
   settings: DEFAULT_SETTINGS,
-  agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
+  providers: [],
+  agentAvailability: new Map(),
   accountQuotas: [],
   accountLogins: [],
   loginsStartedHere: [],

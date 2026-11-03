@@ -1,10 +1,11 @@
 import React from "react";
 
 import type { AccountQuota, Agent } from "../protocol";
-import { remainingPercentAt, usageBarWindows } from "../accounts/quotaFormat";
+import { remainingPercentAt, usageBarLayers } from "../accounts/quotaFormat";
+import { PROVIDER_FILL_CLASS, providerFillVars } from "./providerFill";
 
-/** A bar of what remains of a window, in the agent's colour, or in grey when the account is used up (the fill reads
- * `--meter-fill`, which the `quota-meter--<agent>` or `quota-meter--used-up` class sets). Plain spans rather than
+/** A bar of what remains of a window, in the provider's colour, or in grey when the account is used up (the fill reads
+ * `--meter-fill`, which the `quota-meter--provider` or `quota-meter--used-up` class sets). Plain spans rather than
  * HeroUI's `Meter` or `ProgressBar`: the bar sits inside a list option, where a `role="meter"` or `progressbar` with a
  * name and a value would be a second, nested control inside the option, whose own description already states the
  * numbers (`usageBarSummary`); this one is purely decorative and carries no role or name. The track is
@@ -28,9 +29,9 @@ function Track({ percent, thin, edge }: { percent?: number; thin?: boolean; edge
  * the tracks' hairline edges, which a popover, a menu and a select trigger need to show an empty track and a bar on the
  * page's own surface (a table cell) does not. */
 export function AccountUsageBar({ agent, quota, now, className = "w-8", edge = true, usedUp = false, stale = false }: { agent: Agent; quota: AccountQuota | undefined; now: number; className?: string; edge?: boolean; usedUp?: boolean; stale?: boolean }): React.ReactElement {
-  const bar = quota && (stale || !quota.unavailable) ? usageBarWindows(quota) : undefined;
+  const bar = quota && (stale || !quota.unavailable) ? usageBarLayers(quota.windows) : undefined;
   return (
-    <span aria-hidden="true" className={`flex ${className} shrink-0 flex-col gap-0.5 ${usedUp ? "quota-meter--used-up" : `quota-meter--${agent}`}`}>
+    <span aria-hidden="true" className={`flex ${className} shrink-0 flex-col gap-0.5 ${usedUp ? "quota-meter--used-up" : PROVIDER_FILL_CLASS}`} style={usedUp ? undefined : providerFillVars(agent)}>
       <Track edge={edge} percent={bar && remainingPercentAt(bar.main, now)} />
       {bar?.thin && <Track thin edge={edge} percent={remainingPercentAt(bar.thin, now)} />}
     </span>

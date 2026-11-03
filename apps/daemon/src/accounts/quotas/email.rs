@@ -1,31 +1,19 @@
 //! The email an account is signed in with, read from the agent's own sign-in record so a client
-//! can tell accounts apart. Each file is a format of the CLI's own, which it may change or not
+//! can tell accounts apart. Each record is a format of the CLI's own, which it may change or not
 //! write at all (Codex can keep its credentials in the keyring, say), so any failure to find or
-//! read one means no email, never a failure of the account. Nothing but the email leaves this
-//! module: the rest of the files, tokens included, is parsed and dropped, and the email is never
-//! logged.
-//!
-//! - **Claude Code**: `oauthAccount.emailAddress` of `.claude.json`. With `CLAUDE_CONFIG_DIR` set
-//!   the file is in that directory; without it, it is `~/.claude.json`, beside the default
-//!   directory and not inside it.
-//! - **Codex**: the `email` claim of the ID token in `auth.json` under `CODEX_HOME`. The token's
-//!   signature is not checked: the file is the user's own and the claim only labels the account.
-//! - **Grok Build**: the `email` of the entries of `auth.json` under `GROK_HOME`. Entries signed
-//!   in as different people leave no way to tell which one the CLI uses, so there is no email then.
+//! read one means no email, never a failure of the account. Nothing but the email leaves the
+//! provider's reader (`AccountOps::email`, in `crate::adapter::<provider>::accounts`): the rest of
+//! the record, tokens included, is parsed and dropped, and the email is never logged.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::path::Path;
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use serde_json::Value;
 
-use crate::adapter;
-use crate::adapter::claude::settings::global_config_file;
 use crate::adapter::files::LARGE_FILE_LIMIT;
-use crate::agents::layout::{CODEX_SIGN_IN_FILE, GROK_SIGN_IN_FILE};
+use crate::adapter::provider;
 use crate::hostfs::read_regular_text;
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 
 /// The longest email address there can be.
 const MAX_EMAIL_CHARS: usize = 254;
@@ -33,27 +21,19 @@ const MAX_EMAIL_CHARS: usize = 254;
 /// The email `agent`'s account signs in with, `config_dir` being the account's directory and
 /// `None` for the default account, whose directory follows `shell_env` as the CLI's would.
 pub(super) fn account_email(
-    agent: Agent,
+    agent: AgentId,
     config_dir: Option<&Path>,
     shell_env: &HashMap<String, String>,
 ) -> Option<String> {
-    match agent {
-        Agent::Claude => claude_email(&read_json(&global_config_file(shell_env, config_dir))?),
-        Agent::Codex => codex_email(&read_json(
-            &adapter::account_dir(agent, config_dir, shell_env).join(CODEX_SIGN_IN_FILE),
-        )?),
-        Agent::Grok => grok_email(&read_json(
-            &adapter::account_dir(agent, config_dir, shell_env).join(GROK_SIGN_IN_FILE),
-        )?),
-    }
+    provider(agent).accounts()?.email(config_dir, shell_env)
 }
 
-fn read_json(file: &Path) -> Option<Value> {
+pub(crate) fn read_json(file: &Path) -> Option<Value> {
     serde_json::from_str(&read_regular_text(file, LARGE_FILE_LIMIT).ok()?).ok()
 }
 
 /// `email` as an address worth showing: trimmed, one line, not empty or implausibly long.
-fn tidy(email: &str) -> Option<String> {
+pub(crate) fn tidy(email: &str) -> Option<String> {
     let email = email.trim();
     (!email.is_empty()
         && email.chars().count() <= MAX_EMAIL_CHARS
@@ -61,39 +41,15 @@ fn tidy(email: &str) -> Option<String> {
     .then(|| email.to_string())
 }
 
-fn claude_email(file: &Value) -> Option<String> {
-    tidy(file.pointer("/oauthAccount/emailAddress")?.as_str()?)
-}
-
-fn codex_email(file: &Value) -> Option<String> {
-    let token = file.pointer("/tokens/id_token")?.as_str()?;
-    let payload = token.split('.').nth(1)?;
-    let claims: Value =
-        serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?)
-            .ok()?;
-    let email = claims.get("email").and_then(Value::as_str).or_else(|| {
-        claims
-            .pointer("/https:~1~1api.openai.com~1profile/email")
-            .and_then(Value::as_str)
-    })?;
-    tidy(email)
-}
-
-fn grok_email(file: &Value) -> Option<String> {
-    let emails: BTreeSet<String> = file
-        .as_object()?
-        .values()
-        .filter_map(|entry| tidy(entry.get("email")?.as_str()?))
-        .collect();
-    let mut emails = emails.into_iter();
-    let only = emails.next()?;
-    emails.next().is_none().then_some(only)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::claude::accounts::claude_email;
+    use crate::adapter::codex::accounts::codex_email;
+    use crate::adapter::grok::accounts::grok_email;
     use crate::test_support::ScratchDir;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
     use serde_json::json;
 
     fn jwt(claims: &Value) -> String {
@@ -125,7 +81,7 @@ mod tests {
             r#"{"oauthAccount":{"emailAddress":" me@example.com "}}"#,
         );
         assert_eq!(
-            account_email(Agent::Claude, Some(&account), &HashMap::new()).as_deref(),
+            account_email(AgentId::CLAUDE, Some(&account), &HashMap::new()).as_deref(),
             Some("me@example.com")
         );
     }
@@ -141,7 +97,7 @@ mod tests {
             r#"{"oauthAccount":{"emailAddress":"home@example.com"}}"#,
         );
         assert_eq!(
-            account_email(Agent::Claude, None, &env(&[("HOME", &home)])).as_deref(),
+            account_email(AgentId::CLAUDE, None, &env(&[("HOME", &home)])).as_deref(),
             Some("home@example.com")
         );
         let named = dir.join("named");
@@ -152,7 +108,7 @@ mod tests {
         );
         assert_eq!(
             account_email(
-                Agent::Claude,
+                AgentId::CLAUDE,
                 None,
                 &env(&[("HOME", &home), ("CLAUDE_CONFIG_DIR", &named)])
             )
@@ -164,7 +120,7 @@ mod tests {
     #[test]
     fn a_missing_malformed_or_signed_out_record_has_no_email() {
         let dir = ScratchDir::new("email-none");
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             // Nothing there.
             assert_eq!(
                 account_email(agent, Some(&dir.join("absent")), &HashMap::new()),
@@ -174,7 +130,7 @@ mod tests {
         let account = dir.join("account");
         write(&account, ".claude.json", "{not json");
         write(&account, "auth.json", "{not json");
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             assert_eq!(
                 account_email(agent, Some(&account), &HashMap::new()),
                 None,
@@ -188,7 +144,7 @@ mod tests {
             "auth.json",
             r#"{"OPENAI_API_KEY":null,"tokens":null}"#,
         );
-        for agent in Agent::ALL {
+        for agent in AgentId::ALL {
             assert_eq!(
                 account_email(agent, Some(&account), &HashMap::new()),
                 None,
@@ -220,12 +176,12 @@ mod tests {
             &json!({"tokens": {"id_token": token}}).to_string(),
         );
         assert_eq!(
-            account_email(Agent::Codex, Some(&account), &HashMap::new()).as_deref(),
+            account_email(AgentId::CODEX, Some(&account), &HashMap::new()).as_deref(),
             Some("me@example.com")
         );
         // The default account follows CODEX_HOME.
         assert_eq!(
-            account_email(Agent::Codex, None, &env(&[("CODEX_HOME", &account)])).as_deref(),
+            account_email(AgentId::CODEX, None, &env(&[("CODEX_HOME", &account)])).as_deref(),
             Some("me@example.com")
         );
         let profile =
@@ -263,7 +219,7 @@ mod tests {
                 "https://auth.x.ai::2":{"email":"me@example.com"}}"#,
         );
         assert_eq!(
-            account_email(Agent::Grok, Some(&account), &HashMap::new()).as_deref(),
+            account_email(AgentId::GROK, Some(&account), &HashMap::new()).as_deref(),
             Some("me@example.com")
         );
         write(
@@ -273,7 +229,7 @@ mod tests {
                 "https://auth.x.ai::2":{"email":"other@example.com"}}"#,
         );
         assert_eq!(
-            account_email(Agent::Grok, Some(&account), &HashMap::new()),
+            account_email(AgentId::GROK, Some(&account), &HashMap::new()),
             None
         );
         assert_eq!(grok_email(&json!({})), None);

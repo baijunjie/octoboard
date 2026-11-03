@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::agents::{Agent, Launch, PerAgent};
+use super::agents::{AgentId, Launch, PerAgent};
 use super::fields::present_option;
 use super::git_workflow::GitWorkflowOverride;
 
@@ -39,8 +39,8 @@ pub enum Origin {
 /// afterwards only by the user (see `Session.colour`). The daemon only ever hands the label
 /// around; what each one looks like in the light and the dark appearance is the UI's own
 /// (`packages/ui/src/sessions/sessionColours.ts`), not here. A stored label must stay readable,
-/// so one is renamed or removed only together with a schema version step (`SCHEMA_VERSION` in
-/// `apps/daemon/src/store/schema.rs`).
+/// so once a release has stored it, one is renamed or removed only together with a schema version
+/// step (`SCHEMA_VERSION` in `apps/daemon/src/store/schema.rs`).
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -149,10 +149,10 @@ pub struct Console {
     pub name: String,
     pub workdir: String,
     /// The agent a console session of this console is of.
-    pub default_agent: Agent,
+    pub default_agent: AgentId,
     /// The agent a project session falls back to when its project names none; `None` follows
     /// `default_agent`. Read it through [`Console::project_session_default`].
-    pub project_session_agent: Option<Agent>,
+    pub project_session_agent: Option<AgentId>,
     /// The account each agent's sessions opened in this console read, by id; one setting per
     /// agent, and a session reads only its own agent's. `null` means that agent's default account
     /// — the state of pinning nothing. What a referenced account resolves to at launch is
@@ -180,7 +180,7 @@ pub struct Console {
 impl Console {
     /// The agent a project session of this console is of when neither the request nor its
     /// project names one.
-    pub fn project_session_default(&self) -> Agent {
+    pub fn project_session_default(&self) -> AgentId {
         self.project_session_agent.unwrap_or(self.default_agent)
     }
 
@@ -188,7 +188,7 @@ impl Console {
     /// account, `None` for the agent's default, and this console's reference when it inherits.
     pub fn resolve_project_account(
         &self,
-        agent: Agent,
+        agent: AgentId,
         setting: &ProjectAccount,
     ) -> Option<String> {
         match setting {
@@ -209,7 +209,7 @@ impl Console {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     pub id: String,
-    pub agent: Agent,
+    pub agent: AgentId,
     /// Required, and unique within this account's agent compared trimmed and case-insensitively —
     /// the default account's own name takes part in that comparison, which is why it is compared
     /// against [`DEFAULT_ACCOUNT_NAME`] rather than left unchecked. Names are not compared across
@@ -264,7 +264,7 @@ pub enum Availability {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AgentAvailability {
-    pub agent: Agent,
+    pub agent: AgentId,
     pub availability: Availability,
     /// The directory this agent's default account currently resolves to: the directory its own
     /// variable is exported to in the snapshot, else the agent's own usual default. For Grok Build
@@ -284,7 +284,7 @@ pub const DEFAULT_ACCOUNT_NAME: &str = "Default";
 /// user's own, else [`DEFAULT_ACCOUNT_NAME`].
 pub fn default_account_name_in(
     names: &std::collections::BTreeMap<String, String>,
-    agent: Agent,
+    agent: AgentId,
 ) -> &str {
     names
         .get(agent.wire_name())
@@ -328,7 +328,7 @@ pub struct Project {
     pub host_id: String,
     pub name: String,
     pub path: String,
-    pub default_agent: Option<Agent>,
+    pub default_agent: Option<AgentId>,
     pub source: ProjectSource,
     pub remote_url: Option<String>,
     /// The account each agent's sessions opened in this project read; one setting per agent, and
@@ -419,7 +419,7 @@ pub struct RecordTitles {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
-    pub agent: Agent,
+    pub agent: AgentId,
     pub agent_session_id: Option<String>,
     pub console_id: String,
     pub project_id: Option<String>,
@@ -665,8 +665,8 @@ pub struct ShellTerminal {
 #[cfg(test)]
 mod tests {
     use crate::protocol::{
-        Agent, AgentAvailability, Availability, ConsoleSessionColour, Event, Request, RequestBody,
-        Settings, ShellTerminal, ShellTerminalState,
+        AgentAvailability, AgentId, Availability, ConsoleSessionColour, Event, Request,
+        RequestBody, Settings, ShellTerminal, ShellTerminalState,
     };
 
     /// A shell terminal travels in the snapshot and in events of its own in the shape
@@ -716,6 +716,7 @@ mod tests {
             sessions: vec![],
             trusted_directories: vec![],
             settings: Settings::default(),
+            providers: Vec::new(),
             git_statuses: vec![],
             agent_availability: vec![],
             account_quotas: vec![],
@@ -763,7 +764,7 @@ mod tests {
     #[test]
     fn not_yet_determined_is_an_explicit_value_not_an_absent_entry() {
         let entry = AgentAvailability {
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             availability: Availability::NotDetermined,
             default_account_dir: None,
         };
@@ -773,7 +774,7 @@ mod tests {
         assert!(json["default_account_dir"].is_null());
 
         let determined = AgentAvailability {
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             availability: Availability::Unavailable,
             default_account_dir: Some("/home/user/.grok".to_string()),
         };

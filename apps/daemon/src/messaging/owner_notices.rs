@@ -16,7 +16,7 @@ use crate::messaging::delivery::{
 };
 use crate::messaging::naming::{label, named_session, one_line, place_of, quote};
 use crate::messaging::texts::{capitalised, session_notice_opening, NOTICE_PREFIX, WAITING_PHRASE};
-use crate::protocol::{Agent, Role, Session, SessionKind, SessionStatus};
+use crate::protocol::{AgentId, Role, Session, SessionKind, SessionStatus};
 use crate::session_tools::catalogue;
 use crate::state::AppState;
 
@@ -241,7 +241,7 @@ pub(crate) fn tell_owner(
 
 /// The tools a project session has, as a worker or not, by the names its agent shows them, for
 /// telling a session whose binding has just changed what it has.
-fn project_tools(agent: Agent, worker: bool) -> String {
+fn project_tools(agent: AgentId, worker: bool) -> String {
     catalogue::tools_for(SessionKind::Project, worker)
         .iter()
         .map(|tool| format!("`{}`", catalogue::qualified_tool_name(agent, tool.name)))
@@ -251,7 +251,7 @@ fn project_tools(agent: Agent, worker: bool) -> String {
 
 /// The sentence that tells a session that has just become a worker that it can no longer start or
 /// drive sessions, with the tools it has left; what comes before it says it is a worker.
-fn lost_tools(agent: Agent) -> String {
+fn lost_tools(agent: AgentId) -> String {
     format!(
         "You can no longer start or drive sessions: of Octoboard's tools you now have {}, and a \
          call of any other is refused. Any pages you pushed to the report panel were withdrawn \
@@ -279,7 +279,7 @@ pub(crate) fn role_after_owner_change(session: &Session, was_worker: bool) -> St
 /// it and report to it, what ending a round with `done` does and where items for the parent go,
 /// and, for a `coordinator`, that it keeps its child sessions, else the tools it lost. Its role
 /// description, recorded at launch, says it is independent, so this says it replaces that.
-pub(crate) fn duties_under_new_parent(agent: Agent, coordinator: bool) -> String {
+pub(crate) fn duties_under_new_parent(agent: AgentId, coordinator: bool) -> String {
     let tool = |name: &str| catalogue::qualified_tool_name(agent, name);
     let report = tool("report");
     let ending = if coordinator {
@@ -316,7 +316,7 @@ pub(crate) const INDEPENDENT_COORDINATOR_ROLE: &str =
 
 /// The sentence that tells a session whose it is from now on, in the words of its `agent`'s tool
 /// names; `owner` names the parent session, and the sentence begins with it.
-pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
+pub(crate) fn owner_from_now_on(agent: AgentId, owner: &str) -> String {
     format!(
         "{owner} is your parent session from now on: take work only from it, or from the user \
          typing in this terminal, and report to it with `{report}`.",
@@ -335,7 +335,7 @@ pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
 /// role the session now has, for one).
 pub(crate) fn parent_changed_notice(
     happened: &str,
-    agent: Agent,
+    agent: AgentId,
     owner: &str,
     after: &str,
 ) -> String {
@@ -351,7 +351,7 @@ pub(crate) fn parent_changed_notice(
 ///
 /// `lead` is what the notice says first, ending where "you drive it" follows on; `rest` follows
 /// the sentence, with its own leading space.
-pub(crate) fn new_owner_notice(owner_agent: Agent, lead: &str, rest: &str) -> String {
+pub(crate) fn new_owner_notice(owner_agent: AgentId, lead: &str, rest: &str) -> String {
     let tool = |name: &str| catalogue::qualified_tool_name(owner_agent, name);
     format!(
         "{NOTICE_PREFIX}: {lead} you drive it like any session of yours, with \
@@ -810,7 +810,7 @@ mod tests {
     #[tokio::test]
     async fn an_owner_is_told_when_a_dialog_or_an_action_title_makes_its_session_wait() {
         let (state, _dir, hub) = team_state("reporting-waiting-routes", &[]);
-        for (id, agent) in [("dialog", Agent::Claude), ("title", Agent::Codex)] {
+        for (id, agent) in [("dialog", AgentId::CLAUDE), ("title", AgentId::CODEX)] {
             state
                 .store
                 .insert_session(&Session {
@@ -825,7 +825,7 @@ mod tests {
         }
         let dialog = crate::test_support::running(&state, "dialog");
         let title =
-            crate::test_support::fake_live_session("title", Agent::Codex, 80, 24, "sleep 30");
+            crate::test_support::fake_live_session("title", AgentId::CODEX, 80, 24, "sleep 30");
         state.register_live(title.clone());
         crate::session::spawn_reader_thread(title.clone(), 8 * 1024);
 
@@ -921,7 +921,7 @@ mod tests {
         let session = project_session("Fix the \"login\"\nretry");
         let owner = Session {
             id: "hub".to_string(),
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             ..project_session("hub")
         };
         assert_eq!(
@@ -1036,7 +1036,7 @@ mod tests {
     fn the_new_owner_notice_is_worded_as_fixed_for_each_path() {
         assert_eq!(
             new_owner_notice(
-                Agent::Grok,
+                AgentId::GROK,
                 "`a` transferred its session `s` (\"S\") to you. It is yours from now on: it \
                  reports to you, and",
                 " Its role is worker and it cannot manage child sessions.",
@@ -1048,7 +1048,7 @@ mod tests {
         );
         assert_eq!(
             new_owner_notice(
-                Agent::Claude,
+                AgentId::CLAUDE,
                 "`a`, which reported to you, was handed off to a session of Codex. `b` took its \
                  place and reports to you from now on:",
                 " The original is archived.",

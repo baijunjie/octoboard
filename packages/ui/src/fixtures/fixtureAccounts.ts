@@ -1,7 +1,7 @@
 // What the fixture daemon answers for the agent accounts: their creation and removal, sharing, sign-in, the default
 // account's name and the use of a Codex reset credit, and the refusals a session gets on an account.
 import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
-import { AGENT_LABEL, AGENTS } from "../agents/agents";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, servedLabel } from "./fixtureProviders";
 import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type SharingCause } from "../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
@@ -83,7 +83,7 @@ function failedSharing(error: FixtureError, share: boolean): NonNullable<Account
 
 /** One per-agent group with `map` applied to each agent's value. */
 function mappedPerAgent<T>(group: PerAgent<T>, map: (value: T) => T): PerAgent<T> {
-  return Object.fromEntries(AGENTS.map((agent) => [agent, map(group[agent])])) as PerAgent<T>;
+  return Object.fromEntries(FIXTURE_AGENTS.map((agent) => [agent, map(group[agent])])) as PerAgent<T>;
 }
 
 /** The window's name in a quota refusal; mirrors the daemon's English `window_name`. */
@@ -123,7 +123,7 @@ export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store
     return fail({
       code: "account_quota_exhausted",
       params: {
-        agent: AGENT_LABEL[agent],
+        agent: servedLabel(agent),
         account: name,
         window: windowName,
         window_kind: blocking.kind,
@@ -131,7 +131,7 @@ export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store
         ...(modelWeekly && { model_weekly: "true" }),
         ...(blocking.resets_at != null && { resets_at: String(blocking.resets_at) }),
       },
-      message: `${name} has reached its ${AGENT_LABEL[agent]} usage limit (${windowName})`,
+      message: `${name} has reached its ${servedLabel(agent)} usage limit (${windowName})`,
     });
   };
   /** Refuses a session on, a handoff to, or a switch to an account the user turned off, as the daemon does before it
@@ -144,8 +144,8 @@ export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store
     const name = account?.name ?? current.settings.default_account_names?.[agent] ?? DEFAULT_ACCOUNT_NAME;
     return fail({
       code: "account_disabled",
-      params: { agent: AGENT_LABEL[agent], account: name },
-      message: `${name} is disabled for ${AGENT_LABEL[agent]}. Choose another account, or turn it back on in Settings → Agent accounts.`,
+      params: { agent: servedLabel(agent), account: name },
+      message: `${name} is disabled for ${servedLabel(agent)}. Choose another account, or turn it back on in Settings → Agent accounts.`,
     });
   };
   /** Refuses a session on, a handoff to, or a switch to an account whose last reading in the store says it is not logged
@@ -159,8 +159,8 @@ export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store
     const name = account?.name ?? current.settings.default_account_names?.[agent] ?? DEFAULT_ACCOUNT_NAME;
     return fail({
       code: "account_not_signed_in",
-      params: { agent: AGENT_LABEL[agent], account: name },
-      message: `${name} (${AGENT_LABEL[agent]}) is not logged in. Choose another account, or log in to it in Settings → Agent accounts.`,
+      params: { agent: servedLabel(agent), account: name },
+      message: `${name} (${servedLabel(agent)}) is not logged in. Choose another account, or log in to it in Settings → Agent accounts.`,
     });
   };
   /** Refuses what the daemon turns away while a change of the sharing of `accountId` runs: a session opened on it, one
@@ -190,7 +190,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
     const agent = body.type === "create_account" ? body.agent : editing!.agent;
     const customDefault = current.settings.default_account_names?.[agent];
     if (body.name !== undefined && customDefault && body.name.trim().toLowerCase() === customDefault.toLowerCase()) {
-      return fail({ code: "account_name_taken", params: { agent: AGENT_LABEL[agent], name: customDefault }, message: `${AGENT_LABEL[agent]} already has an account named ${customDefault}` });
+      return fail({ code: "account_name_taken", params: { agent: servedLabel(agent), name: customDefault }, message: `${servedLabel(agent)} already has an account named ${customDefault}` });
     }
     if (body.config_dir !== undefined) {
       const dir = normalizedPath(body.config_dir.trim());
@@ -200,7 +200,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
         ? undefined
         : current.settings.accounts.find((account) => account.agent === agent && account.id !== editing?.id && normalizedPath(account.config_dir) === dir)?.name
           ?? (defaultDir != null && normalizedPath(defaultDir) === dir ? DEFAULT_ACCOUNT_NAME : undefined);
-      if (owner !== undefined) return fail({ code: "config_dir_taken", params: { agent: AGENT_LABEL[agent], name: owner }, message: `${AGENT_LABEL[agent]} account ${owner} already uses this config directory` });
+      if (owner !== undefined) return fail({ code: "config_dir_taken", params: { agent: servedLabel(agent), name: owner }, message: `${servedLabel(agent)} account ${owner} already uses this config directory` });
     }
     return { type: "ack", id: null };
   };
@@ -273,7 +273,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
       const current = store.getState();
       const name = body.name.trim();
       const taken = name && current.settings.accounts.find((account) => account.agent === body.agent && account.name.trim().toLowerCase() === name.toLowerCase());
-      if (taken) return fail({ code: "account_name_taken", params: { agent: AGENT_LABEL[body.agent], name: taken.name }, message: `${AGENT_LABEL[body.agent]} already has an account named ${taken.name}` });
+      if (taken) return fail({ code: "account_name_taken", params: { agent: servedLabel(body.agent), name: taken.name }, message: `${servedLabel(body.agent)} already has an account named ${taken.name}` });
       const { [body.agent]: _, ...others } = current.settings.default_account_names ?? {};
       // A blank name, or the reserved word in any letter case, clears the custom name.
       const clears = !name || name.toLowerCase() === DEFAULT_ACCOUNT_NAME.toLowerCase();
@@ -284,7 +284,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
       const current = store.getState();
       if (scenario.loginStartError) return fail(scenario.loginStartError);
       if (current.accountLogins.some((login) => login.agent === body.agent && login.account === (body.account ?? null) && (login.status === "starting" || login.status === "waiting"))) {
-        return fail({ code: "login_already_running", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is already being signed in for this account` });
+        return fail({ code: "login_already_running", params: { agent: servedLabel(body.agent) }, message: `${servedLabel(body.agent)} is already being signed in for this account` });
       }
       const account = body.account ?? null;
       const publish = (login: Partial<AccountLogin>) => store.setState((state) => ({
@@ -304,7 +304,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
         setTimeout(() => {
           const outcome = scenario.loginOutcome!;
           publish(outcome === "failed"
-            ? { status: "failed", failure: { code: "login_failed", params: { agent: AGENT_LABEL[body.agent], detail: LOGIN_FAILURE_DETAIL }, message: `${AGENT_LABEL[body.agent]} reported: ${LOGIN_FAILURE_DETAIL}` } }
+            ? { status: "failed", failure: { code: "login_failed", params: { agent: servedLabel(body.agent), detail: LOGIN_FAILURE_DETAIL }, message: `${servedLabel(body.agent)} reported: ${LOGIN_FAILURE_DETAIL}` } }
             : { status: outcome });
         }, 300);
       }, 50);
@@ -313,19 +313,22 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
     cancel_account_login: (body) => {
       const account = body.account ?? null;
       const running = store.getState().accountLogins.find((login) => login.agent === body.agent && login.account === account && (login.status === "starting" || login.status === "waiting"));
-      if (!running) return fail({ code: "login_not_running", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not being signed in for this account` });
+      if (!running) return fail({ code: "login_not_running", params: { agent: servedLabel(body.agent) }, message: `${servedLabel(body.agent)} is not being signed in for this account` });
       store.setState((state) => ({ accountLogins: state.accountLogins.map((login) => login === running ? { ...login, status: "cancelled", authorization_url: null, device_code: null } : login) }));
       return { type: "ack", id: null };
     },
-    use_codex_reset_credit: (body) => {
+    use_reset_credit: (body) => {
       const current = store.getState();
       const account = body.account ?? null;
-      if (account !== null && !current.settings.accounts.some((held) => held.id === account && held.agent === "codex")) {
+      if (!FIXTURE_PROVIDERS.find(({ id }) => id === body.agent)?.capabilities.reset_credits) {
+        return fail({ code: "provider_unsupported", params: { agent: body.agent, operation: "reset_credit" }, message: `${servedLabel(body.agent)} does not offer using a rate limit reset credit` });
+      }
+      if (account !== null && !current.settings.accounts.some((held) => held.id === account && held.agent === body.agent)) {
         return fail({ code: "unknown_account", params: { account }, message: `unknown account ${account}` });
       }
       const staged = scenario.resetCreditUse;
       if (staged === "pending") return neverReplied();
-      const reading = accountQuotaOf(current.accountQuotas, "codex", account);
+      const reading = accountQuotaOf(current.accountQuotas, body.agent, account);
       const held = typeof reading === "object" ? reading : undefined;
       // The daemon reads the account again after every run of Codex, a failed one included, a moment after it
       // answers: as the scenario says, or never. A refusal that comes before Codex runs reads nothing again.
@@ -333,7 +336,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
       const reread = (outcome: ResetCreditOutcome | "failed") => {
         if (!held || rereading === "never") return;
         setTimeout(() => {
-          const latest = accountQuotaOf(store.getState().accountQuotas, "codex", account);
+          const latest = accountQuotaOf(store.getState().accountQuotas, body.agent, account);
           if (typeof latest !== "object") return;
           // A failed read keeps the windows and the credits as they were and carries the failure.
           const next: AccountQuota = rereading?.unavailable ? { ...latest, unavailable: rereading.unavailable } : quotaAfterResetCredit(latest, outcome);

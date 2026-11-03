@@ -15,7 +15,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{Map, Value};
 
 use crate::protocol::{
-    Agent, CodedError, Console, LaunchChange, Project, ProjectAccount, Session, SessionKind,
+    AgentId, CodedError, Console, LaunchChange, Project, ProjectAccount, Session, SessionKind,
     SessionStatus,
 };
 use crate::state::AppState;
@@ -43,15 +43,15 @@ pub(super) fn optional_text(arguments: &Map<String, Value>, key: &str) -> Result
     Ok(trimmed_or_none(raw_text(arguments, key)?.as_deref()))
 }
 
-pub(super) fn optional_agent(arguments: &Map<String, Value>, key: &str) -> Result<Option<Agent>> {
+pub(super) fn optional_agent(arguments: &Map<String, Value>, key: &str) -> Result<Option<AgentId>> {
     optional_string(arguments, key)
         .map(|value| parse_agent(&value))
         .transpose()
 }
 
-pub(super) fn parse_agent(value: &str) -> Result<Agent> {
-    Agent::from_wire_name(value).ok_or_else(|| {
-        let names: Vec<String> = Agent::ALL
+pub(super) fn parse_agent(value: &str) -> Result<AgentId> {
+    AgentId::from_wire_name(value).ok_or_else(|| {
+        let names: Vec<String> = AgentId::ALL
             .iter()
             .map(|agent| format!("`{}`", agent.wire_name()))
             .collect();
@@ -160,7 +160,7 @@ pub(super) fn present_text(
 pub(super) fn present_agent(
     arguments: &Map<String, Value>,
     key: &str,
-) -> Result<Option<Option<Agent>>> {
+) -> Result<Option<Option<AgentId>>> {
     match arguments.get(key) {
         None => Ok(None),
         Some(Value::Null) => Ok(Some(None)),
@@ -194,7 +194,10 @@ pub(super) fn git_workflow_argument<T: serde::de::DeserializeOwned + Default>(
 }
 
 /// The entries of an argument that is an object keyed by agent, in no particular order.
-fn per_agent<'a>(arguments: &'a Map<String, Value>, key: &str) -> Result<Vec<(Agent, &'a Value)>> {
+fn per_agent<'a>(
+    arguments: &'a Map<String, Value>,
+    key: &str,
+) -> Result<Vec<(AgentId, &'a Value)>> {
     match arguments.get(key) {
         None | Some(Value::Null) => Ok(Vec::new()),
         Some(Value::Object(entries)) => entries
@@ -209,7 +212,7 @@ fn per_agent<'a>(arguments: &'a Map<String, Value>, key: &str) -> Result<Vec<(Ag
 pub(super) fn project_accounts_argument(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
-) -> Result<HashMap<Agent, ProjectAccount>> {
+) -> Result<HashMap<AgentId, ProjectAccount>> {
     per_agent(arguments, "accounts")?
         .into_iter()
         .map(|(agent, value)| {
@@ -233,7 +236,7 @@ pub(super) fn project_accounts_argument(
 pub(super) fn console_accounts_argument(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
-) -> Result<HashMap<Agent, Option<String>>> {
+) -> Result<HashMap<AgentId, Option<String>>> {
     per_agent(arguments, "accounts")?
         .into_iter()
         .map(|(agent, value)| match value {
@@ -249,7 +252,7 @@ pub(super) fn console_accounts_argument(
 /// unknown one, which is what it is for this agent.
 pub(super) fn resolve_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     wanted: &str,
 ) -> Result<Option<String>> {
     let wanted = wanted.trim();
@@ -273,7 +276,7 @@ pub(super) fn resolve_account(
 pub(super) fn launch_argument(
     arguments: &Map<String, Value>,
     key: &str,
-) -> Result<HashMap<Agent, LaunchChange>> {
+) -> Result<HashMap<AgentId, LaunchChange>> {
     per_agent(arguments, key)?
         .into_iter()
         .map(|(agent, value)| {

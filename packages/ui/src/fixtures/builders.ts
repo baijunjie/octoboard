@@ -1,12 +1,11 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type FileContent, type Launch, type GitStatus, type Host, type Page, type PerAgent, type ProcessTree, type Project, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type DocumentSettings, type FileContent, type Launch, type GitStatus, type Host, type InspectedSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
-import { AGENTS } from "../agents/agents";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, availabilityOf } from "./fixtureProviders";
 
 const NOW = Date.now();
 
@@ -29,7 +28,7 @@ const NO_LAUNCH: Launch = { model: null, effort: null };
 
 /** One group per agent with the settings an extra names laid over the ones it has. */
 function layered<T extends object>(base: PerAgent<T>, over: Partial<PerAgent<Partial<T>>> = {}): PerAgent<T> {
-  return Object.fromEntries(AGENTS.map((agent) => [agent, { ...base[agent], ...over[agent] }])) as PerAgent<T>;
+  return Object.fromEntries(FIXTURE_AGENTS.map((agent) => [agent, { ...base[agent], ...over[agent] }])) as PerAgent<T>;
 }
 
 /** What a test or scenario may set on a console: the per-agent settings may name only the agents (and launch fields) they set. */
@@ -51,7 +50,7 @@ export function consoleWith(base: Console, extra: ConsoleExtra): Console {
   return {
     ...base,
     ...rest,
-    accounts: { ...base.accounts, ...accounts },
+    accounts: { ...base.accounts, ...accounts } as Console["accounts"],
     launch: layered(base.launch, launch),
     project_session_launch: layered(base.project_session_launch, project_session_launch),
   };
@@ -63,7 +62,7 @@ export function projectWith(base: Project, extra: ProjectExtra): Project {
   return {
     ...base,
     ...rest,
-    accounts: { ...base.accounts, ...accounts },
+    accounts: { ...base.accounts, ...accounts } as Project["accounts"],
     launch: layered(base.launch, launch),
   };
 }
@@ -291,6 +290,8 @@ export function snapshotState(parts: {
     trustedDirectories: parts.trustedDirectories ?? [],
     sessionRequests: parts.sessionRequests ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
+    providers: FIXTURE_PROVIDERS,
+    agentAvailability: availabilityOf(FIXTURE_PROVIDERS),
     settings: parts.settings ?? { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects" },
     accountQuotas: parts.accountQuotas ?? [],
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
@@ -341,11 +342,51 @@ export const broadcastErrorNotification = (code: string, params: MessageParams =
  * app renames or drops breaks the scenario at type checking. */
 export const failureTitle = (key: PlainMessageKey) => (t: Translate) => t(key);
 
-/** The Claude compatibility the daemon puts in `Settings.claude_compatibility` and in an import's
- * `current_claude_compatibility`: the user's explicit choice for an agent when there is one, otherwise Grok Build on and
- * Codex on only while Claude Code is among the added agents (an undecided list counts as not). The gallery's daemon keeps
- * a scenario's `settings.claude_compatibility` as the explicit choices and reports this. */
-export function effectiveClaudeCompatibility(choices: Partial<Record<Agent, boolean>>, added: readonly Agent[] | null): Partial<Record<Agent, boolean>> {
-  const defaults: Record<Exclude<Agent, "claude">, boolean> = { codex: added?.includes("claude") ?? false, grok: true };
-  return Object.fromEntries(AGENTS.filter(hasClaudeCompatibility).map((agent) => [agent, choices[agent] ?? defaults[agent]]));
+/** The value in effect of every setting of every provider, as the daemon puts them in `Settings.provider_settings`: the
+ * user's explicit choice (`choices`, the same shape) when there is one, otherwise what the setting follows without one.
+ * A choice setting without a choice is `null`; a switch follows its default rule (Codex's Claude compatibility is on
+ * only while Claude Code is among the added agents, an undecided list counting as not). The gallery's daemon keeps a
+ * scenario's `settings.provider_settings` as the explicit choices and reports this. By default the providers are the
+ * registered ones; a scenario that serves another beside them passes the providers it serves. */
+export function effectiveProviderSettings(choices: Settings["provider_settings"], added: readonly Agent[] | null, providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): Settings["provider_settings"] {
+  return Object.fromEntries(
+    providers.map(({ id, settings }) => [
+      id,
+      Object.fromEntries(
+        settings.map(({ id: setting, kind }): [string, boolean | string | null] => {
+          const chosen = choices[id]?.[setting] ?? null;
+          if (kind.type === "choice" || chosen !== null) return [setting, chosen];
+          const rule = kind.default;
+          return [setting, rule === "on" ? true : rule === "off" ? false : (added?.some((agent) => agent === rule.while_added) ?? false)];
+        }),
+      ),
+    ]),
+  );
+}
+
+/** What a configuration export carries of the user's explicit choices (`choices`, as `effectiveProviderSettings` takes
+ * them): only the settings their descriptors export, only those the user chose for. A provider with none has no entry.
+ * `providers` are the ones the machine serves, the registered ones by default. */
+export function exportedProviderSettings(choices: Settings["provider_settings"], providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): DocumentSettings["provider_settings"] {
+  const exported: DocumentSettings["provider_settings"] = {};
+  for (const { id, settings } of providers) {
+    const chosen = settings.flatMap(({ id: setting, exported: carried }) => {
+      const value = choices[id]?.[setting];
+      return carried && value !== undefined && value !== null ? [[setting, value] as const] : [];
+    });
+    if (chosen.length > 0) exported[id] = Object.fromEntries(chosen);
+  }
+  return exported;
+}
+
+/** The values in effect (`effectiveProviderSettings`) of the exported settings, as an import's review reports them for
+ * this machine in `InspectedSettings.current_provider_settings`. A provider that exports none has no entry. `providers`
+ * are the ones the machine serves, the registered ones by default. */
+export function currentExportedProviderSettings(effective: Settings["provider_settings"], providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): InspectedSettings["current_provider_settings"] {
+  const current: InspectedSettings["current_provider_settings"] = {};
+  for (const { id, settings } of providers) {
+    const carried = settings.filter(({ exported }) => exported).map(({ id: setting }) => [setting, effective[id]?.[setting] ?? null] as const);
+    if (carried.length > 0) current[id] = Object.fromEntries(carried);
+  }
+  return current;
 }

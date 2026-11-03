@@ -117,7 +117,7 @@ mod tests {
         account, arguments, live_and_watched, peer_state, prepare_relaunch, sessions_as_stored,
         shared_console_state, Launches, Started, CONVERSATION,
     };
-    use crate::protocol::{Agent, Role};
+    use crate::protocol::{AgentId, Role};
     use crate::session::term::{Launch, LaunchRequest};
     use crate::test_support::{
         code_of, output_containing, running, stand_in_launch, within, ScratchDir, PATIENCE,
@@ -141,7 +141,7 @@ mod tests {
     ) -> impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static {
         crate::test_support::offer_models(
             state,
-            Agent::Claude,
+            AgentId::CLAUDE,
             &[("opus", &["high", "low"]), ("sonnet", &["low"])],
         );
         prepare_relaunch(state, dir, session, &["project-1", "project-3"])
@@ -187,7 +187,7 @@ mod tests {
         assert!(!state.is_changing_model("of-a"));
         assert!(result["note"].as_str().unwrap().contains(&format!(
             "send it the next step with `{}`",
-            qualified_tool_name(Agent::Claude, "instruct_session")
+            qualified_tool_name(AgentId::CLAUDE, "instruct_session")
         )));
     }
 
@@ -559,7 +559,7 @@ mod tests {
         let _snapshot = prepare(&state, &dir, "mine");
         let account = account(
             "claude-a",
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             "Claude A",
             dir.join("claude-a").to_string_lossy().into_owned(),
         );
@@ -746,11 +746,11 @@ mod tests {
         let _ = prepare(&state, &dir, "mine");
         crate::test_support::offer_models(
             &state,
-            Agent::Grok,
+            AgentId::GROK,
             &[("grok-4.7", &["high"]), ("grok-4.8", &["high"])],
         );
         let mut grok = state.session_record("mine").unwrap();
-        grok.agent = Agent::Grok;
+        grok.agent = AgentId::GROK;
         grok.agent_session_id = Some("b0000000-0000-4000-8000-000000000001".to_string());
         state.store.update_session(&grok).unwrap();
         // Its turn stopped on the limit, as Grok 1.0.70 writes it.
@@ -768,7 +768,8 @@ mod tests {
         )
         .unwrap();
         let home = dir.join("grok-default").to_string_lossy().into_owned();
-        let live = crate::test_support::fake_live_session("mine", Agent::Grok, 80, 24, "sleep 30");
+        let live =
+            crate::test_support::fake_live_session("mine", AgentId::GROK, 80, 24, "sleep 30");
         state.register_live(live.clone());
         crate::coordinator::exit_watch::watch_exit(&state, (*live).clone());
         live.on_output(GROK_MODAL.as_bytes());

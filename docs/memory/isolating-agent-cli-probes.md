@@ -61,7 +61,7 @@ probes' trust entries and session records — that residue is not evidence of a 
 Applies to any probe of an agent's sign-in — `claude auth login`, `codex login`, `grok login` — including one against a
 scratch config directory, **and to any Grok Build run at all whose home holds no login**, since Grok starts the same
 sign-in inline on a plain run. The scratch directory isolates only the credential written on disk; the authorisation
-runs in the user's own default browser, which is usually already signed in to the vendor, so the flow can complete
+runs in the user's own default browser, which is usually already signed in to the provider, so the flow can complete
 against their real account with nobody approving it (a Grok Build login did, in about five seconds), leave a
 server-side session that deleting the scratch credential does not revoke, and put pages up on their screen.
 
@@ -71,7 +71,7 @@ records its argument; Codex through `codex app-server`'s `account/login/start` o
 Build and plain `codex login` open the browser themselves and nothing found stops them (`docs/agent-cli-reference.md`,
 "Signing in a config directory without a terminal"), so they have no such route. A login that has to complete is done
 by the user, against an account they choose. If one completes anyway, tell the user which account it signed in, so they
-can revoke the session on the vendor's side.
+can revoke the session on the provider's side.
 
 **For Grok Build, a throwaway `GROK_HOME` and `HOME` with no `auth.json` do not keep a run off the user's account**
 (Grok Build 1.0.62, macOS). A first run there, with no login intended, ran the inline sign-in through the already

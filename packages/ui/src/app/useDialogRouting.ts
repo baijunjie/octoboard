@@ -72,9 +72,9 @@ export function useDialogRouting({
 
   const openDialog = (dialog: DialogRequest) => {
     // Nothing to offer without an agent that is added and installed; the controls are disabled already.
-    const { agentAvailability, settings } = store.getState();
-    if ((dialog.kind === "new-session" || dialog.kind === "new-console-session") && noAgentState(agentAvailability, settings.added_agents)) return;
-    if (dialog.kind === "handoff" && !pickableAgents(agentAvailability, settings.added_agents).some((agent) => agent !== dialog.session.agent)) return;
+    const { agentAvailability, settings, providers } = store.getState();
+    if ((dialog.kind === "new-session" || dialog.kind === "new-console-session") && noAgentState(agentAvailability, settings.added_agents, providers)) return;
+    if (dialog.kind === "handoff" && !pickableAgents(agentAvailability, settings.added_agents, providers).some((agent) => agent !== dialog.session.agent)) return;
     clearTimeout(forgetTimer.current);
     if (dialog.kind === "new-console") consolesBeforeNew.current = new Set(consoles.keys());
     else forgetSoon();

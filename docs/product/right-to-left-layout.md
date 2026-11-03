@@ -43,9 +43,10 @@ product docs name for parts of the window:
   beside the field keeps to the reading direction's end, so it is at the field's left.
 - **A value named inside a sentence keeps its own order**, wherever that sentence appears — a message, a tooltip, a
   `title`, a toast or an accessible name. A path, a branch name, a commit id, a `git` or operating-system message quoted
-  inside localized wording (see "What follows the language" in `docs/product/language.md`) and a name the user typed all
-  read in the direction of their own text inside right-to-left prose — one the sentence sets as code reads left to right
-  — and the quotation marks, parentheses and full stop the sentence puts around them stay where the sentence puts them.
+  inside localized wording (see "What follows the language" in `docs/product/language.md`), an agent's name and a name
+  the user typed all read in the direction of their own text inside right-to-left prose — one the sentence sets as code
+  reads left to right — and the quotation marks, parentheses and full stop the sentence puts around them stay where the
+  sentence puts them.
 - The rail's waiting count carries its badge at the button's top left rather than its top right, and so does the
   rail's Processes button, so the badge points into the content panel and the overflow pill stays clear of the window's
   edge, the rail being down the window's right edge (see "The rail" in

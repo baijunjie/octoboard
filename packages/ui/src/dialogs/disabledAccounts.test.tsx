@@ -7,7 +7,9 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { accountOf, sessionOf } from "../fixtures/builders";
 import type { Account, AccountQuota, Settings } from "../protocol";
 import { createStateStore, DaemonProvider } from "../store";
+import { availabilityOf } from "../fixtures/fixtureProviders";
 import { testDaemon } from "../test/testDaemon";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 
@@ -20,7 +22,7 @@ const work: Account = accountOf("claude-work", "claude", "Work", "/a/work");
 const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null };
 
 function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = []) {
-  const store = createStateStore({ accountQuotas });
+  const store = createStateStore({ accountQuotas, providers: TEST_PROVIDERS, agentAvailability: availabilityOf(TEST_PROVIDERS) });
   store.setState({ settings: { ...store.getState().settings, ...settings } });
   const daemon = testDaemon({ store, request: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));

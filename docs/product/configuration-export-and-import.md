@@ -148,10 +148,11 @@ Sessions and their records, the pages sessions pushed to the report panel, the c
 trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
 configuration, and are in no document. Neither is the default clone directory: that one is the importing machine's own
 to choose, and an import places what it clones under it (see "Default clone directory" in `docs/product/settings.md`).
-No console, project or account carries its stored id. Codex's and Claude Code's permission approval settings also stay
-local: exports omit them and imports leave the importing machine's choices unchanged, since importing them could
-silently turn on **Approve everything**, which on its own machine is saved only after a confirmation (see "Approval
-modes" in `docs/product/per-agent-settings.md`). Nothing to log an account in with — credentials, login state — is in any
+No console, project or account carries its stored id. A provider setting its provider does not declare as carried
+stays local too (see "Provider settings" in `docs/product/per-agent-settings.md`): Codex's and Claude Code's permission
+approval settings are such, so exports omit them and imports leave the importing machine's choices unchanged, since
+importing them could silently turn on **Approve everything**, which on its own machine is saved only after a
+confirmation (see "Approval modes" in the same document). Nothing to log an account in with — credentials, login state — is in any
 document, so every account an import creates starts not logged in; nor are the default account's directory and whether
 the default account is turned off. The added agents, the accounts and their order, sharing and turned-off choices, and
 the default accounts' names travel only in the accounts region (see "The accounts" above). Account quota readings are
@@ -200,13 +201,17 @@ The language the daemon holds for the user is not carried either (see "The langu
   instead" below). Applying the document's settings sets all five to the document's values.
   The import review and its result each have one line for all five (see "The import review" and "The import result" in
   `docs/product/configuration-export-and-import-dialogs.md`).
-- **Claude compatibility** (see "Claude compatibility" in `docs/product/per-agent-settings.md`), under
-  `claude_compatibility`, an object keyed by agent (`codex`, `grok`) holding `true` or `false`. It carries only the
-  choices the user made: an agent never chosen for is absent, so on the importing machine it keeps following that
-  machine's default — an unset Codex there follows whether Claude Code is added there — and an export where no choice
-  was made carries `{}`. Applying the document's settings records each choice it carries as the importing machine's own,
-  agent by agent, and leaves an agent it does not carry as it is; an agent the document names that has no such setting
-  here, Claude Code or one this build does not know, is skipped rather than refused.
+- **Provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), under
+  `provider_settings`, an object keyed by agent, each holding an object keyed by setting id with the user's explicit
+  choice: `true` or `false` for a switch, the choice's text for a choice setting. Only the settings their provider
+  declares as carried are in it — today Claude compatibility, `{"codex": {"claude_compatibility": true}}` say — and of
+  those only the ones the user made a choice for: a setting never chosen for is absent, so on the importing machine it
+  keeps following that machine's default — an unset Codex Claude compatibility there follows whether Claude Code is
+  added there — and an agent with nothing carried is absent, an export where no choice was made carrying `{}`.
+  Applying the document's settings records each choice it carries as the importing machine's own, setting by setting,
+  and leaves a setting it does not carry as it is. An entry naming an agent or a setting this build does not declare as
+  carried, or a value the setting does not take, is skipped rather than refused, in the inspection as in the apply, so
+  a hand-edited document cannot set a permission approval this way.
 - **Agent tags** (see "Agent tags" in `docs/product/per-agent-settings.md`), under `agent_tags`, an object keyed by
   agent (`claude`, `codex`, `grok`) holding each agent's tags as a list. It carries every agent that has tags, a removed
   agent's included; an agent without tags is absent, and an export where no agent has tags carries `{}`. Applying the
@@ -228,15 +233,22 @@ above).
 ### Versions
 
 The format marker tells a configuration document from any other JSON. The version is a whole number, 1 today, and is
-raised only when a change would make a reader written for an older version misread a document — a field dropped, or
+raised only when a change would make a reader written for a released version misread a document — a field dropped, or
 given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know. An import
 reads only version 1. It refuses a document whose format it does not recognize, and one of any other version, older or
-newer, before it creates anything. No build has been released, so there is no upgrade of an older document; once a version is released, raising it adds a
-step that upgrades the previous one.
+newer, before it creates anything. Version changes and upgrade steps are written only between released versions: a
+change no release has carried is made in place, at the current version, and raising the version past a released one adds
+a step that upgrades a document of that version. No build has been released, so there is no upgrade of an older
+document.
 
 An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads
 an agent's entry that is left out as unset: a console's account is then the agent's default account, a project's
-account inherits its console's reference, and the model and effort are unset.
+account inherits its console's reference, and the model and effort are unset. An entry of `accounts`, `launch` or
+`project_session_launch` keyed by an agent this build does not support (see `docs/product/supported-agents.md`) is
+ignored, as are such an agent's `provider_settings` and `agent_tags` entries (see "The application settings an export
+carries" above). A document that names such an agent anywhere else — among the added agents (`added_agents`), as an
+account's agent, or as a console's or project's default agent or a console's default agent for project sessions —
+cannot be read, and is refused as one (see "What is refused, and what is reported instead" below).
 
 A document also carries, under `exported_by`, the version of Octoboard (its daemon) that exported it. It is there only
 for diagnosing a document that misbehaves: an import never reads it and it has no bearing on the version number.
@@ -394,8 +406,9 @@ new session that names no account take the one whose weekly quota resets soonest
 limit ends sessions' processes and moves them to other accounts by itself, starting usage windows automatically spends
 a little of the accounts' quota by itself, and the four automatic approvals let agents' requests, account
 switches and handoffs through without asking the user, asking questions as choices changes what sessions are told at
-launch, and Claude compatibility changes what Codex and Grok Build sessions load at launch, so applying them changes how the daemon's host behaves rather than only adding to what it holds. The inspection
-says both what the document sets and what is set now, so what applying would change can be shown before anything is
+launch, and the provider settings — Claude compatibility — change what Codex and Grok Build sessions load at launch, so applying them changes how the daemon's host behaves rather than only adding to what it holds. The inspection
+says both what the document sets and what is set now — for the provider settings, the value in effect here of every
+setting a document can carry, `null` for a choice setting left unset — so what applying would change can be shown before anything is
 done. The settings are applied last, through the same path as a change made in Settings — so an import that turns
 automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on"
 in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes nothing until the next

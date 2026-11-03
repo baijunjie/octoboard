@@ -9,14 +9,16 @@
 // `cargo test --workspace`, one feature set), so selecting either selects both Rust steps.
 
 // What `apps/web` imports from `@octoboard/ui` outside the preview inputs below: the modules its `exports` map
-// names (`i18n/matchLanguage.ts`, `i18n/languages.ts`, `components/icons/agentMarks.ts`) and what they import
-// (`protocol.ts`, for the `Agent` type, and the generated types it re-exports).
+// names (`i18n/matchLanguage.ts`, `i18n/languages.ts`, `providers/agentMarks.ts`) and what they import
+// (the provider presentation modules the marks come from, and their types).
 export const WEB_IMPORTS_FROM_UI = [
   "packages/ui/src/i18n/matchLanguage.ts",
   "packages/ui/src/i18n/languages.ts",
-  "packages/ui/src/components/icons/agentMarks.ts",
-  "packages/ui/src/protocol.ts",
-  "packages/ui/src/protocol.generated.ts",
+  "packages/ui/src/providers/agentMarks.ts",
+  "packages/ui/src/providers/claude.ts",
+  "packages/ui/src/providers/codex.ts",
+  "packages/ui/src/providers/grok.ts",
+  "packages/ui/src/providers/types.ts",
 ];
 
 // The inputs of the preview build `apps/web` takes from `packages/ui`.
@@ -61,6 +63,9 @@ export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
 export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.template.plist"];
 // A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
 export const UI_READS_ELSEWHERE = ["LICENSE"];
+// UI tests (`daemonCodes.test.ts`, `fixtureProviders.test.ts`) read the provider modules' sources, where each provider
+// declares its codes and facts.
+export const UI_READS_DAEMON = ["apps/daemon/src/providers/"];
 // A verify test (`rerun.test.mjs`) reads the reporter that shares `REPORT_ENV` with `rerun.mjs`.
 export const VERIFY_READS_UI = ["packages/ui/src/test/failedFilesReporter.ts"];
 
@@ -102,10 +107,11 @@ export const RULES = [
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
   { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },
+  { match: UI_READS_DAEMON, consumers: ["verify", "ui", "daemon"], why: "a UI test reads them" },
   { match: UI_READS_NATIVE, consumers: ["verify", "ui", "native"], why: "a UI test reads it" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
-  { match: ["apps/daemon/src/adapter/codex/claude_compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },
+  { match: ["apps/daemon/src/adapter/claude/compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },
 
   // The UI build runs only for changes to what it reads besides `src/`. The gallery and benchmark
   // scripts and pages are not among them, and the website's preview build has no step of its own.

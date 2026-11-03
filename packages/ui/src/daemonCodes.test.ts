@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { CodedError } from "./errors/codedError";
 import { CODES, codeRecord, type CodeRecord, type MessageFacets } from "./errors/codes";
 import { messageCode, RECORD_NAMES } from "./errors/daemonMessage";
+import { messageKey } from "./errors/codes";
 import { noticeKind } from "./errors/errorPresentation";
 import { classifyError } from "./errors/errorRecovery";
 import { en } from "./i18n/messages/en";
@@ -38,7 +39,29 @@ function readRegistry(): Record<Module, string[]> {
   return registry;
 }
 
-const REGISTRY = readRegistry();
+// The codes of the providers: each provider's file under `providers/` declares its own, as
+// `pub const NAME: ProviderCode = ProviderCode::<kind>("provider.<id>.<code>");` (rustfmt may wrap after the `=`), where
+// the kind is an `error` or a `notice`.
+function readProviderCodes(): Pick<Record<Module, string[]>, "error_code" | "notice_code"> {
+  const directory = new URL("../../../apps/daemon/src/providers/", pathToFileURL(`${import.meta.dirname}/`));
+  const found = { error_code: [] as string[], notice_code: [] as string[] };
+  for (const file of readdirSync(directory).filter((name) => name.endsWith(".rs") && name !== "mod.rs")) {
+    const source = readFileSync(new URL(file, directory), "utf8");
+    const declared = [...source.matchAll(/pub const [A-Z0-9_]+: ProviderCode =\s*ProviderCode::(error|notice)\("(provider\.[a-z0-9_]+\.[a-z0-9_]+)"\);/g)];
+    for (const [, kind, code] of declared) {
+      expect(code, `${file} declares ${code}`).toMatch(new RegExp(`^provider\\.${file.slice(0, -3)}\\.`));
+      found[kind === "error" ? "error_code" : "notice_code"].push(code);
+    }
+    // A code made in any other shape would escape this reading.
+    const made = source.match(/\bProviderCode::(?:error|notice)\("/g)?.length ?? 0;
+    if (made !== declared.length) throw new Error(`providers/${file} makes ${made} codes, of which ${declared.length} are read as declarations`);
+  }
+  return found;
+}
+
+const CORE = readRegistry();
+const PROVIDER = readProviderCodes();
+const REGISTRY = { ...CORE, error_code: [...CORE.error_code, ...PROVIDER.error_code], notice_code: [...CORE.notice_code, ...PROVIDER.notice_code] };
 
 const ERROR_CODES = REGISTRY.error_code;
 const FAILURE_NOTICES = REGISTRY.notice_code.filter((code) => noticeKind(code, {}) === "error");
@@ -48,11 +71,14 @@ it("reads the daemon's registry", () => {
   for (const module of MODULES) expect(REGISTRY[module].length, module).toBeGreaterThan(0);
   expect(ERROR_CODES).toContain("internal_error");
   expect(REGISTRY.notice_code).toContain("launch_failed");
+  expect(PROVIDER.error_code.length).toBeGreaterThan(0);
+  expect(PROVIDER.notice_code.length).toBeGreaterThan(0);
+  for (const code of [...PROVIDER.error_code, ...PROVIDER.notice_code]) expect(code, code).toMatch(/^provider\.[a-z0-9_]+\.[a-z0-9_]+$/);
 });
 
 describe.each(ALL_CODES)("the daemon's code %s", (code) => {
   it("is worded in English and Simplified Chinese", () => {
-    const key = `daemon.${messageCode(code, {})}`;
+    const key = messageKey(messageCode(code, {}));
     expect(Object.hasOwn(en, key), `en lacks ${key}`).toBe(true);
     expect(Object.hasOwn(zhHans, key), `zh-Hans lacks ${key}`).toBe(true);
   });
@@ -71,7 +97,7 @@ const wordedUnder = (code: string, record: CodeRecord): string[] => {
 /** The catalog's English texts a message's params are shown in: its sentence, its opening sentence and its remedy line;
  * a trust failure's `reason` is worded from `daemon.trust_reason.<reason_code>`, filled in with the same params. */
 const textsOf = (code: string, message: string): string => {
-  const key = `daemon.${message}`;
+  const key = messageKey(message);
   const reasons = code === "trust_answer_failed" || code === "trust_not_carried_over"
     ? Object.keys(en).filter((k) => k.startsWith("daemon.trust_reason."))
     : [];
@@ -99,13 +125,13 @@ describe("the registry in errors/codes.ts", () => {
 
   it("marks an alert title exactly where the catalogs have one", () => {
     for (const [code, record] of records) {
-      expect(has(`daemon.${code}.alertTitle`), code).toBe(record.alertTitle === true);
+      expect(has(`${messageKey(code)}.alertTitle`), code).toBe(record.alertTitle === true);
     }
   });
 
   it("words every variant", () => {
     for (const [code, record] of records) {
-      for (const variant of Object.keys(record.variants ?? {})) expect(has(`daemon.${code}.${variant}`), `${code}.${variant}`).toBe(true);
+      for (const variant of Object.keys(record.variants ?? {})) expect(has(`${messageKey(code)}.${variant}`), `${code}.${variant}`).toBe(true);
     }
   });
 
@@ -139,8 +165,8 @@ describe("the registry in errors/codes.ts", () => {
     // The opening sentence of a message is its `.summary`; a variant of a code with a detail block has one only where
     // the detail can be there, so it is the code's messages together that must have it.
     for (const [code, record] of records) {
-      const worded = wordedUnder(code, record).filter((message) => has(`daemon.${message}`));
-      const some = (part: string) => worded.some((message) => has(`daemon.${message}.${part}`));
+      const worded = wordedUnder(code, record).filter((message) => has(`${messageKey(message)}`));
+      const some = (part: string) => worded.some((message) => has(`${messageKey(message)}.${part}`));
       if (record.noSummary) expect(some("summary"), code).toBe(false);
       else if (record.recoveryLine || (record.detailBlock && record.summaryForDetail !== false)) expect(some("summary"), code).toBe(true);
       if (record.recoveryLine) expect(some("recovery"), code).toBe(true);

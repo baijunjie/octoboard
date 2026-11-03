@@ -16,7 +16,7 @@ use crate::coordinator::test_support::{
 };
 use crate::protocol::DefaultModelSource;
 use crate::protocol::{
-    error_code, Agent, Availability, CodedError, Event, Launch, LaunchChange, PerAgent, Project,
+    error_code, AgentId, Availability, CodedError, Event, Launch, LaunchChange, PerAgent, Project,
     ProjectSource, RequestBody, Session, SessionStatus,
 };
 use crate::state::AppState;
@@ -56,7 +56,7 @@ async fn a_session_record_takes_what_is_held_for_it_with_it() {
         let workdir = console_workdir_in(&dir);
         state
             .store
-            .insert_console(&console(Agent::Claude, &workdir))
+            .insert_console(&console(AgentId::CLAUDE, &workdir))
             .unwrap();
         state
             .store
@@ -80,7 +80,7 @@ async fn a_session_record_takes_what_is_held_for_it_with_it() {
             .unwrap();
         state
             .store
-            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
             .unwrap();
         // Raised while it ran, and left behind by the archive.
         state.raise_request_hand("s").unwrap();
@@ -128,7 +128,7 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
     handle(
         &state,
         Some("req-1".to_string()),
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
@@ -138,7 +138,7 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
         &state,
         Some("req-2".to_string()),
         RequestBody::ListAgentModels {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: None,
         },
     )
@@ -155,7 +155,7 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
             unavailable,
         }) => {
             assert_eq!(id.as_deref(), Some("req-2"));
-            assert_eq!((agent, account), (Agent::Claude, None));
+            assert_eq!((agent, account), (AgentId::CLAUDE, None));
             assert_eq!(models.len(), 4);
             // The test home holds no catalogue, so nothing is known to be usable.
             assert_eq!((default_model, default_model_source), (None, None));
@@ -169,7 +169,7 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
             &state,
             None,
             RequestBody::ListAgentModels {
-                agent: Agent::Claude,
+                agent: AgentId::CLAUDE,
                 account: Some(account),
             },
         )
@@ -184,7 +184,7 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
 /// or the one Claude Code's own configuration names.
 #[tokio::test]
 async fn the_agent_models_reply_names_the_default_model_of_the_account() {
-    use crate::agents::models::claude_fixtures::{write_claude_account, CLAUDE_CATALOGUE};
+    use crate::adapter::claude::models::fixtures::{write_claude_account, CLAUDE_CATALOGUE};
     let (state, dir) = crate::test_support::app_state("coordinator-agent-models-default");
     let pinned = dir.join("pinned");
     std::fs::create_dir_all(&pinned).unwrap();
@@ -197,7 +197,7 @@ async fn the_agent_models_reply_names_the_default_model_of_the_account() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Work", &pinned.to_string_lossy()),
+        create_account_request(AgentId::CLAUDE, "Work", &pinned.to_string_lossy()),
     )
     .await
     .expect("created");
@@ -207,7 +207,7 @@ async fn the_agent_models_reply_names_the_default_model_of_the_account() {
             &state,
             None,
             RequestBody::ListAgentModels {
-                agent: Agent::Claude,
+                agent: AgentId::CLAUDE,
                 account: Some(account.clone()),
             },
         )
@@ -249,17 +249,20 @@ async fn using_a_reset_credit_is_refused_for_a_foreign_or_unknown_account() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
     )
     .await
     .expect("created");
     let claude_account = only_account(&state).id;
-    let use_on = |account: Option<String>| RequestBody::UseCodexResetCredit { account };
+    let use_on = |account: Option<String>| RequestBody::UseResetCredit {
+        agent: AgentId::CODEX,
+        account,
+    };
     let code_of = |refused: anyhow::Error| refused.downcast_ref::<CodedError>().unwrap().code;
 
     // Refused before any shell is asked for; `reset_credit_shell` has none under test either,
     // so a request that got through would fail on that instead of reaching Codex.
-    set_availability(&state, Agent::Codex, Availability::Available);
+    set_availability(&state, AgentId::CODEX, Availability::Available);
     for account in [Some(claude_account), Some("no-such-account".to_string())] {
         let refused = handle(&state, None, use_on(account)).await.unwrap_err();
         assert_eq!(code_of(refused), error_code::UNKNOWN_ACCOUNT);
@@ -274,12 +277,12 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
     let (state, dir) = crate::test_support::app_state("coordinator-inherited-model-check");
     crate::test_support::offer_models(
         &state,
-        Agent::Claude,
+        AgentId::CLAUDE,
         &[("fallback", &["low"]), ("other", &["high"])],
     );
     let workdir = console_workdir_in(&dir);
-    let mut owner = console(Agent::Claude, &workdir);
-    owner.project_session_launch.claude.model = Some("fallback".to_string());
+    let mut owner = console(AgentId::CLAUDE, &workdir);
+    owner.project_session_launch[AgentId::CLAUDE].model = Some("fallback".to_string());
     state.store.insert_console(&owner).unwrap();
     state
         .store
@@ -293,13 +296,13 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
         effort: Some(Some(effort.to_string())),
     };
     let mut changes = ProjectChanges::default();
-    changes.launch.insert(Agent::Claude, effort_only("high"));
+    changes.launch.insert(AgentId::CLAUDE, effort_only("high"));
     let err = update_project(&state, "project-1", changes)
         .await
         .expect_err("effort of another model");
     assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
     let mut changes = ProjectChanges::default();
-    changes.launch.insert(Agent::Claude, effort_only("low"));
+    changes.launch.insert(AgentId::CLAUDE, effort_only("low"));
     update_project(&state, "project-1", changes)
         .await
         .expect("the inherited model's own effort");
@@ -318,13 +321,13 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
                 name: None,
                 default_agent: None,
                 settings: NewProjectSettings {
-                    launch: PerAgent {
-                        claude: Launch {
+                    launch: PerAgent::default().with(
+                        AgentId::CLAUDE,
+                        Launch {
                             model: None,
                             effort: Some(effort.to_string()),
                         },
-                        ..Default::default()
-                    },
+                    ),
                     ..NewProjectSettings::default()
                 },
                 detect_default_agent: false,
@@ -356,7 +359,7 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
     // The console's own project session pair is checked like any other setting.
     let mut changes = ConsoleChanges::default();
     changes.project_launch.insert(
-        Agent::Claude,
+        AgentId::CLAUDE,
         LaunchChange {
             model: Some(Some("unlisted".to_string())),
             effort: None,
@@ -385,9 +388,9 @@ async fn information_kept_for_an_interrupted_session_is_deleted_only_once_it_is_
         "kept-info",
         vec![
             console_session("hub", Idle),
-            no_process_with_conversation("codex", Agent::Codex, "hub"),
-            no_process_with_conversation("archived-later", Agent::Codex, "hub"),
-            no_process_with_conversation("deleted-later", Agent::Codex, "hub"),
+            no_process_with_conversation("codex", AgentId::CODEX, "hub"),
+            no_process_with_conversation("archived-later", AgentId::CODEX, "hub"),
+            no_process_with_conversation("deleted-later", AgentId::CODEX, "hub"),
         ],
         &["hub"],
     );
@@ -484,7 +487,7 @@ fn interrupted_owner(id: &str) -> Session {
         title: id.to_string(),
         agent_session_id: Some(format!("conversation-{id}")),
         has_conversation: true,
-        ..project_session(id, Agent::Claude, SessionStatus::Interrupted)
+        ..project_session(id, AgentId::CLAUDE, SessionStatus::Interrupted)
     }
 }
 

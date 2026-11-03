@@ -5,13 +5,18 @@ import { CODE, codeRecord } from "./codes";
 import { CodedError } from "./codedError";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
 
+/** A remedy a provider's presentation module words itself, for a failure of its own: the key of the module's message
+ * (`provider.<id>.<code>.remedy`, `<code>` being a code's own name), whose `{agent}` is the provider's name. */
+export type ProviderRemedy = `provider.${string}.${string}.remedy`;
+
 export type ErrorRecovery =
+  | ProviderRemedy
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
   | "refresh" | "refreshMessages" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "switchRelaunch" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "unarchive" | "resetCredit" | "resetCreditLogin" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "resetCredit" | "resetCreditLogin" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"

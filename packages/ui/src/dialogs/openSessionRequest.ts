@@ -1,7 +1,7 @@
 import { choiceGroups, type AccountChoice } from "../accounts/choiceEntries";
 import { settledInitialChoice } from "../accounts/openingChoice";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ClientRequestBody, Settings } from "../protocol";
+import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ClientRequestBody, ProviderInfo, Settings } from "../protocol";
 import type { NewSessionBinding, NewSessionRequest } from "./dialogRequest";
 
 export type OpenSessionRequest = Extract<ClientRequestBody, { type: "open_session" }>;
@@ -37,6 +37,7 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
 export interface QuickCreateState {
   settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account" | "disabled_default_accounts" | "account_order">;
   agentAvailability: Map<Agent, AgentAvailability>;
+  providers: readonly ProviderInfo[];
   accountQuotas: AccountQuota[];
   accountSharing?: Map<string, AccountSharing>;
 }
@@ -46,13 +47,14 @@ export interface QuickCreateState {
  * `auto_select_account` is on, weekly quota ranks the accounts and another agent is tried if necessary. */
 function settledQuickChoice(parentConsole: Console, project: Project | undefined, state: QuickCreateState, now: number) {
   const { accounts, added_agents, auto_select_account } = state.settings;
-  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now }, state.accountSharing, state.settings.disabled_default_accounts, state.settings.account_order);
+  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, state.providers, () => "", { quotas: state.accountQuotas, now }, state.accountSharing, state.settings.disabled_default_accounts, state.settings.account_order);
   return settledInitialChoice(
     parentConsole,
     project,
     accounts,
     state.agentAvailability,
     added_agents,
+    state.providers,
     groups,
     auto_select_account ? { now } : undefined,
   );

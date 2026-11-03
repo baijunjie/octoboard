@@ -405,7 +405,7 @@ fn a_session_opened_under_a_console_is_a_coordinator_and_one_under_a_coordinator
         role: under_console.role,
         ..project_session(
             "coordinator",
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             SessionStatus::Idle,
         )
     };

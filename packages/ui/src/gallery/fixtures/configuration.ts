@@ -8,13 +8,13 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
 import { type DocumentSettings, type ImportedAccount, type ImportedAccounts, type InspectedAccount, type InspectedAccounts, type InspectedSettings } from "../../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
-import { AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import type { Ui, Step } from "../../fixtures/interact";
 import type { ConfigurationFixture } from "../../fixtures/fixture";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, consoleOf, projectOf, snapshotState } from "../../fixtures/builders";
-import { fallback, failure, imported, inspected, inspectedProject, MIXED_RESULT, REVIEW, THIS_CLAUDE_COMPATIBILITY } from "../../fixtures/configurationReview";
+import { fallback, failure, imported, inspected, inspectedProject, MIXED_RESULT, REVIEW, THIS_PROVIDER_SETTINGS } from "../../fixtures/configurationReview";
 
 const GROUP = "Configuration";
 
@@ -46,11 +46,11 @@ const layout = {
 };
 const state = snapshotState({
   ...layout,
-  settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { ...DEFAULT_SETTINGS, added_agents: [...FIXTURE_AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const autoPulling = snapshotState({
   ...layout,
-  settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [...FIXTURE_AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 // The machine the accounts of a document are imported on: Grok is not among its added agents, and its default account
 // already has a name of its own.
@@ -70,13 +70,20 @@ const MACHINE_AGENT_TAGS = { claude: ["personal"], grok: ["trial"] };
 /** The machine of the application settings scenarios: the one of the other import scenarios with agents that have tags. */
 const taggedState = snapshotState({
   ...layout,
-  settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts, agent_tags: MACHINE_AGENT_TAGS },
+  settings: { ...DEFAULT_SETTINGS, added_agents: [...FIXTURE_AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts, agent_tags: MACHINE_AGENT_TAGS },
 });
+/** `taggedState` with a provider this build has no presentation for served beside the registered ones, for a document that
+ * carries a setting of it. */
+const unpresentedSettingState: Scenario["state"] = {
+  ...taggedState,
+  providers: [...FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER],
+  settings: { ...taggedState.settings!, added_agents: [...FIXTURE_AGENTS] },
+};
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { ...DEFAULT_SETTINGS, added_agents: [...FIXTURE_AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));
@@ -141,7 +148,7 @@ function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSett
     auto_approve_handoffs: false,
     ask_questions_as_choices: false,
     git_workflow: DEFAULT_GIT_WORKFLOW,
-    claude_compatibility: {},
+    provider_settings: {},
     agent_tags: {},
     ...carried,
   };
@@ -170,14 +177,14 @@ const SETTING_KEYS = [
 type SettingKey = (typeof SETTING_KEYS)[number];
 
 /** An inspection's settings of a document whose every setting is the one this machine already has (the settings a fresh
- * installation starts with, and this machine's Claude compatibility) except what `carried` sets; the document carries no
- * Claude compatibility choice and no agent tags, so those lines are not shown. */
+ * installation starts with, and this machine's exported provider settings) except what `carried` sets; the document carries no
+ * provider setting choice and no agent tags, so those lines are not shown. */
 function inspectedSettings(carried: Partial<InspectedSettings> = {}): InspectedSettings {
   const entries = (name: (key: SettingKey) => string) => SETTING_KEYS.map((key) => [name(key), DEFAULT_SETTINGS[key]]);
   return {
     ...documentSettings(Object.fromEntries(entries((key) => key))),
     ...(Object.fromEntries(entries((key) => `current_${key}`)) as { [K in SettingKey as `current_${K}`]: DocumentSettings[K] }),
-    current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
+    current_provider_settings: THIS_PROVIDER_SETTINGS,
     current_agent_tags: {},
     ...carried,
   };
@@ -669,17 +676,32 @@ const SETTINGS_FAILED_RESULT: Omit<Imported, "type"> = { ...SETTINGS_FAILED_CONS
  * tag it has here. Grok Build is not listed, so its tag stays as it is. */
 const FILE_AGENT_TAGS = { codex: ["review", "backend", "nightly"], claude: [] };
 
+/** The setting of a provider without a presentation module the file carries, which no provider has a heading for. */
+const UNPRESENTED_FILE_SETTING = { review_mode: "careful" };
+
 /** `REVIEW` with the tags above, and with one setting the file leaves as this machine has it, so that the review has a
  * line that reads No change beside the ones that change: the sidebar order, which the file also has on. */
 const SETTINGS_REVIEW: Omit<Inspection, "type"> = {
   ...REVIEW,
-  settings: { ...REVIEW.settings!, sidebar_order_by_status: true, agent_tags: FILE_AGENT_TAGS, current_agent_tags: MACHINE_AGENT_TAGS },
+  settings: {
+    ...REVIEW.settings!,
+    sidebar_order_by_status: true,
+    agent_tags: FILE_AGENT_TAGS,
+    current_agent_tags: MACHINE_AGENT_TAGS,
+    provider_settings: { ...REVIEW.settings!.provider_settings, [UNPRESENTED_PROVIDER.id]: UNPRESENTED_FILE_SETTING },
+    current_provider_settings: { ...REVIEW.settings!.current_provider_settings, [UNPRESENTED_PROVIDER.id]: { review_mode: null } },
+  },
 };
 
 /** What importing `SETTINGS_REVIEW` came to. */
 const SETTINGS_RESULT: Omit<Imported, "type"> = {
   ...MIXED_RESULT,
-  settings_applied: { ...MIXED_RESULT.settings_applied!, sidebar_order_by_status: true, agent_tags: FILE_AGENT_TAGS },
+  settings_applied: {
+    ...MIXED_RESULT.settings_applied!,
+    sidebar_order_by_status: true,
+    agent_tags: FILE_AGENT_TAGS,
+    provider_settings: { ...MIXED_RESULT.settings_applied!.provider_settings, [UNPRESENTED_PROVIDER.id]: UNPRESENTED_FILE_SETTING },
+  },
 };
 
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
@@ -850,8 +872,8 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the application settings",
-    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), and \"Order the sidebar by status\", which the device already has as the file does, reads No change with nothing under it. The four lines with several values read \"Set to the file's\" and list under the badge only what applying would change, each as the file's value with what it is now in brackets: Git workflow lists four of its five items (where sessions develop, rebase before delivery, delivery, revert gate; \"Squash commits before delivery\" is the same and is left out); Claude compatibility lists Codex, Off (now On); Agent tags lists Codex with three tags (now No tags) and Claude Code with No tags (now personal), and not Grok Build, which the file does not list; Keyboard shortcuts says 3 of the file's shortcuts differ from the defaults and apply to this device or browser only, then lists each of the three as its key caps with the current ones in brackets (scroll the card to the end of the list).",
-    state: taggedState,
+    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), and \"Order the sidebar by status\", which the device already has as the file does, reads No change with nothing under it. The four lines with several values read \"Set to the file's\" and list under the badge only what applying would change, each as the file's value with what it is now in brackets: Git workflow lists four of its five items (where sessions develop, rebase before delivery, delivery, revert gate; \"Squash commits before delivery\" is the same and is left out); Claude compatibility lists Codex, Off (now On); the setting of Acme Agent, a provider this build has no words for, is a line of its own headed by the agent and the setting's id and lists Acme Agent with the file's value (now Follow account configuration); Agent tags lists Codex with three tags (now No tags) and Claude Code with No tags (now personal), and not Grok Build, which the file does not list; Keyboard shortcuts says 3 of the file's shortcuts differ from the defaults and apply to this device or browser only, then lists each of the three as its key caps with the current ones in brackets (scroll the card to the end of the list).",
+    state: unpresentedSettingState,
     configuration: reviewing({ file: SHORTCUTS_FILE, inspection: SETTINGS_REVIEW, imported: SETTINGS_RESULT }),
     steps: [
       ...importFromSettings,
@@ -897,7 +919,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the accounts",
-    description: "The Accounts tab, opened from a tab bar of Consoles and projects and Accounts (the What to import group above it has both checked, Application settings unchecked): one line saying Grok Build would be added to the added agents and one saying the default account of Claude Code would be named Personal (Grok Build's default name, which is not applied, has no line). A card for each agent. A row's status line says only New or \"Already exists, used as it is\"; an account that cannot be created has no status line but a warning mark after its name instead (its popovers are in the scenarios below). Claude Code's rows: Work, New, with the \"Shares default configuration\" badge; Archive, New, with the \"Disabled\" badge and its choice set to Leave out (changed from \"Create it\"); Sandbox, New; Clients, Original and Default, each with the warning mark and its choice at Leave out (a directory in use by another account, one in use by the default account, a name Claude Code already has). Clients and Original can be given another directory; Default, whose name is the problem, offers only Leave out. Codex's: Home, \"Already exists, used as it is\", with no choice and no directory line; Reports, New; Backup, with the warning mark, its directory written as the bare name codex-backup, at Leave out. Every row but Home has a \"Directory in the file\" line giving the directory as the file writes it. Grok Build says the file has no accounts of its own for this agent. A note says the accounts are created without being logged in.",
+    description: "The Accounts tab, opened from a tab bar of Consoles and projects and Accounts (the What to import group above it has both checked, Application settings unchecked): the sentence \"This agent will be added to the agent list:\" over a bulleted list holding Grok Build as its one item, and one line saying the default account of Claude Code would be named Personal (Grok Build's default name, which is not applied, has no line). A card for each agent. A row's status line says only New or \"Already exists, used as it is\"; an account that cannot be created has no status line but a warning mark after its name instead (its popovers are in the scenarios below). Claude Code's rows: Work, New, with the \"Shares default configuration\" badge; Archive, New, with the \"Disabled\" badge and its choice set to Leave out (changed from \"Create it\"); Sandbox, New; Clients, Original and Default, each with the warning mark and its choice at Leave out (a directory in use by another account, one in use by the default account, a name Claude Code already has). Clients and Original can be given another directory; Default, whose name is the problem, offers only Leave out. Codex's: Home, \"Already exists, used as it is\", with no choice and no directory line; Reports, New; Backup, with the warning mark, its directory written as the bare name codex-backup, at Leave out. Every row but Home has a \"Directory in the file\" line giving the directory as the file writes it. Grok Build says the file has no accounts of its own for this agent. A note says the accounts are created without being logged in.",
     state: accountsMachine,
     configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
@@ -1138,8 +1160,8 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import result, the application settings applied",
-    description: "The Application settings tab holds the \"Application settings applied\" card, whose switches read On or Off. The four lines with several values come after them and list what was applied under their badge, with no \"now\" values: Git workflow (\"Matches the file\") lists all five items, Claude compatibility (\"Matches the file\") lists Codex, Off, Agent tags (\"Matches the file\") lists Codex with its three tags and Claude Code as No tags, and Keyboard shortcuts (\"3 changes from the defaults\") lists the three that were applied as key caps, under a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph.",
-    state: taggedState,
+    description: "The Application settings tab holds the \"Application settings applied\" card, whose switches read On or Off. The four lines with several values come after them and list what was applied under their badge, with no \"now\" values: Git workflow (\"Matches the file\") lists all five items, Claude compatibility (\"Matches the file\") lists Codex, Off, Acme Agent's setting (\"Matches the file\") lists Acme Agent with the file's value, Agent tags (\"Matches the file\") lists Codex with its three tags and Claude Code as No tags, and Keyboard shortcuts (\"3 changes from the defaults\") lists the three that were applied as key caps, under a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph.",
+    state: unpresentedSettingState,
     configuration: reviewing({ file: SHORTCUTS_FILE, inspection: SETTINGS_REVIEW, imported: SETTINGS_RESULT }),
     steps: [
       ...importFromSettings,
@@ -1154,7 +1176,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import result of the accounts, with a failure and a warning",
-    description: "The Accounts tab, with a warning glyph beside the Consoles and projects one, is open. It starts with one line of totals counting only the accounts, \"3 accounts created · 1 account already existed · 4 accounts left out · 1 failed\", directly above the cards, and holds a card per agent with a row per account, each with its status: for Claude Code, Work Created with the sharing warning written under the row (the sentence that the account was created but sharing the default configuration could not be turned on, then only the remedy and a Details button: the failure's own summary is not repeated), Archive Created, Sandbox Failed with the reason under the row, Clients, Original and Default Left out; for Codex, Home Already existed, Reports Created and Backup Left out; Grok Build has no card. Under the cards, one line says Grok Build was added to the agents, one that the default account of Claude Code is now named as in the file, and a note with an info icon says the new accounts are not logged in yet; there is no Log in button.",
+    description: "The Accounts tab, with a warning glyph beside the Consoles and projects one, is open. It starts with one line of totals counting only the accounts, \"3 accounts created · 1 account already existed · 4 accounts left out · 1 failed\", directly above the cards, and holds a card per agent with a row per account, each with its status: for Claude Code, Work Created with the sharing warning written under the row (the sentence that the account was created but sharing the default configuration could not be turned on, then only the remedy and a Details button: the failure's own summary is not repeated), Archive Created, Sandbox Failed with the reason under the row, Clients, Original and Default Left out; for Codex, Home Already existed, Reports Created and Backup Left out; Grok Build has no card. Under the cards, the sentence \"This agent was added to the agent list:\" is followed by a bulleted list holding Grok Build as its one item, one line says that the default account of Claude Code is now named as in the file, and a note with an info icon says the new accounts are not logged in yet; there is no Log in button.",
     state: accountsMachine,
     configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [

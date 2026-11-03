@@ -2,6 +2,8 @@ import React, { useLayoutEffect, useState } from "react";
 
 import { accountDisabledUnavailable, incompleteAccount, sharingChangeRuns } from "../accounts/choiceEntries";
 import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
+import { providerModelDisplay } from "../agents/providers";
+import { quotaNaming } from "../accounts/quotaFormat";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { PathText } from "../components/text/PathText";
@@ -13,7 +15,7 @@ import type { Account, Agent, Console, Project, Session } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import type { SessionRequest } from "../store";
-import { useAccountSwitchHeld, useDaemonStore } from "../store";
+import { useAccountSwitchHeld, useDaemonStore, useProviders } from "../store";
 import { useNow } from "../format/useNow";
 import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
@@ -105,6 +107,7 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const quotas = useDaemonStore((s) => s.accountQuotas);
+  const providers = useProviders();
   const sharing = useDaemonStore((s) => s.accountSharing);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const accountOrder = useDaemonStore((s) => s.settings.account_order);
@@ -143,11 +146,11 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
         : chosenSignedOut
           ? accountRefusalMessage("accountChoice.signedOut.description", chosen.name)
           : chosen && chosen.exhaustedBy && chosen.quota
-            ? quotaUsedUpMessage(t, chosen.quota, chosen.name, chosen.exhaustedBy, now)
+            ? quotaUsedUpMessage(t, quotaNaming(chosen.quota, providers), chosen.name, chosen.exhaustedBy, now)
             : sharingBlock;
   const sessionHold = !chosenDisabled && !chosenSignedOut && sharingBlock === undefined ? chosenBlock?.detail : undefined;
   const options = entries.filter((entry) => entry.current || !entry.disabled || entry.account === account).map((entry): Option<string> => {
-    const usage = accountUsage(t, session.agent, entry.quota, entry.current ? undefined : entry.exhaustedBy, now);
+    const usage = accountUsage(t, providers, session.agent, entry.quota, entry.current ? undefined : entry.exhaustedBy, now);
     const block = blockOf(entry);
     // A turned-off account, one not logged in (the only block with a reason) and a used-up one (through its usage)
     // say why on the option. The chosen account's own sharing change is the field's error and a hold on the session
@@ -164,7 +167,7 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
     };
     return note.detail !== undefined ? { ...option, detail: note.detail, reason: note.reason } : option;
   });
-  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent) : { model: null, effort: null };
+  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent, providerModelDisplay(providers, session.agent)) : { model: null, effort: null };
   const { model, effort } = launchWithOverrides(launchWithOverrides(inherited, { model: session.model, effort: session.effort }), changed);
 
   return (

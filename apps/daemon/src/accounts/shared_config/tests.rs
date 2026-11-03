@@ -18,7 +18,7 @@ impl Fixture {
     fn new() -> Self {
         let (state, dir) = test_support::console_with_project_and_accounts("shared-config");
         state.set_agent_availability(
-            Agent::ALL
+            AgentId::ALL
                 .into_iter()
                 .map(|agent| {
                     let default = dir.join(format!("default-{}", agent.label()));
@@ -34,15 +34,15 @@ impl Fixture {
         Self { state, dir }
     }
 
-    fn default(&self, agent: Agent) -> PathBuf {
+    fn default(&self, agent: AgentId) -> PathBuf {
         self.dir.join(format!("default-{}", agent.label()))
     }
 
-    fn account(&self, agent: Agent) -> PathBuf {
+    fn account(&self, agent: AgentId) -> PathBuf {
         self.dir.join(account_id(agent))
     }
 
-    fn record(&self, agent: Agent) -> Account {
+    fn record(&self, agent: AgentId) -> Account {
         self.state
             .store
             .get_account(account_id(agent))
@@ -50,7 +50,7 @@ impl Fixture {
             .unwrap()
     }
 
-    async fn share(&self, agent: Agent, share: bool) -> Result<()> {
+    async fn share(&self, agent: AgentId, share: bool) -> Result<()> {
         handle(
             &self.state,
             None,
@@ -64,7 +64,7 @@ impl Fixture {
     }
 
     /// A session of the account recorded in the store, not running.
-    fn session(&self, id: &str, agent: Agent) -> Session {
+    fn session(&self, id: &str, agent: AgentId) -> Session {
         let session = Session {
             account_id: Some(account_id(agent).to_string()),
             config_dir: Some(self.account(agent).to_string_lossy().into_owned()),
@@ -76,11 +76,12 @@ impl Fixture {
     }
 }
 
-fn account_id(agent: Agent) -> &'static str {
+fn account_id(agent: AgentId) -> &'static str {
     match agent {
-        Agent::Claude => "claude-a",
-        Agent::Codex => "codex-a",
-        Agent::Grok => "grok-a",
+        AgentId::CLAUDE => "claude-a",
+        AgentId::CODEX => "codex-a",
+        AgentId::GROK => "grok-a",
+        other => panic!("no fixture for {other}"),
     }
 }
 
@@ -119,8 +120,8 @@ fn backups(dir: &Path, name: &str) -> Vec<PathBuf> {
 /// treats differently.
 fn claude_setup(fixture: &Fixture) -> (PathBuf, PathBuf) {
     let (default, account) = (
-        fixture.default(Agent::Claude),
-        fixture.account(Agent::Claude),
+        fixture.default(AgentId::CLAUDE),
+        fixture.account(AgentId::CLAUDE),
     );
     write(&default, "settings.json", "default settings");
     write(&default, "skills/shared/SKILL.md", "shared skill");
@@ -138,13 +139,49 @@ fn claude_setup(fixture: &Fixture) -> (PathBuf, PathBuf) {
     (default, account)
 }
 
+/// Turning sharing on for an account of a provider without `config_sharing` is refused with
+/// `provider_unsupported`, before anything is recorded or touched.
+#[tokio::test]
+async fn sharing_is_refused_for_a_provider_without_the_capability() {
+    let fixture = Fixture::new();
+    for agent in AgentId::ALL
+        .into_iter()
+        .filter(|agent| !agent.descriptor().capabilities.config_sharing)
+    {
+        let id = format!("{}-account", agent.wire_name());
+        let config_dir = fixture.dir.join(&id);
+        fixture
+            .state
+            .store
+            .insert_account(&Account {
+                id: id.clone(),
+                agent,
+                name: id.clone(),
+                config_dir: config_dir.to_string_lossy().into_owned(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        let err = set(&fixture.state, Some(id.clone()), true)
+            .await
+            .unwrap_err();
+        assert_eq!(code_of(&err), error_code::PROVIDER_UNSUPPORTED, "{agent:?}");
+        let coded = err.downcast_ref::<CodedError>().expect("coded");
+        assert_eq!(coded.params["operation"], "config_sharing");
+        let record = fixture.state.store.get_account(&id).unwrap().unwrap();
+        assert!(!record.share_default_config && !record.share_default_config_incomplete);
+        assert!(!config_dir.exists(), "nothing was touched");
+    }
+}
+
 #[tokio::test]
 async fn turning_sharing_on_backs_up_configuration_and_carries_history_into_the_default() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
 
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(record.share_default_config && !record.share_default_config_incomplete);
     // Configuration: the account's own copy backed up, a link in its place.
     assert_eq!(
@@ -194,15 +231,15 @@ async fn turning_sharing_on_backs_up_configuration_and_carries_history_into_the_
 async fn turning_sharing_off_restores_backups_and_leaves_history_in_the_default() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     write(
         &account,
         "projects/p/while-sharing.jsonl",
         "written while sharing",
     );
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
 
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(!record.share_default_config && !record.share_default_config_incomplete);
     assert!(!is_link(&account.join("settings.json")));
     assert_eq!(read(&account, "settings.json"), "account settings");
@@ -233,7 +270,7 @@ async fn turning_sharing_off_restores_backups_and_leaves_history_in_the_default(
 async fn a_backup_that_cannot_be_looked_up_keeps_the_link() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(is_link(&account.join("settings.json")));
     let dirs = link::Dirs::for_undoing(&account, &default, &default)
         .unwrap()
@@ -241,7 +278,7 @@ async fn a_backup_that_cannot_be_looked_up_keeps_the_link() {
     let stamp = "x".repeat(300);
 
     let failures = link::turn_off(
-        Agent::Claude,
+        AgentId::CLAUDE,
         &dirs,
         &stamp,
         &[],
@@ -261,8 +298,8 @@ async fn a_backup_that_cannot_be_looked_up_keeps_the_link() {
 async fn a_link_names_the_default_entrys_resolved_target() {
     let fixture = Fixture::new();
     let (default, account) = (
-        fixture.default(Agent::Claude),
-        fixture.account(Agent::Claude),
+        fixture.default(AgentId::CLAUDE),
+        fixture.account(AgentId::CLAUDE),
     );
     write(&fixture.dir, "dotfiles/settings.json", "from dotfiles");
     std::os::unix::fs::symlink(
@@ -270,7 +307,7 @@ async fn a_link_names_the_default_entrys_resolved_target() {
         default.join("settings.json"),
     )
     .unwrap();
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert_eq!(
         std::fs::read_link(account.join("settings.json")).unwrap(),
         real(&fixture.dir.join("dotfiles/settings.json"))
@@ -293,11 +330,11 @@ async fn the_default_account_is_refused() {
     assert_eq!(code_of(&err), error_code::DEFAULT_ACCOUNT_NOT_SHAREABLE);
 
     // So is an account whose directory is the default's under another spelling.
-    let default = fixture.default(Agent::Codex);
-    std::os::unix::fs::symlink(&default, fixture.account(Agent::Codex)).unwrap();
-    let err = fixture.share(Agent::Codex, true).await.unwrap_err();
+    let default = fixture.default(AgentId::CODEX);
+    std::os::unix::fs::symlink(&default, fixture.account(AgentId::CODEX)).unwrap();
+    let err = fixture.share(AgentId::CODEX, true).await.unwrap_err();
     assert_eq!(code_of(&err), error_code::DEFAULT_ACCOUNT_NOT_SHAREABLE);
-    assert!(!fixture.record(Agent::Codex).share_default_config);
+    assert!(!fixture.record(AgentId::CODEX).share_default_config);
 }
 
 /// What launches were given as the shared default directory, with the stand-ins started for
@@ -375,13 +412,13 @@ async fn resumed_with(fixture: &Fixture, session: &str) -> Option<PathBuf> {
 async fn a_file_link_an_agent_replaced_is_repaired_before_a_resume() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     // An agent saving through the link replaced it with a plain file.
     std::fs::remove_file(account.join("settings.json")).unwrap();
     std::fs::write(account.join("settings.json"), "saved over the link").unwrap();
     std::fs::remove_file(account.join("CLAUDE.md")).ok();
     write(&default, "CLAUDE.md", "default instructions");
-    fixture.session("s", Agent::Claude);
+    fixture.session("s", AgentId::CLAUDE);
 
     let given = resumed_with(&fixture, "s").await;
     assert_eq!(given, Some(real(&default)));
@@ -411,7 +448,7 @@ async fn a_file_link_an_agent_replaced_is_repaired_before_a_resume() {
 #[tokio::test]
 async fn only_a_sharing_accounts_launch_is_given_the_shared_directory() {
     let fixture = Fixture::new();
-    fixture.session("s", Agent::Claude);
+    fixture.session("s", AgentId::CLAUDE);
     assert_eq!(resumed_with(&fixture, "s").await, None);
 }
 
@@ -422,7 +459,7 @@ async fn a_change_that_fails_part_way_says_what_it_left_where_and_stays_incomple
     let (_, account) = claude_setup(&fixture);
     // Nothing can be renamed or created in the account's directory.
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o555)).unwrap();
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     assert_eq!(code_of(&err), error_code::ACCOUNT_SHARING_FAILED);
@@ -437,10 +474,10 @@ async fn a_change_that_fails_part_way_says_what_it_left_where_and_stays_incomple
     assert_eq!(coded.params["cause"], "permission_denied");
     assert!(!coded.message.contains("tried again"), "{}", coded.message);
     assert_eq!(read(&account, "settings.json"), "account settings");
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(record.share_default_config && record.share_default_config_incomplete);
     // The failure is kept in the account's sharing state, with its entries.
-    let failure = sharing_state(&fixture, Agent::Claude)
+    let failure = sharing_state(&fixture, AgentId::CLAUDE)
         .failure
         .expect("the failure kept");
     assert!(failure.share);
@@ -452,26 +489,26 @@ async fn a_change_that_fails_part_way_says_what_it_left_where_and_stays_incomple
         item.item == "settings.json"
             && item.cause == crate::protocol::SharingCause::PermissionDenied
     }));
-    assert!(sharing_state(&fixture, Agent::Claude).progress.is_none());
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).progress.is_none());
     // Nothing retries it by itself: a launch leaves the directory as it is.
-    let session = fixture.session("s", Agent::Claude);
+    let session = fixture.session("s", AgentId::CLAUDE);
     before_launch(&fixture.state, &session).await.unwrap();
     assert!(!is_link(&account.join("settings.json")));
     assert!(
         fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
 
     // Asking again retries, and completes now that the directory can be written; the prompt
     // history is merged once.
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(
         !fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
-    assert!(sharing_state(&fixture, Agent::Claude).failure.is_none());
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).failure.is_none());
     assert!(is_link(&account.join("settings.json")));
     // A run that appended the account's lines and stopped before removing its aside is not
     // appended again.
@@ -492,10 +529,10 @@ async fn a_change_that_fails_part_way_says_what_it_left_where_and_stays_incomple
         .store
         .set_account_sharing("claude-a", true, true)
         .unwrap();
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(backups(&account, "history.jsonl").is_empty());
     assert_eq!(
-        read(&fixture.default(Agent::Claude), "history.jsonl"),
+        read(&fixture.default(AgentId::CLAUDE), "history.jsonl"),
         "{\"display\":\"default\"}\n{\"display\":\"account\"}\n"
     );
 }
@@ -545,7 +582,10 @@ const ROLLOUT: &str = "sessions/2026/10/20/rollout-2026-10-20T00-00-00-a.jsonl";
 #[tokio::test]
 async fn a_codex_accounts_history_is_merged_and_its_threads_listed_through_the_shared_database() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     write(
         &default,
         "session_index.jsonl",
@@ -571,7 +611,7 @@ async fn a_codex_accounts_history_is_merged_and_its_threads_listed_through_the_s
     );
     assert!(account.join("state_5.sqlite-wal").exists());
 
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     drop(own);
 
     assert_eq!(
@@ -613,10 +653,13 @@ async fn a_codex_accounts_history_is_merged_and_its_threads_listed_through_the_s
 #[tokio::test]
 async fn turning_codex_sharing_off_points_the_rows_written_through_the_account_at_the_default() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     codex_database(&default.join("state_5.sqlite"), &[]);
     std::fs::create_dir_all(default.join("sessions")).unwrap();
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     // Codex in the account records rollouts by the account's own spelling.
     write(&account, ROLLOUT, "written while sharing");
     let archived = "archived_sessions/rollout-2026-10-04T00-00-00-b.jsonl";
@@ -629,7 +672,7 @@ async fn turning_codex_sharing_off_points_the_rows_written_through_the_account_a
         ],
     );
 
-    fixture.share(Agent::Codex, false).await.unwrap();
+    fixture.share(AgentId::CODEX, false).await.unwrap();
     assert_eq!(
         rollout_of(&default.join("state_5.sqlite"), "b").map(PathBuf::from),
         Some(real(&default.join("archived_sessions")).join("rollout-2026-10-04T00-00-00-b.jsonl"))
@@ -651,9 +694,9 @@ async fn turning_codex_sharing_off_points_the_rows_written_through_the_account_a
 async fn turning_sharing_off_keeps_plugins_installed_through_the_account_usable() {
     let fixture = Fixture::new();
     for (agent, item, registry) in [
-        (Agent::Claude, "plugins", "installed_plugins.json"),
-        (Agent::Claude, "plugins", "known_marketplaces.json"),
-        (Agent::Grok, "installed-plugins", "registry.json"),
+        (AgentId::CLAUDE, "plugins", "installed_plugins.json"),
+        (AgentId::CLAUDE, "plugins", "known_marketplaces.json"),
+        (AgentId::GROK, "installed-plugins", "registry.json"),
     ] {
         let (default, account) = (fixture.default(agent), fixture.account(agent));
         std::fs::create_dir_all(default.join(item)).unwrap();
@@ -689,10 +732,10 @@ async fn turning_sharing_off_keeps_plugins_installed_through_the_account_usable(
 #[tokio::test]
 async fn a_codex_state_database_the_catalog_does_not_name_is_told_before_a_launch() {
     let fixture = Fixture::new();
-    let account = fixture.account(Agent::Codex);
-    fixture.share(Agent::Codex, true).await.unwrap();
+    let account = fixture.account(AgentId::CODEX);
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     write(&account, "state_6.sqlite", "");
-    let session = fixture.session("s", Agent::Codex);
+    let session = fixture.session("s", AgentId::CODEX);
     let prepared = before_launch(&fixture.state, &session).await.unwrap();
     let codes: Vec<crate::protocol::Code> =
         prepared.notices.iter().map(|notice| notice.code).collect();
@@ -706,14 +749,17 @@ async fn a_codex_state_database_the_catalog_does_not_name_is_told_before_a_launc
 #[tokio::test]
 async fn a_thread_codex_archived_behind_a_sharing_accounts_links_is_judged_to_need_unarchiving() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     std::fs::create_dir_all(default.join("sessions")).unwrap();
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     let thread = "019a0000-0000-7000-8000-0000000000c1";
     let session = Session {
         agent_session_id: Some(thread.to_string()),
         has_conversation: true,
-        ..fixture.session("archived-by-codex", Agent::Codex)
+        ..fixture.session("archived-by-codex", AgentId::CODEX)
     };
     let archived = format!("archived_sessions/rollout-2026-10-04T00-00-00-{thread}.jsonl");
     write(&account, &archived, "archived by codex");
@@ -734,7 +780,7 @@ async fn a_thread_codex_archived_behind_a_sharing_accounts_links_is_judged_to_ne
 }
 
 /// Holds a launch claim on a session of the account, which counts as one of its sessions running.
-fn busy(fixture: &Fixture, agent: Agent) -> crate::state::LaunchClaim {
+fn busy(fixture: &Fixture, agent: AgentId) -> crate::state::LaunchClaim {
     fixture.session("busy", agent);
     fixture.state.begin_launch("busy").unwrap()
 }
@@ -743,20 +789,20 @@ fn busy(fixture: &Fixture, agent: Agent) -> crate::state::LaunchClaim {
 async fn turning_sharing_off_finds_the_links_into_a_default_directory_that_moved() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let moved = fixture.dir.join("default-moved");
     std::fs::rename(&default, &moved).unwrap();
     fixture
         .state
         .set_agent_availability(vec![AgentAvailability {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             availability: Availability::Available,
             default_account_dir: Some(moved.to_string_lossy().into_owned()),
         }]);
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
     assert!(
         !fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
     assert_eq!(read(&account, "settings.json"), "account settings");
@@ -777,7 +823,7 @@ async fn a_history_item_the_account_links_elsewhere_itself_is_left_and_reported(
     std::fs::create_dir_all(&elsewhere).unwrap();
     std::fs::remove_dir_all(account.join("projects")).unwrap();
     std::os::unix::fs::symlink(&elsewhere, account.join("projects")).unwrap();
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     let coded = err.downcast_ref::<CodedError>().unwrap();
     let items: Vec<serde_json::Value> = serde_json::from_str(&coded.params["items"]).unwrap();
     assert_eq!(items.len(), 1, "{items:?}");
@@ -794,7 +840,10 @@ async fn a_history_item_the_account_links_elsewhere_itself_is_left_and_reported(
 #[tokio::test]
 async fn a_codex_row_carry_that_failed_is_redone_by_a_retry() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     let shared = codex_database(&default.join("state_5.sqlite"), &[]);
     shared
         .execute_batch(
@@ -806,12 +855,12 @@ async fn a_codex_row_carry_that_failed_is_redone_by_a_retry() {
         &account.join("state_5.sqlite"),
         &[("a", &account.join(ROLLOUT).to_string_lossy(), 1)],
     );
-    let err = fixture.share(Agent::Codex, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CODEX, true).await.unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_SHARING_FAILED);
     assert_eq!(rollout_of(&default.join("state_5.sqlite"), "a"), None);
 
     shared.execute_batch("DROP TRIGGER refuse;").unwrap();
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     assert_eq!(
         rollout_of(&default.join("state_5.sqlite"), "a").map(PathBuf::from),
         Some(
@@ -824,7 +873,7 @@ async fn a_codex_row_carry_that_failed_is_redone_by_a_retry() {
 async fn deleting_a_sharing_account_turns_its_sharing_off_first() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let delete = || {
         handle(
             &fixture.state,
@@ -835,10 +884,10 @@ async fn deleting_a_sharing_account_turns_its_sharing_off_first() {
             },
         )
     };
-    let claim = busy(&fixture, Agent::Claude);
+    let claim = busy(&fixture, AgentId::CLAUDE);
     let err = delete().await.unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_STILL_SHARING);
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(record.share_default_config && !record.share_default_config_incomplete);
     assert!(is_link(&account.join("settings.json")));
     drop(claim);
@@ -860,7 +909,7 @@ async fn deleting_a_sharing_account_turns_its_sharing_off_first() {
 async fn deleting_a_sharing_account_with_its_directory_turns_sharing_off_before_the_move() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(is_link(&account.join("settings.json")));
     // What the Trash is handed: the settings file, and whether it is still a link.
     static HANDED: Mutex<Vec<(Option<String>, bool)>> = Mutex::new(Vec::new());
@@ -903,7 +952,7 @@ async fn deleting_a_sharing_account_with_its_directory_turns_sharing_off_before_
 async fn repointing_a_sharing_account_turns_its_sharing_off_first() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let elsewhere = fixture.dir.join("claude-elsewhere");
     let repoint = || {
         handle(
@@ -929,19 +978,19 @@ async fn repointing_a_sharing_account_turns_its_sharing_off_first() {
     .await
     .unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_NAME_TAKEN);
-    assert!(fixture.record(Agent::Claude).share_default_config);
+    assert!(fixture.record(AgentId::CLAUDE).share_default_config);
     assert!(is_link(&account.join("settings.json")));
 
-    let claim = busy(&fixture, Agent::Claude);
+    let claim = busy(&fixture, AgentId::CLAUDE);
     let err = repoint().await.unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_STILL_SHARING);
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert_eq!(PathBuf::from(&record.config_dir), account);
     assert!(record.share_default_config && !record.share_default_config_incomplete);
     drop(claim);
 
     repoint().await.unwrap();
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert_eq!(PathBuf::from(&record.config_dir), elsewhere);
     assert!(!record.share_default_config && !record.share_default_config_incomplete);
     assert_eq!(read(&account, "settings.json"), "account settings");
@@ -952,13 +1001,13 @@ async fn repointing_a_sharing_account_turns_its_sharing_off_first() {
 async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_back() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let moved = fixture.dir.join("default-now");
     std::fs::create_dir_all(&moved).unwrap();
     fixture
         .state
         .set_agent_availability(vec![AgentAvailability {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             availability: Availability::Available,
             default_account_dir: Some(moved.to_string_lossy().into_owned()),
         }]);
@@ -967,7 +1016,7 @@ async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_bac
     // the directory its links lead into.
     std::fs::remove_file(account.join("settings.json")).unwrap();
     std::fs::write(account.join("settings.json"), "saved over the link").unwrap();
-    let session = fixture.session("s", Agent::Claude);
+    let session = fixture.session("s", AgentId::CLAUDE);
     let prepared = before_launch(&fixture.state, &session).await.unwrap();
     assert_eq!(prepared.shared_default_dir, Some(real(&default)));
     let codes: Vec<crate::protocol::Code> =
@@ -981,7 +1030,7 @@ async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_bac
         .store
         .set_account_sharing("claude-a", true, true)
         .unwrap();
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_SHARING_FAILED);
     let coded = err.downcast_ref::<CodedError>().unwrap();
     assert_eq!(coded.params["cause"], "default_moved");
@@ -990,10 +1039,10 @@ async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_bac
     // Turning off finds links into the recorded default and into the current one alike.
     std::fs::remove_file(account.join("rules")).unwrap();
     std::os::unix::fs::symlink(real(&moved).join("rules"), account.join("rules")).unwrap();
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
     assert!(
         !fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
     assert!(std::fs::symlink_metadata(account.join("rules")).is_err());
@@ -1003,14 +1052,17 @@ async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_bac
 #[tokio::test]
 async fn codex_rows_carried_once_are_not_carried_again() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     codex_database(&default.join("state_5.sqlite"), &[]);
     write(&account, ROLLOUT, "rollout a");
     codex_database(
         &account.join("state_5.sqlite"),
         &[("a", &account.join(ROLLOUT).to_string_lossy(), 1)],
     );
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     assert!(rollout_of(&default.join("state_5.sqlite"), "a").is_some());
     // The thread's row went since (taken back with a session, say); a later retry of turning
     // sharing on does not bring the stale row back from the account's set-aside database.
@@ -1023,7 +1075,7 @@ async fn codex_rows_carried_once_are_not_carried_again() {
         .store
         .set_account_sharing("codex-a", true, true)
         .unwrap();
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     assert_eq!(rollout_of(&default.join("state_5.sqlite"), "a"), None);
 }
 
@@ -1033,7 +1085,12 @@ const THREAD: &str = "019a0000-0000-7000-8000-000000000001";
 const ARCHIVED_THREAD: &str = "019a0000-0000-7000-8000-000000000002";
 
 /// An archived session of the account that has a conversation with the agent's id `id`.
-fn archived_with_conversation(fixture: &Fixture, session: &str, agent: Agent, id: &str) -> Session {
+fn archived_with_conversation(
+    fixture: &Fixture,
+    session: &str,
+    agent: AgentId,
+    id: &str,
+) -> Session {
     let session = Session {
         account_id: Some(account_id(agent).to_string()),
         config_dir: Some(fixture.account(agent).to_string_lossy().into_owned()),
@@ -1053,10 +1110,10 @@ fn judged(session: &Session) -> crate::records::Judgement {
 async fn turning_sharing_off_takes_the_accounts_own_claude_conversations_back() {
     let fixture = Fixture::new();
     let (default, account) = (
-        fixture.default(Agent::Claude),
-        fixture.account(Agent::Claude),
+        fixture.default(AgentId::CLAUDE),
+        fixture.account(AgentId::CLAUDE),
     );
-    let session = archived_with_conversation(&fixture, "own", Agent::Claude, CLAUDE_ID);
+    let session = archived_with_conversation(&fixture, "own", AgentId::CLAUDE, CLAUDE_ID);
     let transcript = format!("projects/p/{CLAUDE_ID}.jsonl");
     let sidecar = format!("projects/p/{CLAUDE_ID}/subagents/agent.jsonl");
     let checkpoint = format!("file-history/{CLAUDE_ID}/v1");
@@ -1065,14 +1122,14 @@ async fn turning_sharing_off_takes_the_accounts_own_claude_conversations_back() 
     write(&account, &checkpoint, "a checkpoint");
     let not_owned = format!("projects/p/{NOT_OWNED_ID}.jsonl");
     write(&default, &not_owned, "the default's conversation");
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert_eq!(read(&default, &transcript), "the account's conversation");
     assert_eq!(
         judged(&session).resumability,
         crate::records::Resumability::Unknown
     );
 
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
     for (relative, content) in [
         (&transcript, "the account's conversation"),
         (&sidecar, "a subagent"),
@@ -1095,14 +1152,18 @@ async fn turning_sharing_off_takes_the_accounts_own_claude_conversations_back() 
 #[tokio::test]
 async fn turning_sharing_off_takes_the_accounts_own_codex_threads_back() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     codex_database(&default.join("state_5.sqlite"), &[]);
     std::fs::create_dir_all(default.join("sessions")).unwrap();
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     // Written while sharing: a thread with reverted turns, one archived by Codex, and the rows
     // Codex records of them through the account's link.
-    let session = archived_with_conversation(&fixture, "own", Agent::Codex, THREAD);
-    let archived = archived_with_conversation(&fixture, "archived", Agent::Codex, ARCHIVED_THREAD);
+    let session = archived_with_conversation(&fixture, "own", AgentId::CODEX, THREAD);
+    let archived =
+        archived_with_conversation(&fixture, "archived", AgentId::CODEX, ARCHIVED_THREAD);
     let chain = test_support::codex_chain(&account, THREAD, true);
     let archived_rollout =
         format!("archived_sessions/rollout-2026-10-04T00-00-00-{ARCHIVED_THREAD}.jsonl");
@@ -1126,7 +1187,7 @@ async fn turning_sharing_off_takes_the_accounts_own_codex_threads_back() {
     let relative = |path: &Path| path.strip_prefix(&account).unwrap().to_path_buf();
     let chain_files: Vec<PathBuf> = chain.all().iter().map(|path| relative(path)).collect();
 
-    fixture.share(Agent::Codex, false).await.unwrap();
+    fixture.share(AgentId::CODEX, false).await.unwrap();
     for file in &chain_files {
         assert!(account.join(file).is_file(), "{file:?}");
         assert!(
@@ -1158,11 +1219,11 @@ fn default_session_with_conversation(fixture: &Fixture, id: &str) -> Session {
         config_dir: None,
         agent_session_id: Some(CLAUDE_ID.to_string()),
         has_conversation: true,
-        ..test_support::project_session(id, Agent::Claude, SessionStatus::Interrupted)
+        ..test_support::project_session(id, AgentId::CLAUDE, SessionStatus::Interrupted)
     };
     fixture.state.store.insert_session(&session).unwrap();
     write(
-        &fixture.default(Agent::Claude),
+        &fixture.default(AgentId::CLAUDE),
         &format!("projects/p/{CLAUDE_ID}.jsonl"),
         "the conversation",
     );
@@ -1174,7 +1235,7 @@ fn on_default_shell(fixture: &Fixture) -> std::collections::HashMap<String, Stri
     std::collections::HashMap::from([(
         "CLAUDE_CONFIG_DIR".to_string(),
         fixture
-            .default(Agent::Claude)
+            .default(AgentId::CLAUDE)
             .to_string_lossy()
             .into_owned(),
     )])
@@ -1185,8 +1246,8 @@ async fn a_switch_onto_an_account_that_stopped_sharing_that_fails_leaves_the_con
 ) {
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
     let session = default_session_with_conversation(&fixture, "moving");
 
     let launches = Launches::default();
@@ -1209,10 +1270,10 @@ async fn a_switch_onto_an_account_that_stopped_sharing_that_fails_leaves_the_con
     // conversation.
     assert!(
         !fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
-    assert!(!is_link(&fixture.account(Agent::Claude).join("projects")));
+    assert!(!is_link(&fixture.account(AgentId::CLAUDE).join("projects")));
     let resumable = crate::records::judge(
         &crate::records::Locator::with_shell(on_default_shell(&fixture)),
         &session,
@@ -1227,13 +1288,13 @@ async fn a_switch_onto_an_account_that_stopped_sharing_that_fails_leaves_the_con
 async fn a_conversation_another_session_records_is_copied_back_not_moved() {
     let fixture = Fixture::new();
     let (default, account) = (
-        fixture.default(Agent::Claude),
-        fixture.account(Agent::Claude),
+        fixture.default(AgentId::CLAUDE),
+        fixture.account(AgentId::CLAUDE),
     );
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     default_session_with_conversation(&fixture, "on-default");
-    let own = archived_with_conversation(&fixture, "own", Agent::Claude, CLAUDE_ID);
-    fixture.share(Agent::Claude, false).await.unwrap();
+    let own = archived_with_conversation(&fixture, "own", AgentId::CLAUDE, CLAUDE_ID);
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
     let transcript = format!("projects/p/{CLAUDE_ID}.jsonl");
     assert_eq!(read(&account, &transcript), "the conversation");
     assert_eq!(read(&default, &transcript), "the conversation");
@@ -1247,11 +1308,11 @@ async fn a_conversation_another_session_records_is_copied_back_not_moved() {
 async fn a_record_the_account_holds_already_is_kept_when_it_is_the_later_one() {
     let fixture = Fixture::new();
     let (default, account) = (
-        fixture.default(Agent::Claude),
-        fixture.account(Agent::Claude),
+        fixture.default(AgentId::CLAUDE),
+        fixture.account(AgentId::CLAUDE),
     );
-    fixture.share(Agent::Claude, true).await.unwrap();
-    archived_with_conversation(&fixture, "own", Agent::Claude, CLAUDE_ID);
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
+    archived_with_conversation(&fixture, "own", AgentId::CLAUDE, CLAUDE_ID);
     let transcript = format!("projects/p/{CLAUDE_ID}.jsonl");
     write(&default, &transcript, "older");
     test_support::move_modification_time_back(&default.join(&transcript));
@@ -1267,7 +1328,7 @@ async fn a_record_the_account_holds_already_is_kept_when_it_is_the_later_one() {
     };
     take_back::take_back(
         &mut crate::records::Locator::default(),
-        Agent::Claude,
+        AgentId::CLAUDE,
         &dirs,
         &conversation,
         "STAMP",
@@ -1287,11 +1348,14 @@ async fn a_record_the_account_holds_already_is_kept_when_it_is_the_later_one() {
 #[tokio::test]
 async fn a_codex_row_cleanup_that_failed_is_redone_by_a_retry() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     let shared = codex_database(&default.join("state_5.sqlite"), &[]);
     std::fs::create_dir_all(default.join("sessions")).unwrap();
-    fixture.share(Agent::Codex, true).await.unwrap();
-    archived_with_conversation(&fixture, "own", Agent::Codex, THREAD);
+    fixture.share(AgentId::CODEX, true).await.unwrap();
+    archived_with_conversation(&fixture, "own", AgentId::CODEX, THREAD);
     let chain = test_support::codex_chain(&account, THREAD, false);
     codex_database(
         &account.join("state_5.sqlite"),
@@ -1302,7 +1366,7 @@ async fn a_codex_row_cleanup_that_failed_is_redone_by_a_retry() {
             "CREATE TRIGGER refuse BEFORE DELETE ON threads BEGIN SELECT RAISE(ABORT, 'no'); END;",
         )
         .unwrap();
-    let err = fixture.share(Agent::Codex, false).await.unwrap_err();
+    let err = fixture.share(AgentId::CODEX, false).await.unwrap_err();
     let coded = err.downcast_ref::<CodedError>().unwrap();
     let items: Vec<serde_json::Value> = serde_json::from_str(&coded.params["items"]).unwrap();
     assert_eq!(items[0]["item"], THREAD);
@@ -1313,16 +1377,19 @@ async fn a_codex_row_cleanup_that_failed_is_redone_by_a_retry() {
     assert!(rollout_of(&default.join("state_5.sqlite"), THREAD).is_some());
 
     shared.execute_batch("DROP TRIGGER refuse;").unwrap();
-    fixture.share(Agent::Codex, false).await.unwrap();
+    fixture.share(AgentId::CODEX, false).await.unwrap();
     assert_eq!(rollout_of(&default.join("state_5.sqlite"), THREAD), None);
 }
 
 #[tokio::test]
 async fn a_taken_back_codex_thread_is_pointed_where_the_launch_environment_puts_the_database() {
     let fixture = Fixture::new();
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     std::fs::create_dir_all(default.join("sessions")).unwrap();
-    fixture.share(Agent::Codex, true).await.unwrap();
+    fixture.share(AgentId::CODEX, true).await.unwrap();
     std::fs::remove_file(account.join("sessions")).unwrap();
     let chain = test_support::codex_chain(&account, THREAD, false);
     let database_dir = fixture.dir.join("codex-sqlite-home");
@@ -1340,7 +1407,7 @@ async fn a_taken_back_codex_thread_is_pointed_where_the_launch_environment_puts_
     let take = |launch_env: Result<&std::collections::HashMap<String, String>, &str>| {
         take_back::take_back(
             &mut crate::records::Locator::default(),
-            Agent::Codex,
+            AgentId::CODEX,
             &dirs,
             &conversation,
             "STAMP",
@@ -1373,29 +1440,32 @@ async fn conversations_are_taken_back_from_a_default_records_directory_that_is_a
     let fixture = Fixture::new();
     // Claude: the default's `projects/` is a link to a directory of the user's.
     let (default, account) = (
-        fixture.default(Agent::Claude),
-        fixture.account(Agent::Claude),
+        fixture.default(AgentId::CLAUDE),
+        fixture.account(AgentId::CLAUDE),
     );
     let projects = fixture.dir.join("claude-projects");
     std::fs::create_dir_all(&projects).unwrap();
     std::os::unix::fs::symlink(&projects, default.join("projects")).unwrap();
-    fixture.share(Agent::Claude, true).await.unwrap();
-    archived_with_conversation(&fixture, "own", Agent::Claude, CLAUDE_ID);
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
+    archived_with_conversation(&fixture, "own", AgentId::CLAUDE, CLAUDE_ID);
     let transcript = format!("projects/p/{CLAUDE_ID}.jsonl");
     write(&account, &transcript, "the account's conversation");
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
     assert_eq!(read(&account, &transcript), "the account's conversation");
     assert!(std::fs::symlink_metadata(projects.join(format!("p/{CLAUDE_ID}.jsonl"))).is_err());
 
     // Codex: the default's `sessions/` is one; the thread's row goes only with its rollout.
-    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
     let sessions = fixture.dir.join("codex-sessions");
     std::fs::create_dir_all(&sessions).unwrap();
     std::os::unix::fs::symlink(&sessions, default.join("sessions")).unwrap();
     codex_database(&default.join("state_5.sqlite"), &[]);
-    fixture.share(Agent::Codex, true).await.unwrap();
-    archived_with_conversation(&fixture, "own-thread", Agent::Codex, THREAD);
-    archived_with_conversation(&fixture, "gone-thread", Agent::Codex, ARCHIVED_THREAD);
+    fixture.share(AgentId::CODEX, true).await.unwrap();
+    archived_with_conversation(&fixture, "own-thread", AgentId::CODEX, THREAD);
+    archived_with_conversation(&fixture, "gone-thread", AgentId::CODEX, ARCHIVED_THREAD);
     let chain = test_support::codex_chain(&account, THREAD, false);
     codex_database(
         &account.join("state_5.sqlite"),
@@ -1405,7 +1475,7 @@ async fn conversations_are_taken_back_from_a_default_records_directory_that_is_a
         ],
     );
     let head = chain.head.strip_prefix(&account).unwrap().to_path_buf();
-    fixture.share(Agent::Codex, false).await.unwrap();
+    fixture.share(AgentId::CODEX, false).await.unwrap();
     assert!(account.join(&head).is_file());
     assert_eq!(rollout_of(&default.join("state_5.sqlite"), THREAD), None);
     // No file of this thread was found anywhere: its row is the only trace left, and stays.
@@ -1413,7 +1483,7 @@ async fn conversations_are_taken_back_from_a_default_records_directory_that_is_a
 }
 
 /// The account's sharing state as a client connecting now would be told it.
-fn sharing_state(fixture: &Fixture, agent: Agent) -> crate::protocol::AccountSharing {
+fn sharing_state(fixture: &Fixture, agent: AgentId) -> crate::protocol::AccountSharing {
     fixture
         .state
         .account_sharing_states()
@@ -1426,12 +1496,12 @@ fn sharing_state(fixture: &Fixture, agent: Agent) -> crate::protocol::AccountSha
 /// The `account_in_use` refusal's params, after checking nothing was recorded or touched.
 fn refused_in_use(fixture: &Fixture, err: &anyhow::Error) -> crate::protocol::Params {
     assert_eq!(code_of(err), error_code::ACCOUNT_IN_USE);
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(!record.share_default_config && !record.share_default_config_incomplete);
     assert!(!is_link(
-        &fixture.account(Agent::Claude).join("settings.json")
+        &fixture.account(AgentId::CLAUDE).join("settings.json")
     ));
-    assert!(sharing_state(fixture, Agent::Claude).progress.is_none());
+    assert!(sharing_state(fixture, AgentId::CLAUDE).progress.is_none());
     err.downcast_ref::<CodedError>().unwrap().params.clone()
 }
 
@@ -1439,14 +1509,14 @@ fn refused_in_use(fixture: &Fixture, err: &anyhow::Error) -> crate::protocol::Pa
 async fn a_change_is_refused_while_a_session_of_the_account_runs() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    fixture.session("running", Agent::Claude);
+    fixture.session("running", AgentId::CLAUDE);
     let running = test_support::running(&fixture.state, "running");
-    let in_use = sharing_state(&fixture, Agent::Claude)
+    let in_use = sharing_state(&fixture, AgentId::CLAUDE)
         .in_use
         .expect("in use");
     assert_eq!((in_use.sessions, in_use.signing_in), (1, false));
 
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     let params = refused_in_use(&fixture, &err);
     assert_eq!(params["sessions"], "1");
     assert_eq!(params["signing_in"], "false");
@@ -1461,15 +1531,15 @@ async fn a_change_is_refused_while_a_session_of_the_account_runs() {
         );
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
-    assert!(sharing_state(&fixture, Agent::Claude).in_use.is_none());
-    fixture.share(Agent::Claude, true).await.unwrap();
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).in_use.is_none());
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(
         !fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
     assert!(is_link(
-        &fixture.account(Agent::Claude).join("settings.json")
+        &fixture.account(AgentId::CLAUDE).join("settings.json")
     ));
 }
 
@@ -1478,20 +1548,20 @@ async fn a_change_is_refused_while_a_session_of_the_account_starts() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let mut events = fixture.state.subscribe();
-    let claim = busy(&fixture, Agent::Claude);
+    let claim = busy(&fixture, AgentId::CLAUDE);
     // Every client is told, the one connecting later too.
     let told = std::iter::from_fn(|| events.try_recv().ok()).any(|event| {
         matches!(event, crate::protocol::Event::AccountSharing(sharing)
             if sharing.account == "claude-a" && sharing.in_use.as_ref().is_some_and(|in_use| in_use.sessions == 1))
     });
     assert!(told);
-    assert!(sharing_state(&fixture, Agent::Claude).in_use.is_some());
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).in_use.is_some());
 
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     assert_eq!(refused_in_use(&fixture, &err)["sessions"], "1");
     drop(claim);
-    assert!(sharing_state(&fixture, Agent::Claude).in_use.is_none());
-    fixture.share(Agent::Claude, true).await.unwrap();
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).in_use.is_none());
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
 }
 
 #[tokio::test]
@@ -1500,24 +1570,24 @@ async fn a_change_is_refused_while_the_account_is_being_signed_in() {
     let (_, account) = claude_setup(&fixture);
     let signing_in = running_long(Some(&account));
     fixture.state.publish_account_sharing();
-    let in_use = sharing_state(&fixture, Agent::Claude)
+    let in_use = sharing_state(&fixture, AgentId::CLAUDE)
         .in_use
         .expect("in use");
     assert_eq!((in_use.sessions, in_use.signing_in), (0, true));
 
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     let params = refused_in_use(&fixture, &err);
     assert_eq!(params["sessions"], "0");
     assert_eq!(params["signing_in"], "true");
     drop(signing_in);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
 }
 
 /// A change of the account's sharing to `share`, started and left waiting for a short read of the
 /// account; it goes on once the answer is dropped.
 async fn waiting_change(
     fixture: &Fixture,
-    agent: Agent,
+    agent: AgentId,
     share: bool,
 ) -> (tokio::task::JoinHandle<Result<()>>, Run) {
     let reading = reading_account(Some(&fixture.account(agent))).unwrap();
@@ -1551,11 +1621,11 @@ async fn waiting_change(
 async fn a_change_waits_for_a_short_read_and_holds_new_ones_back() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    let (change, reading) = waiting_change(&fixture, Agent::Claude, true).await;
+    let (change, reading) = waiting_change(&fixture, AgentId::CLAUDE, true).await;
     // Recorded and told at once, waiting with no entry under way.
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(record.share_default_config && record.share_default_config_incomplete);
-    let progress = sharing_state(&fixture, Agent::Claude)
+    let progress = sharing_state(&fixture, AgentId::CLAUDE)
         .progress
         .expect("a change running");
     assert_eq!(
@@ -1584,10 +1654,10 @@ async fn a_change_waits_for_a_short_read_and_holds_new_ones_back() {
     next.join().unwrap();
     assert!(
         !fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
-    assert!(sharing_state(&fixture, Agent::Claude).progress.is_none());
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).progress.is_none());
 }
 
 #[tokio::test]
@@ -1595,15 +1665,15 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
     std::fs::create_dir_all(fixture.dir.join("no-such-project")).unwrap();
-    fixture.session("s", Agent::Claude);
+    fixture.session("s", AgentId::CLAUDE);
     let moving = Session {
         account_id: None,
         config_dir: None,
-        ..test_support::project_session("moving", Agent::Claude, SessionStatus::Idle)
+        ..test_support::project_session("moving", AgentId::CLAUDE, SessionStatus::Idle)
     };
     fixture.state.store.insert_session(&moving).unwrap();
     let running = test_support::running(&fixture.state, "moving");
-    let (change, reading) = waiting_change(&fixture, Agent::Claude, true).await;
+    let (change, reading) = waiting_change(&fixture, AgentId::CLAUDE, true).await;
     let in_progress = |result: Result<()>| {
         assert_eq!(
             code_of(&result.unwrap_err()),
@@ -1620,7 +1690,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
         crate::coordinator::open::OpenRequest {
             console_id: "console-1".to_string(),
             project_id: Some("project-1".to_string()),
-            agent: Some(Agent::Claude),
+            agent: Some(AgentId::CLAUDE),
             account: Some(Some("claude-a".to_string())),
             model: None,
             effort: None,
@@ -1674,7 +1744,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
             &fixture.state,
             crate::coordinator::handoff::Handoff {
                 session: "s".to_string(),
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 account: None,
                 model: None,
                 effort: None,
@@ -1689,7 +1759,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
         .map(drop),
     );
     // A second change, and removing or repointing it.
-    in_progress(fixture.share(Agent::Claude, false).await);
+    in_progress(fixture.share(AgentId::CLAUDE, false).await);
     in_progress(
         handle(
             &fixture.state,
@@ -1733,7 +1803,7 @@ async fn a_change_tells_its_progress_through_every_entry() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let mut events = fixture.state.subscribe();
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let states: Vec<crate::protocol::AccountSharing> =
         std::iter::from_fn(|| events.try_recv().ok())
             .filter_map(|event| match event {
@@ -1745,7 +1815,7 @@ async fn a_change_tells_its_progress_through_every_entry() {
                 _ => None,
             })
             .collect();
-    let catalog: Vec<&str> = crate::accounts::shared_config::items::shared_items(Agent::Claude)
+    let catalog: Vec<&str> = crate::accounts::shared_config::items::shared_items(AgentId::CLAUDE)
         .iter()
         .map(|item| item.name)
         .collect();
@@ -1768,13 +1838,13 @@ async fn a_change_tells_its_progress_through_every_entry() {
     assert!(last.progress.is_none() && last.failure.is_none());
 
     // Turning it off counts each conversation taken back as an entry too.
-    archived_with_conversation(&fixture, "own", Agent::Claude, CLAUDE_ID);
+    archived_with_conversation(&fixture, "own", AgentId::CLAUDE, CLAUDE_ID);
     write(
-        &fixture.account(Agent::Claude),
+        &fixture.account(AgentId::CLAUDE),
         &format!("projects/p/{CLAUDE_ID}.jsonl"),
         "the account's conversation",
     );
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
     let progress: Vec<_> = std::iter::from_fn(|| events.try_recv().ok())
         .filter_map(|event| match event {
             crate::protocol::Event::AccountSharing(sharing) if sharing.account == "claude-a" => {
@@ -1801,12 +1871,12 @@ async fn no_launch_or_switch_carries_a_change_out() {
         .store
         .set_account_sharing("claude-a", true, true)
         .unwrap();
-    fixture.session("s", Agent::Claude);
+    fixture.session("s", AgentId::CLAUDE);
     assert_eq!(resumed_with(&fixture, "s").await, None);
     let session = Session {
         account_id: None,
         config_dir: None,
-        ..test_support::project_session("moving", Agent::Claude, SessionStatus::Interrupted)
+        ..test_support::project_session("moving", AgentId::CLAUDE, SessionStatus::Interrupted)
     };
     fixture.state.store.insert_session(&session).unwrap();
     let launches = Launches::default();
@@ -1825,7 +1895,7 @@ async fn no_launch_or_switch_carries_a_change_out() {
     assert_eq!(launches.given(), vec![None]);
     assert!(
         fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
     assert_eq!(read(&account, "settings.json"), "account settings");
@@ -1836,7 +1906,7 @@ async fn no_launch_or_switch_carries_a_change_out() {
 async fn a_launch_of_an_incomplete_account_skips_the_repair() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     fixture
         .state
         .store
@@ -1844,12 +1914,12 @@ async fn a_launch_of_an_incomplete_account_skips_the_repair() {
         .unwrap();
     std::fs::remove_file(account.join("settings.json")).unwrap();
     std::fs::write(account.join("settings.json"), "saved over the link").unwrap();
-    fixture.session("s", Agent::Claude);
+    fixture.session("s", AgentId::CLAUDE);
     assert_eq!(resumed_with(&fixture, "s").await, Some(real(&default)));
     assert_eq!(read(&account, "settings.json"), "saved over the link");
     assert!(
         fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
 }
@@ -1859,7 +1929,7 @@ async fn an_incomplete_account_is_given_the_shared_directory_while_its_conversat
     use std::os::unix::fs::PermissionsExt;
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    let session = fixture.session("s", Agent::Claude);
+    let session = fixture.session("s", AgentId::CLAUDE);
     let given = || async {
         before_launch(&fixture.state, &session)
             .await
@@ -1869,18 +1939,18 @@ async fn an_incomplete_account_is_given_the_shared_directory_while_its_conversat
 
     // Turning sharing on that stopped before `projects/` was linked.
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o555)).unwrap();
-    fixture.share(Agent::Claude, true).await.unwrap_err();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert!(
         fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
     assert!(!is_link(&account.join("projects")));
     assert_eq!(given().await, None);
 
     // Turning sharing off that stopped with `projects/` still linked.
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     fixture
         .state
         .store
@@ -1900,8 +1970,8 @@ async fn turning_sharing_off_an_account_never_shared_touches_nothing() {
         .store
         .set_account_sharing("claude-a", true, true)
         .unwrap();
-    fixture.share(Agent::Claude, false).await.unwrap();
-    let record = fixture.record(Agent::Claude);
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(!record.share_default_config && !record.share_default_config_incomplete);
     assert_eq!(read(&account, "settings.json"), "account settings");
     assert!(backups(&account, "settings.json").is_empty());
@@ -1912,7 +1982,7 @@ async fn turning_sharing_off_an_account_never_shared_touches_nothing() {
         .unwrap()
         .is_none());
     // Asking again for a choice that is complete does nothing.
-    fixture.share(Agent::Claude, false).await.unwrap();
+    fixture.share(AgentId::CLAUDE, false).await.unwrap();
 }
 
 #[test]
@@ -1968,12 +2038,12 @@ fn a_failures_cause_is_told_from_the_error_kind() {
 async fn a_default_directory_that_is_gone_is_told_as_not_found() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    std::fs::remove_dir_all(fixture.default(Agent::Claude)).unwrap();
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    std::fs::remove_dir_all(fixture.default(AgentId::CLAUDE)).unwrap();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_SHARING_FAILED);
     let coded = err.downcast_ref::<CodedError>().unwrap();
     assert_eq!(coded.params["cause"], "not_found");
-    let failure = sharing_state(&fixture, Agent::Claude).failure.unwrap();
+    let failure = sharing_state(&fixture, AgentId::CLAUDE).failure.unwrap();
     assert_eq!(failure.cause, crate::protocol::SharingCause::NotFound);
     assert!(failure.items.is_empty());
 }
@@ -1982,7 +2052,7 @@ async fn a_default_directory_that_is_gone_is_told_as_not_found() {
 async fn a_conversation_with_nowhere_of_the_accounts_to_go_is_told_as_a_conflict() {
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let dirs = link::Dirs::for_undoing(&account, &default, &default)
         .unwrap()
         .unwrap();
@@ -1999,7 +2069,7 @@ async fn a_conversation_with_nowhere_of_the_accounts_to_go_is_told_as_a_conflict
     );
     let failure = take_back::take_back(
         &mut crate::records::Locator::default(),
-        Agent::Claude,
+        AgentId::CLAUDE,
         &dirs,
         &conversation,
         "STAMP",
@@ -2020,7 +2090,7 @@ impl Launches {
 }
 
 /// A session of the account with a process at its prompt, waiting for the user's next message.
-fn idle_session(fixture: &Fixture, id: &str, agent: Agent) -> test_support::StandIn {
+fn idle_session(fixture: &Fixture, id: &str, agent: AgentId) -> test_support::StandIn {
     let session = Session {
         status: SessionStatus::Idle,
         ..fixture.session(id, agent)
@@ -2034,7 +2104,7 @@ fn idle_session(fixture: &Fixture, id: &str, agent: Agent) -> test_support::Stan
 /// The `account_sharing` states sent for `agent`'s account since `events` was subscribed.
 fn sharing_events(
     events: &mut tokio::sync::broadcast::Receiver<crate::protocol::Event>,
-    agent: Agent,
+    agent: AgentId,
 ) -> Vec<crate::protocol::AccountSharing> {
     std::iter::from_fn(|| events.try_recv().ok())
         .filter_map(|event| match event {
@@ -2067,15 +2137,15 @@ async fn an_idle_session_does_not_block_and_is_resumed_after_the_change() {
     use crate::protocol::{Event, SharingPhase};
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
-    let first = idle_session(&fixture, "idle", Agent::Claude);
+    let first = idle_session(&fixture, "idle", AgentId::CLAUDE);
     let launches = Launches::default();
     launches.resume_through(&fixture.state, false);
-    let before = sharing_state(&fixture, Agent::Claude);
+    let before = sharing_state(&fixture, AgentId::CLAUDE);
     assert!(before.in_use.is_none());
     assert_eq!(before.idle_sessions, 1);
 
     let mut events = fixture.state.subscribe();
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(first.poll_exit());
     assert!(is_link(&account.join("settings.json")));
     // Resumed onto the directory as it is now, sharing.
@@ -2120,7 +2190,7 @@ async fn an_idle_session_does_not_block_and_is_resumed_after_the_change() {
             SharingPhase::Resuming
         ]
     );
-    let after = sharing_state(&fixture, Agent::Claude);
+    let after = sharing_state(&fixture, AgentId::CLAUDE);
     assert!(after.progress.is_none() && after.in_use.is_none());
     assert_eq!(after.idle_sessions, 1);
     assert!(fixture.state.sharing_locked("claude-a").is_none());
@@ -2131,11 +2201,11 @@ async fn an_idle_session_is_resumed_after_a_change_that_failed() {
     use std::os::unix::fs::PermissionsExt;
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    let first = idle_session(&fixture, "idle", Agent::Claude);
+    let first = idle_session(&fixture, "idle", AgentId::CLAUDE);
     let launches = Launches::default();
     launches.resume_through(&fixture.state, false);
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o555)).unwrap();
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(code_of(&err), error_code::ACCOUNT_SHARING_FAILED);
     assert!(first.poll_exit());
@@ -2149,15 +2219,15 @@ async fn an_idle_session_is_resumed_after_a_change_that_failed() {
 async fn a_session_that_is_not_resumed_is_told_and_the_change_stands() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    idle_session(&fixture, "idle", Agent::Claude);
+    idle_session(&fixture, "idle", AgentId::CLAUDE);
     let launches = Launches::default();
     launches.resume_through(&fixture.state, true);
     let mut events = fixture.state.subscribe();
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(is_link(&account.join("settings.json")));
     assert!(
         !fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
     let told = std::iter::from_fn(|| events.try_recv().ok()).any(|event| {
@@ -2186,7 +2256,7 @@ async fn a_working_session_blocks_a_change_and_is_left_running() {
         ("background", SessionStatus::Idle),
         ("dialog", SessionStatus::Idle),
     ] {
-        let running = idle_session(&fixture, id, Agent::Claude);
+        let running = idle_session(&fixture, id, AgentId::CLAUDE);
         let session = Session {
             status,
             ..fixture.state.store.get_session(id).unwrap().unwrap()
@@ -2213,17 +2283,17 @@ async fn a_working_session_blocks_a_change_and_is_left_running() {
             assert!(running.look_for_dialog().current.is_some());
         }
         fixture.state.publish_account_sharing();
-        let in_use = sharing_state(&fixture, Agent::Claude)
+        let in_use = sharing_state(&fixture, AgentId::CLAUDE)
             .in_use
             .expect("in use");
         assert_eq!(in_use.sessions, 1, "{id}");
         assert_eq!(
-            sharing_state(&fixture, Agent::Claude).idle_sessions,
+            sharing_state(&fixture, AgentId::CLAUDE).idle_sessions,
             0,
             "{id}"
         );
 
-        let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+        let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
         assert_eq!(refused_in_use(&fixture, &err)["sessions"], "1", "{id}");
         assert!(!running.poll_exit(), "{id}");
         assert!(launches.given().is_empty());
@@ -2243,7 +2313,7 @@ async fn a_session_that_turned_working_before_it_was_ended_refuses_the_change() 
     use crate::protocol::SharingPhase;
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    let running = idle_session(&fixture, "idle", Agent::Claude);
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
     let launches = Launches::default();
     launches.resume_through(&fixture.state, false);
     // Another account's change of the same agent holds the change at waiting, explicitly.
@@ -2251,7 +2321,7 @@ async fn a_session_that_turned_working_before_it_was_ended_refuses_the_change() 
         .state
         .account_sharing
         .locks
-        .lock(Agent::Claude)
+        .lock(AgentId::CLAUDE)
         .await;
     let mut events = fixture.state.subscribe();
     let state = fixture.state.clone();
@@ -2262,7 +2332,7 @@ async fn a_session_that_turned_working_before_it_was_ended_refuses_the_change() 
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     tokio::task::yield_now().await;
-    let waiting = sharing_state(&fixture, Agent::Claude);
+    let waiting = sharing_state(&fixture, AgentId::CLAUDE);
     assert_eq!(
         waiting.progress.expect("a change").phase,
         SharingPhase::Waiting
@@ -2270,7 +2340,7 @@ async fn a_session_that_turned_working_before_it_was_ended_refuses_the_change() 
     // Not claimed while the change queues: still usable, and still counted idle.
     assert!(!fixture.state.is_launching("idle"));
     assert_eq!(waiting.idle_sessions, 1);
-    assert!(sharing_events(&mut events, Agent::Claude)
+    assert!(sharing_events(&mut events, AgentId::CLAUDE)
         .iter()
         .any(|state| state
             .progress
@@ -2292,11 +2362,11 @@ async fn a_session_that_turned_working_before_it_was_ended_refuses_the_change() 
     );
     assert!(!running.poll_exit());
     assert!(launches.given().is_empty());
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(!record.share_default_config && !record.share_default_config_incomplete);
     assert!(!is_link(&account.join("settings.json")));
     assert!(fixture.state.sharing_locked("claude-a").is_none());
-    assert!(sharing_state(&fixture, Agent::Claude).progress.is_none());
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).progress.is_none());
     assert!(!fixture.state.is_launching("idle"));
 }
 
@@ -2304,8 +2374,8 @@ async fn a_session_that_turned_working_before_it_was_ended_refuses_the_change() 
 async fn the_account_stays_locked_until_its_sessions_are_resumed() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    idle_session(&fixture, "idle", Agent::Claude);
-    fixture.session("other", Agent::Claude);
+    idle_session(&fixture, "idle", AgentId::CLAUDE);
+    fixture.session("other", AgentId::CLAUDE);
     let seen = Arc::new(Mutex::new(Vec::new()));
     let launches = Launches::default();
     {
@@ -2322,7 +2392,7 @@ async fn the_account_stays_locked_until_its_sessions_are_resumed() {
             },
         ));
     }
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert_eq!(
         *seen.lock().unwrap(),
         vec![(true, Err(error_code::ACCOUNT_SHARING_IN_PROGRESS))]
@@ -2335,10 +2405,10 @@ async fn the_account_stays_locked_until_its_sessions_are_resumed() {
 async fn removing_or_repointing_restarts_idle_sessions_and_refuses_working_ones() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let launches = Launches::default();
     launches.resume_through(&fixture.state, false);
-    let running = idle_session(&fixture, "idle", Agent::Claude);
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
     fixture
         .state
         .store
@@ -2373,10 +2443,10 @@ async fn removing_or_repointing_restarts_idle_sessions_and_refuses_working_ones(
     // Removal: shared again, then removed with the session idle.
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let launches = Launches::default();
     launches.resume_through(&fixture.state, false);
-    let running = idle_session(&fixture, "idle", Agent::Claude);
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
     handle(
         &fixture.state,
         None,
@@ -2401,7 +2471,7 @@ async fn removing_or_repointing_restarts_idle_sessions_and_refuses_working_ones(
 /// change of the same agent, which the answer's sender lets go of.
 async fn change_held_at_waiting(
     fixture: &Fixture,
-    agent: Agent,
+    agent: AgentId,
     share: bool,
 ) -> (
     tokio::task::JoinHandle<Result<()>>,
@@ -2438,19 +2508,19 @@ async fn a_retry_refused_before_it_started_keeps_the_earlier_failure() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o555)).unwrap();
-    fixture.share(Agent::Claude, true).await.unwrap_err();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let failed = sharing_state(&fixture, Agent::Claude)
+    let failed = sharing_state(&fixture, AgentId::CLAUDE)
         .failure
         .expect("a failure");
 
     let launches = Launches::default();
     launches.resume_through(&fixture.state, false);
-    let running = idle_session(&fixture, "idle", Agent::Claude);
-    let (change, release) = change_held_at_waiting(&fixture, Agent::Claude, true).await;
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
+    let (change, release) = change_held_at_waiting(&fixture, AgentId::CLAUDE, true).await;
     // Still told while the retry waits.
     assert_eq!(
-        sharing_state(&fixture, Agent::Claude).failure,
+        sharing_state(&fixture, AgentId::CLAUDE).failure,
         Some(failed.clone())
     );
     fixture
@@ -2462,12 +2532,12 @@ async fn a_retry_refused_before_it_started_keeps_the_earlier_failure() {
     let err = change.await.unwrap().unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_IN_USE);
     assert!(!running.poll_exit());
-    let after = sharing_state(&fixture, Agent::Claude);
+    let after = sharing_state(&fixture, AgentId::CLAUDE);
     assert_eq!(after.failure, Some(failed));
     assert!(after.progress.is_none());
     assert!(
         fixture
-            .record(Agent::Claude)
+            .record(AgentId::CLAUDE)
             .share_default_config_incomplete
     );
 }
@@ -2484,17 +2554,17 @@ async fn a_session_that_does_not_stop_holds_the_change_back_and_the_others_are_r
         launches.resume_through(&fixture.state, false);
         *fixture.state.restart_stop_timeout.lock().unwrap() =
             Some(std::time::Duration::from_millis(500));
-        idle_session(&fixture, "fine", Agent::Claude);
+        idle_session(&fixture, "fine", AgentId::CLAUDE);
         // Its process ends, but nothing watches it, so it is never seen down.
         let session = Session {
             status: SessionStatus::Idle,
-            ..fixture.session("stuck", Agent::Claude)
+            ..fixture.session("stuck", AgentId::CLAUDE)
         };
         fixture.state.store.update_session(&session).unwrap();
         let stuck = test_support::running(&fixture.state, "stuck");
         let events = fixture.state.subscribe();
 
-        let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+        let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
         assert_eq!(code_of(&err), error_code::SHARING_SESSION_DID_NOT_STOP);
         // "fine" missed the point under test if its wait timed out (the error names the first
         // session to time out), or if it was not resumed: never claimed because it was already
@@ -2510,10 +2580,10 @@ async fn a_session_that_does_not_stop_holds_the_change_back_and_the_others_are_r
     assert_eq!(params["session"], "stuck");
     assert_eq!(params["account"], "claude-a");
     // Nothing recorded or changed, and no failure kept: the change never started.
-    let record = fixture.record(Agent::Claude);
+    let record = fixture.record(AgentId::CLAUDE);
     assert!(!record.share_default_config && !record.share_default_config_incomplete);
     assert!(!is_link(&account.join("settings.json")));
-    assert!(sharing_state(&fixture, Agent::Claude).failure.is_none());
+    assert!(sharing_state(&fixture, AgentId::CLAUDE).failure.is_none());
     // The one that stopped is resumed; the other is told, not dropped silently.
     assert_eq!(launches.given().len(), 1);
     assert!(fixture.state.live_session("fine").is_some());
@@ -2538,22 +2608,22 @@ async fn a_session_that_does_not_stop_holds_the_change_back_and_the_others_are_r
 async fn a_session_with_a_message_queued_or_left_unsent_is_working() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    let running = idle_session(&fixture, "idle", Agent::Claude);
-    assert_eq!(sharing_state(&fixture, Agent::Claude).idle_sessions, 1);
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
+    assert_eq!(sharing_state(&fixture, AgentId::CLAUDE).idle_sessions, 1);
 
     fixture.state.queue_message("idle", "a message for it");
     assert_eq!(
-        sharing_state(&fixture, Agent::Claude)
+        sharing_state(&fixture, AgentId::CLAUDE)
             .in_use
             .map(|in_use| in_use.sessions),
         Some(1)
     );
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     assert_eq!(refused_in_use(&fixture, &err)["sessions"], "1");
     fixture.state.discard_outbox("idle");
 
     running.mark_unsent(running.prompts_sent());
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     assert_eq!(refused_in_use(&fixture, &err)["sessions"], "1");
     assert!(!running.poll_exit());
 }
@@ -2563,7 +2633,7 @@ async fn a_message_sent_to_a_session_being_restarted_is_held_for_its_resumed_pro
     let fixture = Fixture::new();
     claude_setup(&fixture);
     *fixture.state.send_wait.lock().unwrap() = None;
-    idle_session(&fixture, "idle", Agent::Claude);
+    idle_session(&fixture, "idle", AgentId::CLAUDE);
     let relaunched = Arc::new(Mutex::new(Vec::new()));
     {
         let relaunched = relaunched.clone();
@@ -2619,8 +2689,8 @@ async fn down(fixture: &Fixture, id: &str) {
 /// Claims the idle session `id` for a change to restart and ends its process, as a change does
 /// before the resume.
 async fn claimed_and_down(fixture: &Fixture, id: &str) -> crate::state::AccountSharingLock {
-    let running = idle_session(fixture, id, Agent::Claude);
-    let account = fixture.record(Agent::Claude);
+    let running = idle_session(fixture, id, AgentId::CLAUDE);
+    let account = fixture.record(AgentId::CLAUDE);
     let (_, mut lock) = fixture
         .state
         .lock_account_sharing(&account, |_, _| Ok(()))
@@ -2663,8 +2733,8 @@ async fn a_message_queued_after_the_queue_went_to_the_launch_is_written_when_the
     let fixture = Fixture::new();
     claude_setup(&fixture);
     *fixture.state.send_wait.lock().unwrap() = None;
-    let running = idle_session(&fixture, "idle", Agent::Claude);
-    let account = fixture.record(Agent::Claude);
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
+    let account = fixture.record(AgentId::CLAUDE);
     let (_, mut lock) = fixture
         .state
         .lock_account_sharing(&account, |_, _| Ok(()))
@@ -2755,9 +2825,9 @@ async fn a_session_being_restarted_is_described_to_agents_as_starting() {
     use crate::mcp::dispatch::call;
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    fixture.session("caller", Agent::Claude);
-    let running = idle_session(&fixture, "idle", Agent::Claude);
-    let account = fixture.record(Agent::Claude);
+    fixture.session("caller", AgentId::CLAUDE);
+    let running = idle_session(&fixture, "idle", AgentId::CLAUDE);
+    let account = fixture.record(AgentId::CLAUDE);
     let (_, mut lock) = fixture
         .state
         .lock_account_sharing(&account, |_, _| Ok(()))
@@ -2822,8 +2892,8 @@ async fn the_hold_a_sharing_change_takes_on_a_queue_is_told_apart_from_a_handoff
     use crate::state::WriteHold;
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    fixture.session("caller", Agent::Claude);
-    let _running = idle_session(&fixture, "idle", Agent::Claude);
+    fixture.session("caller", AgentId::CLAUDE);
+    let _running = idle_session(&fixture, "idle", AgentId::CLAUDE);
     let held = |fixture: &Fixture| {
         let state = fixture.state.clone();
         async move {
@@ -2895,11 +2965,11 @@ async fn a_change_of_sharing_carries_what_a_sessions_process_started_over_to_its
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let (first, child) =
-        idle_session_that_started_a_server(&fixture, fixture.session("idle", Agent::Claude));
+        idle_session_that_started_a_server(&fixture, fixture.session("idle", AgentId::CLAUDE));
     let _guard = test_support::KillOnDrop(vec![child]);
     let started = relaunch_as_a_launch_does(&fixture, false);
 
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
 
     assert!(first.poll_exit());
     let relaunched = fixture.state.live_session("idle").expect("resumed");
@@ -2932,7 +3002,7 @@ async fn a_change_of_sharing_tells_a_session_which_trees_it_ended() {
     claude_setup(&fixture);
     let session = Session {
         status: SessionStatus::Idle,
-        ..fixture.session("idle", Agent::Claude)
+        ..fixture.session("idle", AgentId::CLAUDE)
     };
     fixture.state.store.update_session(&session).unwrap();
     let (_first, survivor, doomed) =
@@ -2940,7 +3010,7 @@ async fn a_change_of_sharing_tells_a_session_which_trees_it_ended() {
     let _guard = test_support::KillOnDrop(vec![survivor, doomed]);
     relaunch_as_a_launch_does(&fixture, false);
 
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
 
     let relaunched = fixture.state.live_session("idle").expect("resumed");
     let heard = test_support::heard_after_marker(&fixture.state, &relaunched);
@@ -2957,13 +3027,13 @@ async fn a_change_of_sharing_whose_resume_fails_keeps_what_the_process_started_u
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let (_first, child) =
-        idle_session_that_started_a_server(&fixture, fixture.session("idle", Agent::Claude));
+        idle_session_that_started_a_server(&fixture, fixture.session("idle", AgentId::CLAUDE));
     let _guard = test_support::KillOnDrop(vec![child]);
     relaunch_as_a_launch_does(&fixture, true);
     let mut events = fixture.state.subscribe();
 
     // The change itself goes through; the session it could not resume is told as a notice.
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
     assert!(std::iter::from_fn(|| events.try_recv().ok()).any(|event| matches!(
         event,
         crate::protocol::Event::SessionNotice { code, .. } if code == notice_code::SHARING_RESUME_FAILED
@@ -2998,10 +3068,10 @@ async fn a_console_session_whose_resume_fails_after_a_change_of_sharing_stops_wh
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let console = Session {
-        account_id: Some(account_id(Agent::Claude).to_string()),
+        account_id: Some(account_id(AgentId::CLAUDE).to_string()),
         config_dir: Some(
             fixture
-                .account(Agent::Claude)
+                .account(AgentId::CLAUDE)
                 .to_string_lossy()
                 .into_owned(),
         ),
@@ -3012,7 +3082,7 @@ async fn a_console_session_whose_resume_fails_after_a_change_of_sharing_stops_wh
     let _guard = test_support::KillOnDrop(vec![child]);
     relaunch_as_a_launch_does(&fixture, true);
 
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
 
     assert!(
         test_support::stops_running(&fixture.state, child).await,
@@ -3024,9 +3094,9 @@ async fn a_console_session_whose_resume_fails_after_a_change_of_sharing_stops_wh
 async fn a_session_archived_while_the_change_runs_stops_what_its_process_started() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    idle_session(&fixture, "first", Agent::Claude);
+    idle_session(&fixture, "first", AgentId::CLAUDE);
     let (_second, child) =
-        idle_session_that_started_a_server(&fixture, fixture.session("second", Agent::Claude));
+        idle_session_that_started_a_server(&fixture, fixture.session("second", AgentId::CLAUDE));
     let _guard = test_support::KillOnDrop(vec![child]);
     // The user archives the second while the first is being resumed.
     let state = fixture.state.clone();
@@ -3039,7 +3109,7 @@ async fn a_session_archived_while_the_change_runs_stops_what_its_process_started
         (test_support::stand_in_launch(&started, &launches, || {}))(request)
     }));
 
-    fixture.share(Agent::Claude, true).await.unwrap();
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
 
     assert!(
         test_support::stops_running(&fixture.state, child).await,
@@ -3056,8 +3126,8 @@ async fn a_session_archived_while_the_change_runs_stops_what_its_process_started
 async fn a_session_the_change_restarts_cannot_be_claimed_by_a_switch_meanwhile() {
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    idle_session(&fixture, "idle", Agent::Claude);
-    let account = fixture.record(Agent::Claude);
+    idle_session(&fixture, "idle", AgentId::CLAUDE);
+    let account = fixture.record(AgentId::CLAUDE);
     let (_, mut lock) = fixture
         .state
         .lock_account_sharing(&account, |_, _| Ok(()))

@@ -12,13 +12,18 @@ notice, a record with none of `recovery`, `causeOnly` or `unexpected`; it also c
 catalogs. Which remedy, and the wording rules below, are still on you. So when daemon code starts sending a new code,
 the same change:
 
-- Declares it in `apps/daemon/src/protocol/codes.rs`, as its own `pub const NAME: Code = Code("code");` in the code
-  module for its kind (`error_code`, `notice_code`, `models_unavailable_code`, `quota_unavailable_code`,
-  `login_failure_code`, reached elsewhere as `crate::protocol::error_code` and so on); every wire `code` field is a
-  `Code`, which nothing outside that file can make. A code of a quota reading, a models list or a login is shown where
+- Declares it. A core code is its own `pub const NAME: Code = Code("code");` in `apps/daemon/src/protocol/codes.rs`, in
+  the code module for its kind (`error_code`, `notice_code`, `models_unavailable_code`, `quota_unavailable_code`,
+  `login_failure_code`, reached elsewhere as `crate::protocol::error_code` and so on). A code only one provider raises,
+  of an error or a notice, is a `ProviderCode` of that provider named `provider.<id>.<code>` (`docs/structure/daemon.md`,
+  "Where new code goes"), never a core code named after the provider. Every wire `code` field is a `Code`, made only
+  there (a provider's through `Code::of_provider`). A code of a quota reading, a models list or a login is shown where
   it is read, so its record needs only its message facets, not a remedy.
-- Adds its record to `CODES` with `origin: "daemon"`, and `daemon.<code>` in every message catalog under
-  `packages/ui/src/i18n/messages/`. The sentence says what happened, and no remedy beyond a code-specific step as set
+- Adds its record with `origin: "daemon"` and its words in every language: a core code's record to `CODES` and
+  `daemon.<code>` to every message catalog under `packages/ui/src/i18n/messages/`; a provider code's record to its
+  presentation module's `codes` and its words to every language of that module's `messages`, keyed by the code itself
+  (`provider.<id>.<code>`, with no `daemon.` before it). Below, `daemon.<code>` stands for that key, so a provider
+  code's summary is `provider.<id>.<code>.summary`. The sentence says what happened, and no remedy beyond a code-specific step as set
   out below. Where the code is worded by a param (one key per `kind` or `cause`), its record names the variant with
   `variantOf` (`daemon.<code>.<variant>`), with the variant's own params facets under `variants` where they differ;
   `messageCode` only looks it up. The code's own key, what `variantOf` returning nothing is worded with, is still

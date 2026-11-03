@@ -7,7 +7,7 @@ use anyhow::Result;
 use super::automatic::automatic_open_choice;
 use super::session_agent;
 use super::standing::{account_can_open, agent_can_open};
-use crate::protocol::{Agent, Console, Project, Session, SessionKind};
+use crate::protocol::{AgentId, Console, Project, Session, SessionKind};
 use crate::state::AppState;
 
 /// The agent and the account of a session `caller` starts in `project` of `console` (none for a
@@ -21,9 +21,9 @@ pub(crate) fn choice_for_started_session(
     caller: &Session,
     console: &Console,
     project: Option<&Project>,
-    chosen_agent: Option<Agent>,
-    named_account: impl FnOnce(Agent) -> Result<Option<Option<String>>>,
-) -> Result<(Option<Agent>, Option<Option<String>>)> {
+    chosen_agent: Option<AgentId>,
+    named_account: impl FnOnce(AgentId) -> Result<Option<Option<String>>>,
+) -> Result<(Option<AgentId>, Option<Option<String>>)> {
     // Only in the caller's own console does a session follow the caller's agent and account:
     // another console is set up apart, and its sessions run on what it and its projects set. A
     // console session does not follow its own agent into a project either: the project's default
@@ -77,11 +77,11 @@ pub(crate) fn choice_for_started_session(
 fn automatic_choice(
     state: &Arc<AppState>,
     caller: &Session,
-    agent: Agent,
+    agent: AgentId,
     console: &Console,
     project: Option<&Project>,
     other_agents: bool,
-) -> Result<Option<(Agent, Option<String>)>> {
+) -> Result<Option<(AgentId, Option<String>)>> {
     let inherited = if caller.console_id == console.id {
         callers_account(state, caller, caller.agent)?.map(|account| (caller.agent, account))
     } else {
@@ -98,7 +98,7 @@ fn automatic_choice(
 fn callers_account(
     state: &Arc<AppState>,
     caller: &Session,
-    agent: Agent,
+    agent: AgentId,
 ) -> Result<Option<Option<String>>> {
     if agent != caller.agent || !account_can_open(state, agent, caller.account_id.as_deref())? {
         return Ok(None);

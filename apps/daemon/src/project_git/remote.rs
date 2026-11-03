@@ -395,7 +395,7 @@ fn reconcile_project(
 mod tests {
     use super::*;
     use crate::git::run::UserGit;
-    use crate::protocol::{Agent, Console, ProjectSource};
+    use crate::protocol::{AgentId, Console, ProjectSource};
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{
         app_state, fixture_git, git, isolated_git_env, redirecting_overrides, repo_pair, repo_with,
@@ -807,7 +807,7 @@ mod tests {
                 id: "console-1".to_string(),
                 name: "Console".to_string(),
                 workdir: dir.join("workdir").to_string_lossy().into_owned(),
-                default_agent: Agent::Claude,
+                default_agent: AgentId::CLAUDE,
                 project_session_agent: None,
                 accounts: Default::default(),
                 launch: Default::default(),

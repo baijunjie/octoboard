@@ -85,15 +85,15 @@ fn an_agent_left_out_of_a_per_agent_entry_reads_as_unset() {
         effort: None,
     };
     let mut hub = console("Hub", vec![project("repo", "/work/repo")]);
-    hub.accounts.codex = named("Work");
-    hub.launch.grok = launch.clone();
-    hub.projects[0].accounts.claude = ProjectAccountRef::Default;
+    hub.accounts[AgentId::CODEX] = named("Work");
+    hub.launch[AgentId::GROK] = launch.clone();
+    hub.projects[0].accounts[AgentId::CLAUDE] = ProjectAccountRef::Default;
     let mut value = document(vec![hub]);
     let parsed = parse(&value).expect("read");
-    assert_eq!(parsed.consoles[0].accounts.codex, named("Work"));
-    assert_eq!(parsed.consoles[0].launch.grok, launch);
+    assert_eq!(parsed.consoles[0].accounts[AgentId::CODEX], named("Work"));
+    assert_eq!(parsed.consoles[0].launch[AgentId::GROK], launch);
     assert_eq!(
-        parsed.consoles[0].projects[0].accounts.claude,
+        parsed.consoles[0].projects[0].accounts[AgentId::CLAUDE],
         ProjectAccountRef::Default
     );
 
@@ -106,10 +106,10 @@ fn an_agent_left_out_of_a_per_agent_entry_reads_as_unset() {
         .remove("claude");
     let parsed = parse(&value).expect("read");
 
-    assert_eq!(parsed.consoles[0].accounts.codex, None);
-    assert_eq!(parsed.consoles[0].launch.grok, Launch::default());
+    assert_eq!(parsed.consoles[0].accounts[AgentId::CODEX], None);
+    assert_eq!(parsed.consoles[0].launch[AgentId::GROK], Launch::default());
     assert_eq!(
-        parsed.consoles[0].projects[0].accounts.claude,
+        parsed.consoles[0].projects[0].accounts[AgentId::CLAUDE],
         ProjectAccountRef::Inherit
     );
 }
@@ -118,8 +118,8 @@ fn an_agent_left_out_of_a_per_agent_entry_reads_as_unset() {
 fn a_reference_is_rebound_by_agent_and_name_ignoring_case_and_falls_back_to_the_default() {
     let rebinder = Rebinder {
         accounts: vec![
-            account("claude-work", Agent::Claude, "Work"),
-            account("codex-work", Agent::Codex, "work"),
+            account("claude-work", AgentId::CLAUDE, "Work"),
+            account("codex-work", AgentId::CODEX, "work"),
         ],
     };
     let named = |name: &str| {
@@ -130,40 +130,46 @@ fn a_reference_is_rebound_by_agent_and_name_ignoring_case_and_falls_back_to_the_
     let mut hub = console("Hub", Vec::new());
     // Matches by case-insensitive name in its own agent; the Grok one has no account at all;
     // the Codex one names an account that exists for Claude only.
-    hub.accounts.claude = named("WORK");
-    hub.accounts.codex = named("Work");
-    hub.accounts.grok = named("Work");
+    hub.accounts[AgentId::CLAUDE] = named("WORK");
+    hub.accounts[AgentId::CODEX] = named("Work");
+    hub.accounts[AgentId::GROK] = named("Work");
     let bound = rebinder.console(&hub);
-    assert_eq!(bound.accounts.claude.as_deref(), Some("claude-work"));
-    assert_eq!(bound.accounts.codex.as_deref(), Some("codex-work"));
-    assert_eq!(bound.accounts.grok, None);
+    assert_eq!(
+        bound.accounts[AgentId::CLAUDE].as_deref(),
+        Some("claude-work")
+    );
+    assert_eq!(
+        bound.accounts[AgentId::CODEX].as_deref(),
+        Some("codex-work")
+    );
+    assert_eq!(bound.accounts[AgentId::GROK], None);
     assert_eq!(
         bound.fallbacks,
         vec![AccountFallback {
-            agent: Agent::Grok,
+            agent: AgentId::GROK,
             name: "Work".to_string(),
         }]
     );
 
     let mut unmatched = project("p", "/p");
-    unmatched.accounts.claude = ProjectAccountRef::Account {
+    unmatched.accounts[AgentId::CLAUDE] = ProjectAccountRef::Account {
         name: "missing".to_string(),
     };
-    unmatched.accounts.codex = ProjectAccountRef::Default;
-    unmatched.accounts.grok = ProjectAccountRef::Account {
+    unmatched.accounts[AgentId::CODEX] = ProjectAccountRef::Default;
+    unmatched.accounts[AgentId::GROK] = ProjectAccountRef::Account {
         name: "work".to_string(),
     };
     let bound = rebinder.project(&unmatched);
     // The default account is pinned, not left to the console's reference.
-    assert_eq!(bound.accounts.claude, ProjectAccount::Default);
-    assert_eq!(bound.accounts.codex, ProjectAccount::Default);
-    assert_eq!(bound.accounts.grok, ProjectAccount::Default);
+    assert_eq!(bound.accounts[AgentId::CLAUDE], ProjectAccount::Default);
+    assert_eq!(bound.accounts[AgentId::CODEX], ProjectAccount::Default);
+    assert_eq!(bound.accounts[AgentId::GROK], ProjectAccount::Default);
     assert_eq!(
         bound.fallbacks.iter().map(|f| f.agent).collect::<Vec<_>>(),
-        [Agent::Claude, Agent::Grok]
+        [AgentId::CLAUDE, AgentId::GROK]
     );
     assert_eq!(
-        rebinder.project(&project("q", "/q")).accounts.claude,
+        rebinder.project(&project("q", "/q")).accounts[AgentId::CLAUDE],
         ProjectAccount::Inherit
     );
 }

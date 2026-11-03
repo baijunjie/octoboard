@@ -69,7 +69,7 @@ pub use git_status::GitCheckClaim;
 pub use live::Running;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
-pub use turns::{is_task_notification, LastReport, TurnClose};
+pub use turns::{LastReport, TurnClose};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -82,7 +82,7 @@ use tokio::sync::broadcast;
 use crate::blocking_pass::StalledPasses;
 use crate::messaging::outbox::Outbox;
 use crate::protocol::{
-    error_code, Agent, AgentAvailability, Availability, CodedError, Event, SessionStatus,
+    error_code, AgentAvailability, AgentId, Availability, CodedError, Event, SessionStatus,
 };
 use crate::store::Store;
 use crate::terminal::saved_output::SavedOutput;
@@ -139,8 +139,8 @@ pub struct AppState {
     #[cfg(test)]
     pub(crate) restart_stop_timeout: Mutex<Option<std::time::Duration>>,
     /// The generation each session's record watch (`crate::records::watch`, run for Claude Code by
-    /// `crate::records::watch::claude_transcript` and for Codex by
-    /// `crate::records::watch::codex_rollout`) is currently on. Starting a watch records a fresh
+    /// `crate::adapter::claude::transcript_watch` and for Codex by
+    /// `crate::adapter::codex::rollout_watch`) is currently on. Starting a watch records a fresh
     /// value here; the watch keeps polling only while its own value is still the one recorded,
     /// which is what lets a newer watch for the same session retire an older one rather than race
     /// it. The counter it is drawn from is global, not per-session, because uniqueness is all that
@@ -202,7 +202,7 @@ pub struct AppState {
     /// per daemon start (`crate::agents::availability`) and broadcast by its own event on change;
     /// never a field of `Store`'s settings row, which only the user's own updates write. Always
     /// holds all three agents, each starting `NotDetermined` — the state every run begins in.
-    agent_availability: RwLock<HashMap<Agent, AgentAvailability>>,
+    agent_availability: RwLock<HashMap<AgentId, AgentAvailability>>,
     /// Each ended session's last terminal output, written as its process ends and removed with its
     /// record.
     saved_output: SavedOutput,
@@ -353,7 +353,7 @@ impl AppState {
             git_watch: Default::default(),
             ref_moves: Default::default(),
             agent_availability: RwLock::new(
-                Agent::ALL
+                AgentId::ALL
                     .into_iter()
                     .map(|agent| {
                         (

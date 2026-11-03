@@ -14,7 +14,7 @@ fn native_download_versions_are_read_through_the_launcher_symlink() {
     let launcher = scratch.join("grok");
     std::os::unix::fs::symlink(&release, &launcher).unwrap();
     assert_eq!(
-        GrokAdapter.installed_version(launcher.to_str().unwrap()),
+        GrokProvider.installed_version(launcher.to_str().unwrap()),
         Some((1, 0, 70))
     );
     for filename in [
@@ -26,7 +26,7 @@ fn native_download_versions_are_read_through_the_launcher_symlink() {
         let release = scratch.join(filename);
         std::fs::write(&release, "not executed").unwrap();
         assert_eq!(
-            GrokAdapter.installed_version(release.to_str().unwrap()),
+            GrokProvider.installed_version(release.to_str().unwrap()),
             None
         );
     }
@@ -34,7 +34,7 @@ fn native_download_versions_are_read_through_the_launcher_symlink() {
 
 #[test]
 fn terminal_titles_lose_the_spinner_the_status_and_groks_own_name() {
-    let task = |raw: &str| GrokAdapter.task_title(raw, &[]);
+    let task = |raw: &str| GrokProvider.task_title(raw, &[]);
     for raw in [
         "grok",
         "⠋ - Waiting for response… - grok",
@@ -120,8 +120,12 @@ fn claude_compatibility_sets_groks_claude_switches_only_when_on() {
     };
     assert!(claude_vars(&plan_isolated(&fixture.spec()).unwrap()).is_empty());
 
+    let settings = crate::providers::ProviderSettings::new([(
+        "claude_compatibility".to_string(),
+        Some(crate::providers::SettingValue::Switch(true)),
+    )]);
     let mut spec = fixture.spec();
-    spec.claude_compatibility = true;
+    spec.settings = &settings;
     let plan = plan_isolated(&spec).unwrap();
     assert_eq!(plan.env[0].0, "GROK_HOME");
     assert_eq!(
@@ -266,7 +270,7 @@ fn a_pinned_grok_home_that_has_gone_or_was_never_initialized_refuses_the_launch(
             err.downcast_ref::<crate::protocol::CodedError>()
                 .expect("coded")
                 .code,
-            crate::protocol::error_code::GROK_HOME_NOT_INITIALIZED,
+            crate::protocol::Code::of_provider(crate::providers::grok::HOME_NOT_INITIALIZED),
             "{name}"
         );
         let message = err.to_string();
@@ -310,8 +314,28 @@ fn the_role_text_travels_in_rules() {
         session_tools::role::role_description(
             fixture.kind,
             fixture.owner.as_ref(),
-            Agent::Grok,
+            AgentId::GROK,
             &fixture.spec().role_options(),
         )
     );
+}
+
+/// The stash is used from the first version measured to take it, and never on an unknown one.
+#[test]
+fn the_stash_is_used_only_from_the_measured_version() {
+    let mut fixture = spec_fixture();
+    for (version, expected) in [
+        (None, false),
+        (Some((1, 0, 69)), false),
+        (Some((1, 0, 70)), true),
+    ] {
+        fixture.agent_version = version;
+        assert_eq!(
+            GrokProvider
+                .screen()
+                .native_stash(&fixture.spec(), &LaunchPlan::default()),
+            expected,
+            "{version:?}"
+        );
+    }
 }

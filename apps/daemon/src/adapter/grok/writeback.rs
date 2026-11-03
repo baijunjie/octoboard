@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::adapter::files::{read_regular_text, SMALL_FILE_LIMIT};
-use crate::agents::layout::GROK_CONFIG_FILE;
 use crate::hostfs::replace::{replace_beside, Permissions};
+use crate::providers::grok::GROK_CONFIG_FILE;
 
 /// Keys a sharing account's session may copy from its `config.toml` onto the shared file.
 ///
@@ -73,6 +73,17 @@ pub(super) fn shared_config_writeback(
         baseline: ConfigSlice::from_table(&table),
         launch_model: launch_model.map(str::to_owned),
     })
+}
+
+impl crate::session::term::AfterExit for SharedConfigWriteback {
+    fn run(&self) {
+        self.publish();
+    }
+
+    #[cfg(test)]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl SharedConfigWriteback {

@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
@@ -30,7 +30,7 @@ const hubOwned = [
 // Codex has two named accounts beside its default one, which the dialog's joined picker offers.
 const settings = {
   ...DEFAULT_SETTINGS,
-  added_agents: [...AGENTS],
+  added_agents: [...FIXTURE_AGENTS],
   default_clone_dir: "/Users/dev/Projects",
   accounts: [
     accountOf("a-codex-work", "codex", "Work account", "/Users/dev/.codex-work"),

@@ -73,7 +73,7 @@ it("shows short and general weekly windows before model windows with their remai
   expect(meters.map((meter) => meter.getAttribute("aria-label"))).toEqual(["Session", "Weekly · all models", `${isolate("Fable")} weekly`]);
   expect(meters[0]!.getAttribute("aria-valuetext")).toBe("82% remaining, resets in 1h 57m");
   expect(meters[2]!.getAttribute("aria-valuetext")).toBe("100% remaining");
-  expect(meters.every((meter) => meter.classList.contains("quota-meter--claude"))).toBe(true);
+  expect(meters.every((meter) => meter.classList.contains("quota-meter--provider"))).toBe(true);
   expect(container.querySelector('[data-slot="meter-fill"]')?.getAttribute("style")).toContain("width: 82%");
 });
 

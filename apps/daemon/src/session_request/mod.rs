@@ -68,7 +68,7 @@ use crate::branch_origin::transfer::BranchTransfer;
 use crate::coordinator::{self, open::OpenRequest};
 use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::texts;
-use crate::protocol::{error_code, Agent, CodedError, Event, Session, SessionRequestEnding};
+use crate::protocol::{error_code, AgentId, CodedError, Event, Session, SessionRequestEnding};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 
@@ -483,7 +483,7 @@ const OUTCOME_OPENING: &str = concat!(texts::notice_prefix!(), " about your");
 
 /// The message that tells a caller's session what became of its call of `tool`, the note being the
 /// call's own, for a caller whose agent gave up on the call without any signal reaching Octoboard.
-pub(crate) fn outcome_message(agent: Agent, tool: &str, note: &str) -> String {
+pub(crate) fn outcome_message(agent: AgentId, tool: &str, note: &str) -> String {
     format!(
         "{OUTCOME_OPENING} `{}` call. {note} If that call already returned this, there is nothing \
          more to do about it.",

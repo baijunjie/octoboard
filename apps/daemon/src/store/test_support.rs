@@ -2,7 +2,8 @@
 
 use super::*;
 use crate::protocol::{
-    Account, Agent, Console, PerAgent, Project, ProjectAccount, ProjectSource, Session, SessionKind,
+    Account, AgentId, Console, PerAgent, Project, ProjectAccount, ProjectSource, Session,
+    SessionKind,
 };
 use crate::test_support::{bare_session, ScratchFile};
 
@@ -15,12 +16,11 @@ pub(super) fn console(claude: Option<&str>, codex: Option<&str>, grok: Option<&s
         id: "console-1".to_string(),
         name: "Console".to_string(),
         workdir: "/tmp/console-1".to_string(),
-        default_agent: Agent::Claude,
-        accounts: PerAgent {
-            claude: claude.map(str::to_string),
-            codex: codex.map(str::to_string),
-            grok: grok.map(str::to_string),
-        },
+        default_agent: AgentId::CLAUDE,
+        accounts: PerAgent::default()
+            .with(AgentId::CLAUDE, claude.map(str::to_string))
+            .with(AgentId::CODEX, codex.map(str::to_string))
+            .with(AgentId::GROK, grok.map(str::to_string)),
         launch: Default::default(),
         icon: None,
         console_session_prompt: None,
@@ -30,7 +30,7 @@ pub(super) fn console(claude: Option<&str>, codex: Option<&str>, grok: Option<&s
     }
 }
 
-pub(super) fn account(id: &str, agent: Agent, config_dir: &str) -> Account {
+pub(super) fn account(id: &str, agent: AgentId, config_dir: &str) -> Account {
     Account {
         id: id.to_string(),
         agent,

@@ -1,6 +1,6 @@
 import { noAgentState, type NoAgentReason } from "../agents/agents";
 import type { NewSessionBinding } from "../dialogs/dialogRequest";
-import type { Agent, AgentAvailability, Console, Project, Session } from "../protocol";
+import type { Agent, AgentAvailability, Console, Project, ProviderInfo, Session } from "../protocol";
 import { consoleSessionAbove } from "../sessions/order";
 import type { FocusTarget } from "../sidebar/types";
 
@@ -22,11 +22,12 @@ export function terminalEmptyState(
   sessions: Session[],
   availability: Map<Agent, AgentAvailability>,
   added: Agent[] | null,
+  providers: readonly ProviderInfo[],
 ): TerminalEmptyState | undefined {
   if (!ready || !console) return undefined;
   const inConsole = sessions.filter((s) => s.console_id === console.id);
   const listedProjects = projects.filter((p) => p.console_id === console.id);
-  const reason = noAgentState(availability, added);
+  const reason = noAgentState(availability, added, providers);
   const noAgents: TerminalEmptyState | undefined = reason && { kind: "no-agents", reason };
   if (focus && "consoleSession" in focus) return undefined;
   if (focus && "project" in focus) {

@@ -2,13 +2,15 @@
 // reads, and a member `Daemon` gains later is added here once.
 import { looseRequestSender, type ReplyOf, type RequestHandler, type RequestType } from "../requests";
 import { createStateStore, type Daemon, type State } from "../store";
+import { availabilityOf } from "../fixtures/fixtureProviders";
+import { TEST_PROVIDERS } from "./testProviders";
 
-/** A `Daemon` over a store that starts at `state`, whose requests are rejected unless the test gives
+/** A `Daemon` over a store that starts at `state` (with the providers a daemon serves, unless it names its own), whose requests are rejected unless the test gives
  * its own `request` (a plain handler, see `looseRequestSender`), and whose other members do nothing. `overrides`
  * replace members as they are. */
 export function testDaemon({ state, request = () => Promise.reject(new Error("no daemon")), ...overrides }: { state?: Partial<State>; request?: RequestHandler } & Partial<Omit<Daemon, "request">> = {}): Daemon {
   return {
-    store: createStateStore(state),
+    store: createStateStore({ providers: TEST_PROVIDERS, agentAvailability: availabilityOf(state?.providers ?? TEST_PROVIDERS), ...state }),
     request: looseRequestSender(request),
     showNotice: () => {},
     onNotification: () => () => {},

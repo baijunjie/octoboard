@@ -35,7 +35,7 @@ fn console(id: &str, dir: &ScratchDir) -> Console {
         id: id.to_string(),
         name: format!("Console {id}"),
         workdir: dir.join(id).to_string_lossy().into_owned(),
-        default_agent: Agent::Claude,
+        default_agent: AgentId::CLAUDE,
         project_session_agent: None,
         accounts: Default::default(),
         launch: Default::default(),
@@ -275,7 +275,7 @@ async fn an_approval_starts_a_session_with_no_owner_in_any_project() {
             SessionKind::Project,
             OTHER_CONSOLE,
             Some("project-2"),
-            Agent::Claude
+            AgentId::CLAUDE
         )
     );
     assert!(matches!(&event, Event::SessionRequest { branches, .. } if branches.is_empty()));

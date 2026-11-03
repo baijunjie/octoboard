@@ -2,7 +2,7 @@
 //! `set_session_model`, `handoff_session`) tell the caller in the same words.
 
 use crate::coordinator::resume::resumable_agent_session_id;
-use crate::protocol::{Agent, Session};
+use crate::protocol::{AgentId, Session};
 use crate::session_tools::catalogue::qualified_tool_name;
 
 /// How a setting the user chose is told: its value, or the default for an unset one (for a
@@ -16,7 +16,7 @@ pub(super) fn setting_text(value: &Option<String>) -> String {
 /// What the caller (a session of `caller`'s agent) is told of the state a relaunched session came
 /// back in: whether the relaunch was sent a prompt to carry on with the turn that `cut_off_by` (a
 /// word for what relaunched it) cut off, or is awaiting instructions.
-pub(super) fn relaunch_note(caller: Agent, cut_off_by: &str, continued: bool) -> String {
+pub(super) fn relaunch_note(caller: AgentId, cut_off_by: &str, continued: bool) -> String {
     if continued {
         format!(
             "Its turn had been cut off by the {cut_off_by} or stopped on a usage limit, so it was \

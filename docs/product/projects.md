@@ -157,7 +157,8 @@ its own project. Octoboard writes it into no instruction file and into no text a
 
 A project may carry its own default agent, or leave it unset to follow its console's default agent for project sessions
 (see `docs/product/consoles.md`). The selection order for a new session is in "Which agent a session uses" in
-`docs/product/opening-sessions.md`.
+`docs/product/opening-sessions.md`. A default agent this build does not support, stored by a build that did, is read as
+in "Data of an agent this build does not support" in `docs/product/supported-agents.md`.
 
 The project dialog, both when associating and when editing a project, offers "unset" as a "Same as console" choice
 listed first and preselected for a new project (a parent directory preselects "Detect from files" instead); a badge

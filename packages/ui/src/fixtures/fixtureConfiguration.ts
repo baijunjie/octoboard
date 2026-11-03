@@ -21,11 +21,13 @@ import type {
   Project,
   ProjectAccount,
   ClientRequestBody,
+  Settings,
 } from "../protocol";
 import type { State } from "../store";
 import { refuseUnfillable } from "./banner";
 import type { FixtureError } from "./sampleFiles";
 import type { ConfigurationFixture } from "./fixture";
+import { exportedProviderSettings } from "./builders";
 
 /** The last segment of `path`, or an empty string where it has none (the filesystem root). */
 const directoryName = (path: string): string => path.split("/").filter(Boolean).at(-1) ?? "";
@@ -104,12 +106,13 @@ function mappedAgents<T, U>(group: PerAgent<T>, map: (value: T, agent: Agent) =>
  * or every console or none, the application settings, the accounts; consoles by creation time and a console's projects by
  * name, with no id and no console working directory in it, and an account carried by its name alone. Without
  * `include_paths` a project's path is only its last segment and a project's remote is kept only where it can be cloned
- * from; an account directory is written whatever it says. A document with the settings carries the user's explicit Claude
- * compatibility `choices` (not the values in effect, which `state.settings` holds), `{}` when the user chose for no agent. */
+ * from; an account directory is written whatever it says. A document with the settings carries the user's explicit
+ * provider setting `choices` of the settings that are exported (not the values in effect, which `state.settings` holds),
+ * `{}` when the user chose for none. */
 export function exportedDocument(
   state: State,
   request: Omit<ExportRequest, "type"> = {},
-  choices: Partial<Record<Agent, boolean>> = {},
+  choices: Settings["provider_settings"] = {},
 ): ConfigurationDocument {
   const regions = exportedRegions({ type: "export_configuration", ...request });
   const includePaths = request.include_paths ?? true;
@@ -172,7 +175,7 @@ export function exportedDocument(
         auto_approve_handoffs: state.settings.auto_approve_handoffs,
         ask_questions_as_choices: state.settings.ask_questions_as_choices,
         git_workflow: state.settings.git_workflow,
-        claude_compatibility: { ...choices },
+        provider_settings: exportedProviderSettings(choices, state.providers),
         agent_tags: { ...state.settings.agent_tags },
       }
       : null,
@@ -250,14 +253,14 @@ export function createConfigurationReplies(
   fixture: ConfigurationFixture | undefined,
   getState: () => State,
   fail: (error: FixtureError) => never,
-  claudeCompatibilityChoices: () => Partial<Record<Agent, boolean>>,
+  providerSettingChoices: () => Settings["provider_settings"],
 ): (body: ClientRequestBody) => Event | Promise<Event> | undefined {
   return (body) => {
     switch (body.type) {
       case "export_configuration": {
         const refusal = exportRefusal(getState(), body);
         if (refusal) return fail(refusal);
-        return { type: "configuration_exported", id: null, document: exportedDocument(getState(), body, claudeCompatibilityChoices()) };
+        return { type: "configuration_exported", id: null, document: exportedDocument(getState(), body, providerSettingChoices()) };
       }
       case "inspect_configuration": {
         const inspection = fixture?.inspection;

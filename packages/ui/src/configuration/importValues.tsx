@@ -1,14 +1,14 @@
 import React from "react";
 
-import { AGENT_LABEL } from "../agents/agents";
-import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
+import { idWords, isKnownAgent, providerLabel, servedProvider, settingMessageKey } from "../agents/providers";
 import { Tag } from "../components/form/Tag";
+import { isolate } from "../i18n/isolate";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
-import type { PlainMessageKey, Translate } from "../i18n/catalog";
+import type { MessageKey, PlainMessageKey, Translate } from "../i18n/catalog";
 import { Message } from "../i18n/react";
-import type { Agent, GitWorkflowSettings } from "../protocol";
+import type { Agent, DocumentSettings, GitWorkflowSettings, InspectedSettings, ProviderInfo, SettingDescriptor } from "../protocol";
 import type { Binding } from "../shortcuts/binding";
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
 import type { Overrides } from "../shortcuts/store";
@@ -50,13 +50,75 @@ export function gitWorkflowValues(t: Translate, wanted: GitWorkflowSettings, cur
     }));
 }
 
-/** The agents' Claude compatibility, each On or Off. With `current`, only the agents applying would change, each
- * with what it is now: an agent counts only when it has the setting and this machine reports it in `current` (the
- * daemon skips the others, and for an agent it does not report nothing is known to compare with). */
-export function claudeCompatibilityValues(t: Translate, wanted: Partial<Record<Agent, boolean>>, current?: Partial<Record<Agent, boolean>>): SettingValue[] {
-  return (Object.entries(wanted) as [Agent, boolean][])
-    .filter(([agent, on]) => hasClaudeCompatibility(agent) && (!current || (current[agent] !== undefined && current[agent] !== on)))
-    .map(([agent, on]) => ({ item: AGENT_LABEL[agent], value: shown(t(onOff(on)), current && t(onOff(current[agent]!))) }));
+/** The values in effect on this machine of the exported provider settings, which a choice left unset is `null` in. */
+export type CurrentProviderSettings = InspectedSettings["current_provider_settings"];
+
+/** One line of the import cards for a provider setting: its name, and the agents' values for it. */
+export interface ProviderSettingLine {
+  label: string;
+  values: SettingValue[];
+}
+
+/** The message `name` of a provider's setting, in plain words, or `undefined` for one with no message. */
+function settingWord(t: Translate, agent: string, setting: string, name: string): string | undefined {
+  const key = settingMessageKey(agent, setting, name);
+  return key && (t as (key: MessageKey) => string)(key);
+}
+
+/** Whether `value` is one the setting takes: a switch's on or off, one of a choice's declared values. */
+function isSettingValue(descriptor: SettingDescriptor, value: unknown): value is boolean | string {
+  return descriptor.kind.type === "switch"
+    ? typeof value === "boolean"
+    : typeof value === "string" && descriptor.kind.choices.some((choice) => choice.value === value);
+}
+
+/** How a setting's value reads in the review: a switch On or Off, a choice by its provider's word for it, and a choice
+ * left unset as following the account configuration. */
+function settingValueText(t: Translate, agent: string, setting: string, value: boolean | string | null): string {
+  if (typeof value === "boolean") return t(onOff(value));
+  if (value === null) return t("settings.accounts.setting.inherit");
+  return settingWord(t, agent, setting, `choice.${value}`) ?? idWords(value);
+}
+
+/** The provider settings a document carries, one line for each setting, listing the agents' values under it (the
+ * agents that declare a setting by the same id share its line, named by the first heading a provider has for it, as
+ * Claude compatibility does). A setting counts when the providers this daemon serves declare it exported and the value
+ * is one it takes, as the daemon applies it; one no provider has a heading for is a line of its own for the agent,
+ * named by the agent's label and the setting's id. With `current`, a line lists only the agents applying would change, each with
+ * what it is now: an agent counts only when this machine reports its value in `current` (for one it does not report
+ * nothing is known to compare with). */
+export function providerSettingLines(
+  t: Translate,
+  providers: readonly ProviderInfo[],
+  wanted: DocumentSettings["provider_settings"],
+  current?: CurrentProviderSettings,
+): ProviderSettingLine[] {
+  const lines = new Map<string, ProviderSettingLine>();
+  const headings = new Map<string, string>();
+  for (const agent of Object.keys(wanted)) {
+    for (const descriptor of servedProvider(providers, agent)?.settings ?? []) {
+      const heading = settingWord(t, agent, descriptor.id, "heading");
+      if (heading !== undefined && !headings.has(descriptor.id)) headings.set(descriptor.id, heading);
+    }
+  }
+  for (const [agent, settings] of Object.entries(wanted) as [Agent, Record<string, boolean | string>][]) {
+    for (const descriptor of servedProvider(providers, agent)?.settings ?? []) {
+      const value = settings[descriptor.id];
+      if (!descriptor.exported || !isSettingValue(descriptor, value)) continue;
+      const heading = headings.get(descriptor.id);
+      const key = heading === undefined ? `${agent}\u0000${descriptor.id}` : descriptor.id;
+      const line = lines.get(key) ?? { label: heading ?? t("configuration.import.settingUnnamed", { agent: isolate(providerLabel(t, providers, agent)), setting: isolate(idWords(descriptor.id)) }), values: [] };
+      lines.set(key, line);
+      const values = line.values;
+      const now = current?.[agent]?.[descriptor.id];
+      if (current && (now === undefined || now === value)) continue;
+      values.push({
+        item: providerLabel(t, providers, agent),
+        value: shown(settingValueText(t, agent, descriptor.id, value), now === undefined ? undefined : settingValueText(t, agent, descriptor.id, now)),
+      });
+    }
+  }
+  return [...lines.values()];
 }
 
 /** An agent's tags as the read-only tags the settings show them as, or the message for no tags. The joining text of
@@ -71,13 +133,13 @@ function tagsNode(t: Translate, language: Language, tags: string[]): React.React
   );
 }
 
-/** The tags of each agent this build knows. With `current`, only the agents whose tags would change, each
+/** The tags of each agent the daemon serves (`providers`). With `current`, only the agents whose tags would change, each
  * with what it has now: the tags of each agent the document lists replace that agent's, an agent it does not list keeps
  * its own, and an agent missing from `current` has no tags. */
-export function agentTagsValues(t: Translate, language: Language, wanted: Partial<Record<Agent, string[]>>, current?: Partial<Record<Agent, string[]>>): SettingValue[] {
+export function agentTagsValues(t: Translate, language: Language, providers: readonly ProviderInfo[], wanted: Partial<Record<Agent, string[]>>, current?: Partial<Record<Agent, string[]>>): SettingValue[] {
   return (Object.entries(wanted) as [Agent, string[]][])
-    .filter(([agent, tags]) => Object.hasOwn(AGENT_LABEL, agent) && (!current || !sameValue(tags, current[agent] ?? [])))
-    .map(([agent, tags]) => ({ item: AGENT_LABEL[agent], value: shown(tagsNode(t, language, tags), current && tagsNode(t, language, current[agent] ?? [])) }));
+    .filter(([agent, tags]) => isKnownAgent(providers, agent) && (!current || !sameValue(tags, current[agent] ?? [])))
+    .map(([agent, tags]) => ({ item: providerLabel(t, providers, agent), value: shown(tagsNode(t, language, tags), current && tagsNode(t, language, current[agent] ?? [])) }));
 }
 
 /** A key combination at the size of the muted text it sits in: the key caps' own size is for a row of their own,

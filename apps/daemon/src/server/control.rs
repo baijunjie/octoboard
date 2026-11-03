@@ -323,6 +323,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
             .collect(),
         trusted_directories: state.store.trusted_directories()?,
         settings: state.store.get_settings()?,
+        providers: crate::protocol::registered_providers(),
         git_statuses: state.git_statuses(),
         agent_availability: state.agent_availability(),
         account_quotas: state.account_quotas.list(),

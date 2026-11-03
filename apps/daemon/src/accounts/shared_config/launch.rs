@@ -8,7 +8,7 @@ use anyhow::Result;
 
 use super::link::{self, DirsError};
 use super::{default_dir, describe, items_param, moves, sharing_in_progress};
-use crate::agents::layout::CLAUDE_RECORDS_DIR;
+use crate::adapter::provider;
 use crate::hostfs::dir_key;
 use crate::protocol::{notice_code, Account, Notice, Session, SharingCause, SharingItemFailure};
 use crate::state::AppState;
@@ -53,21 +53,25 @@ pub async fn before_launch(state: &Arc<AppState>, session: &Session) -> Result<P
     let current = default_dir(state, account.agent).await?;
     let (agent, dir) = (account.agent, PathBuf::from(&account.config_dir));
     let incomplete = account.share_default_config_incomplete;
-    let checked =
-        tokio::task::spawn_blocking(move || {
-            let recorded = moves::resolve_or_spelled(Path::new(&start.default_dir));
-            if incomplete {
-                let shared = links_conversations_into(&dir, &recorded).then_some(recorded);
-                return Repair::Skipped(shared);
-            }
-            if moves::resolve_or_spelled(&current) != recorded {
-                return Repair::DefaultMoved { recorded, current };
-            }
-            Repair::Done(link::Dirs::new(&dir, &recorded, false).map(|dirs| {
+    let memory_item = provider(agent)
+        .accounts()
+        .and_then(|ops| ops.shared_memory_item());
+    let checked = tokio::task::spawn_blocking(move || {
+        let recorded = moves::resolve_or_spelled(Path::new(&start.default_dir));
+        if incomplete {
+            let shared = links_conversations_into(memory_item, &dir, &recorded).then_some(recorded);
+            return Repair::Skipped(shared);
+        }
+        if moves::resolve_or_spelled(&current) != recorded {
+            return Repair::DefaultMoved { recorded, current };
+        }
+        Repair::Done(
+            link::Dirs::new(&dir, &recorded, false).map(|dirs| {
                 dirs.map(|dirs| (link::repair(agent, &dirs, &start.stamp), dirs.default))
-            }))
-        })
-        .await?;
+            }),
+        )
+    })
+    .await?;
     let (shared_default_dir, notices) = repair_notices(&account, checked);
     Ok(Prepared {
         shared_default_dir,
@@ -81,11 +85,14 @@ fn links_anything(account: &Account) -> bool {
     account.share_default_config || account.share_default_config_incomplete
 }
 
-/// Whether the account's `projects/` links into `default`, a resolved directory, directly or to
-/// where the default's own `projects/` leads. It is where Claude Code keeps auto memory, which
-/// the shared directory is given for. Blocking.
-fn links_conversations_into(dir: &Path, default: &Path) -> bool {
-    let projects = CLAUDE_RECORDS_DIR;
+/// Whether the account's `memory_item`, the directory in which the provider keeps per-project
+/// memory, links into `default`, a resolved directory, directly or to where the default's own
+/// leads; the shared directory is given for that memory. A provider with no such item has no
+/// memory to share. Blocking.
+fn links_conversations_into(memory_item: Option<&str>, dir: &Path, default: &Path) -> bool {
+    let Some(projects) = memory_item else {
+        return false;
+    };
     moves::link_target(&dir.join(projects)).is_some_and(|target| {
         target.starts_with(default)
             || moves::resolve(&default.join(projects)).ok().flatten() == Some(target)
@@ -162,13 +169,14 @@ fn repair_notices(account: &Account, repair: Repair) -> (Option<PathBuf>, Vec<No
         notices.push(repair_failed(message, cause, &repaired.failures));
     }
     for database in &repaired.unshared_databases {
-        tracing::warn!(account = %account.id, database = %database.display(), "a Codex state database the shared configuration does not cover");
+        tracing::warn!(account = %account.id, database = %database.display(), "a thread database the shared configuration does not cover");
         notices.push(Notice::new(
             notice_code::UNSHARED_STATE_DATABASE,
             format!(
-                "`{}` is a Codex state database the default configuration does not share, so \
+                "`{}` is a {} state database the default configuration does not share, so \
                  this account keeps its threads apart from the others",
-                database.display()
+                database.display(),
+                account.agent.label()
             ),
             &[
                 ("account", &account.id),

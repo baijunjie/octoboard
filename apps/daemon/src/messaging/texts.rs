@@ -399,7 +399,7 @@ pub(crate) fn capacity_retry_prompt(attempt: usize, of: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, SessionStatus};
+    use crate::protocol::{AgentId, SessionStatus};
 
     fn tree(command: &str, cwd: Option<&str>, ports: &[u16]) -> ProcessTree {
         ProcessTree {
@@ -571,7 +571,7 @@ mod tests {
     #[test]
     fn the_opening_prompt_words_the_approval_by_who_gave_it() {
         let caller =
-            crate::test_support::project_session("loose", Agent::Claude, SessionStatus::Idle);
+            crate::test_support::project_session("loose", AgentId::CLAUDE, SessionStatus::Idle);
         let asked = request_opening_prompt(&caller, None, false, "the brief");
         assert!(
             asked.contains("), with the user's approval. Nobody owns you"),

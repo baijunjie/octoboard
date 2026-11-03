@@ -4,9 +4,10 @@ import { StatusBadge } from "../components/status/StatusBadge";
 import { useT } from "../i18n/react";
 import type { QuotaWindow } from "../protocol";
 import { useNow } from "../format/useNow";
+import { useProviders } from "../store";
 import { AccountQuotaNotice, NoUsageReading, QuotaStaleMark } from "./AccountQuotaSummary";
 import { AccountUsageBar } from "./AccountUsageBar";
-import { quotaUsedUpDetail, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
+import { quotaNaming, quotaUsedUpDetail, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 
 /** An account's usage in a table row: the picker's two-layer usage bar (`AccountUsageBar`, the 5-hour window with the
@@ -20,15 +21,16 @@ import type { QuotaReading } from "./useAccountQuota";
 export function AccountUsageCell({ quota, exhausted }: { quota: QuotaReading; exhausted?: QuotaWindow }): React.ReactElement {
   const t = useT();
   const now = useNow();
+  const providers = useProviders();
   if (quota === "loading") return <AccountQuotaNotice quota={quota} />;
-  const bar = quota ? usageBarWindows(quota) : undefined;
+  const bar = quota ? usageBarWindows(quotaNaming(quota, providers)) : undefined;
   if (!quota || !bar) {
     return <NoUsageReading quota={quota} />;
   }
   return (
     <div className="flex items-center gap-2">
       <AccountUsageBar agent={quota.agent} quota={quota} now={now} className="w-24" edge={false} usedUp={exhausted !== undefined} stale />
-      <span className="sr-only">{exhausted ? quotaUsedUpDetail(t, quota, exhausted, now) : usageBarSummary(t, bar, now)}</span>
+      <span className="sr-only">{exhausted ? quotaUsedUpDetail(t, quotaNaming(quota, providers), exhausted, now) : usageBarSummary(t, bar, now)}</span>
       {exhausted && <StatusBadge variant="soft" color="warning" separated={false} aria-hidden="true" className="whitespace-nowrap">{t("quota.usedUp")}</StatusBadge>}
       <QuotaStaleMark quota={quota} />
     </div>

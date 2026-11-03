@@ -4,11 +4,11 @@ import type { ReplyOf } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { currentLanguage } from "../i18n/language";
-import { type Agent, type Event, type Launch, type LaunchChange, type PerAgent, type ClientRequestBody, type Session } from "../protocol";
-import { AGENTS } from "../agents/agents";
+import { type Event, type Launch, type LaunchChange, type PerAgent, type ClientRequestBody, type Session, type Settings } from "../protocol";
 import { createStateStore } from "../store";
 import type { Fixture } from "./fixture";
 import { createGitReplies } from "./fixtureGit";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, availabilityOf } from "./fixtureProviders";
 import type { FixtureError, FixtureFiles } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
 import type { FixtureGit } from "./changeFixtures";
@@ -35,7 +35,7 @@ export const trimmedOrNull = (text: string | null | undefined): string | null =>
 /** One per-agent group after a request's `Partial<PerAgent<…>>`: an agent the request leaves out keeps its value, and
  * `change` says what the request's value for one agent makes of the current one. */
 export function changedPerAgent<T, C>(current: PerAgent<T>, changes: Partial<PerAgent<C>> | undefined, change: (value: T, change: C) => T): PerAgent<T> {
-  return Object.fromEntries(AGENTS.map((agent) => {
+  return Object.fromEntries(FIXTURE_AGENTS.map((agent) => {
     const requested = changes?.[agent];
     return [agent, requested === undefined ? current[agent] : change(current[agent], requested)];
   })) as PerAgent<T>;
@@ -86,9 +86,10 @@ export interface FixtureContext {
   fail: (error: FixtureError) => never;
   refuseUnknownProject: (project: string) => void;
   refuseLocked: (sessions: Iterable<Session>) => void;
-  /** The scenario's `settings.claude_compatibility` read as the user's explicit choices, as the daemon stores them (what
-   * the window is told is the value in effect); `update_settings` writes them and configuration export reads them. */
-  claudeCompatibilityChoices: { current: Partial<Record<Agent, boolean>> };
+  /** The scenario's `settings.provider_settings` read as the user's explicit choices, as the daemon stores them (what
+   * the window is told is the value in effect, `effectiveProviderSettings`); `set_provider_setting` writes them and
+   * configuration export reads them. */
+  providerSettingChoices: { current: Settings["provider_settings"] };
   /** What a project's files and repository are after a branch switch or a restore, in place of the scenario's. */
   restored: { files: Map<string, FixtureFiles>; git: Map<string, ReturnType<typeof createGitReplies>> };
   /** The shell terminals this window started, which draw a fresh prompt instead of the sample of a used shell. */
@@ -96,7 +97,7 @@ export interface FixtureContext {
 }
 
 export function createFixtureContext(scenario: Fixture): FixtureContext {
-  const store = createStateStore(scenario.state);
+  const store = createStateStore({ providers: FIXTURE_PROVIDERS, agentAvailability: availabilityOf(FIXTURE_PROVIDERS), ...scenario.state });
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new CodedError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
@@ -112,7 +113,7 @@ export function createFixtureContext(scenario: Fixture): FixtureContext {
       const locked = [...sessions].find((session) => session.locked);
       if (locked) fail({ code: "session_locked", params: { session: locked.id }, message: "This session is locked" });
     },
-    claudeCompatibilityChoices: { current: scenario.state?.settings?.claude_compatibility ?? {} },
+    providerSettingChoices: { current: scenario.state?.settings?.provider_settings ?? {} },
     restored: { files: new Map(), git: new Map() },
     startedShellTerminals: new Set(),
   };

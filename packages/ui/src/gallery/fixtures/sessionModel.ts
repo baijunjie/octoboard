@@ -1,4 +1,5 @@
-import { AGENT_LABEL } from "../../agents/agents";
+import { providerLabel } from "../../agents/providers";
+import { FIXTURE_PROVIDERS, servedLabel } from "../../fixtures/fixtureProviders";
 import type { Session } from "../../protocol";
 import { describing, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
@@ -61,7 +62,7 @@ const didNotStop: FixtureError = {
 // The agent no longer lists the model the dialog sent, as can be so once its list changed behind the dialog.
 const notOffered: FixtureError = {
   code: "invalid_launch_setting",
-  params: { field: "model", value: "opus", agent: AGENT_LABEL.claude },
+  params: { field: "model", value: "opus", agent: servedLabel("claude") },
   message: "opus is not a model that Claude Code offers",
 };
 // Change model confirmed on the running session, the alert about it up, and its Change model button pressed.
@@ -134,7 +135,7 @@ export const sessionModelScenarios: Scenario[] = [
     description: "The pointer rests on the Claude Code mark of Rework the result ranking, which was restarted with Opus and high: its records have named no model yet, so the tooltip shows the session's own choice, Opus and high, where it showed the model it ran before, under the default account.",
     state: chosenState,
     preferences: { sidebarConsole: console_.id },
-    steps: [(ui) => ui.hoverSessionAgent(ui.session(chosen.title), AGENT_LABEL.claude, { account: ui.t("settings.accounts.defaultName"), model: "Opus", effort: "high" })],
+    steps: [(ui) => ui.hoverSessionAgent(ui.session(chosen.title), providerLabel(ui.t, FIXTURE_PROVIDERS, "claude"), { account: ui.t("settings.accounts.defaultName"), model: "Opus", effort: "high" })],
   },
   {
     id: "dialog-session-model-models-unavailable",

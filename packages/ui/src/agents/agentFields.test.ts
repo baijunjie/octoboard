@@ -3,27 +3,28 @@ import { describe, expect, it } from "vitest";
 import type { Launch } from "../protocol";
 import { changedAccounts, changedLaunch, changedProjectAccounts, readAccounts, readLaunch, readProjectAccounts } from "./agentFields";
 
+const served = ["claude", "codex", "grok"];
 const unset: Launch = { model: null, effort: null };
 const launch = (claude: Launch = unset, codex: Launch = unset) => ({ claude, codex, grok: unset });
 
 describe("reading what a dialog holds", () => {
   it("fills every agent the record leaves out with its unset value", () => {
-    expect(readAccounts(undefined)).toEqual({ claude: null, codex: null, grok: null });
-    expect(readLaunch(undefined)).toEqual(launch());
-    expect(readProjectAccounts(undefined)).toEqual({ claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } });
+    expect(readAccounts(undefined, served)).toEqual({ claude: null, codex: null, grok: null });
+    expect(readLaunch(undefined, served)).toEqual(launch());
+    expect(readProjectAccounts(undefined, served)).toEqual({ claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } });
   });
 });
 
 describe("changedAccounts", () => {
-  const initial = readAccounts({ claude: "a", codex: null, grok: null });
+  const initial = readAccounts({ claude: "a", codex: null, grok: null }, served);
 
   it("clears an account back to the default with an explicit null on update", () => {
     expect(changedAccounts("update", { ...initial, claude: null }, initial)).toEqual({ claude: null });
   });
 
   it("sends only the accounts that were set on create", () => {
-    expect(changedAccounts("create", { claude: "a", codex: null, grok: null }, readAccounts(undefined))).toEqual({ claude: "a" });
-    expect(changedAccounts("create", readAccounts(undefined), readAccounts(undefined))).toBeUndefined();
+    expect(changedAccounts("create", { claude: "a", codex: null, grok: null }, readAccounts(undefined, served))).toEqual({ claude: "a" });
+    expect(changedAccounts("create", readAccounts(undefined, served), readAccounts(undefined, served))).toBeUndefined();
   });
 });
 
@@ -51,7 +52,7 @@ describe("changedLaunch", () => {
 });
 
 describe("changedProjectAccounts", () => {
-  const initial = readProjectAccounts({ claude: { kind: "account", id: "a" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } });
+  const initial = readProjectAccounts({ claude: { kind: "account", id: "a" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } }, served);
 
   it("puts an account back to inheriting with an explicit null on update, and leaves it out on create", () => {
     expect(changedProjectAccounts("update", { ...initial, claude: { kind: "inherit" } }, initial)).toEqual({ claude: null });

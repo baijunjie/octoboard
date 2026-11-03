@@ -148,7 +148,7 @@ saved, the switch keeping its position (see "The error alert" in `docs/product/e
 
 Other switches in Settings save by rules of their own: an account's Disable switch (see "Turning an account off" in
 `docs/product/agent-accounts.md`), each agent's Claude compatibility switch, which is unavailable while its save is
-unanswered (see "Claude compatibility" in `docs/product/per-agent-settings.md`), the sharing switch of an account's
+unanswered (see "Provider settings" in `docs/product/per-agent-settings.md`), the sharing switch of an account's
 settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), and **Keep running in
 the background**, a choice the client keeps itself rather than the daemon (see "Closing the window" in
 `docs/product/application-lifecycle.md`).

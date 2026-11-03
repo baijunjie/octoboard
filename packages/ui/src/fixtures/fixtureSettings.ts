@@ -1,28 +1,27 @@
 // What the fixture daemon answers for the application's settings: the preferences the daemon stores, the agents the user
 // has added, the approval choices and the trusted folders.
-import { AGENT_LABEL, AGENTS } from "../agents/agents";
+import { FIXTURE_AGENTS, servedLabel } from "./fixtureProviders";
 import { type Agent, type ClientRequestBody } from "../protocol";
-import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { defaultClaudeModel, SAMPLE_MODELS } from "./agentModels";
-import { effectiveClaudeCompatibility } from "./builders";
+import { effectiveProviderSettings } from "./builders";
 import { HOME, neverReplied, normalizedPath, normalizeTags, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
-/** Keeps the window's settings in step with the user's explicit choices (`claudeCompatibilityChoices`): what the window is
- * told is the value in effect, which follows the added agents while Codex's is unset. */
-export function keepClaudeCompatibilityInEffect({ store, claudeCompatibilityChoices }: FixtureContext): void {
-  const syncClaudeCompatibility = () => {
-    const { settings } = store.getState();
-    const effective = effectiveClaudeCompatibility(claudeCompatibilityChoices.current, settings.added_agents);
-    if (AGENTS.some((agent) => hasClaudeCompatibility(agent) && settings.claude_compatibility?.[agent] !== effective[agent])) {
-      store.setState({ settings: { ...settings, claude_compatibility: effective } });
+/** Keeps the window's settings in step with the user's explicit choices (`providerSettingChoices`): what the window is
+ * told is the value in effect, which follows the added agents while a switch's default rule says so. */
+export function keepProviderSettingsInEffect({ store, providerSettingChoices }: FixtureContext): void {
+  const syncProviderSettings = () => {
+    const { settings, providers } = store.getState();
+    const effective = effectiveProviderSettings(providerSettingChoices.current, settings.added_agents, providers);
+    if (JSON.stringify(settings.provider_settings) !== JSON.stringify(effective)) {
+      store.setState({ settings: { ...settings, provider_settings: effective } });
     }
   };
-  syncClaudeCompatibility();
-  store.subscribe(syncClaudeCompatibility);
+  syncProviderSettings();
+  store.subscribe(syncProviderSettings);
 }
 
 /** The replies about settings. */
-export function createSettingsReplies({ scenario, store, fail, claudeCompatibilityChoices }: FixtureContext): Handlers {
+export function createSettingsReplies({ scenario, store, fail, providerSettingChoices }: FixtureContext): Handlers {
   const changeAgentList = (body: Extract<ClientRequestBody, { type: "remove_agent" | "reorder_agents" }>): Ack => {
     if (scenario.agentListError) return fail(scenario.agentListError);
     const current = store.getState();
@@ -41,14 +40,7 @@ export function createSettingsReplies({ scenario, store, fail, claudeCompatibili
 
   return {
     update_settings: (body) => {
-      // The daemon refuses a name that has no such setting (Claude Code, which the others are made compatible with) before
-      // it writes anything, whichever other field the request carries.
-      const unsupported = Object.keys(body.claude_compatibility ?? {}).find((name) => !hasClaudeCompatibility(name));
-      if (unsupported !== undefined) {
-        const message = `\`${unsupported}\` has no Claude compatibility setting; it applies to codex and grok`;
-        return fail({ code: "internal_error", params: { detail: message }, message });
-      }
-      const unknownAgent = Object.keys(body.agent_tags ?? {}).find((name) => !AGENTS.includes(name as Agent));
+      const unknownAgent = Object.keys(body.agent_tags ?? {}).find((name) => !FIXTURE_AGENTS.includes(name as Agent));
       if (unknownAgent !== undefined) {
         const message = `\`${unknownAgent}\` is not an agent`;
         return fail({ code: "internal_error", params: { detail: message }, message });
@@ -64,7 +56,6 @@ export function createSettingsReplies({ scenario, store, fail, claudeCompatibili
           cloneDir = normalizedPath(given);
         }
       }
-      if (body.claude_compatibility !== undefined) claudeCompatibilityChoices.current = { ...claudeCompatibilityChoices.current, ...body.claude_compatibility };
       // Normalised as the daemon does: trimmed, empty ones dropped, case-insensitive repeats dropped keeping the first spelling.
       const agentTags = { ...current.settings.agent_tags };
       for (const [agent, tags] of Object.entries(body.agent_tags ?? {}) as [Agent, string[]][]) {
@@ -75,14 +66,19 @@ export function createSettingsReplies({ scenario, store, fail, claudeCompatibili
       store.setState({ settings: { ...current.settings, agent_tags: agentTags, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.ask_questions_as_choices !== undefined && { ask_questions_as_choices: body.ask_questions_as_choices }), ...(body.interface_language !== undefined && { interface_language: body.interface_language }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.auto_switch_on_usage_limit !== undefined && { auto_switch_on_usage_limit: body.auto_switch_on_usage_limit }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.git_workflow !== undefined && { git_workflow: { ...current.settings.git_workflow, ...body.git_workflow } }), default_clone_dir: cloneDir } });
       return { type: "ack", id: null };
     },
-    set_codex_approval_reviewer: (body) => {
+    set_provider_setting: (body) => {
+      // The daemon refuses a setting the provider does not declare or a value it does not take before it writes anything;
+      // a null clears the choice.
+      const descriptor = store.getState().providers.find(({ id }) => id === body.agent)?.settings.find(({ id }) => id === body.setting);
+      const unreadable = (detail: string) => fail({ code: "unreadable_request", params: { detail }, message: `unreadable request: ${detail}` });
+      if (!descriptor) return unreadable(`${body.agent} has no setting \`${body.setting}\``);
+      const takes = body.value === null || (descriptor.kind.type === "switch" ? typeof body.value === "boolean" : descriptor.kind.choices.some(({ value }) => value === body.value));
+      if (!takes) return unreadable(`${body.agent}'s setting \`${body.setting}\` does not take ${JSON.stringify(body.value)}`);
       if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
-      store.setState({ settings: { ...store.getState().settings, codex_approval_reviewer: body.reviewer } });
-      return { type: "ack", id: null };
-    },
-    set_claude_approval_mode: (body) => {
-      if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
-      store.setState({ settings: { ...store.getState().settings, claude_approval_mode: body.mode } });
+      const kept = Object.entries(providerSettingChoices.current[body.agent] ?? {}).filter(([setting]) => setting !== body.setting);
+      providerSettingChoices.current = { ...providerSettingChoices.current, [body.agent]: Object.fromEntries(body.value === null ? kept : [...kept, [body.setting, body.value]]) };
+      const current = store.getState();
+      store.setState({ settings: { ...current.settings, provider_settings: effectiveProviderSettings(providerSettingChoices.current, current.settings.added_agents, current.providers) } });
       return { type: "ack", id: null };
     },
     add_agent: (body) => {
@@ -90,9 +86,9 @@ export function createSettingsReplies({ scenario, store, fail, claudeCompatibili
       const current = store.getState();
       const added = current.settings.added_agents;
       const state = current.agentAvailability.get(body.agent)?.availability;
-      if (state === "unavailable") return fail({ code: "agent_not_installed", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not installed on this machine` });
-      if (state !== "available") return fail({ code: "agent_availability_pending", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} cannot be added until it is known which agents are installed` });
-      if (added?.includes(body.agent)) return fail({ code: "agent_already_added", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is already added` });
+      if (state === "unavailable") return fail({ code: "agent_not_installed", params: { agent: servedLabel(body.agent) }, message: `${servedLabel(body.agent)} is not installed on this machine` });
+      if (state !== "available") return fail({ code: "agent_availability_pending", params: { agent: servedLabel(body.agent) }, message: `${servedLabel(body.agent)} cannot be added until it is known which agents are installed` });
+      if (added?.includes(body.agent)) return fail({ code: "agent_already_added", params: { agent: servedLabel(body.agent) }, message: `${servedLabel(body.agent)} is already added` });
       store.setState({ settings: { ...current.settings, added_agents: [...(added ?? []), body.agent] } });
       return { type: "ack", id: null };
     },

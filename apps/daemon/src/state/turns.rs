@@ -56,7 +56,8 @@ pub(super) struct TurnState {
     /// (`hooks::turn_key`): while the agent is working, its current turn's.
     key: Option<String>,
     /// How many turn starts of this session carried the agent telling itself that background work
-    /// finished ([`is_task_notification`]). Only ever moves on, like `ends`.
+    /// finished (`HookInterpreter::is_completion_notice`, noted by
+    /// [`AppState::note_completion_notice`]). Only ever moves on, like `ends`.
     completion_notices: u64,
     /// The session's last report, its own or synthesised, accepted for its owner since a turn of
     /// its last opened: what an owner is told of a child idle after it
@@ -141,10 +142,18 @@ impl AppState {
             turn.last_report = None;
             turn.opened = next_number();
         }
-        if prompt.is_some_and(is_task_notification) {
-            turn.completion_notices += 1;
-        }
         turn.last_event_at = now_millis();
+    }
+
+    /// The turn of this session that just started ([`Self::turn_started`]) carries the agent
+    /// telling itself that background work finished; see [`TurnState::completion_notices`].
+    pub fn note_completion_notice(&self, id: &str) {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .entry(id.to_string())
+            .or_default()
+            .completion_notices += 1;
     }
 
     /// How many turns of this session have started with the agent telling itself that background
@@ -232,7 +241,7 @@ impl AppState {
     }
 
     /// A watch saw the session back at its prompt with no hook, its turn left open
-    /// (`crate::records::watch::claude_transcript::back_at_prompt`).
+    /// (`crate::records::watch::back_at_prompt`).
     pub fn note_turn_end(&self, id: &str) {
         self.turns
             .lock()
@@ -450,18 +459,11 @@ impl AppState {
     }
 }
 
-/// Whether a submitted prompt is the agent reporting finished background work to itself rather
-/// than a prompt anyone sent it. It lives here, below the hooks that also read it, because a
-/// turn's bookkeeping counts these turns.
-pub fn is_task_notification(prompt: &str) -> bool {
-    prompt.contains("<task-notification>")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::messaging::outbox::Drain;
-    use crate::protocol::{Agent, SessionStatus};
+    use crate::protocol::{AgentId, SessionStatus};
     use crate::state::test_support::insert_record;
     use crate::test_support::{app_state, fake_live_session};
 
@@ -472,7 +474,7 @@ mod tests {
     async fn messages_written_while_a_turn_runs_are_counted_for_it() {
         let (state, dir) = app_state("state-written-mid-turn");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", Agent::Codex, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CODEX, 80, 24, "sleep 30");
         state.register_live(live.clone());
         state.turn_started("s", None);
 

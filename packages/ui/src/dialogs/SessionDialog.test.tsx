@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import { type Agent, type AgentAvailability, type Session } from "../protocol";
-import { AGENTS } from "../agents/agents";
+import { TEST_AGENTS } from "../test/testProviders";
 import type { NewSessionBinding } from "./dialogRequest";
 import { accountOf, type ProjectExtra, sessionOf } from "../fixtures/builders";
 import { DaemonProvider } from "../store";
@@ -20,7 +20,7 @@ vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "
 /** An `agentAvailability` map with every agent `unavailable` — "no agent available at all". Named
  * distinctly from `agents.ts`'s own `noAgentState`, which this is only a fixture for. */
 function everyAgentUnavailable(): Map<Agent, AgentAvailability> {
-  return new Map(AGENTS.map((agent) => [agent, { agent, availability: "unavailable" as const, default_account_dir: null }]));
+  return new Map(TEST_AGENTS.map((agent) => [agent, { agent, availability: "unavailable" as const, default_account_dir: null }]));
 }
 
 const hub2 = sessionOf("s-hub-2", parentConsole.id, undefined, "Hub 2", "working", { colour: "pink", started_at: 200 });
@@ -239,7 +239,7 @@ it("hides turned-off accounts and hides their agent when every account is off", 
   const second = renderDialog([], { settings: { ...DEFAULT_SETTINGS, ...settings, accounts: settings.accounts.map((account) => ({ ...account, disabled: true })) } }, { default_agent: "codex" });
   expect(pickerNamed("Agent").textContent).toContain("Claude Code");
   await act(async () => pickerNamed("Agent").click());
-  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Grok Build"]);
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Grok Build", "Test Agent"]);
   act(() => second.root.unmount());
   second.container.remove();
 });
@@ -254,9 +254,9 @@ it("drops an agent whose last enabled account is turned off while the dialog is 
   act(() => view.daemon.store.setState((state) => ({ settings: { ...state.settings, disabled_default_accounts: ["codex"] } })));
   expect(pickerNamed("Agent").textContent).toContain("Claude Code");
   await act(async () => pickerNamed("Agent").click());
-  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Grok Build"]);
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Grok Build", "Test Agent"]);
   act(() => view.daemon.store.setState((state) => ({ settings: { ...state.settings, disabled_default_accounts: [] } })));
-  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Codex", "Grok Build"]);
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
 });
 
 it("refuses opening a session when every agent's accounts are turned off", () => {
@@ -265,7 +265,7 @@ it("refuses opening a session when every agent's accounts are turned off", () =>
     act(() => view.root.unmount());
     view.container.remove();
   });
-  act(() => view.daemon.store.setState((state) => ({ settings: { ...state.settings, disabled_default_accounts: ["claude", "codex", "grok"] } })));
+  act(() => view.daemon.store.setState((state) => ({ settings: { ...state.settings, disabled_default_accounts: ["claude", "codex", "grok", "test_agent"] } })));
   expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No agent is available to open a session.");
   expect(pickerNamed("Agent")).toBeUndefined();
   expect(view.daemon.request).not.toHaveBeenCalled();
@@ -291,10 +291,11 @@ it("leaves the agents known to be missing out of the agent picker", async () => 
       ["claude", { agent: "claude", availability: "available", default_account_dir: null }],
       ["codex", { agent: "codex", availability: "unavailable", default_account_dir: null }],
       ["grok", { agent: "grok", availability: "available", default_account_dir: null }],
+      ["test_agent", { agent: "test_agent", availability: "available", default_account_dir: null }],
     ]),
   });
   await act(async () => pickerNamed("Agent").click());
-  expect(optionElements().map((o) => o.textContent)).toEqual(["Claude Code", "Grok Build"]);
+  expect(optionElements().map((o) => o.textContent)).toEqual(["Claude Code", "Grok Build", "Test Agent"]);
   act(() => root.unmount());
   container.remove();
 });

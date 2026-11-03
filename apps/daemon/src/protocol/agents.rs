@@ -1,139 +1,126 @@
-//! The agents, and the values the wire types keep once per agent: [`PerAgent`], a launch's model
-//! and effort, and [`Change`], an update request's value for one agent's setting.
+//! The values the wire types keep once per provider:
+//! [`PerAgent`], a launch's model and effort, and [`Change`], an update request's value for one
+//! agent's setting. The agents themselves are the provider registry's (`crate::providers`).
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::de::{IgnoredAny, MapAccess, Visitor};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::fields::{present_option, Present};
 
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Agent {
-    Claude,
-    Codex,
-    Grok,
-}
+pub use crate::providers::AgentId;
+use crate::providers::PROVIDER_COUNT;
 
-impl Agent {
-    /// Every agent, in the order a per-agent listing keeps.
-    pub const ALL: [Agent; 3] = [Agent::Claude, Agent::Codex, Agent::Grok];
+/// One value for each registered provider: a map keyed by [`AgentId`] that always holds an entry
+/// for every one of them, serialised as `{"<provider id>": …, …}` in the registry's order. Reading
+/// one, a key left out is the default value and a key naming no registered provider is ignored.
+#[cfg_attr(test, derive(ts_rs::TS), ts(bound = "T: ts_rs::TS"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PerAgent<T>(#[cfg_attr(test, ts(type = "Record<Agent, T>"))] [T; PROVIDER_COUNT]);
 
-    /// How the agent is named on the wire and in the console session's tools.
-    pub fn wire_name(self) -> &'static str {
-        match self {
-            Agent::Claude => "claude",
-            Agent::Codex => "codex",
-            Agent::Grok => "grok",
-        }
+impl<T: Default> Default for PerAgent<T> {
+    fn default() -> Self {
+        Self::from_fn(|_| T::default())
     }
-
-    /// The agent [`Self::wire_name`] names.
-    pub fn from_wire_name(name: &str) -> Option<Agent> {
-        Agent::ALL
-            .into_iter()
-            .find(|agent| agent.wire_name() == name)
-    }
-
-    /// Whether the agent has the Claude compatibility setting: every agent but Claude Code, which
-    /// is what the others are made compatible with.
-    pub fn has_claude_compatibility(self) -> bool {
-        self != Agent::Claude
-    }
-
-    /// The Claude compatibility setting while the user has made no choice for the agent: Grok Build
-    /// follows its own default, which is on, and Codex is on while Claude Code is among the
-    /// `added` agents (`None` while undecided, which counts as Claude Code not being among them).
-    /// Claude Code itself has no such setting and reads as off.
-    pub fn claude_compatibility_default(self, added: Option<&[Agent]>) -> bool {
-        match self {
-            Agent::Claude => false,
-            Agent::Codex => added.is_some_and(|added| added.contains(&Agent::Claude)),
-            Agent::Grok => true,
-        }
-    }
-
-    /// How the agent is named in a message shown to the user.
-    pub fn label(self) -> &'static str {
-        match self {
-            Agent::Claude => "Claude Code",
-            Agent::Codex => "Codex",
-            Agent::Grok => "Grok Build",
-        }
-    }
-}
-
-/// One value for each [`Agent`], serialised as `{"claude": …, "codex": …, "grok": …}`. A struct
-/// rather than a map, so that adding an agent fails to compile everywhere a value is built or
-/// looked up instead of defaulting silently. A key left out when reading is the default value.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PerAgent<T> {
-    pub claude: T,
-    pub codex: T,
-    pub grok: T,
 }
 
 impl<T> PerAgent<T> {
-    pub fn from_fn(mut f: impl FnMut(Agent) -> T) -> Self {
-        Self {
-            claude: f(Agent::Claude),
-            codex: f(Agent::Codex),
-            grok: f(Agent::Grok),
-        }
+    pub fn from_fn(mut f: impl FnMut(AgentId) -> T) -> Self {
+        Self(std::array::from_fn(|index| f(AgentId::ALL[index])))
     }
 
     /// As [`Self::from_fn`], for a value that can fail to build, such as a store row.
-    pub fn try_from_fn<E>(mut f: impl FnMut(Agent) -> Result<T, E>) -> Result<Self, E> {
-        Ok(Self {
-            claude: f(Agent::Claude)?,
-            codex: f(Agent::Codex)?,
-            grok: f(Agent::Grok)?,
-        })
-    }
-
-    pub fn get(&self, agent: Agent) -> &T {
-        match agent {
-            Agent::Claude => &self.claude,
-            Agent::Codex => &self.codex,
-            Agent::Grok => &self.grok,
+    pub fn try_from_fn<E>(mut f: impl FnMut(AgentId) -> Result<T, E>) -> Result<Self, E> {
+        let mut values = Vec::with_capacity(PROVIDER_COUNT);
+        for agent in AgentId::ALL {
+            values.push(f(agent)?);
         }
+        Ok(Self(
+            values.try_into().ok().expect("one value per provider"),
+        ))
     }
 
-    pub fn get_mut(&mut self, agent: Agent) -> &mut T {
-        match agent {
-            Agent::Claude => &mut self.claude,
-            Agent::Codex => &mut self.codex,
-            Agent::Grok => &mut self.grok,
+    pub fn get(&self, agent: AgentId) -> &T {
+        &self.0[agent.index()]
+    }
+
+    pub fn get_mut(&mut self, agent: AgentId) -> &mut T {
+        &mut self.0[agent.index()]
+    }
+
+    /// In [`AgentId::ALL`] order.
+    pub fn iter(&self) -> impl Iterator<Item = (AgentId, &T)> {
+        AgentId::ALL.into_iter().zip(self.0.iter())
+    }
+
+    /// In [`AgentId::ALL`] order.
+    #[allow(clippy::should_implement_trait)]
+    pub fn into_iter(self) -> impl Iterator<Item = (AgentId, T)> {
+        AgentId::ALL.into_iter().zip(self.0)
+    }
+
+    /// The values with `agent`'s replaced by `value`.
+    pub fn with(mut self, agent: AgentId, value: T) -> Self {
+        *self.get_mut(agent) = value;
+        self
+    }
+
+    pub fn map<U>(self, mut f: impl FnMut(AgentId, T) -> U) -> PerAgent<U> {
+        let mut values = self.0.into_iter();
+        PerAgent::from_fn(|agent| f(agent, values.next().expect("one value per provider")))
+    }
+}
+
+impl<T> std::ops::Index<AgentId> for PerAgent<T> {
+    type Output = T;
+
+    fn index(&self, agent: AgentId) -> &T {
+        self.get(agent)
+    }
+}
+
+impl<T> std::ops::IndexMut<AgentId> for PerAgent<T> {
+    fn index_mut(&mut self, agent: AgentId) -> &mut T {
+        self.get_mut(agent)
+    }
+}
+
+impl<T: Serialize> Serialize for PerAgent<T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(PROVIDER_COUNT))?;
+        for (agent, value) in self.iter() {
+            map.serialize_entry(agent.wire_name(), value)?;
         }
+        map.end()
     }
+}
 
-    /// In [`Agent::ALL`] order.
-    pub fn iter(&self) -> impl Iterator<Item = (Agent, &T)> {
-        [
-            (Agent::Claude, &self.claude),
-            (Agent::Codex, &self.codex),
-            (Agent::Grok, &self.grok),
-        ]
-        .into_iter()
-    }
+impl<'de, T: Deserialize<'de> + Default> Deserialize<'de> for PerAgent<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct PerAgentVisitor<T>(std::marker::PhantomData<T>);
 
-    /// In [`Agent::ALL`] order.
-    pub fn into_iter(self) -> impl Iterator<Item = (Agent, T)> {
-        [
-            (Agent::Claude, self.claude),
-            (Agent::Codex, self.codex),
-            (Agent::Grok, self.grok),
-        ]
-        .into_iter()
-    }
+        impl<'de, T: Deserialize<'de> + Default> Visitor<'de> for PerAgentVisitor<T> {
+            type Value = PerAgent<T>;
 
-    pub fn map<U>(self, mut f: impl FnMut(Agent, T) -> U) -> PerAgent<U> {
-        PerAgent {
-            claude: f(Agent::Claude, self.claude),
-            codex: f(Agent::Codex, self.codex),
-            grok: f(Agent::Grok, self.grok),
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a map keyed by provider id")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut values: PerAgent<Option<T>> = PerAgent::from_fn(|_| None);
+                while let Some(key) = map.next_key::<std::borrow::Cow<'de, str>>()? {
+                    match AgentId::from_wire_name(&key) {
+                        Some(agent) => *values.get_mut(agent) = Some(map.next_value()?),
+                        None => {
+                            map.next_value::<IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(values.map(|_, value| value.unwrap_or_default()))
+            }
         }
+
+        deserializer.deserialize_map(PerAgentVisitor(std::marker::PhantomData))
     }
 }
 

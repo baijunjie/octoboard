@@ -10,11 +10,10 @@ use std::process::{Command, Output};
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use super::adapter_for;
 use crate::accounts::shared_config;
-use crate::agents::layout::layout;
 use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
+use crate::providers::layout::layout;
 
 /// The home directory the launch's shell snapshot carries, else the daemon's own.
 pub(crate) fn snapshot_home(shell_env: &HashMap<String, String>) -> PathBuf {
@@ -44,7 +43,7 @@ pub(crate) fn exported_dir(shell_env: &HashMap<String, String>, var: &str) -> Op
 /// Shared by `crate::agents::availability`, which shows it as the default account's directory
 /// before any session has opened, and by [`account_dir`], which a launch with no pinned account
 /// resolves its directory through.
-pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) -> PathBuf {
+pub fn default_account_dir(agent: AgentId, shell_env: &HashMap<String, String>) -> PathBuf {
     let layout = layout(agent);
     exported_dir(shell_env, layout.config_dir_var)
         .unwrap_or_else(|| snapshot_home(shell_env).join(layout.default_dir))
@@ -53,7 +52,7 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
 /// The directory of an account of `agent` as a session of it would see it: `pinned`, the account's
 /// own, else the default account's ([`default_account_dir`]) resolved from `shell_env`.
 pub fn account_dir(
-    agent: Agent,
+    agent: AgentId,
     pinned: Option<&Path>,
     shell_env: &HashMap<String, String>,
 ) -> PathBuf {
@@ -70,7 +69,7 @@ pub fn account_dir(
 ///
 /// [`admitted_command`] is the way to run it.
 fn account_command(
-    agent: Agent,
+    agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     args: &[&str],
@@ -83,10 +82,10 @@ fn account_command(
 
 /// Where `agent`'s binary resolves on `shell_env`'s `PATH`; `Err` carries the binary's name.
 pub fn resolve_account_binary(
-    agent: Agent,
+    agent: AgentId,
     shell_env: &HashMap<String, String>,
 ) -> Result<String, &'static str> {
-    let binary_name = adapter_for(agent).binary();
+    let binary_name = agent.descriptor().binary;
     crate::env_shell::resolve_binary(binary_name, shell_env).map_err(|_| binary_name)
 }
 
@@ -96,7 +95,7 @@ pub fn resolve_account_binary(
 /// for a long one), so sharing cannot move what the CLI opens from under it.
 pub fn account_command_of(
     binary: &str,
-    agent: Agent,
+    agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     args: &[&str],
@@ -161,7 +160,7 @@ impl NotRun {
 /// default account) would run it, admitted under that directory. Blocking: the admission waits
 /// for a change of the account's sharing that is moving files there.
 pub(crate) fn admitted_command(
-    agent: Agent,
+    agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     args: &[&str],
@@ -205,7 +204,7 @@ pub(crate) fn run_query(
 
 /// [`admitted_command`] with `args` run as a short query ([`run_query`]). Blocking.
 pub(crate) fn query(
-    agent: Agent,
+    agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     args: &[&str],

@@ -3,12 +3,13 @@ import type React from "react";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { remedyInBody } from "./errorPartPresence";
 import { rawErrorDetails } from "./errorParts";
+import { messageKey } from "../../errors/codes";
 import { isStructuredFailure } from "../../errors/errorPresentation";
 import { isMessageKey, type MessageKey } from "../../i18n/catalog";
 import { t } from "../../i18n/language";
 import type { NotificationRequest } from "../../store";
 
-type AlertTitleKey = Extract<MessageKey, `daemon.${string}.alertTitle`>;
+type AlertTitleKey = Extract<MessageKey, `${string}.alertTitle`>;
 
 /** The catalog key of the title an error alert takes for what failed (`daemon.<code>.alertTitle`),
  * where the code has one: it says what failed without naming the session, which the alert's body
@@ -16,7 +17,7 @@ type AlertTitleKey = Extract<MessageKey, `daemon.${string}.alertTitle`>;
  * `daemonTitle`. */
 function alertTitleKey({ daemonError, daemonTitle }: NotificationRequest): AlertTitleKey | undefined {
   const code = daemonTitle ? daemonTitle.code.replace(/\.title$/, "") : daemonError?.code;
-  const key = `daemon.${code}.alertTitle`;
+  const key = `${messageKey(code ?? "")}.alertTitle`;
   return isMessageKey(key) ? (key as AlertTitleKey) : undefined;
 }
 

@@ -9,7 +9,7 @@
 //! records the trust in its own configuration, which is what makes a later launch of that agent
 //! trusted. Octoboard never makes that trust decision itself and never writes it into a
 //! per-session copy ahead of the press; the one write it makes is carrying the entry Grok wrote
-//! over to the user's own store, unchanged ([`CarriedTrust`]), after Octoboard's press and after
+//! over to the user's own store, unchanged ([`TrustCarrier`]), after Octoboard's press and after
 //! the person's own answer in the terminal alike ([`on_hook`]), so that Grok, like the other two,
 //! does not ask again. Only Octoboard's own successful press records a permission of Octoboard's.
 //!
@@ -103,20 +103,19 @@
 //! retried behind the person's back.
 
 use std::collections::{HashMap, HashSet};
-use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::hostfs::place::{looked_within, Place};
 use crate::hostfs::{self, lexically_normalise};
 use crate::paths;
 use crate::protocol::{
-    error_code, notice_code, trust_reason, Agent, CodedError, Event, Notice, Project, Session,
+    error_code, notice_code, trust_reason, AgentId, CodedError, Event, Notice, Project, Session,
     SessionKind,
 };
 use crate::session::wait::QUIET;
@@ -130,12 +129,12 @@ mod screen;
 #[cfg(test)]
 mod tests;
 
-pub use carry::CarriedTrust;
-use carry::*;
+pub use carry::{CarryFailure, TrustCarrier};
 use place::*;
 use press::*;
 pub use screen::TrustState;
 use screen::*;
+pub(crate) use screen::{Press, Screen, StartSignal, NO_SCREEN};
 
 /// How much output after a sighting the watch for the person's answer reads at most. Codex prints
 /// little at its screen; past this, its next screen is left for a hook to announce.
@@ -144,10 +143,13 @@ const WATCHED_ANSWER_BYTES: u64 = 128 * 1024;
 /// How often a session's held messages are looked at while its watch runs.
 const RELEASE_POLL: Duration = Duration::from_millis(250);
 
-/// How long after its launch a Grok Build session may go without a hook before the messages held
-/// for it are let through anyway ([`Screen::hook_fallback`]). Its `SessionStart` normally comes
-/// within a second of the launch, so a hook that has not come by now is not coming.
-const HOOK_FALLBACK: Duration = Duration::from_secs(30);
+/// How long after its launch a session whose provider's hook cannot be relied on may go without a
+/// hook before the messages held for it are let through anyway ([`Screen::hook_fallback`]): Grok
+/// Build's, whose `SessionStart` normally comes within a second of the launch, so a hook that has
+/// not come by now is not coming, and any provider whose trust screen has not been measured
+/// ([`NO_SCREEN`]). A provider of the latter kind without hooks has its launch-time messages held
+/// for all of it.
+pub(crate) const HOOK_FALLBACK: Duration = Duration::from_secs(30);
 
 /// Whether Octoboard may answer this session's screen without asking: a console session always
 /// may, because its working directory is the console's own, which holds nothing but the
@@ -366,7 +368,10 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     }
     if let Some(bound) = live.trust.screen.hook_fallback {
         release_when_no_hook_comes(state, live, bound);
-        release_when_the_sighted_screen_goes(state, live);
+        // A screen that is never looked for is never sighted, so there is nothing to watch go.
+        if live.trust.screen.can_be_sighted() {
+            release_when_the_sighted_screen_goes(state, live);
+        }
     }
     let state = state.clone();
     // Weak, so that the session being dropped closes its sightings and ends this task.
@@ -552,7 +557,7 @@ pub fn on_hook(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let state = state.clone();
     let live = live.clone();
     tokio::task::spawn_blocking(move || {
-        let outcome = carry(&carried);
+        let outcome = carried.carry();
         let Some(Err(failure)) = live.trust.deliver_carry(outcome) else {
             return;
         };
@@ -563,7 +568,7 @@ pub fn on_hook(state: &Arc<AppState>, live: &Arc<LiveSession>) {
             &state,
             &live.id,
             live.agent,
-            &not_carried_over(live.agent, &carried, &failure),
+            &not_carried_over(live.agent, carried.as_ref(), &failure),
         );
     });
 }
@@ -683,7 +688,7 @@ fn not_waiting() -> anyhow::Error {
 /// Pressing `agent`'s screen failed for `reason`, the English account that `reason_code` names
 /// for a client to word. `detail` is what the code's wording is filled with, if anything.
 fn answer_failed(
-    agent: Agent,
+    agent: AgentId,
     reason_code: &'static str,
     reason: impl Into<String>,
     detail: &[(&str, &str)],
@@ -702,7 +707,7 @@ fn answer_failed(
     )
 }
 
-fn answer_failed_message(agent: Agent, reason: &str) -> String {
+fn answer_failed_message(agent: AgentId, reason: &str) -> String {
     format!(
         "{} could not press {}'s trust confirmation ({reason}). Answer it in the terminal.",
         crate::APP_NAME,
@@ -712,8 +717,12 @@ fn answer_failed_message(agent: Agent, reason: &str) -> String {
 
 /// Grok's confirmation was pressed, but the entry it wrote could not be carried over to the
 /// user's own store, for `reason`. Nothing was written there.
-fn not_carried_over(agent: Agent, carried: &CarriedTrust, failure: &CarryFailure) -> anyhow::Error {
-    let path = carried.user_store.to_string_lossy();
+fn not_carried_over(
+    agent: AgentId,
+    carried: &dyn TrustCarrier,
+    failure: &CarryFailure,
+) -> anyhow::Error {
+    let path = carried.user_store().to_string_lossy();
     let mut pairs = vec![
         ("agent", agent.label()),
         ("path", path.as_ref()),
@@ -744,7 +753,7 @@ fn is_not_waiting(err: &anyhow::Error) -> bool {
 /// Logs a failed answer and tells the user, whoever asked for it: the screen is then still up and
 /// theirs to answer, or, where only carrying Grok's entry over failed, Grok will ask again next
 /// time. A lost claim is not a failure.
-fn report_failure(state: &Arc<AppState>, session_id: &str, agent: Agent, err: &anyhow::Error) {
+fn report_failure(state: &Arc<AppState>, session_id: &str, agent: AgentId, err: &anyhow::Error) {
     if is_not_waiting(err) {
         tracing::debug!(session = %session_id, "the trust confirmation is already being answered");
         return;

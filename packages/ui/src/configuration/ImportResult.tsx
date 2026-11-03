@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 
-import { AGENT_LABEL } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
-import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
@@ -16,6 +15,8 @@ import { shortcutValues } from "./importValues";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
 import { ResultCard, ResultRow } from "./ResultCards";
 import { SettingsCard } from "./SettingsCard";
+import { useProviders } from "../store";
+import { ProviderName } from "../components/text/ProviderName";
 
 export type Imported = ReplyOf<"import_configuration">;
 
@@ -53,7 +54,7 @@ function RegionTotals({ label, items }: { label: string; items: string[] }): Rea
  * accounts (created, already existing, left out, or failed; the reason written under the row, and under a created
  * account the reason sharing could not be turned on), the agents added, the default accounts named, and, when accounts
  * were created, a note that they are not logged in. Application settings: an alert when they could not be applied, else
- * a card of what was applied, where the git workflow, Claude compatibility, agent tags and keyboard shortcuts also list
+ * a card of what was applied, where the git workflow, provider settings, agent tags and keyboard shortcuts also list
  * the values they were set to. The totals lines give the counts and the cards the items, so neither repeats the other.
  * `shortcuts` says what came of the document's keyboard shortcuts, when they were applied here: how many, how many were skipped, and the overrides that were set.
  */
@@ -65,6 +66,7 @@ export function ImportResult({
   shortcuts?: { applied: number; skipped: number; overrides: Overrides };
 }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   const failureNode = useFailureNode();
   const outcome = outcomeOf(result.consoles);
   const accounts = result.accounts;
@@ -128,7 +130,7 @@ export function ImportResult({
     <>
       <RegionTotals label={t("configuration.import.result.totals.accounts")} items={accountsTotals} />
       {accounts.agents.filter((agent) => agent.accounts.length > 0).map((agent) => (
-        <ResultCard key={agent.agent} name={AGENT_LABEL[agent.agent]}>
+        <ResultCard key={agent.agent} name={providerLabel(t, providers, agent.agent)}>
           <CardRows>
             {agent.accounts.map((account, i) => (
               <ResultRow
@@ -143,13 +145,11 @@ export function ImportResult({
         </ResultCard>
       ))}
       {accounts.agents_added.length > 0 && (
-        <p className="text-sm">
-          <Message id="configuration.import.result.accounts.added" params={{ count: accounts.agents_added.length, agents: <AgentList agents={accounts.agents_added} /> }} />
-        </p>
+        <AgentList lead={t("configuration.import.result.accounts.added", { count: accounts.agents_added.length })} agents={accounts.agents_added} />
       )}
       {accounts.agents.filter((agent) => agent.default_name_applied).map((agent) => (
         <p key={agent.agent} className="text-sm">
-          <Message id="configuration.import.result.accounts.defaultNamed" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent.agent]}</InlineReference> }} />
+          <Message id="configuration.import.result.accounts.defaultNamed" params={{ agent: <ProviderName agent={agent.agent} /> }} />
         </p>
       ))}
       {accountsOutcome && accountsOutcome.created > 0 && (

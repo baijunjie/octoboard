@@ -8,8 +8,8 @@ import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
 import { ResetCreditsLine } from "./ResetCredits";
 import { useAccountQuota } from "./useAccountQuota";
 
-/** Asks to use a reset credit of an account (its id, null for the default account) under the name the panel shows it by. */
-export type ResetRequest = (account: string | null, name: string) => void;
+/** Asks to use a reset credit of an account of `agent` (its id, null for the default account) under the name the panel shows it by. */
+export type ResetRequest = (agent: Agent, account: string | null, name: string) => void;
 
 /** One account of the panel: its name and plan, and its quota beneath. An account that is used up recedes, its
  * name and meters muted and a "Limit reached" badge saying so, so the accounts that can still be used stand out.
@@ -27,7 +27,7 @@ export function QuotaAccount({ agent, account, name, plainName, rowRef, dimmed, 
     <div ref={rowRef} data-list-motion={account ?? `default:${agent}`} data-dimmed={dimmed || undefined} className={`${INACTIVE_VEIL_CLASS} flex flex-col gap-2 groove-b py-3 data-dimmed:after:bg-overlay/55 [&:not(:has(~[data-list-motion]))]:border-b-0`}>
       <AccountNameLine name={name} quota={quota} usedUp={usedUp} disabled={disabled} />
       <AccountQuotaSummary quota={quota} single usedUp={usedUp} />
-      <ResetCreditsLine quota={quota} accountName={plainName} onUse={() => onUseReset(account, plainName)} preventFocusOnPress />
+      <ResetCreditsLine quota={quota} accountName={plainName} onUse={() => onUseReset(agent, account, plainName)} preventFocusOnPress />
     </div>
   );
 }

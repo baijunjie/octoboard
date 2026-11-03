@@ -13,7 +13,7 @@ use super::looks::LOOK_DEADLINE_OVERRIDE;
 use super::stop::{self, follow_ups};
 use super::table::{self, Identity, Proc, Table};
 use super::{boot_id, persist, ProcessLedger, BOOT_ID_OVERRIDE, SETTLED_OVERRIDE, TAG_VARIABLE};
-use crate::protocol::{Agent, Session, SessionStatus};
+use crate::protocol::{AgentId, Session, SessionStatus};
 use crate::state::AppState;
 use crate::test_support::{
     app_state, assert_stops_running, console_with_project_and_accounts, detached, detached_in,
@@ -85,7 +85,7 @@ fn launch_of(ledger: &ProcessLedger, pid: i32) -> Option<String> {
 fn agent(state: &Arc<AppState>, id: &str, script: &str) -> StandIn {
     let live = fake_live_session(
         id,
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!("{script}\nexec sleep 300"),
@@ -1077,7 +1077,7 @@ async fn a_launch_is_followed_under_the_tag_it_reserved_before_its_agent_started
         .insert_session(&Session {
             agent_session_id: Some("conversation-s1".to_string()),
             has_conversation: true,
-            ..project_session("s1", Agent::Claude, SessionStatus::Interrupted)
+            ..project_session("s1", AgentId::CLAUDE, SessionStatus::Interrupted)
         })
         .unwrap();
     let pid_file = dir.join("tagged");
@@ -1137,7 +1137,7 @@ fn a_scan_before_a_launch_starts_leaves_its_agents_internals_alone() {
         helper_file.display(),
         helper_file.display()
     );
-    let live = tagged_live_session("s1", Agent::Claude, &script, pending.tag());
+    let live = tagged_live_session("s1", AgentId::CLAUDE, &script, pending.tag());
     let helper = wait_for_pid(&helper_file);
     let _guard = KillOnDrop(vec![helper]);
     wait_for_tag(helper);
@@ -2191,7 +2191,7 @@ fn the_file_written_at_a_launch_end_names_no_session_its_stop_emptied() {
         test_binary(),
         SLEEPER.join(" "),
     );
-    let live = tagged_live_session("s1", Agent::Claude, &script, pending.tag());
+    let live = tagged_live_session("s1", AgentId::CLAUDE, &script, pending.tag());
     state.register_live(live.clone());
     let first = wait_for_pid(&dir.join("gen-0"));
     let _guard = KillOnDrop(vec![first]);

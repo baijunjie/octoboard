@@ -21,9 +21,9 @@
 //! - `config.toml`. The session home keeps a real copy so the MCP server appended to it stays out of
 //!   the source file. Grok rewrites the copy for session settings. When the source file is a symlink,
 //!   the theme, the plugin switches, and a model chosen in the session are written to that link's
-//!   canonical target after the process exits ([`SharedConfigWriteback`]), and the link itself is left
-//!   in place. The model and reasoning effort passed only for this launch are not written there, and
-//!   neither is the MCP block.
+//!   canonical target after the process exits ([`writeback::SharedConfigWriteback`]), and the link
+//!   itself is left in place. The model and reasoning effort passed only for this launch are not
+//!   written there, and neither is the MCP block.
 //! - `trusted_folders.toml`: Grok saves it by replacing the file, so against a symlink its write
 //!   would replace the link rather than reach the user's store, and no setting moves the store out
 //!   of `GROK_HOME`. The copy carries every folder the user already trusts, and Octoboard adds
@@ -31,10 +31,10 @@
 //!   Octoboard presses under the user's permission (`crate::session::trust`), or the person answers
 //!   in the terminal. The entry Grok then writes lands only in this copy, so once the confirmation
 //!   is accepted, by Octoboard's press or in the terminal, it is carried over, unchanged, to the
-//!   user's own store (`LaunchPlan::carried_trust`), and a later launch is trusted from the start.
-//!   Until a folder is trusted Grok silently loads none of the project's own `AGENTS.md`, hooks or
-//!   MCP servers. Folder trust, not a git repository, is what gates the instruction files: outside
-//!   one Grok reads only the working directory's own.
+//!   user's own store (`LaunchPlan::carried_trust`, `trust`), and a later launch is trusted from
+//!   the start. Until a folder is trusted Grok silently loads none of the project's own
+//!   `AGENTS.md`, hooks or MCP servers. Folder trust, not a git repository, is what gates the
+//!   instruction files: outside one Grok reads only the working directory's own.
 //!
 //! Four more entries are real copies too, `bundled/`, `bundles/`, `hooks-paths` and
 //! `sandbox.toml`: Grok's startup sandbox check refuses to start when they are symlinks (it
@@ -64,8 +64,8 @@
 //! The copies are a snapshot: an edit the user makes while a session runs is not seen, and anything
 //! the session persists lands in Octoboard's copy. Two things are kept: the trust entry above, once
 //! the confirmation is accepted, and, when the source `config.toml` is a symlink, the settings
-//! [`SharedConfigWriteback`] copies to its target. The rest is lost with the process. Rebuilding the
-//! farm on every launch is what picks up an edit made in between.
+//! [`writeback::SharedConfigWriteback`] copies to its target. The rest is lost with the process.
+//! Rebuilding the farm on every launch is what picks up an edit made in between.
 //!
 //! Two conditions come from Grok itself rather than from the mechanism: it locates a project by
 //! walking up for a `.git` directory and reads no project hooks without one; and its hooks must be
@@ -80,8 +80,19 @@
 //! files for a session, replaying them on a resume or a fork, so a change never reaches a session
 //! already begun.
 
+pub(crate) mod accounts;
+mod conversation;
 mod home;
+mod hooks;
+mod login;
+pub(crate) mod models;
+pub(crate) mod quota;
+pub(crate) mod records;
 mod sandbox;
+pub(crate) mod screen;
+mod shared_config;
+mod switch_continue;
+pub(crate) mod trust;
 mod writeback;
 
 #[cfg(test)]
@@ -97,15 +108,14 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use super::{AgentAdapter, LaunchPlan, LaunchSpec};
-use crate::agents::layout;
-use crate::protocol::{error_code, Agent, CodedError, TerminalAppearance};
-use crate::session::trust::CarriedTrust;
+use super::{AgentProvider, LaunchPlan, LaunchSpec};
+use crate::protocol::{AgentId, Code, CodedError, TerminalAppearance};
+use crate::providers::{grok, ProviderDescriptor};
+use crate::session::screen::ScreenReader;
 use crate::session_tools;
 use home::{build_grok_home, canonical_cwd};
 use sandbox::require_unsandboxed;
 use writeback::shared_config_writeback;
-pub use writeback::SharedConfigWriteback;
 
 /// The events Octoboard's session states are derived from. All three stop events are registered
 /// because they are mutually exclusive, and `Notification` is the backstop: some turns (bash mode,
@@ -132,19 +142,38 @@ const WAITING_STATUS: &str = "Waiting for response…";
 /// its home are excluded from the farm, so Grok running against it never loads them.
 const SYSTEM_GROK_DIR: &str = "/etc/grok";
 
-pub struct GrokAdapter;
+pub struct GrokProvider;
 
-impl AgentAdapter for GrokAdapter {
-    fn binary(&self) -> &'static str {
-        "grok"
+impl AgentProvider for GrokProvider {
+    fn descriptor(&self) -> &'static ProviderDescriptor {
+        AgentId::GROK.descriptor()
     }
 
-    fn preallocates_session_id(&self) -> bool {
-        true
+    fn screen(&self) -> &'static dyn ScreenReader {
+        &screen::GrokScreen
     }
 
-    fn uses_hook_script(&self) -> bool {
-        true
+    fn hooks(&self) -> &'static dyn crate::hooks::HookInterpreter {
+        &hooks::GrokHooks
+    }
+
+    fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {
+        Some(&accounts::GrokAccounts)
+    }
+
+    fn catalogue(&self) -> &'static dyn crate::agents::models::ModelCatalogue {
+        &models::GrokCatalogue
+    }
+
+    fn records(&self) -> &'static dyn crate::records::RecordStore {
+        &records::GrokRecords
+    }
+
+    fn refuse_unlaunchable_account(&self, pinned: Option<&Path>) -> Result<()> {
+        match pinned {
+            Some(dir) => require_initialized_grok_home(dir),
+            None => Ok(()),
+        }
     }
 
     /// Native releases resolve to a versioned download, without spawning a CLI process.
@@ -204,8 +233,8 @@ impl AgentAdapter for GrokAdapter {
 /// `plan` with the directory of Grok's system-wide configuration passed in, so a test never
 /// reads the machine's own.
 fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
-    let pinned = super::pinned_config_dir(spec, Agent::Grok)?;
-    // Unlike the other two agents, an account Grok has never been run against cannot simply be
+    let pinned = super::pinned_config_dir(spec, AgentId::GROK)?;
+    // Unlike Claude Code and Codex, an account Grok has never been run against cannot simply be
     // created on first use: the per-session home only links what already exists in the source,
     // so an empty one would have Grok write its login and conversation into the throw-away
     // farm instead, discarded with the process — the exact silent failure a switch must not
@@ -215,7 +244,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     if let Some(dir) = pinned {
         require_initialized_grok_home(dir)?;
     }
-    let source_home = super::account_dir(Agent::Grok, pinned, spec.shell_env);
+    let source_home = super::account_dir(AgentId::GROK, pinned, spec.shell_env);
     require_unsandboxed(spec, &source_home, system_dir)?;
     let grok_home = build_grok_home(spec, &source_home)?;
 
@@ -249,7 +278,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     args.push(session_tools::role::role_description(
         spec.kind,
         spec.owner.as_ref(),
-        Agent::Grok,
+        AgentId::GROK,
         &spec.role_options(),
     ));
 
@@ -272,9 +301,9 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         }
     }
 
-    let carried_trust = CarriedTrust {
-        session_store: grok_home.join(layout::GROK_TRUST_STORE),
-        user_store: source_home.join(layout::GROK_TRUST_STORE),
+    let carried_trust = trust::CarriedTrust {
+        session_store: grok_home.join(grok::GROK_TRUST_STORE),
+        user_store: source_home.join(grok::GROK_TRUST_STORE),
         folder: canonical_cwd(spec.cwd),
     };
     // Grok has no `--theme` flag. `GROK_THEME` outranks `config.toml`, so the copy of the user's
@@ -288,7 +317,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     };
     let mut env = vec![
         (
-            layout::GROK.config_dir_var.to_string(),
+            grok::LAYOUT.config_dir_var.to_string(),
             grok_home.to_string_lossy().into_owned(),
         ),
         ("GROK_THEME".to_string(), theme.to_string()),
@@ -296,14 +325,15 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     // Grok's own Claude compatibility is on unless its configuration or the user's shell turns it
     // off; these outrank both. Turned off in Octoboard, nothing is passed and Grok follows its own
     // configuration.
-    if spec.claude_compatibility {
+    if spec.settings.switch("claude_compatibility") {
         env.extend(CLAUDE_COMPATIBILITY_VARS.map(|var| (var.to_string(), "true".to_string())));
     }
     Ok(LaunchPlan {
         args,
         env,
-        carried_trust: Some(carried_trust),
-        shared_config_writeback: shared_config_writeback(&source_home, &grok_home, spec.model),
+        carried_trust: Some(std::sync::Arc::new(carried_trust)),
+        after_exit: shared_config_writeback(&source_home, &grok_home, spec.model)
+            .map(|writeback| Box::new(writeback) as Box<dyn crate::session::term::AfterExit>),
         ..LaunchPlan::default()
     })
 }
@@ -325,11 +355,11 @@ const CLAUDE_COMPATIBILITY_VARS: [&str; 5] = [
 /// way: an API-key user's legitimate home has `sessions/` with no `auth.json`, and that is not
 /// Octoboard's business to check.
 pub(super) fn require_initialized_grok_home(dir: &Path) -> Result<()> {
-    if dir.join(layout::GROK_RECORDS_DIR).is_dir() {
+    if dir.join(grok::GROK_RECORDS_DIR).is_dir() {
         return Ok(());
     }
     Err(CodedError::raised(
-        error_code::GROK_HOME_NOT_INITIALIZED,
+        Code::of_provider(grok::HOME_NOT_INITIALIZED),
         format!(
             "`{}` is not a Grok home yet: run `grok` against it directly at least once so it has \
              a session history, before pointing an account at it",

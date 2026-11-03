@@ -5,8 +5,8 @@ use crate::coordinator::test_support::{
 };
 use crate::hostfs;
 use crate::protocol::{
-    error_code, Account, Agent, Availability, Change, CodedError, Event, Launch, PerAgent, Project,
-    ProjectAccount, ProjectSource, RequestBody, Session, SessionKind, SessionStatus,
+    error_code, Account, AgentId, Availability, Change, CodedError, Event, Launch, PerAgent,
+    Project, ProjectAccount, ProjectSource, RequestBody, Session, SessionKind, SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::bare_session;
@@ -25,7 +25,7 @@ async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     state
         .store
@@ -84,7 +84,7 @@ async fn remote_urls_are_read_for_unassociated_directories_of_the_directory_sour
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let (taken, fresh, bare) = (dir.join("taken"), dir.join("fresh"), dir.join("bare"));
     let mut associated = project_of("console-1", "taken");
@@ -140,9 +140,9 @@ async fn add_project_detects_the_agent_only_when_none_is_given() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
-    let add = |name: &str, default_agent: Option<Agent>, detect_default_agent: bool| {
+    let add = |name: &str, default_agent: Option<AgentId>, detect_default_agent: bool| {
         let repo = dir.join(name);
         std::fs::create_dir(&repo).expect("repo");
         std::fs::write(repo.join("AGENTS.md"), "").expect("marker");
@@ -167,11 +167,11 @@ async fn add_project_detects_the_agent_only_when_none_is_given() {
 
     assert_eq!(
         add("auto", None, true).await.unwrap()[0].default_agent,
-        Some(Agent::Codex)
+        Some(AgentId::CODEX)
     );
     assert_eq!(
-        add("explicit", Some(Agent::Grok), true).await.unwrap()[0].default_agent,
-        Some(Agent::Grok)
+        add("explicit", Some(AgentId::GROK), true).await.unwrap()[0].default_agent,
+        Some(AgentId::GROK)
     );
     // A client that has shown the detection and was told to keep "inherit" gets none stored.
     assert_eq!(
@@ -179,7 +179,7 @@ async fn add_project_detects_the_agent_only_when_none_is_given() {
         None
     );
     state.set_agent_availability(vec![crate::protocol::AgentAvailability {
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         availability: Availability::Unavailable,
         default_account_dir: None,
     }]);
@@ -197,7 +197,7 @@ async fn add_project_applies_a_description_to_a_single_project_only() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let add = |source: ProjectSource, path: &Path| {
         add_project(
@@ -241,9 +241,9 @@ async fn add_project_refuses_a_directory_spelled_another_way() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
-    let mut other = console(Agent::Claude, &workdir);
+    let mut other = console(AgentId::CLAUDE, &workdir);
     other.id = "console-2".to_string();
     other.name = "Other".to_string();
     state.store.insert_console(&other).unwrap();
@@ -291,7 +291,7 @@ async fn add_project_associates_a_linked_repository_of_a_parent_once() {
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-parent-link");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
         .unwrap();
     let parent = dir.join("parent");
     std::fs::create_dir_all(parent.join("repo").join(".git")).unwrap();
@@ -368,7 +368,7 @@ async fn adding_project_text_checks_trimmed_character_limits_before_storing_or_c
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-text-limits");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
         .unwrap();
     let repo = dir.join("repo");
     std::fs::create_dir(&repo).unwrap();
@@ -419,7 +419,7 @@ async fn derived_names_and_ignored_parent_text_do_not_block_association() {
     let (state, dir) = crate::test_support::app_state("coordinator-derived-project-text");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
         .unwrap();
     let long_name = "a".repeat(101);
     let repo = dir.join(&long_name);
@@ -476,7 +476,7 @@ async fn project_text_updates_preserve_legacy_values_and_reject_new_overlong_tex
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-text-limits");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
         .unwrap();
     let mut legacy = project_of("console-1", "project-1");
     legacy.name = format!("  {}  ", "n".repeat(101));
@@ -565,7 +565,7 @@ async fn add_project_stores_its_own_git_workflow_values_for_every_project_added(
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let own = GitWorkflowOverride {
         development: Some(GitDevelopment::InPlace),
@@ -610,7 +610,7 @@ async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     state
         .store
@@ -704,7 +704,7 @@ async fn a_project_description_is_left_set_or_cleared_by_an_update() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     state
         .store
@@ -775,19 +775,22 @@ async fn a_project_launch_setting_is_left_set_or_cleared_by_an_update() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let mut seeded = project_of("console-1", "project-1");
-    seeded.launch.claude.model = Some("opus".to_string());
-    seeded.launch.grok.effort = Some("high".to_string());
-    seeded.launch.codex.model = Some("gpt-5".to_string());
+    seeded.launch[AgentId::CLAUDE].model = Some("opus".to_string());
+    seeded.launch[AgentId::GROK].effort = Some("high".to_string());
+    seeded.launch[AgentId::CODEX].model = Some("gpt-5".to_string());
     state.store.insert_project(&seeded).unwrap();
     let stored = || state.store.get_project("project-1").unwrap().unwrap();
 
     handle(&state, None, update_project_request("project-1", |_| {}))
         .await
         .unwrap();
-    assert_eq!(stored().launch.claude.model.as_deref(), Some("opus"));
+    assert_eq!(
+        stored().launch[AgentId::CLAUDE].model.as_deref(),
+        Some("opus")
+    );
 
     handle(
         &state,
@@ -796,19 +799,25 @@ async fn a_project_launch_setting_is_left_set_or_cleared_by_an_update() {
             let RequestBody::UpdateProject { launch, .. } = request else {
                 unreachable!()
             };
-            launch.claude.model = Some(Some(" sonnet ".to_string()));
-            launch.claude.effort = Some(Some("low".to_string()));
-            launch.grok.effort = Some(None);
-            launch.codex.model = Some(Some("  ".to_string()));
+            launch[AgentId::CLAUDE].model = Some(Some(" sonnet ".to_string()));
+            launch[AgentId::CLAUDE].effort = Some(Some("low".to_string()));
+            launch[AgentId::GROK].effort = Some(None);
+            launch[AgentId::CODEX].model = Some(Some("  ".to_string()));
         }),
     )
     .await
     .unwrap();
     let updated = stored();
-    assert_eq!(updated.launch.claude.model.as_deref(), Some("sonnet"));
-    assert_eq!(updated.launch.claude.effort.as_deref(), Some("low"));
-    assert_eq!(updated.launch.grok.effort, None);
-    assert_eq!(updated.launch.codex.model, None);
+    assert_eq!(
+        updated.launch[AgentId::CLAUDE].model.as_deref(),
+        Some("sonnet")
+    );
+    assert_eq!(
+        updated.launch[AgentId::CLAUDE].effort.as_deref(),
+        Some("low")
+    );
+    assert_eq!(updated.launch[AgentId::GROK].effort, None);
+    assert_eq!(updated.launch[AgentId::CODEX].model, None);
 }
 
 /// A project's account reference is checked against the agent it is set for, set or cleared by
@@ -819,13 +828,16 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     state
         .store
         .insert_project(&project_of("console-1", "project-1"))
         .unwrap();
-    for (id, agent) in [("claude-acct", Agent::Claude), ("codex-acct", Agent::Codex)] {
+    for (id, agent) in [
+        ("claude-acct", AgentId::CLAUDE),
+        ("codex-acct", AgentId::CODEX),
+    ] {
         state
             .store
             .insert_account(&Account {
@@ -848,12 +860,12 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
             let RequestBody::UpdateProject { accounts, .. } = request else {
                 unreachable!()
             };
-            accounts.claude = Change::Set(pins("claude-acct"));
+            accounts[AgentId::CLAUDE] = Change::Set(pins("claude-acct"));
         }),
     )
     .await
     .unwrap();
-    assert_eq!(stored().accounts.claude, pins("claude-acct"));
+    assert_eq!(stored().accounts[AgentId::CLAUDE], pins("claude-acct"));
 
     // An account of another agent is refused, and the rest of the same request with it.
     let err = handle(
@@ -864,7 +876,7 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
                 unreachable!()
             };
             *name = Some("Renamed".to_string());
-            accounts.grok = Change::Set(pins("codex-acct"));
+            accounts[AgentId::GROK] = Change::Set(pins("codex-acct"));
         }),
     )
     .await
@@ -872,12 +884,12 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
     let coded = err.downcast_ref::<CodedError>().expect("a coded error");
     assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT);
     assert_eq!(stored().name, "project-1");
-    assert_eq!(stored().accounts.grok, ProjectAccount::Inherit);
+    assert_eq!(stored().accounts[AgentId::GROK], ProjectAccount::Inherit);
 
     handle(&state, None, update_project_request("project-1", |_| {}))
         .await
         .unwrap();
-    assert_eq!(stored().accounts.claude, pins("claude-acct"));
+    assert_eq!(stored().accounts[AgentId::CLAUDE], pins("claude-acct"));
 
     // The agent's default account is stored as such, and needs no account to exist.
     handle(
@@ -887,17 +899,17 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
             let RequestBody::UpdateProject { accounts, .. } = request else {
                 unreachable!()
             };
-            accounts.claude = Change::Set(ProjectAccount::Default);
+            accounts[AgentId::CLAUDE] = Change::Set(ProjectAccount::Default);
         }),
     )
     .await
     .unwrap();
-    assert_eq!(stored().accounts.claude, ProjectAccount::Default);
+    assert_eq!(stored().accounts[AgentId::CLAUDE], ProjectAccount::Default);
     // Left alone by a request that does not mention it, then named again from the default.
     handle(&state, None, update_project_request("project-1", |_| {}))
         .await
         .unwrap();
-    assert_eq!(stored().accounts.claude, ProjectAccount::Default);
+    assert_eq!(stored().accounts[AgentId::CLAUDE], ProjectAccount::Default);
     handle(
         &state,
         None,
@@ -905,12 +917,12 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
             let RequestBody::UpdateProject { accounts, .. } = request else {
                 unreachable!()
             };
-            accounts.claude = Change::Set(pins("claude-acct"));
+            accounts[AgentId::CLAUDE] = Change::Set(pins("claude-acct"));
         }),
     )
     .await
     .unwrap();
-    assert_eq!(stored().accounts.claude, pins("claude-acct"));
+    assert_eq!(stored().accounts[AgentId::CLAUDE], pins("claude-acct"));
 
     handle(
         &state,
@@ -919,17 +931,17 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
             let RequestBody::UpdateProject { accounts, .. } = request else {
                 unreachable!()
             };
-            accounts.claude = Change::Clear;
+            accounts[AgentId::CLAUDE] = Change::Clear;
         }),
     )
     .await
     .unwrap();
-    assert_eq!(stored().accounts.claude, ProjectAccount::Inherit);
+    assert_eq!(stored().accounts[AgentId::CLAUDE], ProjectAccount::Inherit);
 
     // An explicit inherit is the same as null, from the default as from an account.
     for before in [ProjectAccount::Default, pins("claude-acct")] {
         let mut project = stored();
-        project.accounts.claude = before;
+        project.accounts[AgentId::CLAUDE] = before;
         state.store.update_project(&project).unwrap();
         handle(
             &state,
@@ -938,12 +950,12 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
                 let RequestBody::UpdateProject { accounts, .. } = request else {
                     unreachable!()
                 };
-                accounts.claude = Change::Set(ProjectAccount::Inherit);
+                accounts[AgentId::CLAUDE] = Change::Set(ProjectAccount::Inherit);
             }),
         )
         .await
         .unwrap();
-        assert_eq!(stored().accounts.claude, ProjectAccount::Inherit);
+        assert_eq!(stored().accounts[AgentId::CLAUDE], ProjectAccount::Inherit);
     }
 }
 
@@ -955,13 +967,13 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     state
         .store
         .insert_account(&Account {
             id: "codex-acct".to_string(),
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             name: "Codex".to_string(),
             config_dir: "/home/u/.codex-alt".to_string(),
             share_default_config: false,
@@ -987,15 +999,12 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
     };
     // What Grok Build offers, so the effort below is checked against this and not against
     // whatever is installed on the machine running the test.
-    crate::test_support::offer_models(&state, Agent::Grok, &[("grok-4", &["low", "high"])]);
+    crate::test_support::offer_models(&state, AgentId::GROK, &[("grok-4", &["low", "high"])]);
 
     let err = add_project(
         &state,
         request(NewProjectSettings {
-            accounts: PerAgent {
-                claude: pins("codex-acct"),
-                ..Default::default()
-            },
+            accounts: PerAgent::default().with(AgentId::CLAUDE, pins("codex-acct")),
             ..NewProjectSettings::default()
         }),
     )
@@ -1008,22 +1017,24 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
     let added = add_project(
         &state,
         request(NewProjectSettings {
-            accounts: PerAgent {
-                codex: pins("codex-acct"),
-                grok: ProjectAccount::Default,
-                ..Default::default()
-            },
-            launch: PerAgent {
-                claude: Launch {
-                    model: Some(" opus ".to_string()),
-                    effort: Some("  ".to_string()),
-                },
-                grok: Launch {
-                    model: None,
-                    effort: Some("high".to_string()),
-                },
-                ..Default::default()
-            },
+            accounts: PerAgent::default()
+                .with(AgentId::CODEX, pins("codex-acct"))
+                .with(AgentId::GROK, ProjectAccount::Default),
+            launch: PerAgent::default()
+                .with(
+                    AgentId::CLAUDE,
+                    Launch {
+                        model: Some(" opus ".to_string()),
+                        effort: Some("  ".to_string()),
+                    },
+                )
+                .with(
+                    AgentId::GROK,
+                    Launch {
+                        model: None,
+                        effort: Some("high".to_string()),
+                    },
+                ),
             ..NewProjectSettings::default()
         }),
     )
@@ -1031,12 +1042,15 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
     .expect("added")
     .remove(0);
     let stored = state.store.get_project(&added.id).unwrap().unwrap();
-    assert_eq!(stored.accounts.codex, pins("codex-acct"));
-    assert_eq!(stored.accounts.grok, ProjectAccount::Default);
-    assert_eq!(stored.accounts.claude, ProjectAccount::Inherit);
-    assert_eq!(stored.launch.claude.model.as_deref(), Some("opus"));
-    assert_eq!(stored.launch.claude.effort, None);
-    assert_eq!(stored.launch.grok.effort.as_deref(), Some("high"));
+    assert_eq!(stored.accounts[AgentId::CODEX], pins("codex-acct"));
+    assert_eq!(stored.accounts[AgentId::GROK], ProjectAccount::Default);
+    assert_eq!(stored.accounts[AgentId::CLAUDE], ProjectAccount::Inherit);
+    assert_eq!(
+        stored.launch[AgentId::CLAUDE].model.as_deref(),
+        Some("opus")
+    );
+    assert_eq!(stored.launch[AgentId::CLAUDE].effort, None);
+    assert_eq!(stored.launch[AgentId::GROK].effort.as_deref(), Some("high"));
 }
 
 /// Removing a project that holds a running bound coordinator and its running sessions stops them
@@ -1089,9 +1103,9 @@ async fn a_project_at_an_associated_path_is_refused_by_the_store_and_skipped() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
-    let mut other = console(Agent::Claude, &workdir);
+    let mut other = console(AgentId::CLAUDE, &workdir);
     other.id = "console-2".to_string();
     other.name = "Other".to_string();
     state.store.insert_console(&other).unwrap();
@@ -1167,7 +1181,7 @@ async fn add_project_waits_for_the_consoles_claim_before_storing() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let target = dir.join("target");
     std::fs::create_dir(&target).unwrap();
@@ -1195,7 +1209,7 @@ async fn two_concurrent_add_projects_for_one_directory_store_one_project() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let target = dir.join("target");
     std::fs::create_dir(&target).unwrap();

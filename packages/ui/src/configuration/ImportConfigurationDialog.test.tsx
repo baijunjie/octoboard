@@ -471,8 +471,8 @@ describe("the Claude compatibility and agent tags", () => {
   it("list the agents applying would change, each with what it is now", async () => {
     await reviewingSettings({
       reply: inspecting({
-        claude_compatibility: { codex: false, grok: true },
-        current_claude_compatibility: { codex: true, grok: true },
+        provider_settings: { codex: { claude_compatibility: false }, grok: { claude_compatibility: true } },
+        current_provider_settings: { codex: { claude_compatibility: true }, grok: { claude_compatibility: true } },
         agent_tags: { codex: ["review", "ci"], grok: [], claude: ["same"] },
         current_agent_tags: { codex: [], grok: ["old"], claude: ["same"] },
       }),
@@ -485,8 +485,8 @@ describe("the Claude compatibility and agent tags", () => {
   it("list nothing when they are the same", async () => {
     await reviewingSettings({
       reply: inspecting({
-        claude_compatibility: { codex: true },
-        current_claude_compatibility: { codex: true },
+        provider_settings: { codex: { claude_compatibility: true } },
+        current_provider_settings: { codex: { claude_compatibility: true } },
         agent_tags: { codex: ["review"] },
         current_agent_tags: { codex: ["review"] },
       }),

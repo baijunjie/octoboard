@@ -408,7 +408,7 @@ describe("an account's actions menu", () => {
 
   it("notes that this window started the login it asked for, and shows a refusal in the modal", async () => {
     const { container, store } = mount();
-    request.mockRejectedValueOnce(Object.assign(new Error("busy"), { code: "login_codex_busy", params: {} }));
+    request.mockRejectedValueOnce(Object.assign(new Error("busy"), { code: "provider.codex.login_busy", params: {} }));
     await openAccountMenu(container, 0);
     await chooseItem("Log in");
     await act(async () => {});

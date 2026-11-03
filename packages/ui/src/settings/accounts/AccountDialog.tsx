@@ -4,7 +4,9 @@ import { FailureAlert } from "../../components/alerts/FailureAlert";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { appDataRecovery } from "../../errors/errorRecovery";
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
-import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL, defaultAccountName, listedAgents } from "../../agents/agents";
+import { defaultAccountName, servedAgents, listedAgents } from "../../agents/agents";
+import { ProviderMessage } from "../../agents/ProviderMessage";
+import { providerConfigDir, providerLabel } from "../../agents/providers";
 import { agentIconSetupOptions } from "../../components/icons/AgentIcon";
 import { TILDE_PARAMS } from "../../components/text/literalParams";
 import { Dialog } from "../../components/dialog/Dialog";
@@ -18,7 +20,8 @@ import { isolate } from "../../i18n/isolate";
 import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
+import { useDaemon, useDaemonStore, useProviders } from "../../store";
+import { ProviderName } from "../../components/text/ProviderName";
 import { nameCollision, nextConfigDir, type NameCollision } from "./agentAccounts";
 
 /** What each kind of name collision says. */
@@ -50,6 +53,7 @@ export function AccountDialog({
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
+  const providers = useProviders();
   const [agent, setAgent] = useState<Agent>(editing?.agent ?? initialAgent);
   const [name, setName] = useState(editing?.name ?? (renameDefault ? defaultNames?.[initialAgent] ?? "" : ""));
   const [typedConfigDir, setConfigDir] = useState<string | undefined>(editing?.config_dir);
@@ -80,8 +84,9 @@ export function AccountDialog({
     return () => { active = false; };
   }, [request, editing, renameDefault, listingAttempt]);
 
-  const configDir = typedConfigDir ?? (directoryListing
-    ? nextConfigDir(AGENT_DEFAULT_CONFIG_DIR[agent], [
+  const defaultConfigDir = providerConfigDir(providers, agent);
+  const configDir = typedConfigDir ?? (directoryListing && defaultConfigDir !== undefined
+    ? nextConfigDir(defaultConfigDir, [
       ...directoryListing.paths,
       ...accounts.map((account) => account.config_dir),
       ...Array.from(agentAvailability.values()).flatMap((availability) => availability.default_account_dir ? [availability.default_account_dir] : []),
@@ -94,7 +99,7 @@ export function AccountDialog({
     : nameCollision(name, agent, accounts, renameDefault ? null : defaultAccountName(t, defaultNames, agent), editing?.id);
   const nameError = !name && !renameDefault
     ? t("dialog.nameRequired")
-    : collision && t(COLLISION_MESSAGE[collision.kind], { name: isolate(collision.name), agent: AGENT_LABEL[agent] });
+    : collision && t(COLLISION_MESSAGE[collision.kind], { name: isolate(collision.name), agent: isolate(providerLabel(t, providers, agent)) });
   const dirError = isAbsoluteOrHomePath(configDir) ? undefined : "notAbsolute";
 
   const submit = () => {
@@ -123,14 +128,14 @@ export function AccountDialog({
         busy={busy}
         onSubmit={submit}
       >
-        {renameDefault && <p className="text-sm"><Message id="settings.accounts.dialog.renameDefaultSubject" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>}
-        {editing && <p className="text-sm"><Message id="settings.accounts.dialog.editSubject" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[editing.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{editing.name}</InlineReference> }} /></p>}
+        {renameDefault && <p className="text-sm"><Message id="settings.accounts.dialog.renameDefaultSubject" params={{ agent: <ProviderName agent={agent} /> }} /></p>}
+        {editing && <p className="text-sm"><Message id="settings.accounts.dialog.editSubject" params={{ agent: <ProviderName agent={editing.agent} />, name: <InlineReference dir="auto" wrap>{editing.name}</InlineReference> }} /></p>}
         {!editing && !renameDefault && (
           <OptionSelect
             label={t("settings.accounts.agent")}
             // Availability is shown but deliberately not enforced: an account may be set up before
             // its agent is installed, so every added agent is selectable; one not added is not listed.
-            options={agentIconSetupOptions(t, agentAvailability, listedAgents(addedAgents))}
+            options={agentIconSetupOptions(t, providers, agentAvailability, listedAgents(addedAgents, servedAgents(providers)))}
             value={agent}
             onChange={setAgent}
           />
@@ -142,7 +147,7 @@ export function AccountDialog({
           placeholder={renameDefault ? t("settings.accounts.defaultName") : t("settings.accounts.nameExample")}
           description={renameDefault ? t("settings.accounts.defaultNameHint") : undefined}
           errorMessage={shown(nameError) && (collision
-            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineReference dir="auto" wrap>{collision.name}</InlineReference>, agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />
+            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineReference dir="auto" wrap>{collision.name}</InlineReference>, agent: <ProviderName agent={agent} /> }} />
             : nameError)}
           autoFocus
         />
@@ -151,8 +156,8 @@ export function AccountDialog({
           value={configDir}
           onChange={setConfigDir}
           dir="ltr"
-          placeholder={AGENT_DEFAULT_CONFIG_DIR[agent]}
-          description={<Message id={agent === "grok" ? "settings.accounts.dirHintGrok" : "settings.accounts.dirHint"} />}
+          placeholder={defaultConfigDir}
+          description={<ProviderMessage providers={providers} id={agent} name="dirHint" fallback="settings.accounts.dirHint" />}
           describedBy={showDirectoryFailure ? directoryFailureId : undefined}
           errorMessage={shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}
           trailing={directoryBrowse.browseButton()}

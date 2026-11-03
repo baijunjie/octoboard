@@ -2,7 +2,7 @@
 
 use crate::mcp::dispatch::call;
 use crate::protocol::{
-    Account, Agent, Console, Event, Project, ProjectSource, QuotaWindow, QuotaWindowKind, Role,
+    Account, AgentId, Console, Event, Project, ProjectSource, QuotaWindow, QuotaWindowKind, Role,
     Session, SessionKind, SessionStatus,
 };
 use crate::session_request;
@@ -25,7 +25,7 @@ pub(super) const CONVERSATION: &str = "projects/slug/a0000000-0000-4000-8000-000
 /// An account that is enabled and shares nothing of the agent's default configuration.
 pub(super) fn account(
     id: impl Into<String>,
-    agent: Agent,
+    agent: AgentId,
     name: impl Into<String>,
     config_dir: impl Into<String>,
 ) -> Account {
@@ -56,7 +56,7 @@ pub(super) fn console() -> Console {
         id: "console-1".to_string(),
         name: "Console".to_string(),
         workdir: "/tmp/console-1".to_string(),
-        default_agent: Agent::Claude,
+        default_agent: AgentId::CLAUDE,
         project_session_agent: None,
         accounts: Default::default(),
         launch: Default::default(),
@@ -292,7 +292,7 @@ pub(super) fn settings_state(name: &str) -> (Arc<AppState>, ScratchDir) {
         .store
         .insert_account(&account(
             "acct-codex",
-            Agent::Codex,
+            AgentId::CODEX,
             "Work",
             "/secret/codex",
         ))

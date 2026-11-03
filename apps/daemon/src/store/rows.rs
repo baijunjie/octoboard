@@ -1,29 +1,27 @@
-//! What the table files share: the enum text conversion and the helpers that read the columns every
-//! table lays out alike.
+//! What the table files share: the enum text conversion and the readers of provider ids.
 
 use anyhow::Result;
 use rusqlite::Row;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::protocol::{Agent, Launch};
+use crate::protocol::AgentId;
 
-/// Which of the three consecutive per-agent columns (or pairs of columns) of a `consoles` or
-/// `projects` row an agent's are.
-pub(super) fn column_slot(agent: Agent) -> usize {
-    match agent {
-        Agent::Claude => 0,
-        Agent::Codex => 1,
-        Agent::Grok => 2,
-    }
+/// The registered provider a stored provider id names, or `None` for an id no provider of this
+/// build registers: such a row is kept in the store and left out of what is loaded.
+pub(super) fn agent_from_row(row: &Row<'_>, index: usize) -> rusqlite::Result<Option<AgentId>> {
+    let id: String = row.get(index)?;
+    Ok(AgentId::from_wire_name(&id))
 }
 
-/// The model and effort in the two columns from `model_column` on.
-pub(super) fn launch_from_row(row: &Row<'_>, model_column: usize) -> rusqlite::Result<Launch> {
-    Ok(Launch {
-        model: row.get(model_column)?,
-        effort: row.get(model_column + 1)?,
-    })
+/// `provider IN (…)` over `column`: the rows of the registered providers.
+pub(super) fn registered_provider_clause(column: &str) -> String {
+    let ids = AgentId::ALL
+        .iter()
+        .map(|agent| format!("'{}'", agent.wire_name().replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{column} IN ({ids})")
 }
 
 /// The text form of a protocol enum, taken from its serde representation so the stored value and

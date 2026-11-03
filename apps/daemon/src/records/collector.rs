@@ -22,10 +22,10 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::adapter::adapter_for;
-use crate::agents::layout::layout;
-use crate::protocol::{Agent, Session};
-use crate::records::context::{codex_figure, Context};
+use crate::adapter::provider;
+use crate::protocol::{AgentId, Session};
+use crate::providers::layout::layout;
+use crate::records::context::Context;
 use crate::records::default_effort::DefaultEfforts;
 use crate::records::line_file::{Change, LineFile, Signature, JSON_FILE_LIMIT};
 use crate::records::observed::Observed;
@@ -36,14 +36,14 @@ use crate::store::RecordUpdate;
 
 #[derive(Default)]
 struct Cursor {
-    identity: Option<(Agent, Option<String>, Option<String>)>,
+    identity: Option<(AgentId, Option<String>, Option<String>)>,
     path: Option<PathBuf>,
     file: LineFile,
     context: Context,
     without_process: bool,
     titles: Titles,
-    /// The opening prompt of a Codex thread's first rollout, when the record read is a later
-    /// segment, with the path it was read from.
+    /// The opening prompt of the file the conversation opened in, when the record read continues
+    /// an earlier file (`RecordStore::continues_earlier_file`), with the path it was read from.
     first_prompt: Option<(PathBuf, Option<String>)>,
     observed: Observed,
     /// The session's observation boundary as the store holds it (`Store::observed_boundaries`),
@@ -58,10 +58,11 @@ struct Cursor {
     /// since that reads the whole of what the file held at the boundary; not kept while it cannot
     /// be told.
     boundary_start: Option<(PathBuf, u64)>,
-    /// The summary file beside the record, which Grok keeps its titles and configured model in.
+    /// The summary file beside the record (`AgentLayout::title_summary`), which names the
+    /// conversation and may name its configured model.
     summary: JsonFile,
-    /// The signals file beside the record, which Grok keeps its context window in.
-    signals: JsonFile,
+    /// The file beside the record that gives the context window (`RecordStore::window_file`).
+    window: JsonFile,
 }
 
 /// What a session's records held when a change of its model ended its process (see the module
@@ -211,9 +212,10 @@ impl ObservedBoundary {
 /// Captures what the records hold once the process has ended and before its replacement can
 /// write: the files the collector goes on to ask [`ObservedBoundary::start`] about, which are the
 /// record the process was hinted at and the one the agent now names (the head, for Codex), and,
-/// where the agent keeps one, the summary file beside it. Grok's lines never give the observed
-/// model, so only its summary is kept. Reads each in full, so the caller runs this on the
-/// blocking pool, with the same shell snapshot as the relaunch.
+/// where the agent keeps one, the summary file beside it. A record whose lines never give the
+/// observed model (`RecordStore::observes_record_lines`) is not kept, only its summary. Reads each
+/// in full, so the caller runs this on the blocking pool, with the same shell snapshot as the
+/// relaunch.
 pub(crate) fn observed_boundary(
     state: &AppState,
     session: &Session,
@@ -233,12 +235,13 @@ pub(crate) fn observed_boundary(
             records.push(path);
         }
     }
+    let observes_lines = provider(session.agent).records().observes_record_lines();
     let mut files = Vec::new();
     for path in records {
         if let Some(summary) = layout(session.agent).title_summary {
             files.push(path.with_file_name(summary));
         }
-        if session.agent != Agent::Grok {
+        if observes_lines {
             files.push(path);
         }
     }
@@ -273,7 +276,7 @@ impl JsonFile {
 struct Cursors {
     sessions: HashMap<String, Cursor>,
     /// Each account's shared title file, by agent and account directory.
-    shared_titles: HashMap<(Agent, PathBuf), SharedTitles>,
+    shared_titles: HashMap<(AgentId, PathBuf), SharedTitles>,
     default_efforts: DefaultEfforts,
 }
 
@@ -314,8 +317,8 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
     // Default homes resolve through the same login-shell snapshot as agent launches.
     let mut locator = Locator::default();
     // The sessions each account's shared title file is read for.
-    let mut wanted: HashMap<(Agent, PathBuf), HashSet<String>> = HashMap::new();
-    let mut shared_keys: HashMap<String, (Agent, PathBuf)> = HashMap::new();
+    let mut wanted: HashMap<(AgentId, PathBuf), HashSet<String>> = HashMap::new();
+    let mut shared_keys: HashMap<String, (AgentId, PathBuf)> = HashMap::new();
     for session in &sessions {
         let sleeping = cursors
             .sessions
@@ -346,7 +349,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 .shared_titles
                 .entry((agent, root.clone()))
                 .or_default()
-                .refresh(adapter_for(agent).as_ref(), &root.join(file), ids);
+                .refresh(provider(agent), &root.join(file), ids);
         }
     }
     let mut updates = Vec::new();
@@ -411,7 +414,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             cursor.context.forget();
             cursor.titles.clear();
             cursor.summary = JsonFile::default();
-            cursor.signals = JsonFile::default();
+            cursor.window = JsonFile::default();
             if let Ok(current) = state.session_record(&session.id) {
                 session.observed_model = current.observed_model;
                 session.observed_effort = current.observed_effort;
@@ -440,16 +443,15 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 .as_ref()
                 .and_then(|id| locator.current_record(session.agent, &root, id));
         }
+        let store = provider(session.agent).records();
         refresh_first_prompt(cursor, &mut locator, &session);
         if let Some(path) = cursor.path.clone() {
             if scan(session.agent, &path, cursor).is_ok() {
                 refresh_base(cursor, &mut locator, &session);
             }
-            if session.agent == Agent::Grok {
-                if let Some(signals) = cursor.signals.read(&path.with_file_name("signals.json")) {
-                    cursor
-                        .context
-                        .set_window(signals.get("contextWindowTokens").and_then(Value::as_u64));
+            if let Some(file) = store.window_file() {
+                if let Some(window) = cursor.window.read(&path.with_file_name(file)) {
+                    cursor.context.set_window(store.window_in(&window));
                 }
             }
             if let Some(summary) = layout(session.agent).title_summary {
@@ -457,7 +459,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 if let Some(summary) = cursor.summary.read(&summary_path) {
                     cursor
                         .titles
-                        .fold_summary(adapter_for(session.agent).as_ref(), &summary);
+                        .fold_summary(provider(session.agent), &summary);
                     // Rewritten in place rather than appended to: as it was at the boundary, it
                     // still names the old process's model.
                     let old = cursor
@@ -465,16 +467,16 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                         .as_ref()
                         .is_some_and(|boundary| boundary.unchanged(&summary_path));
                     if !old {
-                        cursor.observed.fold_grok(&summary);
+                        store.observe_summary(&summary, &mut cursor.observed);
                     }
                 }
             }
         }
-        // Claude Code's status line reports the window; its transcript never does. The last report
-        // wins, and until there is one the stored window stands, so a daemon restart, a cursor
-        // started afresh or a record read again from its start (which forgets the window) keeps
-        // it. Hence after the scan.
-        if session.agent == Agent::Claude {
+        // A provider's status line reports the window (Claude Code's transcript never does). The
+        // last report wins, and until there is one the stored window stands, so a daemon restart,
+        // a cursor started afresh or a record read again from its start (which forgets the window)
+        // keeps it. Hence after the scan.
+        if session.agent.descriptor().capabilities.status_line {
             let reported = windows.get(&session.id).copied();
             if let Some(window) = reported.or_else(|| session.context.as_ref()?.window) {
                 cursor.context.set_window(Some(window));
@@ -482,7 +484,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
         }
         let context = cursor
             .context
-            .context(session.agent)
+            .context(store)
             .filter(|context| context != &session.context);
         let observed_model = cursor
             .observed
@@ -579,85 +581,67 @@ fn settle_default_effort(
     }
 }
 
-/// For a Codex record that is a later history segment, which holds only the prompts since the last
-/// revert, reads the thread's opening prompt from its first rollout (once per file).
+/// For a record that continues an earlier file (`RecordStore::continues_earlier_file`), which
+/// holds only the prompts since it picked up, reads the conversation's opening prompt from the file
+/// it opened in (`RecordStore::opening_file`), once per file.
 fn refresh_first_prompt(cursor: &mut Cursor, locator: &mut Locator, session: &Session) {
-    let (Agent::Codex, Some(id)) = (session.agent, session.agent_session_id.as_deref()) else {
+    let Some(id) = session.agent_session_id.as_deref() else {
         return;
     };
+    let store = provider(session.agent).records();
     if !cursor
         .path
         .as_deref()
-        .is_some_and(crate::records::is_segment)
+        .is_some_and(|path| store.continues_earlier_file(path))
     {
         return;
     }
     let Some(first) = locator
         .root(session.agent, session.config_dir.as_deref())
-        .and_then(|root| locator.first_rollout(&root, id))
+        .and_then(|root| store.opening_file(locator, &root, id))
         .filter(|first| cursor.first_prompt.as_ref().map(|(from, _)| from) != Some(first))
     else {
         return;
     };
-    let prompt = Titles::first_prompt_of(adapter_for(session.agent).as_ref(), &first);
+    let prompt = Titles::first_prompt_of(provider(session.agent), &first);
     cursor.first_prompt = Some((first, prompt));
 }
 
-/// For a Codex record that is a later history segment, which holds only the turns since the last
-/// revert and so no figure until its next turn, reads the figure the conversation had where the
-/// segment picks up: the last one in the file it continues, before the cut, or failing that in the
-/// nearest earlier file of the chain that has one (once per head file).
+/// For a record that continues an earlier file, which holds only the turns since it picked up and
+/// so no figure until its next turn, reads the figure the conversation had where it picks up
+/// (`RecordStore::earlier_figure`), once per head file.
 fn refresh_base(cursor: &mut Cursor, locator: &mut Locator, session: &Session) {
-    let (Agent::Codex, Some(id), Some(head)) = (
-        session.agent,
-        session.agent_session_id.as_deref(),
-        cursor.path.clone(),
-    ) else {
+    let (Some(id), Some(head)) = (session.agent_session_id.as_deref(), cursor.path.clone()) else {
         return;
     };
+    let store = provider(session.agent).records();
     if cursor.context.is_shown()
-        || !crate::records::is_segment(&head)
+        || !store.continues_earlier_file(&head)
         || cursor.context.has_base_for(&head)
     {
         return;
     }
     // A lookup that failed is tried again next pass; only a base without a figure is final.
-    let Some(stretches) = locator
+    let Some(figure) = locator
         .root(session.agent, session.config_dir.as_deref())
-        .and_then(|root| locator.rollout_stretches(&root, id, &head))
+        .and_then(|root| store.earlier_figure(locator, &root, id, &head))
     else {
         return;
     };
-    let mut figure = None;
-    for stretch in stretches.iter().rev().skip(1) {
-        let mut last = None;
-        let read = |line: &str| last = codex_figure(line).or(last);
-        let _ = crate::records::line_file::read_to(
-            &stretch.path,
-            stretch.cut.unwrap_or(u64::MAX),
-            read,
-        );
-        if last.is_some() {
-            figure = last;
-            break;
-        }
-    }
     cursor.context.set_base(head, figure);
 }
 
-fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
-    // Grok's `usage.json` marks its session directory; the figure is in the updates log beside it.
-    let record = match agent {
-        Agent::Grok => path.with_file_name("updates.jsonl"),
-        Agent::Claude | Agent::Codex => path.to_path_buf(),
-    };
+fn scan(agent: AgentId, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
+    let adapter = provider(agent);
+    let store = adapter.records();
+    let record = store.followed_file(path);
     let change = cursor.file.check(&record)?;
     if change == Change::Restarted {
         cursor.context.forget();
         cursor.titles.clear();
         cursor.observed = Observed::default();
         cursor.summary = JsonFile::default();
-        cursor.signals = JsonFile::default();
+        cursor.window = JsonFile::default();
     }
     if change != Change::Unchanged {
         let start = match &cursor.boundary_start {
@@ -671,30 +655,15 @@ fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
                 start
             }
         };
-        let adapter = adapter_for(agent);
         cursor.file.read_with_position(&record, |at, line| {
-            match agent {
-                Agent::Codex => {
-                    cursor.context.fold_codex(line);
-                    if start.is_some_and(|start| at >= start) {
-                        cursor.observed.fold_codex(line);
-                    }
-                }
-                Agent::Claude => {
-                    if line.contains("\"usage\"") || line.contains("compact_boundary") {
-                        if let Ok(value) = serde_json::from_str::<Value>(line) {
-                            cursor.context.fold_claude(&value);
-                            if start.is_some_and(|start| at >= start) {
-                                cursor.observed.fold_claude(&value);
-                            }
-                        }
-                    }
-                }
-                Agent::Grok => cursor.context.fold_grok(line),
-            }
-            if agent != Agent::Grok {
-                cursor.titles.fold_line(adapter.as_ref(), line);
-            }
+            let past_boundary = start.is_some_and(|start| at >= start);
+            store.fold_line(
+                line,
+                past_boundary,
+                &mut cursor.context,
+                &mut cursor.observed,
+            );
+            cursor.titles.fold_line(adapter, line);
         })?;
     }
     Ok(())
@@ -712,7 +681,7 @@ mod tests {
             id: "console".to_owned(),
             name: "Console".to_owned(),
             workdir: directory.join("console").to_string_lossy().into_owned(),
-            default_agent: Agent::Claude,
+            default_agent: AgentId::CLAUDE,
             project_session_agent: None,
             accounts: Default::default(),
             launch: Default::default(),
@@ -1042,7 +1011,7 @@ mod tests {
         cursor.stored_boundary = None;
         cursor.observed_boundary = None;
         cursor.boundary_start = None;
-        scan(Agent::Codex, &rollout, cursor).unwrap();
+        scan(AgentId::CODEX, &rollout, cursor).unwrap();
         state
             .store
             .set_record_data(&[RecordUpdate {
@@ -1085,7 +1054,7 @@ mod tests {
             observed_boundary: Some(boundary),
             ..Default::default()
         };
-        scan(Agent::Codex, &moved, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &moved, &mut cursor).unwrap();
         assert!(
             cursor.observed.model.is_none(),
             "a moved old file stays old"
@@ -1100,7 +1069,7 @@ mod tests {
             .unwrap()
             .set_modified(std::time::SystemTime::now() + Duration::from_secs(60))
             .unwrap();
-        scan(Agent::Codex, &moved, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &moved, &mut cursor).unwrap();
         assert_eq!(
             cursor.observed.model.as_deref(),
             Some("codex-next-review"),
@@ -1129,7 +1098,7 @@ mod tests {
             observed_boundary: Some(boundary),
             ..Default::default()
         };
-        scan(Agent::Codex, &compressed, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &compressed, &mut cursor).unwrap();
         assert!(
             cursor.observed.model.is_none(),
             "compressing old history does not make it new"
@@ -1145,10 +1114,10 @@ mod tests {
             observed_boundary: Some(boundary),
             ..Default::default()
         };
-        scan(Agent::Codex, &plain, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &plain, &mut cursor).unwrap();
         assert!(cursor.observed.model.is_none(), "the old history stays old");
         std::fs::write(&plain, format!("{capture}{next}")).unwrap();
-        scan(Agent::Codex, &plain, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &plain, &mut cursor).unwrap();
         assert_eq!(cursor.observed.model.as_deref(), Some("codex-next-review"));
         // Read by a fresh cursor, as after a daemon restart, the old part is still skipped.
         let mut fresh = Cursor {
@@ -1156,14 +1125,14 @@ mod tests {
             ..Default::default()
         };
         std::fs::write(&plain, format!("{capture}{capture}")).unwrap();
-        scan(Agent::Codex, &plain, &mut fresh).unwrap();
+        scan(AgentId::CODEX, &plain, &mut fresh).unwrap();
         assert_eq!(fresh.observed.model.as_deref(), Some("codex-auto-review"));
         std::fs::write(&plain, capture).unwrap();
         let mut fresh = Cursor {
             observed_boundary: fresh.observed_boundary.take(),
             ..Default::default()
         };
-        scan(Agent::Codex, &plain, &mut fresh).unwrap();
+        scan(AgentId::CODEX, &plain, &mut fresh).unwrap();
         assert!(fresh.observed.model.is_none());
     }
 
@@ -1368,6 +1337,7 @@ mod tests {
         crate::records::on_hook(
             &state,
             "s",
+            crate::adapter::provider(crate::protocol::AgentId::CODEX).records(),
             &json!({
                 "session_id":ID,
                 "transcript_path":root.join(chain.head.strip_prefix(&shared).unwrap())
@@ -1385,8 +1355,9 @@ mod tests {
                 .as_deref(),
             Some("first prompt")
         );
+        let codex = provider(AgentId::CODEX).records();
         let mut locator = Locator::default();
-        assert!(locator.first_rollout(&root, ID).is_some());
+        assert!(codex.opening_file(&mut locator, &root, ID).is_some());
         assert!(
             crate::records::locate::record_paths(&state.record_hints, &mut locator, &[], &session)
                 .is_empty(),
@@ -1398,7 +1369,9 @@ mod tests {
         std::fs::rename(&year, &outside).unwrap();
         std::os::unix::fs::symlink(&outside, &year).unwrap();
         assert!(
-            Locator::default().first_rollout(&root, ID).is_none(),
+            codex
+                .opening_file(&mut Locator::default(), &root, ID)
+                .is_none(),
             "links below the records root are not traversed"
         );
     }
@@ -1410,17 +1383,17 @@ mod tests {
         let first = capture.lines().next().unwrap().to_owned() + "\n";
         std::fs::write(&file, &first).unwrap();
         let mut cursor = Cursor::default();
-        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        scan(AgentId::CLAUDE, &file, &mut cursor).unwrap();
         assert_eq!(cursor.observed.model.as_deref(), Some("claude-opus-5"));
         assert_eq!(cursor.observed.effort.as_deref(), Some("high"));
         // The later turn wins; the sidechain turn and the synthetic notice after it do not.
         std::fs::write(&file, capture).unwrap();
-        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        scan(AgentId::CLAUDE, &file, &mut cursor).unwrap();
         assert_eq!(cursor.observed.model.as_deref(), Some("claude-opus-5-5"));
         assert_eq!(cursor.observed.effort.as_deref(), Some("medium"));
         // A record that restarts leaves nothing of the old one behind.
         std::fs::write(&file, r#"{"type":"user"}"#.to_owned() + "\n").unwrap();
-        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        scan(AgentId::CLAUDE, &file, &mut cursor).unwrap();
         assert!(cursor.observed.model.is_none() && cursor.observed.effort.is_none());
     }
 
@@ -1433,7 +1406,7 @@ mod tests {
         )
         .unwrap();
         let mut cursor = Cursor::default();
-        scan(Agent::Codex, &file, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &file, &mut cursor).unwrap();
         assert_eq!(cursor.observed.model.as_deref(), Some("codex-auto-review"));
         assert_eq!(cursor.observed.effort.as_deref(), Some("low"));
     }
@@ -1445,7 +1418,8 @@ mod tests {
         let capture = include_str!("../../testdata/titles_grok_1.0.60_summary.json");
         std::fs::write(&path, capture).unwrap();
         let (mut file, mut observed) = (JsonFile::default(), Observed::default());
-        observed.fold_grok(&file.read(&path).unwrap());
+        let grok = provider(AgentId::GROK).records();
+        grok.observe_summary(&file.read(&path).unwrap(), &mut observed);
         assert_eq!(observed.model.as_deref(), Some("grok-4.7"));
         assert_eq!(observed.effort.as_deref(), Some("high"));
         assert!(
@@ -1459,7 +1433,7 @@ mod tests {
                 .replace("\"high\"", "\"low\""),
         )
         .unwrap();
-        observed.fold_grok(&file.read(&path).unwrap());
+        grok.observe_summary(&file.read(&path).unwrap(), &mut observed);
         assert_eq!(observed.model.as_deref(), Some("grok-4.8-mini"));
         assert_eq!(observed.effort.as_deref(), Some("low"));
     }
@@ -1480,11 +1454,11 @@ mod tests {
         )
         .unwrap();
         let mut cursor = Cursor::default();
-        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        scan(AgentId::CLAUDE, &file, &mut cursor).unwrap();
         assert_eq!(cursor.observed.model.as_deref(), Some("claude-opus-5-5"));
         assert_eq!(cursor.observed.effort.as_deref(), Some("medium"));
         assert!(matches!(
-            cursor.context.context(Agent::Claude),
+            cursor.context.context(provider(AgentId::CLAUDE).records()),
             Some(Some(_))
         ));
     }
@@ -1502,20 +1476,20 @@ mod tests {
         let (request, next) = (claude_request(3), claude_request(9));
         std::fs::write(&file, format!("{request}\n{next}")).unwrap();
         let mut cursor = Cursor::default();
-        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        scan(AgentId::CLAUDE, &file, &mut cursor).unwrap();
         let tokens = |cursor: &Cursor| {
             cursor
                 .context
-                .context(Agent::Claude)
+                .context(provider(AgentId::CLAUDE).records())
                 .map(|context| context.unwrap().tokens)
         };
         assert_eq!(tokens(&cursor), Some(3), "an unfinished line waits");
         std::fs::write(&file, format!("{request}\n{next}\n")).unwrap();
-        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        scan(AgentId::CLAUDE, &file, &mut cursor).unwrap();
         assert_eq!(tokens(&cursor), Some(9));
         // A record that restarts leaves nothing of the old one behind.
         std::fs::write(&file, "{\"type\":\"user\"}\n").unwrap();
-        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        scan(AgentId::CLAUDE, &file, &mut cursor).unwrap();
         assert_eq!(tokens(&cursor), None);
     }
 
@@ -1862,13 +1836,13 @@ mod tests {
             observed_boundary: Some(boundary),
             ..Default::default()
         };
-        scan(Agent::Codex, &path, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &path, &mut cursor).unwrap();
         assert!(cursor.observed.model.is_none(), "nothing from a short file");
         assert!(cursor.boundary_start.is_none(), "and nothing is remembered");
 
         // Grown past the prefix with the old content intact: only what follows it is new.
         std::fs::write(&path, format!("{capture}{next}")).unwrap();
-        scan(Agent::Codex, &path, &mut cursor).unwrap();
+        scan(AgentId::CODEX, &path, &mut cursor).unwrap();
         assert_eq!(cursor.observed.model.as_deref(), Some("codex-next-review"));
         assert_eq!(
             cursor.boundary_start,

@@ -20,13 +20,9 @@ use super::moves::{
 };
 use super::registries;
 use super::take_back::{take_back, Conversation};
-use crate::accounts::codex_threads::{self, is_state_database, Repoint};
 use crate::accounts::shared_config::items::{shared_items, ItemClass, ItemKind, SharedItem};
-use crate::agents::layout::{
-    CLAUDE_PROMPT_HISTORY, CODEX_ARCHIVED_DIR, CODEX_PROMPT_HISTORY, CODEX_RECORDS_DIR,
-    CODEX_TITLE_INDEX,
-};
-use crate::protocol::{Agent, SharingCause, SharingItemFailure, SharingLeft};
+use crate::accounts::thread_registry::{thread_registry, Repoint, ThreadRegistry};
+use crate::protocol::{AgentId, SharingCause, SharingItemFailure, SharingLeft};
 
 /// The two directories an operation works between.
 pub(super) struct Dirs {
@@ -175,7 +171,7 @@ impl SharingItemFailure {
         Self::new(item, left, SharingCause::of(&err), err)
     }
 
-    /// The rows of a Codex state database not brought in line (`what`, such as "rows not
+    /// The rows of a provider's thread database not brought in line (`what`, such as "rows not
     /// repointed"), the item itself already linked.
     fn database(item: &SharedItem, what: &str, err: &rusqlite::Error) -> Self {
         Self::new(
@@ -209,19 +205,6 @@ fn is_sharing_link(entry: &Path, item: &SharedItem, dirs: &Dirs) -> bool {
         })
 }
 
-/// Prompt histories and Codex's thread-name index: one line per entry, merged into the default
-/// directory's copy rather than set aside, so the recall and the names of the account's earlier
-/// conversations survive. A name that is lost makes Codex start a new session where a resume by
-/// that name was asked for.
-fn is_line_history(name: &str) -> bool {
-    [
-        CLAUDE_PROMPT_HISTORY,
-        CODEX_PROMPT_HISTORY,
-        CODEX_TITLE_INDEX,
-    ]
-    .contains(&name)
-}
-
 /// Merges the account's `entry` into `into`, the default's copy: the account's file is first set
 /// aside under the operation's exact backup name, its lines appended from there and the aside
 /// removed. An aside left by a run that stopped part-way is merged first, and lines already
@@ -240,11 +223,12 @@ fn merge_lines(entry: &Path, into: &Path, stamp: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// How a Codex database's rows name rollouts through the account's directory, by either of its
-/// spellings, and where those rollouts are once shared.
-fn codex_repoints(dirs: &Dirs) -> Vec<Repoint> {
+/// How a thread database's rows name records through the account's directory, by either of its
+/// spellings, and where those records are once shared. `record_dirs` are the subdirectories the
+/// rows name records under.
+fn repoints(dirs: &Dirs, record_dirs: &[&str]) -> Vec<Repoint> {
     let mut repoints = Vec::new();
-    for sub in [CODEX_RECORDS_DIR, CODEX_ARCHIVED_DIR] {
+    for sub in record_dirs {
         let to = resolve_or_spelled(&dirs.default.join(sub));
         for from in [dirs.account.join(sub), dirs.account_real.join(sub)] {
             if repoints.iter().all(|seen: &Repoint| seen.from != from) {
@@ -260,33 +244,39 @@ fn codex_repoints(dirs: &Dirs) -> Vec<Repoint> {
 
 /// The work an item that already links where it should may still owe: the lines of a prompt
 /// history a stopped run set aside, and, on a retry of turning sharing on that has not completed
-/// once yet (`retry_database`), the rows of a Codex state database, carried over from the
-/// account's own one set aside under `stamp` or, when the database itself was moved, repointed.
-/// Both are safe to repeat until turning sharing on completes; after that, the rows carried may
-/// have been taken back or forgotten, and are not carried again.
+/// once yet (`retry_database`), the rows of a thread database, carried over from the account's own
+/// one set aside under `stamp` or, when the database itself was moved, repointed (`threads` is
+/// the provider's registry, if it keeps one). Both are safe to repeat until turning sharing on
+/// completes; after that, the rows carried may have been taken back or forgotten, and are not
+/// carried again.
 fn finish_linked(
     item: &SharedItem,
     dirs: &Dirs,
     shared: &Path,
     stamp: &str,
+    threads: Option<&dyn ThreadRegistry>,
     retry_database: bool,
 ) -> Result<(), SharingItemFailure> {
     let entry = dirs.account.join(item.name);
-    if is_line_history(item.name) {
+    if item.class == ItemClass::LineHistory {
         return merge_lines(&entry, shared, stamp)
             .map_err(|err| SharingItemFailure::io(item, SharingLeft::Linked, err));
     }
-    if !(retry_database && is_state_database(item.name)) {
+    let Some(threads) =
+        threads.filter(|_| retry_database && item.class == ItemClass::ThreadDatabase)
+    else {
         return Ok(());
-    }
+    };
     let aside = turn_on_backup(dirs, item, stamp);
     let has_aside = lstat(&aside)
         .map_err(|err| SharingItemFailure::io(item, SharingLeft::Linked, err))?
         .is_some();
     let carried = if has_aside {
-        codex_threads::bring_rows(shared, &aside, &codex_repoints(dirs)).map(|_| ())
+        threads
+            .bring_rows(shared, &aside, &repoints(dirs, threads.record_dirs()))
+            .map(|_| ())
     } else {
-        codex_threads::repoint_rows(shared, &codex_repoints(dirs))
+        threads.repoint_rows(shared, &repoints(dirs, threads.record_dirs()))
     };
     carried.map_err(|err| SharingItemFailure::database(item, "rows not carried over", &err))
 }
@@ -295,11 +285,13 @@ fn finish_linked(
 /// (configuration) or carried into the default directory (conversation history), and replaced by
 /// a link to the default entry's resolved target. A directory the default directory lacks is
 /// created there, empty; a configuration file it lacks is skipped, and so is a history file
-/// neither directory has. `stamp` names the backups.
+/// neither directory has. `stamp` names the backups; `threads` is the provider's thread registry,
+/// if it keeps one.
 fn bring_in(
     item: &SharedItem,
     dirs: &Dirs,
     stamp: &str,
+    threads: Option<&dyn ThreadRegistry>,
     retry_database: bool,
 ) -> Result<(), SharingItemFailure> {
     let entry = dirs.account.join(item.name);
@@ -312,7 +304,7 @@ fn bring_in(
     let target = resolve(&default_entry).map_err(unchanged)?;
     if let Some(target) = &target {
         if is_link(&present) && link_target(&entry).as_ref() == Some(target) {
-            return finish_linked(item, dirs, target, stamp, retry_database);
+            return finish_linked(item, dirs, target, stamp, threads, retry_database);
         }
         // The default directory's entry leading back into the account's own: moving or backing
         // it up would take the very thing the link is to lead to.
@@ -326,7 +318,7 @@ fn bring_in(
             )));
         }
     }
-    let history = item.class == ItemClass::ConversationHistory;
+    let history = item.class.is_history();
     let sharing_link = is_link(&present) && is_sharing_link(&entry, item, dirs);
     if history && is_link(&present) && !sharing_link {
         // Conversation history the account keeps elsewhere through a link of its own: what it
@@ -370,8 +362,12 @@ fn bring_in(
                     .map_err(|err| failed(SharingLeft::PartlyMoved, err))?;
                 left = SharingLeft::Absent;
             }
-            (ItemClass::ConversationHistory, ItemKind::File, None) if !is_dir => {
-                let database = is_state_database(item.name);
+            (
+                ItemClass::ConversationHistory | ItemClass::LineHistory | ItemClass::ThreadDatabase,
+                ItemKind::File,
+                None,
+            ) if !is_dir => {
+                let database = item.class == ItemClass::ThreadDatabase;
                 let moved = if database {
                     move_database(&entry, &default_entry)
                 } else {
@@ -381,28 +377,30 @@ fn bring_in(
                 let shared = resolve_existing(&default_entry)
                     .map_err(|err| failed(SharingLeft::Absent, err))?;
                 link(&entry, &shared).map_err(|err| failed(SharingLeft::Absent, err))?;
-                if database {
-                    // The rows name the rollouts by the account's own spelling, and the
-                    // rollouts are in the default directory now.
-                    return codex_threads::repoint_rows(&shared, &codex_repoints(dirs)).map_err(
-                        |err| SharingItemFailure::database(item, "rows not repointed", &err),
-                    );
+                if let Some(threads) = threads.filter(|_| database) {
+                    // The rows name the records by the account's own spelling, and the
+                    // records are in the default directory now.
+                    return threads
+                        .repoint_rows(&shared, &repoints(dirs, threads.record_dirs()))
+                        .map_err(|err| {
+                            SharingItemFailure::database(item, "rows not repointed", &err)
+                        });
                 }
                 return Ok(());
             }
-            (ItemClass::ConversationHistory, ItemKind::File, Some(into))
-                if !is_dir && is_line_history(item.name) =>
-            {
+            (ItemClass::LineHistory, ItemKind::File, Some(into)) if !is_dir => {
                 merge_lines(&entry, into, stamp).map_err(|err| failed(left, err))?;
                 left = SharingLeft::Absent;
             }
-            (ItemClass::ConversationHistory, ItemKind::File, Some(shared))
-                if !is_dir && is_state_database(item.name) =>
-            {
+            (ItemClass::ThreadDatabase, ItemKind::File, Some(shared)) if !is_dir => {
                 let aside = backup_path(&entry, stamp);
                 move_database(&entry, &aside).map_err(|err| failed(left, err))?;
                 link(&entry, shared).map_err(|err| failed(SharingLeft::BackedUp, err))?;
-                return codex_threads::bring_rows(shared, &aside, &codex_repoints(dirs))
+                let Some(threads) = threads else {
+                    return Ok(());
+                };
+                return threads
+                    .bring_rows(shared, &aside, &repoints(dirs, threads.record_dirs()))
                     .map(|_| ())
                     .map_err(|err| {
                         SharingItemFailure::database(item, "rows not carried over", &err)
@@ -425,7 +423,7 @@ fn bring_in(
         }
     };
     link(&entry, &target).map_err(|err| failed(left, err))?;
-    finish_linked(item, dirs, &target, stamp, retry_database)
+    finish_linked(item, dirs, &target, stamp, threads, retry_database)
 }
 
 /// Tells how far a change has got: the entries done so far, and the one being processed now.
@@ -433,7 +431,7 @@ pub(super) type Report<'a> = &'a mut dyn FnMut(usize, &str);
 
 /// How many entries a change of `agent`'s sharing processes: every item of the catalog and, when
 /// turning sharing off, each of the `conversations` taken back.
-pub(crate) fn entries(agent: Agent, conversations: usize) -> usize {
+pub(crate) fn entries(agent: AgentId, conversations: usize) -> usize {
     shared_items(agent).len() + conversations
 }
 
@@ -441,18 +439,19 @@ pub(crate) fn entries(agent: Agent, conversations: usize) -> usize {
 /// account had under `stamp`. A retry before turning sharing on has `completed` once also redoes
 /// the database work an earlier attempt may have left undone.
 pub(super) fn turn_on(
-    agent: Agent,
+    agent: AgentId,
     dirs: &Dirs,
     stamp: &str,
     completed: bool,
     report: Report,
 ) -> Vec<SharingItemFailure> {
+    let threads = thread_registry(agent);
     shared_items(agent)
         .iter()
         .enumerate()
         .filter_map(|(done, item)| {
             report(done, item.name);
-            bring_in(item, dirs, stamp, !completed).err()
+            bring_in(item, dirs, stamp, threads, !completed).err()
         })
         .collect()
 }
@@ -466,16 +465,16 @@ pub(super) fn turn_on(
 /// there is the account's own and is left alone.
 ///
 /// Before anything is unlinked, what the default directory records by the account's spelling is
-/// pointed at the default directory's own: Codex's thread rows, which would otherwise name
-/// rollouts through an empty directory for every account still sharing, and the plugin
+/// pointed at the default directory's own: a provider's thread rows, which would otherwise name
+/// records through an empty directory for every account still sharing, and the plugin
 /// registries. An item whose records could not be repointed stays linked, so nothing it holds
 /// is left unreachable.
 ///
 /// The repointing is told as part of the first entry, under the item whose records it rewrites.
-/// `launch_env` is the environment the account's sessions launch with, which says where a Codex
+/// `launch_env` is the environment the account's sessions launch with, which says where an
 /// account keeps its own thread database, or why it could not be had.
 pub(super) fn turn_off(
-    agent: Agent,
+    agent: AgentId,
     dirs: &Dirs,
     stamp: &str,
     conversations: &[Conversation],
@@ -501,11 +500,18 @@ pub(super) fn turn_off(
             kept.push(name);
         }
     }
-    for item in items.iter().filter(|item| is_state_database(item.name)) {
+    let databases = thread_registry(agent).into_iter().flat_map(|threads| {
+        items
+            .iter()
+            .filter(|item| item.class == ItemClass::ThreadDatabase)
+            .map(move |item| (threads, item))
+    });
+    for (threads, item) in databases {
         report(0, item.name);
         let repointed = match resolve(&dirs.default.join(item.name)) {
             Ok(None) => Ok(()),
-            Ok(Some(database)) => codex_threads::repoint_rows(&database, &codex_repoints(dirs))
+            Ok(Some(database)) => threads
+                .repoint_rows(&database, &repoints(dirs, threads.record_dirs()))
                 .map_err(|err| SharingItemFailure::database(item, "rows not repointed", &err)),
             Err(err) => Err(SharingItemFailure::new(
                 item,
@@ -516,7 +522,8 @@ pub(super) fn turn_off(
         };
         if let Err(failure) = repointed {
             failures.push(failure);
-            kept.extend([item.name, CODEX_RECORDS_DIR, CODEX_ARCHIVED_DIR]);
+            kept.push(item.name);
+            kept.extend(threads.record_dirs());
         }
     }
     for (done, item) in items.iter().enumerate() {
@@ -587,7 +594,7 @@ fn take_out(item: &SharedItem, dirs: &Dirs, stamp: &str) -> Result<(), SharingIt
 /// What a repair found that it could not, or must not, fix.
 pub(super) struct Repaired {
     pub failures: Vec<SharingItemFailure>,
-    /// Codex state databases in the account's directory that the catalog does not name: a Codex
+    /// Thread databases in the account's directory that the catalog does not name: a provider
     /// that moved to a new schema generation creates one of its own in every account, and from
     /// then on the shared database is no longer used.
     pub unshared_databases: Vec<PathBuf>,
@@ -598,8 +605,9 @@ pub(super) struct Repaired {
 /// replaced the link with a plain file), and so is a directory item that is missing or links
 /// elsewhere. A directory the account holds as its own is left alone. Backups are named with
 /// `stamp`, the one turning sharing on used, a later one getting a numbered name beside it.
-pub(super) fn repair(agent: Agent, dirs: &Dirs, stamp: &str) -> Repaired {
+pub(super) fn repair(agent: AgentId, dirs: &Dirs, stamp: &str) -> Repaired {
     let mut failures = Vec::new();
+    let threads = thread_registry(agent);
     for item in shared_items(agent) {
         let entry = dirs.account.join(item.name);
         let present = match lstat(&entry) {
@@ -622,27 +630,24 @@ pub(super) fn repair(agent: Agent, dirs: &Dirs, stamp: &str) -> Repaired {
             (None, _) => true,
         };
         if needs {
-            if let Err(failure) = bring_in(item, dirs, stamp, false) {
+            if let Err(failure) = bring_in(item, dirs, stamp, threads, false) {
                 failures.push(failure);
             }
         }
     }
-    let unshared_databases = if agent == Agent::Codex {
-        unshared_databases(dirs)
-    } else {
-        Vec::new()
-    };
+    let unshared_databases =
+        threads.map_or_else(Vec::new, |threads| unshared_databases(agent, dirs, threads));
     Repaired {
         failures,
         unshared_databases,
     }
 }
 
-fn unshared_databases(dirs: &Dirs) -> Vec<PathBuf> {
-    let catalogued: Vec<&str> = shared_items(Agent::Codex)
+fn unshared_databases(agent: AgentId, dirs: &Dirs, threads: &dyn ThreadRegistry) -> Vec<PathBuf> {
+    let catalogued: Vec<&str> = shared_items(agent)
         .iter()
+        .filter(|item| item.class == ItemClass::ThreadDatabase)
         .map(|item| item.name)
-        .filter(|name| is_state_database(name))
         .collect();
     let Ok(entries) = std::fs::read_dir(&dirs.account) else {
         return Vec::new();
@@ -652,7 +657,7 @@ fn unshared_databases(dirs: &Dirs) -> Vec<PathBuf> {
         .filter(|entry| {
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            is_state_database(&name)
+            threads.is_database(&name)
                 && !catalogued.contains(&name.as_ref())
                 && entry.file_type().is_ok_and(|kind| kind.is_file())
         })

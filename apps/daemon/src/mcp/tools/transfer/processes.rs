@@ -287,7 +287,7 @@ mod tests {
         let pid_file = dir.join(format!("{id}-child"));
         let live = fake_live_session(
             id,
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             80,
             24,
             &format!(

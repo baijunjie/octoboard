@@ -1,7 +1,7 @@
 import { Spinner } from "@heroui/react";
 import React, { useId } from "react";
 
-import { AGENT_LABEL } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { errorDetails, errorRemedy } from "../components/alerts/errorParts";
@@ -10,10 +10,11 @@ import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Agent } from "../protocol";
 import { sessionAccountName } from "../sessions/sessionLabel";
-import { useDaemonStore } from "../store";
+import { useDaemonStore, useProviders } from "../store";
 import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import type { useLaunchChoice } from "./useLaunchChoice";
@@ -25,16 +26,17 @@ import { TextInput } from "../components/form/TextInput";
  * half is there as in a new session's, unless the account has no name to show. */
 function HeldAgentAccount({ agent, accountName, errorMessage }: { agent: Agent; accountName: string | undefined; errorMessage?: React.ReactNode }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   return (
     <AgentAccountField
       label={t("dialog.session.agent")}
-      options={agentIconPickerOptions(t, agentAvailability, addedAgents, agent).filter((option) => option.value === agent)}
+      options={agentIconPickerOptions(t, agentAvailability, addedAgents, providers, agent).filter((option) => option.value === agent)}
       value={agent}
       onChange={() => {}}
       account={accountName === undefined ? undefined : {
-        label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[agent] }),
+        label: t("dialog.agentSettings.account", { agent: isolate(providerLabel(t, providers, agent)) }),
         options: [{ value: "held", label: accountName }],
         value: "held",
         onChange: () => {},

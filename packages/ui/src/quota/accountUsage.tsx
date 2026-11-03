@@ -1,8 +1,8 @@
 import type { Reason } from "../format/reason";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, Agent, QuotaWindow } from "../protocol";
+import type { AccountQuota, Agent, ProviderInfo, QuotaWindow } from "../protocol";
 import { AccountUsageBar } from "./AccountUsageBar";
-import { quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
+import { quotaNaming, quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 
 /** How a list of accounts shows one: its usage bar as the `icon`, and in words what the bar only
  * shows to the eye, for assistive technology. For an account whose quota is used up (`exhaustedBy`)
@@ -11,6 +11,7 @@ import { quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usageBarWindows }
  * remainder to state. */
 export function accountUsage(
   t: Translate,
+  providers: readonly ProviderInfo[],
   agent: Agent,
   quota: AccountQuota | undefined,
   exhaustedBy: QuotaWindow | undefined,
@@ -18,7 +19,7 @@ export function accountUsage(
 ): { icon: React.ReactElement } & ({ detail?: undefined; reason?: undefined } | { detail: string; reason?: Reason }) {
   const icon = <AccountUsageBar agent={agent} quota={quota} now={now} />;
   // A used-up account always has the reading that says so, which names the window.
-  if (exhaustedBy && quota) return { icon, detail: quotaUsedUpDetail(t, quota, exhaustedBy, now), reason: quotaUsedUpShort(t, exhaustedBy, now) };
-  const bar = quota && !quota.unavailable ? usageBarWindows(quota) : undefined;
+  if (exhaustedBy && quota) return { icon, detail: quotaUsedUpDetail(t, quotaNaming(quota, providers), exhaustedBy, now), reason: quotaUsedUpShort(t, exhaustedBy, now) };
+  const bar = quota && !quota.unavailable ? usageBarWindows(quotaNaming(quota, providers)) : undefined;
   return bar ? { icon, detail: usageBarSummary(t, bar, now) } : { icon };
 }

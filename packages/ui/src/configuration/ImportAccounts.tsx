@@ -1,7 +1,7 @@
 import { CircleCheck, CircleDot } from "lucide-react";
 import React from "react";
 
-import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents/agents";
+import { providerConfigDir, providerLabel } from "../agents/providers";
 import { InlineReference } from "../i18n/InlineReference";
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { StatusBadge } from "../components/status/StatusBadge";
@@ -12,6 +12,8 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, InspectedAccount, InspectedAccounts } from "../protocol";
+import { useProviders } from "../store";
+import { ProviderName } from "../components/text/ProviderName";
 import { useFailureNode } from "./failureText";
 import { accountChoicesFor, directoryProblem, hasNameProblem, withAccountRow, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
 import { AgentList, Card, CardHeading, CardRows, DirectoryChoiceField, EmptyLine, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
@@ -44,6 +46,7 @@ function AccountRow({
   onChange: (row: AccountRowState) => void;
 }): React.ReactElement {
   const t = useT();
+  const configDir = providerConfigDir(useProviders(), agent);
   const choices = accountChoicesFor(account);
   const settled = account.status === "new" || account.status === "existing" ? STATUS[account.status] : undefined;
   // An account used as it is has no directory to place, and one given another directory shows that one below.
@@ -92,7 +95,7 @@ function AccountRow({
       {row.choice === "directory" && (
         <DirectoryChoiceField
           label={t("configuration.import.accounts.directory.label", { account: isolate(account.name) })}
-          placeholder={t("configuration.import.accounts.directory.placeholder", { example: `${AGENT_DEFAULT_CONFIG_DIR[agent]}-work` })}
+          placeholder={configDir === undefined ? "" : t("configuration.import.accounts.directory.placeholder", { example: `${configDir}-work` })}
           requiredMessage={t("configuration.import.accounts.directory.required")}
           value={row.directory}
           onChange={(directory) => onChange({ ...row, directory })}
@@ -159,15 +162,13 @@ export function ImportAccounts({
   return (
     <>
       {accounts.agents_to_add.length > 0 && (
-        <p className="text-sm">
-          <Message id="configuration.import.accounts.toAdd" params={{ count: accounts.agents_to_add.length, agents: <AgentList agents={accounts.agents_to_add} /> }} />
-        </p>
+        <AgentList lead={t("configuration.import.accounts.toAdd", { count: accounts.agents_to_add.length })} agents={accounts.agents_to_add} />
       )}
       {named.map((agent) => (
         <p key={agent.agent} className="text-sm">
           <Message
             id="configuration.import.accounts.defaultNamed"
-            params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{agent.default_name!}</InlineReference> }}
+            params={{ agent: <ProviderName agent={agent.agent} />, name: <InlineReference dir="auto" wrap>{agent.default_name!}</InlineReference> }}
           />
         </p>
       ))}
@@ -200,8 +201,9 @@ function AgentCard({
   onRow: (account: number, row: AccountRowState) => void;
 }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   return (
-    <Card header={(headingId) => <CardHeading id={headingId}>{AGENT_LABEL[agent]}</CardHeading>}>
+    <Card header={(headingId) => <CardHeading id={headingId}>{providerLabel(t, providers, agent)}</CardHeading>}>
       {accounts.length === 0 ? (
         <EmptyLine>{t("configuration.import.accounts.none")}</EmptyLine>
       ) : (

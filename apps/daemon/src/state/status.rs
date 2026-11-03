@@ -239,7 +239,7 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, Event, SessionStatus};
+    use crate::protocol::{AgentId, Event, SessionStatus};
     use crate::state::test_support::insert_record;
     use crate::test_support::{app_state, fake_live_session, SUBAGENT_VIEW};
 
@@ -248,9 +248,9 @@ mod tests {
         let (state, dir) = app_state("codex-manual-approval");
         insert_record(&state, &dir, "s", SessionStatus::Working);
         let mut record = state.session_record("s").unwrap();
-        record.agent = Agent::Codex;
+        record.agent = AgentId::CODEX;
         state.save_session(&record).unwrap();
-        let live = fake_live_session("s", Agent::Codex, 80, 24, "sleep 30").with_auto_review();
+        let live = fake_live_session("s", AgentId::CODEX, 80, 24, "sleep 30").with_auto_review();
         assert!(live.resolves_approvals_itself);
         state.register_live(live.clone());
         live.on_output(include_bytes!("../../testdata/codex_working_title.bin"));
@@ -329,7 +329,7 @@ mod tests {
     ) {
         let (state, dir) = app_state(label);
         insert_record(&state, &dir, "s", stored);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         live.on_output(screen.as_bytes());
         assert!(live.look_for_dialog().current.is_some());

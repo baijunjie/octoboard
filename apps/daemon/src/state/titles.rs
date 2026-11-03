@@ -97,7 +97,7 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{Agent, Event, SessionStatus};
+    use crate::protocol::{AgentId, Event, SessionStatus};
     use crate::state::test_support::insert_record;
     use crate::test_support::{app_state, fake_live_session};
 
@@ -106,7 +106,7 @@ mod tests {
         let (state, dir) = app_state("state-terminal-title");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
         let original = state.session_record("s").unwrap();
-        let first = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let first = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         let mut events = state.subscribe();
         let output = b"before\x1b]2;First task\x07after";
         first.on_output(output);
@@ -134,7 +134,7 @@ mod tests {
             Some("First task"),
             "a stale caller cannot blank the title"
         );
-        let successor = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let successor = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(successor.clone());
         first.on_output(b"\x1b]2;Stale task\x07");
         assert!(events.try_recv().is_err());
@@ -177,7 +177,7 @@ mod tests {
     fn decorations_that_leave_the_resolved_title_alone_are_not_published() {
         let (state, dir) = app_state("state-title-decoration");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         let mut events = state.subscribe();
         live.on_output(b"\x1b]2;\xe2\x9c\xb3 Claude Code\x07");

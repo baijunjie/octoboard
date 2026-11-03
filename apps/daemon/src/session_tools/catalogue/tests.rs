@@ -315,15 +315,15 @@ fn every_title_says_which_language_to_write_the_name_in() {
 #[test]
 fn the_qualified_name_follows_the_agent() {
     assert_eq!(
-        qualified_tool_name(Agent::Claude, "report"),
+        qualified_tool_name(AgentId::CLAUDE, "report"),
         "mcp__octoboard__report"
     );
     assert_eq!(
-        qualified_tool_name(Agent::Codex, "report"),
+        qualified_tool_name(AgentId::CODEX, "report"),
         "mcp__octoboard__report"
     );
     assert_eq!(
-        qualified_tool_name(Agent::Grok, "report"),
+        qualified_tool_name(AgentId::GROK, "report"),
         "octoboard__report"
     );
 }
@@ -530,13 +530,44 @@ fn the_protocol_tools_table_names_every_tool_of_the_catalogues() {
         })
         .collect();
     let catalogued: BTreeSet<&str> = [
-        CONSOLE_SESSION_TOOLS,
-        COORDINATOR_PROJECT_SESSION_TOOLS,
-        WORKER_PROJECT_SESSION_TOOLS,
+        CONSOLE_SESSION_TOOLS.as_slice(),
+        COORDINATOR_PROJECT_SESSION_TOOLS.as_slice(),
+        WORKER_PROJECT_SESSION_TOOLS.as_slice(),
     ]
     .into_iter()
     .flatten()
     .map(|tool| tool.name)
     .collect();
     assert_eq!(documented, catalogued);
+}
+
+/// The five-hour window's names come from the providers that report one, in the registry's order.
+#[test]
+fn list_agents_names_the_five_hour_window_as_each_provider_reporting_one_does() {
+    let tool = tool_by_name(SessionKind::Console, false, "list_agents").unwrap();
+    let named: Vec<String> = crate::providers::descriptors()
+        .filter(|descriptor| {
+            descriptor
+                .quota_windows
+                .kinds
+                .contains(&crate::protocol::QuotaWindowKind::Session)
+        })
+        .map(|descriptor| {
+            format!(
+                "{}'s {} limit",
+                descriptor.label,
+                descriptor.quota_windows.session_window.text()
+            )
+        })
+        .collect();
+    assert!(tool.description.contains(&format!(
+        "(`kind` `session` is the five-hour window ({}), `weekly` the weekly one",
+        named.join(", ")
+    )));
+    // The two real wordings, and the test-only provider, which reports a session window too.
+    assert!(named.starts_with(&[
+        "Claude Code's session limit".to_string(),
+        "Codex's 5h limit".to_string(),
+    ]));
+    assert!(named.contains(&"Test Agent's session limit".to_string()));
 }

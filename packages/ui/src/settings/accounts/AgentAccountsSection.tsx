@@ -3,21 +3,22 @@ import { Tabs } from "@heroui/react";
 import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
-import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../../agents/agents";
+import { defaultAccountName, isAgentUnavailable } from "../../agents/agents";
+import { defaultProviderAgent } from "../../agents/providers";
 import { ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
 import { takeMenuFocusToRestore } from "../../components/focus/menuFocus";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { AgentTabList } from "../../components/tabs/AgentTabList";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
 import { TitledControl } from "../../components/hint/TitledControl";
-import { InlineReference } from "../../i18n/InlineReference";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { canTakeFocus } from "../../components/focus/regionFocus";
 import { tryEachFrame } from "../../components/focus/tryEachFrame";
 import { useStickyHeadingFocus } from "../../components/scroll/stickyHeadingFocus";
 import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
+import { useDaemon, useDaemonStore, useProviders } from "../../store";
+import { ProviderName } from "../../components/text/ProviderName";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
@@ -27,8 +28,7 @@ import type { ReturnLoginFocus } from "./AccountLoginButton";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AccountsTable, AccountTableRow, rowActionsTrigger } from "./AccountsTable";
 import { AddAgentDialog } from "./AddAgentDialog";
-import { AgentApprovalSetting } from "./AgentApprovalSetting";
-import { AgentClaudeCompatibilitySetting } from "./AgentClaudeCompatibilitySetting";
+import { AgentProviderSettings } from "./AgentProviderSettings";
 import { AgentTagsSetting } from "./AgentTagsSetting";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { RemoveAccountDialog } from "./RemoveAccountDialog";
@@ -87,7 +87,7 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
 }
 
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's
- * open). A tab holds the agent's Tags row and its Permission approval row (not for Grok), which
+ * open). A tab holds the agent's Tags row and the rows of the settings its descriptor declares, which
  * apply to all its accounts, and a table with the agent's accounts in their saved order, each a row
  * (name, plan and email, usage, status, the Disable switch) with an actions menu whose first
  * entries open the account's details and its settings, each in a modal. The section also has the
@@ -107,6 +107,7 @@ export function AgentAccountsSection(): React.ReactElement {
   const { request, store } = useDaemon();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const added = useDaemonStore((s) => s.settings.added_agents);
+  const providers = useProviders();
   const { agents, tabs, tabRef, reorder, move } = useAgentList(added);
   // `undefined` is closed; `null` is the form for a new account.
   const [editing, setEditing] = useState<Account | null | undefined>();
@@ -171,7 +172,7 @@ export function AgentAccountsSection(): React.ReactElement {
     const running = store.getState().accountLogins.find((held) => loginIsActive(held));
     if (running) setLoggingIn({ agent: running.agent, account: running.account, start: false });
   }, []);
-  const [chosen, setChosen] = useState<Agent>(agents[0] ?? "claude");
+  const [chosen, setChosen] = useState<Agent>(agents[0] ?? defaultProviderAgent(providers));
   // The tab in view: the chosen one unless its agent has left the list.
   const selected = agents.includes(chosen) ? chosen : agents[0];
   // An account Settings was asked to show: its agent's tab comes forward and its settings open with the sharing
@@ -253,6 +254,7 @@ export function AgentAccountsSection(): React.ReactElement {
         <Tabs variant="secondary" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
           <AgentTabList
             {...pinnedFocus}
+            providers={providers}
             agents={agents}
             label={t("settings.accounts.agents")}
             tabRef={added === null ? undefined : tabRef}
@@ -274,7 +276,7 @@ export function AgentAccountsSection(): React.ReactElement {
               />
             )}
             notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
-              <Message id="settings.accounts.notInstalledTip" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference>, ...PATH_VAR_PARAMS }} />
+              <Message id="settings.accounts.notInstalledTip" params={{ agent: <ProviderName agent={agent} />, ...PATH_VAR_PARAMS }} />
             )}
             className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] w-full groove-b bg-overlay ${pinnedFocus.className}`}
           />
@@ -303,7 +305,7 @@ export function AgentAccountsSection(): React.ReactElement {
           onRemove={() => setRemovingAgent(agent)}
         />
       ))}
-      {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected ?? "claude"} onClose={() => setEditing(undefined)} />}
+      {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected ?? defaultProviderAgent(providers)} onClose={() => setEditing(undefined)} />}
       {renamingDefault && <AccountDialog agent={renamingDefault} renameDefault onClose={() => setRenamingDefault(undefined)} />}
       {accountDialog && renderAccountDialog(accountDialog)}
       {loggingIn && (
@@ -343,8 +345,8 @@ export function AgentAccountsSection(): React.ReactElement {
   );
 }
 
-/** One agent's tab panel: its Tags row, its Permission approval row (not for Grok) and its Claude
- * compatibility row (Codex and Grok only), each of which applies to every account of the agent, and
+/** One agent's tab panel: its Tags row and the rows of the settings its descriptor declares, each of
+ * which applies to every account of the agent, and
  * the table of the agent's accounts in their saved order. */
 function AgentAccountsPanel(props: AgentAccountsPanelProps): React.ReactElement {
   const order = useAccountOrder(props.agent, props.owned);
@@ -401,8 +403,7 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   return (
     <>
       <AgentTagsSetting agent={agent} />
-      <AgentApprovalSetting agent={agent} />
-      <AgentClaudeCompatibilitySetting agent={agent} />
+      <AgentProviderSettings agent={agent} />
       <AccountsTable agent={agent}>
         {order.rows.map((account) => (
           <AccountTableRow

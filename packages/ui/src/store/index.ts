@@ -3,7 +3,7 @@ export { createDaemon } from "./connection";
 export type { Daemon } from "./connection";
 export { consolePreference, currentConsoleOf, useCurrentConsole } from "./currentConsole";
 export { DEFAULT_SETTINGS } from "./defaultSettings";
-export { DaemonProvider, useDaemon, useDaemonStore, useDaemonStoreEqual, useDaemonStoreOrEmpty } from "./react";
+export { DaemonProvider, useDaemon, useDaemonStore, useDaemonStoreEqual, useDaemonStoreOrEmpty, useProviders } from "./react";
 export type { SessionRequest } from "./sessionRequests";
 export { createStateStore } from "./state";
 export type { State, TrustPrompt } from "./state";

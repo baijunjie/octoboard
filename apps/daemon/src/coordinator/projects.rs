@@ -15,9 +15,9 @@ use crate::branch_cleanup;
 use crate::hostfs;
 use crate::project_git;
 use crate::protocol::{
-    error_code, Agent, CodedError, Console, Event, GitWorkflowOverride, GitWorkflowOverrideChanges,
-    Launch, LaunchChange, PerAgent, Present, Project, ProjectAccount, ProjectSource, Session,
-    SessionBranchTarget,
+    error_code, AgentId, CodedError, Console, Event, GitWorkflowOverride,
+    GitWorkflowOverrideChanges, Launch, LaunchChange, PerAgent, Present, Project, ProjectAccount,
+    ProjectSource, Session, SessionBranchTarget,
 };
 use crate::removal_safety::project;
 use crate::state::refusals::ensure_unlocked;
@@ -43,7 +43,7 @@ pub struct AddProjectRequest {
     pub path: Option<String>,
     pub remote_url: Option<String>,
     pub name: Option<String>,
-    pub default_agent: Option<Agent>,
+    pub default_agent: Option<AgentId>,
     pub settings: NewProjectSettings,
     /// Whether an absent `default_agent` is detected from each directory; false stores none.
     pub detect_default_agent: bool,
@@ -294,9 +294,9 @@ pub struct ProjectChanges {
     pub name: Option<String>,
     /// `Some(None)` is back to following the console's project session agent (else its
     /// `default_agent`).
-    pub default_agent: Present<Agent>,
-    pub accounts: HashMap<Agent, ProjectAccount>,
-    pub launch: HashMap<Agent, LaunchChange>,
+    pub default_agent: Present<AgentId>,
+    pub accounts: HashMap<AgentId, ProjectAccount>,
+    pub launch: HashMap<AgentId, LaunchChange>,
     pub pinned: Option<bool>,
     /// Replaces the tags wholesale; refused beside `add_tags` or `remove_tags`.
     pub tags: Option<Vec<String>>,
@@ -714,7 +714,7 @@ async fn directory_agents(
     state: &Arc<AppState>,
     associated: &hostfs::identity::DirectoryIdentities,
     directories: &[hostfs::identity::Resolved],
-) -> HashMap<PathBuf, Option<Agent>> {
+) -> HashMap<PathBuf, Option<AgentId>> {
     let unassociated: Vec<PathBuf> = directories
         .iter()
         .filter(|directory| !associated.contains_resolved(directory))
@@ -755,7 +755,7 @@ fn insert_unless_associated(state: &AppState, project: &Project) -> Result<bool>
 /// directory is set up for, unless that agent has been determined unavailable. Decided once, at
 /// association, and stored like any chosen default; while availability is still undetermined the
 /// detected agent is kept.
-pub(super) fn detect_project_agent(state: &Arc<AppState>, directory: &Path) -> Option<Agent> {
+pub(super) fn detect_project_agent(state: &Arc<AppState>, directory: &Path) -> Option<AgentId> {
     crate::agents::detect::detect_agent(directory).filter(|agent| agent_is_available(state, *agent))
 }
 

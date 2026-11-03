@@ -20,12 +20,13 @@
 //! key to a dialog. The ages, token counts and model names the screens print vary, so no string
 //! uses them.
 //!
-//! Adding a dialog is one more entry in [`DIALOGS`].
+//! Each provider's dialogs are its own, listed by its screen reader
+//! ([`crate::session::screen::ScreenReader::dialogs`]); adding one is one more entry there.
 
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 use crate::session::LiveSession;
 use crate::state::AppState;
 
@@ -45,6 +46,21 @@ pub enum WrittenMessage {
     Diverted,
 }
 
+/// What a dialog is to the session showing it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DialogKind {
+    /// Something put to the person, which the session waits on them for.
+    Question,
+    /// The dialog the agent raises on reaching its usage limit. A session whose only wait is this
+    /// one is switched to another account all the same: ending the modal is the point of the
+    /// switch (see `crate::coordinator::auto_switch`).
+    UsageLimit,
+    /// A view of the agent's background agents. The person is looking at the agents, not at a
+    /// question put to them, so a session showing one reads as dormant rather than waiting for
+    /// the user, though it holds its writes all the same.
+    AgentsView,
+}
+
 /// A dialog on an agent's screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dialog {
@@ -52,42 +68,25 @@ pub struct Dialog {
     pub code: &'static str,
     /// What becomes of a message written while it is up.
     pub written: WrittenMessage,
+    pub kind: DialogKind,
 }
-
-/// The name of the dialog Grok Build raises when its plan's usage limit is reached.
-const GROK_USAGE_LIMIT: &str = "grok_usage_limit";
-
-/// The names of the dialogs for Claude Code's views of its background agents: a subagent's view,
-/// the agents view, and the task list holding focus.
-const CLAUDE_SUBAGENT_VIEW: &str = "claude_subagent_view";
-const CLAUDE_AGENTS_VIEW: &str = "claude_agents_view";
-const CLAUDE_AGENT_LIST_FOCUS: &str = "claude_agent_list_focus";
 
 impl Dialog {
-    /// Whether this is the dialog an agent raises on reaching its usage limit. A session whose only
-    /// wait is this one is switched to another account all the same: ending the modal is the point
-    /// of the switch (see `crate::coordinator::auto_switch`). Only Grok Build raises one when a
-    /// turn stops on the limit; Claude Code prints the limit in its conversation (its
-    /// `/rate-limit-options` menu is not recognised as a dialog here), and Codex's "Approaching
-    /// rate limits" screen is raised before the limit, and is not one.
+    /// Whether this is the dialog an agent raises on reaching its usage limit
+    /// ([`DialogKind::UsageLimit`]).
     pub fn is_usage_limit(&self) -> bool {
-        self.code == GROK_USAGE_LIMIT
+        self.kind == DialogKind::UsageLimit
     }
 
-    /// Whether this is one of Claude Code's views of its background agents (a subagent's view, the
-    /// agents view, or the task list holding focus). The person is looking at the agents, not at
-    /// a question put to them, so a session showing one reads as dormant rather than waiting for
-    /// the user, though it holds its writes all the same.
+    /// Whether this is a view of the agent's background agents ([`DialogKind::AgentsView`]).
     pub fn is_agents_view(&self) -> bool {
-        matches!(
-            self.code,
-            CLAUDE_SUBAGENT_VIEW | CLAUDE_AGENTS_VIEW | CLAUDE_AGENT_LIST_FOCUS
-        )
+        self.kind == DialogKind::AgentsView
     }
 }
 
-struct Entry {
-    agent: Agent,
+/// How one dialog is recognised on a provider's screen: an entry of the provider's
+/// `crate::session::screen::ScreenReader::dialogs`.
+pub struct DialogPattern {
     dialog: Dialog,
     /// Whitespace-free strings that must all be on the screen.
     all_of: &'static [&'static str],
@@ -96,178 +95,61 @@ struct Entry {
     row: Option<&'static str>,
 }
 
-const fn entry(
-    agent: Agent,
-    code: &'static str,
-    written: WrittenMessage,
-    all_of: &'static [&'static str],
-) -> Entry {
-    Entry {
-        agent,
-        dialog: Dialog { code, written },
-        all_of,
-        row: None,
+impl DialogPattern {
+    /// A [`DialogKind::Question`] recognised by whitespace-free strings that must all be on the
+    /// screen.
+    pub const fn all_of(
+        code: &'static str,
+        written: WrittenMessage,
+        all_of: &'static [&'static str],
+    ) -> Self {
+        Self {
+            dialog: Dialog {
+                code,
+                written,
+                kind: DialogKind::Question,
+            },
+            all_of,
+            row: None,
+        }
+    }
+
+    /// A [`DialogKind::Question`] recognised by a whitespace-free row of its own.
+    pub const fn on_row(code: &'static str, written: WrittenMessage, row: &'static str) -> Self {
+        Self {
+            dialog: Dialog {
+                code,
+                written,
+                kind: DialogKind::Question,
+            },
+            all_of: &[],
+            row: Some(row),
+        }
+    }
+
+    /// The same dialog, of `kind`.
+    pub const fn of_kind(mut self, kind: DialogKind) -> Self {
+        self.dialog.kind = kind;
+        self
     }
 }
-
-const fn entry_on_row(
-    agent: Agent,
-    code: &'static str,
-    written: WrittenMessage,
-    row: &'static str,
-) -> Entry {
-    Entry {
-        agent,
-        dialog: Dialog { code, written },
-        all_of: &[],
-        row: Some(row),
-    }
-}
-
-const DIALOGS: &[Entry] = &[
-    // Shown at a launch that resumes a conversation with no prompt on the command line; a paste is
-    // discarded and the Enter picks the focused row.
-    entry(
-        Agent::Claude,
-        "claude_resume_at_launch",
-        WrittenMessage::Discarded,
-        &["Resumethisconversation?", "Entertoconfirm", "Esctoresume"],
-    ),
-    // Shown on its own in an idle session once the prompt cache has expired; a paste goes into the
-    // input box and the Enter is swallowed, so the message waits there as a draft.
-    entry(
-        Agent::Claude,
-        "claude_resume_idle",
-        WrittenMessage::Draft,
-        &["Resumethisconversation?", "Entertoconfirm", "Esctodismiss"],
-    ),
-    entry(
-        Agent::Claude,
-        "claude_resume_from_summary",
-        WrittenMessage::Discarded,
-        &["Resumefromsummary", "Resumefullsessionas-is", "Esctocancel"],
-    ),
-    // A notice that waits for Enter, such as the one 2.1.308 raises mid-turn about auto mode's
-    // classifier billing behind a gateway, or the rewind dialog: a paste is dropped and the Enter
-    // continues past it.
-    entry(
-        Agent::Claude,
-        "claude_notice",
-        WrittenMessage::Discarded,
-        &["Entertocontinue\u{B7}Esctocancel"],
-    ),
-    // Offered once an account's settings name a default mode other than auto, at a launch or once a
-    // turn ends: a paste is dropped and the Enter picks the focused Yes, which writes auto into the
-    // account's settings. It has no footer, so its Yes option, which does not vary with the mode,
-    // stands in for one.
-    entry(
-        Agent::Claude,
-        "claude_auto_mode_default",
-        WrittenMessage::Discarded,
-        &[
-            "Makeautomodeyourdefaultpermissionmode?",
-            "Yes,setautomodeasmydefaultpermissionmode",
-        ],
-    ),
-    // Focus moved from the prompt to the task list under the prompt box: a paste is dropped, and
-    // the Enter opens a subagent's view (or, on the main row inside one, returns to the
-    // conversation). The hints are rows of their own, so a transcript quoting them in a sentence
-    // does not match. Inside a subagent's view the hint is what tells the list's focus from the
-    // view itself, so these come before the view's entries.
-    entry_on_row(
-        Agent::Claude,
-        CLAUDE_AGENT_LIST_FOCUS,
-        WrittenMessage::Discarded,
-        "Entertoview\u{B7}xtostop",
-    ),
-    entry_on_row(
-        Agent::Claude,
-        CLAUDE_AGENT_LIST_FOCUS,
-        WrittenMessage::Discarded,
-        "\u{2191}/\u{2193}toselect",
-    ),
-    // A background subagent's transcript in place of the conversation. Its prompt box stays on
-    // screen, but what is sent there goes to the subagent, with no `UserPromptSubmit`. The main
-    // row of the task list is filled while the conversation is shown and hollow while a subagent
-    // is; 2.1.309 marks it with `❯` when it is selected without leaving the view, and shows no
-    // hint then. Leaving is never safe to do for the user: Esc stops the agent, Ctrl+C kills it,
-    // and ← opens the agents view below.
-    entry_on_row(
-        Agent::Claude,
-        CLAUDE_SUBAGENT_VIEW,
-        WrittenMessage::Diverted,
-        "\u{25EF}main",
-    ),
-    entry_on_row(
-        Agent::Claude,
-        CLAUDE_SUBAGENT_VIEW,
-        WrittenMessage::Diverted,
-        "\u{276F}\u{25EF}main",
-    ),
-    // The agents view (`claude agents`), which ← at an empty prompt opens after moving the
-    // conversation into a background session of its own: a paste and Enter here start another
-    // session with that text.
-    entry(
-        Agent::Claude,
-        CLAUDE_AGENTS_VIEW,
-        WrittenMessage::Diverted,
-        &["Newsessions:", "awaitinginput\u{B7}"],
-    ),
-    entry(
-        Agent::Codex,
-        "codex_sign_in",
-        WrittenMessage::Discarded,
-        &[
-            "WelcometoCodex",
-            "SigninwithChatGPT",
-            "Pressentertocontinue",
-        ],
-    ),
-    entry(
-        Agent::Codex,
-        "codex_resume_cwd",
-        WrittenMessage::Discarded,
-        &[
-            "Usesessiondirectory",
-            "Usecurrentdirectory",
-            "escusesession",
-        ],
-    ),
-    entry(
-        Agent::Codex,
-        "codex_model_migration",
-        WrittenMessage::Discarded,
-        &["Trynewmodel", "Useexistingmodel", "enter/escconfirm"],
-    ),
-    entry(
-        Agent::Codex,
-        "codex_rate_limit_nudge",
-        WrittenMessage::Discarded,
-        &["Approachingratelimits", "Keepcurrentmodel"],
-    ),
-    entry(
-        Agent::Grok,
-        GROK_USAGE_LIMIT,
-        WrittenMessage::Discarded,
-        &["Upgradetier", "Buymorecredits", "Enter:submit"],
-    ),
-];
 
 /// The dialog `agent` is showing on a screen with this text, if any.
-pub fn recognise(agent: Agent, screen: &str) -> Option<Dialog> {
+pub fn recognise(agent: AgentId, screen: &str) -> Option<Dialog> {
     let strip = |text: &str| -> String { text.chars().filter(|c| !c.is_whitespace()).collect() };
     let rows: Vec<String> = screen.lines().map(strip).collect();
     let screen = strip(screen);
-    DIALOGS
+    crate::adapter::provider(agent)
+        .screen()
+        .dialogs()
         .iter()
-        .filter(|entry| entry.agent == agent)
-        .find(|entry| {
-            entry.all_of.iter().all(|part| screen.contains(part))
-                && entry
+        .find(|pattern| {
+            pattern.all_of.iter().all(|part| screen.contains(part))
+                && pattern
                     .row
                     .is_none_or(|row| rows.iter().any(|candidate| candidate == row))
         })
-        .map(|entry| entry.dialog)
+        .map(|pattern| pattern.dialog)
 }
 
 /// What a session's screen showed at the latest look.
@@ -399,44 +281,52 @@ mod tests {
     #[test]
     fn every_dialog_is_recognised_for_its_own_agent_only() {
         for (agent, screen, code) in [
-            (Agent::Claude, RESUME_AT_LAUNCH, "claude_resume_at_launch"),
-            (Agent::Claude, RESUME_IDLE, "claude_resume_idle"),
-            (Agent::Claude, RESUME_IDLE_AFTER_PASTE, "claude_resume_idle"),
+            (AgentId::CLAUDE, RESUME_AT_LAUNCH, "claude_resume_at_launch"),
+            (AgentId::CLAUDE, RESUME_IDLE, "claude_resume_idle"),
             (
-                Agent::Claude,
+                AgentId::CLAUDE,
+                RESUME_IDLE_AFTER_PASTE,
+                "claude_resume_idle",
+            ),
+            (
+                AgentId::CLAUDE,
                 RESUME_FROM_SUMMARY,
                 "claude_resume_from_summary",
             ),
-            (Agent::Codex, CODEX_SIGN_IN, "codex_sign_in"),
-            (Agent::Codex, CODEX_RESUME_CWD, "codex_resume_cwd"),
-            (Agent::Codex, CODEX_MODEL_MIGRATION, "codex_model_migration"),
-            (Agent::Codex, CODEX_RATE_LIMIT, "codex_rate_limit_nudge"),
-            (Agent::Grok, GROK_USAGE_LIMIT, "grok_usage_limit"),
-            (Agent::Claude, SUBAGENT_VIEW, "claude_subagent_view"),
+            (AgentId::CODEX, CODEX_SIGN_IN, "codex_sign_in"),
+            (AgentId::CODEX, CODEX_RESUME_CWD, "codex_resume_cwd"),
             (
-                Agent::Claude,
+                AgentId::CODEX,
+                CODEX_MODEL_MIGRATION,
+                "codex_model_migration",
+            ),
+            (AgentId::CODEX, CODEX_RATE_LIMIT, "codex_rate_limit_nudge"),
+            (AgentId::GROK, GROK_USAGE_LIMIT, "grok_usage_limit"),
+            (AgentId::CLAUDE, SUBAGENT_VIEW, "claude_subagent_view"),
+            (
+                AgentId::CLAUDE,
                 SUBAGENT_VIEW_MAIN_SELECTED,
                 "claude_subagent_view",
             ),
-            (Agent::Claude, AGENT_ROW_FOCUS, "claude_agent_list_focus"),
-            (Agent::Claude, MAIN_ROW_FOCUS, "claude_agent_list_focus"),
-            (Agent::Claude, VIEW_LIST_FOCUS, "claude_agent_list_focus"),
+            (AgentId::CLAUDE, AGENT_ROW_FOCUS, "claude_agent_list_focus"),
+            (AgentId::CLAUDE, MAIN_ROW_FOCUS, "claude_agent_list_focus"),
+            (AgentId::CLAUDE, VIEW_LIST_FOCUS, "claude_agent_list_focus"),
             (
-                Agent::Claude,
+                AgentId::CLAUDE,
                 VIEW_AGENT_ROW_FOCUS,
                 "claude_agent_list_focus",
             ),
-            (Agent::Claude, AGENTS_VIEW, "claude_agents_view"),
-            (Agent::Claude, CLAUDE_NOTICE, "claude_notice"),
-            (Agent::Claude, AUTO_DEFAULT, "claude_auto_mode_default"),
+            (AgentId::CLAUDE, AGENTS_VIEW, "claude_agents_view"),
+            (AgentId::CLAUDE, CLAUDE_NOTICE, "claude_notice"),
+            (AgentId::CLAUDE, AUTO_DEFAULT, "claude_auto_mode_default"),
             (
-                Agent::Claude,
+                AgentId::CLAUDE,
                 AUTO_DEFAULT_NO_FOCUSED,
                 "claude_auto_mode_default",
             ),
         ] {
             assert_eq!(recognise(agent, screen).map(|d| d.code), Some(code));
-            for other in [Agent::Claude, Agent::Codex, Agent::Grok] {
+            for other in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
                 if other != agent {
                     assert_eq!(recognise(other, screen), None, "{code} for {other:?}");
                 }
@@ -446,7 +336,7 @@ mod tests {
 
     #[test]
     fn each_dialog_says_what_becomes_of_a_message_written_into_it() {
-        let written = |screen| recognise(Agent::Claude, screen).unwrap().written;
+        let written = |screen| recognise(AgentId::CLAUDE, screen).unwrap().written;
         assert_eq!(written(RESUME_AT_LAUNCH), WrittenMessage::Discarded);
         assert_eq!(written(RESUME_FROM_SUMMARY), WrittenMessage::Discarded);
         assert_eq!(written(AGENT_ROW_FOCUS), WrittenMessage::Discarded);
@@ -464,7 +354,7 @@ mod tests {
     #[test]
     fn words_split_by_cursor_moves_and_wrapping_still_match() {
         let screen = "R e s u m e\nthis   conver\nsation ?\nEnter  to\nconfirm·Esc to resume";
-        assert!(recognise(Agent::Claude, screen).is_some());
+        assert!(recognise(AgentId::CLAUDE, screen).is_some());
     }
 
     #[test]
@@ -488,15 +378,15 @@ mod tests {
             "> why did it ask \"Make auto mode your default permission mode?\"\n",
             "",
         ] {
-            assert_eq!(recognise(Agent::Claude, screen), None, "{screen}");
+            assert_eq!(recognise(AgentId::CLAUDE, screen), None, "{screen}");
         }
     }
 
     #[test]
     fn a_dialog_is_counted_by_its_kind_each_time_it_comes_up() {
-        let launch = recognise(Agent::Claude, RESUME_AT_LAUNCH);
-        let idle = recognise(Agent::Claude, RESUME_IDLE);
-        let view = recognise(Agent::Claude, SUBAGENT_VIEW);
+        let launch = recognise(AgentId::CLAUDE, RESUME_AT_LAUNCH);
+        let idle = recognise(AgentId::CLAUDE, RESUME_IDLE);
+        let view = recognise(AgentId::CLAUDE, SUBAGENT_VIEW);
         let sighting = Sighting::default();
         let up = sighting.after(launch);
         assert_eq!(up.discarded_seen, 1);
@@ -510,8 +400,8 @@ mod tests {
 
     #[test]
     fn every_dialog_coming_or_going_is_a_change() {
-        let idle = recognise(Agent::Claude, RESUME_IDLE);
-        let launch = recognise(Agent::Claude, RESUME_AT_LAUNCH);
+        let idle = recognise(AgentId::CLAUDE, RESUME_IDLE);
+        let launch = recognise(AgentId::CLAUDE, RESUME_AT_LAUNCH);
         let up = Sighting::default().after(idle);
         assert_eq!(up.changes, 1);
         assert_eq!(up.after(idle).changes, 1);
@@ -524,12 +414,12 @@ mod tests {
     /// owner is not told the session waits.
     #[test]
     fn only_a_dialog_that_is_neither_the_usage_limit_nor_an_agents_view_is_a_wait_for_the_user() {
-        let limit = recognise(Agent::Grok, GROK_USAGE_LIMIT).unwrap();
-        let resume = recognise(Agent::Claude, RESUME_IDLE).unwrap();
+        let limit = recognise(AgentId::GROK, GROK_USAGE_LIMIT).unwrap();
+        let resume = recognise(AgentId::CLAUDE, RESUME_IDLE).unwrap();
         assert!(!is_a_wait_for_the_user(&limit));
         assert!(is_a_wait_for_the_user(&resume));
         for screen in [SUBAGENT_VIEW, AGENTS_VIEW, AGENT_ROW_FOCUS] {
-            let view = recognise(Agent::Claude, screen).unwrap();
+            let view = recognise(AgentId::CLAUDE, screen).unwrap();
             assert!(!is_a_wait_for_the_user(&view), "{}", view.code);
         }
     }
@@ -539,19 +429,19 @@ mod tests {
     #[test]
     fn only_the_three_views_of_the_background_agents_are_agents_views() {
         for (agent, screen, view) in [
-            (Agent::Claude, SUBAGENT_VIEW, true),
-            (Agent::Claude, AGENTS_VIEW, true),
-            (Agent::Claude, AGENT_ROW_FOCUS, true),
-            (Agent::Claude, RESUME_IDLE, false),
-            (Agent::Claude, RESUME_AT_LAUNCH, false),
-            (Agent::Claude, RESUME_FROM_SUMMARY, false),
-            (Agent::Claude, CLAUDE_NOTICE, false),
-            (Agent::Claude, AUTO_DEFAULT, false),
-            (Agent::Codex, CODEX_SIGN_IN, false),
-            (Agent::Codex, CODEX_RESUME_CWD, false),
-            (Agent::Codex, CODEX_MODEL_MIGRATION, false),
-            (Agent::Codex, CODEX_RATE_LIMIT, false),
-            (Agent::Grok, GROK_USAGE_LIMIT, false),
+            (AgentId::CLAUDE, SUBAGENT_VIEW, true),
+            (AgentId::CLAUDE, AGENTS_VIEW, true),
+            (AgentId::CLAUDE, AGENT_ROW_FOCUS, true),
+            (AgentId::CLAUDE, RESUME_IDLE, false),
+            (AgentId::CLAUDE, RESUME_AT_LAUNCH, false),
+            (AgentId::CLAUDE, RESUME_FROM_SUMMARY, false),
+            (AgentId::CLAUDE, CLAUDE_NOTICE, false),
+            (AgentId::CLAUDE, AUTO_DEFAULT, false),
+            (AgentId::CODEX, CODEX_SIGN_IN, false),
+            (AgentId::CODEX, CODEX_RESUME_CWD, false),
+            (AgentId::CODEX, CODEX_MODEL_MIGRATION, false),
+            (AgentId::CODEX, CODEX_RATE_LIMIT, false),
+            (AgentId::GROK, GROK_USAGE_LIMIT, false),
         ] {
             let dialog = recognise(agent, screen).unwrap();
             assert_eq!(dialog.is_agents_view(), view, "{}", dialog.code);
@@ -574,7 +464,7 @@ mod tests {
             (nudge, Some("codex_rate_limit_nudge")),
             (session, None),
         ] {
-            assert_eq!(recognise(Agent::Codex, screen).map(|d| d.code), code);
+            assert_eq!(recognise(AgentId::CODEX, screen).map(|d| d.code), code);
         }
     }
 }

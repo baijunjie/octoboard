@@ -595,19 +595,8 @@ impl LiveSession {
     }
 }
 
-fn stash_marker(agent: Agent, screen: &str) -> bool {
-    match agent {
-        Agent::Claude => screen
-            .lines()
-            .rev()
-            .take(6)
-            .any(|line| line.contains("› stashed")),
-        Agent::Grok => screen.lines().any(|line| {
-            let line = line.trim();
-            line.starts_with('╭') && line.ends_with('╮') && line.contains("Stashed")
-        }),
-        Agent::Codex => false,
-    }
+fn stash_marker(agent: AgentId, screen: &str) -> bool {
+    crate::adapter::provider(agent).screen().stash_shown(screen)
 }
 
 #[cfg(test)]
@@ -628,14 +617,14 @@ mod tests {
             .unwrap();
     }
 
-    fn draw(text: &str, stashed: bool, agent: Agent) -> Vec<u8> {
+    fn draw(text: &str, stashed: bool, agent: AgentId) -> Vec<u8> {
         let rule = "─".repeat(60);
         let screen = match agent {
-            Agent::Claude => format!(
+            AgentId::CLAUDE => format!(
                 "{rule}\r\n❯ {text}\r\n{rule}\r\n{}",
                 if stashed { "› stashed" } else { "" }
             ),
-            Agent::Grok => format!(
+            AgentId::GROK => format!(
                 "╭{}╮\r\n│ ❯ {text:50} │\r\n╰{rule}╯",
                 if stashed {
                     format!("{} Stashed {}", "─".repeat(25), "─".repeat(25))
@@ -652,11 +641,11 @@ mod tests {
     fn measured_native_stash_markers_require_an_empty_composer() {
         for (agent, bytes) in [
             (
-                Agent::Claude,
+                AgentId::CLAUDE,
                 &include_bytes!("../../testdata/claude_native_stashed.bin")[..],
             ),
             (
-                Agent::Grok,
+                AgentId::GROK,
                 &include_bytes!("../../testdata/grok_native_stashed.bin")[..],
             ),
         ] {
@@ -687,7 +676,7 @@ mod tests {
 
     #[test]
     fn a_native_swap_buffers_typing_and_enter_until_the_original_editor_is_restored() {
-        for agent in [Agent::Claude, Agent::Grok] {
+        for agent in [AgentId::CLAUDE, AgentId::GROK] {
             let live =
                 crate::test_support::fake_live_session("native-swap", agent, 120, 40, "sleep 30")
                     .with_composer();
@@ -727,7 +716,7 @@ mod tests {
     fn a_queued_message_hint_takes_the_empty_input_path() {
         let live = crate::test_support::fake_live_session(
             "queued-hint",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -746,21 +735,21 @@ mod tests {
     fn a_message_just_written_is_not_stashed_as_a_draft() {
         let live = crate::test_support::fake_live_session(
             "own-message",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
         )
         .with_composer();
         live.enable_native_stash(true);
-        live.on_output(&draw("", false, Agent::Claude));
+        live.on_output(&draw("", false, AgentId::CLAUDE));
         crate::session::term::send_message(&live, "first").unwrap();
-        live.on_output(&draw("[Pasted text #1 +24 lines]", false, Agent::Claude));
+        live.on_output(&draw("[Pasted text #1 +24 lines]", false, AgentId::CLAUDE));
         let writer = live.clone();
         let send =
             std::thread::spawn(move || crate::session::term::send_message(&writer, "second"));
         std::thread::sleep(Duration::from_millis(100));
-        live.on_output(&draw("", false, Agent::Claude));
+        live.on_output(&draw("", false, AgentId::CLAUDE));
         send.join().unwrap().unwrap();
         assert_eq!(live.input_writes(), 2, "two payloads and no stash key");
         assert!(!live.input_swap_active());
@@ -773,23 +762,23 @@ mod tests {
         OWN_MESSAGE_SETTLE_OVERRIDE.with(|settle| settle.set(Some(Duration::from_millis(50))));
         let live = crate::test_support::fake_live_session(
             "own-message-window",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
         )
         .with_composer();
         live.enable_native_stash(true);
-        live.on_output(&draw("", false, Agent::Claude));
+        live.on_output(&draw("", false, AgentId::CLAUDE));
         crate::session::term::send_message(&live, "first").unwrap();
         live.write_terminal_input(b"draft").unwrap();
-        live.on_output(&draw("draft", false, Agent::Claude));
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
         let agent = live.clone();
         let screen = std::thread::spawn(move || {
             wait_until(|| agent.input_swap_active());
-            agent.on_output(&draw("", true, Agent::Claude));
+            agent.on_output(&draw("", true, AgentId::CLAUDE));
             wait_until(|| agent.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
-            agent.on_output(&draw("draft", false, Agent::Claude));
+            agent.on_output(&draw("draft", false, AgentId::CLAUDE));
         });
         let started = Instant::now();
         crate::session::term::send_message(&live, "second").unwrap();
@@ -812,14 +801,14 @@ mod tests {
         for text in ["draft", ""] {
             let live = crate::test_support::fake_live_session(
                 "owned-stash",
-                Agent::Grok,
+                AgentId::GROK,
                 120,
                 40,
                 "sleep 30",
             )
             .with_composer();
             live.enable_native_stash(true);
-            live.on_output(&draw(text, true, Agent::Grok));
+            live.on_output(&draw(text, true, AgentId::GROK));
             let before = live.input_writes();
             assert_eq!(
                 crate::session::term::send_message(&live, "peer")
@@ -835,21 +824,21 @@ mod tests {
     fn a_restore_timeout_releases_keys_without_retrying_the_written_payload() {
         let live = crate::test_support::fake_live_session(
             "native-timeout",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
         )
         .with_composer();
         live.enable_native_stash(true);
-        live.on_output(&draw("draft", false, Agent::Claude));
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
         let started = Instant::now();
         let writer = live.clone();
         let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
         wait_until(|| live.input_swap_active());
         // Saving and restoring share one protection window; a slow save cannot buy another one.
         std::thread::sleep(SETTLE * 2 / 3);
-        live.on_output(&draw("", true, Agent::Claude));
+        live.on_output(&draw("", true, AgentId::CLAUDE));
         wait_until(|| live.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
         live.write_terminal_input(b"user typing\r").unwrap();
         assert!(
@@ -874,14 +863,14 @@ mod tests {
     fn an_unconfirmed_stash_times_out_to_one_payload_without_a_second_toggle() {
         let live = crate::test_support::fake_live_session(
             "missing-stash",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
         )
         .with_composer();
         live.enable_native_stash(true);
-        live.on_output(&draw("draft", false, Agent::Claude));
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
         live.write_terminal_input(b"draft").unwrap();
         let writer = live.clone();
         let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
@@ -905,7 +894,7 @@ mod tests {
         insert_session_record(&state, &dir, "missing-stash-notice");
         let live = crate::test_support::fake_live_session(
             "missing-stash-notice",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -914,7 +903,7 @@ mod tests {
         state.register_live(live.clone());
         let mut events = state.subscribe();
         live.enable_native_stash(true);
-        live.on_output(&draw("draft", false, Agent::Claude));
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
         live.write_terminal_input(b"draft").unwrap();
         let writer = live.clone();
         std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"))
@@ -948,26 +937,26 @@ mod tests {
     fn an_expired_draft_wait_bypasses_only_editor_protection() {
         for (screen, input, native, blocked_first) in [
             (
-                draw("draft", false, Agent::Claude),
+                draw("draft", false, AgentId::CLAUDE),
                 &b"draft"[..],
                 false,
                 true,
             ),
             (
-                draw("draft", false, Agent::Claude),
+                draw("draft", false, AgentId::CLAUDE),
                 &b"draft"[..],
                 true,
                 false,
             ),
             (b"unknown composer".to_vec(), &b"draft"[..], false, true),
             (
-                draw("draft", true, Agent::Claude),
+                draw("draft", true, AgentId::CLAUDE),
                 &b"draft"[..],
                 true,
                 true,
             ),
             (
-                draw("draft", false, Agent::Claude),
+                draw("draft", false, AgentId::CLAUDE),
                 &b"\x1b[200~draft"[..],
                 true,
                 true,
@@ -975,7 +964,7 @@ mod tests {
         ] {
             let live = crate::test_support::fake_live_session(
                 "expired-editor",
-                Agent::Claude,
+                AgentId::CLAUDE,
                 120,
                 40,
                 "sleep 30",
@@ -984,7 +973,7 @@ mod tests {
             live.enable_native_stash(native);
             live.on_output(&screen);
             live.write_terminal_input(input).unwrap();
-            let framed = crate::session::term::frame_message(Agent::Claude, "peer");
+            let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
             if blocked_first {
                 assert_eq!(
                     live.write_message_input(&framed, "peer", false)
@@ -1002,7 +991,7 @@ mod tests {
                 live.write_message_input(&framed, "peer", true).is_err(),
                 "a deadline never answers a modal"
             );
-            live.on_output(&draw("draft", false, Agent::Claude));
+            live.on_output(&draw("draft", false, AgentId::CLAUDE));
             live.freeze_output();
             assert!(
                 live.write_message_input(&framed, "peer", true).is_err(),
@@ -1017,7 +1006,7 @@ mod tests {
         insert_session_record(&state, &dir, "timeout-modal");
         let live = crate::test_support::fake_live_session(
             "timeout-modal",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -1025,11 +1014,11 @@ mod tests {
         .with_composer();
         state.register_live(live.clone());
         live.enable_native_stash(true);
-        live.on_output(&draw("draft", false, Agent::Claude));
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
         let writer = live.clone();
         let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
         wait_until(|| live.input_swap_active());
-        live.on_output(&draw("", true, Agent::Claude));
+        live.on_output(&draw("", true, AgentId::CLAUDE));
         wait_until(|| live.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
         live.write_terminal_input(b"old edit\r").unwrap();
         live.on_output(b"\x1b[2J\x1b[HResume this conversation?\r\nEnter to confirm \xc2\xb7 Esc to dismiss\r\n");
@@ -1058,7 +1047,7 @@ mod tests {
         insert_session_record(&state, &dir, "recovery-output-handoff");
         let live = crate::test_support::fake_live_session(
             "recovery-output-handoff",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -1090,10 +1079,10 @@ mod tests {
         let (state, dir) = crate::test_support::app_state("hook-permission-input");
         let id = "hook-permission-input";
         insert_session_record(&state, &dir, id);
-        let live = crate::test_support::fake_live_session(id, Agent::Claude, 120, 40, "sleep 30")
+        let live = crate::test_support::fake_live_session(id, AgentId::CLAUDE, 120, 40, "sleep 30")
             .with_composer();
         state.register_live(live.clone());
-        live.on_output(&draw("", false, Agent::Claude));
+        live.on_output(&draw("", false, AgentId::CLAUDE));
         state
             .apply_hook_status(id, crate::protocol::SessionStatus::WaitingUser)
             .unwrap();
@@ -1144,10 +1133,10 @@ mod tests {
     ) {
         let (state, dir) = crate::test_support::app_state(id);
         insert_session_record(&state, &dir, id);
-        let live = crate::test_support::fake_live_session(id, Agent::Claude, 120, 40, "sleep 30")
+        let live = crate::test_support::fake_live_session(id, AgentId::CLAUDE, 120, 40, "sleep 30")
             .with_composer();
         state.register_live(live.clone());
-        live.on_output(&draw("", false, Agent::Claude));
+        live.on_output(&draw("", false, AgentId::CLAUDE));
         live.write_terminal_input(b"user prompt\r").unwrap();
         live.note_launch_prompt("earlier message".to_string());
         live.note_prompt_sent(Some("sent before"));
@@ -1195,7 +1184,7 @@ mod tests {
             assert_eq!(swap.bytes, 0);
             assert!(!swap.pending && swap.pending_since.is_none());
         }
-        live.on_output(&draw("", false, Agent::Claude));
+        live.on_output(&draw("", false, AgentId::CLAUDE));
         assert!(
             !live.recovery_scheduled.load(Ordering::Acquire),
             "output schedules no pass for a takeover"
@@ -1207,7 +1196,7 @@ mod tests {
             swap.pending = true;
             swap.pending_since = Some(Instant::now() - SETTLE * 2);
         }
-        live.on_output(&draw("", false, Agent::Claude));
+        live.on_output(&draw("", false, AgentId::CLAUDE));
         wait_for_recovery_pass(&live);
         assert_eq!(
             live.swap.lock().unwrap().phase,
@@ -1264,7 +1253,7 @@ mod tests {
     fn one_large_terminal_frame_makes_progress_without_dropping_the_next_frame() {
         let live = crate::test_support::fake_live_session(
             "large-input",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -1285,7 +1274,7 @@ mod tests {
     fn retained_edits_wait_for_a_dialog_but_new_user_keys_can_answer_it() {
         let live = crate::test_support::fake_live_session(
             "restore-dialog",
-            Agent::Claude,
+            AgentId::CLAUDE,
             120,
             40,
             "sleep 30",
@@ -1294,7 +1283,7 @@ mod tests {
         live.write_terminal_input(b"draft").unwrap();
         live.set_swap_phase(RecoveryPhase::Submitted);
         assert!(live.buffer_terminal_input(b" edit\r").unwrap());
-        let mut screen = draw("draft", false, Agent::Claude);
+        let mut screen = draw("draft", false, AgentId::CLAUDE);
         screen.extend_from_slice(
             b"\x1b[1;1HResume this conversation?\r\nEnter to confirm \xc2\xb7 Esc to dismiss\r\n",
         );
@@ -1310,7 +1299,7 @@ mod tests {
             before + 1,
             "new user keys answer the visible dialog"
         );
-        live.on_output(&draw("draft", false, Agent::Claude));
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
         assert!(live.finish_input_swap());
         assert!(!live.input_swap_active());
         assert_eq!(live.swap.lock().unwrap().bytes, 0);

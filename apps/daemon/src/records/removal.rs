@@ -3,13 +3,11 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::agents::layout::{CLAUDE_CHECKPOINTS_DIR, CODEX, CODEX_ARCHIVED_DIR};
+use crate::adapter::provider;
 use crate::hostfs::lexically_normalise;
-use crate::protocol::{Account, Agent, Session};
-use crate::records::codex_rollout_files::is_rollout_of;
+use crate::protocol::{Account, AgentId, Session};
 use crate::records::locate::{
-    in_real_directories, own_paths, plausible_id, record_paths, records_dir, walk_records, Hints,
-    Locator, Step,
+    in_real_directories, own_paths, plausible_id, record_paths, records_dir, Hints, Locator,
 };
 
 /// [`record_paths`] cut to what deleting `session` may remove: when `session` is on another
@@ -66,40 +64,36 @@ pub fn removable_record_paths(
 
 /// Every file the agent keeps of conversation `agent_id` in the account directory `root`, found
 /// as [`record_paths`] finds a record (a canonical id, the agent's exact layout depth, no linked
-/// directory below the records directory), with what the agent keeps beside it: Claude Code's
-/// rewind checkpoints (`file-history/<id>`) and the rollouts `codex archive` moved into
-/// `archived_sessions/`. Each of those directories is looked in where it leads, as a records
-/// directory that is itself a link (to a dotfiles copy, say) is still the account's, and every
-/// path answered is spelled through `root`. Turning an account's sharing off moves these back
-/// into the account; `locator` lists each directory once for all the conversations it moves.
+/// directory below the records directory), with what the agent keeps beside it
+/// (`RecordStore::beside_records`), such as Claude Code's rewind checkpoints (`file-history/<id>`)
+/// and the rollouts `codex archive` moved into `archived_sessions/`. Each of those directories is
+/// looked in where it leads ([`Resolved`]), as a records directory that is itself a link (to a
+/// dotfiles copy, say) is still the account's, and every path answered is spelled through `root`.
+/// Turning an account's sharing off moves these back into the account; `locator` lists each
+/// directory once for all the conversations it moves.
 pub fn conversation_files_in(
     locator: &mut Locator,
-    agent: Agent,
+    agent: AgentId,
     root: &Path,
     agent_id: &str,
 ) -> Vec<PathBuf> {
     if !plausible_id(agent_id) {
         return Vec::new();
     }
-    // `dir` spelled through `root`, and where it leads.
-    let resolved = |dir: PathBuf| std::fs::canonicalize(&dir).ok().map(|real| (dir, real));
-    let spelled = |(dir, real): &(PathBuf, PathBuf), path: &Path| {
-        path.strip_prefix(real).ok().map(|rest| dir.join(rest))
-    };
     let mut files: Vec<PathBuf> = Vec::new();
-    if let Some(records) = resolved(records_dir(agent, root)) {
+    if let Some(records) = Resolved::of(records_dir(agent, root)) {
         let found = locator
-            .index_at(agent, &records.1)
+            .index_at(agent, records.real())
             .records
             .get(agent_id)
             .cloned()
             .unwrap_or_default();
         for record in found {
-            if !in_real_directories(&record, &records.1) {
+            if !in_real_directories(&record, records.real()) {
                 continue;
             }
-            for path in own_paths(agent, agent_id, &record, &records.1) {
-                let Some(path) = spelled(&records, &path) else {
+            for path in own_paths(agent, agent_id, &record, records.real()) {
+                let Some(path) = records.spell(&path) else {
                     continue;
                 };
                 if !files.contains(&path) && std::fs::symlink_metadata(&path).is_ok() {
@@ -108,37 +102,35 @@ pub fn conversation_files_in(
             }
         }
     }
-    match agent {
-        Agent::Claude => {
-            if let Some(history) = resolved(root.join(CLAUDE_CHECKPOINTS_DIR)) {
-                let checkpoints = history.1.join(agent_id);
-                if std::fs::symlink_metadata(&checkpoints).is_ok() {
-                    files.extend(spelled(&history, &checkpoints));
-                }
-            }
-        }
-        Agent::Codex => {
-            if let Some(archived) = resolved(root.join(CODEX_ARCHIVED_DIR)) {
-                let id = agent_id.to_ascii_lowercase();
-                let mut found = Vec::new();
-                walk_records(
-                    &archived.1,
-                    CODEX.search_depth,
-                    &mut |path, name, kind, _| {
-                        if is_rollout_of(kind, &name.to_ascii_lowercase(), &id) {
-                            found.push(path.to_path_buf());
-                            Step::Matched
-                        } else {
-                            Step::Descend
-                        }
-                    },
-                );
-                files.extend(found.iter().filter_map(|path| spelled(&archived, path)));
-            }
-        }
-        Agent::Grok => {}
-    }
+    files.extend(provider(agent).records().beside_records(root, agent_id));
     files
+}
+
+/// A directory as an account spells it, and where it leads, for looking in it where it leads and
+/// answering what is found there through the account's spelling.
+pub(crate) struct Resolved {
+    spelled: PathBuf,
+    real: PathBuf,
+}
+
+impl Resolved {
+    /// `dir` and where it leads; `None` when it cannot be resolved, as when it does not exist.
+    pub(crate) fn of(dir: PathBuf) -> Option<Self> {
+        let real = std::fs::canonicalize(&dir).ok()?;
+        Some(Self { spelled: dir, real })
+    }
+
+    /// Where the directory leads.
+    pub(crate) fn real(&self) -> &Path {
+        &self.real
+    }
+
+    /// `path`, found under where the directory leads, spelled through the directory instead.
+    pub(crate) fn spell(&self, path: &Path) -> Option<PathBuf> {
+        path.strip_prefix(&self.real)
+            .ok()
+            .map(|rest| self.spelled.join(rest))
+    }
 }
 
 #[cfg(test)]
@@ -169,7 +161,7 @@ mod tests {
                 &hints,
                 locator,
                 accounts,
-                &session(Agent::Claude, CLAUDE_ID, on),
+                &session(AgentId::CLAUDE, CLAUDE_ID, on),
             )
         };
         let on_account = removable(&mut locator, &[], Some(&account));
@@ -183,7 +175,7 @@ mod tests {
 
         let mut sharing = Account {
             id: "a".to_owned(),
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             name: "Sharing".to_owned(),
             config_dir: account.to_string_lossy().into_owned(),
             share_default_config: true,
@@ -226,7 +218,7 @@ mod tests {
         );
         touch(&root.join("file-history").join(CLAUDE_ID).join("1"));
         touch(&root.join("history.jsonl"));
-        let mut claude = conversation_files_in(&mut locator, Agent::Claude, &root, CLAUDE_ID);
+        let mut claude = conversation_files_in(&mut locator, AgentId::CLAUDE, &root, CLAUDE_ID);
         claude.sort();
         assert_eq!(
             claude,
@@ -246,7 +238,7 @@ mod tests {
         touch(&rollout);
         touch(&archived);
         assert_eq!(
-            conversation_files_in(&mut locator, Agent::Codex, &root, CODEX_ID),
+            conversation_files_in(&mut locator, AgentId::CODEX, &root, CODEX_ID),
             [rollout, archived]
         );
 
@@ -254,7 +246,7 @@ mod tests {
         touch(&grok.join("usage.json"));
         touch(&grok.join("chat_history.jsonl"));
         assert_eq!(
-            conversation_files_in(&mut locator, Agent::Grok, &root, CLAUDE_ID),
+            conversation_files_in(&mut locator, AgentId::GROK, &root, CLAUDE_ID),
             [grok]
         );
     }

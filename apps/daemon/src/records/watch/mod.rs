@@ -1,8 +1,9 @@
 //! The mechanism behind watching an agent's own session record for something its hooks never
-//! report: [`claude_transcript`] (Claude Code's transcript, a declined prompt or an interrupted
-//! turn) and [`codex_rollout`] (Codex's rollout file, a turn that ended in an error). Each of those
-//! owns what a line means, when a watch is armed and what a finding does; this owns reading the
-//! file and the poll loop around it.
+//! report. Each watcher is its provider's own, in that provider's adapter module, and armed by its
+//! record store (`crate::records::RecordStore::arm_watch`): Claude Code's transcript watch for a
+//! declined prompt or an interrupted turn, Codex's rollout watch for a turn that ended in an error.
+//! Each of those owns what a line means, when a watch is armed and what a finding does; this owns
+//! reading the file and the poll loop around it.
 //!
 //! A record is append-only JSONL that the agent flushes per line, and belongs to the agent, which
 //! rewrites its format on upgrades. So every line is judged on its own, and one that is not UTF-8,
@@ -17,14 +18,12 @@
 //! [`scan_lines`] is the pure half: a path, an offset and a line check in, what was found among the
 //! lines added since and where to read from next out. [`spawn`] is what calls it on a timer.
 
-pub(crate) mod claude_transcript;
-pub(crate) mod codex_rollout;
-
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::protocol::SessionStatus;
 use crate::records::line_file;
 use crate::state::AppState;
 
@@ -238,6 +237,54 @@ where
         }
     });
     Some(generation)
+}
+
+/// Puts the session back at its prompt, from the `expected` status watch `generation` was armed
+/// for, after a watch saw `found` — a rejection or an interrupt in the agent's record, or a cancel
+/// read off the terminal title (`crate::session::title_interrupt`), named for the log.
+pub(crate) fn back_at_prompt(
+    state: &Arc<AppState>,
+    session_id: &str,
+    generation: u64,
+    expected: SessionStatus,
+    found: &str,
+) {
+    // Conditional, in one step, on the session still being where the watch found it and on the
+    // watch still being current: between the poll's read and this write a real hook can have moved
+    // the session on, which an unconditional write would lose, or the next prompt can have retired
+    // the watch and opened a turn that is just as `Working`, which this write would end.
+    let moved = state.while_record_watch_current(session_id, generation, || {
+        // Every one of these ends the turn abnormally, so the session comes back paused.
+        state.report_paused_if(session_id, expected)
+    });
+    match moved {
+        Some(Ok(true)) => {
+            tracing::debug!(
+                session = %session_id,
+                "a {found} was found; the agent is back at its prompt"
+            );
+            state.note_turn_end(session_id);
+            // Mirrors the release the hook path pairs with every status change: a message queued
+            // while the session could not take one is still queued, and nothing else is coming to
+            // release it. `flush_outbox`'s gate asks for a hook-reported state, which this `Idle`
+            // is not, but both states it accepts are reached here anyway: a genuine rejection or
+            // interrupt leaves the agent at its prompt, and an exit a watch's match deliberately
+            // over-catches (Claude Code's `Chat about this` after a rejection) leaves it working.
+            state.spawn_flush_outbox(session_id, SessionStatus::Idle);
+        }
+        Some(Ok(false)) | None => {
+            tracing::debug!(
+                session = %session_id,
+                "a {found} was found, but the session had already moved on"
+            );
+        }
+        Some(Err(err)) => {
+            tracing::debug!(
+                session = %session_id, %err,
+                "returning the session to its prompt after a {found} failed"
+            );
+        }
+    }
 }
 
 #[cfg(test)]

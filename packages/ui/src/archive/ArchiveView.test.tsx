@@ -19,6 +19,7 @@ import { expectIndependentMarquees, stubMarquee } from "../components/motion/mar
 import { isolate } from "../i18n/isolate";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Session } from "../protocol";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { ArchiveView } from "./ArchiveView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -57,6 +58,7 @@ function renderArchiveView(
           projects={new Map()}
           accounts={[]}
           defaultNames={{}}
+          providers={TEST_PROVIDERS}
           onSelect={() => {}}
           onReopen={() => {}}
           onOpenDialog={onOpenDialog}

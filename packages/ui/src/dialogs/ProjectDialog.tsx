@@ -4,12 +4,8 @@ import { orderedAccounts } from "../accounts/accountOrder";
 import { accountDisabled } from "../accounts/choiceEntries";
 import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accounts/accountInheritance";
 import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agents/agentFields";
-import {
-  AGENT_LABEL,
-  consoleProjectLaunch,
-  defaultAccountName,
-  projectSessionAgent,
-} from "../agents/agents";
+import { consoleProjectLaunch, defaultAccountName, projectSessionAgent, servedAgents } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import { agentIconPickerOptions, AgentIcon } from "../components/icons/AgentIcon";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { FailureAlert } from "../components/alerts/FailureAlert";
@@ -17,9 +13,10 @@ import { HelpTip } from "../components/hint/HelpTip";
 import { InlineReference } from "../i18n/InlineReference";
 import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
-import { useDaemon, useDaemonStore } from "../store";
+import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { offeredAccountOptions } from "./accountOptions";
 import { AdvancedSection, AdvancedTabs } from "../components/form/AdvancedSection";
 import { AgentAccountField } from "./AgentAccountField";
@@ -71,12 +68,14 @@ export function ProjectDialog({
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   const { request } = useDaemon();
   const owner = useDaemonStore((s) => s.consoles.get(consoleId));
   // The agent "Same as console" resolves to: what a project session of the console is of when
   // its project names none.
   const consoleAgent = owner && projectSessionAgent(owner);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const served = servedAgents(providers);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const accountOrder = useDaemonStore((s) => s.settings.account_order);
@@ -105,9 +104,9 @@ export function ProjectDialog({
   // effort, `null` being unset (the agent's own), and the account, which may be inheriting the
   // console's. Kept per agent as the values are the agent's own, so a value set for one says nothing
   // about another.
-  const [initialLaunch] = useState(() => readLaunch(editing?.launch));
+  const [initialLaunch] = useState(() => readLaunch(editing?.launch, served));
   const [launch, setLaunch] = useState(initialLaunch);
-  const [initialAccounts] = useState(() => readProjectAccounts(editing?.accounts));
+  const [initialAccounts] = useState(() => readProjectAccounts(editing?.accounts, served));
   const [accountFields, setAccountFields] = useState(initialAccounts);
   // The project's own git workflow settings when the dialog opens, and the edits since; `null` follows the application-wide value.
   const [initialGitWorkflow] = useState(() => editing?.git_workflow ?? FOLLOWING_GIT_WORKFLOW);
@@ -244,11 +243,11 @@ export function ProjectDialog({
     {
       value: "",
       label: t("dialog.agentSettings.sameAsConsole"),
-      badge: consoleAgent && AGENT_LABEL[consoleAgent],
+      badge: consoleAgent && providerLabel(t, providers, consoleAgent),
       badgeInLabel: true,
       icon: consoleAgent && <AgentIcon agent={consoleAgent} className="size-4 opacity-50" />,
     },
-    ...agentIconPickerOptions(t, agentAvailability, addedAgents, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
+    ...agentIconPickerOptions(t, agentAvailability, addedAgents, providers, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
   ];
   const gitWorkflowTab = {
     id: "gitWorkflow",
@@ -361,7 +360,7 @@ export function ProjectDialog({
           account={
             agent && ownAccounts.length > 0
               ? {
-                label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[agent] }),
+                label: t("dialog.agentSettings.account", { agent: isolate(providerLabel(t, providers, agent)) }),
                 options: [
                   {
                     value: accountValue(INHERIT),

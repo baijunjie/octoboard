@@ -1,33 +1,13 @@
-//! The app-wide settings record, and the approval overrides it carries.
+//! The app-wide settings record.
 
-use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
-use super::agents::Agent;
+use serde::Serialize;
+
+use super::agents::AgentId;
 use super::git_workflow::GitWorkflowSettings;
 use super::records::Account;
-
-/// Who resolves Codex approval requests. An absent override follows the account configuration.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApprovalReviewer {
-    User,
-    AutoReview,
-}
-
-/// The permission mode a Claude Code launch is asked for. An absent override follows the account
-/// configuration and passes no flag.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ClaudeApprovalMode {
-    /// Claude Code's classifier approves what it judges safe and blocks the rest.
-    Auto,
-    /// Every tool call that is not already allowed asks the user.
-    Manual,
-    /// Every tool call runs without asking.
-    Bypass,
-}
+use crate::providers::SettingValue;
 
 /// The app-wide user settings the daemon stores, and the account list alongside them: a record
 /// that already grows without a new request shape or a new event for every addition, which is
@@ -98,20 +78,20 @@ pub struct Settings {
     /// new choice; removing one leaves its accounts here. `null` while the daemon has not yet
     /// decided the list (it waits for the agents' availability), which is not the same as the
     /// empty list of a user who removed them all.
-    pub added_agents: Option<Vec<Agent>>,
-    /// Launch override for every Codex session, whichever account it uses; never written into
-    /// Codex's own configuration. Null follows each account's configuration. Kept local.
-    pub codex_approval_reviewer: Option<ApprovalReviewer>,
-    /// Launch override for every Claude Code session, whichever account it uses; never written
-    /// into Claude Code's own configuration. Null follows each account's configuration. Kept local.
-    pub claude_approval_mode: Option<ClaudeApprovalMode>,
-    /// Whether each agent other than Claude Code (by wire name) loads Claude Code's instructions
-    /// (CLAUDE.md and rules), skills, agents, commands, MCP servers, hooks and permissions in its
-    /// sessions: one value per agent, whichever account a session uses. It is the value in effect:
-    /// the user's choice for the agent, else on for Grok Build and, for Codex, on while Claude Code
-    /// is an added agent. Read when a session starts, resumes or switches account.
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-    pub claude_compatibility: std::collections::BTreeMap<String, bool>,
+    pub added_agents: Option<Vec<AgentId>>,
+    /// The value in effect of every setting of every provider (see `ProviderInfo::settings`), by
+    /// provider id and then setting id: each provider the daemon registers has an entry and each of
+    /// its settings a key, and the type is `Partial` only because a client may index it by an id
+    /// the daemon does not serve. A switch holds the user's choice, else the value its default rule
+    /// gives now; a choice holds the user's, else `null`, which follows each account's own
+    /// configuration. Read when a session starts, resumes or switches account. The choices of a
+    /// setting its provider does not export (`exported` false) are kept local to this machine; an
+    /// exported one travels with a configuration export.
+    #[cfg_attr(
+        test,
+        ts(type = "Partial<Record<Agent, Record<string, boolean | string | null>>>")
+    )]
+    pub provider_settings: BTreeMap<String, BTreeMap<String, Option<SettingValue>>>,
     /// The tags the user put on each agent (by wire name), which tell a session choosing an agent
     /// what it is good for. Application-wide, and they apply to every account of the agent. An
     /// agent without tags has no entry. An agent removed from `added_agents` keeps its entry, so
@@ -151,9 +131,7 @@ impl Default for Settings {
             accounts: Vec::new(),
             account_order: Default::default(),
             added_agents: None,
-            codex_approval_reviewer: None,
-            claude_approval_mode: None,
-            claude_compatibility: std::collections::BTreeMap::new(),
+            provider_settings: BTreeMap::new(),
             agent_tags: std::collections::BTreeMap::new(),
             default_account_names: Default::default(),
             disabled_default_accounts: Default::default(),
@@ -164,7 +142,7 @@ impl Default for Settings {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{Agent, AgentAvailability, Availability, Event, Settings};
+    use crate::protocol::{AgentAvailability, AgentId, Availability, Event, Settings};
 
     #[test]
     fn the_trusted_directories_travel_under_their_own_names() {
@@ -181,8 +159,9 @@ mod tests {
             sessions: vec![],
             trusted_directories: vec!["/work".to_string()],
             settings: Settings::default(),
+            providers: Vec::new(),
             git_statuses: vec![],
-            agent_availability: [Agent::Claude, Agent::Codex, Agent::Grok]
+            agent_availability: [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK]
                 .into_iter()
                 .map(|agent| AgentAvailability {
                     agent,

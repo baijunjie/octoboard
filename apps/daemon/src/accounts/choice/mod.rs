@@ -11,7 +11,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::adapter;
-use crate::protocol::{Account, Agent, CodedError, Console, Project, ProjectAccount};
+use crate::protocol::{Account, AgentId, CodedError, Console, Project, ProjectAccount};
 use crate::state::AppState;
 
 mod automatic;
@@ -36,7 +36,7 @@ pub(crate) use started::choice_for_started_session;
 /// The directory of an account: the pinned one, else the default account's, resolved from
 /// `shell_env`, the snapshot the caller took when it had a default side.
 pub(crate) fn account_dir(
-    agent: Agent,
+    agent: AgentId,
     pinned: Option<&str>,
     shell_env: Option<&HashMap<String, String>>,
 ) -> PathBuf {
@@ -51,10 +51,10 @@ pub(crate) fn account_dir(
 /// console's project session default. A console session has no project, so it falls straight
 /// back to the console's console session default.
 pub(crate) fn session_agent(
-    chosen: Option<Agent>,
+    chosen: Option<AgentId>,
     project: Option<&Project>,
     console: &Console,
-) -> Agent {
+) -> AgentId {
     chosen.unwrap_or_else(|| match project {
         Some(project) => project
             .default_agent
@@ -75,7 +75,7 @@ pub(crate) fn session_agent(
 /// [`open_session`]: crate::coordinator::open::open_session
 pub(crate) fn session_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     console: &Console,
     project: Option<&Project>,
     chosen: Option<Option<String>>,
@@ -96,7 +96,7 @@ pub(crate) fn session_account(
 /// across agents would launch it with another agent's directory.
 pub(crate) fn checked_account_reference(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     id: Option<String>,
 ) -> Result<Option<String>> {
     let Some(id) = id else { return Ok(None) };
@@ -109,7 +109,7 @@ pub(crate) fn checked_account_reference(
 /// The stored account `id`, when it is one of `agent`'s.
 pub(crate) fn account_of_agent(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     id: &str,
 ) -> Result<Option<Account>> {
     Ok(state
@@ -123,7 +123,7 @@ pub(crate) fn account_of_agent(
 /// check.
 pub(crate) fn checked_project_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account: ProjectAccount,
 ) -> Result<ProjectAccount> {
     match account {

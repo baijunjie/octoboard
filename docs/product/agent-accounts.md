@@ -79,7 +79,7 @@ status badge in every state:
 |---|---|
 | **Added** | Nothing. An added agent shows as added even when it is not installed. |
 | **Installed** | An **Add** button, which puts the agent at the end of the list. |
-| **Not installed** | A **How to install** link to the agent's own installation instructions, published by its vendor; Octoboard writes none of its own. |
+| **Not installed** | A **How to install** link to the agent's own installation instructions, published by its provider; Octoboard writes none of its own. |
 | **Checking…** (not yet determined) | The Add button, unavailable until the agent is found installed. |
 
 While the list is undecided every Add button is unavailable. The dialog stays open after an agent is added, its row
@@ -177,11 +177,11 @@ are shown" in `docs/product/settings.md`.
 
 ## The accounts table
 
-Each agent's tab panel holds the agent's **Tags** row (see "Agent tags" in `docs/product/per-agent-settings.md`), then,
-for Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes" in
-`docs/product/per-agent-settings.md`), then, for Codex and Grok Build, the agent's **Claude compatibility** row (see
-"Claude compatibility" in `docs/product/per-agent-settings.md`), then one table of the agent's accounts, named for the
-agent ("Claude Code accounts"): a row per account, in the saved order (see "Reordering accounts" below). Its columns:
+Each agent's tab panel holds the agent's **Tags** row (see "Agent tags" in `docs/product/per-agent-settings.md`), then
+a row for each setting its provider declares (see "Provider settings" in `docs/product/per-agent-settings.md`) — for
+Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes" there), then, for Codex and Grok
+Build, the agent's **Claude compatibility** row (see "Claude compatibility" there) — then one table of the agent's
+accounts, named for the agent ("Claude Code accounts"): a row per account, in the saved order (see "Reordering accounts" below). Its columns:
 
 | Column | What a row shows |
 |---|---|

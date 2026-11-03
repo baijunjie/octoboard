@@ -8,30 +8,30 @@ async fn an_import_creates_a_console_and_its_projects_with_their_configuration()
     let (state, _dir) = app_state("import-apply");
     state
         .store
-        .insert_account(&account("acct-1", Agent::Claude, "work"))
+        .insert_account(&account("acct-1", AgentId::CLAUDE, "work"))
         .unwrap();
     // The document's Codex models below are not ones Codex offers here; they are stored as they
     // are all the same.
-    crate::test_support::offer_models(&state, Agent::Codex, &[("offered", &[])]);
+    crate::test_support::offer_models(&state, AgentId::CODEX, &[("offered", &[])]);
     let repo = directory(&area, "repo");
     let mut hub = console("Hub", vec![project("renamed", &repo.to_string_lossy())]);
     hub.icon = Some("data:image/png;base64,AAAA".to_string());
-    hub.launch.codex.model = Some("gpt-x".to_string());
+    hub.launch[AgentId::CODEX].model = Some("gpt-x".to_string());
     hub.console_session_prompt = Some("\n Be brief.\n".to_string());
-    hub.accounts.claude = Some(AccountName {
+    hub.accounts[AgentId::CLAUDE] = Some(AccountName {
         name: "WORK".to_string(),
     });
     let p = &mut hub.projects[0];
     p.pinned = true;
     p.tags = vec!["backend".to_string(), "Backend".to_string()];
     p.description = Some("\n A billing service.\n".to_string());
-    p.default_agent = Some(Agent::Grok);
-    p.launch.codex.model = Some("gpt-y".to_string());
-    p.launch.grok.effort = Some("high".to_string());
-    p.accounts.claude = ProjectAccountRef::Account {
+    p.default_agent = Some(AgentId::GROK);
+    p.launch[AgentId::CODEX].model = Some("gpt-y".to_string());
+    p.launch[AgentId::GROK].effort = Some("high".to_string());
+    p.accounts[AgentId::CLAUDE] = ProjectAccountRef::Account {
         name: "Work".to_string(),
     };
-    p.accounts.codex = ProjectAccountRef::Default;
+    p.accounts[AgentId::CODEX] = ProjectAccountRef::Default;
 
     let imported = import(
         &state,
@@ -49,12 +49,18 @@ async fn an_import_creates_a_console_and_its_projects_with_their_configuration()
         stored_console.icon.as_deref(),
         Some("data:image/png;base64,AAAA")
     );
-    assert_eq!(stored_console.launch.codex.model.as_deref(), Some("gpt-x"));
+    assert_eq!(
+        stored_console.launch[AgentId::CODEX].model.as_deref(),
+        Some("gpt-x")
+    );
     assert_eq!(
         stored_console.console_session_prompt.as_deref(),
         Some("Be brief.")
     );
-    assert_eq!(stored_console.accounts.claude.as_deref(), Some("acct-1"));
+    assert_eq!(
+        stored_console.accounts[AgentId::CLAUDE].as_deref(),
+        Some("acct-1")
+    );
     assert!(Path::new(&stored_console.workdir).is_dir());
 
     let created = stored_projects(&state).remove(0);
@@ -73,17 +79,23 @@ async fn an_import_creates_a_console_and_its_projects_with_their_configuration()
     assert!(created.pinned);
     assert_eq!(created.tags, ["backend"]);
     assert_eq!(created.description.as_deref(), Some("A billing service."));
-    assert_eq!(created.default_agent, Some(Agent::Grok));
-    assert_eq!(created.launch.codex.model.as_deref(), Some("gpt-y"));
-    assert_eq!(created.launch.grok.effort.as_deref(), Some("high"));
+    assert_eq!(created.default_agent, Some(AgentId::GROK));
     assert_eq!(
-        created.accounts.claude,
+        created.launch[AgentId::CODEX].model.as_deref(),
+        Some("gpt-y")
+    );
+    assert_eq!(
+        created.launch[AgentId::GROK].effort.as_deref(),
+        Some("high")
+    );
+    assert_eq!(
+        created.accounts[AgentId::CLAUDE],
         ProjectAccount::Account {
             id: "acct-1".to_string()
         }
     );
-    assert_eq!(created.accounts.codex, ProjectAccount::Default);
-    assert_eq!(created.accounts.grok, ProjectAccount::Inherit);
+    assert_eq!(created.accounts[AgentId::CODEX], ProjectAccount::Default);
+    assert_eq!(created.accounts[AgentId::GROK], ProjectAccount::Inherit);
     // Trust does not travel: an imported project asks like a hand-added one.
     assert!(!created.trust_consent);
 }
@@ -94,10 +106,10 @@ async fn an_unmatched_account_is_bound_to_the_default_and_listed_in_the_result()
     let (state, _dir) = app_state("import-fallback");
     let repo = directory(&area, "repo");
     let mut hub = console("Hub", vec![project("p", &repo.to_string_lossy())]);
-    hub.accounts.grok = Some(AccountName {
+    hub.accounts[AgentId::GROK] = Some(AccountName {
         name: "Team".to_string(),
     });
-    hub.projects[0].accounts.codex = ProjectAccountRef::Account {
+    hub.projects[0].accounts[AgentId::CODEX] = ProjectAccountRef::Account {
         name: "Solo".to_string(),
     };
 
@@ -109,9 +121,12 @@ async fn an_unmatched_account_is_bound_to_the_default_and_listed_in_the_result()
     .await
     .unwrap();
 
-    assert_eq!(state.store.list_consoles().unwrap()[0].accounts.grok, None);
     assert_eq!(
-        stored_projects(&state)[0].accounts.codex,
+        state.store.list_consoles().unwrap()[0].accounts[AgentId::GROK],
+        None
+    );
+    assert_eq!(
+        stored_projects(&state)[0].accounts[AgentId::CODEX],
         ProjectAccount::Default
     );
     let fallback = |agent, name: &str| AccountFallback {
@@ -120,11 +135,11 @@ async fn an_unmatched_account_is_bound_to_the_default_and_listed_in_the_result()
     };
     assert_eq!(
         imported[0].account_fallbacks,
-        [fallback(Agent::Grok, "Team")]
+        [fallback(AgentId::GROK, "Team")]
     );
     assert_eq!(
         imported[0].projects[0].account_fallbacks,
-        [fallback(Agent::Codex, "Solo")]
+        [fallback(AgentId::CODEX, "Solo")]
     );
 }
 

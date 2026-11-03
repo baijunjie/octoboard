@@ -367,7 +367,7 @@ html {
    the track, so the bars keep their 4:3 heights and end together, and painted under the fill, so it outlines only the
    empty part (over the fill it would leave a 3px bar a single pixel of its colour). The edge (25% of the foreground
    over the track) is a hint at a track that is already there, not a control boundary, so it is not held to 3:1. The
-   fills' ratios against the track are under `.quota-meter--claude`. In dark the track is a step lighter than
+   fills' ratios against the track are under `.quota-meter--provider`. In dark the track is a step lighter than
    `--default`, which on a select trigger is the trigger's own fill and on a floating surface only a faint step off it:
    a track that faint is lost on a dark ground, where a light one just as faint still reads. */
 .quota-bar-track {
@@ -418,47 +418,32 @@ html {
   --meter-fill: var(--danger-soft-foreground);
 }
 
-/* The fill of an account quota bar (`QuotaMeter` and the compact `AccountUsageBar`): one colour per agent. Claude's is
-   its brand orange darkened to keep 3:1 against every track it is drawn on at full opacity, lightened on the dark
-   tracks, though the bar is decorative and not held to it (see docs/ui-accessibility.md, "A colour mark whose meaning
-   is in words"); Codex's is a blue; Grok's is the foreground, as its mark is. Inside `.control-fills` (Settings, the
-   dialogs, the rail panel) `--default` is `--control-fill`, and the compact bar's dark track lightens that a step (see
-   `.quota-bar-track`): the lightest dark track, and the one that sets Claude's dark value. From the tokens, light then
-   dark: the compact bar on `--control-fill` (a table cell, a select trigger; in dark also a popover and a menu, whose
-   `--default` is the floating fill) Claude 3.55 / 3.01, Codex 3.65 / 3.10; the compact bar on HeroUI's own `--default`
-   (a light popover or menu) Claude 3.77, Codex 3.88; the meters, on `--control-fill` itself (the rail panel, the
-   details) Claude 3.55 / 4.52, Codex 3.65 / 4.65. The per-agent colours are tokens declared per appearance, like
-   `--meter-used-up-fill` below, rather than descendant rules under `.dark`, so the menu bar icon's menu can read each
-   one back for its own bars in either appearance. */
-:root,
-.light,
-[data-theme="light"] {
-  --meter-claude-fill: #c2562f;
-  --meter-codex-fill: #2a6df0;
+/* The fill of an account quota bar (`QuotaMeter` and the compact `AccountUsageBar`): one colour per provider, which its
+   presentation module holds (`src/providers/`) and `providerFillVars` hands the bar as `--provider-fill-light` and
+   `--provider-fill-dark`, the way `.session-colour-dot` takes its pair; a provider without a colour sets neither, and its
+   bars take the foreground, as its mark does. Claude's is its provider colour, an orange darkened to keep 3:1 against every track it
+   is drawn on at full opacity, lightened on the dark tracks, though the bar is decorative and not held to it (see
+   docs/ui-accessibility.md, "A colour mark whose meaning is in words"); Codex's is a blue. Inside `.control-fills`
+   (Settings, the dialogs, the rail panel) `--default` is `--control-fill`, and the compact bar's dark track lightens that
+   a step (see `.quota-bar-track`): the lightest dark track, and the one that sets Claude's dark value. From the module
+   colours, light then dark: the compact bar on `--control-fill` (a table cell, a select trigger; in dark also a popover
+   and a menu, whose `--default` is the floating fill) Claude 3.55 / 3.01, Codex 3.65 / 3.10; the compact bar on HeroUI's
+   own `--default` (a light popover or menu) Claude 3.77, Codex 3.88; the meters, on `--control-fill` itself (the rail
+   panel, the details) Claude 3.55 / 4.52, Codex 3.65 / 4.65. The menu bar icon's menu reads the same colours from the
+   module for its own bars in either appearance. */
+.quota-meter--provider {
+  --meter-fill: var(--provider-fill-light, var(--default-foreground));
 }
 
-.dark,
-[data-theme="dark"] {
-  --meter-claude-fill: #ea835d;
-  --meter-codex-fill: #6ea0ff;
+.dark .quota-meter--provider,
+[data-theme="dark"] .quota-meter--provider {
+  --meter-fill: var(--provider-fill-dark, var(--default-foreground));
 }
 
-.quota-meter--claude {
-  --meter-fill: var(--meter-claude-fill);
-}
-
-.quota-meter--codex {
-  --meter-fill: var(--meter-codex-fill);
-}
-
-.quota-meter--grok {
-  --meter-fill: var(--default-foreground);
-}
-
-/* An account that is used up draws its bars in a neutral grey instead of the agent's colour, so it recedes beside the
+/* An account that is used up draws its bars in a neutral grey instead of the provider's colour, so it recedes beside the
    accounts that can still be used; its "Limit reached" badge says why, beside the name on the rail
    (`AccountNameLine`) and after the bar in the accounts table (`AccountUsageCell`). The grey is the muted text's hue,
-   a step fainter than the agent colours on their track. `--meter-used-up-fill` is the one definition of that grey,
+   a step fainter than the provider colours on their track. `--meter-used-up-fill` is the one definition of that grey,
    which the menu bar icon's menu reads back for its own bars. */
 :root,
 .light,

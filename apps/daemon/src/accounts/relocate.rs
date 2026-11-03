@@ -19,10 +19,10 @@
 //! rollouts, the record is the chain's head, and the first rollout and the segments between are its
 //! companions. Nothing else is touched in either directory: the copy only ever adds (or replaces)
 //! those items of the one session, besides a transient staging directory at the target's root that
-//! it creates and removes again, and, for Codex, the one `rollout_path` its database keeps of the
-//! thread ([`repoint_thread_row`]). It copies rather than moves, so a switch that fails afterwards
-//! leaves the original where it was and switching back needs no second copy. The measurements are
-//! in `docs/agent-cli-reference.md`.
+//! it creates and removes again, and, for a provider that keeps a thread registry (Codex's
+//! database), the one row it keeps of the thread ([`repoint_thread_row`]). It copies rather than
+//! moves, so a switch that fails afterwards leaves the original where it was and switching back
+//! needs no second copy. The measurements are in `docs/agent-cli-reference.md`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::io;
@@ -30,16 +30,16 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::accounts::codex_threads::{self, RowError};
+use crate::accounts::thread_registry::{thread_registry, RowCause, RowError, ThreadRegistry};
 use crate::hostfs::{is_same_path, remove_any};
-use crate::protocol::{error_code, Agent, CodedError, SharingCause};
+use crate::protocol::{error_code, AgentId, CodedError, SharingCause};
 use crate::records::carried::locate_record;
 use crate::records::{plausible_id, Locator};
 
 /// The path, relative to `source`, of the session's record in the account whose directory is
 /// `source` ([`locate_record`]). Refused with `conversation_not_found` when there is none, which
 /// the caller meets before it has ended anything.
-pub fn locate(agent: Agent, source: &Path, agent_session_id: &str) -> Result<PathBuf> {
+pub fn locate(agent: AgentId, source: &Path, agent_session_id: &str) -> Result<PathBuf> {
     locate_with(&mut Locator::default(), agent, source, agent_session_id)
 }
 
@@ -47,7 +47,7 @@ pub fn locate(agent: Agent, source: &Path, agent_session_id: &str) -> Result<Pat
 /// later lookups: one directory several accounts share is listed once for all of them.
 pub fn locate_with(
     locator: &mut Locator,
-    agent: Agent,
+    agent: AgentId,
     source: &Path,
     agent_session_id: &str,
 ) -> Result<PathBuf> {
@@ -66,39 +66,44 @@ pub fn locate_with(
     })
 }
 
-/// Points a Codex home's own record of `thread` at the rollout the switch just carried in
-/// (`head`, relative to `target`), which is the one write a switch makes to an agent's own state
-/// beside the copy; what is pointed and when is [`codex_threads::point_thread_at`]'s.
+/// Points the account's own record of `thread` in its provider's thread registry at the record the
+/// switch just carried in (`head`, relative to `target`), for a provider that keeps one: the one
+/// write a switch makes to an agent's own state beside the copy. What is pointed and when is the
+/// provider's [`ThreadRegistry::point_thread_at`]'s.
 ///
-/// `launch_env` is the environment the relaunch will see, which with the home's `config.toml` says
-/// where the home keeps its database. A switch fails (`relocation_failed`, before anything is
-/// relaunched) when where the database is cannot be determined (a `config.toml` that cannot be
-/// read or parsed, a relative `CODEX_SQLITE_HOME`, a directory that cannot be listed) or it cannot
-/// be written to or stays busy: a row left standing would resume the stale branch with no sign of
-/// it.
+/// `launch_env` is the environment the relaunch will see, which can say where the account keeps
+/// its registry. A switch fails (`relocation_failed`, before anything is relaunched) when where the
+/// registry is cannot be determined, or it cannot be written to or stays busy: a row left standing
+/// would resume the stale branch with no sign of it.
 pub fn repoint_thread_row(
-    agent: Agent,
+    agent: AgentId,
     target: &Path,
     head: &Path,
     thread: &str,
     launch_env: &HashMap<String, String>,
 ) -> Result<()> {
+    let Some(registry) = thread_registry(agent) else {
+        return Ok(());
+    };
     repoint_within(
+        registry,
         agent,
         target,
         head,
         thread,
         launch_env,
-        codex_threads::PATIENCE,
+        registry.patience(),
     )
 }
 
 /// Why a conversation could not be moved, in the words of the wire's `cause` param on
 /// `relocation_failed`: the file system's own causes ([`SharingCause`]), which a user can act on,
-/// and the ones of this move alone — `config_unreadable` (the target's `config.toml` cannot be read
-/// or parsed), `sqlite_home` (where its thread database is cannot be told), `symlink` (a record
-/// holds a symbolic link, which is not copied) and `not_restored` (an older item could not be put
-/// back). `other` is everything else. Not found and conflicts are told only as `other`.
+/// and the ones of this move alone — `config_unreadable` (the provider's configuration that says
+/// where its thread registry is cannot be read or understood), `sqlite_home` (where that registry
+/// is cannot be told; the word names Codex's setting, the first provider to have such a
+/// registry), `symlink` (a record holds a symbolic link, which is not copied) and `not_restored`
+/// (an older item could not be put back). `other` is everything else. Not found and conflicts are
+/// told only as `other`.
 fn cause_of_io(err: &io::Error) -> &'static str {
     narrowed(SharingCause::of(err))
 }
@@ -113,17 +118,15 @@ fn narrowed(cause: SharingCause) -> &'static str {
     }
 }
 
-/// The wire word for why a Codex home's row of the thread was not pointed (see [`cause_of_io`]).
+/// The wire word for why the account's row of the thread was not pointed (see [`cause_of_io`]).
 fn cause_of_row(err: &RowError) -> &'static str {
-    match err {
-        RowError::ConfigUnreadable(err) => match cause_of_io(err) {
+    match err.cause {
+        RowCause::Configuration(cause) => match narrowed(cause) {
             "other" => "config_unreadable",
             cause => cause,
         },
-        RowError::ConfigInvalid(_) => "config_unreadable",
-        RowError::Unresolvable(_) => "sqlite_home",
-        RowError::Listing(_, err) | RowError::Inspecting(_, err) => cause_of_io(err),
-        RowError::Database(_, err) => narrowed(SharingCause::of_database(err)),
+        RowCause::Unlocatable => "sqlite_home",
+        RowCause::Registry(cause) => narrowed(cause),
     }
 }
 
@@ -140,24 +143,27 @@ impl std::fmt::Display for SymbolicLink {
 impl std::error::Error for SymbolicLink {}
 
 fn repoint_within(
-    agent: Agent,
+    registry: &dyn ThreadRegistry,
+    agent: AgentId,
     target: &Path,
     head: &Path,
     thread: &str,
     launch_env: &HashMap<String, String>,
     patience: std::time::Duration,
 ) -> Result<()> {
-    if agent != Agent::Codex || !plausible_id(thread) {
+    if !plausible_id(thread) {
         return Ok(());
     }
-    codex_threads::point_thread_at(target, &target.join(head), thread, launch_env, patience)
+    registry
+        .point_thread_at(target, &target.join(head), thread, launch_env, patience)
         .map_err(|err| {
             let detail = err.to_string();
             CodedError::raised(
                 error_code::RELOCATION_FAILED,
                 format!(
-                    "the conversation was copied but Codex's record of the thread was not \
-                     updated: {detail}"
+                    "the conversation was copied but {}'s record of the thread was not \
+                     updated: {detail}",
+                    agent.label()
                 ),
                 &[
                     ("path", &target.to_string_lossy()),

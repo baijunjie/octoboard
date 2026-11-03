@@ -129,6 +129,10 @@ quota is read" and "What reading a quota leaves behind" in `docs/product/account
   `docs/product/account-quota-readings.md`);
 - none starts once the daemon has begun shutting down, and one running when it does is stopped.
 
+The redeem is the control request `use_reset_credit`, naming the agent and the account (none for the default account).
+A redeem for an agent without usage limit resets, Claude Code or Grok Build, is refused before anything runs, with
+`provider_unsupported` (see "The error alert" in `docs/product/error-alerts.md`).
+
 When Codex answers that the usage was reset, the daemon takes the redeemed reset out of the reading it holds (the count
 goes down by one; with no reset named, the list is dropped and only the count kept) and sends the changed reading to
 every window before it replies, so no window offers that reset again. After every run of Codex, whatever its outcome,

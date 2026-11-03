@@ -56,7 +56,7 @@ import { useWaitingCount } from "./store";
 import { indexSessions, NO_SESSIONS, sessionsOf } from "./sessions/sessionIndex";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
-import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "./store";
+import { useDaemon, useDaemonStore, useDaemonStoreEqual, useProviders } from "./store";
 import { terminalEmptyState } from "./app/emptyState";
 import { TerminalPane } from "./terminal/TerminalPane";
 import { WelcomeScreen } from "./WelcomeScreen";
@@ -88,6 +88,7 @@ export function App(): React.ReactElement {
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultAccountNames = useDaemonStore((s) => s.settings.default_account_names);
+  const providers = useProviders();
   // Keeps Settings out of the way of the question's dialog.
   const questionPending = usePendingQuestion();
   const { terminalRef, welcomeRef, agentAreaRef, focusTerminal } = useTerminalFocus();
@@ -185,7 +186,7 @@ export function App(): React.ReactElement {
   // sidebar previews another console. A selected session or an archive keeps that offer hidden.
   const emptyState = useDaemonStoreEqual((s) =>
     selectedSession === undefined && !archiveOpen
-      ? terminalEmptyState(hosts !== undefined, currentConsole, sidebarView.focus, projectList, currentConsole ? sessionsOf(indexSessions(s.sessions).byConsole, currentConsole.id) : NO_SESSIONS, agentAvailability, s.settings.added_agents)
+      ? terminalEmptyState(hosts !== undefined, currentConsole, sidebarView.focus, projectList, currentConsole ? sessionsOf(indexSessions(s.sessions).byConsole, currentConsole.id) : NO_SESSIONS, agentAvailability, s.settings.added_agents, s.providers)
       : undefined,
   );
   // The "no agent added" state offers Add agent; only "no agent installed" has nothing to press.
@@ -654,6 +655,7 @@ export function App(): React.ReactElement {
                       projects,
                       accounts,
                       defaultNames: defaultAccountNames,
+                      providers,
                       selectedSessionId,
                       onSelect: stableSelectSession,
                       onReopen: stableReopenSession,

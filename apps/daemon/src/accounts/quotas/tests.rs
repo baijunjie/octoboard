@@ -1,11 +1,11 @@
 use super::*;
 
 use crate::protocol::{
-    quota_unavailable_code as code, AccountQuota, Agent, Event, QuotaUnavailable, QuotaWindow,
+    quota_unavailable_code as code, AccountQuota, AgentId, Event, QuotaUnavailable, QuotaWindow,
     QuotaWindowKind,
 };
 
-pub(super) fn key(agent: Agent, account: Option<&str>) -> Key {
+pub(super) fn key(agent: AgentId, account: Option<&str>) -> Key {
     Key {
         agent,
         account: account.map(str::to_string),
@@ -30,7 +30,7 @@ pub(super) fn quota_of(key: &Key, failed: bool) -> AccountQuota {
 #[test]
 fn a_failure_keeps_the_last_good_windows_beside_the_reason_and_a_success_clears_it() {
     let (state, _dir) = crate::test_support::app_state("quota-stale");
-    let key = key(Agent::Codex, None);
+    let key = key(AgentId::CODEX, None);
     let good = AccountQuota {
         fetched_at: 7,
         plan: Some("plus".to_string()),
@@ -81,7 +81,7 @@ fn a_failure_keeps_the_last_good_windows_beside_the_reason_and_a_success_clears_
 fn every_change_is_broadcast_whole_and_a_forgotten_account_is_dropped() {
     let (state, _dir) = crate::test_support::app_state("quota-broadcast");
     let mut events = state.subscribe();
-    let (default, owned) = (key(Agent::Claude, None), key(Agent::Claude, Some("a")));
+    let (default, owned) = (key(AgentId::CLAUDE, None), key(AgentId::CLAUDE, Some("a")));
     state
         .account_quotas
         .recorded(&state, owned.clone(), quota_of(&owned, false));
@@ -115,7 +115,7 @@ fn every_change_is_broadcast_whole_and_a_forgotten_account_is_dropped() {
 #[test]
 fn readings_of_accounts_no_longer_targeted_are_dropped() {
     let (state, _dir) = crate::test_support::app_state("quota-retain");
-    let (kept, gone) = (key(Agent::Codex, None), key(Agent::Codex, Some("a")));
+    let (kept, gone) = (key(AgentId::CODEX, None), key(AgentId::CODEX, Some("a")));
     state
         .account_quotas
         .recorded(&state, kept.clone(), quota_of(&kept, false));
@@ -148,7 +148,7 @@ fn readings_of_accounts_no_longer_targeted_are_dropped() {
 #[test]
 fn a_superseded_claim_tells_the_log_nothing() {
     let (state, _dir) = crate::test_support::app_state("quota-log-claim");
-    let key = key(Agent::Codex, Some("a"));
+    let key = key(AgentId::CODEX, Some("a"));
     let claim = {
         let mut inner = state.account_quotas.lock();
         state
@@ -171,7 +171,7 @@ fn a_superseded_claim_tells_the_log_nothing() {
 #[test]
 fn forgetting_an_account_forgets_what_the_log_was_told_of_it() {
     let (state, _dir) = crate::test_support::app_state("quota-forget-observed");
-    let (kept, gone) = (key(Agent::Codex, None), key(Agent::Codex, Some("a")));
+    let (kept, gone) = (key(AgentId::CODEX, None), key(AgentId::CODEX, Some("a")));
     for key in [&kept, &gone] {
         state
             .account_quotas

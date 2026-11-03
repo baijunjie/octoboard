@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 use tokio::sync::oneshot;
 
-use crate::protocol::{Agent, Session, SessionRequestAction, SessionRequestEnding};
+use crate::protocol::{AgentId, Session, SessionRequestAction, SessionRequestEnding};
 use crate::state::AppState;
 
 use super::{outcome_message, tell_the_caller, wait_for_answer, Ask, Request};
@@ -23,7 +23,7 @@ use super::{outcome_message, tell_the_caller, wait_for_answer, Ask, Request};
 /// own value stands. Empty for every other kind of request, and for one approved automatically.
 #[derive(Debug, Default, Clone)]
 pub struct Edits {
-    pub agent: Option<Agent>,
+    pub agent: Option<AgentId>,
     pub account: Option<Option<String>>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
@@ -77,7 +77,7 @@ pub(crate) enum Change {
     /// default account), with the `model` and `effort` the call asked for.
     Handoff {
         target: String,
-        agent: Agent,
+        agent: AgentId,
         account: Option<String>,
         model: Option<Option<String>>,
         effort: Option<Option<String>>,

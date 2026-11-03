@@ -4,7 +4,7 @@ use crate::mcp::test_support::{
     account, arguments, console_session, peer_state, project_session, shared_console_state,
     with_status, RepoState,
 };
-use crate::protocol::{Agent, Console, Project, Role, Session, SessionStatus};
+use crate::protocol::{AgentId, Console, Project, Role, Session, SessionStatus};
 use crate::test_support::{running, ScratchDir};
 use anyhow::anyhow;
 use serde_json::{json, Map, Value};
@@ -224,7 +224,7 @@ fn rich_session(fixture: &RepoState) {
         .store
         .insert_account(&account(
             "claude-a",
-            Agent::Claude,
+            AgentId::CLAUDE,
             "Work account",
             "/tmp/octoboard-secret-account-dir",
         ))
@@ -332,7 +332,7 @@ async fn the_default_account_is_shown_under_the_name_the_user_gave_it() {
     fixture
         .state
         .store
-        .set_default_account_name(Agent::Claude, Some("Personal"))
+        .set_default_account_name(AgentId::CLAUDE, Some("Personal"))
         .unwrap();
     let record = call(
         &fixture.state,
@@ -994,8 +994,14 @@ async fn a_session_holding_its_queue_says_why() {
     assert_eq!(fetched().await, (Value::Null, json!(0)));
 
     // Freshly launched, before its agent's first hook.
-    let live =
-        crate::test_support::watched_live_session("of-a", Agent::Claude, 80, 24, "sleep 30", None);
+    let live = crate::test_support::watched_live_session(
+        "of-a",
+        AgentId::CLAUDE,
+        80,
+        24,
+        "sleep 30",
+        None,
+    );
     state.register_live((*live).clone());
     state.queue_message("of-a", "go on");
     let (hold, queued) = fetched().await;

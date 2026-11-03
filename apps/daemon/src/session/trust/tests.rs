@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use super::*;
+use crate::adapter::claude::screen::TRUST as CLAUDE;
+use crate::adapter::codex::screen::TRUST as CODEX;
+use crate::adapter::grok::screen::TRUST as GROK;
 use crate::protocol::{Console, ProjectSource, Role, SessionStatus};
 use crate::session::spawn_reader_thread;
 use crate::session::wait::wait_for;
@@ -303,9 +306,9 @@ fn a_transcript_quoting_both_options_beside_a_cursor_glyph_is_not_the_screen() {
 #[test]
 fn the_watch_for_an_agent_outlasts_any_amount_of_output() {
     for (agent, screen) in [
-        (Agent::Claude, SCREEN),
-        (Agent::Grok, GROK_SCREEN),
-        (Agent::Codex, CODEX_SCREEN),
+        (AgentId::CLAUDE, SCREEN),
+        (AgentId::GROK, GROK_SCREEN),
+        (AgentId::CODEX, CODEX_SCREEN),
     ] {
         let state = TrustState::new(agent, None);
         let mut sightings = state.take_sightings().expect("receiver");
@@ -326,7 +329,7 @@ fn the_watch_for_an_agent_outlasts_any_amount_of_output() {
 /// among them, does not.
 #[test]
 fn the_first_title_of_codex_ends_the_watch_with_no_screen() {
-    let live = stand_in("s", Agent::Codex, "sleep 30");
+    let live = stand_in("s", AgentId::CODEX, "sleep 30");
     let mut sightings = live.trust.take_sightings().expect("receiver");
     live.on_output(b"\x1b]10;?\x1b\\\x1b]11;?\x07\x1b]8;;https://example.com\x07login");
     assert!(
@@ -345,7 +348,7 @@ fn the_first_title_of_codex_ends_the_watch_with_no_screen() {
 /// in, so a chunk that holds the screen and a title is a sighting.
 #[test]
 fn a_title_in_the_chunk_of_the_screen_does_not_end_the_wait_for_it() {
-    let live = stand_in("s", Agent::Codex, "sleep 30");
+    let live = stand_in("s", AgentId::CODEX, "sleep 30");
     live.on_output(&[CODEX_SCREEN, b"\x1b]0;project\x07"].concat());
     assert!(live.trust.waiting());
     assert!(live.trust.holds_writes());
@@ -355,7 +358,7 @@ fn a_title_in_the_chunk_of_the_screen_does_not_end_the_wait_for_it() {
 /// screens, and their watch runs on to the first hook.
 #[test]
 fn a_title_ends_no_watch_but_codexs() {
-    for (agent, screen) in [(Agent::Claude, SCREEN), (Agent::Grok, GROK_SCREEN)] {
+    for (agent, screen) in [(AgentId::CLAUDE, SCREEN), (AgentId::GROK, GROK_SCREEN)] {
         let state = TrustState::new(agent, None);
         state.note_title();
         assert!(state.holds_writes(), "{agent:?}");
@@ -366,7 +369,7 @@ fn a_title_ends_no_watch_but_codexs() {
 
 #[test]
 fn a_hook_releases_the_window() {
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(AgentId::CLAUDE, None);
     state.feed(b"some output", 0, 0);
     state.note_hook();
     assert_eq!(state.window.lock().unwrap().capacity(), 0);
@@ -376,7 +379,7 @@ fn a_hook_releases_the_window() {
 fn the_event_is_named_trust_prompt_on_the_wire_and_names_the_agent() {
     let json = serde_json::to_value(Event::TrustPrompt {
         session: "s".into(),
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         project: "p".into(),
         path: "/x/y".into(),
         trust_dir: Some("/x".into()),
@@ -393,10 +396,10 @@ fn the_event_is_named_trust_prompt_on_the_wire_and_names_the_agent() {
 #[test]
 fn the_screen_is_sighted_once_however_it_is_cut_into_reads() {
     for (agent, screen, after) in [
-        (Agent::Claude, SCREEN, AFTER_DOWN),
-        (Agent::Codex, CODEX_SCREEN, CODEX_AFTER_DOWN),
-        (Agent::Codex, CODEX_FOLDER_ACCESS, CODEX_AFTER_DOWN),
-        (Agent::Grok, GROK_SCREEN, GROK_ANIMATION),
+        (AgentId::CLAUDE, SCREEN, AFTER_DOWN),
+        (AgentId::CODEX, CODEX_SCREEN, CODEX_AFTER_DOWN),
+        (AgentId::CODEX, CODEX_FOLDER_ACCESS, CODEX_AFTER_DOWN),
+        (AgentId::GROK, GROK_SCREEN, GROK_ANIMATION),
     ] {
         for size in [1, 3, 7, 200, screen.len()] {
             let state = TrustState::new(agent, None);
@@ -419,7 +422,7 @@ fn the_screen_is_sighted_once_however_it_is_cut_into_reads() {
 
 #[test]
 fn nothing_is_sighted_before_the_screen_is_complete() {
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(AgentId::CLAUDE, None);
     let mut sightings = state.take_sightings().expect("receiver");
     // Everything up to, and including, the first option.
     let cut = SCREEN
@@ -434,7 +437,7 @@ fn nothing_is_sighted_before_the_screen_is_complete() {
 
 #[test]
 fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
-    for agent in [Agent::Codex, Agent::Grok] {
+    for agent in [AgentId::CODEX, AgentId::GROK] {
         let state = TrustState::new(agent, None);
         let mut sightings = state.take_sightings().expect("receiver");
         state.feed(SCREEN, 0, 0);
@@ -445,7 +448,7 @@ fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
         assert!(!state.claim_answer(), "{agent:?} is not answered for it");
     }
 
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(AgentId::CLAUDE, None);
     let mut sightings = state.take_sightings().expect("receiver");
     state.feed(DISMISSED, 0, 0);
     state.note_hook();
@@ -455,9 +458,35 @@ fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
     assert!(!state.waiting());
 }
 
+/// A provider whose trust screen has not been measured never sights one, whatever it prints, so it
+/// is never pressed; its messages are held until a hook, or until the hook fallback lets them
+/// through.
+#[test]
+fn a_provider_with_no_trust_screen_never_sights_one_and_holds_messages_for_a_hook() {
+    for screen in [SCREEN, CODEX_SCREEN, GROK_SCREEN] {
+        let state = TrustState::new(AgentId::TEST, None);
+        let mut sightings = state.take_sightings().expect("receiver");
+        state.feed(screen, 0, 0);
+        assert!(sightings.try_recv().is_err());
+        assert!(!state.waiting());
+        assert!(!state.claim_answer());
+        assert!(state.holds_writes(), "held for a hook");
+        state.note_hook();
+        assert!(!state.holds_writes(), "a hook releases them");
+    }
+
+    let state = TrustState::new(AgentId::TEST, None);
+    assert!(state.holds_writes());
+    assert!(
+        state.release_without_hook(),
+        "the fallback lets them through"
+    );
+    assert!(!state.holds_writes());
+}
+
 #[test]
 fn a_session_is_answered_at_most_once_and_only_after_the_screen_was_sighted() {
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(AgentId::CLAUDE, None);
     assert!(!state.claim_answer(), "nothing sighted yet");
     state.feed(SCREEN, 0, 0);
     assert!(state.waiting());
@@ -471,7 +500,7 @@ fn console() -> Console {
         id: "console-1".to_string(),
         name: "Console".to_string(),
         workdir: "/tmp/console-1".to_string(),
-        default_agent: Agent::Claude,
+        default_agent: AgentId::CLAUDE,
         project_session_agent: None,
         accounts: Default::default(),
         launch: Default::default(),
@@ -502,7 +531,7 @@ fn project(consent: bool) -> Project {
     }
 }
 
-fn session(id: &str, agent: Agent, kind: SessionKind, project_id: Option<&str>) -> Session {
+fn session(id: &str, agent: AgentId, kind: SessionKind, project_id: Option<&str>) -> Session {
     Session {
         agent,
         project_id: project_id.map(str::to_string),
@@ -513,8 +542,13 @@ fn session(id: &str, agent: Agent, kind: SessionKind, project_id: Option<&str>) 
 #[tokio::test]
 async fn a_console_session_is_always_answered_and_a_project_only_with_the_users_consent() {
     let (state, dir, work) = state_with_real_project("consented-rule");
-    let console_session = session("s", Agent::Claude, SessionKind::Console, None);
-    let project_session = session("s", Agent::Claude, SessionKind::Project, Some("project-1"));
+    let console_session = session("s", AgentId::CLAUDE, SessionKind::Console, None);
+    let project_session = session(
+        "s",
+        AgentId::CLAUDE,
+        SessionKind::Project,
+        Some("project-1"),
+    );
     let mut inside = project(false);
     inside.path = work.join("project").to_string_lossy().into_owned();
     let mut consenting = inside.clone();
@@ -544,7 +578,7 @@ fn scratch(name: &str) -> ScratchDir {
 /// A stand-in for an agent at its trust screen, on a real PTY with its trust watch running:
 /// prints what the script says to and records every byte it is sent, so a test sees exactly
 /// what reached the terminal.
-fn stand_in(id: &str, agent: Agent, script: &str) -> StandIn {
+fn stand_in(id: &str, agent: AgentId, script: &str) -> StandIn {
     // Raw first, so the fixtures reach the terminal as captured and the keys are read as sent.
     let script = format!("stty raw -echo; {script}");
     let live = watched_live_session(id, agent, 120, 32, &script, None);
@@ -595,7 +629,7 @@ fn conversation(received: &Path, held: usize) -> String {
 fn answering_sends_a_down_and_then_an_enter_and_nothing_else() {
     let dir = scratch("answer");
     let received = dir.join("received");
-    let live = stand_in("s", Agent::Claude, &full_script(&received));
+    let live = stand_in("s", AgentId::CLAUDE, &full_script(&received));
     let mut sightings = live.trust.take_sightings().expect("receiver");
     assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
@@ -620,7 +654,7 @@ fn nothing_is_sent_when_the_cursor_is_not_on_the_first_option() {
         "sleep 30".to_string(),
     ]
     .join("; ");
-    let live = stand_in("s", Agent::Claude, &script);
+    let live = stand_in("s", AgentId::CLAUDE, &script);
     let mut sightings = live.trust.take_sightings().expect("receiver");
     assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
@@ -644,7 +678,7 @@ fn enter_is_withheld_when_the_cursor_does_not_move() {
         "sleep 30".to_string(),
     ]
     .join("; ");
-    let live = stand_in("s", Agent::Claude, &script);
+    let live = stand_in("s", AgentId::CLAUDE, &script);
     let mut sightings = live.trust.take_sightings().expect("receiver");
     assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
@@ -669,7 +703,7 @@ fn a_terminals_own_traffic_does_not_stop_the_answer() {
     let chatter: &[u8] = b"\x1b[I\x1b[O\x1b[?1;2c";
     // The stand-in holds its redraw until the chatter is in.
     let script = conversation(&received, chatter.len());
-    let live = stand_in("s", Agent::Claude, &script);
+    let live = stand_in("s", AgentId::CLAUDE, &script);
     let mut sightings = live.trust.take_sightings().expect("receiver");
     assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
@@ -694,7 +728,7 @@ fn a_key_is_written_only_while_nothing_else_has_written() {
     let dir = scratch("if-untouched");
     let received = dir.join("received");
     let script = format!("printf ready; {}; sleep 30", take(5, &quoted(&received)));
-    let live = stand_in("s", Agent::Claude, &script);
+    let live = stand_in("s", AgentId::CLAUDE, &script);
     // Input written before the stand-in has set its terminal up would be thrown away.
     assert!(wait_for(PATIENCE, || live
         .recent_output(64)
@@ -729,7 +763,7 @@ fn enter_is_withheld_when_something_else_writes_into_the_session_meanwhile() {
     let received = dir.join("received");
     // The stand-in holds its redraw until the stray byte is in.
     let script = conversation(&received, 1);
-    let live = stand_in("s", Agent::Claude, &script);
+    let live = stand_in("s", AgentId::CLAUDE, &script);
     let mut sightings = live.trust.take_sightings().expect("receiver");
     assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
@@ -752,10 +786,10 @@ fn nothing_is_sent_to_a_session_that_never_showed_its_own_screen() {
     let dir = scratch("never");
     let received = dir.join("received");
     let script = format!("echo hello; {}; sleep 30", take(1, &quoted(&received)));
-    let claude = stand_in("a", Agent::Claude, &script);
+    let claude = stand_in("a", AgentId::CLAUDE, &script);
     assert!(answer(&claude).is_err());
 
-    let codex = stand_in("b", Agent::Codex, &script);
+    let codex = stand_in("b", AgentId::CODEX, &script);
     codex.trust.feed(SCREEN, 0, 0);
     assert!(answer(&codex).is_err());
 
@@ -856,7 +890,7 @@ async fn a_console_sessions_screen_is_answered_without_asking() {
     let mut events = state.subscribe();
     let record = session(
         "console-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Console,
         None,
     );
@@ -878,7 +912,7 @@ async fn a_project_without_consent_is_asked_about_and_nothing_is_sent_until_conf
     let mut events = state.subscribe();
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -969,7 +1003,7 @@ async fn a_consented_project_is_answered_without_a_prompt() {
     let mut events = state.subscribe();
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -993,7 +1027,7 @@ async fn codex_folder_access_asks_and_raises_the_hand_only_without_consent() {
             .set_project_trust_consent("project-1", consent)
             .unwrap();
         let mut events = state.subscribe();
-        let mut record = session("s", Agent::Codex, SessionKind::Project, Some("project-1"));
+        let mut record = session("s", AgentId::CODEX, SessionKind::Project, Some("project-1"));
         record.status = SessionStatus::Working;
         let script = codex_script(Path::new("%RECEIVED%"))
             .replace("codex_trust_screen.bin", "codex_folder_access_screen.txt");
@@ -1003,7 +1037,7 @@ async fn codex_folder_access_asks_and_raises_the_hand_only_without_consent() {
 
         let mut prompted = false;
         while let Ok(event) = events.try_recv() {
-            prompted |= matches!(event, Event::TrustPrompt { session, agent: Agent::Codex, .. } if session == "s");
+            prompted |= matches!(event, Event::TrustPrompt { session, agent: AgentId::CODEX, .. } if session == "s");
         }
         assert_eq!(prompted, !consent, "consent {consent}");
         if !consent {
@@ -1041,7 +1075,7 @@ async fn codex_folder_access_on_the_decline_option_is_never_pressed() {
         "sleep 30".to_string(),
     ]
     .join("; ");
-    let record = session("s", Agent::Codex, SessionKind::Project, Some("project-1"));
+    let record = session("s", AgentId::CODEX, SessionKind::Project, Some("project-1"));
     let (live, received) = start(&state, &dir, record, &script);
     screen_printed(&live).await;
     let err = answer_off_the_runtime(&state, live.clone())
@@ -1075,7 +1109,7 @@ async fn a_confirmation_for_a_stale_or_foreign_session_changes_nothing() {
     // Holding another agent's screen, which is not its own.
     let codex = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1089,7 +1123,7 @@ async fn a_confirmation_for_a_stale_or_foreign_session_changes_nothing() {
     // Claude Code's, but not running.
     let gone = session(
         "gone-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1102,7 +1136,7 @@ async fn a_confirmation_for_a_stale_or_foreign_session_changes_nothing() {
     // Running, but its screen is not up.
     let quiet = session(
         "quiet-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1115,7 +1149,7 @@ async fn a_confirmation_for_a_stale_or_foreign_session_changes_nothing() {
     // A console session's screen is not the user's to confirm.
     let console_session = session(
         "console-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Console,
         None,
     );
@@ -1152,7 +1186,7 @@ async fn without_remember_the_screen_is_answered_and_no_consent_is_recorded() {
     let (state, dir) = state_with_project("no-remember");
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1177,7 +1211,7 @@ async fn a_failed_answer_records_no_consent_and_tells_the_user() {
     let script = never_moves_script();
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1213,7 +1247,7 @@ async fn an_automatic_answer_that_fails_leaves_a_notice() {
     let script = never_moves_script();
     let record = session(
         "console-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Console,
         None,
     );
@@ -1247,35 +1281,35 @@ async fn a_snapshot_is_followed_by_the_prompts_still_waiting() {
     let (state, dir, work) = state_with_real_project("replay");
     let waiting = session(
         "waiting-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
     let (waiting_live, _) = start(&state, &dir, waiting, "sleep 30");
     let console_session = session(
         "console-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Console,
         None,
     );
     let (console_session_live, _) = start(&state, &dir, console_session, "sleep 30");
     let quiet = session(
         "quiet-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
     let (_quiet_live, _) = start(&state, &dir, quiet, "sleep 30");
     let answered = session(
         "answered-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
     let (answered_live, _) = start(&state, &dir, answered, "sleep 30");
     let also = session(
         "waiting-2",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1481,7 +1515,7 @@ async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
     let mut events = state.subscribe();
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1513,7 +1547,7 @@ async fn nothing_is_trusted_when_the_answer_fails_or_is_refused() {
     let script = never_moves_script();
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1529,14 +1563,14 @@ async fn nothing_is_trusted_when_the_answer_fails_or_is_refused() {
     // console session's.
     let codex = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
     let (_codex_live, _) = start(&state, &dir, codex, "sleep 30");
     let console_session = session(
         "console-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Console,
         None,
     );
@@ -1544,7 +1578,7 @@ async fn nothing_is_trusted_when_the_answer_fails_or_is_refused() {
     console_session_live.trust.feed(SCREEN, 0, 0);
     let gone = session(
         "gone-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1567,7 +1601,7 @@ async fn a_parent_that_is_the_home_directory_is_refused_before_the_screen_is_ans
     state.store.insert_project(&broad).expect("project");
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("broad"),
     );
@@ -1595,7 +1629,7 @@ async fn a_folder_go_ahead_for_a_project_that_cannot_be_looked_at_is_refused() {
     let (state, dir, work) = state_with_real_project("confirm-stalled");
     let record = session(
         "project-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1663,7 +1697,7 @@ async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others
 
     let under = session(
         "under-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1672,7 +1706,7 @@ async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others
     supervise(&state, &under_live);
     let beside = session(
         "beside-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-2"),
     );
@@ -1706,7 +1740,7 @@ async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others
     // A screen that comes up later under the directory is answered with no prompt.
     let later = session(
         "later-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1756,7 +1790,7 @@ async fn a_project_linked_out_of_a_trusted_directory_is_asked_about_and_not_pres
 
     let waiting = session(
         "waiting-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-2"),
     );
@@ -1772,7 +1806,7 @@ async fn a_project_linked_out_of_a_trusted_directory_is_asked_about_and_not_pres
     add_trusted_directory(&state, &work).await.expect("trusted");
     let later = session(
         "later-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-2"),
     );
@@ -1917,7 +1951,7 @@ async fn a_prompt_offers_the_parent_only_where_trusting_it_would_cover_the_proje
 
     let mut project = project(false);
     project.path = inside;
-    let asking = session("s", Agent::Grok, SessionKind::Project, Some("project-1"));
+    let asking = session("s", AgentId::GROK, SessionKind::Project, Some("project-1"));
     assert!(matches!(prompt(&asking, &project, Some(work.clone())),
         Event::TrustPrompt { trust_dir, .. } if trust_dir == Some(text(&work))));
     assert!(matches!(
@@ -1936,7 +1970,7 @@ async fn the_replay_leaves_out_a_screen_under_a_trusted_directory() {
     let (state, dir, work) = state_with_real_project("replay-trusted");
     let record = session(
         "waiting-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1964,7 +1998,7 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
     let mut events = state.subscribe();
     let a = session(
         "a-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1973,7 +2007,7 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
     screen_printed(&a_live).await;
     let b = session(
         "b-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -1982,7 +2016,7 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
     screen_printed(&b_live).await;
     let console_session = session(
         "console-session-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Console,
         None,
     );
@@ -1997,7 +2031,7 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
     // Another agent's, at its own screen: the permission is the same for every agent.
     let codex = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2025,7 +2059,7 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
     // A repeat: nothing announced, and nothing more is answered.
     let c = session(
         "c-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2052,7 +2086,7 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
 fn codex_is_pressed_with_an_enter_and_nothing_else() {
     let dir = scratch("codex");
     let received = dir.join("received");
-    let live = stand_in("s", Agent::Codex, &codex_script(&received));
+    let live = stand_in("s", AgentId::CODEX, &codex_script(&received));
     let mut sightings = live.trust.take_sightings().expect("receiver");
     assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
@@ -2070,7 +2104,7 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
     let (state, dir) = state_with_project("codex-in-terminal");
     let record = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2126,10 +2160,10 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
 #[tokio::test]
 async fn a_message_waits_while_codex_is_at_its_screen_and_follows_the_press() {
     let (state, dir) = state_with_project("held-message");
-    let message = crate::session::term::frame_message(Agent::Codex, "hello");
+    let message = crate::session::term::frame_message(AgentId::CODEX, "hello");
     let record = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2171,14 +2205,14 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
     state.store.insert_project(&elsewhere).expect("project");
     let a = session(
         "a-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
     let (a_live, a_received) = start(&state, &dir, a, &full_script(Path::new("%RECEIVED%")));
     let same = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2186,7 +2220,7 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
         start(&state, &dir, same, &codex_script(Path::new("%RECEIVED%")));
     let other = session(
         "codex-2",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-2"),
     );
@@ -2215,10 +2249,10 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
 #[tokio::test]
 async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() {
     let (state, dir) = state_with_project("title-ends");
-    let message = crate::session::term::frame_message(Agent::Codex, "hello");
+    let message = crate::session::term::frame_message(AgentId::CODEX, "hello");
     let record = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2255,11 +2289,11 @@ async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() 
 #[tokio::test]
 async fn codex_answered_in_the_terminal_lets_held_messages_through_once_the_screen_goes() {
     let (state, dir) = state_with_project("codex-released");
-    let message = crate::session::term::frame_message(Agent::Codex, "hello");
+    let message = crate::session::term::frame_message(AgentId::CODEX, "hello");
     let r = "'%RECEIVED%'";
     let answered = session(
         "codex-1",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2271,7 +2305,7 @@ async fn codex_answered_in_the_terminal_lets_held_messages_through_once_the_scre
     );
     let moved = session(
         "codex-2",
-        Agent::Codex,
+        AgentId::CODEX,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2338,22 +2372,22 @@ async fn a_grok_entry_that_never_appears_is_reported_and_records_nothing() {
     .join("; ");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
     state.store.insert_session(&record).expect("session");
     let live = watched_live_session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         120,
         32,
         &format!("stty raw -echo; {script}"),
-        Some(CarriedTrust {
+        Some(Arc::new(crate::adapter::grok::trust::CarriedTrust {
             session_store: dir.join("session-store.toml"),
             user_store: user_store.clone(),
             folder: "/work/project".to_string(),
-        }),
+        })),
     );
     spawn_reader_thread(live.clone(), 8 * 1024);
     state.register_live(live.clone());
@@ -2408,22 +2442,22 @@ async fn grok_answered_in_the_terminal_still_has_its_entry_carried() {
     .join("; ");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
     state.store.insert_session(&record).expect("session");
     let live = watched_live_session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         120,
         32,
         &format!("stty raw -echo; {script}"),
-        Some(CarriedTrust {
+        Some(Arc::new(crate::adapter::grok::trust::CarriedTrust {
             session_store,
             user_store: user_store.clone(),
             folder: "/work/project".to_string(),
-        }),
+        })),
     );
     spawn_reader_thread(live.clone(), 8 * 1024);
     state.register_live(live.clone());
@@ -2472,18 +2506,18 @@ async fn grok_is_pressed_behind_its_animation_and_its_entry_reaches_the_users_st
         "sleep 30".to_string(),
     ]
     .join("; ");
-    let carried = CarriedTrust {
+    let carried = crate::adapter::grok::trust::CarriedTrust {
         session_store,
         user_store: user_store.clone(),
         folder: "/work/project".to_string(),
     };
     let live = watched_live_session(
         "s",
-        Agent::Grok,
+        AgentId::GROK,
         120,
         32,
         &format!("stty raw -echo; {script}"),
-        Some(carried),
+        Some(Arc::new(carried)),
     );
     spawn_reader_thread(live.clone(), 8 * 1024);
     let mut sightings = live.trust.take_sightings().expect("receiver");
@@ -2515,30 +2549,6 @@ async fn grok_is_pressed_behind_its_animation_and_its_entry_reaches_the_users_st
     );
 }
 
-/// Only Grok's entry changes in the user's store, exactly as Grok wrote it — added, or put in
-/// place of a stale one — and every other byte stays; a store that cannot be read is left
-/// alone.
-#[test]
-fn only_groks_entry_changes_in_the_users_store() {
-    let entry = "[folders.\"/work/project\"]\ntrusted = true\ndecided_at = 1791531653\n";
-    let others = "# mine\n[folders.\"/a\"]\ntrusted = true\n\n[folders.'/b']\ntrusted   =   true\n";
-    assert_eq!(
-        merge_entry(others, "/work/project", entry).unwrap(),
-        format!("{others}\n{entry}")
-    );
-    let stale =
-        "[folders.\"/a\"]\ntrusted = true\n\n[folders.\"/work/project\"]\ntrusted = false\n\
-                 decided_at = 5\n\n# about b\n[folders.\"/b\"]\ntrusted = true\n";
-    assert_eq!(
-        merge_entry(stale, "/work/project", entry).unwrap(),
-        stale.replace(
-            "trusted = false\ndecided_at = 5\n",
-            "trusted = true\ndecided_at = 1791531653\n"
-        )
-    );
-    assert!(merge_entry("[folders\n", "/work/project", entry).is_err());
-}
-
 /// A session held up by the folder-trust confirmation is waiting for the user, and its owner is
 /// told so, whether the confirmation was sighted or an automatic answer to it failed.
 #[tokio::test]
@@ -2547,11 +2557,16 @@ async fn an_owner_is_told_that_its_session_waits_on_a_trust_confirmation() {
         let (state, dir) = state_with_project("owner-told");
         let hub = Session {
             project_id: None,
-            ..session("hub", Agent::Claude, SessionKind::Console, None)
+            ..session("hub", AgentId::CLAUDE, SessionKind::Console, None)
         };
         state.store.insert_session(&hub).unwrap();
         let hub = crate::test_support::running(&state, "hub");
-        let mut record = session("s", Agent::Claude, SessionKind::Project, Some("project-1"));
+        let mut record = session(
+            "s",
+            AgentId::CLAUDE,
+            SessionKind::Project,
+            Some("project-1"),
+        );
         record.bound_to = Some("hub".to_string());
         record.role = Role::Worker;
         let (live, _) = start(&state, &dir, record, "sleep 30");
@@ -2578,7 +2593,7 @@ async fn an_owner_is_told_that_its_session_waits_on_a_trust_confirmation() {
 
 #[tokio::test]
 async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_is_gone() {
-    for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+    for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
         let (state, dir) = state_with_project("trust-status");
         let mut record = session("s", agent, SessionKind::Project, Some("project-1"));
         record.status = SessionStatus::Working;
@@ -2608,10 +2623,10 @@ async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_
 #[tokio::test]
 async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
     let (state, dir) = state_with_project("hook-fallback");
-    let message = crate::session::term::frame_message(Agent::Grok, "hello");
+    let message = crate::session::term::frame_message(AgentId::GROK, "hello");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2650,7 +2665,7 @@ async fn the_hook_fallback_never_lets_a_sighted_trust_screen_through() {
     let (state, dir) = state_with_project("hook-fallback-screen");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2662,7 +2677,7 @@ async fn the_hook_fallback_never_lets_a_sighted_trust_screen_through() {
     assert!(live.trust.holds_writes());
     assert!(!live.trust.released_without_hook.load(Ordering::Acquire));
 
-    let watch = TrustState::new(Agent::Grok, None);
+    let watch = TrustState::new(AgentId::GROK, None);
     assert!(watch.release_without_hook());
     assert!(!watch.holds_writes());
     watch.feed(GROK_SCREEN, 0, 0);
@@ -2680,7 +2695,7 @@ async fn a_grok_screen_seen_to_go_with_no_hook_releases_what_it_held() {
     let (state, dir) = state_with_project("grok-screen-gone");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2711,7 +2726,7 @@ async fn a_grok_screen_sighted_after_the_fallback_is_released_when_it_goes() {
     let (state, dir) = state_with_project("grok-screen-late");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2731,7 +2746,7 @@ async fn a_grok_screen_sighted_after_the_fallback_is_released_when_it_goes() {
 /// Claude Code's hold ends with its hook alone: a screen seen to go does not end it.
 #[test]
 fn a_dismissed_screen_ends_no_hold_of_an_agent_without_the_fallback() {
-    let watch = TrustState::new(Agent::Claude, None);
+    let watch = TrustState::new(AgentId::CLAUDE, None);
     watch.dismissed.store(true, Ordering::Release);
     assert!(watch.holds_writes());
 }
@@ -2743,7 +2758,7 @@ async fn the_hook_fallback_leaves_a_dialog_to_hold_the_writes_itself() {
     let (state, dir) = state_with_project("hook-fallback-dialog");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2768,6 +2783,26 @@ async fn the_hook_fallback_leaves_a_dialog_to_hold_the_writes_itself() {
     assert_eq!(state.write_hold("grok-1"), None);
 }
 
+/// A provider whose trust screen has not been measured (the test-only provider) has its output
+/// neither kept nor read for one, so nothing in it is ever sighted, and with no option text of its
+/// own it reads no cursor and no screen of its own in anything; its messages are held for a hook
+/// up to the fallback.
+#[test]
+fn an_unmeasured_trust_screen_is_never_looked_for() {
+    let trust = TrustState::new(AgentId::TEST, None);
+    assert!(!trust.screen.can_be_sighted());
+    assert_eq!(trust.screen.hook_fallback, Some(HOOK_FALLBACK));
+    for chunk in [&b"Yes, I trust this folder"[..], CODEX_SCREEN, GROK_SCREEN] {
+        trust.feed(chunk, 0, chunk.len() as u64);
+        assert!(trust.window.lock().unwrap().is_empty());
+        assert!(!trust.sighted.load(Ordering::Acquire));
+        assert_eq!(trust.screen.cursor_on(chunk), None);
+        assert!(trust.screen.gone_in(chunk));
+        assert!(trust.screen.replaced_in(chunk));
+    }
+    assert!(!trust.screen.gone_in(b"\x1b[2J"));
+}
+
 /// A hook before the bound releases as it always has, and the fallback then does nothing; Claude
 /// Code has no fallback at all.
 #[tokio::test]
@@ -2779,7 +2814,7 @@ async fn a_hook_before_the_bound_releases_and_claude_code_has_no_fallback() {
     let (state, dir) = state_with_project("hook-fallback-hook");
     let record = session(
         "grok-1",
-        Agent::Grok,
+        AgentId::GROK,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2797,12 +2832,12 @@ async fn a_hook_before_the_bound_releases_and_claude_code_has_no_fallback() {
 #[test]
 fn a_hook_after_a_press_the_screen_confirmed_still_carries_the_entry() {
     let watch = TrustState::new(
-        Agent::Grok,
-        Some(CarriedTrust {
+        AgentId::GROK,
+        Some(Arc::new(crate::adapter::grok::trust::CarriedTrust {
             session_store: PathBuf::from("/nonexistent/session/trusted_folders.toml"),
             user_store: PathBuf::from("/nonexistent/user/trusted_folders.toml"),
             folder: "/nonexistent/project".to_string(),
-        }),
+        })),
     );
     watch.sighted.store(true, Ordering::Release);
     watch.dismissed.store(true, Ordering::Release);
@@ -2817,10 +2852,10 @@ fn a_hook_after_a_press_the_screen_confirmed_still_carries_the_entry() {
 #[tokio::test]
 async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
     let (state, dir) = state_with_project("paste-after-hook");
-    let message = crate::session::term::frame_message(Agent::Claude, "hello");
+    let message = crate::session::term::frame_message(AgentId::CLAUDE, "hello");
     let record = session(
         "claude-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2868,7 +2903,7 @@ async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
 /// at once and there is nothing left to wait for.
 #[test]
 fn claude_messages_are_released_by_the_first_hook_when_bracketed_paste_came_first() {
-    let watch = TrustState::new(Agent::Claude, None);
+    let watch = TrustState::new(AgentId::CLAUDE, None);
     assert!(watch.holds_writes());
     watch.note_paste_mode(true);
     assert!(watch.holds_writes(), "still before the hook");
@@ -2881,7 +2916,7 @@ fn claude_messages_are_released_by_the_first_hook_when_bracketed_paste_came_firs
 /// the off, so the hook that follows does not release what is held; bracketed paste on again does.
 #[test]
 fn claude_bracketed_paste_turned_off_before_the_hook_does_not_count() {
-    let watch = TrustState::new(Agent::Claude, None);
+    let watch = TrustState::new(AgentId::CLAUDE, None);
     watch.note_paste_mode(true);
     watch.note_paste_mode(false);
     assert!(
@@ -2901,10 +2936,10 @@ fn claude_bracketed_paste_turned_off_before_the_hook_does_not_count() {
 #[tokio::test]
 async fn claude_messages_are_not_released_by_the_start_probes_bracketed_paste() {
     let (state, dir) = state_with_project("paste-probe");
-    let message = crate::session::term::frame_message(Agent::Claude, "hello");
+    let message = crate::session::term::frame_message(AgentId::CLAUDE, "hello");
     let record = session(
         "claude-1",
-        Agent::Claude,
+        AgentId::CLAUDE,
         SessionKind::Project,
         Some("project-1"),
     );
@@ -2953,12 +2988,12 @@ async fn claude_messages_are_not_released_by_the_start_probes_bracketed_paste() 
 /// terminal never having turned it on.
 #[test]
 fn codex_and_grok_are_released_by_the_first_hook_without_bracketed_paste() {
-    let codex = TrustState::new(Agent::Codex, None);
+    let codex = TrustState::new(AgentId::CODEX, None);
     assert!(!codex.follows_paste_mode());
     assert!(codex.note_hook().released);
     assert!(!codex.holds_writes());
 
-    let grok = TrustState::new(Agent::Grok, None);
+    let grok = TrustState::new(AgentId::GROK, None);
     assert!(grok.note_hook().released);
     assert!(!grok.holds_writes());
 }

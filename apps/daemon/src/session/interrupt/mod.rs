@@ -37,7 +37,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 
-use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
+use crate::session::screen::{Interrupt, InterruptKey};
 use crate::session::wait::{wait_for, wait_quiet};
 use crate::session::LiveSession;
 use crate::state::{AppState, ClaimKind, WriteHold};
@@ -106,13 +107,35 @@ const NOT_SHOWN_RUNNING: &str = "No key was sent: the session reads as working, 
      does not show a turn running (its title shows none, or has stopped changing), so a key could \
      land on something other than a turn. Check it with `get_session`.";
 
-const WAITING_FOR_USER: &str = "No key was sent: the session's agent is showing something only \
-     the user can answer (a dialog of its own, or Codex's `Action Required`), which a key would \
-     answer in their place. It is theirs to clear in the terminal.";
+/// What the session is waiting on: a dialog of its own, or the title `agent`'s provider shows
+/// when only the user can act, where it has one.
+fn waiting_for_user(agent: AgentId) -> String {
+    let shown = match crate::adapter::provider(agent).screen().user_action_title() {
+        Some(title) => format!("a dialog of its own, or {}'s `{title}`", agent.label()),
+        None => "a dialog of its own".to_string(),
+    };
+    format!(
+        "No key was sent: the session's agent is showing something only the user can answer \
+         ({shown}), which a key would answer in their place. It is theirs to clear in the terminal."
+    )
+}
 
-const DRAFT_UNREAD: &str = "No key was sent: Grok Build's composer held a draft that could not \
-     be read back off the screen to clear it, and a Ctrl-C would only have cleared it. Check the \
-     session with `get_session`.";
+fn draft_unread(agent: AgentId) -> String {
+    format!(
+        "No key was sent: {}'s composer held a draft that could not be read back off the screen \
+         to clear it, and a Ctrl-C would only have cleared it. Check the session with \
+         `get_session`.",
+        agent.label()
+    )
+}
+
+fn no_key_known(agent: AgentId) -> String {
+    format!(
+        "No key was sent: no key is known to interrupt a turn of {} safely. Ask the user to stop \
+         it in the terminal.",
+        agent.label()
+    )
+}
 
 const TOUCHED: &str = "Nothing was sent: something else wrote into the session's terminal just \
      then. Check it with `get_session` before trying again.";
@@ -141,19 +164,26 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
         });
     };
     let agent = live.agent;
+    let Some(interrupt) = crate::adapter::provider(agent).screen().interrupt() else {
+        return Ok(Interrupted {
+            interrupted: false,
+            status: state.agent_status(&session),
+            note: no_key_known(agent),
+        });
+    };
     let written = state.written_mid_turn(id);
     let settle = settle();
     let pressed = {
         let state = state.clone();
-        tokio::task::spawn_blocking(move || press(&state, &live, settle)).await?
+        tokio::task::spawn_blocking(move || press(&state, &live, interrupt, settle)).await?
     }?;
     let status = state
         .session_record(id)
         .map(|session| state.agent_status(&session))
         .unwrap_or(SessionStatus::Working);
     let (interrupted, note) = match pressed {
-        Pressed::Nothing(why) => (false, nothing_sent(why).to_string()),
-        Pressed::OnlyCtrlU { draft, why } => (false, only_ctrl_u(draft, why)),
+        Pressed::Nothing(why) => (false, nothing_sent(why, agent)),
+        Pressed::OnlyCtrlU { draft, why } => (false, only_ctrl_u(agent, interrupt, draft, why)),
         Pressed::Keys {
             draft,
             ended: false,
@@ -164,14 +194,17 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
                 "The interrupt key was sent, but the session still reads as working {} seconds \
                  later. Check it with `get_session` before sending it anything.{}",
                 SETTLE.as_secs(),
-                draft_note(draft)
+                draft_note(agent, interrupt, draft)
             ),
         ),
         Pressed::Keys {
             draft,
             prompt,
             ended: true,
-        } => (true, interrupted_note(agent, written, draft, prompt)),
+        } => (
+            true,
+            interrupted_note(agent, interrupt, written, draft, prompt),
+        ),
     };
     Ok(Interrupted {
         interrupted,
@@ -180,23 +213,27 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
     })
 }
 
-fn nothing_sent(why: Held) -> &'static str {
+fn nothing_sent(why: Held, agent: AgentId) -> String {
     match why {
-        Held::TurnOver => NOTHING_TO_INTERRUPT,
-        Held::NotShownRunning => NOT_SHOWN_RUNNING,
-        Held::Touched => TOUCHED,
-        Held::WaitingForUser => WAITING_FOR_USER,
-        Held::DraftUnread => DRAFT_UNREAD,
+        Held::TurnOver => NOTHING_TO_INTERRUPT.to_string(),
+        Held::NotShownRunning => NOT_SHOWN_RUNNING.to_string(),
+        Held::Touched => TOUCHED.to_string(),
+        Held::WaitingForUser => waiting_for_user(agent),
+        Held::DraftUnread => draft_unread(agent),
     }
 }
 
-/// What the caller is told when Grok's composer was cleared and its Ctrl-C did not go in.
-fn only_ctrl_u(draft: Draft, why: CtrlCHeld) -> String {
+/// What the caller is told when the input box was cleared ahead of a Ctrl-C
+/// ([`InterruptKey::CtrlCAfterClearing`]) and the Ctrl-C did not go in.
+fn only_ctrl_u(agent: AgentId, interrupt: &Interrupt, draft: Draft, why: CtrlCHeld) -> String {
+    let label = agent.label();
     let sent = match draft {
-        Draft::None => "Only a Ctrl-U was sent, into Grok Build's empty composer",
-        Draft::Cleared => "Only Ctrl-U was sent, which cleared the draft in Grok Build's composer",
+        Draft::None => format!("Only a Ctrl-U was sent, into {label}'s empty composer"),
+        Draft::Cleared => {
+            format!("Only Ctrl-U was sent, which cleared the draft in {label}'s composer")
+        }
         Draft::Partly => {
-            "Only Ctrl-U was sent, which cleared part of the draft in Grok Build's composer"
+            format!("Only Ctrl-U was sent, which cleared part of the draft in {label}'s composer")
         }
     };
     let why = match why {
@@ -215,25 +252,45 @@ fn only_ctrl_u(draft: Draft, why: CtrlCHeld) -> String {
         "{sent}; the Ctrl-C that cancels the turn was not sent, because {why}. Check the session \
          with `get_session`.{}",
         if draft == Draft::None {
-            ""
+            String::new()
         } else {
-            " Grok Build may let you undo the clearing with ctrl+z."
+            undo_note(agent, interrupt)
         }
     )
 }
 
-fn draft_note(draft: Draft) -> &'static str {
+fn draft_note(agent: AgentId, interrupt: &Interrupt, draft: Draft) -> String {
     match draft {
-        Draft::None => "",
-        Draft::Cleared | Draft::Partly => {
-            " Grok Build's composer held a draft, which was cleared first so the Ctrl-C would \
-             cancel the turn; Grok Build may let you undo the clearing with ctrl+z."
-        }
+        Draft::None => String::new(),
+        Draft::Cleared | Draft::Partly => format!(
+            " {}'s composer held a draft, which was cleared first so the Ctrl-C would cancel the \
+             turn;{}",
+            agent.label(),
+            undo_note(agent, interrupt)
+        ),
+    }
+}
+
+/// The sentence saying how the clearing of a draft may be undone, where the provider has a key for
+/// it; it starts with a space.
+fn undo_note(agent: AgentId, interrupt: &Interrupt) -> String {
+    match interrupt.key {
+        InterruptKey::CtrlCAfterClearing { undo: Some(undo) } => format!(
+            " {} may let you undo the clearing with {undo}.",
+            agent.label()
+        ),
+        _ => String::new(),
     }
 }
 
 /// What the caller of an interrupt that stopped a turn is told.
-fn interrupted_note(agent: Agent, written: usize, draft: Draft, prompt: Restored) -> String {
+fn interrupted_note(
+    agent: AgentId,
+    interrupt: &Interrupt,
+    written: usize,
+    draft: Draft,
+    prompt: Restored,
+) -> String {
     let mut note = String::from(
         "Interrupted: the turn was stopped. The session keeps its conversation and is awaiting \
          instructions; send it the next step with `instruct_session`.",
@@ -241,31 +298,9 @@ fn interrupted_note(agent: Agent, written: usize, draft: Draft, prompt: Restored
     if written > 0 {
         // Counted by the status read before each write, so a message written just as the turn
         // began or ended can fall on the wrong side; hence "about".
-        note.push_str(&match agent {
-            // A message written into a Codex turn is steered into that turn, which the cancel
-            // throws away with it, unless the turn had acted on it already.
-            Agent::Codex => format!(
-                " Octoboard wrote about {written} message(s) into the session during that turn. \
-                 Codex steers such messages into the turn the cancel threw away, so unless the \
-                 turn had already acted on them they were not acted on: resend whatever still \
-                 matters."
-            ),
-            // Claude Code may take a message queued mid-turn into the turn it is running, and
-            // otherwise submits it once the turn is over; Grok Build keeps it queued until then.
-            Agent::Claude => format!(
-                " Octoboard wrote about {written} message(s) into the session during that turn. \
-                 Claude Code may already have taken some into the turn it cancelled; the rest stay \
-                 queued in it and run next, as a new turn. Check it with `get_session` before \
-                 sending the next step, and resend what was not acted on."
-            ),
-            Agent::Grok => format!(
-                " Octoboard wrote about {written} message(s) into the session during that turn; \
-                 Grok Build keeps them queued and runs them next, as a new turn. Check it with \
-                 `get_session` before sending the next step."
-            ),
-        });
+        note.push_str(&(interrupt.written_during_turn)(written));
     }
-    note.push_str(draft_note(draft));
+    note.push_str(&draft_note(agent, interrupt, draft));
     if prompt == Restored::Left {
         note.push_str(&format!(
             " {}'s input box still holds text after the interrupt (the interrupted prompt it put \
@@ -419,7 +454,12 @@ enum Restored {
 
 /// Sends the agent's interrupt key, and waits up to `settle` ([`settle`]) for the turn to end,
 /// clearing a prompt the agent restores meanwhile. **Blocks.**
-fn press(state: &Arc<AppState>, live: &Arc<LiveSession>, settle: Duration) -> Result<Pressed> {
+fn press(
+    state: &Arc<AppState>,
+    live: &Arc<LiveSession>,
+    interrupt: &Interrupt,
+    settle: Duration,
+) -> Result<Pressed> {
     let agent = live.agent;
     // Read before anything is looked at: a write by anyone else after this point means what was
     // looked at may no longer be true.
@@ -427,9 +467,10 @@ fn press(state: &Arc<AppState>, live: &Arc<LiveSession>, settle: Duration) -> Re
     // The turn's end is told by this count moving on rather than by the status, which a message
     // the agent had queued can take back to `Working` within milliseconds of the cancel.
     let ends = state.turn_ends(&live.id);
-    // Codex does not restore the prompt after a cancel. Its composer is read for delivery only;
-    // treating an empty screen as permission to clear here could erase a user's pending edit.
-    let mut input_before = (agent != Agent::Codex)
+    // Read only for an agent that restores the prompt after a cancel: treating an empty screen as
+    // permission to clear here could erase a user's pending edit.
+    let mut input_before = interrupt
+        .restores_prompt
         .then(|| input_box(agent, &live.screen_text_undimmed()))
         .flatten();
     let stops = live.title_activity().stops();
@@ -449,7 +490,7 @@ fn press(state: &Arc<AppState>, live: &Arc<LiveSession>, settle: Duration) -> Re
         }
     };
     let mut draft = Draft::None;
-    if agent == Agent::Grok {
+    if let InterruptKey::CtrlCAfterClearing { .. } = interrupt.key {
         match input_before.as_deref() {
             Some(text) if !text.is_empty() => {
                 let (cleared, presses) = clear_input_box(state, live, &mut writes, true);

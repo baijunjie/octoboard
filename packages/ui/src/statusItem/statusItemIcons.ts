@@ -1,10 +1,9 @@
-import { AGENT_MARKS } from "../components/icons/agentMarks";
 import { DELEGATED_DOT_PX, DELEGATED_RING_PX } from "../components/status/delegatedGlyph";
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedTransform, type OpticalShift } from "../components/status/opticalCentring";
 import { SLEEP_PATHS } from "../components/status/sleepGlyph";
 import { resolveCssColour, type Appearance } from "../preferences/cssColour";
+import { providerColour, providerMark } from "../providers/registry";
 import type { StatusItemIcon, StatusItemMenu, StatusItemSubmenuDraftItem, StatusItemSubmenuItem } from "../platform";
-import type { Agent } from "../protocol";
 import type { ShownStatusKind } from "../sessions/sessionStatus";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 
@@ -104,8 +103,7 @@ export function statusGlyph(status: ShownStatusKind, appearance: Appearance): st
 function glyphOf(key: string, appearance: Appearance): { svg: string; template: boolean } | undefined {
   const [kind, name] = key.split(":");
   if (kind === "agent") {
-    const mark = AGENT_MARKS[name as Agent];
-    if (!mark) return undefined;
+    const mark = providerMark(name);
     const template = mark.fill === "currentColor";
     return { svg: `<path d="${mark.d}" fill="${template ? "#000" : mark.fill}" fill-rule="evenodd"/>`, template };
   }
@@ -159,8 +157,8 @@ export function iconKeysOf(draft: StatusItemMenuDraft): Set<string | undefined> 
 /** The menu with the pictures its lines name, in the system's `appearance`. Each picture is drawn once for
  * as long as its colours stay the same, so a change of appearance draws the status glyphs again and the
  * pictures of the other appearance are kept for its return. A key that cannot be drawn is left out, and
- * its line is shown without a picture. The bars take their agent's colour from the stylesheet, and those of a
- * used-up account its grey for them. */
+ * its line is shown without a picture. The bars take their agent's colour from its presentation module (the
+ * foreground for one without), and those of a used-up account the stylesheet's grey for them. */
 export async function withIcons(draft: StatusItemMenuDraft, appearance: Appearance): Promise<StatusItemMenu> {
   const keys = iconKeysOf(draft);
   const icons: StatusItemMenu["icons"] = {};
@@ -170,15 +168,15 @@ export async function withIcons(draft: StatusItemMenuDraft, appearance: Appearan
       if (key !== undefined && icon) icons[key] = icon;
     }),
   );
-  const bytesOf = (expression: string, probeClass?: string): [number, number, number] | undefined => {
-    const colour = resolveCssColour(expression, appearance, probeClass);
-    return colour ? ([1, 3, 5].map((offset) => Number.parseInt(colour.slice(offset, offset + 2), 16)) as [number, number, number]) : undefined;
-  };
-  const used_up_colour = bytesOf("var(--meter-used-up-fill)");
+  const bytesOf = (colour: string | undefined): [number, number, number] | undefined =>
+    colour ? ([1, 3, 5].map((offset) => Number.parseInt(colour.slice(offset, offset + 2), 16)) as [number, number, number]) : undefined;
+  const used_up_colour = bytesOf(resolveCssColour("var(--meter-used-up-fill)", appearance));
+  // A provider without a colour of its own draws in the foreground, as its bars do on the page.
+  const neutral = bytesOf(resolveCssColour("var(--default-foreground)", appearance));
   const coloured = (item: StatusItemSubmenuDraftItem): StatusItemSubmenuItem => {
     if (item.kind !== "window" && item.kind !== "meter") return item;
     const { agent, ...rest } = item;
-    const fill_colour = bytesOf("var(--meter-fill)", `quota-meter--${agent}`);
+    const fill_colour = bytesOf(providerColour(agent)?.[appearance]) ?? neutral;
     return { ...rest, ...(fill_colour && { fill_colour }), ...(item.used_up && used_up_colour && { used_up_colour }) };
   };
   return {

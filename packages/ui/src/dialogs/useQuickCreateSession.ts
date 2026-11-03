@@ -37,10 +37,10 @@ export function useQuickCreateSession(
   return (target) => {
     if (pending.current) return;
     const state = store.getState();
-    const { sessions, settings, agentAvailability } = state;
+    const { sessions, settings, agentAvailability, providers } = state;
     const project = target.kind === "new-session" ? target.project : undefined;
     const binding = target.kind === "new-session" ? target.binding : { kind: "unbound" as const };
-    if (noAgentState(agentAvailability, settings.added_agents)) return;
+    if (noAgentState(agentAvailability, settings.added_agents, providers)) return;
     if (binding.kind === "bound") {
       // An owner that is no longer live cannot take a session, and there is no dialog to say so.
       const owner = sessions.get(binding.to.id) ?? binding.to;

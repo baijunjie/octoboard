@@ -3,17 +3,26 @@
 
 use serde::Serialize;
 
+use crate::providers::ProviderCode;
+
 /// A code the daemon names a failure or a notice by on the wire. Only this module can make one, so
 /// every code the daemon sends is a `pub const` of one of the code modules below ([`error_code`],
 /// [`models_unavailable_code`], [`quota_unavailable_code`], [`login_failure_code`],
 /// [`notice_code`]): together they are the registry of the codes a client has to word. A UI test
 /// (`packages/ui/src/daemonCodes.test.ts`) reads them from this file and fails for a code the UI
 /// has no words or classification for, so each is a `pub const` of its own, of type `Code`, made
-/// from a string literal, and a code is never made anywhere else in this file.
+/// from a string literal, and a code is never made anywhere else in this file. The one exception is
+/// a code only one provider raises, which its descriptor declares ([`Code::of_provider`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Code(&'static str);
 
 impl Code {
+    /// The wire code of a code a provider declares (`crate::providers::ProviderCode`). The only
+    /// way to make a `Code` that is not a `pub const` below.
+    pub const fn of_provider(code: ProviderCode) -> Self {
+        Self(code.as_str())
+    }
+
     pub fn as_str(self) -> &'static str {
         self.0
     }
@@ -57,6 +66,10 @@ pub mod error_code {
 
     // -- what a client acts on, rather than just shows ---------------------------------------
 
+    /// A request asked a provider for something it does not offer: `params` names the `agent` (its
+    /// wire id, unlike every other code's `agent`, its label) and the `operation`, one of
+    /// `sign_in`, `kick`, `reset_credit` and `config_sharing`.
+    pub const PROVIDER_UNSUPPORTED: Code = Code("provider_unsupported");
     /// A launch was asked for while one was already running or already starting for that session.
     /// The client's own double click is the ordinary cause, so it is shown as nothing at all.
     pub const SESSION_ALREADY_RUNNING: Code = Code("session_already_running");
@@ -86,11 +99,12 @@ pub mod error_code {
     /// press without asking. `params` names the `agent`, and the `reason_code` param says why, one
     /// of [`trust_reason`](crate::protocol::codes::trust_reason).
     pub const TRUST_ANSWER_FAILED: Code = Code("trust_answer_failed");
-    /// Grok Build's confirmation was accepted — pressed by Octoboard, or answered by the person in
-    /// the terminal — but no trust entry for the folder reached the user's own store: Grok wrote
-    /// none into the session's copy in time, or the user's store could not be updated. Nothing was
-    /// written to the user's store and no permission was recorded. `params` names the `agent`, the
-    /// user's store as `path`, the English `reason`, its `reason_code` (one of
+    /// The confirmation of a provider that records trust per session (`Capabilities::
+    /// per_session_trust`, Grok Build's) was accepted — pressed by Octoboard, or answered by the
+    /// person in the terminal — but no trust entry for the folder reached the user's own store: the
+    /// agent wrote none into the session's copy in time, or the user's store could not be updated.
+    /// Nothing was written to the user's store and no permission was recorded. `params` names the
+    /// `agent`, the user's store as `path`, the English `reason`, its `reason_code` (one of
     /// [`trust_reason`](crate::protocol::codes::trust_reason)'s carry codes) and, for some, a
     /// `detail`.
     pub const TRUST_NOT_CARRIED_OVER: Code = Code("trust_not_carried_over");
@@ -184,14 +198,6 @@ pub mod error_code {
     /// A session's pinned configuration directory has gone, which refuses the launch — narrowed to
     /// a session that has a conversation on the agent's side; see `crate::adapter::pinned_config_dir`.
     pub const CONFIG_DIR_UNREACHABLE: Code = Code("config_dir_unreachable");
-    /// A Grok Build session's pinned source home exists but Grok has never been run against it, so
-    /// it carries no login and no session history for the per-session home to link. `params` names
-    /// `path`.
-    pub const GROK_HOME_NOT_INITIALIZED: Code = Code("grok_home_not_initialized");
-    /// A Grok Build launch would run under Grok's sandbox, which the per-session home cannot
-    /// support. `params` names the `source` that sets the `profile`: an environment variable, or
-    /// the file it is read from.
-    pub const GROK_SANDBOX_UNSUPPORTED: Code = Code("grok_sandbox_unsupported");
     /// The `format` of a configuration document is absent or names something else, so the file is
     /// not one.
     pub const CONFIGURATION_NOT_RECOGNISED: Code = Code("configuration_not_recognised");
@@ -312,25 +318,22 @@ pub mod error_code {
     /// in time, and no counts had been noted to answer with. Nothing was counted; the next request
     /// asks again. No `params`.
     pub const PROCESS_COUNT_TIMED_OUT: Code = Code("process_count_timed_out");
-    /// A `use_codex_reset_credit` for an account whose use of a credit is already running. Nothing
+    /// A `use_reset_credit` for an account whose use of a credit is already running. Nothing
     /// was sent. `params` names `agent`.
     pub const RESET_CREDIT_IN_PROGRESS: Code = Code("reset_credit_in_progress");
-    /// Codex did not answer a `use_codex_reset_credit` in time. The credit may or may not have been
-    /// used; the quota is read again. `params` names `agent`.
+    /// The provider did not answer a `use_reset_credit` in time. The credit may or may not have
+    /// been used; the quota is read again. `params` names `agent`.
     pub const RESET_CREDIT_TIMED_OUT: Code = Code("reset_credit_timed_out");
-    /// Codex refused a `use_codex_reset_credit` for want of a sign-in. The quota is read again.
+    /// The provider refused a `use_reset_credit` for want of a sign-in. The quota is read again.
     /// `params` names the `agent` and the `account` (by name).
     pub const RESET_CREDIT_NOT_SIGNED_IN: Code = Code("reset_credit_not_signed_in");
-    /// A `use_codex_reset_credit` could not be carried out: Codex could not be run, ended without
-    /// answering, refused the request or answered with something that could not be read. The
-    /// quota is read again. `params` names `agent` and `detail`.
+    /// A `use_reset_credit` could not be carried out: the provider's CLI could not be run, ended
+    /// without answering, refused the request or answered with something that could not be read.
+    /// The quota is read again. `params` names `agent` and `detail`.
     pub const RESET_CREDIT_FAILED: Code = Code("reset_credit_failed");
     /// A `start_account_login` for an account that is being signed in already. `params` names
     /// `agent`.
     pub const LOGIN_ALREADY_RUNNING: Code = Code("login_already_running");
-    /// A `start_account_login` for a Codex account while another Codex account is being signed in:
-    /// Codex's browser flow holds one fixed local port. No `params`.
-    pub const LOGIN_CODEX_BUSY: Code = Code("login_codex_busy");
     /// A `cancel_account_login` for an account that is not being signed in. `params` names
     /// `agent`.
     pub const LOGIN_NOT_RUNNING: Code = Code("login_not_running");
@@ -407,9 +410,6 @@ pub mod error_code {
     /// resume, so the launch could only fail. The session is left as it was. `params` names
     /// `agent` and `session`.
     pub const CONVERSATION_UNRESUMABLE: Code = Code("conversation_unresumable");
-    /// Reopening a Codex session was refused because `codex unarchive` could not bring its
-    /// archived rollout back. The session is left as it was. `params` names `detail`.
-    pub const CODEX_UNARCHIVE_FAILED: Code = Code("codex_unarchive_failed");
     /// An `open_session` asked to resume a conversation named an id that is not a UUID, which
     /// every agent's conversation ids are. `params` names the `id`.
     pub const RESUME_ID_INVALID: Code = Code("resume_id_invalid");
@@ -614,7 +614,8 @@ pub mod trust_reason {
     pub const SCREEN_REDRAWN: &str = "screen_redrawn";
     pub const INPUT_TOUCHED: &str = "input_touched";
     pub const TERMINAL_WRITE_FAILED: &str = "terminal_write_failed";
-    // Of `trust_not_carried_over`: why Grok Build's trust entry did not reach the user's store.
+    // Of `trust_not_carried_over`: why the trust entry a provider recorded per session did not
+    // reach the user's store.
     pub const NOT_RECORDED: &str = "not_recorded";
     pub const STORE_LOCKED: &str = "store_locked";
     pub const STORE_UNREADABLE: &str = "store_unreadable";
@@ -627,7 +628,6 @@ pub mod notice_code {
     use super::Code;
 
     pub const LAUNCH_FAILED: Code = Code("launch_failed");
-    pub const CLAUDE_WORKSPACE_UNTRUSTED: Code = Code("claude_workspace_untrusted");
     pub const QUEUED_MESSAGES_DROPPED: Code = Code("queued_messages_dropped");
     pub const HANDOFF_MESSAGES_DROPPED: Code = Code("handoff_messages_dropped");
     pub const SHARING_MESSAGES_DROPPED: Code = Code("sharing_messages_dropped");
@@ -676,9 +676,9 @@ pub mod notice_code {
     /// `params` names the `account`, its `name`, the `detail` and `still_running`, `true` or
     /// `false`.
     pub const SHARING_RESUME_FAILED: Code = Code("sharing_resume_failed");
-    /// The session's sharing account holds a Codex state database the shared configuration does
-    /// not cover (a newer Codex's), so its threads are kept apart from the other accounts'.
-    /// `params` names the `account`, its `name` and the database's `path`.
+    /// The session's sharing account holds a thread registry database the shared configuration
+    /// does not cover (for Codex, a newer schema generation's), so its threads are kept apart from
+    /// the other accounts'. `params` names the `account`, its `name` and the database's `path`.
     pub const UNSHARED_STATE_DATABASE: Code = Code("unshared_state_database");
     /// The session's agent did not confirm, within the protection window, stashing the draft in its
     /// input box before a message was written, so the message went into the input as it was and

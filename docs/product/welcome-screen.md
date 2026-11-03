@@ -21,7 +21,7 @@ has been detected on the machine.
   macOS application and a browser both can; where it cannot, New console stands alone.
 
 - Below the actions, a **supported CLI tools** heading and a card containing a list: **Claude Code**, **Codex**, then
-  **Grok Build**. Each row carries its tool's brand mark, name and status badge. The list stays visible for the whole
+  **Grok Build**. Each row carries its tool's provider mark, name and status badge. The list stays visible for the whole
   no-console state, whether detection is pending, some tools are available, or none has been detected.
 
 The badges distinguish three states: a tool detected on the user's login shell `PATH` is shown as installed; one

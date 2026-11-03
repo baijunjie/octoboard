@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use super::agents::{Agent, Change, Launch, LaunchChange, PerAgent};
+use super::agents::{AgentId, Change, Launch, LaunchChange, PerAgent};
 #[cfg(test)]
 use super::bindings;
 use super::configuration::{AccountResolution, ExportedConsoles, ProjectResolution};
@@ -14,7 +14,7 @@ use super::git_workflow::{
 };
 use super::records::{ConsoleSessionColour, ProjectAccount, ProjectSource};
 use super::session_branches::SessionBranchTarget;
-use super::settings::{ApprovalReviewer, ClaudeApprovalMode};
+use crate::providers::SettingValue;
 
 /// The appearance a client has resolved for its window, sent with a launch so Grok's theme matches
 /// the terminal that will show it. It is not stored: a later launch sends its own.
@@ -50,11 +50,11 @@ pub struct Request {
 pub enum RequestBody {
     CreateConsole {
         name: String,
-        default_agent: Agent,
+        default_agent: AgentId,
         /// Absent means project sessions follow `default_agent`.
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
-        project_session_agent: Option<Agent>,
+        project_session_agent: Option<AgentId>,
         /// Each agent's account, by id; an agent left out, or `null`, has its default account. A
         /// reference that names no account of that agent is refused with `unknown_account`.
         #[serde(default)]
@@ -83,12 +83,12 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional))]
         name: Option<String>,
         #[cfg_attr(test, ts(optional))]
-        default_agent: Option<Agent>,
+        default_agent: Option<AgentId>,
         /// Absent leaves the setting alone; an explicit `null` makes project sessions follow
         /// `default_agent` again.
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
-        project_session_agent: Option<Option<Agent>>,
+        project_session_agent: Option<Option<AgentId>>,
         /// Each agent's account: an agent left out is left alone; an explicit `null` clears it
         /// back to that agent's default account. A reference that names no account of that agent
         /// is refused with `unknown_account`.
@@ -128,7 +128,7 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional))]
         name: Option<String>,
         #[cfg_attr(test, ts(optional))]
-        default_agent: Option<Agent>,
+        default_agent: Option<AgentId>,
         /// Each agent's account as a [`ProjectAccount`]; an agent left out, or `null`, inherits
         /// the console's reference. An account that names none of that agent's is refused with
         /// `unknown_account`.
@@ -173,7 +173,7 @@ pub enum RequestBody {
         /// sent.
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
-        default_agent: Option<Option<Agent>>,
+        default_agent: Option<Option<AgentId>>,
         /// Each agent's account as a [`ProjectAccount`]: an agent left out is left alone; an
         /// explicit `null` puts it back to inheriting the console's reference. An account that
         /// names none of that agent's is refused with `unknown_account`.
@@ -245,7 +245,7 @@ pub enum RequestBody {
     /// does not exist or belongs to another agent is refused with `unknown_account`; anything
     /// that goes wrong while asking the agent is not a refusal but an empty answer with a reason.
     ListAgentModels {
-        agent: Agent,
+        agent: AgentId,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         account: Option<String>,
@@ -354,7 +354,7 @@ pub enum RequestBody {
         /// The session's agent; absent takes the project's default, else the console's project
         /// session agent, else its `default_agent`.
         #[cfg_attr(test, ts(optional))]
-        agent: Option<Agent>,
+        agent: Option<AgentId>,
         /// The account this session's agent reads, by id. Absent leaves the choice to the
         /// project's reference for that agent, else the console's, else the default account; an
         /// explicit `null` chooses the default account outright, whatever the project or console
@@ -467,7 +467,7 @@ pub enum RequestBody {
     /// running and the place has moved. See `crate::coordinator::handoff`.
     HandoffSession {
         session: String,
-        agent: Agent,
+        agent: AgentId,
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
         account: Option<Option<String>>,
@@ -655,7 +655,7 @@ pub enum RequestBody {
         approve: bool,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
-        agent: Option<Agent>,
+        agent: Option<AgentId>,
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
         account: Option<Option<String>>,
@@ -712,13 +712,6 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         git_workflow: Option<GitWorkflowSettingsChanges>,
-        /// Per agent other than Claude Code, by wire name: whether its sessions load Claude Code's
-        /// instructions and skills. An agent left out is left alone; Claude Code or an unknown
-        /// name is refused.
-        #[serde(default)]
-        #[cfg_attr(test, ts(optional))]
-        #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-        claude_compatibility: Option<std::collections::BTreeMap<String, bool>>,
         /// Per agent, by wire name: its tags, replacing the ones it has, normalised as a project's
         /// are (trimmed, empty ones dropped, case-insensitive duplicates dropped keeping the first
         /// spelling); an empty list clears them. An agent left out is left alone; an unknown name
@@ -731,7 +724,7 @@ pub enum RequestBody {
     /// Both fields are required: an account always has a name and a directory. Broadcasts
     /// `settings_updated`.
     CreateAccount {
-        agent: Agent,
+        agent: AgentId,
         name: String,
         config_dir: String,
     },
@@ -778,7 +771,7 @@ pub enum RequestBody {
     /// it is there, with `agent_not_installed` when it has been determined not installed, and with
     /// `agent_availability_pending` while that is not yet determined. Broadcasts `settings_updated`.
     AddAgent {
-        agent: Agent,
+        agent: AgentId,
     },
     /// Takes an agent off `Settings.added_agents`; its accounts, and the consoles, projects and
     /// sessions that use it, are left as they are. An undecided list is first filled, as for
@@ -786,7 +779,7 @@ pub enum RequestBody {
     /// undecided. Answered with `ack` and no `settings_updated` of its own when the agent is not
     /// on the list; otherwise broadcasts `settings_updated`.
     RemoveAgent {
-        agent: Agent,
+        agent: AgentId,
     },
     /// Puts `Settings.added_agents` in the given order, which must name exactly the agents on it,
     /// each once. Refused with `agent_order_invalid` when an agent is missing, repeated or not
@@ -794,13 +787,13 @@ pub enum RequestBody {
     /// for `add_agent`). A request that leaves the order as it is answers with `ack` and no
     /// `settings_updated` of its own; otherwise broadcasts `settings_updated`.
     ReorderAgents {
-        agents: Vec<Agent>,
+        agents: Vec<AgentId>,
     },
     /// Sets the order of all accounts of the agent, including its default (null), each
     /// exactly once. Refused with `account_order_invalid` for stale or mismatched lists.
     /// Broadcasts `settings_updated` only when the stored order changed.
     ReorderAccounts {
-        agent: Agent,
+        agent: AgentId,
         accounts: Vec<Option<String>>,
     },
     /// Names an agent's default account, or with a blank `name`, or `Default` in any letter case,
@@ -808,34 +801,37 @@ pub enum RequestBody {
     /// `account_name_taken` when another account of the agent has it. Broadcasts `settings_updated`
     /// when the name changed.
     SetDefaultAccountName {
-        agent: Agent,
+        agent: AgentId,
         name: String,
     },
     /// Turns an account off for new work, or back on. A null account names `agent`'s default
     /// account. Broadcasts `settings_updated` when the stored flag changed; sessions already on the
     /// account are not affected.
     SetAccountDisabled {
-        agent: Agent,
+        agent: AgentId,
         #[cfg_attr(test, ts(type = "string | null"))]
         account: Option<String>,
         disabled: bool,
     },
-    /// Sets the approval reviewer of every Codex account. A null reviewer follows each account's
-    /// configuration. Takes effect on the next launch or resume.
-    SetCodexApprovalReviewer {
-        #[cfg_attr(test, ts(type = "ApprovalReviewer | null"))]
-        reviewer: Option<ApprovalReviewer>,
-    },
-    /// Sets the approval mode of every Claude Code account. A null mode follows each account's
-    /// configuration. Takes effect on the next launch or resume.
-    SetClaudeApprovalMode {
-        #[cfg_attr(test, ts(type = "ClaudeApprovalMode | null"))]
-        mode: Option<ClaudeApprovalMode>,
+    /// Sets the user's choice for a setting of a provider (see `ProviderInfo::settings`). `value`
+    /// is a switch's `true` or `false` or a choice's text, and null clears the choice: a switch
+    /// goes back to its default rule, a choice follows each account's own configuration. Takes
+    /// effect on the next launch or resume. Refused with `unreadable_request` for a setting the
+    /// provider does not declare, a value of the other kind, or a choice it does not offer.
+    /// Broadcasts `settings_updated` only when the stored choice changed. The daemon does not
+    /// require the confirmation a choice declares; the client asks before saving it.
+    SetProviderSetting {
+        agent: AgentId,
+        setting: String,
+        #[cfg_attr(test, ts(type = "boolean | string | null"))]
+        value: Option<SettingValue>,
     },
     /// Sets whether an account shares the agent's default configuration. A null account names
     /// the default account, which is refused. The change is carried out at once and answered when
     /// it ends, or refused: while sessions of the account run or start, or it is being signed in
     /// (`account_in_use`), and while a change of it already runs (`account_sharing_in_progress`).
+    /// Turning sharing on for an account of an agent whose provider lacks `config_sharing` is
+    /// refused with `provider_unsupported` (operation `config_sharing`).
     SetAccountSharing {
         #[cfg_attr(test, ts(type = "string | null"))]
         account: Option<String>,
@@ -850,7 +846,7 @@ pub enum RequestBody {
     RefreshAccountQuotas {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
-        agent: Option<Agent>,
+        agent: Option<AgentId>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         account: Option<String>,
@@ -863,26 +859,31 @@ pub enum RequestBody {
     /// `unknown_account`, an agent determined unavailable with `agent_not_available`, a login shell
     /// whose environment could not be captured with `shell_environment_timeout`, a CLI that does
     /// not resolve with `binary_not_found`, an account that is already being signed in with
-    /// `login_already_running`, a second Codex login while one runs for any account with
-    /// `login_codex_busy`, and an account whose removal is moving its directory to the Trash with
-    /// `account_being_removed`. A success re-reads the account's quota at once.
+    /// `login_already_running`, a second login of a provider whose sign-in takes one account at a
+    /// time with the code it declares (`provider.codex.login_busy` while a Codex login runs for any
+    /// account), an account whose removal is moving its directory to the Trash with
+    /// `account_being_removed`, and an agent with no sign-in flow with `provider_unsupported`
+    /// (operation `sign_in`). A success re-reads the account's quota at once.
     StartAccountLogin {
-        agent: Agent,
+        agent: AgentId,
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,
     },
-    /// Uses one of a Codex account's rate limit reset credits, after the user confirmed it: the
-    /// credit of the held reading that expires first (one with no expiry last), or the one the
-    /// backend picks when the reading holds no details. `account` is an account id, null for
-    /// Codex's default account. Answered with `reset_credit_used` once Codex has answered, and
-    /// the account's quota is then read again. A credit is never used on any other path.
-    /// Refused with `unknown_account` for an account that does not exist or is not Codex's,
-    /// `agent_not_available` for a Codex that is not available, `shell_environment_timeout`,
-    /// `binary_not_found`, `reset_credit_not_signed_in` for an account Codex says is signed in to
-    /// nothing, `reset_credit_in_progress` while a use of the same account is running,
+    /// Uses one of an account's rate limit reset credits, after the user confirmed it: the credit
+    /// of the held reading that expires first (one with no expiry last), or the one the backend
+    /// picks when the reading holds no details. `agent` is the provider that has the credit.
+    /// `account` is an account id, null for the agent's default account. Answered with
+    /// `reset_credit_used` once the provider has answered, and the account's quota is then read
+    /// again. A credit is never used on any other path. Refused with `unknown_account` for an
+    /// account that does not exist or is not `agent`'s, `provider_unsupported` (operation
+    /// `reset_credit`) for an agent that offers none, `agent_not_available` for an agent that is
+    /// not available, `shell_environment_timeout`, `binary_not_found`,
+    /// `reset_credit_not_signed_in` for an account the provider says is signed in to nothing,
+    /// `reset_credit_in_progress` while a use of the same account is running,
     /// `daemon_shutting_down`, `reset_credit_timed_out` and `reset_credit_failed`.
-    UseCodexResetCredit {
+    UseResetCredit {
+        agent: AgentId,
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,
@@ -890,7 +891,7 @@ pub enum RequestBody {
     /// Ends the login of an account that is being signed in, and its CLI with it. Answered with
     /// `ack`; the `cancelled` update follows. Refused with `login_not_running` when there is none.
     CancelAccountLogin {
-        agent: Agent,
+        agent: AgentId,
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,

@@ -19,8 +19,9 @@ use super::judgement::is_account_state;
 use super::kick::{kick, KICK_TIMEOUT};
 use super::probe::{config_dir_missing, failed, probe, PROBE_TIMEOUT};
 use super::{retain_locked, window_id, AccountQuotas, Claim, Entry, Inner, Key, WindowId};
+use crate::adapter::provider;
 use crate::protocol::{
-    quota_unavailable_code as code, AccountQuota, Agent, Availability, Event, QuotaUnavailable,
+    quota_unavailable_code as code, AccountQuota, AgentId, Availability, Event, QuotaUnavailable,
     QuotaWindowKind,
 };
 use crate::state::AppState;
@@ -103,19 +104,24 @@ pub(super) enum Trigger {
 /// Which accounts a refresh covers; the default is all of them.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Scope {
-    pub agent: Option<Agent>,
+    pub agent: Option<AgentId>,
     pub account: Option<String>,
     /// Leave out the accounts the user turned off.
     pub enabled_only: bool,
 }
 
 /// The accounts worth reading: the default account and every stored account of each agent whose
-/// binary was found on the login shell's `PATH`.
+/// binary was found on the login shell's `PATH` and that has a quota to read.
 fn targets(state: &AppState) -> anyhow::Result<Vec<Key>> {
     let accounts = state.store.list_accounts()?;
     let mut keys = Vec::new();
-    for agent in Agent::ALL {
-        if state.agent_availability_of(agent).availability != Availability::Available {
+    for agent in AgentId::ALL {
+        if state.agent_availability_of(agent).availability != Availability::Available
+            || provider(agent)
+                .accounts()
+                .and_then(|ops| ops.quota_probe())
+                .is_none()
+        {
             continue;
         }
         keys.push(Key::of(agent, None, None));

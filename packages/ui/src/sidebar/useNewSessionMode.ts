@@ -27,5 +27,5 @@ export function useNewSessionMode(target?: () => NewSessionRequest | undefined):
 
 /** Whether no agent is both added and installed, so no session can be started. */
 export function useNoAgentToStart(): boolean {
-  return useDaemonStore((s) => noAgentState(s.agentAvailability, s.settings.added_agents) !== undefined);
+  return useDaemonStore((s) => noAgentState(s.agentAvailability, s.settings.added_agents, s.providers) !== undefined);
 }

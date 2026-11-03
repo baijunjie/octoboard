@@ -1,5 +1,5 @@
 use crate::protocol::{
-    Agent, Change, Launch, PerAgent, ProcessTarget, ProjectAccount, ProjectSource, Request,
+    AgentId, Change, Launch, PerAgent, ProcessTarget, ProjectAccount, ProjectSource, Request,
     RequestBody, Session, SessionBranchState,
 };
 
@@ -275,7 +275,7 @@ fn an_envelope_id_never_shadows_what_a_request_acts_on() {
             r#"{"type":"refresh_account_quotas","id":"request-1","agent":"codex","account":"account-7"}"#,
             |body| match body {
                 RequestBody::RefreshAccountQuotas {
-                    agent: Some(Agent::Codex),
+                    agent: Some(AgentId::CODEX),
                     account,
                 } => account,
                 _ => None,
@@ -524,26 +524,33 @@ fn clearing_a_projects_settings_is_distinguishable_from_leaving_them() {
     };
     let (accounts, launch) = parse(r#"{"type":"update_project","project":"p"}"#);
     assert_eq!(accounts, PerAgent::default());
-    assert!(launch.claude.is_keep() && launch.codex.is_keep() && launch.grok.is_keep());
+    assert!(
+        launch[AgentId::CLAUDE].is_keep()
+            && launch[AgentId::CODEX].is_keep()
+            && launch[AgentId::GROK].is_keep()
+    );
 
     let (accounts, launch) = parse(
         r#"{"type":"update_project","project":"p","accounts":{"claude":null,
             "grok":{"kind":"account","id":"acct-1"}},
             "launch":{"claude":{"model":"opus"},"codex":{"effort":null}}}"#,
     );
-    assert_eq!(accounts.claude, Change::Clear);
-    assert_eq!(accounts.codex, Change::Keep);
+    assert_eq!(accounts[AgentId::CLAUDE], Change::Clear);
+    assert_eq!(accounts[AgentId::CODEX], Change::Keep);
     assert_eq!(
-        accounts.grok,
+        accounts[AgentId::GROK],
         Change::Set(ProjectAccount::Account {
             id: "acct-1".to_string()
         })
     );
-    assert_eq!(launch.claude.model, Some(Some("opus".to_string())));
-    assert_eq!(launch.claude.effort, None);
-    assert_eq!(launch.codex.model, None);
-    assert_eq!(launch.codex.effort, Some(None));
-    assert!(launch.grok.is_keep());
+    assert_eq!(
+        launch[AgentId::CLAUDE].model,
+        Some(Some("opus".to_string()))
+    );
+    assert_eq!(launch[AgentId::CLAUDE].effort, None);
+    assert_eq!(launch[AgentId::CODEX].model, None);
+    assert_eq!(launch[AgentId::CODEX].effort, Some(None));
+    assert!(launch[AgentId::GROK].is_keep());
 
     let RequestBody::AddProject {
         accounts, launch, ..
@@ -557,16 +564,16 @@ fn clearing_a_projects_settings_is_distinguishable_from_leaving_them() {
     else {
         panic!("parses as add_project");
     };
-    assert_eq!(accounts.claude, None);
+    assert_eq!(accounts[AgentId::CLAUDE], None);
     assert_eq!(
-        accounts.codex,
+        accounts[AgentId::CODEX],
         Some(ProjectAccount::Account {
             id: "acct-2".to_string()
         })
     );
-    assert_eq!(accounts.grok, Some(ProjectAccount::Default));
-    assert_eq!(launch.grok.model.as_deref(), Some("grok-4"));
-    assert_eq!(launch.claude, Launch::default());
+    assert_eq!(accounts[AgentId::GROK], Some(ProjectAccount::Default));
+    assert_eq!(launch[AgentId::GROK].model.as_deref(), Some("grok-4"));
+    assert_eq!(launch[AgentId::CLAUDE], Launch::default());
 }
 
 /// `add_project` takes a project's own git workflow values: an item absent or `null` follows
@@ -607,7 +614,7 @@ fn add_project_parses_its_own_git_workflow_values() {
 #[test]
 fn a_projects_account_is_inherit_default_or_named_on_an_update() {
     let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
-        RequestBody::UpdateProject { accounts, .. } => accounts.claude,
+        RequestBody::UpdateProject { accounts, .. } => accounts[AgentId::CLAUDE].clone(),
         _ => panic!("parses as update_project"),
     };
     let update = |field: &str| format!(r#"{{"type":"update_project","project":"p"{field}}}"#);
@@ -653,18 +660,14 @@ fn clearing_a_consoles_account_is_distinguishable_from_leaving_it() {
             r#"{"type":"update_console","console":"c","accounts":{"claude":null,
                 "codex":"acct-1"}}"#
         ),
-        PerAgent {
-            claude: Change::Clear,
-            codex: Change::Set("acct-1".to_string()),
-            grok: Change::Keep,
-        }
+        PerAgent::default()
+            .with(AgentId::CLAUDE, Change::Clear)
+            .with(AgentId::CODEX, Change::Set("acct-1".to_string()))
+            .with(AgentId::GROK, Change::Keep)
     );
     assert_eq!(
         parse(r#"{"type":"update_console","console":"c","accounts":{"grok":"acct-2"}}"#),
-        PerAgent {
-            grok: Change::Set("acct-2".to_string()),
-            ..PerAgent::default()
-        }
+        PerAgent::default().with(AgentId::GROK, Change::Set("acct-2".to_string()))
     );
 }
 
@@ -779,23 +782,30 @@ fn clearing_a_consoles_launch_setting_is_distinguishable_from_leaving_it() {
         _ => panic!("parses as update_console"),
     };
     let (launch, project_session_launch) = parse(r#"{"type":"update_console","console":"c"}"#);
-    assert!(launch.claude.is_keep() && launch.codex.is_keep() && launch.grok.is_keep());
-    assert!(project_session_launch.claude.is_keep());
+    assert!(
+        launch[AgentId::CLAUDE].is_keep()
+            && launch[AgentId::CODEX].is_keep()
+            && launch[AgentId::GROK].is_keep()
+    );
+    assert!(project_session_launch[AgentId::CLAUDE].is_keep());
 
     let (launch, project_session_launch) = parse(
         r#"{"type":"update_console","console":"c",
             "launch":{"claude":{"model":null},"codex":{"model":"gpt-5"}},
             "project_session_launch":{"grok":{"effort":"low"}}}"#,
     );
-    assert_eq!(launch.claude.model, Some(None));
-    assert_eq!(launch.claude.effort, None);
-    assert_eq!(launch.codex.model, Some(Some("gpt-5".to_string())));
-    assert!(launch.grok.is_keep());
+    assert_eq!(launch[AgentId::CLAUDE].model, Some(None));
+    assert_eq!(launch[AgentId::CLAUDE].effort, None);
     assert_eq!(
-        project_session_launch.grok.effort,
+        launch[AgentId::CODEX].model,
+        Some(Some("gpt-5".to_string()))
+    );
+    assert!(launch[AgentId::GROK].is_keep());
+    assert_eq!(
+        project_session_launch[AgentId::GROK].effort,
         Some(Some("low".to_string()))
     );
-    assert!(project_session_launch.claude.is_keep());
+    assert!(project_session_launch[AgentId::CLAUDE].is_keep());
 }
 
 /// A model change keeps an absent value, gives an explicit `null` back to the agent and pins
@@ -837,7 +847,7 @@ fn clearing_a_consoles_project_session_agent_is_distinguishable_from_leaving_it(
     );
     assert_eq!(
         parse(r#"{"type":"update_console","console":"c","project_session_agent":"grok"}"#),
-        Some(Some(crate::protocol::Agent::Grok))
+        Some(Some(crate::protocol::AgentId::GROK))
     );
 }
 
@@ -881,19 +891,22 @@ fn creating_a_console_reads_each_agents_account_and_launch_pair() {
     else {
         panic!("parses as create_console");
     };
-    assert_eq!(accounts.claude.as_deref(), Some("acct-1"));
-    assert_eq!(accounts.codex, None);
-    assert_eq!(accounts.grok, None);
+    assert_eq!(accounts[AgentId::CLAUDE].as_deref(), Some("acct-1"));
+    assert_eq!(accounts[AgentId::CODEX], None);
+    assert_eq!(accounts[AgentId::GROK], None);
     assert_eq!(
-        launch.claude,
+        launch[AgentId::CLAUDE],
         Launch {
             model: Some("opus".to_string()),
             effort: Some("high".to_string())
         }
     );
-    assert_eq!(launch.codex, Launch::default());
-    assert_eq!(project_session_launch.codex.model.as_deref(), Some("gpt-5"));
-    assert_eq!(project_session_launch.codex.effort, None);
+    assert_eq!(launch[AgentId::CODEX], Launch::default());
+    assert_eq!(
+        project_session_launch[AgentId::CODEX].model.as_deref(),
+        Some("gpt-5")
+    );
+    assert_eq!(project_session_launch[AgentId::CODEX].effort, None);
 }
 
 /// `trust_parent_dir` is newer than `remember`, so a request without it still reads, as "this
@@ -951,7 +964,7 @@ fn an_answer_to_a_session_request_tells_a_value_left_out_from_a_null_one() {
         ),
         (
             true,
-            Some(crate::protocol::Agent::Grok),
+            Some(crate::protocol::AgentId::GROK),
             Some(None),
             Some(Some("m".to_string())),
             Some(None)

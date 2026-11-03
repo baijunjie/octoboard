@@ -10,10 +10,10 @@ import type {
   InspectedConsole,
   InspectedProject,
   ProjectResolution,
+  ProviderInfo,
 } from "../protocol";
 import type { ReplyOf } from "../requests";
-import { AGENT_LABEL } from "../agents/agents";
-import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
+import { isKnownAgent } from "../agents/providers";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { bindingsEqual, type Binding } from "../shortcuts/binding";
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
@@ -355,14 +355,8 @@ export function shortcutsReview(
   return { count: Object.keys(overrides).length, changed };
 }
 
-/** Whether a document's Claude compatibility choices say anything: an empty object is a machine where the user
- * chose for no agent, and a key for an agent without the setting counts for nothing. */
-export function hasClaudeCompatibilityChoices(choices: Partial<Record<Agent, boolean>>): boolean {
-  return Object.keys(choices).some(hasClaudeCompatibility);
-}
-
 /** Whether a document's agent tags say anything: an empty object is a machine where no agent has tags, and a key for
- * an agent this build does not know counts for nothing. */
-export function hasAgentTags(tags: Partial<Record<Agent, string[]>>): boolean {
-  return Object.keys(tags).some((agent) => Object.hasOwn(AGENT_LABEL, agent));
+ * an agent the daemon does not serve counts for nothing. */
+export function hasAgentTags(providers: readonly ProviderInfo[], tags: Partial<Record<Agent, string[]>>): boolean {
+  return Object.keys(tags).some((agent) => isKnownAgent(providers, agent));
 }

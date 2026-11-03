@@ -1,5 +1,5 @@
 use super::*;
-use crate::protocol::{Agent, Role, SessionKind, SessionStatus};
+use crate::protocol::{AgentId, Role, SessionKind, SessionStatus};
 use crate::test_support::{bare_session, console_session, project_session};
 
 /// Owned sessions are counted as the walks of a team count them: in any status, and none for a
@@ -13,7 +13,7 @@ fn owned_counts_leave_out_owners_with_the_bound_role() {
         } else {
             Role::Worker
         },
-        ..project_session(id, Agent::Claude, status)
+        ..project_session(id, AgentId::CLAUDE, status)
     };
     let sessions = [
         console_session("console", SessionStatus::Idle),
@@ -50,7 +50,7 @@ fn the_count_of_one_session_agrees_with_the_count_of_all() {
         } else {
             Role::Worker
         },
-        ..project_session(id, Agent::Claude, status)
+        ..project_session(id, AgentId::CLAUDE, status)
     };
     state
         .store

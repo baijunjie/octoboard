@@ -7,7 +7,8 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { press } from "../../components/hint/tooltipTestSupport";
-import { accountSharing, request, settings } from "./agentAccountsSectionTestState";
+import { TEST_AGENT_PROVIDER, TEST_PROVIDERS } from "../../test/testProviders";
+import { account, accountSharing, request, settings } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, mountSettings, openSettingsOf, sharingSwitches } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -45,6 +46,30 @@ it("offers the sharing switch on each owned account and none on the default acco
   expect(container.textContent).not.toContain("Applies at once");
   expect(container.textContent).not.toContain("has not been applied to the account’s directory yet");
   expect(container.querySelector('[role="progressbar"]')).toBeNull();
+});
+
+it("words the help tip of a provider whose module names nothing it never shares with the generic sentence", async () => {
+  settings.added_agents = ["claude", "test_agent"];
+  settings.accounts = [...settings.accounts, account("test-work", "test_agent")];
+  const sharing = { ...TEST_AGENT_PROVIDER, capabilities: { ...TEST_AGENT_PROVIDER.capabilities, config_sharing: true } };
+  const { container: section, set } = mount("Test Agent");
+  await set({ providers: [...TEST_PROVIDERS.filter((provider) => provider.id !== "test_agent"), sharing] });
+  const dialog = await openSettingsOf(section, "test-work");
+  const tip = helpTipText(dialog)!;
+  expect(tip).toContain("Login credentials are never shared.");
+  expect(tip).not.toContain(".claude.json");
+  expect(tip).not.toContain("trusted_folders.toml");
+});
+
+it("offers no sharing switch for an account of a provider that cannot share the default configuration", async () => {
+  const { container: section, set } = mount("Codex");
+  await set({ providers: TEST_PROVIDERS.map((provider) => provider.id === "codex" ? { ...provider, capabilities: { ...provider.capabilities, config_sharing: false } } : provider) });
+  const dialog = await openSettingsOf(section, "codex-work");
+  expect(sharingSwitches(dialog)).toHaveLength(0);
+  expect(dialog.textContent).not.toContain("Share default configuration");
+  expect(dialog.querySelector('button[aria-label="About sharing the default configuration"]')).toBeNull();
+  // The account's other switch is still there.
+  expect(dialog.querySelector('input[role="switch"]')).not.toBeNull();
 });
 
 it("says what is the case now when the account shares", async () => {

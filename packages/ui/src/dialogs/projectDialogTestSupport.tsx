@@ -7,7 +7,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { type ConsoleExtra, consoleOf, projectOf } from "../fixtures/builders";
 import type { Account, Agent, AgentAvailability, Event, Project, ClientRequestBody } from "../protocol";
 import { DaemonProvider } from "../store";
-import { buttons, click, inputLabelled, pickerNamed, type } from "../test/dom";
+import { buttons, click, inputLabelled, pickerNamed, type, withoutIsolates } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
 import { personal, work } from "../fixtures/accountTestSupport";
 import { ProjectDialog } from "./ProjectDialog";
@@ -75,7 +75,7 @@ export async function chooseSource(label: string) {
 
 export const buttonText = (text: string) => buttons().find((b) => b.textContent === text);
 /** The account picker, which is the one named for the agent's account. */
-export const accountPicker = () => buttons().find((b) => b.getAttribute("aria-label") === "Claude Code account" || b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.getAttribute("aria-label") === "Claude Code account"));
+export const accountPicker = () => buttons().find((b) => withoutIsolates(b.getAttribute("aria-label")) === "Claude Code account" || b.getAttribute("aria-labelledby")?.split(" ").some((id) => withoutIsolates(document.getElementById(id)?.getAttribute("aria-label")) === "Claude Code account"));
 export const sentOf = (pending: Pending[], type: string) => pending.find((p) => p.body.type === type)?.body;
 
 /** Fills in a directory whose agent is not detected, so the form is open and adds as inheriting. */

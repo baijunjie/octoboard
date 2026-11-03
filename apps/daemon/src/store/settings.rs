@@ -1,5 +1,5 @@
-//! The application settings: the single settings row's flags, default account names, approval
-//! modes, Git workflow and clone directory.
+//! The application settings: the single settings row's flags, default account names, Git workflow
+//! and clone directory. The settings of each provider are `provider_settings`.
 
 use super::Result;
 use rusqlite::types::FromSql;
@@ -9,12 +9,10 @@ use serde::Serialize;
 
 use super::accounts::read_accounts;
 use super::agents::{read_account_order, read_added_agents};
-use super::rows::{enum_from_row, enum_from_text, enum_to_text};
+use super::provider_settings::read_provider_settings;
+use super::rows::{enum_from_row, enum_to_text};
 use super::{Store, SETTINGS_ID};
-use crate::protocol::{
-    Agent, ApprovalReviewer, ClaudeApprovalMode, GitWorkflowSettings, GitWorkflowSettingsChanges,
-    Settings,
-};
+use crate::protocol::{AgentId, GitWorkflowSettings, GitWorkflowSettingsChanges, Settings};
 
 /// Where a clone goes while the user has not chosen a directory.
 const BUILT_IN_CLONE_DIR: &str = "~/Projects";
@@ -53,9 +51,7 @@ impl Store {
             accounts: read_accounts(&conn)?,
             account_order: read_account_order(&conn)?,
             added_agents: read_added_agents(&conn)?,
-            codex_approval_reviewer: read_enum_setting(&conn, "codex_approval_reviewer")?,
-            claude_approval_mode: read_enum_setting(&conn, "claude_approval_mode")?,
-            claude_compatibility: read_claude_compatibility(&conn)?,
+            provider_settings: read_provider_settings(&conn)?,
             agent_tags: read_agent_tags(&conn)?,
             default_account_names: read_default_account_names(&conn)?,
             disabled_default_accounts: read_disabled_default_accounts(&conn)?,
@@ -69,44 +65,6 @@ impl Store {
         read_default_account_names(&self.lock())
     }
 
-    /// The choices the user made for the Claude compatibility setting, by the agent's wire name.
-    /// An agent they never chose for has no entry. A value that is not a JSON object of booleans
-    /// reads as no choices.
-    pub fn claude_compatibility_choices(&self) -> Result<std::collections::BTreeMap<String, bool>> {
-        read_claude_compatibility_choices(&self.lock())
-    }
-
-    /// Whether `agent`'s sessions are to load Claude Code's instructions, skills and the rest: the
-    /// user's choice when they made one. Until then Grok Build follows its own default, which is
-    /// on, and Codex is on while Claude Code is among the added agents, so adding or removing it
-    /// moves the value. Claude Code itself has no such setting and reads as off.
-    pub fn claude_compatibility_of(&self, agent: Agent) -> Result<bool> {
-        let conn = self.lock();
-        let choices = read_claude_compatibility_choices(&conn)?;
-        Ok(effective_claude_compatibility(
-            agent,
-            &choices,
-            read_added_agents(&conn)?.as_deref(),
-        ))
-    }
-
-    /// The effective setting for every agent that has one, by wire name.
-    pub fn claude_compatibility(&self) -> Result<std::collections::BTreeMap<String, bool>> {
-        read_claude_compatibility(&self.lock())
-    }
-
-    /// Records the user's choice of `enabled` for `agent`'s Claude compatibility. The read and the
-    /// write are one step under the store's lock. Whether the stored choice changed.
-    pub fn set_claude_compatibility(&self, agent: Agent, enabled: bool) -> Result<bool> {
-        let conn = self.lock();
-        let mut choices = read_claude_compatibility_choices(&conn)?;
-        if choices.insert(agent.wire_name().to_string(), enabled) == Some(enabled) {
-            return Ok(false);
-        }
-        write_json_setting(&conn, "claude_compatibility", Some(&choices))?;
-        Ok(true)
-    }
-
     /// The tags the user put on each agent, by wire name, for the agents that have any. A value
     /// that is not a JSON object of string lists reads as none.
     pub fn agent_tags(&self) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
@@ -116,9 +74,9 @@ impl Store {
     /// Replaces `agent`'s tags with `tags`, which the caller has normalised; an empty list clears
     /// them. The read and the write are one step under the store's lock. Whether the stored tags
     /// changed.
-    pub fn set_agent_tags(&self, agent: Agent, tags: Vec<String>) -> Result<bool> {
+    pub fn set_agent_tags(&self, agent: AgentId, tags: Vec<String>) -> Result<bool> {
         let conn = self.lock();
-        let mut all = read_agent_tags(&conn)?;
+        let mut all = read_stored_agent_tags(&conn)?;
         let changed = if tags.is_empty() {
             all.remove(agent.wire_name()).is_some()
         } else {
@@ -139,9 +97,9 @@ impl Store {
 
     /// Turns `agent`'s default account off for new work, or back on. The read and the write are
     /// one step under the store's lock. Whether the stored set changed.
-    pub fn set_default_account_disabled(&self, agent: Agent, disabled: bool) -> Result<bool> {
+    pub fn set_default_account_disabled(&self, agent: AgentId, disabled: bool) -> Result<bool> {
         let conn = self.lock();
-        let mut agents = read_disabled_default_accounts(&conn)?;
+        let mut agents = read_stored_disabled_default_accounts(&conn)?;
         let changed = if disabled {
             agents.insert(agent.wire_name().to_string())
         } else {
@@ -160,7 +118,7 @@ impl Store {
 
     /// Whether the user turned `account_id` (`None` the default account) of `agent` off for new
     /// work. An id that is no account of `agent`, or no longer on record, is not disabled.
-    pub fn account_disabled(&self, agent: Agent, account_id: Option<&str>) -> Result<bool> {
+    pub fn account_disabled(&self, agent: AgentId, account_id: Option<&str>) -> Result<bool> {
         match account_id {
             None => Ok(self
                 .disabled_default_accounts()?
@@ -172,7 +130,7 @@ impl Store {
     }
 
     /// The name of `agent`'s default account: the user's own, else the daemon's word for it.
-    pub fn default_account_name(&self, agent: Agent) -> Result<String> {
+    pub fn default_account_name(&self, agent: AgentId) -> Result<String> {
         Ok(
             crate::protocol::default_account_name_in(&self.default_account_names()?, agent)
                 .to_string(),
@@ -181,7 +139,7 @@ impl Store {
 
     /// What an account is called: the stored account's name (its id when it is gone), or for
     /// `None`, the default account's name.
-    pub fn account_display_name(&self, agent: Agent, account_id: Option<&str>) -> Result<String> {
+    pub fn account_display_name(&self, agent: AgentId, account_id: Option<&str>) -> Result<String> {
         match account_id {
             Some(id) => Ok(self
                 .get_account(id)?
@@ -192,9 +150,9 @@ impl Store {
 
     /// Names the agent's default account, or clears the name with `None`. The read and the write
     /// are one step under the store's lock. Whether the stored names changed.
-    pub fn set_default_account_name(&self, agent: Agent, name: Option<&str>) -> Result<bool> {
+    pub fn set_default_account_name(&self, agent: AgentId, name: Option<&str>) -> Result<bool> {
         let conn = self.lock();
-        let mut names = read_default_account_names(&conn)?;
+        let mut names = read_stored_default_account_names(&conn)?;
         let before = names.clone();
         match name {
             Some(name) => names.insert(agent.wire_name().to_string(), name.to_string()),
@@ -209,30 +167,6 @@ impl Store {
             (!names.is_empty()).then_some(&names),
         )?;
         Ok(true)
-    }
-
-    pub fn codex_approval_reviewer(&self) -> Result<Option<ApprovalReviewer>> {
-        read_enum_setting(&self.lock(), "codex_approval_reviewer")
-    }
-
-    pub fn set_codex_approval_reviewer(&self, reviewer: Option<ApprovalReviewer>) -> Result<()> {
-        self.lock().execute(
-            "UPDATE settings SET codex_approval_reviewer = ?2 WHERE id = ?1",
-            params![SETTINGS_ID, reviewer.as_ref().map(enum_to_text)],
-        )?;
-        Ok(())
-    }
-
-    pub fn claude_approval_mode(&self) -> Result<Option<ClaudeApprovalMode>> {
-        read_enum_setting(&self.lock(), "claude_approval_mode")
-    }
-
-    pub fn set_claude_approval_mode(&self, mode: Option<ClaudeApprovalMode>) -> Result<()> {
-        self.lock().execute(
-            "UPDATE settings SET claude_approval_mode = ?2 WHERE id = ?1",
-            params![SETTINGS_ID, mode.as_ref().map(enum_to_text)],
-        )?;
-        Ok(())
     }
 
     /// The application-wide git workflow settings. A project's override is resolved against them by
@@ -393,12 +327,6 @@ fn read_setting<T: FromSql>(conn: &Connection, column: &str) -> Result<T> {
     )?)
 }
 
-/// The enum stored as text in the settings row's `column`; `None` while it is NULL.
-fn read_enum_setting<T: DeserializeOwned>(conn: &Connection, column: &str) -> Result<Option<T>> {
-    let text: Option<String> = read_setting(conn, column)?;
-    Ok(text.map(|text| enum_from_text(&text)).transpose()?)
-}
-
 /// The value of a settings column that holds JSON, `None` while it is NULL. A value that does not
 /// parse as `T` reads as `None` too, with a warning: the daemon is the only writer, so this can
 /// only mean a hand-edited database, or one written by a later version.
@@ -447,64 +375,57 @@ fn clone_dir_or_built_in(stored: Option<String>) -> String {
     })
 }
 
-/// The stored default account names; a value that is not a JSON object of strings reads as none.
-fn read_default_account_names(
+/// The stored default account names, with those of providers this build does not register; a value
+/// that is not a JSON object of strings reads as none. What is rewritten starts from this, so an
+/// unregistered provider's entry stays.
+fn read_stored_default_account_names(
     conn: &Connection,
 ) -> Result<std::collections::BTreeMap<String, String>> {
     read_json_setting(conn, "default_account_names")
 }
 
-/// The stored Claude compatibility choices; a value that is not a JSON object of booleans reads as
-/// none.
-fn read_claude_compatibility_choices(
+/// The default account names of the registered providers.
+fn read_default_account_names(
     conn: &Connection,
-) -> Result<std::collections::BTreeMap<String, bool>> {
-    read_json_setting(conn, "claude_compatibility")
+) -> Result<std::collections::BTreeMap<String, String>> {
+    Ok(registered_keys(read_stored_default_account_names(conn)?))
 }
 
-/// The stored agent tags; a value that is not a JSON object of string lists reads as none.
-fn read_agent_tags(conn: &Connection) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+/// The stored agent tags, with those of providers this build does not register; a value that is not
+/// a JSON object of string lists reads as none.
+fn read_stored_agent_tags(
+    conn: &Connection,
+) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
     read_json_setting(conn, "agent_tags")
 }
 
-/// The effective Claude compatibility setting of every agent that has one, by wire name.
-fn read_claude_compatibility(
+/// The agent tags of the registered providers.
+fn read_agent_tags(conn: &Connection) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    Ok(registered_keys(read_stored_agent_tags(conn)?))
+}
+
+/// The stored agents whose default account is disabled, with providers this build does not
+/// register; a value that is not a JSON array of strings reads as none.
+fn read_stored_disabled_default_accounts(
     conn: &Connection,
-) -> Result<std::collections::BTreeMap<String, bool>> {
-    let choices = read_claude_compatibility_choices(conn)?;
-    let added = read_added_agents(conn)?;
-    Ok(Agent::ALL
-        .into_iter()
-        .filter(|agent| agent.has_claude_compatibility())
-        .map(|agent| {
-            (
-                agent.wire_name().to_string(),
-                effective_claude_compatibility(agent, &choices, added.as_deref()),
-            )
-        })
-        .collect())
-}
-
-/// The Claude compatibility setting in effect for `agent` given the user's `choices` and the
-/// added agents.
-fn effective_claude_compatibility(
-    agent: Agent,
-    choices: &std::collections::BTreeMap<String, bool>,
-    added: Option<&[Agent]>,
-) -> bool {
-    if !agent.has_claude_compatibility() {
-        return false;
-    }
-    choices
-        .get(agent.wire_name())
-        .copied()
-        .unwrap_or_else(|| agent.claude_compatibility_default(added))
-}
-
-/// The stored agents whose default account is disabled; a value that is not a JSON array of strings
-/// reads as none.
-fn read_disabled_default_accounts(conn: &Connection) -> Result<std::collections::BTreeSet<String>> {
+) -> Result<std::collections::BTreeSet<String>> {
     read_json_setting(conn, "disabled_default_accounts")
+}
+
+/// The registered providers whose default account is disabled.
+fn read_disabled_default_accounts(conn: &Connection) -> Result<std::collections::BTreeSet<String>> {
+    let mut agents = read_stored_disabled_default_accounts(conn)?;
+    agents.retain(|id| AgentId::from_wire_name(id).is_some());
+    Ok(agents)
+}
+
+/// `map` without the entries keyed by a provider this build does not register: a setting kept for
+/// such a provider stays in the stored value, and is not loaded.
+pub(super) fn registered_keys<V>(
+    mut map: std::collections::BTreeMap<String, V>,
+) -> std::collections::BTreeMap<String, V> {
+    map.retain(|id, _| AgentId::from_wire_name(id).is_some());
+    map
 }
 
 #[cfg(test)]
@@ -514,55 +435,6 @@ mod tests {
     use crate::protocol::{GitDelivery, GitDevelopment, GitWorkflowOverride};
 
     use crate::store::test_support::*;
-
-    /// Until the user chooses, Grok Build's Claude compatibility is on and Codex's follows whether
-    /// Claude Code is an added agent; a choice is stored per agent and wins from then on; Claude
-    /// Code never has the setting.
-    #[test]
-    fn the_claude_compatibility_follows_added_agents_until_chosen_and_round_trips_per_agent() {
-        let path = temp_db("claude-compatibility");
-        let store = Store::open(&path).expect("store");
-        let stored = |store: &Store| -> Option<String> {
-            store
-                .lock()
-                .query_row(
-                    "SELECT claude_compatibility FROM settings WHERE id = ?1",
-                    params![SETTINGS_ID],
-                    |row| row.get(0),
-                )
-                .unwrap()
-        };
-        let on = |store: &Store, agent| store.claude_compatibility_of(agent).unwrap();
-        assert!(!on(&store, Agent::Codex));
-        assert!(on(&store, Agent::Grok));
-        assert!(!on(&store, Agent::Claude));
-
-        store
-            .set_added_agents_if_undecided(&[Agent::Codex])
-            .unwrap();
-        assert!(!on(&store, Agent::Codex));
-        store.add_added_agent(Agent::Claude).unwrap();
-        assert!(on(&store, Agent::Codex));
-        assert_eq!(stored(&store), None);
-        assert!(store.claude_compatibility_choices().unwrap().is_empty());
-
-        assert!(store.set_claude_compatibility(Agent::Codex, false).unwrap());
-        assert!(!store.set_claude_compatibility(Agent::Codex, false).unwrap());
-        assert_eq!(stored(&store).as_deref(), Some(r#"{"codex":false}"#));
-        assert!(!on(&store, Agent::Codex));
-        assert!(on(&store, Agent::Grok));
-        assert_eq!(
-            store.get_settings().unwrap().claude_compatibility,
-            [("codex".to_string(), false), ("grok".to_string(), true)].into()
-        );
-
-        // A choice outlives the added agents, whichever way it went.
-        assert!(store.set_claude_compatibility(Agent::Codex, true).unwrap());
-        store.remove_added_agent(Agent::Claude).unwrap();
-        assert!(on(&store, Agent::Codex));
-        assert!(store.set_claude_compatibility(Agent::Grok, false).unwrap());
-        assert!(!on(&store, Agent::Grok));
-    }
 
     /// The tags of an agent round-trip per agent, an empty list clears them and a repeat write
     /// changes nothing, and they outlive the agent's removal from the added agents.
@@ -574,15 +446,17 @@ mod tests {
         assert!(store.agent_tags().unwrap().is_empty());
 
         assert!(store
-            .set_agent_tags(Agent::Codex, tags(&["review", "tests"]))
+            .set_agent_tags(AgentId::CODEX, tags(&["review", "tests"]))
             .unwrap());
         assert!(!store
-            .set_agent_tags(Agent::Codex, tags(&["review", "tests"]))
+            .set_agent_tags(AgentId::CODEX, tags(&["review", "tests"]))
             .unwrap());
         assert!(store
-            .set_agent_tags(Agent::Codex, tags(&["tests", "review"]))
+            .set_agent_tags(AgentId::CODEX, tags(&["tests", "review"]))
             .unwrap());
-        assert!(store.set_agent_tags(Agent::Claude, tags(&["ui"])).unwrap());
+        assert!(store
+            .set_agent_tags(AgentId::CLAUDE, tags(&["ui"]))
+            .unwrap());
         assert_eq!(
             store.get_settings().unwrap().agent_tags,
             [
@@ -593,24 +467,24 @@ mod tests {
         );
 
         store
-            .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+            .set_added_agents_if_undecided(&[AgentId::CLAUDE, AgentId::CODEX])
             .unwrap();
-        store.remove_added_agent(Agent::Codex).unwrap();
+        store.remove_added_agent(AgentId::CODEX).unwrap();
         drop(store);
         let store = Store::open(&path).unwrap();
         assert_eq!(
             store.agent_tags().unwrap()["codex"],
             tags(&["tests", "review"])
         );
-        store.add_added_agent(Agent::Codex).unwrap();
+        store.add_added_agent(AgentId::CODEX).unwrap();
         assert_eq!(
             store.agent_tags().unwrap()["codex"],
             tags(&["tests", "review"])
         );
 
-        assert!(store.set_agent_tags(Agent::Codex, Vec::new()).unwrap());
-        assert!(!store.set_agent_tags(Agent::Codex, Vec::new()).unwrap());
-        assert!(store.set_agent_tags(Agent::Claude, Vec::new()).unwrap());
+        assert!(store.set_agent_tags(AgentId::CODEX, Vec::new()).unwrap());
+        assert!(!store.set_agent_tags(AgentId::CODEX, Vec::new()).unwrap());
+        assert!(store.set_agent_tags(AgentId::CLAUDE, Vec::new()).unwrap());
         assert!(store.agent_tags().unwrap().is_empty());
         let stored: Option<String> = store
             .lock()
@@ -621,37 +495,6 @@ mod tests {
             )
             .unwrap();
         assert_eq!(stored, None);
-    }
-
-    /// The approval settings read as unset until chosen, and round-trip.
-    #[test]
-    fn approval_settings_round_trip() {
-        let path = temp_db("approval-columns");
-        let store = Store::open(&path).unwrap();
-        assert_eq!(store.codex_approval_reviewer().unwrap(), None);
-        assert_eq!(store.claude_approval_mode().unwrap(), None);
-
-        store
-            .set_codex_approval_reviewer(Some(ApprovalReviewer::AutoReview))
-            .unwrap();
-        store
-            .set_claude_approval_mode(Some(ClaudeApprovalMode::Bypass))
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).unwrap();
-        let settings = store.get_settings().unwrap();
-        assert_eq!(
-            settings.codex_approval_reviewer,
-            Some(ApprovalReviewer::AutoReview)
-        );
-        assert_eq!(
-            settings.claude_approval_mode,
-            Some(ClaudeApprovalMode::Bypass)
-        );
-        store.set_codex_approval_reviewer(None).unwrap();
-        assert_eq!(store.codex_approval_reviewer().unwrap(), None);
-        store.set_claude_approval_mode(None).unwrap();
-        assert_eq!(store.claude_approval_mode().unwrap(), None);
     }
 
     /// Each boolean setting starts at its default, round-trips, and a repeat write reports no
@@ -896,33 +739,33 @@ mod tests {
                 .unwrap()
         };
         assert!(store.disabled_default_accounts().unwrap().is_empty());
-        assert!(!store.account_disabled(Agent::Codex, None).unwrap());
+        assert!(!store.account_disabled(AgentId::CODEX, None).unwrap());
         assert!(!store
-            .set_default_account_disabled(Agent::Codex, false)
+            .set_default_account_disabled(AgentId::CODEX, false)
             .unwrap());
 
         assert!(store
-            .set_default_account_disabled(Agent::Codex, true)
+            .set_default_account_disabled(AgentId::CODEX, true)
             .unwrap());
         assert!(!store
-            .set_default_account_disabled(Agent::Codex, true)
+            .set_default_account_disabled(AgentId::CODEX, true)
             .unwrap());
         assert!(store
-            .set_default_account_disabled(Agent::Claude, true)
+            .set_default_account_disabled(AgentId::CLAUDE, true)
             .unwrap());
         assert_eq!(stored(&store).as_deref(), Some(r#"["claude","codex"]"#));
-        assert!(store.account_disabled(Agent::Codex, None).unwrap());
-        assert!(!store.account_disabled(Agent::Grok, None).unwrap());
+        assert!(store.account_disabled(AgentId::CODEX, None).unwrap());
+        assert!(!store.account_disabled(AgentId::GROK, None).unwrap());
         assert_eq!(
             store.get_settings().unwrap().disabled_default_accounts,
             ["claude".to_string(), "codex".to_string()].into()
         );
 
         assert!(store
-            .set_default_account_disabled(Agent::Codex, false)
+            .set_default_account_disabled(AgentId::CODEX, false)
             .unwrap());
         assert!(store
-            .set_default_account_disabled(Agent::Claude, false)
+            .set_default_account_disabled(AgentId::CLAUDE, false)
             .unwrap());
         assert_eq!(stored(&store), None);
         assert!(store.disabled_default_accounts().unwrap().is_empty());
@@ -965,5 +808,68 @@ mod tests {
         );
         assert!(store.set_interface_language("de").unwrap());
         assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
+    }
+
+    /// The JSON settings that name providers load only the registered ones, and a write keeps the
+    /// entries of a provider this build does not register.
+    #[test]
+    fn settings_naming_an_unregistered_provider_are_left_out_of_a_load_and_kept_through_writes() {
+        let path = temp_db("settings-unregistered-provider");
+        let store = Store::open(&path).expect("store");
+        store
+            .lock()
+            .execute_batch(
+                r#"UPDATE settings SET
+                       added_agents = '["retired","claude"]',
+                       account_order = '{"retired":["x",null]}',
+                       default_account_names = '{"retired":"Old"}',
+                       disabled_default_accounts = '["retired"]',
+                       agent_tags = '{"retired":["old"]}'"#,
+            )
+            .unwrap();
+        let settings = store.get_settings().unwrap();
+        assert_eq!(settings.added_agents, Some(vec![AgentId::CLAUDE]));
+        assert!(settings.account_order.is_empty());
+        assert!(settings.default_account_names.is_empty());
+        assert!(settings.disabled_default_accounts.is_empty());
+        assert!(settings.agent_tags.is_empty());
+
+        assert!(store.add_added_agent(AgentId::CODEX).unwrap());
+        assert!(store
+            .set_agent_tags(AgentId::CODEX, vec!["new".to_string()])
+            .unwrap());
+        assert!(store
+            .set_default_account_name(AgentId::CODEX, Some("Mine"))
+            .unwrap());
+        assert!(store
+            .set_default_account_disabled(AgentId::CODEX, true)
+            .unwrap());
+        assert!(store.reorder_accounts(AgentId::CODEX, &[None]).unwrap());
+        let raw = |column: &str| -> String {
+            store
+                .lock()
+                .query_row(&format!("SELECT {column} FROM settings"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap()
+        };
+        assert_eq!(raw("added_agents"), r#"["claude","codex","retired"]"#);
+        for column in [
+            "account_order",
+            "default_account_names",
+            "disabled_default_accounts",
+            "agent_tags",
+        ] {
+            assert!(raw(column).contains("retired"), "{column}");
+        }
+        assert_eq!(
+            store
+                .get_settings()
+                .unwrap()
+                .agent_tags
+                .keys()
+                .collect::<Vec<_>>(),
+            ["codex"]
+        );
     }
 }

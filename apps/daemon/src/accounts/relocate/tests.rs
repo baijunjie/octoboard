@@ -2,6 +2,10 @@ use super::*;
 use crate::records::carried::companions;
 use crate::test_support::{code_of, param_of, ScratchDir};
 
+fn codex_registry() -> &'static dyn ThreadRegistry {
+    thread_registry(AgentId::CODEX).expect("Codex keeps a thread registry")
+}
+
 fn temp_dir(name: &str) -> ScratchDir {
     ScratchDir::new(&format!("relocate-{name}"))
 }
@@ -22,21 +26,21 @@ fn the_record_keeps_its_path_relative_to_the_config_directory_and_is_copied_not_
     // neighbour belonging to another session.
     let cases = [
         (
-            Agent::Claude,
+            AgentId::CLAUDE,
             CLAUDE_ID,
             format!("projects/-Users-me-repo/{CLAUDE_ID}.jsonl"),
             format!("projects/-Users-me-repo/{CLAUDE_ID}.jsonl"),
             format!("projects/-Users-me-repo/{OTHER_ID}.jsonl"),
         ),
         (
-            Agent::Codex,
+            AgentId::CODEX,
             CODEX_ID,
             format!("sessions/2026/10/08/rollout-2026-10-08T01-02-03-{CODEX_ID}.jsonl"),
             format!("sessions/2026/10/08/rollout-2026-10-08T01-02-03-{CODEX_ID}.jsonl"),
             format!("sessions/2026/10/08/rollout-2026-10-08T01-02-04-{OTHER_ID}.jsonl"),
         ),
         (
-            Agent::Grok,
+            AgentId::GROK,
             GROK_ID,
             format!("sessions/%2FUsers%2Fme%2Frepo/{GROK_ID}"),
             format!("sessions/%2FUsers%2Fme%2Frepo/{GROK_ID}/messages.jsonl"),
@@ -98,10 +102,10 @@ fn a_record_is_taken_only_by_a_canonical_id_at_the_agents_own_depth() {
         "one level too shallow",
     );
     for (agent, id) in [
-        (Agent::Claude, "claude-id"),
-        (Agent::Claude, CLAUDE_ID),
-        (Agent::Codex, CODEX_ID),
-        (Agent::Grok, GROK_ID),
+        (AgentId::CLAUDE, "claude-id"),
+        (AgentId::CLAUDE, CLAUDE_ID),
+        (AgentId::CODEX, CODEX_ID),
+        (AgentId::GROK, GROK_ID),
     ] {
         let err = locate(agent, &source, id).expect_err(id);
         assert_eq!(code_of(&err), error_code::CONVERSATION_NOT_FOUND, "{id}");
@@ -123,9 +127,9 @@ fn a_reverted_codex_thread_is_carried_whole() {
         let subagent = format!("sessions/2026/10/01/rollout-2026-10-01T01-05-00-{child}.jsonl");
         write(&source, &subagent, "subagent");
 
-        let located = locate(Agent::Codex, &source, CODEX_ID).expect("found");
+        let located = locate(AgentId::CODEX, &source, CODEX_ID).expect("found");
         assert_eq!(located, relative(&chain.head), "compressed: {compressed}");
-        let mut relatives = companions(Agent::Codex, &source, &located, CODEX_ID);
+        let mut relatives = companions(AgentId::CODEX, &source, &located, CODEX_ID);
         relatives.sort();
         assert_eq!(
             relatives,
@@ -187,7 +191,15 @@ fn a_codex_homes_row_of_the_thread_is_pointed_at_the_head_and_nothing_else() {
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect();
-        repoint_within(Agent::Codex, target, head, thread, &env, patience)
+        repoint_within(
+            codex_registry(),
+            AgentId::CODEX,
+            target,
+            head,
+            thread,
+            &env,
+            patience,
+        )
     };
 
     let held = Connection::open(&database).unwrap();
@@ -225,15 +237,7 @@ fn a_codex_homes_row_of_the_thread_is_pointed_at_the_head_and_nothing_else() {
 
     // A thread with no row, another agent, no database, no table, no database file.
     point(&target, other.replace("bb", "cc").as_str(), &[]).unwrap();
-    repoint_within(
-        Agent::Claude,
-        &target,
-        head,
-        CODEX_ID,
-        &HashMap::new(),
-        patience,
-    )
-    .unwrap();
+    repoint_thread_row(AgentId::CLAUDE, &target, head, CODEX_ID, &HashMap::new()).unwrap();
     point(&temp_dir("point-none"), CODEX_ID, &[]).unwrap();
     let bare = temp_dir("point-bare");
     Connection::open(bare.join("state_9.sqlite"))
@@ -369,8 +373,8 @@ fn a_claude_transcripts_sidecar_directory_and_rewind_checkpoints_are_carried() {
     );
     write(&source, "file-history/another/0123@v1", "someone else's");
 
-    let located = locate(Agent::Claude, &source, CLAUDE_ID).expect("found");
-    let relatives = companions(Agent::Claude, &source, &located, CLAUDE_ID);
+    let located = locate(AgentId::CLAUDE, &source, CLAUDE_ID).expect("found");
+    let relatives = companions(AgentId::CLAUDE, &source, &located, CLAUDE_ID);
     assert_eq!(
         relatives,
         [
@@ -394,8 +398,8 @@ fn a_claude_transcripts_sidecar_directory_and_rewind_checkpoints_are_carried() {
     // A session with neither has only its transcript, and an id that is no UUID names no path.
     let bare = temp_dir("claude-sidecar-bare");
     write(&bare, &record, "conversation");
-    assert!(companions(Agent::Claude, &bare, Path::new(&record), CLAUDE_ID).is_empty());
-    assert!(companions(Agent::Claude, &source, Path::new(&record), "..").is_empty());
+    assert!(companions(AgentId::CLAUDE, &bare, Path::new(&record), CLAUDE_ID).is_empty());
+    assert!(companions(AgentId::CLAUDE, &source, Path::new(&record), "..").is_empty());
 }
 
 /// The items of one switch are replaced and rolled back together: a copy that cannot complete
@@ -479,9 +483,9 @@ fn a_session_with_no_record_in_the_account_is_not_found() {
     let source = temp_dir("not-found");
     write(&source, "projects/slug/another.jsonl", "x");
 
-    let err = locate(Agent::Claude, &source, CLAUDE_ID).expect_err("nothing there");
+    let err = locate(AgentId::CLAUDE, &source, CLAUDE_ID).expect_err("nothing there");
     assert_eq!(code_of(&err), error_code::CONVERSATION_NOT_FOUND);
-    let err = locate(Agent::Claude, &source.join("missing"), CLAUDE_ID).expect_err("no dir");
+    let err = locate(AgentId::CLAUDE, &source.join("missing"), CLAUDE_ID).expect_err("no dir");
     assert_eq!(code_of(&err), error_code::CONVERSATION_NOT_FOUND);
     // A link named like the record is not the record.
     std::os::unix::fs::symlink(
@@ -489,7 +493,7 @@ fn a_session_with_no_record_in_the_account_is_not_found() {
         source.join(format!("projects/slug/{CLAUDE_ID}.jsonl")),
     )
     .unwrap();
-    let err = locate(Agent::Claude, &source, CLAUDE_ID).expect_err("a link");
+    let err = locate(AgentId::CLAUDE, &source, CLAUDE_ID).expect_err("a link");
     assert_eq!(code_of(&err), error_code::CONVERSATION_NOT_FOUND);
 }
 
@@ -520,7 +524,7 @@ fn share(account: &Path, default: &Path, names: &[&str]) {
 }
 
 /// What a switch of the session does to the files: locate, collect the companions, copy.
-fn carry(agent: Agent, source: &Path, target: &Path, id: &str) -> PathBuf {
+fn carry(agent: AgentId, source: &Path, target: &Path, id: &str) -> PathBuf {
     let record = locate(agent, source, id).expect("found");
     let companions = companions(agent, source, &record, id);
     copy(source, target, &record, &companions).expect("copied");
@@ -562,7 +566,7 @@ fn claude_accounts_sharing_their_directories_copy_only_what_is_not_shared() {
         let items = [&record, &sidecar_dir, &checkpoint_dir];
         let before = items.map(|item| inode(&source, item));
 
-        carry(Agent::Claude, &source, &target, CLAUDE_ID);
+        carry(AgentId::CLAUDE, &source, &target, CLAUDE_ID);
 
         assert_eq!(items.map(|item| inode(&source, item)), before, "{shared:?}");
         for (file, content) in [
@@ -598,7 +602,7 @@ fn a_switch_between_a_sharing_and_a_non_sharing_account_copies_either_way() {
     share(&sharing, &default, &names);
     write(&sharing, &record, "conversation");
     write(&sharing, &checkpoint, "checkpoint");
-    carry(Agent::Claude, &sharing, &own, CLAUDE_ID);
+    carry(AgentId::CLAUDE, &sharing, &own, CLAUDE_ID);
     for file in [&record, &checkpoint] {
         assert!(own.join(file).is_file(), "{file}");
     }
@@ -606,7 +610,7 @@ fn a_switch_between_a_sharing_and_a_non_sharing_account_copies_either_way() {
     let default = temp_dir("mixed-default-back");
     let sharing = temp_dir("mixed-sharing-back");
     share(&sharing, &default, &names);
-    carry(Agent::Claude, &own, &sharing, CLAUDE_ID);
+    carry(AgentId::CLAUDE, &own, &sharing, CLAUDE_ID);
     for (file, content) in [(&record, "conversation"), (&checkpoint, "checkpoint")] {
         assert_eq!(read(&default, file), content, "{file}");
     }
@@ -632,7 +636,7 @@ fn codex_accounts_sharing_their_sessions_copy_nothing() {
     let chain = crate::test_support::codex_chain(&source, CODEX_ID, true);
     let before: Vec<(Vec<u8>, u64)> = chain.all().iter().map(stamp).collect();
 
-    carry(Agent::Codex, &source, &target, CODEX_ID);
+    carry(AgentId::CODEX, &source, &target, CODEX_ID);
 
     let after: Vec<(Vec<u8>, u64)> = chain.all().iter().map(stamp).collect();
     assert_eq!(before, after);
@@ -652,7 +656,7 @@ fn grok_accounts_sharing_their_sessions_copy_nothing() {
 
     let before = inode(&source, &record);
 
-    carry(Agent::Grok, &source, &target, GROK_ID);
+    carry(AgentId::GROK, &source, &target, GROK_ID);
 
     assert_eq!(inode(&source, &record), before);
     assert_eq!(
@@ -770,7 +774,8 @@ fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect();
         repoint_within(
-            Agent::Codex,
+            codex_registry(),
+            AgentId::CODEX,
             target,
             head,
             CODEX_ID,
@@ -837,4 +842,18 @@ fn a_copy_refused_for_permissions_says_so() {
         ),
         ("copy", "permission_denied")
     );
+}
+
+/// A provider with no thread registry has no row to point at a moved record: the move is done.
+#[test]
+fn a_provider_without_a_thread_registry_has_no_row_to_repoint() {
+    let home = temp_dir("no-registry");
+    repoint_thread_row(
+        AgentId::TEST,
+        &home,
+        Path::new("sessions/thread.jsonl"),
+        "thread",
+        &HashMap::new(),
+    )
+    .expect("nothing to repoint");
 }

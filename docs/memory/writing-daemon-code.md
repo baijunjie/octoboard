@@ -62,6 +62,25 @@ repeating refresh each connected client runs on its own phase — so a read-modi
 mutex gets another caller's writes in between and one of the two is lost. `Store::apply_branch_origins`
 (`apps/daemon/src/store/branch_origins.rs`) is the shape to copy.
 
+## Raise a version and write its migration only between released versions
+
+Applies to the three versions the daemon owns: the protocol generation (`GENERATION` in
+`apps/daemon/src/protocol/version.rs`, rendered as `PROTOCOL_GENERATION` into `packages/ui/src/protocol.generated.ts`),
+the store's `SCHEMA_VERSION` with its `MIGRATIONS`, `schema/v{N}.sql` and `PAST_SCHEMAS`
+(`apps/daemon/src/store/schema.rs`), and the configuration document's `CONFIGURATION_VERSION`
+(`apps/daemon/src/protocol/configuration.rs`). The usual habit — every breaking change or schema change raises the
+version and gets a migration — is wrong here. A version is raised, and a migration or upgrade step written, only to
+bridge one released version to the next: a change to anything no release has carried, however large and however many
+commits or plan milestones it spans, is made in place at the version it already has, with no bump, no step, no kept
+past schema and no migration test. After a release, the first change to what it carried raises the version once, and
+later changes before the next release fold into that same version and step.
+
+A version is released only once a release tag (`v*`, the tags `.github/workflows/release.yml` builds) is on a commit
+that carries it; check the remote's tags (`git ls-remote --tags origin 'v[0-9]*'`), not only the local `git tag`. With
+no release tags nothing is released, and all three stay at 1 with `MIGRATIONS` empty. What each version guards, once a
+release exists, is in `apps/daemon/PROTOCOL.md`, "Versions and compatibility" and the "Version" paragraph of
+"Configuration export", and in `docs/structure/daemon.md`, "Where new code goes". (Source: user instruction)
+
 ## Time a repeating refresh from the client, and bound it in the daemon
 
 Work that only matters while a client is showing something — the projects of the console in the sidebar, a list in
@@ -120,7 +139,7 @@ snapshot is a serial chain of them), so a process that costs milliseconds on a d
 machine is what the user waits on, multiplied by the number of sessions.
 
 So look for a route with no process first: read what is wanted from where it is installed or stored (as
-`AgentAdapter::installed_version` reads an agent's version without running it), serve a cached result (the
+`AgentProvider::installed_version` reads an agent's version without running it), serve a cached result (the
 `env_shell` snapshots, never a fresh login shell per call), or let the other side call the daemon (a Claude Code that
 takes HTTP hooks posts to the hook route with no forwarder process behind it). Where a process cannot be avoided, run
 it off the path the user waits on, cache what it returns, and bound how many run at once.
@@ -173,6 +192,19 @@ the claim, after its checks, and put back on each of its failure paths, since on
 whatever launches in between, and one made after it by whatever was waiting for the claim. Put
 blocking filesystem or process work in a handler on `tokio::task::spawn_blocking` and await it; do not use
 `block_in_place`, which panics under the current-thread runtime plain `#[tokio::test]` gives the coordinator tests.
+
+## A provider interface's default method claims nothing and does nothing
+
+Applies to every default body of `AgentProvider` (`apps/daemon/src/adapter/mod.rs`) and of the per-provider traits it
+hands out (`HookInterpreter`, `RecordStore`, `ScreenReader`, `AccountOps`, `ModelCatalogue`, `StatusLine`,
+`CompatibilitySource`) or a launch plan carries (`TrustCarrier`), and of any added later. A provider that does not override a method gets its default silently — the test-only provider, one being
+added, one that has nothing of the kind — so the default is the answer of a provider with none of the thing: it
+recognises nothing, hints at nothing, proves nothing and acts on nothing. Never write the default as what the built-in
+providers happen to share, least of all where the answer leads to a refusal or a deletion: a `RecordStore` default
+that took a missing record as conclusive made every session of a provider whose records it cannot recognise count as
+gone, so its resume was refused and an archived one's cleanup could delete it. Behavior several providers share goes
+in a helper their overrides call (as `transcript_path_hint` in `apps/daemon/src/records/store.rs` does for the hook
+hint Claude Code and Codex both carry), not in the default.
 
 ## On macOS, reach the system through APIs that need no consent, never through Apple Events
 

@@ -3,7 +3,7 @@ use crate::coordinator::handle;
 use crate::coordinator::projects::{update_project, ProjectChanges};
 use crate::coordinator::test_support::{console, console_workdir_in};
 use crate::protocol::{
-    error_code, Agent, CodedError, Launch, LaunchChange, PerAgent, Project, ProjectAccount,
+    error_code, AgentId, CodedError, Launch, LaunchChange, PerAgent, Project, ProjectAccount,
     ProjectSource, RequestBody,
 };
 use crate::session_tools;
@@ -46,13 +46,12 @@ async fn a_create_the_store_cannot_write_leaves_no_working_directory() {
         None,
         RequestBody::CreateConsole {
             name: "Console".to_string(),
-            default_agent: Agent::Claude,
+            default_agent: AgentId::CLAUDE,
             project_session_agent: None,
-            accounts: PerAgent {
-                claude: None,
-                codex: None,
-                grok: None,
-            },
+            accounts: PerAgent::default()
+                .with(AgentId::CLAUDE, None)
+                .with(AgentId::CODEX, None)
+                .with(AgentId::GROK, None),
             launch: Default::default(),
             project_session_launch: Default::default(),
             icon: None,
@@ -81,13 +80,12 @@ async fn a_create_whose_instructions_cannot_be_written_leaves_no_working_directo
         None,
         RequestBody::CreateConsole {
             name: "Console".to_string(),
-            default_agent: Agent::Claude,
+            default_agent: AgentId::CLAUDE,
             project_session_agent: None,
-            accounts: PerAgent {
-                claude: None,
-                codex: None,
-                grok: None,
-            },
+            accounts: PerAgent::default()
+                .with(AgentId::CLAUDE, None)
+                .with(AgentId::CODEX, None)
+                .with(AgentId::GROK, None),
             launch: Default::default(),
             project_session_launch: Default::default(),
             icon: None,
@@ -105,33 +103,40 @@ async fn a_create_whose_instructions_cannot_be_written_leaves_no_working_directo
 #[tokio::test]
 async fn a_new_console_stores_its_default_agent_and_launch_settings() {
     let (state, dir) = crate::test_support::app_state("coordinator-create-console-agent");
-    crate::test_support::offer_models(&state, Agent::Codex, &[("gpt-5", &["high"])]);
+    crate::test_support::offer_models(&state, AgentId::CODEX, &[("gpt-5", &["high"])]);
     handle(
         &state,
         None,
         RequestBody::CreateConsole {
             name: "Console".to_string(),
-            default_agent: Agent::Codex,
+            default_agent: AgentId::CODEX,
             project_session_agent: None,
-            accounts: PerAgent {
-                claude: None,
-                codex: None,
-                grok: None,
-            },
-            launch: PerAgent {
-                claude: Launch {
-                    model: Some("  ".to_string()),
-                    effort: None,
-                },
-                codex: Launch {
-                    model: Some(" gpt-5 ".to_string()),
-                    effort: Some("high".to_string()),
-                },
-                grok: Launch {
-                    model: None,
-                    effort: None,
-                },
-            },
+            accounts: PerAgent::default()
+                .with(AgentId::CLAUDE, None)
+                .with(AgentId::CODEX, None)
+                .with(AgentId::GROK, None),
+            launch: PerAgent::default()
+                .with(
+                    AgentId::CLAUDE,
+                    Launch {
+                        model: Some("  ".to_string()),
+                        effort: None,
+                    },
+                )
+                .with(
+                    AgentId::CODEX,
+                    Launch {
+                        model: Some(" gpt-5 ".to_string()),
+                        effort: Some("high".to_string()),
+                    },
+                )
+                .with(
+                    AgentId::GROK,
+                    Launch {
+                        model: None,
+                        effort: None,
+                    },
+                ),
             project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
@@ -141,10 +146,16 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
     .expect("created");
     let created = state.store.list_consoles().unwrap().remove(0);
     assert!(Path::new(&created.workdir).starts_with(&*dir));
-    assert_eq!(created.default_agent, Agent::Codex);
-    assert_eq!(created.launch.claude.model, None);
-    assert_eq!(created.launch.codex.model.as_deref(), Some("gpt-5"));
-    assert_eq!(created.launch.codex.effort.as_deref(), Some("high"));
+    assert_eq!(created.default_agent, AgentId::CODEX);
+    assert_eq!(created.launch[AgentId::CLAUDE].model, None);
+    assert_eq!(
+        created.launch[AgentId::CODEX].model.as_deref(),
+        Some("gpt-5")
+    );
+    assert_eq!(
+        created.launch[AgentId::CODEX].effort.as_deref(),
+        Some("high")
+    );
 
     // A model the agent does not offer is refused, and no second console is created.
     let err = handle(
@@ -152,27 +163,34 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
         None,
         RequestBody::CreateConsole {
             name: "Other".to_string(),
-            default_agent: Agent::Codex,
+            default_agent: AgentId::CODEX,
             project_session_agent: None,
-            accounts: PerAgent {
-                claude: None,
-                codex: None,
-                grok: None,
-            },
-            launch: PerAgent {
-                claude: Launch {
-                    model: None,
-                    effort: None,
-                },
-                codex: Launch {
-                    model: Some("gpt-9".to_string()),
-                    effort: None,
-                },
-                grok: Launch {
-                    model: None,
-                    effort: None,
-                },
-            },
+            accounts: PerAgent::default()
+                .with(AgentId::CLAUDE, None)
+                .with(AgentId::CODEX, None)
+                .with(AgentId::GROK, None),
+            launch: PerAgent::default()
+                .with(
+                    AgentId::CLAUDE,
+                    Launch {
+                        model: None,
+                        effort: None,
+                    },
+                )
+                .with(
+                    AgentId::CODEX,
+                    Launch {
+                        model: Some("gpt-9".to_string()),
+                        effort: None,
+                    },
+                )
+                .with(
+                    AgentId::GROK,
+                    Launch {
+                        model: None,
+                        effort: None,
+                    },
+                ),
             project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
@@ -193,10 +211,10 @@ async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let stored = || state.store.get_console("console-1").unwrap().unwrap();
-    let update = |value: Option<Option<Agent>>| {
+    let update = |value: Option<Option<AgentId>>| {
         update_console_request("console-1", move |request| {
             let RequestBody::UpdateConsole {
                 project_session_agent,
@@ -209,12 +227,12 @@ async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
         })
     };
 
-    handle(&state, None, update(Some(Some(Agent::Codex))))
+    handle(&state, None, update(Some(Some(AgentId::CODEX))))
         .await
         .unwrap();
-    assert_eq!(stored().project_session_agent, Some(Agent::Codex));
+    assert_eq!(stored().project_session_agent, Some(AgentId::CODEX));
     handle(&state, None, update(None)).await.unwrap();
-    assert_eq!(stored().project_session_agent, Some(Agent::Codex));
+    assert_eq!(stored().project_session_agent, Some(AgentId::CODEX));
     handle(&state, None, update(Some(None))).await.unwrap();
     assert_eq!(stored().project_session_agent, None);
 
@@ -223,8 +241,8 @@ async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
         None,
         RequestBody::CreateConsole {
             name: "Other".to_string(),
-            default_agent: Agent::Claude,
-            project_session_agent: Some(Agent::Grok),
+            default_agent: AgentId::CLAUDE,
+            project_session_agent: Some(AgentId::GROK),
             accounts: Default::default(),
             launch: Default::default(),
             project_session_launch: Default::default(),
@@ -241,7 +259,7 @@ async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
         .into_iter()
         .find(|console| console.name == "Other")
         .unwrap();
-    assert_eq!(created.project_session_agent, Some(Agent::Grok));
+    assert_eq!(created.project_session_agent, Some(AgentId::GROK));
 }
 
 /// A launch setting is left alone when absent, set (trimmed) by a value, and cleared by `null`
@@ -250,16 +268,19 @@ async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
 async fn a_console_session_launch_setting_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-console-launch");
     let workdir = console_workdir_in(&dir);
-    let mut seeded = console(Agent::Claude, &workdir);
-    seeded.launch.claude.model = Some("opus".to_string());
-    seeded.launch.grok.model = Some("grok-4".to_string());
+    let mut seeded = console(AgentId::CLAUDE, &workdir);
+    seeded.launch[AgentId::CLAUDE].model = Some("opus".to_string());
+    seeded.launch[AgentId::GROK].model = Some("grok-4".to_string());
     state.store.insert_console(&seeded).unwrap();
     let stored = || state.store.get_console("console-1").unwrap().unwrap();
 
     handle(&state, None, update_console_request("console-1", |_| {}))
         .await
         .unwrap();
-    assert_eq!(stored().launch.claude.model.as_deref(), Some("opus"));
+    assert_eq!(
+        stored().launch[AgentId::CLAUDE].model.as_deref(),
+        Some("opus")
+    );
 
     handle(
         &state,
@@ -268,14 +289,17 @@ async fn a_console_session_launch_setting_is_left_set_or_cleared_by_an_update() 
             let RequestBody::UpdateConsole { launch, .. } = request else {
                 unreachable!()
             };
-            launch.claude.model = Some(Some(" sonnet ".to_string()));
-            launch.grok.model = Some(None);
+            launch[AgentId::CLAUDE].model = Some(Some(" sonnet ".to_string()));
+            launch[AgentId::GROK].model = Some(None);
         }),
     )
     .await
     .unwrap();
-    assert_eq!(stored().launch.claude.model.as_deref(), Some("sonnet"));
-    assert_eq!(stored().launch.grok.model, None);
+    assert_eq!(
+        stored().launch[AgentId::CLAUDE].model.as_deref(),
+        Some("sonnet")
+    );
+    assert_eq!(stored().launch[AgentId::GROK].model, None);
 
     handle(
         &state,
@@ -284,12 +308,12 @@ async fn a_console_session_launch_setting_is_left_set_or_cleared_by_an_update() 
             let RequestBody::UpdateConsole { launch, .. } = request else {
                 unreachable!()
             };
-            launch.claude.model = Some(Some("  ".to_string()));
+            launch[AgentId::CLAUDE].model = Some(Some("  ".to_string()));
         }),
     )
     .await
     .unwrap();
-    assert_eq!(stored().launch.claude.model, None);
+    assert_eq!(stored().launch[AgentId::CLAUDE].model, None);
 }
 
 /// The user's addition to the console session's instructions is left alone when absent, set
@@ -301,7 +325,7 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let stored = || {
         state
@@ -415,7 +439,7 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
     let workdir = console_workdir_in(&dir);
     state
         .store
-        .insert_console(&console(Agent::Claude, &workdir))
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let mut project = Project {
         id: "project-1".to_string(),
@@ -426,25 +450,32 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
         default_agent: None,
         source: ProjectSource::Local,
         remote_url: None,
-        accounts: PerAgent {
-            claude: ProjectAccount::Inherit,
-            codex: ProjectAccount::Inherit,
-            grok: ProjectAccount::Inherit,
-        },
-        launch: PerAgent {
-            claude: Launch {
-                model: Some("retired".to_string()),
-                effort: None,
-            },
-            codex: Launch {
-                model: None,
-                effort: None,
-            },
-            grok: Launch {
-                model: None,
-                effort: None,
-            },
-        },
+        accounts: PerAgent::default()
+            .with(AgentId::CLAUDE, ProjectAccount::Inherit)
+            .with(AgentId::CODEX, ProjectAccount::Inherit)
+            .with(AgentId::GROK, ProjectAccount::Inherit),
+        launch: PerAgent::default()
+            .with(
+                AgentId::CLAUDE,
+                Launch {
+                    model: Some("retired".to_string()),
+                    effort: None,
+                },
+            )
+            .with(
+                AgentId::CODEX,
+                Launch {
+                    model: None,
+                    effort: None,
+                },
+            )
+            .with(
+                AgentId::GROK,
+                Launch {
+                    model: None,
+                    effort: None,
+                },
+            ),
         trust_consent: false,
         pinned: false,
         tags: Vec::new(),
@@ -477,7 +508,9 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
     assert_eq!(refused(err), error_code::FIELD_REQUIRED);
 
     let mut changes = ProjectChanges::default();
-    changes.launch.insert(Agent::Claude, launch("gpt-9", None));
+    changes
+        .launch
+        .insert(AgentId::CLAUDE, launch("gpt-9", None));
     let err = update_project(&state, "project-1", changes)
         .await
         .expect_err("model not offered");
@@ -486,20 +519,23 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
     let mut changes = ProjectChanges::default();
     changes
         .launch
-        .insert(Agent::Claude, launch("opus", Some("extreme")));
+        .insert(AgentId::CLAUDE, launch("opus", Some("extreme")));
     let err = update_project(&state, "project-1", changes)
         .await
         .expect_err("effort not offered");
     assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
     project = state.store.get_project("project-1").unwrap().unwrap();
     assert_eq!(project.name, "Project");
-    assert_eq!(project.launch.claude.model.as_deref(), Some("retired"));
+    assert_eq!(
+        project.launch[AgentId::CLAUDE].model.as_deref(),
+        Some("retired")
+    );
 
     // The stored model is not on the list, and sending it again is not a change.
     let mut changes = ProjectChanges::default();
     changes
         .launch
-        .insert(Agent::Claude, launch("retired", None));
+        .insert(AgentId::CLAUDE, launch("retired", None));
     update_project(&state, "project-1", changes)
         .await
         .expect("an unchanged model is not checked");
@@ -513,18 +549,24 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
     .await
     .expect("renamed");
     assert_eq!(renamed.name, "Renamed");
-    assert_eq!(renamed.launch.claude.model.as_deref(), Some("retired"));
+    assert_eq!(
+        renamed.launch[AgentId::CLAUDE].model.as_deref(),
+        Some("retired")
+    );
 
     // Nothing to check Codex's model against, so it is taken as given.
-    crate::test_support::offer_models(&state, Agent::Codex, &[]);
+    crate::test_support::offer_models(&state, AgentId::CODEX, &[]);
     let mut changes = ProjectChanges::default();
     changes
         .launch
-        .insert(Agent::Codex, launch("anything", None));
+        .insert(AgentId::CODEX, launch("anything", None));
     let updated = update_project(&state, "project-1", changes)
         .await
         .expect("accepted");
-    assert_eq!(updated.launch.codex.model.as_deref(), Some("anything"));
+    assert_eq!(
+        updated.launch[AgentId::CODEX].model.as_deref(),
+        Some("anything")
+    );
 
     let err = update_console(
         &state,
@@ -544,12 +586,12 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
 #[tokio::test]
 async fn the_project_session_pair_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-pair");
-    crate::test_support::offer_models(&state, Agent::Codex, &[("gpt-5", &["high"])]);
-    crate::test_support::offer_models(&state, Agent::Claude, &[("opus", &["medium"])]);
+    crate::test_support::offer_models(&state, AgentId::CODEX, &[("gpt-5", &["high"])]);
+    crate::test_support::offer_models(&state, AgentId::CLAUDE, &[("opus", &["medium"])]);
     let workdir = console_workdir_in(&dir);
-    let mut seeded = console(Agent::Claude, &workdir);
-    seeded.project_session_launch.claude.model = Some("opus".to_string());
-    seeded.project_session_launch.grok.effort = Some("low".to_string());
+    let mut seeded = console(AgentId::CLAUDE, &workdir);
+    seeded.project_session_launch[AgentId::CLAUDE].model = Some("opus".to_string());
+    seeded.project_session_launch[AgentId::GROK].effort = Some("low".to_string());
     state.store.insert_console(&seeded).unwrap();
     let stored = || state.store.get_console("console-1").unwrap().unwrap();
 
@@ -557,7 +599,9 @@ async fn the_project_session_pair_is_left_set_or_cleared_by_an_update() {
         .await
         .unwrap();
     assert_eq!(
-        stored().project_session_launch.claude.model.as_deref(),
+        stored().project_session_launch[AgentId::CLAUDE]
+            .model
+            .as_deref(),
         Some("opus")
     );
 
@@ -572,27 +616,33 @@ async fn the_project_session_pair_is_left_set_or_cleared_by_an_update() {
             else {
                 unreachable!()
             };
-            project_session_launch.claude.model = Some(None);
-            project_session_launch.claude.effort = Some(Some("  medium ".to_string()));
-            project_session_launch.codex.model = Some(Some("gpt-5".to_string()));
+            project_session_launch[AgentId::CLAUDE].model = Some(None);
+            project_session_launch[AgentId::CLAUDE].effort = Some(Some("  medium ".to_string()));
+            project_session_launch[AgentId::CODEX].model = Some(Some("gpt-5".to_string()));
         }),
     )
     .await
     .unwrap();
     let updated = stored();
-    assert_eq!(updated.project_session_launch.claude.model, None);
+    assert_eq!(updated.project_session_launch[AgentId::CLAUDE].model, None);
     assert_eq!(
-        updated.project_session_launch.claude.effort.as_deref(),
+        updated.project_session_launch[AgentId::CLAUDE]
+            .effort
+            .as_deref(),
         Some("medium")
     );
     assert_eq!(
-        updated.project_session_launch.codex.model.as_deref(),
+        updated.project_session_launch[AgentId::CODEX]
+            .model
+            .as_deref(),
         Some("gpt-5")
     );
     // The console session pair is a separate setting, and the other agents' values stay.
-    assert_eq!(updated.launch.claude.model, None);
+    assert_eq!(updated.launch[AgentId::CLAUDE].model, None);
     assert_eq!(
-        updated.project_session_launch.grok.effort.as_deref(),
+        updated.project_session_launch[AgentId::GROK]
+            .effort
+            .as_deref(),
         Some("low")
     );
 }

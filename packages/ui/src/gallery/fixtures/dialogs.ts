@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../../git/gitWorkflow";
 import { type Agent, type AgentAvailability, type Console, type Settings } from "../../protocol";
-import { AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import { type RelocationCause } from "../../errors/causes";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
@@ -58,7 +58,7 @@ const accountsState = snapshotState({
   sessions,
   settings: {
     ...DEFAULT_SETTINGS,
-    added_agents: [...AGENTS],
+    added_agents: [...FIXTURE_AGENTS],
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       accountOf("a-work", "claude", "Work account for release coordination across all production services مرحبا 发布", "/Users/dev/.claude-work"),
@@ -194,7 +194,7 @@ const inPlaceState = snapshotState({
 // Detection has settled: the listed agents are not on the machine, the rest are.
 const detected = (missing: Agent[]) =>
   new Map<Agent, AgentAvailability>(
-    AGENTS.map((agent) => [
+    FIXTURE_AGENTS.map((agent) => [
       agent,
       { agent, availability: missing.includes(agent) ? "unavailable" : "available", default_account_dir: `/Users/dev/.${agent}` },
     ]),
@@ -598,7 +598,7 @@ export const dialogScenarios: Scenario[] = [
     title: "Notice below a centered dialog",
     description: "The notice stays at the window's bottom end when there is room below the dialog, even if its horizontal span reaches the footer. Resize the window to compare genuine overlap with the clear space below a centered dialog.",
     steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
-    notifications: [sessionNoticeNotification("s-web-1", "claude_workspace_untrusted")],
+    notifications: [sessionNoticeNotification("s-web-1", "provider.claude.workspace_untrusted")],
   },
   {
     ...dialogFixture,
@@ -610,7 +610,7 @@ export const dialogScenarios: Scenario[] = [
     description: "The stack clears the footer even while collapsed, since spreading its notices would otherwise cover the buttons. Hover to expand it, then move away: the stack's anchor stays steady in both states.",
     steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
     notifications: [
-      sessionNoticeNotification("s-web-1", "claude_workspace_untrusted"),
+      sessionNoticeNotification("s-web-1", "provider.claude.workspace_untrusted"),
       { kind: "notice", message: (t) => t("common.pathCopied") },
     ],
   },
@@ -626,7 +626,7 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
-    notifications: [sessionNoticeNotification("s-web-1", "claude_workspace_untrusted")],
+    notifications: [sessionNoticeNotification("s-web-1", "provider.claude.workspace_untrusted")],
   },
   {
     id: "sidebar-session-menu-unused",
@@ -1070,7 +1070,7 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: withAddedAgents(sessionLaunchState, [...AGENTS]),
+    state: withAddedAgents(sessionLaunchState, [...FIXTURE_AGENTS]),
     id: "dialog-new-session-no-agent-added",
     group: "Sidebar sessions",
     category: "exceptional",

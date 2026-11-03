@@ -17,7 +17,7 @@ use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::owner_notices;
 use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{
-    error_code, error_parts, notice_code, Agent, CodedError, Notice, Session, SessionStatus,
+    error_code, error_parts, notice_code, AgentId, CodedError, Notice, Session, SessionStatus,
     DEFAULT_ACCOUNT_NAME,
 };
 use crate::session::term::{Launch, LaunchRequest};
@@ -258,7 +258,7 @@ pub(crate) fn hooks() -> AutoSwitchHooks {
 /// Only a newly recorded, successful probe is a reason to reconsider the waits.
 fn after_quota_refresh(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account: Option<String>,
     config_dir: Option<String>,
     started_at: i64,
@@ -276,7 +276,7 @@ fn after_quota_refresh(
 
 async fn recover_after_refresh(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account: Option<String>,
     config_dir: Option<String>,
     started_at: i64,
@@ -1029,7 +1029,7 @@ fn is_wrong_time(err: &anyhow::Error) -> bool {
 /// What the switched session is told, put ahead of the prompt it is relaunched with to carry on:
 /// a message written into it would open a turn of its own, which its owner would be sent a report
 /// of.
-fn note_to_session(agent: Agent, from: &str, to: &str) -> String {
+fn note_to_session(agent: AgentId, from: &str, to: &str) -> String {
     format!(
         "{}, so {} switched you to `{to}`.",
         note_opening(agent, from),
@@ -1039,7 +1039,7 @@ fn note_to_session(agent: Agent, from: &str, to: &str) -> String {
 
 /// How [`note_to_session`] begins, which, as written, credits the turn the note opens: credited by
 /// the notice prefix alone, the turn of whichever notice reached the session first would spend it.
-fn note_opening(agent: Agent, from: &str) -> String {
+fn note_opening(agent: AgentId, from: &str) -> String {
     format!(
         "{NOTICE_PREFIX}: your {} account `{from}` reached its usage limit",
         agent.label()

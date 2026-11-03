@@ -47,7 +47,7 @@ are in "Claude Code's status line" in `docs/product/launching-agents.md`.
 
 When Claude Code has **not been trusted with the project's directory**, it ignores that project's own `allow` permission
 rules for the session while still applying its `deny` rules — so the session is only ever more restrictive, never less.
-Octoboard tells the user so once, when the session starts, naming the project it is in: the `allow` rules stay ignored
+Octoboard tells the user so once, when the session starts, with the notice `provider.claude.workspace_untrusted`, naming the project it is in: the `allow` rules stay ignored
 until Claude Code's trust confirmation is answered, and Octoboard presses that confirmation once the user has agreed to
 it (see `docs/product/folder-trust.md`). It stays silent unless the user's own configuration says explicitly that the
 directory is untrusted, so a configuration it cannot read leaves them alone rather than warning on every launch; and it
@@ -134,8 +134,8 @@ An explicit Codex approval reviewer chosen for Codex in Settings takes precedenc
 accounts, a resume included. When the setting follows each account's configuration, whether Codex resolves approval
 requests by itself is read from `config.toml` in the Codex home that launch uses: the session's Codex config directory,
 else a `CODEX_HOME` the user's shell exports, else `~/.codex`. A trusted project's own `.codex/config.toml`, which Codex
-itself layers over that file, is not consulted for this. The choices and their lifetime rules are in "Approval modes" in
-`docs/product/per-agent-settings.md`.
+itself layers over that file, is not consulted for this. The choices are in "Approval modes" and their lifetime rules
+in "Provider settings" in `docs/product/per-agent-settings.md`.
 
 ### Claude compatibility for Codex
 
@@ -250,7 +250,7 @@ below). Its `requirements.toml` and `managed_config.toml` are not carried either
 ### Grok's own sandbox
 
 **A Grok Build launch that would run under Grok's own sandbox is refused** before the per-session home is built, with
-the code `grok_sandbox_unsupported`, whose message names the sandbox profile and what sets it. The sandbox lets Grok
+the code `provider.grok.sandbox_unsupported`, whose message names the sandbox profile and what sets it. The sandbox lets Grok
 write only to its own home, the working directory and temporary directories, judged by where links really lead, and the
 per-session home's login and session records are links back into the source home, so a sandboxed session could not even
 create its conversation. The alert's remedy is to turn the sandbox off where it is set, or to have whoever manages that
@@ -333,7 +333,7 @@ exist in the source home are linked; for an empty directory, Grok creates its lo
 per-session home, which is discarded with the session's process, so neither the login nor the conversation persists.
 Octoboard does not check this when the directory is set — a user pointing it at a directory they are about to create
 should not be stopped. It is checked at **launch** instead, and a Grok Build session pinned to a directory that is not
-an initialized Grok home is refused there, naming the directory and what is wrong with it; a session on the default
+an initialized Grok home is refused there (`provider.grok.home_not_initialized`), naming the directory and what is wrong with it; a session on the default
 account is never held to this, since that directory is the user's own existing setup.
 
 ### A project's hooks and instruction files

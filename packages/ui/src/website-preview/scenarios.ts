@@ -1,6 +1,5 @@
 import type { Language } from "../i18n/languages";
 import { type Agent, type AgentAvailability, type Session } from "../protocol";
-import { AGENTS } from "../agents/agents";
 import type { State } from "../store";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
@@ -25,9 +24,12 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 export type PreviewScene = "overview" | "focus" | "changes";
 
+/** The agents the preview shows: its own list, apart from the providers the app serves. */
+const PREVIEW_AGENTS = ["claude", "codex", "grok"] as const;
+
 /** Every agent installed, so each has a quota tab and the selected session its rail indicator. */
 const agentAvailability = new Map<Agent, AgentAvailability>(
-  AGENTS.map((agent) => [
+  PREVIEW_AGENTS.map((agent) => [
     agent,
     { agent, availability: "available", default_account_dir: `/demo/.${agent}` },
   ]),
@@ -232,7 +234,7 @@ export function createPreviewScenario(
             ahead: 0,
           }),
         ),
-        settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: "/demo" },
+        settings: { ...DEFAULT_SETTINGS, added_agents: [...PREVIEW_AGENTS], default_clone_dir: "/demo" },
         accountQuotas: previewQuotas(),
       }),
       agentAvailability,

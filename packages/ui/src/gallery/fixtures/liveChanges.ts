@@ -1,5 +1,5 @@
 import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type ShellTerminal } from "../../protocol";
-import { AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import { accountQuotaOf } from "../../accounts/accountQuotaOf";
 import type { Step } from "../../fixtures/interact";
 import type { LiveChange } from "../scenario";
@@ -44,7 +44,7 @@ export function agentAvailability(id: string, label: string, agent: Agent, avail
   const step: Step = (ui) =>
     ui.daemonEvents((state) => ({
       type: "agent_availability_updated",
-      agent_availability: AGENTS.map((each): AgentAvailability => {
+      agent_availability: FIXTURE_AGENTS.map((each): AgentAvailability => {
         const held = state.agentAvailability.get(each) ?? { agent: each, availability: "not_determined", default_account_dir: null };
         return each === agent ? { ...held, availability } : held;
       }),

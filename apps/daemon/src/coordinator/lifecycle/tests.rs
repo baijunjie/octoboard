@@ -5,7 +5,7 @@ use crate::coordinator::test_support::{
 };
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
-    error_code, Agent, CodedError, Event, Origin, Project, ProjectSource, RequestBody, Session,
+    error_code, AgentId, CodedError, Event, Origin, Project, ProjectSource, RequestBody, Session,
     SessionKind, SessionStatus,
 };
 use crate::records;
@@ -27,7 +27,7 @@ fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
     let (state, dir) = crate::test_support::app_state("coordinator-delete-sessions");
     let workdir = console_workdir_in(&dir);
     for id in ["console-1", "console-2"] {
-        let mut other = console(Agent::Claude, &workdir);
+        let mut other = console(AgentId::CLAUDE, &workdir);
         other.id = id.to_string();
         state.store.insert_console(&other).unwrap();
     }
@@ -213,7 +213,7 @@ async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
         },
         console_session("other-hub", Idle),
         bound_session("elsewhere", Working, "other-hub"),
-        project_session("unbound", Agent::Claude, Working),
+        project_session("unbound", AgentId::CLAUDE, Working),
     ] {
         state.store.insert_session(&session).unwrap();
     }
@@ -296,7 +296,7 @@ async fn archiving_a_console_session_archives_its_interrupted_bound_sessions() {
             ..bound_session("old", Archived, "hub")
         },
         bound_session("elsewhere", Interrupted, "other-hub"),
-        project_session("unbound", Agent::Claude, Interrupted),
+        project_session("unbound", AgentId::CLAUDE, Interrupted),
     ] {
         state.store.insert_session(&session).unwrap();
     }
@@ -335,7 +335,7 @@ async fn archiving_a_project_session_follows_the_rule_for_the_sessions_bound_to_
     use SessionStatus::{Archived, Idle, Interrupted};
     let (state, _dir) = console_with_project_and_accounts("coordinator-archive-project-owner");
     for session in [
-        project_session("starter", Agent::Claude, Idle),
+        project_session("starter", AgentId::CLAUDE, Idle),
         bound_session("running", Idle, "starter"),
         bound_session("no-process", Interrupted, "starter"),
     ] {
@@ -510,7 +510,7 @@ async fn deleting_an_archived_console_session_deletes_its_archived_bound_session
         bound_session("still-here", Interrupted, "hub"),
         console_session("other-hub", Archived),
         bound_session("c", Archived, "other-hub"),
-        project_session("unbound", Agent::Claude, Archived),
+        project_session("unbound", AgentId::CLAUDE, Archived),
         console_session("live-hub", Idle),
         bound_session("d", Archived, "live-hub"),
         bound_coordinator("coordinator", Archived, "live-hub"),
@@ -580,7 +580,7 @@ fn the_agent_records_of_deleted_sessions_are_trashed_unless_shared() {
     let native = |id: &str, native: &str, status| Session {
         agent_session_id: Some(uuid(native)),
         config_dir: Some(account.to_string_lossy().into_owned()),
-        ..project_session(id, Agent::Claude, status)
+        ..project_session(id, AgentId::CLAUDE, status)
     };
     for session in [
         native("solo", "solo", Archived),
@@ -638,7 +638,7 @@ fn a_reverted_codex_threads_whole_chain_is_trashed() {
         .insert_session(&Session {
             agent_session_id: Some(thread.to_owned()),
             config_dir: Some(account.to_string_lossy().into_owned()),
-            ..project_session("reverted", Agent::Codex, SessionStatus::Archived)
+            ..project_session("reverted", AgentId::CODEX, SessionStatus::Archived)
         })
         .unwrap();
     let deleted = delete_session(&state, "reverted").unwrap();
@@ -668,7 +668,7 @@ async fn guarded_deletion_accepts_an_unused_codex_session_without_a_native_id() 
         .store
         .insert_session(&project_session(
             "unused",
-            Agent::Codex,
+            AgentId::CODEX,
             SessionStatus::Idle,
         ))
         .unwrap();
@@ -707,7 +707,7 @@ async fn guarded_deletion_accepts_and_trashes_unused_grok_native_records() {
         .insert_session(&Session {
             agent_session_id: Some(native_id.to_owned()),
             config_dir: Some(account.to_string_lossy().into_owned()),
-            ..project_session("unused", Agent::Grok, SessionStatus::Idle)
+            ..project_session("unused", AgentId::GROK, SessionStatus::Idle)
         })
         .unwrap();
     let deleted = delete_unused_session(&state, "unused").unwrap();
@@ -732,7 +732,7 @@ async fn guarded_deletion_accepts_and_trashes_unused_grok_native_records() {
 #[tokio::test]
 async fn unused_deletion_returns_the_native_identity_at_the_atomic_delete() {
     let (state, dir) = console_with_project_and_accounts("coordinator-delete-unused-identity");
-    let initial = project_session("unused", Agent::Codex, SessionStatus::Idle);
+    let initial = project_session("unused", AgentId::CODEX, SessionStatus::Idle);
     state.store.insert_session(&initial).unwrap();
     let stale = state.session_record("unused").unwrap();
     assert!(stale.agent_session_id.is_none());
@@ -777,7 +777,7 @@ async fn unused_deletion_returns_the_native_identity_at_the_atomic_delete() {
 #[tokio::test]
 async fn guarded_deletion_refuses_a_first_turn_or_archived_owner_instead_of_cascading() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-delete-unused-race");
-    let session = project_session("first-turn", Agent::Codex, SessionStatus::Idle);
+    let session = project_session("first-turn", AgentId::CODEX, SessionStatus::Idle);
     state.store.insert_session(&session).unwrap();
     let mut started = session.clone();
     started.has_conversation = true;
@@ -821,11 +821,11 @@ async fn deleting_a_session_that_is_not_archived_needs_it_to_be_unused() {
     use SessionStatus::{Idle, Interrupted};
     let (state, _dir) = console_with_project_and_accounts("coordinator-delete-unused");
     for session in [
-        project_session("fresh", Agent::Claude, Idle),
-        project_session("never-used", Agent::Claude, Interrupted),
+        project_session("fresh", AgentId::CLAUDE, Idle),
+        project_session("never-used", AgentId::CLAUDE, Interrupted),
         Session {
             has_conversation: true,
-            ..project_session("used", Agent::Claude, Idle)
+            ..project_session("used", AgentId::CLAUDE, Idle)
         },
         console_session("hub", Idle),
         bound_session("opened-by-user", Idle, "hub"),
@@ -887,7 +887,7 @@ async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sess
             bound_session("a", Archived, "hub"),
             bound_coordinator("coordinator", Archived, "hub"),
             bound_session("of-coordinator", Archived, "coordinator"),
-            project_session("unbound", Agent::Claude, Archived),
+            project_session("unbound", AgentId::CLAUDE, Archived),
         ] {
             state.store.insert_session(&session).unwrap();
         }

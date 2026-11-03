@@ -4,26 +4,25 @@
 // string, and are held and diffed apart.
 
 import type { Agent, ClientRequestBody, Launch, LaunchChange, PerAgent, ProjectAccount } from "../protocol";
-import { AGENTS } from "./agents";
 
 /** One agent's model and reasoning effort in a new record: a field left out, or blank, is the agent's own default. */
 type LaunchSetting = NonNullable<NonNullable<Extract<ClientRequestBody, { type: "create_console" }>["launch"]>[Agent]>;
 
-/** `value` for every agent. */
-function everyAgent<T>(value: (agent: Agent) => T): PerAgent<T> {
-  return Object.fromEntries(AGENTS.map((agent) => [agent, value(agent)])) as PerAgent<T>;
+/** `value` for each of the `served` agents. */
+function everyAgent<T>(served: readonly Agent[], value: (agent: Agent) => T): PerAgent<T> {
+  return Object.fromEntries(served.map((agent) => [agent, value(agent)]));
 }
 
 /** What a dialog holds for each agent's account, taken from the stored record's `source`: `null`
  * where it holds none. */
-export function readAccounts(source: PerAgent<string | null> | undefined): PerAgent<string | null> {
-  return everyAgent((agent) => source?.[agent] ?? null);
+export function readAccounts(source: PerAgent<string | null> | undefined, served: readonly Agent[]): PerAgent<string | null> {
+  return everyAgent(served, (agent) => source?.[agent] ?? null);
 }
 
 /** What a dialog holds for each agent's model and effort, taken from the stored record's `source`:
  * `null` where it holds none. */
-export function readLaunch(source: PerAgent<Launch> | undefined): PerAgent<Launch> {
-  return everyAgent((agent) => ({ model: source?.[agent].model ?? null, effort: source?.[agent].effort ?? null }));
+export function readLaunch(source: PerAgent<Launch> | undefined, served: readonly Agent[]): PerAgent<Launch> {
+  return everyAgent(served, (agent) => ({ model: source?.[agent]?.model ?? null, effort: source?.[agent]?.effort ?? null }));
 }
 
 /** The agents' entries of `current` that differ from `initial`, what the dialog opened with, as
@@ -37,8 +36,8 @@ function changedPerAgent<T, C>(
   change: (current: T, initial: T) => C | undefined,
 ): Partial<PerAgent<C>> | undefined {
   const changes: Partial<PerAgent<C>> = {};
-  for (const agent of AGENTS) {
-    const changed = change(current[agent], initial[agent]);
+  for (const agent of Object.keys(current)) {
+    const changed = change(current[agent]!, initial[agent]!);
     if (changed !== undefined) changes[agent] = changed;
   }
   return Object.keys(changes).length > 0 ? changes : undefined;
@@ -100,8 +99,8 @@ export function changedLaunch(
 
 /** What a project dialog holds for each agent's account, taken from the stored record's `source`:
  * inheriting where it holds none, as a project about to be created does. */
-export function readProjectAccounts(source: PerAgent<ProjectAccount> | undefined): PerAgent<ProjectAccount> {
-  return everyAgent((agent): ProjectAccount => source?.[agent] ?? { kind: "inherit" });
+export function readProjectAccounts(source: PerAgent<ProjectAccount> | undefined, served: readonly Agent[]): PerAgent<ProjectAccount> {
+  return everyAgent(served, (agent): ProjectAccount => source?.[agent] ?? { kind: "inherit" });
 }
 
 const sameAccount = (a: ProjectAccount, b: ProjectAccount): boolean =>

@@ -14,7 +14,7 @@ session in that project's directory and hands it the task; the session reports b
 console session reports to the user. The user can step into any session at any time to watch it or take over.
 
 It is neither a new agent nor a new terminal. Every session is a native agent CLI process (Claude Code, Codex, Grok
-Build), and Octoboard only adds organization, orchestration and observation on top. It is not tied to any vendor, and
+Build), and Octoboard only adds organization, orchestration and observation on top. It is not tied to any provider, and
 the retention and cleanup of session data follows each agent's own rules.
 
 ### Two deployment forms
@@ -57,18 +57,22 @@ server form is the reverse: one host, and what is remote is the clients.
 | Console session | The agent process running in the console's working directory, given the orchestration tools. |
 | Coordinator | A session that can create and manage child sessions. A project coordinator works independently or reports to a console session. |
 | Worker | A project session that reports to a parent session and cannot manage child sessions. |
-| Agent adapter | The layer that plugs an agent CLI in: how to launch it, inject capabilities, report status and resume it. |
+| Agent provider | The layer that plugs an agent CLI in: its descriptor and its behavior (how to launch it, inject capabilities, report status, read its records and screens, and drive its accounts). |
 
-The daemon defines a single adapter interface, which covers launching an agent, injecting Octoboard's capabilities,
-reporting its status and resuming it; clients know the agents by name for their per-agent settings, labels and model
-names, while only the daemon launches and drives them. Where each agent keeps its files on disk — its configuration
-directory and the variable naming it, where a session's records lie in it, the files kept beside them — is one
-descriptor per agent (`agents/layout.rs`). The rest of the daemon still holds per-agent knowledge wherever the agents
-behave differently, among them: recognising their screens and dialogs (`session/`, `titles/`), reading their hook
-payloads (`hooks/`), reading their records (`records/`), their sign-in, quota and account-switching protocols
-(`accounts/`), the Octoboard tool naming, instruction file and role text injected into them (`session_tools/`),
-launching one and switching its account (`coordinator/`), their model catalogues (`agents/models.rs`) and detecting a
-project's agent (`agents/detect.rs`). An agent without hook support would degrade to an ordinary terminal session
+Each agent provider is defined in two places in the daemon: a static descriptor (`providers/`), registered below
+the wire layer so every layer can read it, which holds its names, install URL, binary, where it keeps its files on disk
+(its configuration directory and the variable naming it, where a session's records lie in it, the files kept beside
+them), how a project marks itself as set up for it, the names it gives its instruction file and Octoboard's tools, and
+the capabilities it declares; and a behavior interface (`AgentProvider` in `adapter/`), which covers launching it,
+injecting Octoboard's capabilities, reading its titles, and gathers the sub-interfaces a provider implements in its
+own modules: interpreting its hook events, finding, reading and watching its own records of a session (its record
+store), reading its terminal screens and dialogs, its accounts (sign-in, quotas, reset credits, account switching),
+its model catalogue, its status line and, for a compatibility source, what it offers a provider made compatible with
+it. Every method beyond the core has a default (a no-op or "unsupported"), so a provider implements only what it has.
+Core code branches only on the capabilities and data a provider declares, never on which provider it is, so adding a
+provider means writing its own modules and registering them. Clients read the descriptor data the daemon serves, and
+keep only each provider's presentation (its mark, colour and messages); only the daemon launches and drives the
+agents. An agent without hook support would degrade to an ordinary terminal session
 with no status and no automatic reporting.
 
 ## Layers
@@ -308,11 +312,15 @@ is used as is, and a file with no tables is initialized in place. A file with ta
 before the first release) is moved aside as `<name>.superseded-<unix seconds>` (a counter added when taken; its
 write-ahead log checkpointed into it first and any sidecar files moved with it; never deleted, with a warning logged)
 while a fresh database starts. An older file is copied aside as `<name>.pre-v<N>` and brought up to date by the steps in
-`MIGRATIONS`, one per version, all in one transaction, so a failure leaves it as it was; version 1 is the baseline, so
-the list is empty until the first schema change after release. A file of a newer version or one below 1, one marked as
-another application's, or one that is not SQLite, is refused and left untouched. Every schema change raises the version
-and adds the step from the previous one, whose schema is kept for the migration tests.
+`MIGRATIONS`, one per version, all in one transaction, so a failure leaves it as it was. A file of a newer version or
+one below 1, one marked as another application's, or one that is not SQLite, is refused and left untouched. Version
+changes and migration code are written only between released versions: a schema change no release has carried is made in
+place, at the current version; a change to a released schema raises the version and adds the step from the released one,
+whose schema is kept for the migration tests.
 
+- What belongs to one provider of a console or a project (its account, account-default flag, launch model and effort)
+  is a row of a child table keyed by the owner and the provider, not a column, so a provider is added without a
+  schema change; rows of a provider this build does not register are kept and left out of loads.
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
 - A session row is never written back whole from a copy read earlier. Its fields change on tasks of their own — hooks,

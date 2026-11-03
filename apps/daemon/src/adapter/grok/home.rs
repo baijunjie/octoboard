@@ -9,7 +9,7 @@ use serde_json::json;
 use super::HOOK_EVENTS;
 use crate::adapter::files::{canonical_project, LARGE_FILE_LIMIT};
 use crate::adapter::{LaunchSpec, HOOK_TIMEOUT_SECS};
-use crate::agents::layout::{GROK_CONFIG_FILE, GROK_TRUST_STORE};
+use crate::providers::grok::{GROK_CONFIG_FILE, GROK_TRUST_STORE};
 use crate::session_tools;
 
 /// Entries Octoboard owns in its `GROK_HOME` rather than linking to the user's.

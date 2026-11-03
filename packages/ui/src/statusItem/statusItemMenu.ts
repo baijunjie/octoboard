@@ -69,7 +69,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     ...(selected && bar ? {
       quota_remaining: remainingPercentAt(bar.main, quota.now),
       ...(bar.thin ? { quota_weekly_remaining: remainingPercentAt(bar.thin, quota.now) } : {}),
-      quota_label: accountQuotaLabel(t, selected.agent, accountName, bar, quota.defaultAccountNames, quota.now),
+      quota_label: accountQuotaLabel(t, quota.providers, selected.agent, accountName, bar, quota.defaultAccountNames, quota.now),
     } : {}),
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noListedSessions"), items: [] }],
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? ""), accountInUse(selected)),

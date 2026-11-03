@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { type Agent, type AgentAvailability } from "./protocol";
-import { AGENTS } from "./agents/agents";
+import { TEST_AGENTS } from "./test/testProviders";
 import { DaemonProvider, type State } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { WelcomeScreen } from "./WelcomeScreen";
@@ -50,14 +50,14 @@ it("is a named region of the window", () => {
 
 it("always lists supported tools and keeps the action enabled when none is detected", () => {
   const unavailable = new Map<Agent, AgentAvailability>(
-    AGENTS.map((agent) => [agent, { agent, availability: "unavailable", default_account_dir: null }]),
+    TEST_AGENTS.map((agent) => [agent, { agent, availability: "unavailable", default_account_dir: null }]),
   );
   const pending = mount();
-  expect(pending.querySelectorAll("li")).toHaveLength(3);
+  expect(pending.querySelectorAll("li")).toHaveLength(4);
   expect(pending.textContent).toContain("Grok Build");
   expect(pending.textContent).toContain("Checking…");
   const container = mount(vi.fn(), { agentAvailability: unavailable });
-  expect(container.querySelectorAll("li")).toHaveLength(3);
+  expect(container.querySelectorAll("li")).toHaveLength(4);
   expect(container.textContent).toContain("Not detected");
   // Unlike the sidebar's, the button is not disabled: a console's agents are only defaults.
   expect(container.querySelector("button")!.disabled).toBe(false);
@@ -71,7 +71,7 @@ it("shows each tool's own detection status when an installed tool is available",
   ]);
   const rows = Array.from(mount(vi.fn(), { agentAvailability }).querySelectorAll("li"));
   expect(rows.map((row) => row.textContent)).toEqual([
-    "Claude Code, Installed", "Codex, Not detected", "Grok Build, Installed",
+    "Claude Code, Installed", "Codex, Not detected", "Grok Build, Installed", "Test Agent, Checking…",
   ]);
   expect(rows.every((row) => row.querySelector("svg[aria-hidden=true]"))).toBe(true);
   expect(rows.map((row) => row.querySelector("[role=status]")?.textContent)).toEqual(rows.map((row) => row.textContent));

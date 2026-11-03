@@ -7,7 +7,7 @@ use crate::coordinator::test_support::{
 };
 use crate::paths;
 use crate::protocol::{
-    error_code, error_parts, Agent, Availability, CodedError, Event, ProjectAccount, RequestBody,
+    error_code, error_parts, AgentId, Availability, CodedError, Event, ProjectAccount, RequestBody,
 };
 use crate::state::AppState;
 use crate::test_support::code_of;
@@ -23,7 +23,7 @@ use std::sync::Arc;
 fn an_account_dir_is_stored_absolute_or_not_at_all_and_existence_is_not_checked() {
     let dir = temp_dir("config-dir");
     let text = dir.to_string_lossy().into_owned();
-    let normalize = |text: &str| normalize_account_dir(Agent::Codex, text);
+    let normalize = |text: &str| normalize_account_dir(AgentId::CODEX, text);
 
     assert_eq!(normalize(&format!("  {text} ")).unwrap(), text.clone());
     assert_eq!(normalize(&format!("{text}/")).unwrap(), text.clone());
@@ -45,8 +45,8 @@ fn an_account_dir_is_stored_absolute_or_not_at_all_and_existence_is_not_checked(
 /// An account always requires a non-blank directory.
 #[test]
 fn an_account_directory_may_not_be_blank() {
-    assert!(normalize_account_dir(Agent::Codex, "").is_err());
-    assert!(normalize_account_dir(Agent::Codex, "   ").is_err());
+    assert!(normalize_account_dir(AgentId::CODEX, "").is_err());
+    assert!(normalize_account_dir(AgentId::CODEX, "   ").is_err());
 }
 
 /// Turning an account off or on broadcasts the settings only when the flag really changed, and
@@ -68,25 +68,33 @@ async fn turning_an_account_off_broadcasts_only_a_real_change() {
         other => panic!("unexpected {other:?}"),
     };
 
-    handle(&state, None, toggle(Agent::Claude, Some("claude-a"), true))
-        .await
-        .unwrap();
+    handle(
+        &state,
+        None,
+        toggle(AgentId::CLAUDE, Some("claude-a"), true),
+    )
+    .await
+    .unwrap();
     assert_eq!(flags(events.try_recv().unwrap()), (true, 0));
-    handle(&state, None, toggle(Agent::Claude, Some("claude-a"), true))
-        .await
-        .unwrap();
+    handle(
+        &state,
+        None,
+        toggle(AgentId::CLAUDE, Some("claude-a"), true),
+    )
+    .await
+    .unwrap();
     assert!(events.try_recv().is_err(), "a repeat changes nothing");
 
-    handle(&state, None, toggle(Agent::Claude, None, true))
+    handle(&state, None, toggle(AgentId::CLAUDE, None, true))
         .await
         .unwrap();
     assert_eq!(flags(events.try_recv().unwrap()), (true, 1));
-    handle(&state, None, toggle(Agent::Claude, None, true))
+    handle(&state, None, toggle(AgentId::CLAUDE, None, true))
         .await
         .unwrap();
     assert!(events.try_recv().is_err());
 
-    for (agent, account) in [(Agent::Claude, "nope"), (Agent::Codex, "claude-a")] {
+    for (agent, account) in [(AgentId::CLAUDE, "nope"), (AgentId::CODEX, "claude-a")] {
         let err = handle(&state, None, toggle(agent, Some(account), true))
             .await
             .expect_err("not an account of the agent");
@@ -112,7 +120,7 @@ async fn turning_an_account_back_on_kicks_its_held_window() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-disabled-kick");
     let unstarted = AccountQuota {
         reset_credits: None,
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         account: Some("claude-a".to_string()),
         fetched_at: 1,
         plan: None,
@@ -136,13 +144,13 @@ async fn turning_an_account_back_on_kicks_its_held_window() {
     let kicked = || {
         state
             .account_quotas
-            .is_kicked_for_test(Agent::Claude, Some("claude-a"))
+            .is_kicked_for_test(AgentId::CLAUDE, Some("claude-a"))
     };
 
-    set_account_disabled(&state, Agent::Claude, Some("claude-a"), true).unwrap();
+    set_account_disabled(&state, AgentId::CLAUDE, Some("claude-a"), true).unwrap();
     assert!(!kicked(), "turning it off starts nothing");
 
-    set_account_disabled(&state, Agent::Claude, Some("claude-a"), false).unwrap();
+    set_account_disabled(&state, AgentId::CLAUDE, Some("claude-a"), false).unwrap();
     let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
     while !kicked() && std::time::Instant::now() < deadline {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
@@ -156,7 +164,7 @@ fn a_leading_tilde_in_a_config_dir_is_expanded() {
     // `$HOME` always exists, so this needs no fixture and no environment edit.
     let home = paths::home_dir();
     assert_eq!(
-        normalize_account_dir(Agent::Grok, "~").unwrap(),
+        normalize_account_dir(AgentId::GROK, "~").unwrap(),
         home.to_string_lossy().into_owned()
     );
 }
@@ -166,10 +174,10 @@ fn a_leading_tilde_in_a_config_dir_is_expanded() {
 #[tokio::test]
 async fn adding_an_agent_is_refused_unless_it_is_installed_and_not_yet_added() {
     let (state, _dir) = crate::test_support::app_state("coordinator-add-agent");
-    for agent in Agent::ALL {
+    for agent in AgentId::ALL {
         set_availability(&state, agent, Availability::Unavailable);
     }
-    set_availability(&state, Agent::Claude, Availability::Available);
+    set_availability(&state, AgentId::CLAUDE, Availability::Available);
     state.store.set_added_agents_if_undecided(&[]).unwrap();
 
     let add = |agent| handle(&state, None, RequestBody::AddAgent { agent });
@@ -179,23 +187,23 @@ async fn adding_an_agent_is_refused_unless_it_is_installed_and_not_yet_added() {
         (code, params.get("agent").cloned())
     };
     assert_eq!(
-        refusal(add(Agent::Codex).await),
+        refusal(add(AgentId::CODEX).await),
         (error_code::AGENT_NOT_INSTALLED, Some("Codex".to_string()))
     );
     let mut events = state.subscribe();
-    add(Agent::Claude).await.expect("added");
+    add(AgentId::CLAUDE).await.expect("added");
     assert!(matches!(
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings })
-            if settings.added_agents == Some(vec![Agent::Claude])
+            if settings.added_agents == Some(vec![AgentId::CLAUDE])
     ));
     assert_eq!(
-        refusal(add(Agent::Claude).await).0,
+        refusal(add(AgentId::CLAUDE).await).0,
         error_code::AGENT_ALREADY_ADDED
     );
     assert_eq!(
         state.store.added_agents().unwrap(),
-        Some(vec![Agent::Claude])
+        Some(vec![AgentId::CLAUDE])
     );
 
     let (pending, _dir) = crate::test_support::app_state("coordinator-add-agent-pending");
@@ -205,7 +213,7 @@ async fn adding_an_agent_is_refused_unless_it_is_installed_and_not_yet_added() {
                 &pending,
                 None,
                 RequestBody::AddAgent {
-                    agent: Agent::Claude
+                    agent: AgentId::CLAUDE
                 }
             )
             .await
@@ -225,20 +233,20 @@ async fn adding_an_agent_first_settles_an_undecided_list() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
-    for agent in Agent::ALL {
+    for agent in AgentId::ALL {
         set_availability(&state, agent, Availability::Unavailable);
     }
-    set_availability(&state, Agent::Claude, Availability::Available);
+    set_availability(&state, AgentId::CLAUDE, Availability::Available);
 
     let err = handle(
         &state,
         None,
         RequestBody::AddAgent {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
         },
     )
     .await
@@ -247,7 +255,7 @@ async fn adding_an_agent_first_settles_an_undecided_list() {
     assert_eq!(error_parts(&err).0, error_code::AGENT_ALREADY_ADDED);
     assert_eq!(
         state.store.added_agents().unwrap(),
-        Some(vec![Agent::Claude, Agent::Codex])
+        Some(vec![AgentId::CLAUDE, AgentId::CODEX])
     );
 }
 
@@ -258,43 +266,49 @@ async fn reordering_agents_takes_only_a_permutation_of_the_list() {
     let (state, _dir) = crate::test_support::app_state("coordinator-reorder-agents");
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex, Agent::Grok])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK])
         .unwrap();
     let mut events = state.subscribe();
-    let reorder = |agents: Vec<Agent>| handle(&state, None, RequestBody::ReorderAgents { agents });
+    let reorder =
+        |agents: Vec<AgentId>| handle(&state, None, RequestBody::ReorderAgents { agents });
 
-    reorder(vec![Agent::Grok, Agent::Claude, Agent::Codex])
+    reorder(vec![AgentId::GROK, AgentId::CLAUDE, AgentId::CODEX])
         .await
         .expect("reordered");
-    let order = Some(vec![Agent::Grok, Agent::Claude, Agent::Codex]);
+    let order = Some(vec![AgentId::GROK, AgentId::CLAUDE, AgentId::CODEX]);
     assert_eq!(state.store.added_agents().unwrap(), order);
     assert!(matches!(
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings }) if settings.added_agents == order
     ));
 
-    reorder(vec![Agent::Grok, Agent::Claude, Agent::Codex])
+    reorder(vec![AgentId::GROK, AgentId::CLAUDE, AgentId::CODEX])
         .await
         .expect("an unchanged order is accepted");
     assert!(events.try_recv().is_err(), "nothing changed");
 
     for bad in [
-        vec![Agent::Grok, Agent::Claude],
-        vec![Agent::Grok, Agent::Grok, Agent::Claude],
-        vec![Agent::Grok, Agent::Claude, Agent::Codex, Agent::Codex],
+        vec![AgentId::GROK, AgentId::CLAUDE],
+        vec![AgentId::GROK, AgentId::GROK, AgentId::CLAUDE],
+        vec![
+            AgentId::GROK,
+            AgentId::CLAUDE,
+            AgentId::CODEX,
+            AgentId::CODEX,
+        ],
         vec![],
     ] {
         let err = reorder(bad).await.expect_err("refused");
         assert_eq!(error_parts(&err).0, error_code::AGENT_ORDER_INVALID);
     }
-    state.store.remove_added_agent(Agent::Codex).unwrap();
-    let err = reorder(vec![Agent::Grok, Agent::Codex])
+    state.store.remove_added_agent(AgentId::CODEX).unwrap();
+    let err = reorder(vec![AgentId::GROK, AgentId::CODEX])
         .await
         .expect_err("a not-added agent is refused");
     assert_eq!(error_parts(&err).0, error_code::AGENT_ORDER_INVALID);
     assert_eq!(
         state.store.added_agents().unwrap(),
-        Some(vec![Agent::Grok, Agent::Claude])
+        Some(vec![AgentId::GROK, AgentId::CLAUDE])
     );
 }
 
@@ -307,7 +321,7 @@ async fn account_order_broadcasts_only_a_changed_valid_order() {
             &state,
             None,
             RequestBody::ReorderAccounts {
-                agent: Agent::Claude,
+                agent: AgentId::CLAUDE,
                 accounts,
             },
         )
@@ -336,30 +350,30 @@ async fn reordering_agents_settles_an_undecided_list_or_is_refused() {
         &state,
         None,
         RequestBody::RemoveAgent {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
         },
     )
     .await
     .expect_err("undecided");
     assert_eq!(error_parts(&err).0, error_code::ADDED_AGENTS_UNDECIDED);
 
-    for agent in Agent::ALL {
+    for agent in AgentId::ALL {
         set_availability(&state, agent, Availability::Unavailable);
     }
-    set_availability(&state, Agent::Grok, Availability::Available);
-    set_availability(&state, Agent::Claude, Availability::Available);
+    set_availability(&state, AgentId::GROK, Availability::Available);
+    set_availability(&state, AgentId::CLAUDE, Availability::Available);
     handle(
         &state,
         None,
         RequestBody::ReorderAgents {
-            agents: vec![Agent::Grok, Agent::Claude],
+            agents: vec![AgentId::GROK, AgentId::CLAUDE],
         },
     )
     .await
     .expect("filled, then reordered");
     assert_eq!(
         state.store.added_agents().unwrap(),
-        Some(vec![Agent::Grok, Agent::Claude])
+        Some(vec![AgentId::GROK, AgentId::CLAUDE])
     );
 }
 
@@ -370,12 +384,12 @@ async fn removing_an_agent_keeps_its_accounts() {
     let (state, _dir) = crate::test_support::app_state("coordinator-remove-agent");
     state
         .store
-        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE, AgentId::CODEX])
         .unwrap();
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
@@ -386,7 +400,7 @@ async fn removing_an_agent_keeps_its_accounts() {
         &state,
         None,
         RequestBody::RemoveAgent {
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
         },
     )
     .await
@@ -394,20 +408,20 @@ async fn removing_an_agent_keeps_its_accounts() {
 
     assert_eq!(
         state.store.added_agents().unwrap(),
-        Some(vec![Agent::Claude])
+        Some(vec![AgentId::CLAUDE])
     );
     assert_eq!(only_account(&state), account);
     assert!(matches!(
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings })
-            if settings.added_agents == Some(vec![Agent::Claude]) && settings.accounts == [account]
+            if settings.added_agents == Some(vec![AgentId::CLAUDE]) && settings.accounts == [account]
     ));
 
     handle(
         &state,
         None,
         RequestBody::RemoveAgent {
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
         },
     )
     .await
@@ -424,14 +438,14 @@ async fn an_account_can_be_created_renamed_repointed_and_removed_over_the_protoc
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
     let created = only_account(&state);
     assert_eq!(created.name, "Work");
     assert_eq!(created.config_dir, "/home/u/.codex-work");
-    assert_eq!(created.agent, Agent::Codex);
+    assert_eq!(created.agent, AgentId::CODEX);
 
     handle(
         &state,
@@ -484,7 +498,7 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
     )
     .await
     .expect("created");
@@ -493,7 +507,7 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     let refused = handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "  work ", "/home/u/.claude-other"),
+        create_account_request(AgentId::CLAUDE, "  work ", "/home/u/.claude-other"),
     )
     .await
     .expect_err("collides");
@@ -505,7 +519,7 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     let refused_default = handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "default", "/home/u/.claude-other"),
+        create_account_request(AgentId::CLAUDE, "default", "/home/u/.claude-other"),
     )
     .await
     .expect_err("collides with the default account");
@@ -516,7 +530,7 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("a different agent, so no collision");
@@ -536,7 +550,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
     let before = handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Early", "~/.codex/"),
+        create_account_request(AgentId::CODEX, "Early", "~/.codex/"),
     )
     .await
     .expect_err("the conventional default directory is taken");
@@ -547,21 +561,21 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
         Some("Default")
     );
     state.set_agent_availability(vec![crate::protocol::AgentAvailability {
-        agent: Agent::Claude,
+        agent: AgentId::CLAUDE,
         availability: Availability::Available,
         default_account_dir: Some(format!("{home_dir}/.claude")),
     }]);
     handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
     )
     .await
     .expect("created");
     handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Home", "~/.claude-home"),
+        create_account_request(AgentId::CLAUDE, "Home", "~/.claude-home"),
     )
     .await
     .expect("created");
@@ -588,7 +602,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
         let err = handle(
             &state,
             None,
-            create_account_request(Agent::Claude, "New", dir),
+            create_account_request(AgentId::CLAUDE, "New", dir),
         )
         .await
         .expect_err(dir);
@@ -600,7 +614,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.claude-work"),
     )
     .await
     .expect("a different agent, so no collision");
@@ -609,7 +623,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
     let accounts = state.store.list_accounts().unwrap();
     let work = accounts
         .iter()
-        .find(|a| a.agent == Agent::Claude && a.name == "Work")
+        .find(|a| a.agent == AgentId::CLAUDE && a.name == "Work")
         .unwrap();
     for dir in ["~/.claude-home", "~/.claude"] {
         let err = handle(
@@ -670,7 +684,12 @@ fn racing_account_creates_let_exactly_one_through() {
                         let (state, barrier) = (&state, &barrier);
                         scope.spawn(move || {
                             barrier.wait();
-                            create_account(state, Agent::Claude, name.to_string(), dir.to_string())
+                            create_account(
+                                state,
+                                AgentId::CLAUDE,
+                                name.to_string(),
+                                dir.to_string(),
+                            )
                         })
                     })
                     .into_iter()
@@ -695,14 +714,14 @@ async fn account_directories_fold_case_only_on_macos() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Work", "/home/u/.Claude-Work"),
+        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.Claude-Work"),
     )
     .await
     .expect("created");
     let second = handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Other", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Other", "/home/u/.claude-work"),
     )
     .await;
     if cfg!(target_os = "macos") {
@@ -725,14 +744,14 @@ async fn refreshing_quotas_refuses_a_foreign_or_unknown_account_and_acks_otherwi
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
     let codex_account = only_account(&state).id;
 
     for (agent, account) in [
-        (Some(Agent::Claude), Some(codex_account.clone())),
+        (Some(AgentId::CLAUDE), Some(codex_account.clone())),
         (None, Some("no-such-account".to_string())),
     ] {
         let refused = handle(
@@ -749,9 +768,9 @@ async fn refreshing_quotas_refuses_a_foreign_or_unknown_account_and_acks_otherwi
     // Nothing is available until the shell has been read, so nothing is run.
     for (agent, account) in [
         (None, None),
-        (Some(Agent::Codex), None),
+        (Some(AgentId::CODEX), None),
         (None, Some(codex_account.clone())),
-        (Some(Agent::Codex), Some(codex_account)),
+        (Some(AgentId::CODEX), Some(codex_account)),
     ] {
         let reply = handle(
             &state,
@@ -770,7 +789,7 @@ async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
@@ -780,7 +799,7 @@ async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_
         &state,
         None,
         RequestBody::StartAccountLogin {
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: Some(codex_account.clone()),
         },
     )
@@ -795,7 +814,7 @@ async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_
             &state,
             None,
             RequestBody::CancelAccountLogin {
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 account,
             },
         )
@@ -808,13 +827,45 @@ async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_
     }
 }
 
+/// A sign-in for a provider with no flow is refused with `provider_unsupported`, for the default
+/// account and an account of its own, before any login is registered.
+#[tokio::test]
+async fn a_sign_in_is_refused_for_a_provider_with_no_login_flow() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-login-unsupported");
+    handle(
+        &state,
+        None,
+        create_account_request(AgentId::TEST, "Work", "/home/u/.test-agent-work"),
+    )
+    .await
+    .expect("created");
+    let account = only_account(&state).id;
+    for account in [None, Some(account)] {
+        let refused = handle(
+            &state,
+            None,
+            RequestBody::StartAccountLogin {
+                agent: AgentId::TEST,
+                account,
+            },
+        )
+        .await
+        .expect_err("no flow");
+        let coded = refused.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PROVIDER_UNSUPPORTED);
+        assert_eq!(coded.params["agent"], "test_agent");
+        assert_eq!(coded.params["operation"], "sign_in");
+        assert!(state.account_logins.running().is_empty());
+    }
+}
+
 #[tokio::test]
 async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_and_clears_it() {
     let (state, _dir) = crate::test_support::app_state("coordinator-default-name");
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
@@ -826,15 +877,15 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
     let names = |state: &Arc<AppState>| state.store.get_settings().unwrap().default_account_names;
 
     // The default cannot take an owned account's name, in any letter case.
-    let refused = handle(&state, None, rename(Agent::Codex, " work "))
+    let refused = handle(&state, None, rename(AgentId::CODEX, " work "))
         .await
         .expect_err("taken");
     assert_eq!(code_of(refused), error_code::ACCOUNT_NAME_TAKEN);
     // Another agent's accounts are not in the way.
-    handle(&state, None, rename(Agent::Claude, "Work"))
+    handle(&state, None, rename(AgentId::CLAUDE, "Work"))
         .await
         .unwrap();
-    handle(&state, None, rename(Agent::Codex, "  Personal "))
+    handle(&state, None, rename(AgentId::CODEX, "  Personal "))
         .await
         .unwrap();
     assert_eq!(names(&state)["codex"], "Personal");
@@ -844,16 +895,16 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
     let refused = handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "personal", "/home/u/.codex-p"),
+        create_account_request(AgentId::CODEX, "personal", "/home/u/.codex-p"),
     )
     .await
     .expect_err("taken by the default");
     assert_eq!(code_of(refused), error_code::ACCOUNT_NAME_TAKEN);
-    handle(&state, None, rename(Agent::Codex, "Personal"))
+    handle(&state, None, rename(AgentId::CODEX, "Personal"))
         .await
         .unwrap();
     // Nor is a change of letter case alone.
-    handle(&state, None, rename(Agent::Codex, "PERSONAL"))
+    handle(&state, None, rename(AgentId::CODEX, "PERSONAL"))
         .await
         .unwrap();
     assert_eq!(names(&state)["codex"], "PERSONAL");
@@ -861,7 +912,7 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
     let refused = handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "default", "/home/u/.codex-d"),
+        create_account_request(AgentId::CODEX, "default", "/home/u/.codex-d"),
     )
     .await
     .expect_err("reserved");
@@ -869,7 +920,7 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
 
     // A blank name clears it back, for that agent only, and frees the name.
     let mut events = state.subscribe();
-    handle(&state, None, rename(Agent::Codex, "  "))
+    handle(&state, None, rename(AgentId::CODEX, "  "))
         .await
         .unwrap();
     assert!(!names(&state).contains_key("codex"));
@@ -879,22 +930,22 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
         Ok(Event::SettingsUpdated { .. })
     ));
     // Clearing what is not set changes nothing and says nothing.
-    handle(&state, None, rename(Agent::Codex, ""))
+    handle(&state, None, rename(AgentId::CODEX, ""))
         .await
         .unwrap();
     assert!(events.try_recv().is_err());
     // The word for an unnamed default, in any letter case, clears a name like a blank does.
-    handle(&state, None, rename(Agent::Codex, "Personal"))
+    handle(&state, None, rename(AgentId::CODEX, "Personal"))
         .await
         .unwrap();
-    handle(&state, None, rename(Agent::Codex, " DEFAULT "))
+    handle(&state, None, rename(AgentId::CODEX, " DEFAULT "))
         .await
         .unwrap();
     assert!(!names(&state).contains_key("codex"));
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "personal", "/home/u/.codex-p"),
+        create_account_request(AgentId::CODEX, "personal", "/home/u/.codex-p"),
     )
     .await
     .expect("free again");
@@ -911,7 +962,7 @@ async fn deleting_or_repointing_an_account_ends_its_running_login_as_cancelled()
         handle(
             &state,
             None,
-            create_account_request(Agent::Claude, "Work", &home.to_string_lossy()),
+            create_account_request(AgentId::CLAUDE, "Work", &home.to_string_lossy()),
         )
         .await
         .expect("created");
@@ -920,7 +971,7 @@ async fn deleting_or_repointing_an_account_ends_its_running_login_as_cancelled()
         login::AccountLogins::start_for_test(
             &state,
             login::Start {
-                agent: Agent::Claude,
+                agent: AgentId::CLAUDE,
                 account: Some(account.clone()),
                 config_dir: Some(home.to_string_lossy().into_owned()),
                 resolved_dir: Some(home.to_string_lossy().into_owned()),
@@ -978,7 +1029,7 @@ async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
     )
     .await
     .expect("created");
@@ -988,7 +1039,7 @@ async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
             .account_quotas
             .hold_for_test(&crate::protocol::AccountQuota {
                 reset_credits: None,
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 account: Some(account.clone()),
                 fetched_at: 1,
                 plan: None,
@@ -1049,7 +1100,7 @@ async fn a_non_absolute_account_dir_is_refused_and_a_non_existent_one_is_accepte
     let refused = handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Relative", "relative/path"),
+        create_account_request(AgentId::CLAUDE, "Relative", "relative/path"),
     )
     .await
     .expect_err("not absolute");
@@ -1064,7 +1115,7 @@ async fn a_non_absolute_account_dir_is_refused_and_a_non_existent_one_is_accepte
         &state,
         None,
         create_account_request(
-            Agent::Claude,
+            AgentId::CLAUDE,
             "Not yet created",
             "/tmp/octoboard-does-not-exist",
         ),
@@ -1085,20 +1136,20 @@ async fn removing_an_account_publishes_only_the_projects_it_cleared() {
     handle(
         &state,
         None,
-        create_account_request(Agent::Claude, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
     )
     .await
     .expect("created");
     let account_id = only_account(&state).id;
 
-    let mut referring = console(Agent::Claude, Path::new("/tmp/unused"));
+    let mut referring = console(AgentId::CLAUDE, Path::new("/tmp/unused"));
     referring.id = "console-referring".to_string();
     state.store.insert_console(&referring).unwrap();
     let mut referring_project = project_of("console-referring", "project-referring");
-    referring_project.accounts.claude = pins(&account_id);
+    referring_project.accounts[AgentId::CLAUDE] = pins(&account_id);
     state.store.insert_project(&referring_project).unwrap();
     let mut defaulting_project = project_of("console-referring", "project-defaulting");
-    defaulting_project.accounts.claude = ProjectAccount::Default;
+    defaulting_project.accounts[AgentId::CLAUDE] = ProjectAccount::Default;
     state.store.insert_project(&defaulting_project).unwrap();
     let inheriting_project = project_of("console-referring", "project-inheriting");
     state.store.insert_project(&inheriting_project).unwrap();
@@ -1118,7 +1169,7 @@ async fn removing_an_account_publishes_only_the_projects_it_cleared() {
     let mut broadcast_projects = Vec::new();
     while let Ok(event) = events.try_recv() {
         if let Event::ProjectUpserted { project } = event {
-            broadcast_projects.push((project.id, project.accounts.claude));
+            broadcast_projects.push((project.id, project.accounts[AgentId::CLAUDE].clone()));
         }
     }
     assert_eq!(

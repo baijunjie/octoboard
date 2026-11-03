@@ -99,7 +99,7 @@ function mountApp(narrow = false) {
     return receive({
       type: "snapshot",
       hosts: [...(state.hosts?.values() ?? [])], consoles: [...state.consoles.values()], projects: [...state.projects.values()],
-      sessions: [...state.sessions.values()], trusted_directories: [], settings: state.settings, git_statuses: [],
+      sessions: [...state.sessions.values()], trusted_directories: [], settings: state.settings, git_statuses: [], providers: state.providers,
       agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
     });
   };

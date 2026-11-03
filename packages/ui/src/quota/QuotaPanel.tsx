@@ -11,7 +11,7 @@ import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { Message, useT } from "../i18n/react";
 import type { Agent } from "../protocol";
 import { listedQuotaAccounts } from "./quotaListing";
-import { useDaemonStore } from "../store";
+import { useDaemonStore, useProviders } from "../store";
 import { AgentPanel } from "./AgentPanel";
 import type { ResetRequest } from "./QuotaAccount";
 
@@ -21,6 +21,7 @@ import type { ResetRequest } from "./QuotaAccount";
  * (the first tab if it is not listed or none is given) and the user's own choice lasts only until it closes. */
 export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasiseShown, onMouseEnter, onOpenAccounts, onAddAgent, onUseReset }: { shownAgent?: Agent; shownAccount: string | null; inUse?: { agent: Agent; account: string | null }; focusSelectedTab: boolean; emphasiseShown: boolean; onMouseEnter: () => void; onOpenAccounts: () => void; onAddAgent: () => void; onUseReset: ResetRequest }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const availability = useDaemonStore((s) => s.agentAvailability);
@@ -31,7 +32,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
   const focused = useRef(false);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   // An agent whose accounts are all turned off has no tab, as it has no submenu in the menu bar, unless the selected running session is on one.
-  const listed = listedQuotaAccounts(pickableAgents(availability, addedAgents), { accounts, accountOrder, disabledDefaultAccounts: disabledDefaults }, inUse);
+  const listed = listedQuotaAccounts(pickableAgents(availability, addedAgents, providers), { accounts, accountOrder, disabledDefaultAccounts: disabledDefaults }, inUse);
   const selected = listed.find(({ agent }) => agent === chosen)?.agent ?? listed[0]?.agent;
   const focusOnce = (tab: HTMLElement | null) => {
     if (!tab || focused.current) return;
@@ -49,7 +50,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
   const handoff = useFocusHandoff(() => {
     (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? root.current?.querySelector<HTMLElement>("button"))?.focus();
   });
-  const noAgents = noAgentState(availability, addedAgents);
+  const noAgents = noAgentState(availability, addedAgents, providers);
   return (
     <div ref={root} className="flex flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur} onPointerEnter={(event) => event.pointerType === "mouse" && onMouseEnter()}>
       {selected === undefined ? (
@@ -65,6 +66,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
       ) : (
         <Tabs variant="secondary" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
           <AgentTabList
+            providers={providers}
             agents={listed.map(({ agent }) => agent)}
             label={t("rail.quota.agents")}
             tabRef={(agent) => (focusSelectedTab && agent === selected ? focusOnce : undefined)}

@@ -765,6 +765,7 @@ mod tests {
         Dialog {
             code: "test_dialog",
             written,
+            kind: crate::session::dialogs::DialogKind::Question,
         }
     }
 
@@ -1282,7 +1283,7 @@ mod tests {
         let outbox = Outbox::default();
         let live = crate::test_support::fake_live_session(
             "bounded-draft",
-            crate::protocol::Agent::Claude,
+            crate::protocol::AgentId::CLAUDE,
             120,
             40,
             "sleep 30",

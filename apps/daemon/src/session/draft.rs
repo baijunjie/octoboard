@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 
-use crate::protocol::Agent;
+use crate::protocol::AgentId;
 
 #[derive(Default)]
 pub(super) struct Draft {
@@ -136,7 +136,7 @@ impl Draft {
         }
     }
 
-    pub(super) fn prompt_sent(&mut self, text: Option<&str>, agent: Agent) {
+    pub(super) fn prompt_sent(&mut self, text: Option<&str>, agent: AgentId) {
         if let Some(text) = text.filter(|text| text.len() <= RECENTLY_SENT_BYTES) {
             while self.recently_sent.len() >= RECENTLY_SENT
                 || self.recently_sent.iter().map(String::len).sum::<usize>() + text.len()
@@ -191,7 +191,7 @@ impl Draft {
     /// for it, once, which only delays the end of a hold; and an agent that sends several prompts
     /// from before the mark as one is reported as one text none of them matches, which counts as
     /// later.
-    pub(super) fn sent_after_fragment(&mut self, text: Option<&str>, agent: Agent) -> bool {
+    pub(super) fn sent_after_fragment(&mut self, text: Option<&str>, agent: AgentId) -> bool {
         let (Some(before), Some(text)) = (self.before_fragment.as_mut(), text) else {
             return true;
         };
@@ -217,13 +217,11 @@ impl Draft {
 }
 
 /// Whether `text`, a prompt the agent reported sending, is `candidate` as it was submitted.
-fn same_prompt(agent: Agent, candidate: &str, text: &str) -> bool {
-    let candidate = match agent {
-        Agent::Claude => crate::hooks::without_paste_wrapper(candidate),
-        Agent::Codex => candidate.trim(),
-        Agent::Grok => candidate,
-    };
-    candidate == text
+fn same_prompt(agent: AgentId, candidate: &str, text: &str) -> bool {
+    crate::adapter::provider(agent)
+        .screen()
+        .as_submitted(candidate)
+        == text
 }
 
 fn incomplete_escape(sequence: &[u8]) -> bool {
@@ -243,16 +241,16 @@ mod tests {
     #[test]
     fn an_overflowed_record_still_tells_a_later_prompt_from_an_earlier_one() {
         let mut draft = Draft::default();
-        draft.prompt_sent(Some("sent before"), Agent::Grok);
+        draft.prompt_sent(Some("sent before"), AgentId::GROK);
         for at in 0..300 {
             draft.submission(None, format!("message {at}"));
         }
         assert!(draft.overflowed);
         draft.mark_fragment("message 299");
-        draft.prompt_sent(Some("later"), Agent::Grok);
-        assert!(draft.sent_after_fragment(Some("later"), Agent::Grok));
-        draft.prompt_sent(Some("sent before"), Agent::Grok);
-        assert!(!draft.sent_after_fragment(Some("sent before"), Agent::Grok));
+        draft.prompt_sent(Some("later"), AgentId::GROK);
+        assert!(draft.sent_after_fragment(Some("later"), AgentId::GROK));
+        draft.prompt_sent(Some("sent before"), AgentId::GROK);
+        assert!(!draft.sent_after_fragment(Some("sent before"), AgentId::GROK));
     }
 
     #[test]
@@ -276,13 +274,13 @@ mod tests {
         let mut draft = Draft::default();
         draft.submission(None, "program".to_string());
         draft.input(b"first\rnext draft");
-        draft.prompt_sent(Some("program"), Agent::Grok);
-        draft.prompt_sent(Some("background notification"), Agent::Grok);
+        draft.prompt_sent(Some("program"), AgentId::GROK);
+        draft.prompt_sent(Some("background notification"), AgentId::GROK);
         assert!(draft.holds());
-        draft.prompt_sent(Some("first"), Agent::Grok);
+        draft.prompt_sent(Some("first"), AgentId::GROK);
         assert!(draft.holds(), "typing after Enter is a new draft");
         draft.input(b"\r");
-        draft.prompt_sent(Some("next draft"), Agent::Grok);
+        draft.prompt_sent(Some("next draft"), AgentId::GROK);
         assert!(!draft.holds());
     }
 
@@ -292,13 +290,13 @@ mod tests {
         for chunk in [&b"\x1b[20"[..], b"0~line one\rline two\x1b[201~"] {
             draft.input(chunk);
         }
-        draft.prompt_sent(Some("line one\nline two"), Agent::Grok);
+        draft.prompt_sent(Some("line one\nline two"), AgentId::GROK);
         assert!(draft.holds());
         draft.input(b"\r");
-        draft.prompt_sent(Some("line one\nline two"), Agent::Grok);
+        draft.prompt_sent(Some("line one\nline two"), AgentId::GROK);
         assert!(!draft.holds());
         draft.input(b"\x1b[200~next\nlines\x1b[201~\r");
-        draft.prompt_sent(Some("next\nlines"), Agent::Grok);
+        draft.prompt_sent(Some("next\nlines"), AgentId::GROK);
         assert!(!draft.holds());
     }
 
@@ -306,10 +304,10 @@ mod tests {
     fn non_submitting_enters_and_unknown_edits_do_not_make_later_submissions_lag() {
         let mut draft = Draft::default();
         draft.input(b"\r/model\rhello\x1b[A\r");
-        draft.prompt_sent(Some("a recalled prompt"), Agent::Grok);
+        draft.prompt_sent(Some("a recalled prompt"), AgentId::GROK);
         assert!(draft.holds());
         draft.input(b"a simple prompt\r");
-        draft.prompt_sent(Some("a simple prompt"), Agent::Grok);
+        draft.prompt_sent(Some("a simple prompt"), AgentId::GROK);
         assert!(!draft.holds());
     }
 
@@ -317,10 +315,10 @@ mod tests {
     fn clearing_a_draft_does_not_acknowledge_it_and_alt_enter_inserts_a_newline() {
         let mut draft = Draft::default();
         draft.input(b"draft\x15");
-        draft.prompt_sent(Some("draft"), Agent::Grok);
+        draft.prompt_sent(Some("draft"), AgentId::GROK);
         assert!(draft.holds());
         draft.input(b"first\x1b\rsecond\r");
-        draft.prompt_sent(Some("first\nsecond"), Agent::Grok);
+        draft.prompt_sent(Some("first\nsecond"), AgentId::GROK);
         assert!(!draft.holds());
     }
 
@@ -329,7 +327,7 @@ mod tests {
         let mut draft = Draft::default();
         draft.input("hi猫".as_bytes());
         draft.input(b"\x7f!\r");
-        draft.prompt_sent(Some("hi!"), Agent::Grok);
+        draft.prompt_sent(Some("hi!"), AgentId::GROK);
         assert!(!draft.holds());
     }
 
@@ -340,7 +338,7 @@ mod tests {
             draft.input(b"ignored\r");
         }
         assert_eq!(draft.submissions.len(), 256);
-        draft.prompt_sent(Some("ignored"), Agent::Grok);
+        draft.prompt_sent(Some("ignored"), AgentId::GROK);
         assert!(draft.holds());
     }
 
@@ -348,7 +346,7 @@ mod tests {
     fn codex_trims_only_outer_whitespace_when_matching_a_pasted_submission() {
         let mut draft = Draft::default();
         draft.input(b"\x1b[200~\n  first\nsecond\n\n\x1b[201~\r");
-        draft.prompt_sent(Some("first\nsecond"), Agent::Codex);
+        draft.prompt_sent(Some("first\nsecond"), AgentId::CODEX);
         assert!(!draft.holds());
     }
 
@@ -356,7 +354,7 @@ mod tests {
     fn claude_paste_wrapper_normalization_is_applied_to_candidates_too() {
         let mut draft = Draft::default();
         draft.input(b" leading space\r");
-        draft.prompt_sent(Some("leading space"), Agent::Claude);
+        draft.prompt_sent(Some("leading space"), AgentId::CLAUDE);
         assert!(!draft.holds());
     }
 }

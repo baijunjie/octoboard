@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use crate::accounts::quotas::tests::{key, quota_of, window, NOW};
 use crate::protocol::{
-    quota_unavailable_code as code, AccountQuota, Agent, Availability, Event, QuotaUnavailable,
+    quota_unavailable_code as code, AccountQuota, AgentId, Availability, Event, QuotaUnavailable,
     QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
@@ -26,7 +26,7 @@ fn the_wait_before_another_attempt_doubles_with_failures_up_to_a_cap() {
 async fn a_scope_can_leave_out_the_accounts_the_user_turned_off() {
     let (state, dir) = crate::test_support::app_state("quota-scope-enabled");
     state.set_agent_availability(vec![crate::protocol::AgentAvailability {
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         availability: Availability::Available,
         default_account_dir: None,
     }]);
@@ -35,7 +35,7 @@ async fn a_scope_can_leave_out_the_accounts_the_user_turned_off() {
             .store
             .insert_account(&crate::protocol::Account {
                 id: id.to_string(),
-                agent: Agent::Codex,
+                agent: AgentId::CODEX,
                 name: id.to_string(),
                 config_dir: dir.join(id).to_string_lossy().into_owned(),
                 share_default_config: false,
@@ -92,14 +92,14 @@ async fn a_missing_config_directory_is_a_state_found_before_the_cli_is_run() {
     );
     let shell: ShellSource = Arc::new(move || Ok(env.clone()));
     state.set_agent_availability(vec![crate::protocol::AgentAvailability {
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         availability: Availability::Available,
         default_account_dir: None,
     }]);
     let config_dir = dir.join("codex-work");
     let account = crate::protocol::Account {
         id: "work".to_string(),
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         name: "Work".to_string(),
         config_dir: config_dir.to_string_lossy().into_owned(),
         share_default_config: false,
@@ -108,7 +108,7 @@ async fn a_missing_config_directory_is_a_state_found_before_the_cli_is_run() {
     };
     state.store.insert_account(&account).unwrap();
     let scope = Scope {
-        agent: Some(Agent::Codex),
+        agent: Some(AgentId::CODEX),
         account: Some("work".to_string()),
         ..Scope::default()
     };
@@ -125,7 +125,7 @@ async fn a_missing_config_directory_is_a_state_found_before_the_cli_is_run() {
     assert!(!config_dir.exists());
 
     std::fs::create_dir(&config_dir).unwrap();
-    state.account_quotas.make_due(Agent::Codex, Some("work"));
+    state.account_quotas.make_due(AgentId::CODEX, Some("work"));
     refresh_with(&state, &scope, Trigger::Poll, shell).await;
     assert!(state.account_quotas.list()[0].unavailable.is_none());
     assert!(bin.join("runs").exists());
@@ -145,7 +145,7 @@ fn a_directory_that_cannot_be_judged_missing_is_left_to_the_cli() {
     let file = dir.join("not-a-dir");
     std::fs::write(&file, "x").unwrap();
     let key = Key {
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         account: Some("a".to_string()),
         config_dir: Some(file.to_string_lossy().into_owned()),
     };
@@ -169,7 +169,7 @@ fn codex_account_with_email(dir: &crate::test_support::ScratchDir) -> Key {
     )
     .unwrap();
     Key {
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         account: Some("a".to_string()),
         config_dir: Some(account.to_string_lossy().into_owned()),
     }
@@ -271,7 +271,7 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
     let shell: ShellSource = Arc::new(move || Ok(env.clone()));
 
     state.set_agent_availability(
-        [Agent::Codex, Agent::Grok]
+        [AgentId::CODEX, AgentId::GROK]
             .into_iter()
             .map(|agent| crate::protocol::AgentAvailability {
                 agent,
@@ -284,7 +284,7 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
     std::fs::create_dir(&codex_work).unwrap();
     let account = crate::protocol::Account {
         id: "work".to_string(),
-        agent: Agent::Codex,
+        agent: AgentId::CODEX,
         name: "Work".to_string(),
         config_dir: codex_work.to_string_lossy().into_owned(),
         share_default_config: false,
@@ -293,7 +293,7 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
     };
     state.store.insert_account(&account).unwrap();
     let mut events = state.subscribe();
-    let held = |state: &Arc<AppState>| -> Vec<(Agent, Option<String>)> {
+    let held = |state: &Arc<AppState>| -> Vec<(AgentId, Option<String>)> {
         state
             .account_quotas
             .list()
@@ -304,12 +304,12 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
 
     // One account of one agent: only that one is read, and its reading is announced.
     let scope = Scope {
-        agent: Some(Agent::Codex),
+        agent: Some(AgentId::CODEX),
         account: Some("work".to_string()),
         ..Scope::default()
     };
     refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
-    assert_eq!(held(&state), [(Agent::Codex, Some("work".to_string()))]);
+    assert_eq!(held(&state), [(AgentId::CODEX, Some("work".to_string()))]);
     assert_eq!((runs("codex"), runs("grok")), (1, 0));
     let mut announced = Vec::new();
     while let Ok(event) = events.try_recv() {
@@ -321,7 +321,7 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
 
     // One agent: its default account joins; the other agent stays unread.
     let scope = Scope {
-        agent: Some(Agent::Grok),
+        agent: Some(AgentId::GROK),
         account: None,
         ..Scope::default()
     };
@@ -334,9 +334,9 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
     assert_eq!(
         held(&state),
         [
-            (Agent::Codex, None),
-            (Agent::Codex, Some("work".to_string())),
-            (Agent::Grok, None),
+            (AgentId::CODEX, None),
+            (AgentId::CODEX, Some("work".to_string())),
+            (AgentId::GROK, None),
         ]
     );
     assert!(state
@@ -389,7 +389,7 @@ impl KickFixture {
             ),
         );
         state.set_agent_availability(vec![crate::protocol::AgentAvailability {
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             availability: Availability::Available,
             default_account_dir: None,
         }]);
@@ -428,7 +428,7 @@ impl KickFixture {
     /// A due reading of the account, with the kick it leads to and the reading after that,
     /// awaited.
     async fn refresh(&self) {
-        self.state.account_quotas.make_due(Agent::Codex, None);
+        self.state.account_quotas.make_due(AgentId::CODEX, None);
         refresh_with(
             &self.state,
             &Scope::default(),
@@ -475,7 +475,7 @@ async fn a_refresh_on_demand_rereads_an_account_and_leaves_the_kick_to_the_polle
     assert!(fixture
         .state
         .account_quotas
-        .is_due_for_test(Agent::Codex, None));
+        .is_due_for_test(AgentId::CODEX, None));
 
     // The mark does not let a session's request past the limit: two more in a row read nothing.
     for _ in 0..2 {
@@ -528,7 +528,7 @@ async fn a_window_with_no_reset_time_is_left_alone_while_the_setting_is_off() {
 async fn a_refresh_returns_without_waiting_for_the_kick_it_starts() {
     let fixture = KickFixture::new("quota-kick-detached", true);
     std::fs::write(fixture.bin.join("kick-sleeps"), "").unwrap();
-    fixture.state.account_quotas.make_due(Agent::Codex, None);
+    fixture.state.account_quotas.make_due(AgentId::CODEX, None);
     refresh_with(
         &fixture.state,
         &Scope::default(),
@@ -600,19 +600,19 @@ async fn a_disabled_account_has_no_window_kicked() {
     fixture
         .state
         .store
-        .set_default_account_disabled(Agent::Codex, true)
+        .set_default_account_disabled(AgentId::CODEX, true)
         .unwrap();
     fixture.refresh().await;
     assert_eq!((fixture.count("runs"), fixture.count("kicks")), (1, 0));
     assert!(!fixture
         .state
         .account_quotas
-        .is_kicked_for_test(Agent::Codex, None));
+        .is_kicked_for_test(AgentId::CODEX, None));
 
     fixture
         .state
         .store
-        .set_default_account_disabled(Agent::Codex, false)
+        .set_default_account_disabled(AgentId::CODEX, false)
         .unwrap();
     fixture.refresh().await;
     assert_eq!((fixture.count("runs"), fixture.count("kicks")), (3, 1));
@@ -641,7 +641,7 @@ async fn turning_the_setting_on_kicks_the_readings_already_held() {
 /// [`kick_and_read`] on it in the background, with `kick-sleeps` keeping the kick going, until
 /// the fake CLI has been started for the kick.
 async fn kick_in_progress(fixture: &KickFixture) -> tokio::task::JoinHandle<()> {
-    let key = key(Agent::Codex, None);
+    let key = key(AgentId::CODEX, None);
     let unstarted = AccountQuota {
         windows: vec![window(QuotaWindowKind::Session, 0.0, None)],
         ..quota_of(&key, false)
@@ -666,7 +666,7 @@ async fn kick_in_progress(fixture: &KickFixture) -> tokio::task::JoinHandle<()> 
 async fn a_kick_whose_claim_was_dropped_is_not_followed_by_a_reading() {
     let fixture = KickFixture::new("quota-kick-dropped", true);
     let running = kick_in_progress(&fixture).await;
-    fixture.state.account_quotas.make_due(Agent::Codex, None);
+    fixture.state.account_quotas.make_due(AgentId::CODEX, None);
     std::fs::remove_file(fixture.bin.join("kick-sleeps")).unwrap();
     running.await.unwrap();
     assert_eq!(fixture.count("runs"), 0);
@@ -696,7 +696,7 @@ async fn a_shutdown_stops_a_running_probe_and_records_nothing() {
         .state
         .account_quotas
         .claim_due(
-            vec![key(Agent::Codex, None)],
+            vec![key(AgentId::CODEX, None)],
             Instant::now() + POLL_INTERVAL,
         )
         .pop()
@@ -722,7 +722,7 @@ async fn a_shutdown_stops_a_running_probe_and_records_nothing() {
 #[tokio::test]
 async fn no_kick_is_started_once_the_daemon_is_shutting_down() {
     let fixture = KickFixture::new("quota-kick-refused", true);
-    let key = key(Agent::Codex, None);
+    let key = key(AgentId::CODEX, None);
     let unstarted = AccountQuota {
         windows: vec![window(QuotaWindowKind::Session, 0.0, None)],
         ..quota_of(&key, false)
@@ -751,7 +751,7 @@ async fn no_kick_is_started_once_the_daemon_is_shutting_down() {
 fn an_account_whose_directory_is_gone_is_not_kicked() {
     let fixture = KickFixture::new("quota-kick-dir-missing", true);
     let gone = fixture.bin.join("deleted-account");
-    let key = Key::of(Agent::Codex, Some("a"), gone.to_str());
+    let key = Key::of(AgentId::CODEX, Some("a"), gone.to_str());
     let err = start_windows(&key, &*fixture.shell, &AtomicBool::new(false)).unwrap_err();
     assert!(err.to_string().contains("does not exist"), "{err}");
     assert_eq!(fixture.count("kicks"), 0);
@@ -767,7 +767,7 @@ fn an_account_whose_directory_is_gone_is_not_kicked() {
 fn an_account_made_due_is_claimed_at_once_whatever_the_clock_says() {
     let state = crate::test_support::app_state("quota-make-due").0;
     let quotas = &state.account_quotas;
-    let codex = key(Agent::Codex, Some("a"));
+    let codex = key(AgentId::CODEX, Some("a"));
     quotas.recorded(
         &state,
         codex.clone(),
@@ -779,7 +779,7 @@ fn an_account_made_due_is_claimed_at_once_whatever_the_clock_says() {
     // It was just read, and failed, so it waits.
     let now = Instant::now();
     assert!(quotas.claim_due(vec![codex.clone()], now).is_empty());
-    quotas.make_due(Agent::Codex, Some("a"));
+    quotas.make_due(AgentId::CODEX, Some("a"));
     assert_eq!(quotas.claim_due(vec![codex.clone()], now).len(), 1);
 }
 
@@ -787,7 +787,7 @@ fn an_account_made_due_is_claimed_at_once_whatever_the_clock_says() {
 fn an_account_is_due_once_a_held_window_has_reset_and_the_grace_has_passed() {
     let (state, _dir) = crate::test_support::app_state("quota-reset");
     let quotas = &state.account_quotas;
-    let key = key(Agent::Codex, Some("a"));
+    let key = key(AgentId::CODEX, Some("a"));
     let mut held = quota_of(&key, false);
     held.windows = vec![window(QuotaWindowKind::Session, 100.0, Some(NOW))];
     quotas.recorded(&state, key.clone(), held);
@@ -811,7 +811,7 @@ fn an_account_is_due_once_a_held_window_has_reset_and_the_grace_has_passed() {
 fn a_failed_re_read_after_a_reset_falls_back_to_the_ordinary_wait() {
     let (state, _dir) = crate::test_support::app_state("quota-reset-failed");
     let quotas = &state.account_quotas;
-    let key = key(Agent::Codex, Some("a"));
+    let key = key(AgentId::CODEX, Some("a"));
     let mut held = quota_of(&key, false);
     held.windows = vec![window(
         QuotaWindowKind::Session,
@@ -834,9 +834,9 @@ fn only_accounts_never_read_or_past_their_wait_are_due_and_a_running_one_is_not_
     let (state, _dir) = crate::test_support::app_state("quota-due");
     let quotas = AccountQuotas::default();
     let (fresh, failing, new) = (
-        key(Agent::Claude, None),
-        key(Agent::Codex, Some("a")),
-        key(Agent::Grok, None),
+        key(AgentId::CLAUDE, None),
+        key(AgentId::CODEX, Some("a")),
+        key(AgentId::GROK, None),
     );
     quotas.recorded(&state, fresh.clone(), quota_of(&fresh, false));
     quotas.recorded(&state, failing.clone(), quota_of(&failing, true));
@@ -872,7 +872,10 @@ fn a_probe_running_for_a_forgotten_or_repointed_account_cannot_put_its_reading_b
     let (state, _dir) = crate::test_support::app_state("quota-forgotten");
     let mut events = state.subscribe();
     let quotas = &state.account_quotas;
-    let (deleted, repointed) = (key(Agent::Codex, Some("a")), key(Agent::Codex, Some("b")));
+    let (deleted, repointed) = (
+        key(AgentId::CODEX, Some("a")),
+        key(AgentId::CODEX, Some("b")),
+    );
     let now = Instant::now();
     let claims = quotas.claim_due(vec![deleted.clone(), repointed.clone()], now);
     assert_eq!(claims.len(), 2);
@@ -880,7 +883,7 @@ fn a_probe_running_for_a_forgotten_or_repointed_account_cannot_put_its_reading_b
     quotas.forget_account(&state, "a");
     // The repointed account's old key is no longer among the targets.
     quotas.change(&state, |inner| {
-        retain_locked(inner, &[key(Agent::Codex, None)])
+        retain_locked(inner, &[key(AgentId::CODEX, None)])
     });
     for claim in claims {
         let quota = quota_of(&claim.key, false);
@@ -921,7 +924,7 @@ fn with_windows(key: &Key) -> AccountQuota {
 fn no_quota_to_report_is_not_backed_off_but_still_keeps_the_windows_it_held() {
     let (state, _dir) = crate::test_support::app_state("quota-no-windows");
     let quotas = &state.account_quotas;
-    let key = key(Agent::Claude, None);
+    let key = key(AgentId::CLAUDE, None);
     for _ in 0..3 {
         quotas.recorded(&state, key.clone(), no_windows(&key));
     }
@@ -944,11 +947,11 @@ fn a_request_reads_an_account_that_may_have_signed_in_since_early_but_not_within
     let (state, _dir) = crate::test_support::app_state("quota-request-reread");
     let quotas = &state.account_quotas;
     let (signed_out, none, windows, failing, missing) = (
-        key(Agent::Claude, None),
-        key(Agent::Claude, Some("a")),
-        key(Agent::Codex, None),
-        key(Agent::Codex, Some("b")),
-        key(Agent::Grok, None),
+        key(AgentId::CLAUDE, None),
+        key(AgentId::CLAUDE, Some("a")),
+        key(AgentId::CODEX, None),
+        key(AgentId::CODEX, Some("b")),
+        key(AgentId::GROK, None),
     );
     let not_signed_in = AccountQuota {
         unavailable: Some(QuotaUnavailable::new(code::NOT_SIGNED_IN, "no", &[])),
@@ -984,7 +987,7 @@ fn a_request_reads_an_account_that_may_have_signed_in_since_early_but_not_within
 #[test]
 fn an_account_state_drops_stale_windows_is_not_backed_off_and_a_login_makes_it_due() {
     let (state, _dir) = crate::test_support::app_state("quota-account-state");
-    let key = key(Agent::Codex, Some("a"));
+    let key = key(AgentId::CODEX, Some("a"));
     let good = AccountQuota {
         fetched_at: 7,
         windows: vec![QuotaWindow {
@@ -1033,7 +1036,7 @@ fn an_account_state_drops_stale_windows_is_not_backed_off_and_a_login_makes_it_d
         .account_quotas
         .claim_due(vec![key.clone()], Instant::now() + POLL_INTERVAL * 100);
     assert_eq!(running.len(), 1);
-    state.account_quotas.make_due(Agent::Codex, Some("a"));
+    state.account_quotas.make_due(AgentId::CODEX, Some("a"));
     let again = state
         .account_quotas
         .claim_due(vec![key.clone()], Instant::now());
@@ -1053,7 +1056,7 @@ fn only_a_successful_reading_of_an_idle_account_with_an_unstarted_window_is_kick
     let (state, _dir) = crate::test_support::app_state("quota-kick-claims");
     state.store.set_auto_start_quota_windows(true).unwrap();
     let quotas = AccountQuotas::default();
-    let key = key(Agent::Codex, Some("a"));
+    let key = key(AgentId::CODEX, Some("a"));
     let unstarted = AccountQuota {
         windows: vec![window(QuotaWindowKind::Session, 0.0, None)],
         ..quota_of(&key, false)
@@ -1085,7 +1088,7 @@ fn a_models_own_weekly_window_with_no_reset_time_is_not_kicked() {
     let (state, _dir) = crate::test_support::app_state("quota-kick-weekly-model");
     state.store.set_auto_start_quota_windows(true).unwrap();
     let quotas = AccountQuotas::default();
-    let key = key(Agent::Claude, None);
+    let key = key(AgentId::CLAUDE, None);
     let mut model = window(QuotaWindowKind::WeeklyModel, 0.0, None);
     model.label = Some("Fable".to_string());
     let mut reading = quota_of(&key, false);

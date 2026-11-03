@@ -242,7 +242,10 @@ const grok: Look = {
   ],
 };
 
-const LOOKS: Record<Agent, Look> = { claude, codex, grok };
+/** The agents the preview draws a terminal for: its own literal ids, apart from the providers the app serves. */
+type PreviewAgent = "claude" | "codex" | "grok";
+
+const LOOKS: Record<PreviewAgent, Look> = { claude, codex, grok };
 
 /** A small number that stays the same for a session id, so each session paces itself differently. */
 function seedOf(id: string): number {
@@ -266,7 +269,7 @@ const baseSeconds = (id: string) => 80 + (seedOf(id) % 200);
 /** The screen of an agent that has just started, at rest with nothing asked yet: the terminal of a
  * session the visitor opens, which no script was written for. */
 export function createIdleScript(agent: Agent, cwd: string): TerminalScript {
-  const look = LOOKS[agent];
+  const look = LOOKS[agent as PreviewAgent];
   return { screen: (cols) => [...look.header(cwd, cols), ...look.resting(cols)].join("\r\n") };
 }
 
@@ -275,7 +278,7 @@ export function createIdleScript(agent: Agent, cwd: string): TerminalScript {
  * as they are. Progress follows the page's clock, not the socket's, so a session that is closed and
  * opened again shows the steps it had reached rather than starting over. */
 export function createTerminalScript(session: TerminalSession, options: TerminalOptions): TerminalScript {
-  const look = LOOKS[session.agent];
+  const look = LOOKS[session.agent as PreviewAgent];
   const { copy } = session;
   const working = session.status === "working";
   const moving = working && options.animate;

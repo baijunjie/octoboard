@@ -5,7 +5,7 @@
 //! its response, or the model is still thinking — fires no hook, and on 2.1.310 writes nothing to
 //! the transcript either: the prompt entry written at submit stays the last user entry, and Claude
 //! Code puts the prompt's text back in its input box. So the interrupt watch of
-//! `crate::records::watch::claude_transcript` never sees it, and the session would read `Working`
+//! `crate::adapter::claude::transcript_watch` never sees it, and the session would read `Working`
 //! until its next prompt. What does change is the terminal title: Claude Code starts it with a
 //! turning half-filled circle (`◐`, `◑`) while a turn runs and with `✳` when it is back at its
 //! prompt, and the glyph turns to `✳` within a tenth of a second of the Esc. See
@@ -45,9 +45,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::screen::TitleCancel;
 use super::title_activity::TitleActivity;
-use crate::protocol::{Agent, SessionStatus};
-use crate::records::watch::claude_transcript;
+use crate::protocol::SessionStatus;
+use crate::records::watch::back_at_prompt;
 use crate::state::AppState;
 
 /// How long the title must have read as back at the prompt before the turn counts as ended without
@@ -66,19 +67,20 @@ fn settled_at_prompt(activity: &TitleActivity, armed: u64, now: Instant) -> bool
         .is_some_and(|at| now.saturating_duration_since(at) >= SETTLE)
 }
 
-/// Starts watching the terminal title of `session_id`, a Claude Code or Grok Build session a hook
-/// has just moved into `Working`, for its turn ending with no hook. `generation` is the record
-/// watch generation armed for the same move (for Claude Code, the transcript interrupt watch's):
-/// the next prompt retires it, and with it this watch, before its turn opens, and the session is
-/// put back at its prompt only while it is still current. Spawned, never awaited.
+/// Starts watching the terminal title of `session_id`, a session a hook has just moved into
+/// `Working` whose provider leaves some cancels in the title alone
+/// ([`crate::session::screen::ScreenReader::title_cancel`]), for its turn ending with no hook.
+/// `generation` is the record watch generation armed for the same move (for Claude Code, the
+/// transcript interrupt watch's): the next prompt retires it, and with it this watch, before its
+/// turn opens, and the session is put back at its prompt only while it is still current. Spawned,
+/// never awaited.
 pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
     let Some(live) = state.live_session(session_id) else {
         return;
     };
-    let agent = live.agent;
-    if !matches!(agent, Agent::Claude | Agent::Grok) {
+    let Some(cancel) = crate::adapter::provider(live.agent).screen().title_cancel() else {
         return;
-    }
+    };
     let armed = live.title_activity().stops();
     let live = Arc::downgrade(&live);
     let state = state.clone();
@@ -120,9 +122,11 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
             }
             // Conditional on the session still reading `Working`: one a hook moved on, the turn
             // ending as usual or a prompt waiting on the user, is left where the hook put it.
-            match agent {
-                Agent::Grok => cancelled_before_output(&state, &session_id, generation),
-                _ => claude_transcript::back_at_prompt(
+            match cancel {
+                TitleCancel::CloseAsCancelled => {
+                    cancelled_before_output(&state, &session_id, generation)
+                }
+                TitleCancel::BackAtPrompt => back_at_prompt(
                     &state,
                     &session_id,
                     generation,
@@ -135,13 +139,13 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
     });
 }
 
-/// Puts a Grok Build session whose title went back to the prompt with no hook at its prompt, and
-/// closes its turn as cancelled, while watch `generation` is still current and the session still
-/// reads `Working`.
+/// Puts a session whose title went back to the prompt with no hook at its prompt, and closes its
+/// turn as cancelled ([`TitleCancel::CloseAsCancelled`], Grok Build), while watch `generation` is
+/// still current and the session still reads `Working`.
 fn cancelled_before_output(state: &Arc<AppState>, session_id: &str, generation: u64) {
-    // One step under the watch's bookkeeping, for the reason `claude_transcript::back_at_prompt`
-    // gives; the turn is closed in the same step, so a prompt landing just after cannot have its
-    // own turn closed instead.
+    // One step under the watch's bookkeeping, for the reason `back_at_prompt` gives; the turn is
+    // closed in the same step, so a prompt landing just after cannot have its own turn closed
+    // instead.
     let moved = state.while_record_watch_current(session_id, generation, || {
         let moved = state.report_paused_if(session_id, SessionStatus::Working);
         if matches!(moved, Ok(true)) {
@@ -176,6 +180,7 @@ fn cancelled_before_output(state: &Arc<AppState>, session_id: &str, generation: 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::AgentId;
     use crate::protocol::Session;
     use crate::session::title_activity::Shown;
     use crate::session::LiveSession;
@@ -283,11 +288,11 @@ mod tests {
         state
             .store
             .insert_session(&Session {
-                agent: Agent::Grok,
+                agent: AgentId::GROK,
                 ..console_session("s", SessionStatus::Working)
             })
             .expect("session");
-        let live = fake_live_session("s", Agent::Grok, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::GROK, 80, 24, "sleep 30");
         state.register_live(live.clone());
         crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         state.turn_started("s", None);

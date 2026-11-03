@@ -20,7 +20,7 @@ const STDERR_TAIL_BYTES: usize = 2048;
 const STDERR_TAIL_LINES: usize = 8;
 
 /// The longest a single line of agent text is logged.
-pub(super) const LINE_LIMIT: usize = 300;
+pub(crate) const LINE_LIMIT: usize = 300;
 
 /// How many lines of an agent's own stdout, besides the reply, are kept (see
 /// [`ProbeTrace::notes`]).
@@ -213,7 +213,7 @@ pub(super) fn stderr_tail(stderr: &[u8]) -> String {
 }
 
 /// `text` cut to at most `limit` characters, marked when it was.
-pub(super) fn truncate(text: &str, limit: usize) -> String {
+pub(crate) fn truncate(text: &str, limit: usize) -> String {
     match text.char_indices().nth(limit) {
         Some((end, _)) => format!("{}…", &text[..end]),
         None => text.to_string(),
@@ -261,7 +261,7 @@ const MASK: &str = "[redacted]";
 /// after the name of a secret (`"refresh_token": "…"`, `password: …`, `Authorization: …`), the
 /// value of `token=…`-style pairs, and anything with an `@` in the shape of an address. It errs
 /// on the side of masking too much; the log needs the shape of an error, never the secret in it.
-pub(super) fn redact(text: &str) -> String {
+pub(crate) fn redact(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut word = String::new();
     let mut mask_next = false;

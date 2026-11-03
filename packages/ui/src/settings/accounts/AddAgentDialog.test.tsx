@@ -2,12 +2,13 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_INSTALL_URL } from "../../agents/agents";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { Agent, AgentAvailability, ClientRequestBody } from "../../protocol";
 import { mountHost } from "../../test/mountHost";
 import { testDaemon } from "../../test/testDaemon";
+import { availabilityOf } from "../../fixtures/fixtureProviders";
+import { TEST_PROVIDERS } from "../../test/testProviders";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
@@ -24,7 +25,7 @@ function render(
   const daemon = testDaemon({
     state: {
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
-      agentAvailability: new Map(Object.entries(availability).map(([agent, state]) => [agent as Agent, { agent: agent as Agent, availability: state, default_account_dir: null }])),
+      agentAvailability: availabilityOf(TEST_PROVIDERS, availability),
     },
     request: handler as never,
     showNotice: vi.fn(),
@@ -34,18 +35,18 @@ function render(
 }
 
 const rows = () => [...document.querySelectorAll("li")];
-const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === name || b.textContent === name)!;
+const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "") === name || b.textContent === name)!;
 
 it("lists every agent with whether it is installed or added", () => {
   render({ claude: "available", codex: "unavailable", grok: "not_determined" }, ["claude"]);
-  expect(rows().map((row) => row.textContent)).toEqual(["Claude Code, Added", "Codex, Not installedHow to install", "Grok Build, Checking…Add"]);
+  expect(rows().map((row) => row.textContent)).toEqual(["Claude Code, Added", "Codex, Not installedHow to install", "Grok Build, Checking…Add", "Test Agent, Checking…Add"]);
 });
 
 it("offers Add only for an installed agent that is not added yet", () => {
   render({ claude: "available", codex: "available", grok: "unavailable" }, ["claude"]);
   expect(button("Add Codex").disabled).toBe(false);
-  expect(document.querySelector('button[aria-label="Add Claude Code"]')).toBeNull();
-  expect(document.querySelector('button[aria-label="Add Grok Build"]')).toBeNull();
+  expect(button("Add Claude Code")).toBeUndefined();
+  expect(button("Add Grok Build")).toBeUndefined();
 });
 
 it("cannot add an agent whose installation is not determined yet, or any while the list is undecided", () => {
@@ -54,11 +55,11 @@ it("cannot add an agent whose installation is not determined yet, or any while t
   expect(button("Add Codex").disabled).toBe(true);
 });
 
-it("links each agent that is not installed to its vendor's install instructions", () => {
-  render({ claude: "unavailable", codex: "unavailable", grok: "unavailable" }, []);
+it("links each agent that is not installed to its provider's install instructions", () => {
+  render({ claude: "unavailable", codex: "unavailable", grok: "unavailable", test_agent: "unavailable" }, []);
   const links = [...document.querySelectorAll<HTMLAnchorElement>("a")];
-  expect(links.map((link) => link.getAttribute("aria-label"))).toEqual(["How to install Claude Code", "How to install Codex", "How to install Grok Build"]);
-  expect(links.map((link) => link.getAttribute("href"))).toEqual([AGENT_INSTALL_URL.claude, AGENT_INSTALL_URL.codex, AGENT_INSTALL_URL.grok].map((url) => new URL(url).href));
+  expect(links.map((link) => link.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, ""))).toEqual(["How to install Claude Code", "How to install Codex", "How to install Grok Build", "How to install Test Agent"]);
+  expect(links.map((link) => link.getAttribute("href"))).toEqual(TEST_PROVIDERS.map((provider) => new URL(provider.install_url).href));
 });
 
 it("sends add_agent, and shows the agent as added once the list follows", async () => {

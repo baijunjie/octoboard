@@ -39,10 +39,11 @@ that rule. What is the user's alone is never changed through these tools, by any
   an agent the user removed or never added and start sessions on it, and which agents Octoboard runs, and in what
   order they are offered, is the user's own choice;
 - changing whether a new session's account is chosen automatically (see "Automatically select an account" in
-  `docs/product/settings.md`), an agent's Claude compatibility (see "Claude compatibility" in
+  `docs/product/settings.md`), an agent's provider settings (see "Provider settings" in
   `docs/product/per-agent-settings.md`) or an agent's tags (see "Agent tags" in the same document), since which agents
-  and accounts spend the user's quota, and how, is the user's choice. `get_settings` still returns all three, read-only:
-  a session weighs them when it chooses an agent or an account;
+  and accounts spend the user's quota, and how, is the user's choice. `get_settings` still returns the first and the
+  last, and the provider settings their provider lets sessions read — Claude compatibility — read-only: a session
+  weighs them when it chooses an agent or an account;
 - reading or changing Claude Code's approval mode or Codex's approval reviewer (see "Approval modes" in
   `docs/product/per-agent-settings.md`), since a session could otherwise lift the permission prompts of the sessions
   launched after it, its own next resume included, for instance by switching Claude Code to Approve everything;
@@ -205,7 +206,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_delivery`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
-| `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/per-agent-settings.md`). Read-only. |
+| `provider_settings` | For each agent whose provider declares settings that sessions may read, by its name (`codex`, `grok`), each such setting by its id with its value in effect, the default included while the user has made no choice: today only `claude_compatibility`, `true` or `false`, whether the agent's sessions load Claude Code's configuration (see "Provider settings" and "Claude compatibility" in `docs/product/per-agent-settings.md`). An agent with no such setting, Claude Code among them, has no entry. Read-only. |
 | `agent_tags` | For each added agent that has tags, by its name (`claude`, `codex`, `grok`), its tags as a list, in the user's order (see "Agent tags" in `docs/product/per-agent-settings.md`); every agent's while the list of added agents is undecided. An agent without tags, and a removed agent, has no entry. Read-only. |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's accounts come in the order automatic account selection takes them in: the user's order of that agent's accounts, then those that order does not name (see "Which account a session uses" in `docs/product/opening-sessions.md`). The default account is listed with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
@@ -221,7 +222,7 @@ it shows. `git_workflow` is an object of any of the five git workflow settings, 
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
 unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
 `auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices`,
-`auto_select_account`, `claude_compatibility` or `agent_tags` argument is ignored, whatever its value — the setting
+`auto_select_account`, `provider_settings` or `agent_tags` argument is ignored, whatever its value — the setting
 stays as it is and the rest of the call applies as usual; `get_settings` lists only the last three, read-only. Turning
 `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in
 Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes

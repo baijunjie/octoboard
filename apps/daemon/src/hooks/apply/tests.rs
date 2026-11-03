@@ -44,28 +44,65 @@ async fn a_completion_notification_does_not_publish_a_plain_idle_before_the_turn
     assert!(state.background_tasks_of("s").is_empty());
 }
 
+/// Only Claude Code's `<task-notification>` prompt counts as a completion notice; the same prompt
+/// to another agent's session counts for nothing.
+#[tokio::test]
+async fn only_claude_codes_task_notification_prompt_counts_as_a_completion_notice() {
+    let prompt = br#"{"hook_event_name": "UserPromptSubmit", "prompt": "<task-notification><task-id>b1</task-id></task-notification>"}"#;
+    for (agent, counted) in [
+        (AgentId::CLAUDE, 1),
+        (AgentId::CODEX, 0),
+        (AgentId::TEST, 0),
+    ] {
+        let (state, dir) = app_state("server-completion-notice-count");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        let mut session = crate::test_support::console_session("s", SessionStatus::Idle);
+        session.agent = agent;
+        state.store.insert_session(&session).unwrap();
+        apply_hook(&state, "s", prompt);
+        assert_eq!(state.completion_notices("s"), counted, "{agent:?}");
+        // The prompt itself was processed as a conversation start for every agent.
+        assert!(
+            state
+                .store
+                .get_session("s")
+                .unwrap()
+                .unwrap()
+                .has_conversation,
+            "{agent:?}"
+        );
+    }
+}
+
 /// A Grok session that stopped on an error holds what is queued for it, and a prompt sent ends
 /// the hold; the other agents' failures hold nothing.
 #[tokio::test]
 async fn only_a_grok_error_holds_writes_and_a_prompt_ends_the_hold() {
     for (agent, error, held) in [
-        (Agent::Grok, r#"{"hookEventName": "StopFailure"}"#, true),
+        (AgentId::GROK, r#"{"hookEventName": "StopFailure"}"#, true),
         (
-            Agent::Grok,
+            AgentId::GROK,
             r#"{"hook_event_name": "Notification", "notification_type": "agent_error"}"#,
             true,
         ),
         (
-            Agent::Grok,
+            AgentId::GROK,
             r#"{"hook_event_name": "Notification", "notification_type": "idle_prompt"}"#,
             false,
         ),
         (
-            Agent::Claude,
+            AgentId::CLAUDE,
             r#"{"hook_event_name": "StopFailure"}"#,
             false,
         ),
-        (Agent::Codex, r#"{"hook_event_name": "StopFailure"}"#, false),
+        (
+            AgentId::CODEX,
+            r#"{"hook_event_name": "StopFailure"}"#,
+            false,
+        ),
     ] {
         let (state, dir) = app_state("server-agent-error");
         state
@@ -131,7 +168,7 @@ async fn an_agent_error_hold_runs_out_and_releases_the_queue() {
             SessionStatus::Idle,
         ))
         .unwrap();
-    let live = crate::test_support::fake_live_session("s", Agent::Grok, 80, 24, "sleep 30");
+    let live = crate::test_support::fake_live_session("s", AgentId::GROK, 80, 24, "sleep 30");
     state.register_live(live.clone());
 
     apply_hook(&state, "s", br#"{"hookEventName": "StopFailure"}"#);
@@ -165,7 +202,7 @@ async fn a_grok_prompt_watches_the_title_for_a_cancel_no_hook_reports() {
             SessionStatus::Idle,
         ))
         .unwrap();
-    let live = crate::test_support::fake_live_session("s", Agent::Grok, 80, 24, "sleep 30");
+    let live = crate::test_support::fake_live_session("s", AgentId::GROK, 80, 24, "sleep 30");
     state.register_live(live.clone());
 
     apply_hook(
@@ -209,7 +246,7 @@ async fn a_grok_card_s_title_does_not_end_the_turn_that_carries_on_after_it() {
             SessionStatus::Idle,
         ))
         .unwrap();
-    let live = crate::test_support::fake_live_session("s", Agent::Grok, 80, 24, "sleep 30");
+    let live = crate::test_support::fake_live_session("s", AgentId::GROK, 80, 24, "sleep 30");
     state.register_live(live.clone());
     let status = |state: &Arc<AppState>| state.store.get_session("s").unwrap().unwrap().status;
     let running = "\x1b]0;\u{280B} - Working\u{2026} - grok\x07".as_bytes();
@@ -579,7 +616,7 @@ async fn only_the_next_turns_own_interrupt_ends_it() {
         !reaches_within(
             &state,
             SessionStatus::Idle,
-            crate::records::watch::claude_transcript::TEST_TIMEOUT
+            crate::adapter::claude::transcript_watch::TEST_TIMEOUT
         )
         .await,
         "the next turn must keep working"
@@ -744,31 +781,31 @@ async fn subagent_events_inside_a_turn_leave_the_tasks_alone() {
 async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal_stop() {
     for (agent, abnormal, normal, prompt) in [
         (
-            Agent::Claude,
+            AgentId::CLAUDE,
             r#"{"hook_event_name": "StopFailure"}"#,
             r#"{"hook_event_name": "Stop"}"#,
             r#"{"hook_event_name": "UserPromptSubmit"}"#,
         ),
         (
-            Agent::Claude,
+            AgentId::CLAUDE,
             r#"{"hook_event_name": "StopFailure"}"#,
             r#"{"hook_event_name": "Stop", "background_tasks": [{"id": "b1", "type": "shell"}]}"#,
             r#"{"hook_event_name": "UserPromptSubmit"}"#,
         ),
         (
-            Agent::Codex,
+            AgentId::CODEX,
             r#"{"hook_event_name": "Interrupt"}"#,
             r#"{"hook_event_name": "Stop"}"#,
             r#"{"hook_event_name": "UserPromptSubmit"}"#,
         ),
         (
-            Agent::Grok,
+            AgentId::GROK,
             r#"{"hookEventName": "StopCancelled"}"#,
             r#"{"hookEventName": "Stop", "reason": "end_turn"}"#,
             r#"{"hookEventName": "UserPromptSubmit"}"#,
         ),
         (
-            Agent::Grok,
+            AgentId::GROK,
             r#"{"hookEventName": "StopFailure"}"#,
             r#"{"hookEventName": "Stop", "reason": "end_turn"}"#,
             r#"{"hookEventName": "UserPromptSubmit"}"#,
@@ -854,17 +891,17 @@ async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal
 async fn events_that_end_no_turn_leave_the_paused_flag_alone() {
     for (agent, ends_abnormally, silent) in [
         (
-            Agent::Claude,
+            AgentId::CLAUDE,
             r#"{"hook_event_name": "StopFailure"}"#,
             r#"{"hook_event_name": "Notification", "notification_type": "idle_prompt"}"#,
         ),
         (
-            Agent::Grok,
+            AgentId::GROK,
             r#"{"hookEventName": "StopCancelled"}"#,
             r#"{"hookEventName": "Notification", "notificationType": "idle_prompt"}"#,
         ),
         (
-            Agent::Grok,
+            AgentId::GROK,
             r#"{"hookEventName": "StopCancelled"}"#,
             r#"{"hookEventName": "Stop", "reason": "shutdown"}"#,
         ),
@@ -912,7 +949,7 @@ async fn a_new_claude_conversation_clears_the_paused_flag() {
             SessionStatus::Working,
         ))
         .unwrap();
-    let live = crate::test_support::fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+    let live = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
     state.register_live(live.clone());
     apply_hook(&state, "s", br#"{"hook_event_name": "StopFailure"}"#);
     assert!(state.last_turn_abnormal("s"));
@@ -944,7 +981,7 @@ async fn a_new_claude_conversation_clears_the_paused_flag() {
 /// it, with its scratch directory and its stand-in process.
 fn session_in_turn(
     label: &str,
-    agent: Agent,
+    agent: AgentId,
     prompt: &str,
 ) -> (
     Arc<AppState>,
@@ -993,26 +1030,27 @@ fn exit_at(state: &Arc<AppState>, ended_at: i64) {
 
 /// Each agent's events of one turn, by the id it gives a turn: a prompt opening `t1`, a normal
 /// end of `t1` and of `t0`, and an abnormal end of `t1` where the agent reports one.
-fn late_turn_events(agent: Agent) -> [String; 4] {
+fn late_turn_events(agent: AgentId) -> [String; 4] {
     match agent {
-        Agent::Claude => [
+        AgentId::CLAUDE => [
             r#"{"hook_event_name": "UserPromptSubmit", "prompt_id": "t1"}"#.to_string(),
             r#"{"hook_event_name": "Stop", "prompt_id": "t1"}"#.to_string(),
             r#"{"hook_event_name": "Stop", "prompt_id": "t0"}"#.to_string(),
             r#"{"hook_event_name": "StopFailure", "prompt_id": "t1"}"#.to_string(),
         ],
-        Agent::Codex => [
+        AgentId::CODEX => [
             r#"{"hook_event_name": "UserPromptSubmit", "turn_id": "t1"}"#.to_string(),
             r#"{"hook_event_name": "Stop", "turn_id": "t1"}"#.to_string(),
             r#"{"hook_event_name": "Stop", "turn_id": "t0"}"#.to_string(),
             r#"{"hook_event_name": "Interrupt", "turn_id": "t1"}"#.to_string(),
         ],
-        Agent::Grok => [
+        AgentId::GROK => [
             r#"{"hookEventName": "UserPromptSubmit", "promptId": "t1"}"#.to_string(),
             r#"{"hookEventName": "Stop", "reason": "end_turn", "promptId": "t1"}"#.to_string(),
             r#"{"hookEventName": "Stop", "reason": "end_turn", "promptId": "t0"}"#.to_string(),
             r#"{"hookEventName": "StopCancelled", "promptId": "t1"}"#.to_string(),
         ],
+        other => panic!("no fixture for {other}"),
     }
 }
 
@@ -1020,7 +1058,7 @@ fn late_turn_events(agent: Agent) -> [String; 4] {
 /// set; an end of another turn, or the turn's own abnormal end, leaves it.
 #[tokio::test]
 async fn a_late_normal_end_of_the_turn_cut_short_clears_the_paused_flag() {
-    for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+    for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
         let [prompt, stop, other_stop, abnormal] = late_turn_events(agent);
 
         let (state, _dir, _live) = session_in_turn("hook-late-stop", agent, &prompt);
@@ -1056,7 +1094,7 @@ async fn a_late_normal_end_of_the_turn_cut_short_clears_the_paused_flag() {
 /// it is posted.
 #[tokio::test]
 async fn a_late_end_of_the_turn_cut_short_leaves_a_resumed_session_alone() {
-    for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+    for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
         let [prompt, stop, ..] = late_turn_events(agent);
         let (state, _dir, _old) = session_in_turn("hook-late-stop-resumed", agent, &prompt);
         end_process(&state);
@@ -1093,8 +1131,8 @@ async fn a_late_end_of_the_turn_cut_short_leaves_a_resumed_session_alone() {
 /// same end: a late normal end of the turn still clears the flag on the archived record.
 #[tokio::test]
 async fn a_late_normal_end_of_a_turn_an_archive_cut_short_clears_the_paused_flag() {
-    let [prompt, stop, ..] = late_turn_events(Agent::Codex);
-    let (state, _dir, _live) = session_in_turn("hook-late-stop-archived", Agent::Codex, &prompt);
+    let [prompt, stop, ..] = late_turn_events(AgentId::CODEX);
+    let (state, _dir, _live) = session_in_turn("hook-late-stop-archived", AgentId::CODEX, &prompt);
     state.archive_session_record("s").unwrap();
     assert!(state.last_turn_abnormal("s"));
     // The exit recorded afterwards writes an `ended_at` of its own.
@@ -1113,8 +1151,8 @@ async fn a_late_normal_end_of_a_turn_an_archive_cut_short_clears_the_paused_flag
 /// turn cleared.
 #[tokio::test]
 async fn the_exit_after_an_archive_does_not_set_again_a_flag_a_late_end_cleared() {
-    let [prompt, stop, ..] = late_turn_events(Agent::Codex);
-    let (state, _dir, _live) = session_in_turn("hook-late-stop-hand", Agent::Codex, &prompt);
+    let [prompt, stop, ..] = late_turn_events(AgentId::CODEX);
+    let (state, _dir, _live) = session_in_turn("hook-late-stop-hand", AgentId::CODEX, &prompt);
     state.raise_request_hand("s").unwrap();
     state.archive_session_record("s").unwrap();
     assert!(state.last_turn_abnormal("s"));

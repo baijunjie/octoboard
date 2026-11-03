@@ -10,11 +10,10 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::agents::launch_settings::{self, normalize_session_launch_setting, LaunchCheck};
-use crate::agents::models::legacy_claude_model;
 use crate::messaging::delivery;
 use crate::messaging::owner_notices;
 use crate::protocol::{
-    error_code, Agent, CodedError, Console, GitWorkflowSettings, Launch, ProcessTree, Project,
+    error_code, AgentId, CodedError, Console, GitWorkflowSettings, Launch, ProcessTree, Project,
     Session, SessionKind, SessionStatus, TerminalAppearance,
 };
 use crate::session::dialogs;
@@ -25,7 +24,6 @@ use crate::state::{session_archived, AppState};
 
 use super::bindings::owner_of;
 use super::resume::resumable_agent_session_id;
-use super::settings::{CLAUDE_MODE, CODEX_REVIEWER};
 
 /// The relaunch a resume and a switch of the session's account both end in: everything Octoboard
 /// injects is reassembled and every launch refusal applies, whichever of the two asked. `claim` is
@@ -103,12 +101,21 @@ pub(crate) async fn relaunch_session_with(
         return Err(session_archived(id));
     }
 
-    // Claude Code asks "Resume this conversation?" at a launch that resumes with no prompt on the
-    // command line, and a message pasted into that dialog is discarded while its Enter picks a
+    // A provider that declares `resume_instruction_as_launch_prompt` shows a resume dialog at a
+    // launch that resumes with no prompt on the command line — Claude Code asks "Resume this
+    // conversation?" — and a message pasted into that dialog is discarded while its Enter picks a
     // row. With the instruction as the launch prompt the dialog is not shown, so it goes there;
     // every other launch has it queued instead.
     let (prompt, queued) = match instruction {
-        Some(instruction) if session.agent == Agent::Claude && resume_id.is_some() => {
+        Some(instruction)
+            if resume_id.is_some()
+                && session
+                    .agent
+                    .descriptor()
+                    .capabilities
+                    .delivery
+                    .resume_instruction_as_launch_prompt =>
+        {
             (term::launch_prompt(instruction), None)
         }
         queued => (None, queued),
@@ -208,12 +215,13 @@ pub(crate) async fn relaunch_session_with(
     }
 }
 
-/// A stored model as a launch reads it: the retired Claude alias `best` is no model, so it
-/// reads as unset wherever it is stored.
-fn readable_model(agent: Agent, model: &Option<String>) -> Option<String> {
+/// A stored model as a launch reads it: a spelling the provider has retired (Claude Code's
+/// `best` alias) is no model, so it reads as unset wherever it is stored.
+fn readable_model(agent: AgentId, model: &Option<String>) -> Option<String> {
+    let retired = agent.descriptor().model_display.retired;
     model
         .clone()
-        .filter(|model| agent != Agent::Claude || !legacy_claude_model(model))
+        .filter(|model| !retired.contains(&model.as_str()))
 }
 
 /// The model and reasoning effort a session of `project` launches `agent` with when it chose
@@ -225,7 +233,7 @@ fn readable_model(agent: Agent, model: &Option<String>) -> Option<String> {
 pub(crate) fn project_launch_settings(
     project: &Project,
     console: &Console,
-    agent: Agent,
+    agent: AgentId,
 ) -> Launch {
     let own = project.launch.get(agent);
     let console_launch = console.project_session_launch.get(agent);
@@ -240,7 +248,7 @@ pub(crate) fn project_launch_settings(
 /// console session (`project` none) reads its console's console session pair, a project session
 /// its project's with its console's project session pair behind it (see
 /// [`project_launch_settings`]).
-fn inherited_launch(project: Option<&Project>, console: &Console, agent: Agent) -> Launch {
+fn inherited_launch(project: Option<&Project>, console: &Console, agent: AgentId) -> Launch {
     match project {
         Some(project) => project_launch_settings(project, console, agent),
         // A console session's own pair: each agent has its own model names.
@@ -293,7 +301,7 @@ pub(super) enum SettingsChecked<'a> {
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn check_launch_settings(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<String>,
     project: Option<&Project>,
     console: &Console,
@@ -458,9 +466,7 @@ pub(super) async fn start_process(
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
         config_dir: session.config_dir.as_ref().map(PathBuf::from),
-        approval_reviewer: CODEX_REVIEWER.for_session(state, session)?,
-        approval_mode: CLAUDE_MODE.for_session(state, session)?,
-        claude_compatibility: state.store.claude_compatibility_of(session.agent)?,
+        settings: state.store.provider_settings_of(session.agent)?,
         shared_default_dir: sharing.shared_default_dir,
         model,
         effort,

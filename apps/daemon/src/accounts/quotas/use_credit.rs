@@ -1,6 +1,7 @@
-//! Spending one of a Codex account's rate limit reset credits for the user: [`use_reset_credit`]
-//! picks the credit from the held reading, has `reset_credit.rs` consume it under a per-account
-//! guard, takes it out of the held reading and reads the account again whichever way the use ends.
+//! Spending one of an account's rate limit reset credits for the user: [`use_reset_credit`] picks
+//! the credit from the held reading, has the provider's [`ResetCredits`] consume it under a
+//! per-account guard, takes it out of the held reading and reads the account again whichever way
+//! the use ends.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -9,9 +10,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::poll::{refresh_with, Scope, ShellSource, Trigger};
-use super::reset_credit::{consume, Failure};
+use super::reset_credit::Failure;
 use super::{AccountQuotas, Key};
-use crate::protocol::{error_code, Agent, CodedError, ResetCreditOutcome};
+use crate::adapter::provider;
+use crate::protocol::{error_code, AgentId, CodedError, ProviderOperation, ResetCreditOutcome};
 use crate::state::AppState;
 use crate::time::now_millis;
 
@@ -61,20 +63,28 @@ impl AccountQuotas {
     }
 }
 
-/// Uses one reset credit of the Codex account `account` (an account id, `None` for the default
+/// Uses one reset credit of the `agent` account `account` (an account id, `None` for the default
 /// account) in the shell environment `shell` gives, for a user who confirmed it, and reads the
-/// account's quota again whichever way it ends. The credit used is the first the held reading
-/// lists that has not expired, which is the one that expires first; with no details held, or a
-/// held reading that is out of date (the account's last attempt failed), Codex picks one. A use
+/// account's quota again whichever way it ends. The credit used is the first the held reading lists
+/// that has not expired, which is the one that expires first; with no details held, or a held
+/// reading that is out of date (the account's last attempt failed), the provider picks one. A use
 /// that worked takes the credit out of the held reading at once, until the next reading says what
 /// is left. Nothing but a request from the user calls this: no automatic path may spend a credit.
 pub(crate) async fn use_reset_credit(
     state: &Arc<AppState>,
+    agent: AgentId,
     account: Option<String>,
     shell: ShellSource,
     timeout: Duration,
 ) -> anyhow::Result<ResetCreditOutcome> {
-    let agent = Agent::Codex;
+    let credits = CodedError::require_offered(
+        agent,
+        ProviderOperation::ResetCredit,
+        provider(agent)
+            .accounts()
+            .and_then(|ops| ops.reset_credits())
+            .filter(|_| agent.descriptor().capabilities.reset_credits),
+    )?;
     let quotas = &state.account_quotas;
     if quotas.stopping.load(Ordering::Relaxed) {
         return Err(CodedError::raised(
@@ -131,7 +141,7 @@ pub(crate) async fn use_reset_credit(
                 &[("detail", &detail)],
             )
         })?;
-        Ok::<_, anyhow::Error>(consume(
+        Ok::<_, anyhow::Error>(credits.consume(
             &shell_env,
             dir.as_deref().map(Path::new),
             named.as_deref(),
@@ -146,7 +156,7 @@ pub(crate) async fn use_reset_credit(
         quotas.spend_held_credit(state, &key, credit_id.as_deref());
     }
     // The credit may have been used even when the answer did not arrive, so the reading is taken
-    // again after any run of Codex; a probe that began before it is dropped by `make_due`.
+    // again after any run of the CLI; a probe that began before it is dropped by `make_due`.
     if !matches!(outcome, Err(Failure::BinaryNotFound(_))) {
         quotas.make_due(agent, account.as_deref());
         let (state, shell, scope) = (

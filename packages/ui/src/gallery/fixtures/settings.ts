@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENT_LABEL, AGENTS } from "../../agents/agents";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
+import { providerLabel } from "../../agents/providers";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability } from "../../protocol";
 import type { FixtureError } from "../../fixtures/sampleFiles";
@@ -83,9 +84,8 @@ const quotaState: Scenario["state"] = {
   ...approvalState,
   settings: {
     ...approvalState.settings!,
-    added_agents: [...AGENTS],
-    claude_approval_mode: "auto",
-    codex_approval_reviewer: "auto_review",
+    added_agents: [...FIXTURE_AGENTS],
+    provider_settings: { claude: { approval_mode: "auto" }, codex: { approval_reviewer: "auto_review" } },
   },
   agentAvailability: new Map(approvalState.agentAvailability).set("grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }),
   accountQuotas: [
@@ -100,6 +100,26 @@ const quotaState: Scenario["state"] = {
     quotaOf("codex", "a-codex-auto", null, [quotaWindow("session", 100, -1), quotaWindow("weekly", 9, 6 * 24 * 60)], { fetched_at: minutesAgo(16) }),
     quotaOf("codex", "a-codex-user", "plus", [quotaWindow("session", 97, 25), quotaWindow("weekly", 91, 2 * 24 * 60 + 11 * 60)]),
     quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)]),
+  ],
+};
+
+/** `quotaState` with a fourth provider served that this build has no presentation module for, added and installed, holding
+ * its default account and one account of its own with readings: the agent tabs and the accounts below them name it by
+ * the label the daemon serves, with the generic mark. */
+const unpresentedState: Scenario["state"] = {
+  ...quotaState,
+  providers: [...FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER],
+  settings: {
+    ...quotaState.settings!,
+    added_agents: [...FIXTURE_AGENTS, UNPRESENTED_PROVIDER.id],
+    accounts: [...quotaState.settings!.accounts, accountOf("a-acme", UNPRESENTED_PROVIDER.id, "Studio", "/Users/dev/.acme-studio")],
+    provider_settings: { ...quotaState.settings!.provider_settings, [UNPRESENTED_PROVIDER.id]: {} },
+  },
+  agentAvailability: new Map(quotaState.agentAvailability).set(UNPRESENTED_PROVIDER.id, { agent: UNPRESENTED_PROVIDER.id, availability: "available", default_account_dir: "/Users/dev/.acme" }),
+  accountQuotas: [
+    ...quotaState.accountQuotas!,
+    quotaOf(UNPRESENTED_PROVIDER.id, null, "Team", [quotaWindow("session", 35, 140), quotaWindow("weekly", 58, 3 * 24 * 60 + 2 * 60)]),
+    quotaOf(UNPRESENTED_PROVIDER.id, "a-acme", "Team", [quotaWindow("session", 8, 250), quotaWindow("weekly", 12, 5 * 24 * 60)]),
   ],
 };
 
@@ -139,7 +159,7 @@ const manyAccountsState: Scenario["state"] = {
  * availability is not determined as still being checked. */
 const unavailableQuotaState: Scenario["state"] = {
   ...browserState,
-  settings: { ...browserState.settings!, added_agents: [...AGENTS] },
+  settings: { ...browserState.settings!, added_agents: [...FIXTURE_AGENTS] },
   agentAvailability: new Map(browserState.agentAvailability).set("grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }),
   accountQuotas: [
     quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage.") }),
@@ -356,7 +376,7 @@ const openAccounts: Step[] = [
 /** The `item` (Details or Settings) of the actions menu of the account `name` of `agent` on the tab in view (the
  * default account's name is the language's own); a menu item, since the rail has a Settings button of its name. */
 const openAccountDialog = (item: "settings.accounts.detailsItem" | "settings.accounts.settingsItem", name: string | ((ui: Ui) => string), agent: Agent): Step => async (ui) => {
-  await ui.press(ui.t("settings.accounts.actionsLabel", { name: typeof name === "string" ? name : name(ui), agent: AGENT_LABEL[agent] }));
+  await ui.press(ui.t("settings.accounts.actionsLabel", { name: typeof name === "string" ? name : name(ui), agent: providerLabel(ui.t, FIXTURE_PROVIDERS, agent) }));
   await ui.pressMenuItem(ui.t(item));
 };
 const openDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step => openAccountDialog("settings.accounts.detailsItem", name, agent);
@@ -367,7 +387,7 @@ const defaultAccount = (ui: Ui) => ui.t("settings.accounts.defaultName");
 const accountDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step[] => [...openAccounts, openDetails(name, agent)];
 
 /** Settings → Agent accounts on Codex's tab with Personal's details in front. */
-const codexDetails: Step[] = [...openAccounts, (ui) => ui.press(AGENT_LABEL.codex), openDetails("Personal", "codex")];
+const codexDetails: Step[] = [...openAccounts, (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")), openDetails("Personal", "codex")];
 const redeemFromDetails: Step = (ui) => ui.press(ui.t("quota.resetCredits.useFor", { account: "Personal" }));
 
 /** Settings → Agent accounts with the settings (the switches) of the account `name` in front. */
@@ -381,8 +401,8 @@ const openSharingHelp = (name: string, agent: Agent = "claude"): Step[] => [
 /** Claude Code's tab, its permission approval set to Approve everything: the confirmation dialog it opens. */
 const bypassSteps: Step[] = [
   ...openAccounts,
-  (ui) => ui.press(ui.t("settings.accounts.approval.label", { agent: AGENT_LABEL.claude })),
-  (ui) => ui.press(ui.t("settings.accounts.approval.claudeBypass")),
+  (ui) => ui.press(ui.t("provider.claude.setting.approval_mode.label", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
+  (ui) => ui.press(ui.t("provider.claude.setting.approval_mode.choice.bypass")),
 ];
 
 /** The two owned Claude Code accounts the sharing scenarios share the page with the default account: Work is the first
@@ -522,7 +542,7 @@ const SHARING_TURN_ON_ERROR = {
 const removeWork: Step[] = [
   (ui) => ui.press(ui.t("rail.settings")),
   (ui) => ui.press(ui.t("settings.section.accounts")),
-  (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: AGENT_LABEL.claude })),
+  (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
   (ui) => ui.press(ui.t("common.remove")),
 ];
 
@@ -815,7 +835,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Account details, the agent is not installed",
     description: "Personal's details on the Codex tab, whose agent is not installed: after the name, in the body's first line, the login state reads \"Unknown\", and under the line with the config directory a line says it is not usable until Codex is on PATH, both as chips. The Usage section is a dash, the account having no reading.",
     state: unavailableQuotaState,
-    steps: [...openAccounts, (ui) => ui.press(ui.t("agents.notInstalled", { agent: AGENT_LABEL.codex })), openDetails("Personal", "codex")],
+    steps: [...openAccounts, (ui) => ui.press(ui.t("agents.notInstalled", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })), openDetails("Personal", "codex")],
   },
   {
     id: "settings-account-details-unknown-with-email",
@@ -927,7 +947,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.codex),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
     ],
   },
   {
@@ -939,7 +959,7 @@ export const settingsScenarios: Scenario[] = [
     state: taggedState,
     steps: [
       ...openAccounts,
-      (ui) => ui.press(AGENT_LABEL.codex),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
     ],
   },
@@ -953,7 +973,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.touchPress(ui.t("settings.accounts.approval.helpLabel")),
+      (ui) => ui.touchPress(ui.t("provider.claude.setting.approval_mode.helpLabel")),
     ],
   },
   {
@@ -966,7 +986,20 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.grok),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "grok")),
+    ],
+  },
+  {
+    id: "settings-accounts-provider-without-presentation",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, a provider this build has no presentation for",
+    description: "The daemon serves a fourth provider the UI knows nothing of. Its tab, the last, is named Acme Agent as the daemon calls it, and carries the generic mark in the neutral colour where the others carry their provider marks. Its tab is open: it declares one setting this build has no words for, which has no row, so under the Tags row there is no Permission approval or Claude compatibility row either, only the table of its default account and Studio, whose usage bars are in the neutral foreground, not a provider's blue or orange.",
+    state: unpresentedState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      (ui) => ui.press(UNPRESENTED_PROVIDER.label),
     ],
   },
   {
@@ -979,8 +1012,8 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.codex),
-      (ui) => ui.touchPress(ui.t("settings.accounts.claudeCompat.helpLabel")),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      (ui) => ui.touchPress(ui.t("provider.codex.setting.claude_compatibility.helpLabel")),
     ],
   },
   {
@@ -1029,7 +1062,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.contextMenu(AGENT_LABEL.codex),
+      (ui) => ui.contextMenu(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
     ],
   },
   {
@@ -1041,7 +1074,7 @@ export const settingsScenarios: Scenario[] = [
     state: quotaState,
     steps: [
       ...openAccounts,
-      (ui) => ui.press(ui.t("settings.accounts.agentActions", { agent: AGENT_LABEL.grok })),
+      (ui) => ui.press(ui.t("settings.accounts.agentActions", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "grok") })),
     ],
   },
   {
@@ -1054,7 +1087,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.contextMenu(AGENT_LABEL.grok),
+      (ui) => ui.contextMenu(providerLabel(ui.t, FIXTURE_PROVIDERS, "grok")),
       (ui) => ui.press(ui.t("settings.accounts.removeAgent")),
     ],
   },
@@ -1068,7 +1101,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.contextMenu(AGENT_LABEL.claude),
+      (ui) => ui.contextMenu(providerLabel(ui.t, FIXTURE_PROVIDERS, "claude")),
       (ui) => ui.press(ui.t("settings.accounts.removeAgent")),
     ],
   },
@@ -1120,7 +1153,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: AGENT_LABEL.claude })),
+      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
     ],
   },
   {
@@ -1133,7 +1166,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: ui.t("settings.accounts.defaultName"), agent: AGENT_LABEL.claude })),
+      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: ui.t("settings.accounts.defaultName"), agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
     ],
   },
   {
@@ -1158,7 +1191,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: AGENT_LABEL.claude })),
+      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
       (ui) => ui.press(ui.t("common.edit")),
     ],
   },
@@ -1172,7 +1205,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: RENAMED_DEFAULT, agent: AGENT_LABEL.claude })),
+      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: RENAMED_DEFAULT, agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
       (ui) => ui.press(ui.t("settings.accounts.renameDefault")),
     ],
   },
@@ -1255,12 +1288,12 @@ export const settingsScenarios: Scenario[] = [
     title: "Account login refused, another Codex account is signing in",
     description: "Choosing Log in on Personal is refused: the dialog opens straight as a fixed failure alert (no close button), with the danger icon in its header and the title \"Could not log in\". The body opens with \"Logging in to Codex account Personal failed.\" (agent and account as chips), followed in the same sentence by the cause that another Codex account is logging in, then the remedy to wait as a paragraph of its own. It has no Error details, since there is no raw text; the footer reads Close, then Log in again.",
     state: quotaState,
-    loginStartError: { code: "login_codex_busy", params: {}, message: "Another Codex account is being signed in. Wait for it to finish, then try again." },
+    loginStartError: { code: "provider.codex.login_busy", params: {}, message: "Another Codex account is being signed in. Wait for it to finish, then try again." },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.codex),
-      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Personal", agent: AGENT_LABEL.codex })),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Personal", agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })),
       (ui) => ui.press(ui.t("settings.accounts.login")),
     ],
   },
@@ -1276,7 +1309,7 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.press(ui.t("settings.accounts.addAgent")),
-      (ui) => ui.press(ui.t("settings.addAgent.addLabel", { agent: AGENT_LABEL.codex })),
+      (ui) => ui.press(ui.t("settings.addAgent.addLabel", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })),
     ],
   },
   {
@@ -1290,7 +1323,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.contextMenu(AGENT_LABEL.claude),
+      (ui) => ui.contextMenu(providerLabel(ui.t, FIXTURE_PROVIDERS, "claude")),
       (ui) => ui.press(ui.t("settings.accounts.moveLater")),
     ],
   },
@@ -1299,7 +1332,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Approve everything confirmation",
-    description: "Choosing Approve everything in the Permission approval row opens a warning modal instead of saving: a warning icon and the plain title Approve everything, a body that says every tool will run without asking you in every Claude Code account's sessions (the agent's name as a chip), including commands that change or delete files, and the danger-coloured button repeating the choice. Cancelling leaves the row on Automatic.",
+    description: "Choosing Approve everything in the Permission approval row opens a warning modal instead of saving: a warning icon and the title \"Approve everything?\", a body that says every tool will run without asking you in every Claude Code account's sessions (the agent's name as a chip), including commands that change or delete files, and the danger-coloured button repeating the choice. Cancelling leaves the row on Automatic.",
     state: quotaState,
     steps: bypassSteps,
   },
@@ -1376,9 +1409,9 @@ export const settingsScenarios: Scenario[] = [
     accountApprovalError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
     steps: [
       ...openAccounts,
-      (ui) => ui.press(AGENT_LABEL.codex),
-      (ui) => ui.press(ui.t("settings.accounts.approval.label", { agent: AGENT_LABEL.codex })),
-      (ui) => ui.press(ui.t("settings.accounts.approval.auto")),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      (ui) => ui.press(ui.t("provider.codex.setting.approval_reviewer.label", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })),
+      (ui) => ui.press(ui.t("provider.codex.setting.approval_reviewer.choice.auto_review")),
     ],
   },
   {
@@ -1391,7 +1424,7 @@ export const settingsScenarios: Scenario[] = [
     agentTagsError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
     steps: [
       ...openAccounts,
-      (ui) => ui.press(AGENT_LABEL.codex),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
       (ui) => ui.press("frontend"),
     ],
@@ -1487,7 +1520,7 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("agents.notInstalled", { agent: AGENT_LABEL.codex })),
+      (ui) => ui.press(ui.t("agents.notInstalled", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })),
     ],
   },
   {
@@ -1501,8 +1534,8 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.hoverAnchored(
-        ui.t("agents.notInstalled", { agent: AGENT_LABEL.codex }),
-        ui.t("settings.accounts.notInstalledTip", { agent: AGENT_LABEL.codex, pathVar: "PATH" }),
+        ui.t("agents.notInstalled", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") }),
+        ui.t("settings.accounts.notInstalledTip", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex"), pathVar: "PATH" }),
       ),
     ],
   },
@@ -1534,7 +1567,7 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("settings.accounts.add")),
       // The picker's trigger is named by the agent it holds, as is the selected agent tab behind the dialog; pressing
       // that tab again changes nothing.
-      (ui) => ui.pressEach(AGENT_LABEL.claude),
+      (ui) => ui.pressEach(providerLabel(ui.t, FIXTURE_PROVIDERS, "claude")),
     ],
   },
   {
@@ -1643,12 +1676,12 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Add account, home directory could not be read",
-    description: "The config directory stays empty with ~/.claude as its placeholder. A danger alert beneath it says the directory could not be read, with Details and Try again. The user can retry or enter a config directory manually; entering one dismisses the alert.",
-    state: browserState,
+    description: "Opened for Grok Build: the config directory stays empty with ~/.grok as its placeholder, and under it Grok Build's own note on the directory (it need not exist yet; a session needs a Grok Build home initialized by running the CLI against it) in place of the generic one. A danger alert beneath it says the directory could not be read, with Details and Try again. The user can retry or enter a config directory manually; entering one dismisses the alert.",
+    state: { ...browserState, settings: { ...browserState.settings!, added_agents: [...FIXTURE_AGENTS] } },
     directories: {
       "/Users/dev": { code: "permission_denied", params: { path: "/Users/dev", detail: "Operation not permitted" }, message: "/Users/dev could not be read: Operation not permitted" },
     },
-    steps: [...openAccounts, (ui) => ui.press(ui.t("settings.accounts.add"))],
+    steps: [...openAccounts, (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "grok")), (ui) => ui.press(ui.t("settings.accounts.add"))],
   },
   {
     id: "settings-account-directory-relative",

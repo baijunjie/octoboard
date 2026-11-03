@@ -23,7 +23,7 @@ pub fn hook_url(session_id: &str, daemon_port: u16, daemon_key: &str) -> String 
 /// and for an agent that runs its hook command through a shell, the whole hook, so the script's
 /// own `/bin/sh` is not started on top of it. `exec` rather than a plain call so no shell lingers,
 /// and stderr is dropped at the command level as well as inside the binary: a single stderr line
-/// is enough to render an error cell in every one of the three agents.
+/// is enough to render an error cell in every registered provider.
 pub fn hook_command(
     self_exe: &str,
     session_id: &str,

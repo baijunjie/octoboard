@@ -2,7 +2,6 @@
 // (`apps/daemon/src/protocol/bindings.rs`), plus the two unions a client sends with: `ClientRequest` and
 // `ClientRequestBody` cover the control and the browse requests. The one door to the generated file: nothing else
 // imports it, and nothing else is written here — a rule of the UI's about a wire value lives in the layer that owns it.
-// apps/web type-checks this file (through `@octoboard/ui/agent-marks`) and the generated one under its own options.
 
 export * from "./protocol.generated";
 

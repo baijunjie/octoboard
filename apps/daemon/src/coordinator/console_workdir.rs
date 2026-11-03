@@ -1,5 +1,6 @@
 //! A console's working directory: the console session's instruction file written into it,
-//! `AGENTS.md` with `CLAUDE.md` a symlink to it, and its removal with the console. The text is
+//! `AGENTS.md` with each provider's other spelling (`CLAUDE.md`) a symlink to it, and its removal
+//! with the console. The text is
 //! built elsewhere; this puts it on disk.
 
 use std::path::{Path, PathBuf};
@@ -9,9 +10,7 @@ use anyhow::{Context, Result};
 
 use crate::hostfs::replace::{replace_file, Permissions};
 use crate::protocol::Console;
-use crate::session_tools::console_instructions::{
-    console_session_instructions, CLAUDE_INSTRUCTION_FILE, INSTRUCTION_FILE,
-};
+use crate::session_tools::console_instructions::{console_session_instructions, INSTRUCTION_FILE};
 use crate::session_tools::role::RoleOptions;
 use crate::store::Store;
 
@@ -61,14 +60,15 @@ pub fn write_console_session_instructions_from_settings(
     )
 }
 
-/// Writes the console's instruction file into its working directory: `AGENTS.md`, with
-/// `CLAUDE.md` a relative symlink to it, so Claude Code, Codex and Grok all read the one text and
-/// Grok, which reads both spellings, loads it once. Both are replaced atomically, so concurrent
-/// launches never read a truncated file, including when they run different agents in the same
-/// console. Not locked: a console no one has been told of yet has no other writer, and every other
-/// caller goes through [`refresh_console_session_instructions`]. The working directory must exist:
-/// it is created with the console and removed with it, never recreated by a write.
-/// `options` carries the application settings that add to the text; its worktrees are ignored.
+/// Writes the console's instruction file into its working directory: `AGENTS.md`, with every other
+/// instruction file a registered provider reads (`CLAUDE.md`) a relative symlink to it, so every
+/// provider reads the one text, and one that reads several of the spellings (Grok) loads it once.
+/// Each is replaced atomically, so concurrent launches never read a truncated file, including when
+/// they run different agents in the same console. Not locked: a console no one has been told of yet
+/// has no other writer, and every other caller goes through
+/// [`refresh_console_session_instructions`]. The working directory must exist: it is created with
+/// the console and removed with it, never recreated by a write. `options` carries the application
+/// settings that add to the text; its worktrees are ignored.
 fn write_console_session_instructions(console: &Console, options: &RoleOptions) -> Result<()> {
     let workdir = Path::new(&console.workdir);
 
@@ -82,14 +82,27 @@ fn write_console_session_instructions(console: &Console, options: &RoleOptions) 
     )
     .with_context(|| format!("writing {}", path.display()))?;
 
-    // A symlink that already points at the file is left alone. Anything else at that name — an
-    // earlier build's regular file, or a link elsewhere — is replaced by one made under a
-    // temporary name and renamed over it, so the name never goes missing.
-    let link = workdir.join(CLAUDE_INSTRUCTION_FILE);
+    let mut linked: Vec<&str> = Vec::new();
+    for descriptor in crate::providers::descriptors() {
+        let name = descriptor.instruction_file;
+        if name != INSTRUCTION_FILE && !linked.contains(&name) {
+            linked.push(name);
+            link_instruction_file(workdir, name)?;
+        }
+    }
+    Ok(())
+}
+
+/// Points `name` in `workdir` at [`INSTRUCTION_FILE`]. A symlink that already points at the file
+/// is left alone. Anything else at that name — an earlier build's regular file, or a link
+/// elsewhere — is replaced by one made under a temporary name and renamed over it, so the name
+/// never goes missing.
+fn link_instruction_file(workdir: &Path, name: &str) -> Result<()> {
+    let link = workdir.join(name);
     if std::fs::read_link(&link).is_ok_and(|target| target == Path::new(INSTRUCTION_FILE)) {
         return Ok(());
     }
-    let temp_link = temp_name_beside(workdir, CLAUDE_INSTRUCTION_FILE);
+    let temp_link = temp_name_beside(workdir, name);
     std::os::unix::fs::symlink(INSTRUCTION_FILE, &temp_link)
         .with_context(|| format!("linking {}", temp_link.display()))?;
     rename_over(&temp_link, &link).inspect_err(|_| {
@@ -112,10 +125,10 @@ fn rename_over(temp_path: &Path, path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Agent;
+    use crate::protocol::AgentId;
     use crate::test_support::ScratchDir;
 
-    fn console(agent: Agent, workdir: &Path) -> Console {
+    fn console(agent: AgentId, workdir: &Path) -> Console {
         Console {
             id: "console-1".to_string(),
             name: "Console".to_string(),
@@ -138,7 +151,12 @@ mod tests {
     fn a_console_has_one_instruction_file_and_a_link_to_it() {
         let workdir = ScratchDir::new("console-instructions");
         std::fs::write(workdir.join("CLAUDE.md"), "an earlier build's file").unwrap();
-        let mut console = console(Agent::Claude, &workdir);
+        let mut console = console(AgentId::CLAUDE, &workdir);
+        // The file itself and one link per other name a registered provider reads.
+        let names: std::collections::HashSet<_> = crate::providers::descriptors()
+            .map(|descriptor| descriptor.instruction_file)
+            .chain([INSTRUCTION_FILE])
+            .collect();
         for (prompt, expected) in [
             (
                 None,
@@ -167,7 +185,7 @@ mod tests {
                 std::fs::read_to_string(workdir.join("CLAUDE.md")).unwrap(),
                 expected
             );
-            assert_eq!(workdir.read_dir().unwrap().count(), 2);
+            assert_eq!(workdir.read_dir().unwrap().count(), names.len());
         }
         std::fs::remove_file(workdir.join("CLAUDE.md")).unwrap();
         std::os::unix::fs::symlink("elsewhere", workdir.join("CLAUDE.md")).unwrap();
@@ -184,7 +202,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let workdir = ScratchDir::new("console-instructions-mode");
-        let console = console(Agent::Claude, &workdir);
+        let console = console(AgentId::CLAUDE, &workdir);
         write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
         let file = workdir.join("AGENTS.md");
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
@@ -200,7 +218,7 @@ mod tests {
     #[test]
     fn a_link_that_cannot_be_renamed_into_place_is_removed() {
         let workdir = ScratchDir::new("console-instructions-link-failed");
-        let console = console(Agent::Claude, &workdir);
+        let console = console(AgentId::CLAUDE, &workdir);
         let blocker = workdir.join("CLAUDE.md");
         std::fs::create_dir(&blocker).unwrap();
         std::fs::write(blocker.join("inside"), "kept").unwrap();

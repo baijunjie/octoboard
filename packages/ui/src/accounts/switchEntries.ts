@@ -1,5 +1,5 @@
 import { orderedAccounts } from "./accountOrder";
-import { accountsByAgent, defaultAccountName } from "../agents/agents";
+import { defaultAccountName } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, QuotaWindow, Session, Settings } from "../protocol";
 import { accountQuotaOf } from "./accountQuotaOf";
@@ -87,7 +87,7 @@ export function switchEntries(
   disabledDefaults?: readonly Agent[],
   order?: Settings["account_order"],
 ): SwitchEntry[] {
-  const owned = accountsByAgent(accounts).find((group) => group.agent === session.agent)?.accounts ?? [];
+  const owned = accounts.filter((account) => account.agent === session.agent);
   const entries = orderedAccounts(session.agent, accounts, order).map((account) => ({ account: account?.id ?? null, name: account?.name ?? defaultAccountName(t, defaultNames, session.agent), isPath: false }));
   const removed = session.account_id && !owned.some((account) => account.id === session.account_id);
   const removedName = removed ? sessionAccountName(t, session, accounts, defaultNames) : undefined;

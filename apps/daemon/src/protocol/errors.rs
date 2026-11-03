@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use super::codes::{error_code, Code};
 use super::events::Event;
+use super::AgentId;
 
 /// The named values a coded message is filled with. A parameter that names a console, a project or
 /// a session is that record's id under the param name `console`, `project` or `session`, so the
@@ -105,6 +106,66 @@ impl CodedError {
             &[("account", id)],
         )
     }
+
+    /// The refusal of `operation` for a provider that does not offer it
+    /// ([`error_code::PROVIDER_UNSUPPORTED`]).
+    pub fn provider_unsupported(agent: AgentId, operation: ProviderOperation) -> anyhow::Error {
+        Self::raised(
+            error_code::PROVIDER_UNSUPPORTED,
+            format!(
+                "{} does not offer {}",
+                agent.label(),
+                operation.description()
+            ),
+            &[
+                ("agent", agent.wire_name()),
+                ("operation", operation.wire_name()),
+            ],
+        )
+    }
+
+    /// `offered`, or the refusal of `operation` when the provider offers nothing for it.
+    pub fn require_offered<T>(
+        agent: AgentId,
+        operation: ProviderOperation,
+        offered: Option<T>,
+    ) -> anyhow::Result<T> {
+        offered.ok_or_else(|| Self::provider_unsupported(agent, operation))
+    }
+}
+
+/// What a provider may not offer, as [`error_code::PROVIDER_UNSUPPORTED`] names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderOperation {
+    /// Signing an account in without a terminal.
+    SignIn,
+    /// Starting a usage window that has reset but not begun counting.
+    Kick,
+    /// Using a rate limit reset credit.
+    ResetCredit,
+    /// An account sharing the default account's configuration.
+    ConfigSharing,
+}
+
+impl ProviderOperation {
+    /// The value of the `operation` param.
+    pub fn wire_name(self) -> &'static str {
+        match self {
+            ProviderOperation::SignIn => "sign_in",
+            ProviderOperation::Kick => "kick",
+            ProviderOperation::ResetCredit => "reset_credit",
+            ProviderOperation::ConfigSharing => "config_sharing",
+        }
+    }
+
+    fn description(self) -> &'static str {
+        match self {
+            ProviderOperation::SignIn => "a sign-in flow",
+            ProviderOperation::Kick => "a usage window to start",
+            ProviderOperation::ResetCredit => "reset credits",
+            ProviderOperation::ConfigSharing => "sharing the default account's configuration",
+        }
+    }
 }
 
 /// The `code`, `params` and `message` an `error` reply carries for `err`: a [`CodedError`]'s own,
@@ -145,7 +206,31 @@ impl std::error::Error for CodedError {}
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{notice_code, CodedError, Event, Notice};
+    use crate::protocol::{notice_code, AgentId, CodedError, Event, Notice, ProviderOperation};
+
+    /// A provider that does not offer an operation is refused with the agent's wire id and the
+    /// operation's name, and one that does is let through.
+    #[test]
+    fn a_provider_without_an_operation_is_refused_with_its_id_and_the_operation() {
+        for (operation, name) in [
+            (ProviderOperation::SignIn, "sign_in"),
+            (ProviderOperation::Kick, "kick"),
+            (ProviderOperation::ResetCredit, "reset_credit"),
+            (ProviderOperation::ConfigSharing, "config_sharing"),
+        ] {
+            let err =
+                CodedError::require_offered::<()>(AgentId::GROK, operation, None).unwrap_err();
+            let coded = err.downcast_ref::<CodedError>().expect("coded");
+            assert_eq!(coded.code, "provider_unsupported");
+            assert_eq!(coded.params["agent"], "grok");
+            assert_eq!(coded.params["operation"], name);
+            assert_eq!(coded.params.len(), 2);
+            assert_eq!(
+                CodedError::require_offered(AgentId::GROK, operation, Some(1)).unwrap(),
+                1
+            );
+        }
+    }
 
     /// A client words a failure and a notice from their code and params; the English message rides
     /// along for one that does not know the code.

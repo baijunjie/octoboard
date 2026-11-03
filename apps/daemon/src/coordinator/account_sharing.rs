@@ -19,8 +19,8 @@ use crate::hostfs::is_same_path;
 use crate::messaging::texts;
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{
-    error_code, notice_code, Account, CodedError, Notice, ProcessTree, SessionStatus, SharingCause,
-    SharingFailure, SharingPhase, SharingProgress,
+    error_code, notice_code, Account, CodedError, Notice, ProcessTree, ProviderOperation,
+    SessionStatus, SharingCause, SharingFailure, SharingPhase, SharingProgress,
 };
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 
@@ -29,17 +29,31 @@ use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 /// choice to make, being the directory the others share. Asking again for the choice already
 /// recorded retries a change that did not complete, and does nothing otherwise.
 ///
-/// Refused, with nothing recorded: for the default account and for an account whose directory is
-/// the default account's under another spelling (`default_account_not_shareable`), while
-/// sessions of the account run or start or it is being signed in (`account_in_use`), and while a
-/// change of it runs already (`account_sharing_in_progress`). A change that fails part-way is
-/// answered with what it left where (`account_sharing_failed`) and stays incomplete.
+/// Refused, with nothing recorded: turning sharing on for an account of a provider without the
+/// `config_sharing` capability (`provider_unsupported`), for the default account and for an account
+/// whose directory is the default account's under another spelling
+/// (`default_account_not_shareable`), while sessions of the account run or start or it is being
+/// signed in (`account_in_use`), and while a change of it runs already
+/// (`account_sharing_in_progress`). A change that fails part-way is answered with what it left
+/// where (`account_sharing_failed`) and stays incomplete.
 pub async fn set(state: &Arc<AppState>, account: Option<String>, share: bool) -> Result<()> {
     let Some(id) = account else {
         return Err(not_shareable(None));
     };
     loop {
         let account = state.store.require_account(&id)?;
+        if share {
+            CodedError::require_offered(
+                account.agent,
+                ProviderOperation::ConfigSharing,
+                account
+                    .agent
+                    .descriptor()
+                    .capabilities
+                    .config_sharing
+                    .then_some(()),
+            )?;
+        }
         if let Some(locked) = state.sharing_locked(&id) {
             return Err(sharing_in_progress(&locked));
         }

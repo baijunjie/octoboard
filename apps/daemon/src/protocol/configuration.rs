@@ -7,22 +7,25 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::agents::{Agent, Launch, PerAgent};
+use super::agents::{AgentId, Launch, PerAgent};
 use super::codes::Code;
 use super::errors::Params;
 use super::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
 use super::records::ProjectSource;
+use crate::providers::SettingValue;
 
 /// Names the kind of file, so one that is not a configuration document is told apart from one
 /// whose version is unsupported.
 pub const CONFIGURATION_FORMAT: &str = "octoboard-configuration";
 
-/// Raised when a change makes an older reader misread a document: a field removed or given another
-/// meaning. A field added, which a reader that does not know it ignores, does not raise it.
+/// Raised when a change makes a reader of a released version misread a document: a field removed
+/// or given another meaning. A field added, which a reader that does not know it ignores, does not raise it.
 ///
-/// An import reads only this version and refuses any other. No build has been released yet, so
-/// there are no upgrade steps; once a version is released, raising it adds a step that upgrades a
-/// document of the previous version, so an export made before stays importable.
+/// An import reads only this version and refuses any other. Version changes and upgrade steps are
+/// written only between released versions: a change no release has carried is made in place, at
+/// this version, and raising it past a released version adds the step that upgrades a document of
+/// that version, so an export made by the release stays importable. No build has been released
+/// yet, so there are no upgrade steps.
 pub const CONFIGURATION_VERSION: u32 = 1;
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -54,16 +57,16 @@ pub struct DocumentAccounts {
     /// yet decided the list (it was still finding out which agents are installed), which on import
     /// adds none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub added_agents: Option<Vec<Agent>>,
+    pub added_agents: Option<Vec<AgentId>>,
     /// One entry for each agent that has an account of its own or a named default account, in
-    /// `Agent::ALL` order.
+    /// `AgentId::ALL` order.
     pub agents: Vec<DocumentAgentAccounts>,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentAgentAccounts {
-    pub agent: Agent,
+    pub agent: AgentId,
     pub default_account: DocumentDefaultAccount,
     /// The accounts the user owns, in the agent's display order.
     pub accounts: Vec<DocumentAccount>,
@@ -111,12 +114,16 @@ pub struct DocumentSettings {
     pub ask_questions_as_choices: bool,
     /// The application-wide git workflow settings.
     pub git_workflow: GitWorkflowSettings,
-    /// The choices the user made on whether an agent other than Claude Code (by wire name) loads
-    /// Claude Code's instructions and skills. An agent they never chose for is not listed, so the
-    /// importing machine keeps following its own default for it; an agent the document does not
-    /// list is left as it is.
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-    pub claude_compatibility: BTreeMap<String, bool>,
+    /// The choices the user made for the settings of each provider (by provider id, then setting
+    /// id) that a configuration export carries (`SettingDescriptor::exported`). A setting they
+    /// never chose for is not listed, so the importing machine keeps following its own default for
+    /// it, and a setting the document does not list is left as it is. A provider's settings that
+    /// let its sessions act without asking are never listed.
+    #[cfg_attr(
+        test,
+        ts(type = "Partial<Record<Agent, Record<string, boolean | string>>>")
+    )]
+    pub provider_settings: BTreeMap<String, BTreeMap<String, SettingValue>>,
     /// The tags the user put on each agent (by wire name), for the agents that have any, removed
     /// agents' included. An agent the document does not list is left as it is on import.
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
@@ -164,9 +171,9 @@ pub enum ProjectAccountRef {
 pub struct DocumentConsole {
     pub name: String,
     pub icon: Option<String>,
-    pub default_agent: Agent,
+    pub default_agent: AgentId,
     /// The agent a project session falls back to; absent or `null` follows `default_agent`.
-    pub project_session_agent: Option<Agent>,
+    pub project_session_agent: Option<AgentId>,
     /// Each agent's account, by name; `null` is that agent's default account.
     pub accounts: PerAgent<Option<AccountName>>,
     /// Each agent's model and effort for a console session.
@@ -190,7 +197,7 @@ pub struct DocumentProject {
     pub path: String,
     pub source: ProjectSource,
     pub remote_url: Option<String>,
-    pub default_agent: Option<Agent>,
+    pub default_agent: Option<AgentId>,
     pub pinned: bool,
     pub tags: Vec<String>,
     /// The user's own summary of the project; absent is none.
@@ -304,7 +311,7 @@ pub struct ProjectResolution {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AccountFallback {
-    pub agent: Agent,
+    pub agent: AgentId,
     pub name: String,
 }
 
@@ -353,10 +360,19 @@ pub struct InspectedSettings {
     pub current_ask_questions_as_choices: bool,
     pub git_workflow: GitWorkflowSettings,
     pub current_git_workflow: GitWorkflowSettings,
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-    pub claude_compatibility: BTreeMap<String, bool>,
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-    pub current_claude_compatibility: BTreeMap<String, bool>,
+    /// The document's choices for the exported provider settings, those this build declares only
+    /// (see `DocumentSettings::provider_settings`).
+    #[cfg_attr(
+        test,
+        ts(type = "Partial<Record<Agent, Record<string, boolean | string>>>")
+    )]
+    pub provider_settings: BTreeMap<String, BTreeMap<String, SettingValue>>,
+    /// The values in effect on this machine of the exported provider settings.
+    #[cfg_attr(
+        test,
+        ts(type = "Partial<Record<Agent, Record<string, boolean | string | null>>>")
+    )]
+    pub current_provider_settings: BTreeMap<String, BTreeMap<String, Option<SettingValue>>>,
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
     pub agent_tags: BTreeMap<String, Vec<String>>,
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
@@ -429,7 +445,7 @@ pub struct ImportedConsole {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 pub struct AccountResolution {
-    pub agent: Agent,
+    pub agent: AgentId,
     /// The account's index among the document's accounts of `agent`, in the order it lists them.
     pub account: usize,
     /// An absolute path or one starting with `~/`.
@@ -478,7 +494,7 @@ pub struct InspectedAccount {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAgentAccounts {
-    pub agent: Agent,
+    pub agent: AgentId,
     pub accounts: Vec<InspectedAccount>,
     /// The name the document gives the agent's default account, when it gives one.
     pub default_name: Option<String>,
@@ -493,7 +509,7 @@ pub struct InspectedAgentAccounts {
 pub struct InspectedAccounts {
     /// The agents of the document not yet on this machine's added agents, which importing would
     /// add, in the document's order.
-    pub agents_to_add: Vec<Agent>,
+    pub agents_to_add: Vec<AgentId>,
     pub agents: Vec<InspectedAgentAccounts>,
 }
 
@@ -526,7 +542,7 @@ pub struct ImportedAccount {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAgentAccounts {
-    pub agent: Agent,
+    pub agent: AgentId,
     pub accounts: Vec<ImportedAccount>,
     /// Whether the document's name for the default account was applied.
     pub default_name_applied: bool,
@@ -536,6 +552,6 @@ pub struct ImportedAgentAccounts {
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAccounts {
     /// The agents appended to the added agents, in the order they were.
-    pub agents_added: Vec<Agent>,
+    pub agents_added: Vec<AgentId>,
     pub agents: Vec<ImportedAgentAccounts>,
 }

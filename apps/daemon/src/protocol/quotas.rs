@@ -1,39 +1,13 @@
-//! An account's plan quota and Codex's rate limit reset credits. See "Account quotas" in
-//! `apps/daemon/PROTOCOL.md`.
+//! An account's plan quota and, for a provider that offers them (`Capabilities::reset_credits`,
+//! Codex's), its rate limit reset credits. See "Account quotas" in `apps/daemon/PROTOCOL.md`.
 
 use serde::Serialize;
 
-use super::agents::Agent;
+use super::agents::AgentId;
 use super::codes::Code;
 use super::errors::{params, Params};
 
-/// The kind of a quota window. Not every agent has every kind: Claude Code has `session`,
-/// `weekly` and `weekly_model`, Codex `session` and `weekly`, Grok Build `credit_period`.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum QuotaWindowKind {
-    /// The five-hour window.
-    Session,
-    /// The weekly window across all models.
-    Weekly,
-    /// A weekly window of one model, named by `label`.
-    WeeklyModel,
-    /// A pool of credits over a billing period.
-    CreditPeriod,
-}
-
-impl QuotaWindowKind {
-    /// How the kind is named on the wire, as it serializes.
-    pub fn wire_name(self) -> &'static str {
-        match self {
-            QuotaWindowKind::Session => "session",
-            QuotaWindowKind::Weekly => "weekly",
-            QuotaWindowKind::WeeklyModel => "weekly_model",
-            QuotaWindowKind::CreditPeriod => "credit_period",
-        }
-    }
-}
+pub use crate::providers::QuotaWindowKind;
 
 /// One window of an account's plan quota.
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -58,7 +32,8 @@ impl QuotaWindow {
     }
 }
 
-/// One of an account's rate limit reset credits that can still be used, as Codex describes it.
+/// One of an account's rate limit reset credits that can still be used, as its provider describes
+/// it.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ResetCredit {
@@ -67,26 +42,26 @@ pub struct ResetCredit {
     pub title: Option<String>,
     /// The backend's description of the credit, if it gives one.
     pub description: Option<String>,
-    /// When the credit was granted, in milliseconds since the epoch, if Codex says.
+    /// When the credit was granted, in milliseconds since the epoch, if the provider says.
     pub granted_at: Option<i64>,
     /// When the credit expires, in milliseconds since the epoch; null for one that never does.
     pub expires_at: Option<i64>,
 }
 
-/// The rate limit reset credits of a Codex account that can be used now. Only present while there
-/// is at least one.
+/// The rate limit reset credits of an account that can be used now. Only present while there is at
+/// least one.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ResetCredits {
     /// How many credits can be used, whatever the list below holds.
     pub available_count: u32,
     /// The usable credits in the order they would be used: the one that expires first, a credit
-    /// with no expiry last. Null when Codex gave only the count, and may be shorter than
-    /// `available_count` when Codex caps its list.
+    /// with no expiry last. Null when the provider gave only the count, and may be shorter than
+    /// `available_count` when the provider caps its list.
     pub credits: Option<Vec<ResetCredit>>,
 }
 
-/// What Codex did with a request to use a reset credit (`reset_credit_used`).
+/// What the provider did with a request to use a reset credit (`reset_credit_used`).
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -127,7 +102,7 @@ impl QuotaUnavailable {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountQuota {
-    pub agent: Agent,
+    pub agent: AgentId,
     /// The account's id; `None` for the agent's default account.
     pub account: Option<String>,
     /// When the reading was taken, milliseconds since the epoch.
@@ -152,7 +127,7 @@ pub struct AccountQuota {
 #[cfg(test)]
 mod tests {
     use crate::protocol::{
-        quota_unavailable_code, AccountQuota, Agent, Event, QuotaUnavailable, QuotaWindow,
+        quota_unavailable_code, AccountQuota, AgentId, Event, QuotaUnavailable, QuotaWindow,
         QuotaWindowKind, Settings,
     };
 
@@ -167,7 +142,7 @@ mod tests {
         };
         let quotas = vec![AccountQuota {
             reset_credits: None,
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             account: None,
             fetched_at: 7,
             plan: Some("max".to_string()),
@@ -218,6 +193,7 @@ mod tests {
             sessions: vec![],
             trusted_directories: vec![],
             settings: Settings::default(),
+            providers: Vec::new(),
             git_statuses: vec![],
             agent_availability: vec![],
             account_quotas: quotas,

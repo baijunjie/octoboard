@@ -51,9 +51,7 @@ beforeEach(() => {
   projects.clear();
   sessions.clear();
   settings.accounts = [account("claude-work", "claude"), account("codex-work", "codex"), account("grok-work", "grok")];
-  settings.codex_approval_reviewer = null;
-  settings.claude_approval_mode = null;
-  settings.claude_compatibility = {};
+  settings.provider_settings = {};
   settings.agent_tags = {};
   accountQuotas.length = 0;
   accountLogins.length = 0;

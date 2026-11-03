@@ -2,11 +2,8 @@ import { Description, Tabs } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
 import { storedAccount } from "../accounts/accountInheritance";
-import {
-  AGENT_LABEL,
-  agentChoiceBadge,
-  listedPickerAgents,
-} from "../agents/agents";
+import { agentChoiceBadge, listedPickerAgents } from "../agents/agents";
+import { providerLabel } from "../agents/providers";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { StatusBadge } from "../components/status/StatusBadge";
@@ -16,7 +13,7 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 import type { Agent, Launch, PerAgent } from "../protocol";
-import { useDaemonStore } from "../store";
+import { useDaemonStore, useProviders } from "../store";
 import { AdvancedSection } from "../components/form/AdvancedSection";
 import { EffortPicker, type LaunchModels, ModelPicker, ModelsFailureMark, useLaunchModels } from "./LaunchSettingsFields";
 
@@ -56,6 +53,7 @@ export function ConsoleLaunchFields({
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
+  const providers = useProviders();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
@@ -68,7 +66,7 @@ export function ConsoleLaunchFields({
       values.project_session_launch[agent].model ||
       values.project_session_launch[agent].effort
     );
-  const listed = listedPickerAgents(agentAvailability, addedAgents, stores);
+  const listed = listedPickerAgents(agentAvailability, addedAgents, providers, stores);
   // The agent picked, else the console session agent, else the first listed: a tab can go away
   // under the user, when the last value stored for a missing or not added agent is cleared, and one that comes
   // back does not take the view from the one shown meanwhile.
@@ -92,7 +90,7 @@ export function ConsoleLaunchFields({
                 return (
                   <Tabs.Tab key={option} id={option} data-list-motion={option} className={`gap-2 ${TEXT_TAB_CLASS}`}>
                     <AgentIcon agent={option} />
-                    {AGENT_LABEL[option]}
+                    {providerLabel(t, providers, option)}
                     {badge && <StatusBadge>{badge}</StatusBadge>}
                     <Tabs.Indicator />
                   </Tabs.Tab>

@@ -4,7 +4,7 @@ const { t } = useSiteCopy();
 const { locale } = useI18n();
 const appViews = ["managedAccounts", "usageMonitor", "sessionStatus", "existingWorkflow", "reviewChanges"];
 const ids = ["A", "B", "C"];
-const brands = ["Claude Code", "Codex", "Grok Build"];
+const providers = ["Claude Code", "Codex", "Grok Build"];
 const agents = ["claude", "codex", "grok"] as const;
 const quota = [62, 35, 0];
 const account = (id: string) => t("featureVisualAccount", { id: `\u2068${id}\u2069` });
@@ -80,7 +80,7 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
     <div v-else-if="feature === 'teamCoordination'" class="network-scene">
       <div class="network-head"><span class="network-direction">{{ t('featureVisualAssign') }}<FeatureGlyph name="arrow-down" class="vertical-arrow" :size="13" /></span><div class="network-root visual-node is-accent"><FeatureGlyph name="coordinator" :size="17" /><b>{{ t('demoCoordinator') }}</b></div><span class="network-direction"><FeatureGlyph name="arrow-up" class="vertical-arrow" :size="13" />{{ t('featureVisualReport') }}</span></div>
       <div class="network-trunk" /><div class="network-branches" />
-      <div class="network-leaves"><div v-for="(brand, index) in brands" :key="brand" class="network-leaf visual-node"><AgentMark :agent="agents[index]!" /><b>{{ brand }}</b><span class="work-label">{{ t(['featureVisualImplementation', 'featureVisualChecks', 'featureVisualDocumentation'][index]!) }}</span><code>{{ ['order.ts', 'order.test.ts', 'README.md'][index] }}</code></div></div>
+      <div class="network-leaves"><div v-for="(provider, index) in providers" :key="provider" class="network-leaf visual-node"><AgentMark :agent="agents[index]!" /><b>{{ provider }}</b><span class="work-label">{{ t(['featureVisualImplementation', 'featureVisualChecks', 'featureVisualDocumentation'][index]!) }}</span><code>{{ ['order.ts', 'order.test.ts', 'README.md'][index] }}</code></div></div>
     </div>
 
     <div v-else-if="feature === 'projectCoordination'" class="dependencies-scene">

@@ -11,16 +11,13 @@ use std::sync::Mutex;
 
 use serde_json::Value;
 
-use crate::agents::layout::{
-    layout, CLAUDE_TRANSCRIPT_SUFFIX, CODEX, CODEX_ARCHIVED_DIR, CODEX_ROLLOUT_PREFIX,
-    GROK_CONVERSATION_FILE, GROK_SESSION_MARKER,
-};
+use std::time::SystemTime;
+
+use crate::adapter::provider;
 use crate::hostfs::lexically_normalise;
-use crate::protocol::{Account, Agent, Session};
-use crate::records::codex_rollout_files::{
-    is_rollout_of, modified, names_thread, own_id, path_stem, rollout_branch, rollout_head,
-    rollout_stem, rollout_thread_id, Stretch,
-};
+use crate::protocol::{Account, AgentId, Session};
+use crate::providers::layout::layout;
+use crate::records::RecordStore;
 use crate::state::AppState;
 
 /// The record path each session's hook last reported, with the agent session id it reported it for.
@@ -44,23 +41,20 @@ impl Hints {
 }
 
 /// The record path a hook reported for `session`, when it was reported for the session's current
-/// agent session id. Grok's hook reports none that names a record.
+/// agent session id.
 pub fn hinted_path(
     hints: &HashMap<String, (String, PathBuf)>,
     session: &Session,
 ) -> Option<PathBuf> {
     let (id, path) = hints.get(&session.id)?;
-    (Some(id) == session.agent_session_id.as_ref() && session.agent != Agent::Grok)
-        .then(|| path.clone())
+    (Some(id) == session.agent_session_id.as_ref()).then(|| path.clone())
 }
 
-/// The main session's hook provides the exact record path, including a newly created record.
-/// Subagent hooks are filtered by the caller before this point.
-pub fn on_hook(state: &AppState, id: &str, payload: &Value) {
-    let Some(path) = payload.get("transcript_path").and_then(Value::as_str) else {
-        return;
-    };
-    let Some(agent_id) = payload.get("session_id").and_then(Value::as_str) else {
+/// Notes the record path a hook of session `id` reports, read by its provider's `store`
+/// (`RecordStore::hinted_record`): the exact record, including a newly created one. Subagent hooks
+/// are filtered by the caller before this point.
+pub fn on_hook(state: &AppState, id: &str, store: &dyn RecordStore, payload: &Value) {
+    let Some(hint) = store.hinted_record(payload) else {
         return;
     };
     state
@@ -68,15 +62,15 @@ pub fn on_hook(state: &AppState, id: &str, payload: &Value) {
         .hints
         .lock()
         .expect("record hint lock poisoned")
-        .insert(id.to_owned(), (agent_id.to_owned(), PathBuf::from(path)));
+        .insert(id.to_owned(), hint);
 }
 
 /// Every record of one agent in one account, by agent session id, listed once and kept for as long
 /// as the `Locator` lives.
 #[derive(Default)]
-pub(super) struct Index {
-    pub(super) records: HashMap<String, Vec<PathBuf>>,
-    pub(super) complete: bool,
+pub(crate) struct Index {
+    pub(crate) records: HashMap<String, Vec<PathBuf>>,
+    pub(crate) complete: bool,
 }
 
 /// Resolves accounts' directories and lists their records. The login-shell snapshot that says where
@@ -85,8 +79,8 @@ pub(super) struct Index {
 #[derive(Default)]
 pub struct Locator {
     shell: OnceCell<Option<HashMap<String, String>>>,
-    indexes: HashMap<(Agent, PathBuf), Index>,
-    record_dirs: HashMap<(Agent, PathBuf), Index>,
+    indexes: HashMap<(AgentId, PathBuf), Index>,
+    record_dirs: HashMap<(AgentId, PathBuf), Index>,
 }
 
 impl Locator {
@@ -101,7 +95,7 @@ impl Locator {
     }
 
     /// The account directory `config_dir` names, or the agent's default account when it is `None`.
-    pub fn root(&self, agent: Agent, config_dir: Option<&str>) -> Option<PathBuf> {
+    pub fn root(&self, agent: AgentId, config_dir: Option<&str>) -> Option<PathBuf> {
         match config_dir {
             Some(dir) => Some(PathBuf::from(dir)),
             None => {
@@ -114,7 +108,7 @@ impl Locator {
         }
     }
 
-    pub(super) fn index(&mut self, agent: Agent, root: &Path) -> &Index {
+    pub(crate) fn index(&mut self, agent: AgentId, root: &Path) -> &Index {
         self.indexes
             .entry((agent, root.to_path_buf()))
             .or_insert_with(|| index_records(agent, root))
@@ -122,60 +116,32 @@ impl Locator {
 
     /// The records listed directly under the records directory `records`, a directory of its own
     /// rather than reached through an account's root.
-    pub(super) fn index_at(&mut self, agent: Agent, records: &Path) -> &Index {
+    pub(crate) fn index_at(&mut self, agent: AgentId, records: &Path) -> &Index {
         self.record_dirs
             .entry((agent, records.to_path_buf()))
             .or_insert_with(|| index_records_at(agent, records))
     }
 
-    /// The record of `agent_id` in the account at `root` that holds the conversation as it is now:
-    /// the newest one, and for Codex the head of the thread's chain of rollouts.
-    pub fn current_record(&mut self, agent: Agent, root: &Path, agent_id: &str) -> Option<PathBuf> {
-        let paths = self.index(agent, root).records.get(agent_id)?;
-        if agent == Agent::Codex {
-            return rollout_head(paths);
-        }
-        let mut newest: Option<&PathBuf> = None;
-        for path in paths {
-            if newest.is_none_or(|old| modified(path) > modified(old)) {
-                newest = Some(path);
-            }
-        }
-        newest.cloned()
-    }
-
-    /// What Codex thread `agent_id`'s conversation as it stands is made of, ending in `head` (see
-    /// [`rollout_branch`]), in the account at `root`.
-    pub fn rollout_stretches(
+    /// The record of `agent_id` in the account at `root` that holds the conversation as it is now
+    /// (`RecordStore::current_of`).
+    pub fn current_record(
         &mut self,
+        agent: AgentId,
         root: &Path,
         agent_id: &str,
-        head: &Path,
-    ) -> Option<Vec<Stretch>> {
-        rollout_branch(head, self.index(Agent::Codex, root).records.get(agent_id)?)
-    }
-
-    /// The first rollout of Codex thread `agent_id`, for reading its opening prompt. The account's
-    /// records root may be shared through a link; links below it are still skipped. This read-only
-    /// lookup does not populate the account index used for destructive record discovery.
-    pub fn first_rollout(&mut self, root: &Path, agent_id: &str) -> Option<PathBuf> {
-        let records = records_dir(Agent::Codex, root).canonicalize().ok()?;
-        self.index_at(Agent::Codex, &records)
-            .records
-            .get(agent_id)?
-            .iter()
-            .find(|path| path_stem(path).and_then(own_id) == Some(agent_id))
-            .cloned()
+    ) -> Option<PathBuf> {
+        let paths = self.index(agent, root).records.get(agent_id)?;
+        provider(agent).records().current_of(paths)
     }
 }
 
 /// The directory of an account where an agent keeps its session records.
-pub(super) fn records_dir(agent: Agent, root: &Path) -> PathBuf {
+pub(crate) fn records_dir(agent: AgentId, root: &Path) -> PathBuf {
     root.join(layout(agent).records_dir)
 }
 
 /// What a [`walk_records`] visitor decides about one entry.
-pub(super) enum Step {
+pub(crate) enum Step {
     /// The entry is a record (or otherwise settled): do not descend into it.
     Matched,
     /// Descend into it when it is a directory with levels left.
@@ -185,17 +151,17 @@ pub(super) enum Step {
 }
 
 /// How a [`walk_records`] pass ended.
-pub(super) struct Walked {
+pub(crate) struct Walked {
     /// Every directory was listed and no link was met, so what was not found is not there.
-    pub(super) complete: bool,
-    pub(super) stopped: bool,
+    pub(crate) complete: bool,
+    pub(crate) stopped: bool,
 }
 
 /// Visits the entries of `dir`, at most `depth` levels down (`depth` 1 is `dir`'s own entries),
 /// without following a link. `visit` gets each entry's path, name, type and the levels left
 /// counting its own. A missing `dir` is empty; a link, an unreadable entry or a name that is not
 /// UTF-8 makes the pass incomplete and is not visited.
-pub(super) fn walk_records(
+pub(crate) fn walk_records(
     dir: &Path,
     depth: usize,
     visit: &mut dyn FnMut(&Path, &str, std::fs::FileType, usize) -> Step,
@@ -260,43 +226,22 @@ fn walk_level(
 }
 
 /// Index names once per account per pass; never read other sessions' contents or follow links.
-fn index_records(agent: Agent, root: &Path) -> Index {
+fn index_records(agent: AgentId, root: &Path) -> Index {
     let mut out = index_records_at(agent, &records_dir(agent, root));
     out.complete &=
         !std::fs::symlink_metadata(root).is_ok_and(|meta| meta.file_type().is_symlink());
     out
 }
 
-/// [`index_records`] for the records directory `records` itself.
-fn index_records_at(agent: Agent, records: &Path) -> Index {
+/// [`index_records`] for the records directory `records` itself: each entry the provider's store
+/// recognises as a record (`RecordStore::indexed`), under the agent session id it names.
+fn index_records_at(agent: AgentId, records: &Path) -> Index {
     let mut out = Index::default();
     let depth = layout(agent).search_depth;
+    let store = provider(agent).records();
     let mut visit = |path: &Path, name: &str, kind: std::fs::FileType, left: usize| {
-        // Claude's and Grok's records sit on the last level, below a working-directory folder.
-        let leaf = left == 1;
-        let id = match agent {
-            Agent::Claude if kind.is_file() && leaf => name
-                .strip_suffix(CLAUDE_TRANSCRIPT_SUFFIX)
-                .map(str::to_owned),
-            // A subagent directory may survive after the main transcript was removed.
-            Agent::Claude if kind.is_dir() && leaf && plausible_id(name) => Some(name.to_owned()),
-            Agent::Codex if kind.is_file() && name.starts_with(CODEX_ROLLOUT_PREFIX) => {
-                rollout_stem(name)
-                    .and_then(rollout_thread_id)
-                    .map(str::to_owned)
-            }
-            Agent::Grok if kind.is_dir() && leaf => Some(name.to_owned()),
-            _ => None,
-        };
-        let Some(id) = id else {
+        let Some((id, path)) = store.indexed(path, name, kind, left == 1) else {
             return Step::Descend;
-        };
-        let path = match agent {
-            Agent::Grok => path.join(GROK_SESSION_MARKER),
-            Agent::Claude if kind.is_dir() => {
-                path.with_file_name(format!("{id}{CLAUDE_TRANSCRIPT_SUFFIX}"))
-            }
-            _ => path.to_path_buf(),
         };
         let records = out.records.entry(id).or_default();
         if !records.contains(&path) {
@@ -421,62 +366,42 @@ pub(super) fn in_real_directories(record: &Path, dir: &Path) -> bool {
 }
 
 /// What `record` stands for, when it is named for `agent_id` the way the agent names its own and
-/// sits exactly where the agent puts it, under `dir` (the account's records directory): Claude
-/// `<dir>/<project>/<id>.jsonl`, Codex `<dir>/<year>/<month>/<day>/rollout-<time>-<id>.jsonl` (or
-/// `.jsonl.zst`; a later segment adds `_<segment id>`), Grok
-/// `<dir>/<working directory>/<id>/usage.json`. No other depth is taken, so a name that merely
-/// equals a directory's, or a file inside a session's own directory, never names that directory.
-pub(super) fn own_paths(agent: Agent, agent_id: &str, record: &Path, dir: &Path) -> Vec<PathBuf> {
-    let name = record.file_name().and_then(|name| name.to_str());
-    let Some(parent) = record.parent() else {
+/// sits exactly where the agent puts it, under `dir` (the account's records directory), as the
+/// provider's store answers it (`RecordStore::own_paths`): the depth counted here is the only one
+/// it takes, so a name that merely equals a directory's, or a file inside a session's own
+/// directory, never names that directory.
+pub(crate) fn own_paths(agent: AgentId, agent_id: &str, record: &Path, dir: &Path) -> Vec<PathBuf> {
+    if record.parent().is_none() {
         return Vec::new();
-    };
+    }
     let Ok(levels_below_dir) = record
         .strip_prefix(dir)
         .map(|rest| rest.components().count())
     else {
         return Vec::new();
     };
-    let level = layout(agent).record_level;
-    match agent {
-        Agent::Claude
-            if levels_below_dir == level
-                && name == Some(&format!("{agent_id}{CLAUDE_TRANSCRIPT_SUFFIX}")) =>
-        {
-            vec![record.to_path_buf(), parent.join(agent_id)]
-        }
-        Agent::Codex
-            if levels_below_dir == level
-                && name.is_some_and(|name| {
-                    rollout_stem(name).is_some_and(|stem| {
-                        stem.starts_with(CODEX_ROLLOUT_PREFIX) && names_thread(stem, agent_id)
-                    })
-                }) =>
-        {
-            vec![record.to_path_buf()]
-        }
-        // The index names the ledger inside the session's directory, one level below the
-        // directory that is the record.
-        Agent::Grok
-            if levels_below_dir == level + 1
-                && name == Some(GROK_SESSION_MARKER)
-                && parent.file_name().and_then(|name| name.to_str()) == Some(agent_id) =>
-        {
-            vec![parent.to_path_buf()]
-        }
-        _ => Vec::new(),
-    }
+    provider(agent)
+        .records()
+        .own_paths(agent_id, record, levels_below_dir)
 }
 
 /// The file that holds `session`'s conversation, for reading, and what it is read from.
 pub struct Branch {
-    /// Claude Code's transcript, Codex's rollout (the head of the thread's chain, see
-    /// [`rollout_head`]), Grok Build's `chat_history.jsonl`.
+    /// The file holding the conversation as it stands (`RecordStore::branch_among`).
     pub record: PathBuf,
-    /// The files the conversation is read from, in order: the record itself for Claude Code and
-    /// Grok Build, and for Codex the whole current branch of a thread that had a turn reverted
-    /// (see [`rollout_branch`]). `None` when a Codex thread's chain is missing a file.
+    /// The files the conversation is read from, in order: the record itself, or the whole current
+    /// branch of a conversation the agent keeps across several files. `None` when such a chain is
+    /// missing a file.
     pub stretches: Option<Vec<Stretch>>,
+}
+
+/// A file of a conversation and how much of it counts: the bytes up to the point a later file
+/// picks it up, or all of it for the file holding the conversation as it stands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stretch {
+    pub path: PathBuf,
+    /// How many bytes (decompressed) of the file count; `None` for all of it.
+    pub cut: Option<u64>,
 }
 
 /// The conversation of `session`, found the way [`record_paths`] finds a session's records, so a
@@ -488,30 +413,18 @@ pub fn conversation_branch(
     accounts: &[Account],
     session: &Session,
 ) -> Option<Branch> {
+    let store = provider(session.agent).records();
     let files: Vec<PathBuf> = record_paths(hints, locator, accounts, session)
         .into_iter()
-        .map(|path| match session.agent {
-            Agent::Grok => path.join(GROK_CONVERSATION_FILE),
-            Agent::Claude | Agent::Codex => path,
-        })
+        .map(|path| store.conversation_file(path))
         .filter(|path| std::fs::metadata(path).is_ok_and(|meta| meta.is_file()))
         .collect();
-    if session.agent == Agent::Codex {
-        let record = rollout_head(&files)?;
-        let stretches = rollout_branch(&record, &files);
-        return Some(Branch { record, stretches });
-    }
-    let record = files.into_iter().max_by_key(|path| modified(path))?;
-    let stretches = Some(vec![Stretch {
-        path: record.clone(),
-        cut: None,
-    }]);
-    Some(Branch { record, stretches })
+    store.branch_among(files)
 }
 
-/// [`conversation_branch`], and for a Codex thread that `codex archive` moved out of `sessions/`,
-/// the rollouts it left in the account's `archived_sessions/`. That one a resume refuses, but the
-/// conversation in it can still be read.
+/// [`conversation_branch`], and failing that the conversation where the agent archives records
+/// (`RecordStore::archived_branch`), such as a Codex thread `codex archive` moved out of
+/// `sessions/`. That one a resume refuses, but the conversation in it can still be read.
 pub fn history_branch(
     hints: &Hints,
     locator: &mut Locator,
@@ -519,38 +432,34 @@ pub fn history_branch(
     session: &Session,
 ) -> Option<Branch> {
     conversation_branch(hints, locator, accounts, session)
-        .or_else(|| archived_codex_branch(locator, accounts, session))
+        .or_else(|| archived_branch(locator, accounts, session))
 }
 
-fn archived_codex_branch(
-    locator: &mut Locator,
-    accounts: &[Account],
-    session: &Session,
-) -> Option<Branch> {
+fn archived_branch(locator: &Locator, accounts: &[Account], session: &Session) -> Option<Branch> {
     let agent_id = session
         .agent_session_id
         .as_deref()
-        .filter(|id| session.agent == Agent::Codex && plausible_id(id))?
-        .to_ascii_lowercase();
+        .filter(|id| plausible_id(id))?;
     let (roots, _) = account_roots(locator, accounts, session);
-    let mut files: Vec<PathBuf> = Vec::new();
-    for root in roots {
-        walk_records(
-            &root.join(CODEX_ARCHIVED_DIR),
-            CODEX.search_depth,
-            &mut |path, name, kind, _| {
-                if is_rollout_of(kind, &name.to_ascii_lowercase(), &agent_id) {
-                    files.push(path.to_path_buf());
-                    Step::Matched
-                } else {
-                    Step::Descend
-                }
-            },
-        );
+    provider(session.agent)
+        .records()
+        .archived_branch(&roots, agent_id)
+}
+
+/// The newest of `paths` by modification time.
+pub(crate) fn newest(paths: &[PathBuf]) -> Option<PathBuf> {
+    let mut newest: Option<&PathBuf> = None;
+    for path in paths {
+        if newest.is_none_or(|old| modified(path) > modified(old)) {
+            newest = Some(path);
+        }
     }
-    let record = rollout_head(&files)?;
-    let stretches = rollout_branch(&record, &files);
-    Some(Branch { record, stretches })
+    newest.cloned()
+}
+
+/// When `path` was last written, or `None` when it cannot be read.
+pub(crate) fn modified(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path).ok()?.modified().ok()
 }
 
 /// Whether `id` is a canonical UUID, the shape of every agent's session ids.
@@ -591,10 +500,10 @@ mod tests {
             .map(|branch| branch.record)
         };
 
-        assert_eq!(find(Agent::Claude, CLAUDE_ID), None);
+        assert_eq!(find(AgentId::CLAUDE, CLAUDE_ID), None);
         let orphan = account.join("projects/one").join(CLAUDE_ID);
         std::fs::create_dir_all(orphan.join("subagents")).unwrap();
-        assert_eq!(find(Agent::Claude, CLAUDE_ID), None);
+        assert_eq!(find(AgentId::CLAUDE, CLAUDE_ID), None);
         let old = account
             .join("projects/one")
             .join(format!("{CLAUDE_ID}.jsonl"));
@@ -604,14 +513,14 @@ mod tests {
             .join("projects/two")
             .join(format!("{CLAUDE_ID}.jsonl"));
         touch(&new);
-        assert_eq!(find(Agent::Claude, CLAUDE_ID), Some(new));
+        assert_eq!(find(AgentId::CLAUDE, CLAUDE_ID), Some(new));
 
         let grok = account.join("sessions/work").join(CLAUDE_ID);
         touch(&grok.join("usage.json"));
-        assert_eq!(find(Agent::Grok, CLAUDE_ID), None);
+        assert_eq!(find(AgentId::GROK, CLAUDE_ID), None);
         touch(&grok.join("chat_history.jsonl"));
         assert_eq!(
-            find(Agent::Grok, CLAUDE_ID),
+            find(AgentId::GROK, CLAUDE_ID),
             Some(grok.join("chat_history.jsonl"))
         );
     }
@@ -622,7 +531,7 @@ mod tests {
     fn history_finds_a_codex_rollout_that_was_archived() {
         let dir = crate::test_support::ScratchDir::new("agent-records-history-archived");
         let account = dir.join("account");
-        let own = session(Agent::Codex, CODEX_ID, Some(&account));
+        let own = session(AgentId::CODEX, CODEX_ID, Some(&account));
         let found = |own: &Session| {
             let mut locator = Locator::with_shell(HashMap::from([(
                 "HOME".to_owned(),
@@ -642,7 +551,7 @@ mod tests {
         assert_eq!(found(&own), Some(live));
 
         // Another agent's session is not looked for there.
-        let other = session(Agent::Claude, CLAUDE_ID, Some(&account));
+        let other = session(AgentId::CLAUDE, CLAUDE_ID, Some(&account));
         assert_eq!(found(&other), None);
     }
 
@@ -661,7 +570,7 @@ mod tests {
             &hints,
             &mut locator,
             &[],
-            &session(Agent::Grok, CLAUDE_ID, Some(&root)),
+            &session(AgentId::GROK, CLAUDE_ID, Some(&root)),
         )
         .expect("grok conversation");
         assert_eq!(branch.record, grok.join("chat_history.jsonl"));
@@ -672,7 +581,7 @@ mod tests {
             &hints,
             &mut locator,
             &[],
-            &session(Agent::Claude, CLAUDE_ID, Some(&root)),
+            &session(AgentId::CLAUDE, CLAUDE_ID, Some(&root)),
         )
         .expect("claude conversation");
         assert_eq!(branch.record, transcript);
@@ -692,7 +601,7 @@ mod tests {
         let watch = Hints::default();
         let other_account = Account {
             id: "a".to_owned(),
-            agent: Agent::Claude,
+            agent: AgentId::CLAUDE,
             name: "Other".to_owned(),
             config_dir: other.to_string_lossy().into_owned(),
             share_default_config: false,
@@ -713,7 +622,7 @@ mod tests {
             &watch,
             &mut locator,
             std::slice::from_ref(&other_account),
-            &session(Agent::Claude, CLAUDE_ID, Some(&account)),
+            &session(AgentId::CLAUDE, CLAUDE_ID, Some(&account)),
         );
         let mut expected: Vec<PathBuf> = ["one", "two"]
             .iter()
@@ -743,7 +652,7 @@ mod tests {
                 &watch,
                 &mut locator,
                 &[],
-                &session(Agent::Codex, CODEX_ID, Some(&account))
+                &session(AgentId::CODEX, CODEX_ID, Some(&account))
             ),
             [rollout]
         );
@@ -756,7 +665,7 @@ mod tests {
                 &watch,
                 &mut locator,
                 &[],
-                &session(Agent::Grok, CLAUDE_ID, Some(&account))
+                &session(AgentId::GROK, CLAUDE_ID, Some(&account))
             ),
             [grok]
         );
@@ -778,7 +687,7 @@ mod tests {
         touch(&day.join("rollout-2026-10-01T00-00-00-other.jsonl.zst"));
 
         assert_eq!(
-            locator.current_record(Agent::Codex, &account, CODEX_ID),
+            locator.current_record(AgentId::CODEX, &account, CODEX_ID),
             Some(compressed.clone())
         );
         assert_eq!(
@@ -786,7 +695,7 @@ mod tests {
                 &Hints::default(),
                 &mut locator,
                 &[],
-                &session(Agent::Codex, CODEX_ID, Some(&account))
+                &session(AgentId::CODEX, CODEX_ID, Some(&account))
             ),
             [compressed]
         );
@@ -811,7 +720,7 @@ mod tests {
                     &watch,
                     &mut locator,
                     &[],
-                    &session(Agent::Claude, id, Some(&account))
+                    &session(AgentId::CLAUDE, id, Some(&account))
                 )
                 .is_empty(),
                 "{id:?}"
@@ -836,7 +745,7 @@ mod tests {
                     &watch,
                     &mut locator,
                     &[],
-                    &session(Agent::Claude, CLAUDE_ID, Some(&account))
+                    &session(AgentId::CLAUDE, CLAUDE_ID, Some(&account))
                 )
                 .is_empty(),
                 "{hint:?}"
@@ -861,7 +770,7 @@ mod tests {
                     &watch,
                     &mut locator,
                     &[],
-                    &session(Agent::Claude, CLAUDE_ID, Some(&account))
+                    &session(AgentId::CLAUDE, CLAUDE_ID, Some(&account))
                 )
                 .is_empty(),
                 "{hint:?}"
@@ -871,7 +780,7 @@ mod tests {
             &watch,
             &mut locator,
             &[],
-            &session(Agent::Claude, "subagents", Some(&account))
+            &session(AgentId::CLAUDE, "subagents", Some(&account))
         )
         .is_empty());
         // A project directory that is a link is not followed.
@@ -888,7 +797,7 @@ mod tests {
             &watch,
             &mut locator,
             &[],
-            &session(Agent::Claude, CLAUDE_ID, Some(&account))
+            &session(AgentId::CLAUDE, CLAUDE_ID, Some(&account))
         )
         .is_empty());
         // A hint inside the account's records is taken, though no listing holds it.
@@ -903,7 +812,7 @@ mod tests {
                 &watch,
                 &mut locator,
                 &[],
-                &session(Agent::Claude, CLAUDE_ID, Some(&account))
+                &session(AgentId::CLAUDE, CLAUDE_ID, Some(&account))
             ),
             [inside, projects.join(CLAUDE_ID)]
         );

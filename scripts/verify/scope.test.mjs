@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
-  ALL_PACKAGES, DAEMON_READS_UI, DESKTOP_CONTRACT, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_ELSEWHERE,
+  ALL_PACKAGES, DAEMON_READS_UI, DESKTOP_CONTRACT, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_DAEMON, UI_READS_ELSEWHERE,
   UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
@@ -69,11 +69,12 @@ const CASES = [
   ["packages/ui/src/platform/tauri.ts", ["verify", "ui", "native"]],
   ["scripts/verify/lock.mjs", ["verify", "ui"]],
   ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "daemon"]],
+  ["apps/daemon/src/providers/claude.rs", ["verify", "ui", "daemon"]],
   ["apps/desktop/src-tauri/Info.template.plist", ["verify", "ui", "native"]],
   ["LICENSE", ["verify", "ui"]],
   ["apps/web/site.config.ts", ["web"]],
   ["packages/ui/src/test/failedFilesReporter.ts", ["verify", "ui"]],
-  ["apps/daemon/src/adapter/codex/claude_compatibility.md", ["daemon"]],
+  ["apps/daemon/src/adapter/claude/compatibility.md", ["daemon"]],
   ["packages/ui/vite.config.ts", ["ui"], ["ui"]],
   ["packages/ui/index.html", ["ui"], ["ui"]],
   ["packages/ui/scripts/generate-licenses.mjs", ["ui"], ["ui"]],
@@ -112,7 +113,7 @@ test("a rule overrides the Markdown fallback, and a Markdown file no rule names 
   assert.equal(mode(["docs/plans/x/README.md", "CLAUDE.md", ".claude/skills/a/SKILL.md", "packages/ui/README.md"]), "unread");
   assert.equal(mode([]), "unread");
   assert.deepEqual(planScope(["apps/daemon/PROTOCOL.md"]).packages, ["verify", "ui", "daemon", "native"]);
-  assert.deepEqual(planScope(["packages/ui/src/protocol.generated.ts"]).packages, ["verify", "ui", "web", "daemon", "native"]);
+  assert.deepEqual(planScope(["packages/ui/src/protocol.generated.ts"]).packages, ["verify", "ui", "daemon", "native"]);
 });
 
 test("several changed packages select a union, in package order, without unrelated consumers", () => {
@@ -126,20 +127,21 @@ test("the menu keys select the shell only when the caller reports a change to th
 });
 
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
-  const lists = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI];
+  const lists = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI];
   for (const file of lists.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);
 });
 
 test("every path the relations name still exists", () => {
-  for (const file of [MENU_KEYS_FILE, ...[WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI].flat()]) {
+  for (const file of [MENU_KEYS_FILE, ...[WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI].flat()]) {
     assert.ok(existsSync(path.join(root, file)), file);
   }
 });
 
 // The relation lists are kept by hand: this finds reads that leave a package root, so a new one fails
-// here instead of going unnoticed. Rust `include_str!`/`include_bytes!` and `new URL("../../..")` reads
-// in sources and tests are resolved against the reading file and must land in the reader's own package
-// or in a path the table names.
+// here instead of going unnoticed. A test that reads a directory (a `new URL("../x/", ...)` with a trailing slash,
+// then `new URL(name, directory)`) reads its files, so a directory counts for a test file only. Rust
+// `include_str!`/`include_bytes!` and `new URL("../../..")` reads in sources and tests are resolved against the reading
+// file and must land in the reader's own package or in a path the table names.
 test("cross-package file reads are all named by a rule", () => {
   const tracked = execFileSync("git", ["ls-files", "-z", "--", "apps", "packages"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   const packageOf = (file) => file.split("/").slice(0, file.startsWith("apps/desktop/") ? 3 : 2).join("/");
@@ -153,15 +155,18 @@ test("cross-package file reads are all named by a rule", () => {
     for (const pattern of patterns) {
       for (const [, target] of text.matchAll(pattern)) {
         const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), target.replace(/^\$\{[^}]*\}/, "")));
-        // Only files are reads: a directory is an output (the preview build writes into the website).
-        if (!resolved.startsWith("..") && packageOf(resolved) !== packageOf(file) && existsSync(path.join(root, resolved)) && statSync(path.join(root, resolved)).isFile()) reads.push([file, resolved]);
+        // Outside tests only files are reads: a directory is an output (the preview build writes into the website).
+        const isTest = /\.test\.[a-z]+$/.test(file);
+        if (!resolved.startsWith("..") && packageOf(resolved) !== packageOf(file) && existsSync(path.join(root, resolved)) && (statSync(path.join(root, resolved)).isFile() || (isTest && target.endsWith("/")))) reads.push([file, resolved]);
       }
     }
   }
   for (const [file, target] of reads) {
     // The reader's own package must already be selected by the file being read, so changing it re-runs the reader.
+    // The package's own checks run the reader, not those of another package that also takes the file as input
+    // (the website's preview inputs include UI test fixtures).
     const reader = planScope([target]).packages;
-    const own = planScope([file]).packages;
+    const own = planScope([`${packageOf(file)}/`]).packages;
     assert.ok(own.every((name) => reader.includes(name)) || own.length === 0, `${file} reads ${target}, which does not select ${own.join(", ")}`);
   }
   assert.ok(reads.length > 0, "the scan found no cross-package read; its patterns are stale");

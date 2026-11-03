@@ -1,8 +1,7 @@
 import React, { useRef, useState } from "react";
 
-import { AGENT_LABEL, isAgentUnavailable } from "../../agents/agents";
+import { isAgentUnavailable } from "../../agents/agents";
 import { HelpTip } from "../../components/hint/HelpTip";
-import { InlineReference } from "../../i18n/InlineReference";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { MarkedPath } from "../../components/text/MarkedPath";
 import { focusOpenDialog } from "../../components/focus/modalFocus";
@@ -14,6 +13,7 @@ import { loginStateOf } from "../../accounts/quotaFormat";
 import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "../../quota/ResetCredits";
 import { useAccountQuota } from "../../quota/useAccountQuota";
 import { useDaemonStore } from "../../store";
+import { ProviderName } from "../../components/text/ProviderName";
 import { AccountHeading, useAccountDialogSubject } from "./accountDialogSubject";
 import { AccountLoginAnnouncer, useSucceededAccountLogin } from "./AccountLogin";
 
@@ -36,8 +36,8 @@ function Part({ title, aside, children }: { title: React.ReactNode; aside?: Reac
  * title is plain ("Account details"); the body's first line names the account, with its plan and login state after the
  * name, the email under it on a line of its own, and the next says where its configuration lives, the default account's
  * explanation after the path. Then the account's quota as the rail's panel draws it (the two-layer 5-hour and weekly
- * meter, each model's window after it) with when it was read, and for a Codex account holding a rate limit reset credit
- * the line that offers to redeem it (`ResetCreditsLine`), whose confirmation opens over this dialog. Besides that
+ * meter, each model's window after it) with when it was read, and, for an account holding a reset credit of a provider that offers
+ * them, the line that offers to redeem it (`ResetCreditsLine`), whose confirmation opens over this dialog. Besides that
  * button it holds the header's close button, which Escape and a click outside do the same as; the account's switches
  * are in `AccountSettingsDialog`, and logging in is the row's and the menu's. It reads the account from the store as it
  * is now, so a change from another window shows, and closes if the account is removed.
@@ -93,7 +93,7 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
           )}
           {stored && unusable && (
             <div className="text-sm text-app-muted">
-              <Message id="settings.accounts.notUsable" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference>, ...PATH_VAR_PARAMS }} />
+              <Message id="settings.accounts.notUsable" params={{ agent: <ProviderName agent={agent} />, ...PATH_VAR_PARAMS }} />
             </div>
           )}
           <AccountLoginAnnouncer login={succeeded} name={name} />
@@ -105,7 +105,7 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
           </Part>
         </div>
       </Dialog>
-      {resetting && <UseResetCreditDialog account={account} accountName={name} onClose={closeReset} />}
+      {resetting && <UseResetCreditDialog agent={agent} account={account} accountName={name} onClose={closeReset} />}
     </>
   );
 }

@@ -7,7 +7,7 @@ use crate::coordinator::test_support::{
     archive_during_relaunch, bound_session, shell_env, status_of, temp_dir,
 };
 use crate::protocol::{
-    error_code, Account, Agent, Event, Role, Session, SessionKind, SessionStatus,
+    error_code, Account, AgentId, Event, Role, Session, SessionKind, SessionStatus,
 };
 use crate::session::term;
 use crate::test_support::code_of;
@@ -28,11 +28,11 @@ async fn a_switch_onto_a_disabled_account_is_refused() {
         .store
         .insert_session(&project_session(
             "s",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Interrupted,
         ))
         .unwrap();
-    set_account_disabled(&state, Agent::Claude, Some("claude-a"), true).unwrap();
+    set_account_disabled(&state, AgentId::CLAUDE, Some("claude-a"), true).unwrap();
 
     let err = switch_session_account(
         &state,
@@ -58,32 +58,32 @@ async fn a_refused_switch_records_nothing() {
     std::fs::create_dir_all(dir.join("grok-a")).unwrap();
 
     // (what is refused, the session, the request's account, the code it is refused with)
-    let archived = project_session("s", Agent::Claude, SessionStatus::Archived);
-    let mut with_conversation = project_session("s", Agent::Claude, SessionStatus::Interrupted);
+    let archived = project_session("s", AgentId::CLAUDE, SessionStatus::Archived);
+    let mut with_conversation = project_session("s", AgentId::CLAUDE, SessionStatus::Interrupted);
     with_conversation.has_conversation = true;
     with_conversation.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
     let cases = [
         (
             "an account that does not exist",
-            project_session("s", Agent::Claude, SessionStatus::Interrupted),
+            project_session("s", AgentId::CLAUDE, SessionStatus::Interrupted),
             Some(Some("nope".to_string())),
             error_code::UNKNOWN_ACCOUNT,
         ),
         (
             "another agent's account",
-            project_session("s", Agent::Claude, SessionStatus::Interrupted),
+            project_session("s", AgentId::CLAUDE, SessionStatus::Interrupted),
             Some(Some("codex-a".to_string())),
             error_code::UNKNOWN_ACCOUNT,
         ),
         (
             "the account it is on",
-            project_session("s", Agent::Claude, SessionStatus::Interrupted),
+            project_session("s", AgentId::CLAUDE, SessionStatus::Interrupted),
             Some(None),
             error_code::SESSION_ALREADY_ON_ACCOUNT,
         ),
         (
             "no account named at all",
-            project_session("s", Agent::Claude, SessionStatus::Interrupted),
+            project_session("s", AgentId::CLAUDE, SessionStatus::Interrupted),
             None,
             error_code::FIELD_REQUIRED,
         ),
@@ -101,9 +101,9 @@ async fn a_refused_switch_records_nothing() {
         ),
         (
             "a Grok home that was never initialized",
-            project_session("s", Agent::Grok, SessionStatus::Interrupted),
+            project_session("s", AgentId::GROK, SessionStatus::Interrupted),
             Some(Some("grok-a".to_string())),
-            error_code::GROK_HOME_NOT_INITIALIZED,
+            crate::protocol::Code::of_provider(crate::providers::grok::HOME_NOT_INITIALIZED),
         ),
     ];
     for (why, session, account, code) in cases {
@@ -129,7 +129,7 @@ async fn a_refused_switch_records_nothing() {
         .store
         .insert_session(&project_session(
             "s",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Interrupted,
         ))
         .unwrap();
@@ -200,7 +200,7 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
     let target = dir.join("claude-a").to_string_lossy().into_owned();
 
     let plan = prepare_switch(
-        Agent::Claude,
+        AgentId::CLAUDE,
         Some("a0000000-0000-4000-8000-000000000001"),
         None,
         Some(&target),
@@ -224,7 +224,7 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
     );
 
     // Both sides pinned: no default to resolve, so no snapshot.
-    let plan = prepare_switch(Agent::Claude, None, Some(&target), Some(&target), || {
+    let plan = prepare_switch(AgentId::CLAUDE, None, Some(&target), Some(&target), || {
         panic!("no snapshot needed")
     })
     .unwrap();
@@ -232,7 +232,7 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
 
     // The default account as the target, for a session with no conversation: still one
     // snapshot, for the launch, and nothing to copy.
-    let plan = prepare_switch(Agent::Claude, None, Some(&target), None, snapshot).unwrap();
+    let plan = prepare_switch(AgentId::CLAUDE, None, Some(&target), None, snapshot).unwrap();
     assert!(plan.shell_env.is_some() && plan.relocation.is_none());
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
 }
@@ -250,7 +250,7 @@ fn a_compressed_codex_rollout_is_planned_for_a_switch() {
     let (source_dir, target_dir) = (source.to_string_lossy(), target.to_string_lossy());
     let plan = |id| {
         prepare_switch(
-            Agent::Codex,
+            AgentId::CODEX,
             Some(id),
             Some(&source_dir),
             Some(&target_dir),
@@ -297,7 +297,7 @@ async fn a_switch_whose_relaunch_fails_is_back_on_its_account_and_archives_nothi
     hub.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
     hub.status = SessionStatus::Working;
     state.store.insert_session(&hub).unwrap();
-    let mut bound = project_session("bound", Agent::Claude, SessionStatus::Interrupted);
+    let mut bound = project_session("bound", AgentId::CLAUDE, SessionStatus::Interrupted);
     bound.bound_to = Some("hub".to_string());
     bound.role = Role::Worker;
     state.store.insert_session(&bound).unwrap();
@@ -345,7 +345,7 @@ async fn a_codex_switch_carries_the_chain_and_repoints_the_targets_stale_row() {
         .store
         .insert_account(&Account {
             id: "codex-b".to_string(),
-            agent: Agent::Codex,
+            agent: AgentId::CODEX,
             name: "codex-b".to_string(),
             config_dir: broken.to_string_lossy().into_owned(),
             share_default_config: false,
@@ -370,7 +370,7 @@ async fn a_codex_switch_carries_the_chain_and_repoints_the_targets_stale_row() {
                  INSERT INTO threads VALUES ('{id}', 'older head');"
         ))
         .unwrap();
-    let mut codex = project_session("codex", Agent::Codex, SessionStatus::Idle);
+    let mut codex = project_session("codex", AgentId::CODEX, SessionStatus::Idle);
     codex.has_conversation = true;
     codex.agent_session_id = Some(id.to_string());
     codex.config_dir = Some(source.to_string_lossy().into_owned());
@@ -467,7 +467,7 @@ async fn a_switch_is_not_refused_for_a_running_bound_session() {
 #[tokio::test]
 async fn a_switch_that_did_not_come_up_is_restored_before_it_returns() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-switch-restored-first");
-    let before = project_session("s", Agent::Claude, SessionStatus::Interrupted);
+    let before = project_session("s", AgentId::CLAUDE, SessionStatus::Interrupted);
     state.store.insert_session(&before).unwrap();
     state
         .set_session_account("s", Some("claude-a"), Some("/elsewhere"))
@@ -480,7 +480,7 @@ async fn a_switch_that_did_not_come_up_is_restored_before_it_returns() {
         })
         .unwrap();
     let mut events = state.subscribe();
-    let live = fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
+    let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "exit 1");
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(&state, live.clone());
 
@@ -505,7 +505,7 @@ async fn a_switch_that_did_not_come_up_is_restored_before_it_returns() {
 async fn a_switch_claim_is_held_after_the_relaunched_process_is_live_and_after_it_exits() {
     let (state, _dir) = crate::test_support::app_state("coordinator-switch-claim");
     let claim = state.begin_switch("s").unwrap();
-    let live = fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
+    let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "exit 1");
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(&state, live.clone());
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -529,7 +529,7 @@ async fn a_session_shows_as_switching_its_account_while_the_switch_holds_it() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-switch-shown");
     state
         .store
-        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let mut events = state.subscribe();
     let shown = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
@@ -579,7 +579,7 @@ async fn a_switch_carries_what_the_process_started_over_to_the_relaunch() {
     std::fs::create_dir_all(dir.join("claude-a")).unwrap();
     state
         .store
-        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let (first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
     let _guard = crate::test_support::KillOnDrop(vec![child]);
@@ -630,7 +630,7 @@ async fn a_switch_tells_the_session_which_trees_it_ended() {
         std::fs::create_dir_all(dir.join("claude-a")).unwrap();
         state
             .store
-            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
             .unwrap();
         let (_first, survivor, doomed) = if some_end {
             crate::test_support::running_leaving_two(&state, &dir, "s")
@@ -705,7 +705,7 @@ async fn a_continuing_switch_lists_what_it_ended_in_the_prompt_and_a_failing_one
             .insert_session(&Session {
                 has_conversation: true,
                 agent_session_id: Some("a0000000-0000-4000-8000-000000000001".to_string()),
-                ..project_session("s", Agent::Claude, SessionStatus::Idle)
+                ..project_session("s", AgentId::CLAUDE, SessionStatus::Idle)
             })
             .unwrap();
         let (_first, survivor, doomed) =
@@ -770,7 +770,7 @@ async fn a_switch_that_fails_keeps_what_the_process_started_under_its_project() 
         std::fs::create_dir_all(dir.join("claude-a")).unwrap();
         state
             .store
-            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
             .unwrap();
         let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
         let _guard = crate::test_support::KillOnDrop(vec![child]);
@@ -832,12 +832,12 @@ async fn a_switch_that_fails_stops_what_a_process_that_had_exited_by_itself_star
     std::fs::create_dir_all(dir.join("claude-a")).unwrap();
     state
         .store
-        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let (pid_file, go_file) = (dir.join("s-child"), dir.join("go"));
     let live = fake_live_session(
         "s",
-        Agent::Claude,
+        AgentId::CLAUDE,
         80,
         24,
         &format!(
@@ -900,7 +900,7 @@ async fn what_a_switch_held_for_a_session_archived_meanwhile_is_stopped() {
         .store
         .insert_session(&project_session(
             "s",
-            Agent::Claude,
+            AgentId::CLAUDE,
             SessionStatus::Archived,
         ))
         .unwrap();

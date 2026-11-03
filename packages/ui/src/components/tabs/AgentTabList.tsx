@@ -3,9 +3,10 @@ import { TriangleAlert } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useFocusVisible, useObjectRef } from "react-aria";
 
-import { AGENT_LABEL } from "../../agents/agents";
+import { isolate } from "../../i18n/isolate";
+import { providerLabel } from "../../agents/providers";
 import { useT } from "../../i18n/react";
-import type { Agent } from "../../protocol";
+import type { Agent, ProviderInfo } from "../../protocol";
 import { AgentIcon } from "../icons/AgentIcon";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { beginTabDrag, DRAG_THRESHOLD } from "./tabDrag";
@@ -43,6 +44,7 @@ const REVEAL_QUIET_MS = 100;
  * while the tabs move into their places after a drag or a reorder, every control but the one holding focus fades
  * out, and fades back in at its new place once they have settled. */
 export function AgentTabList({
+  providers,
   agents,
   label,
   tabRef,
@@ -54,6 +56,8 @@ export function AgentTabList({
   tabActions,
   ...container
 }: {
+  /** The providers the daemon serves, which name a provider that has no presentation module. */
+  providers: readonly ProviderInfo[];
   agents: Agent[];
   /** The tab list's accessible name. */
   label: string;
@@ -137,7 +141,7 @@ export function AgentTabList({
       {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
       <Tabs.List ref={listRef} aria-label={label} className={`relative ${TEXT_TAB_LIST_CLASS}`}>
         {agents.map((agent) => (
-          <AgentTab key={agent} agent={agent} tabRef={tabRef?.(agent)} notInstalledTip={notInstalledTip?.(agent)} elements={elements} onDragStart={onReorder && dragStart} onElementChange={tabsChanged} reserve={tabActions !== undefined} />
+          <AgentTab key={agent} providers={providers} agent={agent} tabRef={tabRef?.(agent)} notInstalledTip={notInstalledTip?.(agent)} elements={elements} onDragStart={onReorder && dragStart} onElementChange={tabsChanged} reserve={tabActions !== undefined} />
         ))}
       </Tabs.List>
     </LocalizedTabListContainer>
@@ -155,7 +159,8 @@ export function AgentTabList({
  * afresh, so it opens even when a key press had closed the one the pointer's rest had opened. The tooltip is not
  * linked to the tab for assistive technology; the tab's accessible name says "not installed", and whatever
  * more the tip says has to reach assistive technology elsewhere, which is up to the caller. */
-function AgentTab({ agent, tabRef, notInstalledTip, elements, onDragStart, onElementChange, reserve }: {
+function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragStart, onElementChange, reserve }: {
+  providers: readonly ProviderInfo[];
   agent: Agent;
   tabRef?: React.Ref<HTMLDivElement>;
   notInstalledTip?: React.ReactNode;
@@ -243,7 +248,7 @@ function AgentTab({ agent, tabRef, notInstalledTip, elements, onDragStart, onEle
       id={agent}
       ref={attach}
       data-list-motion={agent}
-      aria-label={notInstalledTip ? t("agents.notInstalled", { agent: AGENT_LABEL[agent] }) : undefined}
+      aria-label={notInstalledTip ? t("agents.notInstalled", { agent: isolate(providerLabel(t, providers, agent)) }) : undefined}
       onHoverChange={setHovered}
       onFocus={() => {
         setHasFocus(true);
@@ -256,7 +261,7 @@ function AgentTab({ agent, tabRef, notInstalledTip, elements, onDragStart, onEle
       className={`gap-2 ${TEXT_TAB_CLASS} ${reserve ? "pe-9" : ""}`}
     >
       <AgentIcon agent={agent} />
-      {AGENT_LABEL[agent]}
+      {providerLabel(t, providers, agent)}
       {notInstalledTip && (
         <>
           <TriangleAlert aria-hidden="true" className="-ms-1 size-3.5 shrink-0 text-warning-soft-foreground" />

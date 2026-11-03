@@ -11,7 +11,7 @@ import { SessionRelativeTime } from "../components/status/SessionMetadata";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { PathText } from "../components/text/PathText";
 import type { Translate } from "../i18n/catalog";
-import type { Account, AccountSharing, Agent, Console, Project, Session, Settings } from "../protocol";
+import type { Account, AccountSharing, Agent, Console, Project, ProviderInfo, Session, Settings } from "../protocol";
 import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
@@ -177,6 +177,7 @@ function switchAccountSubmenu(
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
   readings: QuotaReadings | undefined,
+  providers: readonly ProviderInfo[],
   sharing: Map<string, AccountSharing> | undefined,
   disabledDefaults: Agent[] | undefined,
   accountOrder: Settings["account_order"] | undefined,
@@ -193,7 +194,7 @@ function switchAccountSubmenu(
       // A usage bar as the icon, the remainder said to assistive technology, and for one
       // used up the short reason under its name. The current account is never offered, so it is
       // not marked used up; a removed account's directory has no quota.
-      const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
+      const usage = accountUsage(t, providers, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
       // Nothing can be switched onto an account that is not logged in, which lasts and says so in place of its usage;
       // nor onto one whose sharing change runs, nor away from one, nor while a switch runs, which end on their own, so
       // the entry is disabled without a reason.
@@ -289,12 +290,13 @@ export function sessionMenu(
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandoff = true, switching, quota, sharing, disabledDefaults, accountOrder }: {
+  { placement = "list", hasBoundSessions = false, canHandoff = true, switching, quota, providers, sharing, disabledDefaults, accountOrder }: {
     placement?: MenuPlacement;
     hasBoundSessions?: boolean;
     canHandoff?: boolean;
     switching: boolean;
     quota?: QuotaReadings;
+    providers: readonly ProviderInfo[];
     sharing?: Map<string, AccountSharing>;
     disabledDefaults?: Agent[];
     accountOrder?: Settings["account_order"];
@@ -303,7 +305,7 @@ export function sessionMenu(
   const focused = placement === "focused";
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults, accountOrder, switching);
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
   const focusable = session.kind === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <ShortcutKbd command="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),

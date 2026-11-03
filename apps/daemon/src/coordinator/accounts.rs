@@ -16,7 +16,7 @@ use crate::agents::availability;
 use crate::hostfs;
 use crate::hostfs::dir_key;
 use crate::protocol::{
-    error_code, Account, Agent, Availability, CodedError, Console, Event, Project,
+    error_code, Account, AgentId, Availability, CodedError, Console, Event, Project,
 };
 use crate::state::{broadcast_settings, AppState};
 use crate::store::ReorderOutcome;
@@ -33,7 +33,7 @@ use crate::accounts::choice::{
 /// rename compare against every *other* account without colliding with itself.
 pub(crate) fn colliding_account_name(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: &str,
     exclude_id: Option<&str>,
 ) -> Result<Option<String>> {
@@ -56,7 +56,7 @@ pub(crate) fn colliding_account_name(
 /// `name`, if any.
 pub(crate) fn colliding_owned_account_name(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: &str,
     exclude_id: Option<&str>,
 ) -> Result<Option<String>> {
@@ -78,7 +78,7 @@ pub(crate) fn colliding_owned_account_name(
 /// is no collision, so only the accounts that are rows are compared.
 pub(crate) fn set_default_account_name(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: &str,
 ) -> Result<()> {
     let _writes = state.lock_account_writes();
@@ -91,7 +91,7 @@ pub(crate) fn set_default_account_name(
 /// the word shown for an unnamed one, which clears the name and so writes nothing here.
 pub(crate) fn name_unnamed_default_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: &str,
 ) -> Result<bool> {
     let name = name.trim();
@@ -112,7 +112,7 @@ pub(crate) fn name_unnamed_default_account(
 
 /// Writes the trimmed `name` of `agent`'s default account; the caller holds the account writes
 /// lock.
-fn write_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -> Result<()> {
+fn write_default_account_name(state: &Arc<AppState>, agent: AgentId, name: &str) -> Result<()> {
     let changed = if clears_default_account_name(name) {
         state.store.set_default_account_name(agent, None)?
     } else {
@@ -133,7 +133,7 @@ fn write_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -
 /// when the setting that does that is on ([`quotas::kick_held`]).
 pub(super) fn set_account_disabled(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account: Option<&str>,
     disabled: bool,
 ) -> Result<()> {
@@ -163,7 +163,7 @@ pub(super) fn set_account_disabled(
 /// never asked about.
 pub(crate) fn refuse_if_account_disabled(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
 ) -> Result<()> {
     if !state.store.account_disabled(agent, account_id)? {
@@ -190,7 +190,7 @@ pub(crate) fn refuse_if_account_disabled(
 /// [`Store::account_dir`]: crate::store::Store::account_dir
 pub(crate) fn refuse_unless_account_usable(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account_id: Option<&str>,
     config_dir: Option<&str>,
     enforce_quota: bool,
@@ -206,7 +206,7 @@ pub(crate) fn refuse_unless_account_usable(
 /// Refuses a name that collides within its agent, naming the account it collides with.
 fn check_account_name_unique(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: &str,
     exclude_id: Option<&str>,
 ) -> Result<()> {
@@ -216,7 +216,7 @@ fn check_account_name_unique(
     }
 }
 
-pub(crate) fn account_name_taken(agent: Agent, name: &str, existing: &str) -> anyhow::Error {
+pub(crate) fn account_name_taken(agent: AgentId, name: &str, existing: &str) -> anyhow::Error {
     CodedError::raised(
         error_code::ACCOUNT_NAME_TAKEN,
         format!(
@@ -236,7 +236,7 @@ pub(crate) fn account_name_taken(agent: Agent, name: &str, existing: &str) -> an
 /// not followed. `exclude_id` lets an update compare against every *other* account.
 pub(crate) fn colliding_account_dir(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     dir: &str,
     exclude_id: Option<&str>,
 ) -> Result<Option<String>> {
@@ -263,7 +263,7 @@ pub(crate) fn colliding_account_dir(
 /// Refuses a directory another account of the agent already uses, naming that account.
 fn check_account_dir_unique(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     dir: &str,
     exclude_id: Option<&str>,
 ) -> Result<()> {
@@ -287,7 +287,7 @@ pub(crate) fn normalize_account_name(name: &str) -> Result<String> {
 
 pub(super) fn create_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: String,
     config_dir: String,
 ) -> Result<()> {
@@ -301,7 +301,7 @@ pub(super) fn create_account(
 /// its own (`account_sharing::set`).
 pub(crate) fn insert_new_account(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     name: String,
     config_dir: String,
     disabled: bool,
@@ -477,7 +477,7 @@ pub(super) async fn delete_account_requested(
 /// available agent when neither is.
 pub(super) fn refresh_account_quotas(
     state: &Arc<AppState>,
-    agent: Option<Agent>,
+    agent: Option<AgentId>,
     account: Option<String>,
 ) -> Result<()> {
     let scope = match (agent, account) {
@@ -508,7 +508,7 @@ pub(super) fn refresh_account_quotas(
 /// Starts a sign-in of the account `account` of `agent`, or of its default account for `None`.
 pub(super) async fn start_account_login(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     account: Option<String>,
 ) -> Result<()> {
     refuse_if_agent_unavailable(state, agent)?;
@@ -552,7 +552,7 @@ pub(super) async fn start_account_login(
 /// than guessed at, and the list is filled first if the determination has landed since: the list
 /// must be decided by `availability::fill_added_agents` before a user's edit takes it over, or the
 /// agents with accounts would be left off it.
-pub(super) fn add_agent(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+pub(super) fn add_agent(state: &Arc<AppState>, agent: AgentId) -> Result<()> {
     match state.agent_availability_of(agent).availability {
         Availability::Available => {}
         Availability::Unavailable => {
@@ -588,7 +588,7 @@ pub(super) fn add_agent(state: &Arc<AppState>, agent: Agent) -> Result<()> {
 /// Takes an agent off the list. Its accounts stay, so they reappear when it is added again. An
 /// undecided list is filled first, as `add_agent` does, so the fill cannot put the agent back; if
 /// availability is still unknown it stays undecided and the request is refused.
-pub(super) fn remove_agent(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+pub(super) fn remove_agent(state: &Arc<AppState>, agent: AgentId) -> Result<()> {
     availability::fill_added_agents(state)?;
     if state.store.added_agents()?.is_none() {
         return Err(added_agents_undecided("removed from"));
@@ -602,7 +602,7 @@ pub(super) fn remove_agent(state: &Arc<AppState>, agent: Agent) -> Result<()> {
 /// Puts the accounts of `agent` in the given order and broadcasts the settings if that changed it.
 pub(super) fn reorder_accounts(
     state: &Arc<AppState>,
-    agent: Agent,
+    agent: AgentId,
     order: &[Option<String>],
 ) -> Result<()> {
     if state.store.reorder_accounts(agent, order)? {
@@ -613,7 +613,7 @@ pub(super) fn reorder_accounts(
 
 /// Puts the added agents in the given order. An undecided list is filled first, as `add_agent`
 /// does; if availability is still unknown it stays undecided and the request is refused.
-pub(super) fn reorder_agents(state: &Arc<AppState>, order: &[Agent]) -> Result<()> {
+pub(super) fn reorder_agents(state: &Arc<AppState>, order: &[AgentId]) -> Result<()> {
     availability::fill_added_agents(state)?;
     match state.store.reorder_added_agents(order)? {
         ReorderOutcome::Undecided => Err(added_agents_undecided("reordered")),

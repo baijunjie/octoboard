@@ -34,7 +34,7 @@ pub(super) fn console(name: &str, projects: Vec<DocumentProject>) -> DocumentCon
     DocumentConsole {
         name: name.to_string(),
         icon: None,
-        default_agent: Agent::Codex,
+        default_agent: AgentId::CODEX,
         project_session_agent: None,
         project_session_launch: Default::default(),
         accounts: Default::default(),
@@ -56,7 +56,7 @@ pub(super) fn document(consoles: Vec<DocumentConsole>) -> serde_json::Value {
     .unwrap()
 }
 
-pub(super) fn account(id: &str, agent: Agent, name: &str) -> Account {
+pub(super) fn account(id: &str, agent: AgentId, name: &str) -> Account {
     Account {
         id: id.to_string(),
         agent,
@@ -112,7 +112,7 @@ fn with_settings(
         "auto_approve_handoffs": false,
         "ask_questions_as_choices": true,
         "git_workflow": GitWorkflowSettings::default(),
-        "claude_compatibility": {},
+        "provider_settings": {},
         "agent_tags": {},
     });
     document

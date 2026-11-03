@@ -118,7 +118,7 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{error_code, Agent, CodedError, Event, SessionStatus};
+    use crate::protocol::{error_code, AgentId, CodedError, Event, SessionStatus};
     use crate::session::spawn_reader_thread;
     use crate::state::test_support::insert_record;
     use crate::test_support::{app_state, fake_live_session, PATIENCE};
@@ -129,7 +129,7 @@ mod tests {
         for status in [SessionStatus::Archived, SessionStatus::Interrupted] {
             let (state, dir) = app_state("state-output-frozen-before-publication");
             insert_record(&state, &dir, "s", SessionStatus::Working);
-            let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+            let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
             state.register_live(live.clone());
             live.on_output(b"\x1b[?1049h\x1b[Hconversation");
             let mut events = state.subscribe();
@@ -156,7 +156,13 @@ mod tests {
     async fn stopping_every_session_keeps_each_ones_output() {
         let (state, dir) = app_state("state-output-kept-on-shutdown");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "printf 'still here'; sleep 30");
+        let live = fake_live_session(
+            "s",
+            AgentId::CLAUDE,
+            80,
+            24,
+            "printf 'still here'; sleep 30",
+        );
         spawn_reader_thread(live.clone(), 8 * 1024);
         state.register_live(live.clone());
         let deadline = Instant::now() + PATIENCE;
@@ -177,7 +183,7 @@ mod tests {
     async fn a_stop_still_being_applied_at_shutdown_decides_how_the_turn_ended() {
         let (state, dir) = app_state("state-shutdown-stop-in-flight");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         let stop = bytes::Bytes::from_static(br#"{"hook_event_name": "Stop"}"#);
         state.hook_queues.push("s", stop);

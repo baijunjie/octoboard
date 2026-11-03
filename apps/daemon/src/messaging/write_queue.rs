@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use super::outbox::{Drain, PromptSignal, Ticket};
-use crate::protocol::{notice_code, Agent, Notice, SessionStatus};
+use crate::protocol::{notice_code, Notice, SessionStatus};
 use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
 use crate::state::AppState;
@@ -180,13 +180,21 @@ impl PromptSignal for HookPrompts<'_> {
         self.live.prompts_sent()
     }
 
-    /// Claude Code alone, the one agent seen to take a write and not send it. Read now rather than
-    /// taken from the status the drain was started with, which can be stale by the time a message
-    /// reaches the front: a write that lands mid-turn is queued by the agent and sent only when
-    /// the turn ends, which no short wait would see.
+    /// Only for a provider that declares its writes confirmed by its report of the prompt it sent
+    /// (`DeliveryQuirks::confirms_by_reported_prompt`): Claude Code, the one agent seen to take a
+    /// write and not send it. Read now rather than taken from the status the drain was started
+    /// with, which can be stale by the time a message reaches the front: a write that lands
+    /// mid-turn is queued by the agent and sent only when the turn ends, which no short wait would
+    /// see.
     fn expects_send(&self) -> bool {
         self.wait().is_some()
-            && self.live.agent == Agent::Claude
+            && self
+                .live
+                .agent
+                .descriptor()
+                .capabilities
+                .delivery
+                .confirms_by_reported_prompt
             && self
                 .state
                 .session_record(&self.live.id)
@@ -615,7 +623,7 @@ impl AppState {
 mod tests {
     use super::*;
     use crate::messaging::outbox::Drain;
-    use crate::protocol::{Agent, Event, SessionStatus};
+    use crate::protocol::{AgentId, Event, SessionStatus};
     use crate::state::test_support::{insert_record, session_record};
     use crate::test_support::{app_state, fake_live_session, PATIENCE};
     use std::time::{Duration, Instant};
@@ -624,7 +632,7 @@ mod tests {
     fn submit_retry_respects_hook_permissions_and_lifecycle_holds() {
         let (state, dir) = app_state("submit-retry-permissions");
         insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
-        let live = fake_live_session("s", Agent::Claude, 120, 40, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 120, 40, "sleep 30");
         state.register_live(live.clone());
         assert!(!state.permits_automatic_input("s"));
         state.apply_hook_status("s", SessionStatus::Idle).unwrap();
@@ -644,7 +652,7 @@ mod tests {
     async fn answering_a_codex_manual_approval_releases_queued_messages_off_the_reader() {
         let (state, dir) = app_state("codex-approval-outbox");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", Agent::Codex, 80, 24, "sleep 30").with_auto_review();
+        let live = fake_live_session("s", AgentId::CODEX, 80, 24, "sleep 30").with_auto_review();
         state.register_live(live.clone());
         live.on_output(include_bytes!("../../testdata/codex_working_title.bin"));
         assert!(
@@ -679,7 +687,7 @@ mod tests {
     async fn a_prompt_hook_before_the_composer_redraw_is_retried_without_another_hook() {
         let (state, dir) = app_state("draft-redraw-retry");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", Agent::Claude, 120, 40, "sleep 30").with_composer();
+        let live = fake_live_session("s", AgentId::CLAUDE, 120, 40, "sleep 30").with_composer();
         state.register_live(live.clone());
         live.on_output(include_bytes!("../../testdata/claude_input_restored.bin"));
         live.write_terminal_input(b"typed\r").unwrap();
@@ -713,7 +721,7 @@ mod tests {
     fn an_agent_dialog_on_the_screen_holds_writes_until_it_is_gone() {
         let (state, dir) = app_state("state-agent-dialog");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         assert_eq!(state.write_hold("s"), None);
 
@@ -743,7 +751,7 @@ mod tests {
     async fn the_dialog_watch_raises_the_hand_and_releases_the_queue() {
         let (state, dir) = app_state("state-agent-dialog-watch");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         crate::session::dialogs::watch(&state, &live);
         let mut events = state.subscribe();
@@ -778,7 +786,7 @@ mod tests {
     fn a_message_a_launch_dialog_discarded_is_queued_again_and_announced() {
         let (state, dir) = app_state("state-agent-dialog-discard");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         *state.send_wait.lock().unwrap() = Some(Duration::from_secs(2));
         let mut events = state.subscribe();
@@ -828,7 +836,7 @@ mod tests {
     fn a_dialog_drawn_and_closed_inside_the_write_still_discards_the_message() {
         let (state, dir) = app_state("state-agent-dialog-closed");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         *state.send_wait.lock().unwrap() = Some(Duration::from_secs(1));
         state.queue_message("s", "go on");
@@ -858,7 +866,7 @@ mod tests {
     fn a_message_a_view_of_background_agents_took_is_announced_and_not_queued_again() {
         let (state, dir) = app_state("state-agent-view-diverted");
         insert_record(&state, &dir, "s", SessionStatus::Idle);
-        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
         *state.send_wait.lock().unwrap() = Some(Duration::from_secs(1));
         let mut events = state.subscribe();

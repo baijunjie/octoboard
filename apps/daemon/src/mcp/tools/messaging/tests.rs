@@ -1,7 +1,7 @@
 use crate::coordinator;
 use crate::mcp::dispatch::call;
 use crate::mcp::test_support::{arguments, peer_state, shared_console_state, with_status};
-use crate::protocol::{error_code, Agent, CodedError, SessionStatus};
+use crate::protocol::{error_code, AgentId, CodedError, SessionStatus};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::test_support::{output_containing, running};
 use serde_json::json;
@@ -109,7 +109,7 @@ async fn a_message_for_an_interrupted_session_points_at_resume_session() {
     let message = err.to_string();
     assert!(message.contains("interrupted"), "{message}");
     assert!(
-        message.contains(&qualified_tool_name(Agent::Claude, "resume_session")),
+        message.contains(&qualified_tool_name(AgentId::CLAUDE, "resume_session")),
         "{message}"
     );
 }
@@ -135,7 +135,7 @@ async fn a_message_for_an_archived_session_points_at_resume_session() {
     let message = err.to_string();
     assert!(message.contains("archived"), "{message}");
     assert!(
-        message.contains(&qualified_tool_name(Agent::Claude, "resume_session")),
+        message.contains(&qualified_tool_name(AgentId::CLAUDE, "resume_session")),
         "{message}"
     );
 }
@@ -147,7 +147,7 @@ async fn the_pointer_to_resume_session_is_named_as_the_callers_agent_shows_it() 
     let (state, _dir) = shared_console_state("send-to-archived-grok-caller");
     with_status(&state, "of-a", SessionStatus::Archived);
     let mut caller = state.store.get_session("a").unwrap().unwrap();
-    caller.agent = Agent::Grok;
+    caller.agent = AgentId::GROK;
     state.store.update_session(&caller).unwrap();
     let err = call(
         &state,

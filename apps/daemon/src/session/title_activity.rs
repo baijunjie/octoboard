@@ -8,13 +8,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::protocol::Agent;
-
-/// The glyphs Claude Code starts its title with while a turn runs, turning about once a second.
-const CLAUDE_RUNNING: std::ops::RangeInclusive<char> = '\u{25D0}'..='\u{25D3}';
-
-/// The glyph Claude Code starts its title with when it is back at its prompt.
-const CLAUDE_AT_PROMPT: char = '\u{2733}';
+use crate::protocol::AgentId;
 
 /// How recently a running title must have been sent for the turn to count as still running. Every
 /// agent changes its running title at least once a second (Claude Code's circle turns about once a
@@ -34,22 +28,24 @@ pub enum Shown {
 /// What a completed title that started with `glyph` (one of the activity glyphs
 /// `crate::terminal::title` strips, or none) says, for `agent`'s titles. `empty` is a title with no
 /// text at all, such as the one an agent sends at exit, which says nothing.
-pub fn shown(agent: Agent, glyph: Option<char>, empty: bool) -> Option<Shown> {
+pub fn shown(agent: AgentId, glyph: Option<char>, empty: bool) -> Option<Shown> {
     if empty {
         return None;
     }
-    match (agent, glyph) {
-        (Agent::Claude, Some(glyph)) if CLAUDE_RUNNING.contains(&glyph) => Some(Shown::Running),
-        (Agent::Claude, Some(CLAUDE_AT_PROMPT)) => Some(Shown::AtPrompt),
-        (Agent::Claude, _) => None,
-        (Agent::Codex | Agent::Grok, Some(glyph))
-            if crate::terminal::title::is_braille_spinner_glyph(glyph) =>
-        {
+    crate::adapter::provider(agent)
+        .screen()
+        .title_activity(glyph)
+}
+
+/// What a title says for an agent that starts it with a braille spinner while a turn runs and
+/// drops the spinner when it is back at its prompt.
+pub fn spinner_activity(glyph: Option<char>) -> Option<Shown> {
+    match glyph {
+        Some(glyph) if crate::terminal::title::is_braille_spinner_glyph(glyph) => {
             Some(Shown::Running)
         }
-        // A title with no spinner: Codex's project or thread name, Grok's own name.
-        (Agent::Codex | Agent::Grok, None) => Some(Shown::AtPrompt),
-        (Agent::Codex | Agent::Grok, Some(_)) => None,
+        None => Some(Shown::AtPrompt),
+        Some(_) => None,
     }
 }
 
@@ -128,9 +124,9 @@ mod tests {
         activity.note(WORKING, start);
         let before = activity;
         for glyph in [None, Some('\u{2722}'), Some('\u{280B}')] {
-            activity.note(shown(Agent::Claude, glyph, false), start);
+            activity.note(shown(AgentId::CLAUDE, glyph, false), start);
         }
-        activity.note(shown(Agent::Grok, None, true), start);
+        activity.note(shown(AgentId::GROK, None, true), start);
         assert_eq!(activity, before);
     }
 
@@ -138,16 +134,16 @@ mod tests {
     #[test]
     fn each_agent_s_titles_are_read_by_its_own_glyphs() {
         for (agent, glyph, expected) in [
-            (Agent::Claude, Some('\u{25D0}'), Some(Shown::Running)),
-            (Agent::Claude, Some('\u{25D1}'), Some(Shown::Running)),
-            (Agent::Claude, Some(CLAUDE_AT_PROMPT), Some(Shown::AtPrompt)),
-            (Agent::Claude, Some('\u{280B}'), None),
-            (Agent::Claude, None, None),
-            (Agent::Grok, Some('\u{280B}'), Some(Shown::Running)),
-            (Agent::Grok, None, Some(Shown::AtPrompt)),
-            (Agent::Grok, Some('\u{25D0}'), None),
-            (Agent::Codex, Some('\u{2819}'), Some(Shown::Running)),
-            (Agent::Codex, None, Some(Shown::AtPrompt)),
+            (AgentId::CLAUDE, Some('\u{25D0}'), Some(Shown::Running)),
+            (AgentId::CLAUDE, Some('\u{25D1}'), Some(Shown::Running)),
+            (AgentId::CLAUDE, Some('\u{2733}'), Some(Shown::AtPrompt)),
+            (AgentId::CLAUDE, Some('\u{280B}'), None),
+            (AgentId::CLAUDE, None, None),
+            (AgentId::GROK, Some('\u{280B}'), Some(Shown::Running)),
+            (AgentId::GROK, None, Some(Shown::AtPrompt)),
+            (AgentId::GROK, Some('\u{25D0}'), None),
+            (AgentId::CODEX, Some('\u{2819}'), Some(Shown::Running)),
+            (AgentId::CODEX, None, Some(Shown::AtPrompt)),
         ] {
             assert_eq!(shown(agent, glyph, false), expected, "{agent:?} {glyph:?}");
         }

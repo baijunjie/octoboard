@@ -2,10 +2,9 @@
 
 mod image_path;
 mod invisible;
-mod stash;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -15,13 +14,12 @@ use uuid::Uuid;
 use crate::adapter::{self, LaunchSpec};
 use crate::env_shell;
 use crate::paths;
-use crate::protocol::{
-    error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, SessionKind,
-    TerminalAppearance,
-};
+use crate::protocol::{error_code, AgentId, CodedError, Notice, SessionKind, TerminalAppearance};
+use crate::providers::ProviderSettings;
 use crate::session::{self, LiveSession, NewSession};
 use crate::session_git_hooks;
 use crate::terminal::pty;
+use crate::terminal::ptyio::PartialWrite;
 
 /// Bracketed paste, then the text, then the paste end, then Enter — written as one buffer, which is
 /// what makes a multi-line message arrive as a single submitted message with no delay needed
@@ -44,7 +42,7 @@ pub struct Launch {
 /// environment and forks, so it runs on a blocking thread and the values have to travel to it.
 pub struct LaunchRequest {
     pub session_id: String,
-    pub agent: Agent,
+    pub agent: AgentId,
     pub kind: SessionKind,
     /// Who the session reports to, if anyone; see `LaunchSpec::owner`.
     pub owner: Option<crate::session_tools::Owner>,
@@ -62,12 +60,8 @@ pub struct LaunchRequest {
     /// The configuration directory of the session's own agent that it is pinned to; see
     /// `protocol::Session::config_dir`.
     pub config_dir: Option<PathBuf>,
-    /// Codex approval reviewer override for this launch.
-    pub approval_reviewer: Option<ApprovalReviewer>,
-    /// Claude Code permission mode override for this launch.
-    pub approval_mode: Option<ClaudeApprovalMode>,
-    /// See `LaunchSpec::claude_compatibility`.
-    pub claude_compatibility: bool,
+    /// See `LaunchSpec::settings`.
+    pub settings: ProviderSettings,
     /// The default account's directory, fully resolved, when the session's account shares it;
     /// see `LaunchSpec::shared_default_dir`.
     pub shared_default_dir: Option<PathBuf>,
@@ -108,9 +102,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         task,
         resume_agent_session_id,
         config_dir,
-        approval_reviewer,
-        approval_mode,
-        claude_compatibility,
+        settings,
         shared_default_dir,
         model,
         effort,
@@ -151,8 +143,9 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     }
     std::fs::create_dir_all(&scratch).with_context(|| format!("creating {}", scratch.display()))?;
 
-    let adapter = adapter::adapter_for(agent);
-    let hook_script = if adapter.uses_hook_script() {
+    let adapter = adapter::provider(agent);
+    let capabilities = adapter.descriptor().capabilities;
+    let hook_script = if capabilities.hook_script {
         adapter::write_hook_script(&scratch, &self_exe, session_id, daemon_port, &daemon_key)
             .context("writing the session's hook script")?
     } else {
@@ -163,7 +156,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     // Resolved ahead of the plan because the agent's version, read from where the binary is
     // installed, decides how some adapters inject; a failure is raised only after the plan, so a
     // plan's own error (a missing pinned directory, say) is the one the user is told about.
-    let binary = env_shell::resolve_binary(adapter.binary(), &shell_env);
+    let binary = env_shell::resolve_binary(adapter.descriptor().binary, &shell_env);
     let spec = LaunchSpec {
         session_id,
         kind,
@@ -179,9 +172,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         hook_script: &hook_script,
         shell_env: &shell_env,
         config_dir: config_dir.as_deref(),
-        approval_reviewer,
-        approval_mode,
-        claude_compatibility,
+        settings: &settings,
+        compatibility_source: adapter::compatibility_source_of(agent, &settings),
         shared_default_dir: shared_default_dir.as_deref(),
         model: model.as_deref(),
         effort: effort.as_deref(),
@@ -196,7 +188,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         mcp_token: &mcp_token,
     };
     let plan = adapter.plan(&spec)?;
-    let native_stash = stash::supported(agent, &spec, &plan);
+    // A stash key is used only where the provider says this launch was measured to take it.
+    let native_stash = adapter.screen().native_stash(&spec, &plan);
 
     let binary = binary?;
 
@@ -216,26 +209,12 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         process_tag.value(),
     );
     environment.insert("TERM".to_string(), pty::TERM.to_string());
-    let codex_transport = plan
-        .codex_server
-        .as_ref()
-        .map(|private| {
-            crate::adapter::codex::transport::CodexTransport::start(
-                &binary,
-                private,
-                &environment,
-                cwd,
-            )
-            .map(Arc::new)
-        })
-        .transpose()?;
-    let args = match (&plan.codex_server, &codex_transport) {
-        (Some(private), Some(transport)) => {
-            let mut args = private.tui_args.clone();
-            args.extend(["--remote".to_string(), transport.endpoint()]);
-            args
+    let (args, transport) = match &plan.private_server {
+        Some(server) => {
+            let (args, transport) = server.start(&binary, &environment, cwd)?;
+            (args, Some(transport))
         }
-        _ => plan.args.clone(),
+        None => (plan.args.clone(), None),
     };
     let mut cmd = CommandBuilder::new(&binary);
     cmd.args(&args);
@@ -250,7 +229,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     let agent_session_id = match resume_agent_session_id {
         Some(id) => Some(id),
-        None if adapter.preallocates_session_id() => Some(new_agent_session_id),
+        None if capabilities.preallocates_session_id => Some(new_agent_session_id),
         None => None,
     };
 
@@ -260,26 +239,22 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         launch_id: process_tag.launch_id().to_string(),
         spawned,
         checks_composer: true,
-        codex_transport: codex_transport.clone(),
+        transport: transport.clone(),
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
         before_scratch_removal: {
-            let writeback = plan.shared_config_writeback;
-            codex_transport
-                .is_some()
-                .then_some(())
-                .or(writeback.as_ref().map(|_| ()))
-                .map(|_| {
-                    Box::new(move || {
-                        if let Some(transport) = codex_transport {
-                            transport.stop();
-                        }
-                        if let Some(writeback) = writeback {
-                            writeback.publish();
-                        }
-                    }) as Box<dyn FnOnce() + Send>
-                })
+            let after_exit = plan.after_exit;
+            (transport.is_some() || after_exit.is_some()).then(move || {
+                Box::new(move || {
+                    if let Some(transport) = transport {
+                        transport.stop();
+                    }
+                    if let Some(after_exit) = after_exit {
+                        after_exit.run();
+                    }
+                }) as Box<dyn FnOnce() + Send>
+            })
         },
     }));
     live.enable_native_stash(native_stash);
@@ -293,6 +268,42 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         agent_session_id,
         notice: plan.notice,
     })
+}
+
+/// A server of the provider's own that a session's automatic messages go through instead of its
+/// terminal.
+pub trait MessageTransport: Send + Sync {
+    /// Delivers `text` as the message `logical_id`.
+    fn send(&self, text: &str, logical_id: &str) -> Result<(), PartialWrite>;
+    /// Ends the server; called after the session's process is reaped.
+    fn stop(&self);
+}
+
+/// How a launch starts such a server, when its plan has one.
+pub trait PrivateServer: Send + Sync {
+    /// Starts the server for the session and gives the arguments the terminal is started with,
+    /// which replace `LaunchPlan::args`, and the transport to it.
+    fn start(
+        &self,
+        binary: &str,
+        environment: &HashMap<String, String>,
+        cwd: &Path,
+    ) -> Result<(Vec<String>, Arc<dyn MessageTransport>)>;
+
+    /// The plan itself, for the tests of the provider that made it.
+    #[cfg(test)]
+    fn as_any(&self) -> &dyn std::any::Any;
+}
+
+/// Work a launch leaves for once its process has exited (`LaunchPlan::after_exit`), done before the
+/// session's scratch directory is removed. It cannot fail the session, which has already ended, so
+/// it reports nothing back.
+pub trait AfterExit: Send + Sync {
+    fn run(&self);
+
+    /// The work itself, for the tests of the provider that left it.
+    #[cfg(test)]
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// What is said about a message the agent only partly accepted, to the sender whose call hit it and
@@ -366,7 +377,7 @@ pub fn send_message_with_id(
     logical_id: &str,
     allow_mixed: bool,
 ) -> Result<(), crate::terminal::ptyio::PartialWrite> {
-    if let Some(transport) = &session.codex_transport {
+    if let Some(transport) = &session.transport {
         if session.is_frozen()
             || session.trust.holds_writes()
             || session.look_for_dialog().current.is_some()
@@ -375,7 +386,7 @@ pub fn send_message_with_id(
                 written: 0,
                 error: std::io::Error::new(
                     std::io::ErrorKind::WouldBlock,
-                    "the Codex session is not accepting automatic messages",
+                    "the session's server is not accepting automatic messages",
                 ),
             });
         }
@@ -394,11 +405,14 @@ pub fn send_message_with_id(
 /// ordering — both strips before the slash guard, not after — is something a test can pin
 /// directly, rather than re-deriving it from a copy of this logic; the send path itself needs a
 /// `LiveSession` and a PTY, which is why it is not tested directly.
-pub(crate) fn frame_message(agent: Agent, text: &str) -> Vec<u8> {
+pub(crate) fn frame_message(agent: AgentId, text: &str) -> Vec<u8> {
     let text = shaped(text);
-    // Claude Code reads a pasted piece that ends in an image extension as an image and loses the
-    // Enter that follows (see `image_path`). Codex and Grok Build were not measured for it.
-    let text = if agent == Agent::Claude {
+    // An agent that reads a pasted piece ending in an image extension as an image loses the Enter
+    // that follows (see `image_path`).
+    let text = if crate::adapter::provider(agent)
+        .screen()
+        .pasted_image_path_loses_enter()
+    {
         image_path::guard_image_paths(&text)
     } else {
         text
@@ -491,7 +505,7 @@ mod tests {
     #[test]
     fn an_embedded_paste_end_marker_does_not_survive() {
         let text = "before\x1b[201~\rafter";
-        let framed = frame_message(Agent::Claude, text);
+        let framed = frame_message(AgentId::CLAUDE, text);
         let occurrences = framed
             .windows(PASTE_END.len())
             .filter(|window| *window == PASTE_END)
@@ -514,7 +528,7 @@ mod tests {
     #[test]
     fn ordinary_multiline_text_with_tabs_survives_framing() {
         let text = "line one\n\tindented line two\nline three";
-        let framed = frame_message(Agent::Claude, text);
+        let framed = frame_message(AgentId::CLAUDE, text);
         let mut expected = Vec::new();
         expected.extend_from_slice(PASTE_START);
         expected.extend_from_slice(text.as_bytes());
@@ -528,7 +542,7 @@ mod tests {
     /// it from being guarded, any more than a control character may.
     #[test]
     fn invisible_characters_are_stripped_before_the_slash_guard() {
-        let framed = frame_message(Agent::Claude, "\u{2068}/clear\u{2069} the cache");
+        let framed = frame_message(AgentId::CLAUDE, "\u{2068}/clear\u{2069} the cache");
         let mut expected = Vec::new();
         expected.extend_from_slice(PASTE_START);
         expected.extend_from_slice(b" /clear the cache");
@@ -545,7 +559,7 @@ mod tests {
     #[test]
     fn a_control_character_before_a_slash_command_still_gets_guarded() {
         let text = "\u{1}/clear";
-        let framed = frame_message(Agent::Claude, text);
+        let framed = frame_message(AgentId::CLAUDE, text);
         let mut expected = Vec::new();
         expected.extend_from_slice(PASTE_START);
         expected.extend_from_slice(b" /clear");
@@ -558,8 +572,8 @@ mod tests {
     fn only_a_claude_code_message_has_its_image_paths_wrapped() {
         let text = "done\n- /a/shot.png";
         let framed = |agent| String::from_utf8(frame_message(agent, text)).unwrap();
-        assert!(framed(Agent::Claude).contains("- `/a/shot.png`\x1b[201~"));
-        assert!(framed(Agent::Codex).contains("- /a/shot.png\x1b[201~"));
-        assert!(framed(Agent::Grok).contains("- /a/shot.png\x1b[201~"));
+        assert!(framed(AgentId::CLAUDE).contains("- `/a/shot.png`\x1b[201~"));
+        assert!(framed(AgentId::CODEX).contains("- /a/shot.png\x1b[201~"));
+        assert!(framed(AgentId::GROK).contains("- /a/shot.png\x1b[201~"));
     }
 }
