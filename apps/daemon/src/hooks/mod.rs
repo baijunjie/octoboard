@@ -187,6 +187,14 @@ pub fn is_task_notification(prompt: &str) -> bool {
     prompt.contains("<task-notification>")
 }
 
+/// Whether a submitted prompt is one the agent sent itself rather than one sent from its input
+/// box: a completion notice ([`is_task_notification`]), or the report a subagent resumed with
+/// `SendMessage` hands back, which Claude Code (2.1.316) submits as `Another Claude session sent a
+/// message:` followed by an `<agent-message from="…">` block.
+pub fn is_self_sent(prompt: &str) -> bool {
+    is_task_notification(prompt) || prompt.contains("<agent-message from=")
+}
+
 /// The ids of every `<task-id>…</task-id>` in a prompt.
 fn task_ids(prompt: &str) -> Vec<String> {
     prompt

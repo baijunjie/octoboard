@@ -69,7 +69,9 @@ hold state against.
   a turn is running is usually delivered inside it as a `queued_command` attachment, with no `UserPromptSubmit`, so a
   task list kept from the hooks alone can hold work that has already finished and been reported; the `Stop`'s list is
   the one to trust. A subagent resumed with `SendMessage` hands back twice: an `<agent-message>` prompt carrying its
-  final report, which can start a turn of its own, and then its `<task-notification>`. `/clear` does not end a running
+  final report, which can start a turn of its own, and then its `<task-notification>`; the hook schema in the 2.1.317
+  executable lists peer messages among the prompts that fire `UserPromptSubmit` (with `source` `system`; not measured),
+  so a mapping that reads that event as the input box being sent has to leave both out. `/clear` does not end a running
   background shell: the next `Stop` after the `SessionStart` with source `clear` still listed it (measured through
   `-p --input-format stream-json`; the interactive TUI is unmeasured).
 - `StopFailure` — mutually exclusive with `Stop`: a turn that ends in an API error fires only `StopFailure`, so a

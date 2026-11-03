@@ -412,6 +412,39 @@ async fn a_task_notification_does_not_lift_the_hold() {
     assert_eq!(live.input_writes(), 1);
 }
 
+/// A subagent resumed with `SendMessage` hands its report back as a prompt the agent sends
+/// itself, the way Claude Code words it, which leaves whatever waits in its input box there as a
+/// completion notice does, so it does not lift the hold either.
+#[tokio::test]
+async fn a_subagents_hand_back_does_not_lift_the_hold() {
+    let (state, _dir, live, path) = checked_claude_session("server-unsent-hand-back");
+    let first = crate::messaging::delivery::write_message(
+        &state,
+        "s",
+        "first message",
+        crate::messaging::delivery::WhenBlocked::Queue,
+    )
+    .unwrap();
+    assert_eq!(first, crate::messaging::delivery::Delivery::Unsent);
+
+    let hand_back = serde_json::json!({
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "Another Claude session sent a message:\n<agent-message from=\"afb2497118a985e98\">\n\
+                   [Subagent hand-back] The report follows:\n  pass\n</agent-message>",
+        "transcript_path": path,
+    });
+    apply_hook(&state, "s", hand_back.to_string().as_bytes());
+    let second = crate::messaging::delivery::write_message(
+        &state,
+        "s",
+        "second message",
+        crate::messaging::delivery::WhenBlocked::Queue,
+    )
+    .unwrap();
+    assert_eq!(second, crate::messaging::delivery::Delivery::Queued);
+    assert_eq!(live.input_writes(), 1);
+}
+
 /// A message the agent reports sending in time is delivered, as before.
 #[tokio::test]
 async fn a_message_the_agent_sends_is_delivered() {

@@ -150,9 +150,9 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
             tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
         }
         let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
-        // A background task's completion arrives as a prompt the agent sends itself, which
-        // says nothing about what is in its input box.
-        prompt_sent = !prompt.is_some_and(hooks::is_task_notification);
+        // A background task's completion, and a subagent's hand-back, arrive as prompts the agent
+        // sends itself, which say nothing about what is in its input box.
+        prompt_sent = !prompt.is_some_and(hooks::is_self_sent);
         // The previous turn's watch goes before the new turn opens: a watch still current
         // when it opens could find the previous turn's failure (Codex) or cancel (Claude
         // Code, Grok) and close this one.
