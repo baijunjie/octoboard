@@ -383,7 +383,7 @@ Nothing enforces a minimum when the UI is opened in a browser, so it can also re
 | Pane | Default | Range the user can choose |
 |---|---|---|
 | Sidebar | 280 px | 280–480 px |
-| Right pane | 420 px | 320–720 px; at least 546 px with three or four cards |
+| Docked right pane | 420 px | 320–720 px; at least 546 px with three or four cards |
 | Terminal | everything left over | never below 520 px (about 53 columns) |
 
 The right pane's width includes the gaps around its cards (see "The panel cards" in
@@ -439,9 +439,16 @@ preview of an empty docked column, a mobile panel and a column folded away under
 panel" in `docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 8 px gap. Resizing a
 floating group keeps it revealed throughout the drag and does not resize the agent terminal.
 
+**A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum
+total width is the window's width less the **48 px rail** and the width of the docked sidebar while shown. With the
+sidebar hidden or itself floating, only the rail is reserved. This applies to both a floating group and a single-card
+hover preview, at 594 px and wider; floating widths have no fixed 720 px cap.
+
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
-page is reloaded. A stored sidebar width below 280 px is used as 280 px.
+page is reloaded. A stored sidebar width below 280 px is used as 280 px. A right-pane width above 720 px is remembered
+too: docking the pane or narrowing the window limits its rendered width without replacing that choice. Floating it
+again or widening the available space restores the chosen width as far as the current bounds allow.
 
 ## Hiding the sidebar
 
@@ -503,9 +510,9 @@ above).
 - **How it shows**: both cards fade from transparent to opaque while rising into place by **4% of the card's own
   height**, over **240 ms**, with the same `cubic-bezier(0.2, 0, 0, 1)` easing as switching consoles. The whole card
   fades and rises together — its edge, fill, shadow and content. Neither slides horizontally. Where the system asks for
-  reduced motion, they appear at once. Each uses the pane's chosen width — the right pane capped at the window's width
-  less the rail's 48 px — with a shadow and no dimming behind it. It overlays the terminal, so **the terminal is not
-  resized** and the agent is sent no size change. - The **sidebar's card** keeps an 8 px gap from the rail, from the top
+  reduced motion, they appear at once. Each uses the pane's chosen width within its current limits (see "Resizing the
+  sidebar and the right pane" above), with a shadow and no dimming behind it. It overlays the terminal, so **the terminal
+  is not resized** and the agent is sent no size change. - The **sidebar's card** keeps an 8 px gap from the rail, from the top
   bar and from the window's bottom (or the connection banner), never drawn over the rail. - The **right pane's card**
   keeps the gaps it keeps docked: 8 px from the top bar, from the window's end edge and from the window's bottom (or the
   connection banner), and 8 px on the terminal's side. - A card's own headers are 8 px shorter than the docked sidebar's
@@ -549,8 +556,8 @@ above).
 ## Pane widths below 1394 px
 
 From **594–1393 px**, neither side takes width from the terminal. Both float, one revealed side at a time,
-without changing the terminal's size. The right group uses the same chosen total width as while docked, capped at
-**720 px** and at the window's width less the **48 px rail**. Its minimum is **546 px with three or four cards**,
+without changing the terminal's size. The right group uses the remembered total width within the floating bounds in
+"Resizing the sidebar and the right pane" above. Its minimum is **546 px with three or four cards**,
 **336 px with one or two cards including Terminal**, and **320 px otherwise**. These bounds do not rewrite the
 remembered width. The group retains its column-width and panel-height handles as well as its total-width handle.
 

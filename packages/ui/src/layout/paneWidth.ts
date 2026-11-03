@@ -56,7 +56,7 @@ function createChosenWidth(side: PaneSide) {
     key,
     (raw) => {
       const width = Number(raw);
-      return Number.isFinite(width) && width > 0 ? clamp(width, min, max) : undefined;
+      return Number.isFinite(width) && width > 0 ? Math.max(min, side === "aside" ? width : Math.min(width, max)) : undefined;
     },
     (width) => (width === undefined ? null : String(width)),
   );
@@ -89,14 +89,15 @@ export interface DockedPanes {
  * the terminal always keeps its floor, and when space is short the aside gives up
  * width first, down to its minimum. The sidebar therefore only ever assumes the aside's
  * minimum (not its chosen width), and the aside gets what is left after the sidebar's
- * rendered width. A pane that is not docked is not limited by the viewport (it overlays the
- * terminal). The two-column aside minimum is reserved before the sidebar receives spare width.
+ * rendered width. A floating aside can cover the terminal up to the docked sidebar's edge,
+ * or the rail when the sidebar is hidden. The two-column aside minimum is reserved before the
+ * sidebar receives spare width.
  */
 function maxWidthFor(side: PaneSide, docked: DockedPanes, narrow: boolean, chosenSidebar: number | undefined, railWidth: number, asideMin: number): number {
   const { max } = PANES[side];
   const min = side === "aside" ? asideMin : PANES.sidebar.min;
-  if (!docked[side]) return side === "aside" ? Math.max(min, Math.min(max, viewportWidth - railWidth)) : max;
   if (side === "sidebar") {
+    if (!docked.sidebar) return max;
     const asideReserve = docked.aside ? asideMin : 0;
     return clamp(viewportWidth - railWidth - terminalFloor(narrow) - asideReserve, min, max);
   }
@@ -104,7 +105,8 @@ function maxWidthFor(side: PaneSide, docked: DockedPanes, narrow: boolean, chose
   const sidebarWidth = docked.sidebar
     ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, narrow, chosenSidebar, railWidth, asideMin))
     : 0;
-  return clamp(viewportWidth - railWidth - terminalFloor(narrow) - sidebarWidth, min, max);
+  const available = viewportWidth - railWidth - sidebarWidth;
+  return docked.aside ? clamp(available - terminalFloor(narrow), min, max) : Math.max(min, available);
 }
 
 export interface PaneWidth {

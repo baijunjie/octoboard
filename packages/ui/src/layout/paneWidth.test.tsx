@@ -101,6 +101,45 @@ it("caps a floating pane to the viewport and restores the saved width when widen
   expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("600");
 });
 
+it("lets a floating pane reach the docked sidebar and follows changes to that boundary", () => {
+  const test = mount();
+  test.render(320, false, { sidebar: true, aside: false });
+  act(() => test.aside().setWidth(2000));
+  expect(test.aside().width).toBe(1112);
+  expect(test.aside().max).toBe(1112);
+  expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1112");
+
+  act(() => test.sidebar().setWidth(480));
+  expect(test.aside().width).toBe(912);
+  expect(test.aside().max).toBe(912);
+  test.render(320, false, { sidebar: false, aside: false });
+  expect(test.aside().width).toBe(1112);
+  expect(test.aside().max).toBe(1392);
+
+  const handle = test.container.querySelector<HTMLElement>("[role=separator]")!;
+  act(() => handle.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
+  expect(test.aside().width).toBe(1392);
+  expect(handle.getAttribute("aria-valuemax")).toBe("1392");
+});
+
+it("keeps a floating width above 720 across docking and viewport changes", () => {
+  const test = mount();
+  test.viewport(1200);
+  test.render(320, true, { sidebar: false, aside: false });
+  act(() => test.aside().setWidth(1000));
+  expect(test.aside().width).toBe(1000);
+  expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1000");
+
+  test.viewport(600);
+  expect(test.aside().width).toBe(552);
+  test.viewport(1800);
+  test.render();
+  expect(test.aside().width).toBe(720);
+  expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1000");
+  test.render(320, false, { sidebar: true, aside: false });
+  expect(test.aside().width).toBe(1000);
+});
+
 // Below this breakpoint a two-column floating group no longer fits beside the rail.
 it("sets the phone breakpoint to the rail and the minimum two-column floating group", () => {
   const style = readFileSync(join(import.meta.dirname, "../style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");

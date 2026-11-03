@@ -167,8 +167,8 @@ export const layoutScenarios: Scenario[] = [
     // Hover reveals a pane from 594px up; below that only a press opens a single mobile card.
     minWidth: 594,
     state: railState,
-    preferences: { panelStacks: { report: { open: [], shares: {} } } },
-    description: "The report floated in over the terminal by hovering the Report toggle with no panel open, the pointer now resting on it, after fading in as the card rose by 4% of its own height. Only the Report card floats, with its header (the Report name, the page arrows and count, Close panel), rounded corners, hairline edge and the same drop shadow as the sidebar's floating card, 8px from the top bar, the window's end and the bottom; the terminal shows in the gap around it, unobscured. The Report toggle is not pressed: pressing it opens the panel, which docks on a wide screen or stays in the floating group below 1394px.",
+    preferences: { asideWidth: 1000, panelStacks: { report: { open: [], shares: {} } } },
+    description: "The report floated in over the terminal by hovering the Report toggle with no panel open, the pointer now resting on it, after fading in as the card rose by 4% of its own height. Only the Report card floats, with its header (the Report name, the page arrows and count, Close panel), rounded corners, hairline edge and the same drop shadow as the sidebar's floating card, 8px from the top bar, the window's end and the bottom; the terminal shows in the gap around it, unobscured. The remembered width is 1000px: this floating card can exceed 720px. In Desktop, the floating card stays within the visible docked sidebar’s content edge, leaving the sidebar accessible and keeping the card inset. This single-card hover preview has no outer width handle. Hide the sidebar to give the card room toward the rail instead. At tablet widths the sidebar also floats, so it reserves no width. The Report toggle is not pressed: pressing it opens the panel, which docks on a wide screen with the 720px limit or stays in the floating group below 1394px.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.floatPane(ui.t("titleBar.report.show")),
