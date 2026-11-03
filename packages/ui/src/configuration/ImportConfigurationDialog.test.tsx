@@ -429,14 +429,14 @@ it("states what turning on asking questions as choices does", async () => {
 });
 
 describe("the git workflow settings", () => {
-  const FILE: GitWorkflowSettings = { development: "in_place", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true };
+  const FILE: GitWorkflowSettings = { development: "in_place", squash_before_delivery: false, rebase_before_delivery: true, delivery: "merge", revert_gate: true };
   const inspecting = (git_workflow: GitWorkflowSettings, current: typeof FILE) => {
     const settings = { ...REVIEW.settings!, git_workflow, current_git_workflow: current };
     return (body: ClientRequestBody) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings }) : reply(body));
   };
 
   it("lists the items that applying would change, each with what it is now", async () => {
-    await reviewingSettings({ reply: inspecting(FILE, { ...FILE, development: "worktree", rebase_before_merge: false, delivery: "ask" }) });
+    await reviewingSettings({ reply: inspecting(FILE, { ...FILE, development: "worktree", rebase_before_delivery: false, delivery: "ask" }) });
     expect(settingLines()["Git workflow"]).toEqual({
       badge: "Set to the file's",
       values: [
@@ -453,7 +453,7 @@ describe("the git workflow settings", () => {
   });
 
   it("lists every item that differs, whichever it is", async () => {
-    await reviewingSettings({ reply: inspecting(FILE, { development: "branch", squash_before_delivery: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: false }) });
+    await reviewingSettings({ reply: inspecting(FILE, { development: "branch", squash_before_delivery: true, rebase_before_delivery: false, delivery: "pull_request", revert_gate: false }) });
     expect(settingLines()["Git workflow"].values).toEqual([
       "Where sessions develop: On the current branch (now On a branch of its own)",
       "Squash commits before delivery: Off (now On)",

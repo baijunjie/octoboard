@@ -7,7 +7,7 @@ import type { GitDelivery, GitDevelopment, GitWorkflowOverride, GitWorkflowOverr
 export const DEFAULT_GIT_WORKFLOW: GitWorkflowSettings = {
   development: "worktree",
   squash_before_delivery: false,
-  rebase_before_merge: true,
+  rebase_before_delivery: true,
   delivery: "ask",
   revert_gate: false,
 };
@@ -16,7 +16,7 @@ export const DEFAULT_GIT_WORKFLOW: GitWorkflowSettings = {
 export const FOLLOWING_GIT_WORKFLOW: GitWorkflowOverride = {
   development: null,
   squash_before_delivery: null,
-  rebase_before_merge: null,
+  rebase_before_delivery: null,
   delivery: null,
   revert_gate: null,
 };
@@ -58,7 +58,7 @@ export const GIT_WORKFLOW_ITEMS = {
     label: "settings.gitWorkflow.squash.label",
     description: { on: "settings.gitWorkflow.squash.description.on", off: "settings.gitWorkflow.squash.description.off" },
   },
-  rebase_before_merge: {
+  rebase_before_delivery: {
     label: "settings.gitWorkflow.rebaseBeforeDelivery.label",
     description: { on: "settings.gitWorkflow.rebaseBeforeDelivery.description.on", off: "settings.gitWorkflow.rebaseBeforeDelivery.description.off" },
   },

@@ -194,7 +194,7 @@ async fn the_git_workflow_settings_are_read_and_changed_through_the_tools() {
         json!({
             "development": "worktree",
             "squash_before_delivery": false,
-            "rebase_before_merge": true,
+            "rebase_before_delivery": true,
             "delivery": "ask",
             "revert_gate": false,
         })
@@ -241,7 +241,7 @@ async fn the_git_workflow_settings_are_read_and_changed_through_the_tools() {
         json!({
             "development": "in_place",
             "squash_before_delivery": false,
-            "rebase_before_merge": null,
+            "rebase_before_delivery": null,
             "delivery": "pull_request",
             "revert_gate": null,
         })
@@ -251,7 +251,7 @@ async fn the_git_workflow_settings_are_read_and_changed_through_the_tools() {
         json!({
             "development": "in_place",
             "squash_before_delivery": false,
-            "rebase_before_merge": true,
+            "rebase_before_delivery": true,
             "delivery": "pull_request",
             "revert_gate": true,
         })
@@ -1006,7 +1006,7 @@ async fn add_project_takes_the_projects_own_git_workflow_values() {
         json!({
             "development": "in_place",
             "squash_before_delivery": null,
-            "rebase_before_merge": null,
+            "rebase_before_delivery": null,
             "delivery": "merge",
             "revert_gate": null,
         })
@@ -1027,7 +1027,7 @@ async fn add_project_takes_the_projects_own_git_workflow_values() {
         &arguments(json!({
             "source": "parent",
             "path": parent.to_string_lossy(),
-            "git_workflow": { "rebase_before_merge": false },
+            "git_workflow": { "rebase_before_delivery": false },
         })),
     )
     .await
@@ -1036,7 +1036,7 @@ async fn add_project_takes_the_projects_own_git_workflow_values() {
     assert_eq!(projects.len(), 2);
     assert!(projects
         .iter()
-        .all(|project| project["git_workflow"]["override"]["rebase_before_merge"] == false));
+        .all(|project| project["git_workflow"]["override"]["rebase_before_delivery"] == false));
 
     let bare = dir.join("bare");
     std::fs::create_dir(&bare).unwrap();

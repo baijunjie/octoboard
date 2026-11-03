@@ -689,7 +689,7 @@ export const settingsScenarios: Scenario[] = [
     category: "normal",
     title: "Settings: git, development on a branch and the other items changed from the defaults",
     description: "Automatically pull repositories is on, its description now stating the behaviour (\"A project's branch is pulled when...\") instead of starting with \"Once this is on\". Where sessions develop reads On a branch of its own, with the explanation that the branch shares the project directory, so it suits one session at a time. Squash commits before delivery is on, its explanation saying the commits are consolidated before a merge, push or pull request; Rebase before delivery is off, its explanation saying what turning it on would do; Delivery reads Open a pull request, the longest of its three labels, which fits the select without being cut. Revert gate, in its own group, is on, its explanation starting \"In a project session\" and saying a change takes effect at once, running sessions included.",
-    state: { ...browserState, settings: { ...browserState.settings!, auto_pull_repositories: true, git_workflow: { development: "branch", squash_before_delivery: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: true } } },
+    state: { ...browserState, settings: { ...browserState.settings!, auto_pull_repositories: true, git_workflow: { development: "branch", squash_before_delivery: true, rebase_before_delivery: false, delivery: "pull_request", revert_gate: true } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.git")),
@@ -701,7 +701,7 @@ export const settingsScenarios: Scenario[] = [
     category: "normal",
     title: "Settings: git, development on the current branch",
     description: "Where sessions develop reads On the current branch, its explanation saying a session is given no rule for branches or worktrees and that squashing, rebase and delivery are shown once sessions work on a branch of their own. Squash commits before delivery, Rebase before delivery and Delivery are not shown, though the stored values (squashing on, rebase on, delivery Open a pull request) are kept and come back with another choice. Revert gate is still shown, on, in the Protection group.",
-    state: { ...browserState, settings: { ...browserState.settings!, git_workflow: { development: "in_place", squash_before_delivery: true, rebase_before_merge: true, delivery: "pull_request", revert_gate: true } } },
+    state: { ...browserState, settings: { ...browserState.settings!, git_workflow: { development: "in_place", squash_before_delivery: true, rebase_before_delivery: true, delivery: "pull_request", revert_gate: true } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.git")),

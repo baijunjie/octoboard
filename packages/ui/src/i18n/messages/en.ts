@@ -2406,8 +2406,6 @@ export const en = {
   "settings.gitWorkflow.development.inPlace": "On the current branch",
   "settings.gitWorkflow.development.branch": "On a branch of its own",
   "settings.gitWorkflow.development.worktree": "In a worktree of its own",
-  "settings.gitWorkflow.development.description.inPlace":
-    "A project session works directly on the current branch and is given no rule for branches or worktrees. A change reaches only sessions begun after it. Rebase and delivery are shown once sessions work on a branch of their own.",
   "settings.gitWorkflow.development.description.inPlaceWithPreparation":
     "A project session works directly on the current branch and is given no rule for branches or worktrees. A change reaches only sessions begun after it. Squashing, rebase and delivery are shown once sessions work on a branch of their own.",
   "settings.gitWorkflow.development.description.branch":
@@ -2419,14 +2417,9 @@ export const en = {
     "Once this is on, a branch's commits are squashed into one commit for its feature before delivering finished work by merge, push or pull request. Only a bug fix unrelated to that feature keeps a commit of its own. A change reaches only sessions begun after it, and a project's own rules come first.",
   "settings.gitWorkflow.squash.description.on":
     "A branch's commits are squashed into one commit for its feature before delivering finished work by merge, push or pull request. Only a bug fix unrelated to that feature keeps a commit of its own. A change reaches only sessions begun after it, and a project's own rules come first.",
-  "settings.gitWorkflow.rebase.label": "Rebase before merging",
   "settings.gitWorkflow.rebaseBeforeDelivery.label": "Rebase before delivery",
-  "settings.gitWorkflow.rebase.description.off":
-    "Once this is on, a branch is rebased onto its target branch before it is merged. A change reaches only sessions begun after it, and a project's own rules come first.",
   "settings.gitWorkflow.rebaseBeforeDelivery.description.off":
     "Once this is on, a branch is rebased onto its target branch before delivering finished work by merge, push or pull request. A change reaches only sessions begun after it, and a project's own rules come first.",
-  "settings.gitWorkflow.rebase.description.on":
-    "A branch is rebased onto its target branch before it is merged. A change reaches only sessions begun after it, and a project's own rules come first.",
   "settings.gitWorkflow.rebaseBeforeDelivery.description.on":
     "A branch is rebased onto its target branch before delivering finished work by merge, push or pull request. A change reaches only sessions begun after it, and a project's own rules come first.",
   "settings.gitWorkflow.delivery.label": "Delivery",

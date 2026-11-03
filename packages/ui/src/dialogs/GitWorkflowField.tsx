@@ -45,7 +45,7 @@ export function GitWorkflowField({
     ...development,
   ];
 
-  const flagPicker = (item: "squash_before_delivery" | "rebase_before_merge" | "revert_gate") => {
+  const flagPicker = (item: "squash_before_delivery" | "rebase_before_delivery" | "revert_gate") => {
     const label = t(GIT_WORKFLOW_ITEMS[item].label);
     const options: Option<Follow | "on" | "off">[] = [
       { value: FOLLOW, label: sameAsGlobal, badge: onOff(global[item]), badgeInLabel: true },
@@ -90,7 +90,7 @@ export function GitWorkflowField({
           {onOwnBranch && (
             <>
               {flagPicker("squash_before_delivery")}
-              {flagPicker("rebase_before_merge")}
+              {flagPicker("rebase_before_delivery")}
               <GroupRow label={deliveryLabel}>
                 <OptionSelect
                   hideLabel

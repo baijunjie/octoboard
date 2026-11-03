@@ -66,7 +66,8 @@ set per agent — the account its sessions run under and the model and reasoning
 to the application-wide value (see "A project's own git workflow settings" in
 `docs/product/git-workflow-settings.md`). Every export of consoles carries them, of one console or of all. An import
 stores the description trimmed, and a project of a document that carries no description is imported with none; one
-whose document carries no git workflow settings follows every application-wide value. Export and import preserve the
+whose `git_workflow` leaves an item out follows the application-wide value for it, as one giving it `null` does;
+a project without a `git_workflow` object cannot be read, and the import is refused. Export and import preserve the
 full length of project names and descriptions, including values beyond the editing limits in "Project names" and "The
 project's description" in `docs/product/projects.md`; an import neither rejects nor truncates them for their length.
 
@@ -193,11 +194,10 @@ The language the daemon holds for the user is not carried either (see "The langu
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
 - **The application-wide git workflow settings** (see "The five settings" in `docs/product/git-workflow-settings.md`),
-  under `git_workflow`, an object holding all five of `development`, `squash_before_delivery`, `rebase_before_merge`,
-  `delivery` and `revert_gate`. Applying the document's settings sets the carried items to the document's values, and a
-  document without it, or with `null` there, leaves them as they are. A carried `git_workflow` object that omits
-  `squash_before_delivery` leaves that item at its current application-wide value, in both the import review and the
-  applied settings. A project override that omits it follows the application-wide value.
+  under `git_workflow`, an object holding all five of `development`, `squash_before_delivery`, `rebase_before_delivery`,
+  `delivery` and `revert_gate`. A settings region without `git_workflow`, with `null` there, or with an object that
+  leaves out any of the five cannot be read, and the import is refused (see "What is refused, and what is reported
+  instead" below). Applying the document's settings sets all five to the document's values.
   The import review and its result each have one line for all five (see "The import review" and "The import result" in
   `docs/product/configuration-export-and-import-dialogs.md`).
 - **Claude compatibility** (see "Claude compatibility" in `docs/product/per-agent-settings.md`), under

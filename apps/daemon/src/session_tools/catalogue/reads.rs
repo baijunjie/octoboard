@@ -464,9 +464,8 @@ pub(super) const GET_PROJECT: ToolDef = ToolDef {
          (`null` is the agent's own default) a session of each agent gets when nothing names \
          otherwise, before session-specific selection, and `git_workflow` (the project's own \
          `override` of the git workflow settings, `null` following the application-wide value, \
-         and the `effective` resolved values; `squash_before_delivery`, `rebase_before_merge` \
-         and `delivery` apply only \
-         while `development` is not `in_place`), and `git_status`. ",
+         and the `effective` resolved values; `squash_before_delivery`, `rebase_before_delivery` \
+         and `delivery` apply only while `development` is not `in_place`), and `git_status`. ",
         git_status_field!(),
         " With `refresh` the status is checked against the remote first, as the application's \
          own refresh does, so you need not run git for it; `git_refresh` in the answer then says \

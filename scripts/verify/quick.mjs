@@ -77,11 +77,10 @@ export function uiTests(files, exists = () => true) {
 export const CRATE_WIDE_TESTS = {
   daemon: [
     { filter: "protocol::", test: "committed_bindings_are_current", why: "the wire-type contract (`protocol/bindings.rs`) covers every type deriving `TS`", covers: [
-      "src/protocol/accounts.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/events.rs", "src/protocol/history.rs",
-      "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs",
-      "src/protocol/session_branches.rs", "src/protocol/settings.rs", "src/protocol/terminal.rs", "src/config_document/export.rs",
-      "src/config_document/import/accounts.rs", "src/config_document/import/mod.rs", "src/git_workflow.rs", "src/processes/ledger/trees.rs",
-      "src/accounts/shared_config/link.rs",
+      "src/protocol/accounts.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/configuration.rs", "src/protocol/events.rs",
+      "src/protocol/git_workflow.rs", "src/protocol/history.rs", "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/processes.rs",
+      "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs", "src/protocol/session_branches.rs", "src/protocol/settings.rs",
+      "src/protocol/terminal.rs",
     ] },
     { filter: "records::history::", test: "every_opening_octoboard_writes_with_is_matched", why: "scans every source file for `*_OPENING` constants", covers: ["src/records/history.rs"] },
     { filter: "layering_tests::", test: "every_top_level_module_depends_only_downward_or_as_listed", why: "scans every source file's `crate::` paths against the daemon's layer order", covers: ["src/layering_tests/scan.rs"] },

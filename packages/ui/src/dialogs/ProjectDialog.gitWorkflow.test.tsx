@@ -56,7 +56,7 @@ it("adds without git_workflow when every item follows", async () => {
 });
 
 it("shows the project's own values and sends only the changed items when editing, null for one back to following", async () => {
-  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: null, rebase_before_merge: null, delivery: "merge", revert_gate: null } }));
+  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: null, rebase_before_delivery: null, delivery: "merge", revert_gate: null } }));
   expect(pickerNamed("Where sessions develop").textContent).toContain("On the current branch");
   await choose("Where sessions develop", "Same as global setting");
   expect(pickerNamed("Delivery").textContent).toContain("Merge locally");
@@ -64,7 +64,7 @@ it("shows the project's own values and sends only the changed items when editing
   await choose("Revert gate", "Off");
   await save("Save");
   expect(sentOf(pending, "update_project")).toMatchObject({ git_workflow: { development: null, delivery: null, revert_gate: false } });
-  expect((sentOf(pending, "update_project") as { git_workflow: object }).git_workflow).not.toHaveProperty("rebase_before_merge");
+  expect((sentOf(pending, "update_project") as { git_workflow: object }).git_workflow).not.toHaveProperty("rebase_before_delivery");
 });
 
 it("sends no git_workflow when editing leaves them alone", async () => {
@@ -86,7 +86,7 @@ it("keeps the pickers disabled while the form is locked and enables them once it
 const shown = (picker: string) => Array.from(document.body.querySelectorAll("[aria-label]")).some((el) => el.getAttribute("aria-label") === picker);
 
 it("shows the development picker and the revert gate while the project's own development is on the current branch, and keeps the hidden values", async () => {
-  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: false, rebase_before_merge: false, delivery: "merge", revert_gate: null } }));
+  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: false, rebase_before_delivery: false, delivery: "merge", revert_gate: null } }));
   for (const name of ["Squash commits before delivery", "Rebase before delivery", "Delivery"]) expect(shown(name)).toBe(false);
   for (const name of ["Where sessions develop", "Revert gate"]) expect(shown(name)).toBe(true);
   await save("Save");
@@ -94,7 +94,7 @@ it("shows the development picker and the revert gate while the project's own dev
 });
 
 it.each(["On a branch of its own", "In a worktree of its own"])("shows rebase and delivery again when Where sessions develop is turned back to %s", async (option) => {
-  await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: null, rebase_before_merge: null, delivery: "merge", revert_gate: null } }));
+  await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: null, rebase_before_delivery: null, delivery: "merge", revert_gate: null } }));
   await choose("Where sessions develop", option);
   for (const name of ["Squash commits before delivery", "Rebase before delivery", "Revert gate", "Delivery"]) expect(shown(name)).toBe(true);
   expect(pickerNamed("Delivery").textContent).toContain("Merge locally");

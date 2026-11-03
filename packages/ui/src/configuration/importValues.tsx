@@ -34,7 +34,7 @@ const onOff = (on: boolean): PlainMessageKey => (on ? "configuration.import.valu
 const GIT_WORKFLOW_WORDS: Record<keyof GitWorkflowSettings, (workflow: GitWorkflowSettings) => PlainMessageKey> = {
   development: (w) => DEVELOPMENT_CHOICES.find((choice) => choice.value === w.development)!.label,
   squash_before_delivery: (w) => onOff(w.squash_before_delivery),
-  rebase_before_merge: (w) => onOff(w.rebase_before_merge),
+  rebase_before_delivery: (w) => onOff(w.rebase_before_delivery),
   delivery: (w) => DELIVERY_CHOICES.find((choice) => choice.value === w.delivery)!.label,
   revert_gate: (w) => onOff(w.revert_gate),
 };

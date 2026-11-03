@@ -36,7 +36,7 @@ pub enum GitDevelopment {
 pub const GIT_WORKFLOW_ITEMS: [&str; 5] = [
     "development",
     "squash_before_delivery",
-    "rebase_before_merge",
+    "rebase_before_delivery",
     "delivery",
     "revert_gate",
 ];
@@ -51,8 +51,11 @@ pub struct GitWorkflowSettings {
     /// merge, push or pull request. Moot while `development` is `InPlace`.
     pub squash_before_delivery: bool,
     /// Whether a branch is rebased onto its target branch before delivery (merge, push or pull
-    /// request). The wire name is kept for compatibility. Moot while `development` is `InPlace`.
-    pub rebase_before_merge: bool,
+    /// request). Moot while `development` is `InPlace`.
+    // TODO: remove at the first document `VERSION` bump: reads configuration documents that
+    // carry this item as `rebase_before_merge`.
+    #[serde(alias = "rebase_before_merge")]
+    pub rebase_before_delivery: bool,
     /// Moot while `development` is `InPlace`.
     pub delivery: GitDelivery,
     /// Whether a branch update that quietly undoes changes already on the target branch is
@@ -66,7 +69,7 @@ impl Default for GitWorkflowSettings {
         Self {
             development: GitDevelopment::Worktree,
             squash_before_delivery: false,
-            rebase_before_merge: true,
+            rebase_before_delivery: true,
             delivery: GitDelivery::Ask,
             revert_gate: false,
         }
@@ -79,7 +82,10 @@ impl Default for GitWorkflowSettings {
 pub struct GitWorkflowOverride {
     pub development: Option<GitDevelopment>,
     pub squash_before_delivery: Option<bool>,
-    pub rebase_before_merge: Option<bool>,
+    // TODO: remove at the first document `VERSION` bump: reads configuration documents that
+    // carry this item as `rebase_before_merge`.
+    #[serde(alias = "rebase_before_merge")]
+    pub rebase_before_delivery: Option<bool>,
     pub delivery: Option<GitDelivery>,
     pub revert_gate: Option<bool>,
 }
@@ -96,7 +102,7 @@ pub struct GitWorkflowSettingsChanges {
     pub squash_before_delivery: Option<bool>,
     #[serde(default)]
     #[cfg_attr(test, ts(optional))]
-    pub rebase_before_merge: Option<bool>,
+    pub rebase_before_delivery: Option<bool>,
     #[serde(default)]
     #[cfg_attr(test, ts(optional))]
     pub delivery: Option<GitDelivery>,
@@ -111,7 +117,7 @@ impl From<GitWorkflowSettings> for GitWorkflowSettingsChanges {
         Self {
             development: Some(settings.development),
             squash_before_delivery: Some(settings.squash_before_delivery),
-            rebase_before_merge: Some(settings.rebase_before_merge),
+            rebase_before_delivery: Some(settings.rebase_before_delivery),
             delivery: Some(settings.delivery),
             revert_gate: Some(settings.revert_gate),
         }
@@ -131,7 +137,7 @@ pub struct GitWorkflowOverrideChanges {
     pub squash_before_delivery: Option<Option<bool>>,
     #[serde(default, deserialize_with = "present_option")]
     #[cfg_attr(test, ts(optional))]
-    pub rebase_before_merge: Option<Option<bool>>,
+    pub rebase_before_delivery: Option<Option<bool>>,
     #[serde(default, deserialize_with = "present_option")]
     #[cfg_attr(test, ts(optional))]
     pub delivery: Option<Option<GitDelivery>>,

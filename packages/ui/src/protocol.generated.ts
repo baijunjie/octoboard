@@ -1559,7 +1559,7 @@ export type GitStatus = {
 export type GitWorkflowOverride = {
   development: GitDevelopment | null,
   squash_before_delivery: boolean | null,
-  rebase_before_merge: boolean | null,
+  rebase_before_delivery: boolean | null,
   delivery: GitDelivery | null,
   revert_gate: boolean | null,
 };
@@ -1571,7 +1571,7 @@ export type GitWorkflowOverride = {
 export type GitWorkflowOverrideChanges = {
   development?: GitDevelopment | null,
   squash_before_delivery?: boolean | null,
-  rebase_before_merge?: boolean | null,
+  rebase_before_delivery?: boolean | null,
   delivery?: GitDelivery | null,
   revert_gate?: boolean | null,
 };
@@ -1589,9 +1589,9 @@ export type GitWorkflowSettings = {
   squash_before_delivery: boolean,
   /**
    * Whether a branch is rebased onto its target branch before delivery (merge, push or pull
-   * request). The wire name is kept for compatibility. Moot while `development` is `InPlace`.
+   * request). Moot while `development` is `InPlace`.
    */
-  rebase_before_merge: boolean,
+  rebase_before_delivery: boolean,
   /**
    * Moot while `development` is `InPlace`.
    */
@@ -1609,7 +1609,7 @@ export type GitWorkflowSettings = {
 export type GitWorkflowSettingsChanges = {
   development?: GitDevelopment,
   squash_before_delivery?: boolean,
-  rebase_before_merge?: boolean,
+  rebase_before_delivery?: boolean,
   delivery?: GitDelivery,
   revert_gate?: boolean,
 };

@@ -672,8 +672,8 @@ mod tests {
     };
 
     /// A shell terminal travels in the snapshot and in events of its own in the shape
-    /// `PROTOCOL.md` and `packages/ui/src/protocol.ts` give it, and a terminal is created in the
-    /// project's own directory unless a worktree is named.
+    /// `PROTOCOL.md` and the generated `packages/ui/src/protocol.generated.ts` give it, and a
+    /// terminal is created in the project's own directory unless a worktree is named.
     #[test]
     fn shell_terminals_travel_in_the_documented_shape() {
         let terminal = ShellTerminal {

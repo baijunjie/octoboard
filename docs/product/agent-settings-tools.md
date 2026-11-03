@@ -121,7 +121,7 @@ same set of fields:
 | `accounts` | Its account setting for every agent, as above. |
 | `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
 | `effective` | What `default_agent`, `accounts` and `launch` resolve to under the project's console, worked out as a launch works them out, as `{"default_agent": …, "accounts": …, "launch": …}`: the agent a session opened in the project without a choice runs on (the project's own, else the console's `project_session_agent`, else its `default_agent`); for every agent the account such a session of it gets, by id, or `default` for the agent's default account (the project's own, else the console's); and for every agent the model and reasoning effort it gets (each the project's own, else the console's `project_session_launch`; `null` is the agent's own default). A session's own choices come before these at a launch, and so do the agent and account automatic selection picks and the starting session's own agent and account (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). |
-| `git_workflow` | Its git workflow settings (see `docs/product/git-workflow-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `development`, `squash_before_delivery`, `rebase_before_merge`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the five resolved values for it now (`squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is). |
+| `git_workflow` | Its git workflow settings (see `docs/product/git-workflow-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `development`, `squash_before_delivery`, `rebase_before_delivery`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the five resolved values for it now (`squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is). |
 
 Each also carries `git_status`, the project's git state as the daemon last read it, read-only (see "Reading the status
 from a session" in `docs/product/project-git-status.md`).
@@ -169,7 +169,7 @@ Takes `project` — an id, or a name that names exactly one project of the conso
 | `pinned` | Pins or unpins it. |
 | `default_agent` | An agent, or `null` to follow the console's again (its `project_session_agent`, else its `default_agent`). |
 | `accounts`, `launch` | As above. |
-| `git_workflow` | An object of any of `development` (`in_place`, `branch` or `worktree`), `squash_before_delivery` (`true` or `false`), `rebase_before_merge` (`true` or `false`), `delivery` (`ask`, `merge` or `pull_request`) and `revert_gate` (`true` or `false`); each item given becomes the project's own value, `null` for an item puts it back to following the application-wide value, and an item left out stays as it is. |
+| `git_workflow` | An object of any of `development` (`in_place`, `branch` or `worktree`), `squash_before_delivery` (`true` or `false`), `rebase_before_delivery` (`true` or `false`), `delivery` (`ask`, `merge` or `pull_request`) and `revert_gate` (`true` or `false`); each item given becomes the project's own value, `null` for an item puts it back to following the application-wide value, and an item left out stays as it is. |
 
 `tags` beside `add_tags` or `remove_tags` is refused. Tags end up normalised as in `docs/product/project-tags.md`.
 Anything left out is left as it is, and the call answers with the project's settings as stored.
@@ -204,7 +204,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `interface_language` | The language the daemon holds for the user, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
-| `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
+| `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_delivery`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
 | `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/per-agent-settings.md`). Read-only. |
 | `agent_tags` | For each added agent that has tags, by its name (`claude`, `codex`, `grok`), its tags as a list, in the user's order (see "Agent tags" in `docs/product/per-agent-settings.md`); every agent's while the list of added agents is undecided. An agent without tags, and a removed agent, has no entry. Read-only. |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's accounts come in the order automatic account selection takes them in: the user's order of that agent's accounts, then those that order does not name (see "Which account a session uses" in `docs/product/opening-sessions.md`). The default account is listed with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
@@ -217,7 +217,7 @@ built-in default. `interface_language` is a tag of an offered language (see "The
 `docs/product/language.md`), surrounding whitespace ignored; any other text, a blank one included, is refused. It
 changes the language the daemon holds, as a client's report does, and no window's language: each window keeps the one
 it shows. `git_workflow` is an object of any of the five git workflow settings, with the values `update_project`'s takes
-(`squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`, and
+(`squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`, and
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
 unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
 `auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices`,
@@ -235,7 +235,7 @@ sessions opened afterwards, and a changed model or effort reaches a session's ne
 that value (see `docs/product/model-and-reasoning-effort.md`). That holds for the calling console session too: its own
 console's model and effort reach it when it is next launched, and its console's account only console sessions opened
 afterwards. A changed `project_session_launch` reaches a project session at its next launch, unless its project or the
-session sets that value itself. A changed `development`, `squash_before_delivery`, `rebase_before_merge` or `delivery`,
+session sets that value itself. A changed `development`, `squash_before_delivery`, `rebase_before_delivery` or `delivery`,
 application-wide or a project's own, is sure to reach only project sessions begun after it (see "When a change reaches a
 session" in `docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The
 switch" in `docs/product/revert-gate.md`). A changed `interface_language` reaches sessions as a change made from a

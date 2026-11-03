@@ -196,7 +196,7 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
              development do not trigger this requirement.",
         );
     }
-    if settings.rebase_before_merge {
+    if settings.rebase_before_delivery {
         preparation.push(
             "Before delivering finished work by merging, pushing or opening a pull request, \
              rebase the branch onto its target branch. When merging the rebased branch into its \
@@ -931,11 +931,11 @@ mod tests {
         }
     }
 
-    fn settings(rebase_before_merge: bool, delivery: GitDelivery) -> GitWorkflowSettings {
+    fn settings(rebase_before_delivery: bool, delivery: GitDelivery) -> GitWorkflowSettings {
         GitWorkflowSettings {
             development: GitDevelopment::Worktree,
             squash_before_delivery: false,
-            rebase_before_merge,
+            rebase_before_delivery,
             delivery,
             revert_gate: true,
         }
@@ -1171,7 +1171,7 @@ mod tests {
                         &GitWorkflowSettings {
                             development,
                             squash_before_delivery: squash,
-                            rebase_before_merge: rebase,
+                            rebase_before_delivery: rebase,
                             delivery,
                             ..GitWorkflowSettings::default()
                         },

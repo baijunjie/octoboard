@@ -643,7 +643,7 @@ async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
     let expected = GitWorkflowOverride {
         development: Some(GitDevelopment::InPlace),
         squash_before_delivery: None,
-        rebase_before_merge: None,
+        rebase_before_delivery: None,
         delivery: Some(GitDelivery::PullRequest),
         revert_gate: None,
     };

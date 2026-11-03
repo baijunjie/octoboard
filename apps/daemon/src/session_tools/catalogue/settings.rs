@@ -413,7 +413,7 @@ fn git_workflow_schema(whose: GitWorkflowFor) -> Value {
                      Applies only while `development` is not `in_place`. Default off. {RULE_REACHES}"
                 ),
             },
-            "rebase_before_merge": {
+            "rebase_before_delivery": {
                 "type": nullable(json!("boolean")),
                 "description": format!(
                     "Whether to rebase a branch onto its target branch before delivering finished \

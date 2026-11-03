@@ -64,11 +64,11 @@ export function GitSection(): React.ReactElement {
                 onChange={(value) => change({ squash_before_delivery: value })}
               />
               <SwitchSettingRow
-                motionKey="rebase_before_merge"
-                label={t(GIT_WORKFLOW_ITEMS.rebase_before_merge.label)}
-                description={t(GIT_WORKFLOW_ITEMS.rebase_before_merge.description[gitWorkflow.rebase_before_merge ? "on" : "off"])}
-                isSelected={gitWorkflow.rebase_before_merge}
-                onChange={(value) => change({ rebase_before_merge: value })}
+                motionKey="rebase_before_delivery"
+                label={t(GIT_WORKFLOW_ITEMS.rebase_before_delivery.label)}
+                description={t(GIT_WORKFLOW_ITEMS.rebase_before_delivery.description[gitWorkflow.rebase_before_delivery ? "on" : "off"])}
+                isSelected={gitWorkflow.rebase_before_delivery}
+                onChange={(value) => change({ rebase_before_delivery: value })}
               />
               <SettingRow fill motionKey="delivery" label={t(GIT_WORKFLOW_ITEMS.delivery.label)} description={t(GIT_WORKFLOW_ITEMS.delivery.description)}>
                 <OptionSelect<GitDelivery>

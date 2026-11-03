@@ -171,13 +171,13 @@ const gitWorkflowState = snapshotState({
   consoles: [console_],
   projects: [gitWorkflowProject],
   sessions: [],
-  settings: { ...accountsState.settings!, git_workflow: { development: "branch", squash_before_delivery: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: true } },
+  settings: { ...accountsState.settings!, git_workflow: { development: "branch", squash_before_delivery: true, rebase_before_delivery: false, delivery: "pull_request", revert_gate: true } },
 });
 
 // A project that develops on the current branch for itself while the application-wide setting has worktrees, and holds a
 // value of its own for squashing, rebase and delivery: all three stay as stored, out of sight.
 const inPlaceProject = projectOf("p-in-place", console_.id, "Scratch Site", {
-  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, development: "in_place", squash_before_delivery: true, rebase_before_merge: true, delivery: "merge" },
+  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, development: "in_place", squash_before_delivery: true, rebase_before_delivery: true, delivery: "merge" },
 });
 const inPlaceState = snapshotState({
   consoles: [console_],

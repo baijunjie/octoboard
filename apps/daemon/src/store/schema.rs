@@ -86,6 +86,10 @@ DROP TABLE branch_origins_v1;
 "#;
 
 /// Every table, index and trigger of the current schema.
+///
+/// The `rebase_before_merge` columns of `projects` and `settings` hold the `rebase_before_delivery`
+/// item of the git workflow settings; the column keeps its first name until a schema bump has a
+/// migration step to rename it in.
 pub(super) const SCHEMA: &str = r#"
 CREATE TABLE hosts (
     id          TEXT PRIMARY KEY,

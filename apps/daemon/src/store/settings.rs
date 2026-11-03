@@ -261,7 +261,7 @@ impl Store {
             params![
                 SETTINGS_ID,
                 enum_to_text(&next.development),
-                next.rebase_before_merge,
+                next.rebase_before_delivery,
                 enum_to_text(&next.delivery),
                 next.revert_gate,
                 next.squash_before_delivery,
@@ -376,7 +376,7 @@ fn read_git_workflow_settings(conn: &Connection) -> Result<GitWorkflowSettings> 
             Ok(GitWorkflowSettings {
                 development: enum_from_row(row, 0)?,
                 squash_before_delivery: row.get(4)?,
-                rebase_before_merge: row.get(1)?,
+                rebase_before_delivery: row.get(1)?,
                 delivery: enum_from_row(row, 2)?,
                 revert_gate: row.get(3)?,
             })
@@ -809,7 +809,7 @@ mod tests {
             GitWorkflowSettings {
                 development: GitDevelopment::Worktree,
                 squash_before_delivery: false,
-                rebase_before_merge: true,
+                rebase_before_delivery: true,
                 delivery: GitDelivery::PullRequest,
                 revert_gate: true,
             }
@@ -852,7 +852,7 @@ mod tests {
             .change_git_workflow_settings(&GitWorkflowSettingsChanges {
                 development: Some(GitDevelopment::Branch),
                 squash_before_delivery: Some(true),
-                rebase_before_merge: Some(false),
+                rebase_before_delivery: Some(false),
                 delivery: Some(GitDelivery::PullRequest),
                 revert_gate: Some(true),
             })
@@ -862,7 +862,7 @@ mod tests {
             GitWorkflowSettings {
                 development: GitDevelopment::InPlace,
                 squash_before_delivery: false,
-                rebase_before_merge: false,
+                rebase_before_delivery: false,
                 delivery: GitDelivery::Merge,
                 revert_gate: true,
             }

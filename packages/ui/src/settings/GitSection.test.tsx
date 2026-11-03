@@ -43,7 +43,7 @@ const choose = async (container: HTMLElement, name: string, option: string) => {
 };
 
 it("shows the daemon's values, every control named", () => {
-  const container = mount({ gitWorkflow: { development: "branch", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true } });
+  const container = mount({ gitWorkflow: { development: "branch", squash_before_delivery: false, rebase_before_delivery: true, delivery: "merge", revert_gate: true } });
   expect(picker(container, "Where sessions develop")?.textContent).toContain("On a branch of its own");
   expect(toggle(container, "Squash commits before delivery").checked).toBe(false);
   expect(toggle(container, "Rebase before delivery").checked).toBe(true);
@@ -61,7 +61,7 @@ it("lists the controls in order: Where sessions develop, Squash commits before d
 
 it.each([
   { name: "Squash commits before delivery", key: "squash_before_delivery" as const },
-  { name: "Rebase before delivery", key: "rebase_before_merge" as const },
+  { name: "Rebase before delivery", key: "rebase_before_delivery" as const },
   { name: "Revert gate", key: "revert_gate" as const },
 ])("sends only $key when its switch is turned", async ({ name, key }) => {
   const container = mount();

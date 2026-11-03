@@ -22,7 +22,7 @@ impl GitWorkflowSettingsChanges {
             &GitWorkflowOverride {
                 development: self.development,
                 squash_before_delivery: self.squash_before_delivery,
-                rebase_before_merge: self.rebase_before_merge,
+                rebase_before_delivery: self.rebase_before_delivery,
                 delivery: self.delivery,
                 revert_gate: self.revert_gate,
             },
@@ -38,9 +38,9 @@ impl GitWorkflowOverrideChanges {
             squash_before_delivery: self
                 .squash_before_delivery
                 .unwrap_or(current.squash_before_delivery),
-            rebase_before_merge: self
-                .rebase_before_merge
-                .unwrap_or(current.rebase_before_merge),
+            rebase_before_delivery: self
+                .rebase_before_delivery
+                .unwrap_or(current.rebase_before_delivery),
             delivery: self.delivery.unwrap_or(current.delivery),
             revert_gate: self.revert_gate.unwrap_or(current.revert_gate),
         }
@@ -54,9 +54,9 @@ pub fn resolve(global: &GitWorkflowSettings, project: &GitWorkflowOverride) -> G
         squash_before_delivery: project
             .squash_before_delivery
             .unwrap_or(global.squash_before_delivery),
-        rebase_before_merge: project
-            .rebase_before_merge
-            .unwrap_or(global.rebase_before_merge),
+        rebase_before_delivery: project
+            .rebase_before_delivery
+            .unwrap_or(global.rebase_before_delivery),
         delivery: project.delivery.unwrap_or(global.delivery),
         revert_gate: project.revert_gate.unwrap_or(global.revert_gate),
     }
@@ -84,7 +84,7 @@ mod tests {
             GitWorkflowSettings {
                 development: GitDevelopment::Worktree,
                 squash_before_delivery: false,
-                rebase_before_merge: true,
+                rebase_before_delivery: true,
                 delivery: GitDelivery::Ask,
                 revert_gate: false,
             }
@@ -94,7 +94,7 @@ mod tests {
             GitWorkflowOverride {
                 development: None,
                 squash_before_delivery: None,
-                rebase_before_merge: None,
+                rebase_before_delivery: None,
                 delivery: None,
                 revert_gate: None,
             }
@@ -106,7 +106,7 @@ mod tests {
         let global = GitWorkflowSettings {
             development: GitDevelopment::InPlace,
             squash_before_delivery: false,
-            rebase_before_merge: false,
+            rebase_before_delivery: false,
             delivery: GitDelivery::Merge,
             revert_gate: false,
         };
@@ -121,7 +121,7 @@ mod tests {
             GitWorkflowSettings {
                 development: GitDevelopment::Branch,
                 squash_before_delivery: false,
-                rebase_before_merge: false,
+                rebase_before_delivery: false,
                 delivery: GitDelivery::PullRequest,
                 revert_gate: false,
             }
@@ -166,7 +166,7 @@ mod tests {
             GitWorkflowOverride {
                 development: None,
                 squash_before_delivery: None,
-                rebase_before_merge: None,
+                rebase_before_delivery: None,
                 delivery: Some(GitDelivery::Merge),
                 revert_gate: Some(false),
             }
