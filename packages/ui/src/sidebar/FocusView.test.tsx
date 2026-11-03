@@ -396,7 +396,7 @@ it.each<[string, Parameters<typeof sessionOf>[4], Partial<Session>, string]>([
   ["working in the background", "idle", { background_tasks: [{ id: "watcher" }] }, "Working in background"],
   ["working", "working", {}, "Working"],
   ["starting", "starting", {}, "Starting"],
-  ["switching account", "idle", { switching_account: true }, "Switching account…"],
+  ["switching account", "idle", { switching_account: true }, "Switching account"],
   ["interrupted", "interrupted", {}, "Interrupted"],
 ])("a switch chip marks a console session that is %s with that status's glyph, and names it", (_case, status, extra, words) => {
   const other = sessionOf("s-other", main.id, undefined, "Other", status, { has_conversation: false, ...extra });

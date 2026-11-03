@@ -3,6 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { consoleOf, sessionOf } from "../fixtures/builders";
+import { joinPhrases } from "../i18n/joinPhrases";
 import { isolate } from "../i18n/isolate";
 import { PlatformProvider } from "../platform/react";
 import type { Session, SessionStatus } from "../protocol";
@@ -28,13 +29,13 @@ const EXTRAS: Partial<Record<Case, Partial<Session>>> = {
 
 /** Mounts a rail with one console, holding a session in each of `statuses`, whose avatar's pointer
  * hover floats the hidden sidebar in when `hoverOpensSidebar`. Returns the console's avatar button. */
-function avatarOf(statuses: Case[], hoverOpensSidebar = false): HTMLButtonElement {
+function avatarOf(statuses: Case[], hoverOpensSidebar = false, otherSessions: Session[] = []): HTMLButtonElement {
   const wire = (status: Case): SessionStatus => (status === "background" || status === "paused" || status === "done" || status === "delegated" || status === "switching" ? "idle" : status);
   const sessions = statuses.flatMap((status, index) => {
     const own = sessionOf(`s-${index}`, main.id, undefined, `Hub ${index}`, wire(status), { has_conversation: false, ...EXTRAS[status] });
     return status === "delegated" ? [own, sessionOf(`s-${index}-child`, main.id, undefined, `Child ${index}`, "working", { bound_to: own.id })] : [own];
   });
-  const daemon = testDaemon({ state: { sessions: new Map(sessions.map((session) => [session.id, session])) } });
+  const daemon = testDaemon({ state: { sessions: new Map([...sessions, ...otherSessions].map((session) => [session.id, session])) } });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>
       <DaemonProvider value={daemon}>
@@ -63,52 +64,67 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false): HTMLButtonElemen
   return container.querySelector<HTMLButtonElement>("[data-sidebar-peek-keep]")!;
 }
 
-const AVATAR_TEXT: Array<[string, Case[], string]> = [
-  ["a session is waiting for the user", ["working", "waiting_user"], "Waiting for you"],
-  ["a session awaits instructions before another finishes working", ["idle", "working"], "Awaiting instructions"],
-  ["a done session coexists with dormant and paused sessions", ["dormant", "paused", "done"], "Paused"],
-  ["an idle session coexists with a starting session", ["starting", "idle"], "Awaiting instructions"],
-  ["a waiting session takes priority over done", ["done", "paused", "waiting_user", "idle"], "Waiting for you"],
-  ["a done session takes priority over awaiting instructions", ["idle", "done"], "Done"],
+function tooltipRows(): string[] {
+  return [...openTooltip()!.querySelectorAll("dt")].map((term) => `${term.textContent} ${term.nextElementSibling!.textContent}`);
+}
+
+const COUNTS: Array<[Case[], string[]]> = [
+  [["working", "waiting_user", "working"], ["Waiting for you 1", "Working 2"]],
+  [["dormant", "paused", "done"], ["Dormant 1", "Paused 1", "Done 1"]],
+  [["starting", "idle"], ["Awaiting instructions 1", "Starting 1"]],
+  [["done", "paused", "waiting_user", "idle"], ["Waiting for you 1", "Paused 1", "Done 1", "Awaiting instructions 1"]],
+  [["idle", "done", "done", "archived"], ["Done 2", "Awaiting instructions 1"]],
+  [["background"], ["Working in background 1"]],
+  [["delegated"], ["Child sessions working 1", "Working 1"]],
+  [["switching"], ["Switching account 1"]],
+  [["interrupted"], ["Interrupted 1"]],
 ];
 
-it.each(AVATAR_TEXT)("says on the avatar's tooltip, in its accessible name's words, that %s", (_case, statuses, words) => {
+it.each(COUNTS)("counts the console's shown statuses for %j", (statuses, words) => {
   const settle = withFakeTimers();
   const avatar = avatarOf(statuses);
-  const name = `${isolate("Main")}, ${words}`;
-
   enter(avatar);
   expect(openTooltip()).toBeNull();
   settle();
-  expect(openTooltip()?.textContent).toBe(`Main, ${words}`);
-  const statusBadge = openTooltip()?.querySelector('[data-variant="soft"]');
-  expect(statusBadge?.textContent).toBe(words);
-  expect(statusBadge?.getAttribute("data-color")).toBe(words === "Waiting for you" ? "warning" : "success");
-  expect(statusBadge?.querySelector("svg")).toBeNull();
-  expect(avatar.getAttribute("aria-label")).toBe(name);
-  // The tooltip repeats the name, so it must not be announced a second time as a description.
+  expect(tooltipRows()).toEqual(words);
+  expect(openTooltip()!.querySelector("svg")).toBeNull();
+  expect(avatar.getAttribute("aria-label")).toBe(`${isolate("Main")}, ${joinPhrases("en", words)}`);
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
-
   leave(avatar);
   settle();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it.each<{ statuses: Case[] }>([[], ["archived"], ["working"], ["starting"], ["dormant"], ["background"], ["delegated"], ["switching"], ["interrupted"]].map((statuses) => ({ statuses: statuses as Case[] })))("tells the bare name without an avatar status for $statuses", ({ statuses }) => {
+it.each([{ statuses: [] }, { statuses: ["archived"] }] as { statuses: Case[] }[])("tells the bare name with no unarchived sessions ($statuses)", ({ statuses }) => {
   const settle = withFakeTimers();
   const avatar = avatarOf(statuses);
-
   enter(avatar);
   settle();
   expect(openTooltip()?.textContent).toBe("Main");
   expect(avatar.getAttribute("aria-label")).toBe("Main");
   expect(avatar.closest('[data-slot="badge-anchor"]')!.children).toHaveLength(1);
-  expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
-
   leave(avatar);
   settle();
-  expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each(["working", "starting", "dormant", "background", "delegated", "switching", "interrupted"] as Case[])("counts %s even without an avatar badge", (status) => {
+  const avatar = avatarOf([status]);
+  expect(avatar.closest('[data-slot="badge-anchor"]')!.children).toHaveLength(1);
+});
+
+it("includes project sessions, excludes other consoles, and ignores archived project sessions", () => {
+  const settle = withFakeTimers();
+  const avatar = avatarOf(["done"], false, [
+    sessionOf("project-work", main.id, "project-1", "Work", "working"),
+    sessionOf("other-console", "c-2", "project-2", "Other", "waiting_user"),
+    sessionOf("project-archived", main.id, "project-1", "Old", "archived"),
+  ]);
+  enter(avatar);
+  settle();
+  expect(tooltipRows()).toEqual(["Done 1", "Working 1"]);
+  leave(avatar);
+  settle();
 });
 
 const EVERY_STATUS: Array<[Case, string]> = [
@@ -124,7 +140,7 @@ it.each(EVERY_STATUS)("marks an avatar whose top status is %s with a badge, and 
   expect(badge.getAttribute("aria-hidden")).toBe("true");
   expect(badge.classList.contains("badge")).toBe(true);
   expect(badge.classList.contains("badge--bottom-right")).toBe(true);
-  expect(avatar.getAttribute("aria-label")).toBe(`${isolate("Main")}, ${words}`);
+  expect(avatar.getAttribute("aria-label")).toBe(`${isolate("Main")}, ${words} 1`);
 });
 
 it("gives the badge no tooltip or name of its own", () => {
@@ -135,7 +151,7 @@ it("gives the badge no tooltip or name of its own", () => {
   enter(avatar);
   settle();
   // Only one tooltip is open at a time, so what shows is whose it is: the avatar's, not the badge's.
-  expect(openTooltip()?.textContent).toBe("Main, Waiting for you");
+  expect(openTooltip()?.textContent).toBe("MainWaiting for you1");
   expect(badge.hasAttribute("aria-label")).toBe(false);
   leave(avatar);
   settle();
@@ -156,7 +172,7 @@ it("opens on keyboard focus, and not on hover while the hidden sidebar floats in
     avatar.focus();
   });
   settle();
-  expect(openTooltip()?.textContent).toBe("Main, Waiting for you");
+  expect(openTooltip()?.textContent).toBe("MainWaiting for you1");
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
 
   act(() => avatar.blur());

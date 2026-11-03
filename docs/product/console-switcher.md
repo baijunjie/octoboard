@@ -18,6 +18,8 @@ its console sessions included. Only sessions whose shown status is **waiting for
 (see "The top status" in `docs/product/session-statuses.md`). With none in these four states, the avatar has no badge,
 even while other sessions are running. Starting and switching-account sessions are excluded by their shown status.
 Pinning, project grouping and the sidebar's choice to order by status or date do not affect the choice.
+The badge extends outside the button, with enough space around each avatar to keep it complete at the scrolling
+column's edge.
 
 | Top status | Badge |
 |---|---|
@@ -30,12 +32,19 @@ The hand waves as its status glyph does (see "Status glyphs" in `docs/product/se
 asks for reduced motion, it stays still. The other badges are still.
 
 The avatar's circular badge is decorative and has no tooltip or accessible name of its own. **The avatar's tooltip
-shows the console's name followed by a text-only status badge**, with a soft orange fill for waiting for the user and
-a soft green fill for paused, done or awaiting instructions. The tooltip's status badge has no icon. The avatar's
-accessible name carries the same information as one phrase ("Name, Done"), using the status wording shared across the
-application; the tooltip does not repeat it as an accessible description. With no eligible status, both contain only
-the console's name. When that tooltip opens, and why a mouse user with the docked sidebar hidden does not get to read
-it, is in "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`.
+counts the console's unarchived sessions by their shown status**, including both project and console sessions. The
+console's name sits above a divider and a two-column list: muted status labels on the left and right-aligned counts,
+with no icons or coloured badges. Only statuses with a nonzero count appear. Every shown status is counted, including
+starting, switching account, child sessions working and working in background, whether or not it can supply the
+avatar's badge. A session queued for an account switch in this window counts as switching account, as its row shows
+it (see "Which status a session shows" in `docs/product/session-statuses.md`). Each session counts once, in its own
+shown status.
+
+The avatar's accessible name carries the console's name and the same status counts as one phrase, using the status
+wording shared across the application; the tooltip does not repeat it as an accessible description. With no
+unarchived sessions, both contain only the console's name. When that tooltip opens, and why a mouse user with the
+docked sidebar hidden does not get to read it, is in "Tooltips on icon-only controls" in
+`docs/product/labels-and-tooltips.md`.
 
 **Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer, the same menu as
 the sidebar's header carries (see "The console header" in `docs/product/sidebar.md`). It does not switch to the console.

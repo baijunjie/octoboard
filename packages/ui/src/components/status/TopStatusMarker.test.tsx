@@ -17,7 +17,7 @@ const STATUS_TEXT: Array<[Exclude<ShownStatusKind, "archived">, string]> = [
   ["background", "Working in background"],
   ["working", "Working"],
   ["starting", "Starting"],
-  ["switching", "Switching account…"],
+  ["switching", "Switching account"],
   ["interrupted", "Interrupted"],
 ];
 

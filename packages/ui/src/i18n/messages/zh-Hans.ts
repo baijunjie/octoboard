@@ -771,7 +771,7 @@ export const zhHans: Translation<"other"> = {
   "session.status.background": "后台工作中",
   "session.status.delegated": "子会话工作中",
   "session.status.done": "已完成",
-  "session.status.switching": "正在切换账户…",
+  "session.status.switching": "账户切换中",
   "session.status.interrupted": "已中断",
   "session.status.archived": "已归档",
   "session.status.named": "{name}，{status}",
@@ -791,6 +791,7 @@ export const zhHans: Translation<"other"> = {
   "titleBar.terminal.hide": "隐藏终端面板",
   "titleBar.terminal.show": "显示终端面板",
 
+  "rail.statusCount": "{status} {count}",
   "rail.label": "控制台和窗口控制",
   "rail.newConsole": "新建控制台",
   "rail.waiting": {
@@ -1034,7 +1035,7 @@ export const zhHans: Translation<"other"> = {
   "terminal.loading": "终端加载中…",
   "terminal.resuming": "正在恢复会话…",
   "terminal.starting": "正在启动会话…",
-  "terminal.switchingAccount": "正在切换账户…",
+  "terminal.switchingAccount": "账户切换中",
   "terminal.reconnecting": "终端正在重新连接…",
   "terminal.disconnected": "终端已断开连接",
   "terminal.archived": "此会话已归档",

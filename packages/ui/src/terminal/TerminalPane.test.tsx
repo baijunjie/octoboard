@@ -359,13 +359,13 @@ it("covers the terminal with the switching state, inert and ahead of a failing c
   expect(terminal().hasAttribute("inert")).toBe(false);
   render(root, { ...session, switching_account: true });
   speak();
-  expect(status(container)).toBe("Switching account…");
+  expect(status(container)).toBe("Switching account");
   expect(terminal().hasAttribute("inert")).toBe(true);
   expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
   FakeController.last.settle("closed");
-  expect(status(container)).toBe("Switching account…");
+  expect(status(container)).toBe("Switching account");
   render(root, session);
-  expect(status(container)).not.toBe("Switching account…");
+  expect(status(container)).not.toBe("Switching account");
   expect(terminal().hasAttribute("inert")).toBe(false);
 });
 
@@ -376,7 +376,7 @@ it("offers no Resume over the cover while an account switch holds an interrupted
   expect(container.textContent).toContain("Not running");
   render(root, { ...interrupted, switching_account: true });
   speak();
-  expect(status(container)).toBe("Switching account…");
+  expect(status(container)).toBe("Switching account");
   expect(container.textContent).not.toContain("Not running");
   expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Resume");
 });
@@ -598,7 +598,7 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
   const switching = statusRegions(container)[0];
   expect(switching.textContent).toBe("");
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
-  expect(switching.textContent).toBe("Switching account…");
+  expect(switching.textContent).toBe("Switching account");
   const noProcessPane = mountArchived();
   noProcessPane.show({ resuming: true });
   expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", ""]);
@@ -608,13 +608,13 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
 
 it("covers the terminal for a session this window queued an account switch for, until it leaves the queue", () => {
   const { container } = mount();
-  expect(status(container)).not.toBe("Switching account…");
+  expect(status(container)).not.toBe("Switching account");
   act(() => setAccountSwitchesQueued(daemon.store, [session.id], true));
   speak();
-  expect(status(container)).toBe("Switching account…");
+  expect(status(container)).toBe("Switching account");
   act(() => setAccountSwitchesQueued(daemon.store, [session.id], false));
   speak();
-  expect(status(container)).not.toBe("Switching account…");
+  expect(status(container)).not.toBe("Switching account");
 });
 
 it("speaks a no-process bar's sentence once, from a region mounted empty, and leaves the button reachable", () => {

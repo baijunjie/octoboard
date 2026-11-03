@@ -1,4 +1,5 @@
 import type { Scenario } from "../scenario";
+import { describing } from "../../fixtures/interact";
 import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 
 const GROUP = "Sidebar sessions";
@@ -56,6 +57,8 @@ const paused = consoleOf("c-paused", "Paused");
 const delegating = consoleOf("c-delegating", "Delegating");
 const markerSessions = [
   ...sessions,
+  sessionOf("s-main-hub", console_.id, undefined, "Choose the next release", "waiting_user"),
+  sessionOf("s-main-archived-hub", console_.id, undefined, "Previous release", "archived"),
   sessionOf("s-analytics-1", console_.id, analytics.id, "Watch the background agents", "dormant"),
   sessionOf("s-analytics-2", console_.id, analytics.id, "Compile the report", "working"),
   sessionOf("s-infra-1", console_.id, infrastructure.id, "Retry the failed build", "idle", { paused: true }),
@@ -86,7 +89,7 @@ const markerSessions = [
 ];
 const markerState = switchingAccount(
   snapshotState({
-    consoles: [console_, dormant, paused, finished, ready, delegating, staging, build, starting, switching, interrupted],
+    consoles: [console_, dormant, paused, finished, delegating, staging, build, starting, switching, interrupted, ready],
     projects: [archived, empty, website, api, mobile, billing, docs, analytics, infrastructure, designSystem, pipeline, onboarding, payments, preview, release],
     sessions: markerSessions,
   }),
@@ -138,11 +141,13 @@ export const activityScenarios: Scenario[] = [
     id: "collapsed-project-activity",
     group: GROUP,
     category: "normal",
-    title: "Collapsed project rows and rail avatars, by their top status",
-    description: "Collapsed project rows show every status, while rail avatars summarize only Waiting for you, Paused, Done and Awaiting instructions. Rows carry the compact glyph, and each row's accessible name ends with its status: Website a waving hand (Waiting for you beats its Done and Working sessions), Analytics the orange zz (Dormant), Infrastructure a green circled pause sign (Paused), Design system a green circled check mark (Done), Billing a green speech bubble (Awaiting instructions), Data pipeline a pinging green ring around a dot (Child sessions working), Mobile app a pinging hollow green ring (Working in background: its only session is idle with a dev server still running), Search API a pinging blue dot (Working), Onboarding and Payments a grey turning arc (Starting; Switching account) and Docs a grey pause (Interrupted). The sidebar sorts Payments and Onboarding where they will land, with Done and Working. Hover a marker to read its tooltip. The rail shows only Main with the inverted waving hand on orange, Paused with a bare pause sign, Finished with a check mark and Ready with a speech bubble on green. The small status badges use the component's default border at the bottom-right corner of each avatar button (bottom-left in right-to-left layouts), and each eligible status wins over the working session in the same console. Dormant, Delegating, Staging (background work), Build (Working and Starting), Starting, Switching and Interrupted remain in the rail with no badge. Hover Main, Paused, Finished or Ready: the tooltip puts the console name before a soft status badge containing only localized status text, orange for Waiting for you and green for Paused, Done and Awaiting instructions. Each avatar still names its status once for assistive technology, with no repeated tooltip description. Avatars without an eligible summary keep a name-only tooltip. Dormant raises no hand, so the rail’s waiting count leaves it out. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the eleven active projects open, and those two stay folded.",
+    title: "Collapsed project statuses and rail session counts",
+    description: "Collapsed project rows retain every status glyph, while avatar badges show only Waiting for you, Paused, Done and Awaiting instructions by priority. Main's tooltip starts open: its name sits above a divider and a two-column list, with muted status labels on the left and numeric counts aligned on the right. The rows have no icons or coloured chips. Its two waiting sessions include one console session and one project session; its two Done sessions and the remaining project sessions demonstrate grouping by displayed status, including Dormant, Child sessions working, Working in background, Starting, Switching account and Interrupted. Archived project and console sessions are excluded. The avatar's accessible name carries the same counts once. Focus or hover another avatar to compare: consoles without an eligible avatar badge still show all their session counts in their tooltips. Ready is the last avatar, with a complete green speech-bubble badge outside its button; scroll to the bottom at a short window height to check that the badge stays clear of the scroller's edge. The pinned Archived only and No sessions yet projects remain dimmed and folded after the active projects; expand from Projects to open only the eleven active projects.",
     state: markerState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),
+      (ui) => ui.wait(500),
+      (ui) => ui.focusControl(describing("Main console avatar", (label) => label.startsWith(console_.name) && /^\p{P}/u.test(label.slice(console_.name.length)))),
       (ui) => ui.wait(500),
     ],
   },

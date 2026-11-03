@@ -1322,7 +1322,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive a session switching its account",
-    description: "Release coordinator and its bound session are both mid account switch, as the daemon reports it. The \"Archived with it (1)\" section lists the bound session that goes with the archive, its status glyph the muted turning arc of \"Switching account…\" in place of its waiting status, the same as in its own row and the hub's row behind the dialog.",
+    description: "Release coordinator and its bound session are both mid account switch, as the daemon reports it. The \"Archived with it (1)\" section lists the bound session that goes with the archive, its status glyph the muted turning arc of \"Switching account\" in place of its waiting status, the same as in its own row and the hub's row behind the dialog.",
     state: switchingAccount(switchAccountState, ["s-switch-hub", "s-switch-bound"]),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Release coordinator" })),

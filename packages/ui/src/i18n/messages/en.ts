@@ -867,7 +867,7 @@ export const en = {
   "session.status.background": "Working in background",
   "session.status.delegated": "Child sessions working",
   "session.status.done": "Done",
-  "session.status.switching": "Switching account…",
+  "session.status.switching": "Switching account",
   "session.status.interrupted": "Interrupted",
   "session.status.archived": "Archived",
   "session.status.named": "{name}, {status}",
@@ -887,6 +887,7 @@ export const en = {
   "titleBar.terminal.hide": "Hide terminal panel",
   "titleBar.terminal.show": "Show terminal panel",
 
+  "rail.statusCount": "{status} {count}",
   "rail.label": "Consoles and window controls",
   "rail.newConsole": "New console",
   "rail.waiting": {
@@ -1150,7 +1151,7 @@ export const en = {
   "terminal.loading": "Loading terminal…",
   "terminal.resuming": "Resuming session…",
   "terminal.starting": "Starting session…",
-  "terminal.switchingAccount": "Switching account…",
+  "terminal.switchingAccount": "Switching account",
   "terminal.reconnecting": "Reconnecting the terminal…",
   "terminal.disconnected": "Terminal disconnected",
   "terminal.archived": "This session is archived",

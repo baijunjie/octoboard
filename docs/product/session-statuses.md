@@ -390,11 +390,11 @@ chip is its own name followed by that status ("Name, Working"; for a pinned proj
 each is drawn is in "Project rows" in `docs/product/sidebar-project-rows.md` and "The switch strip" in
 `docs/product/focus-mode.md`.
 
-**A console's avatar on the rail selects only among sessions whose shown status is waiting for the user, paused, done or
+**A console's avatar badge on the rail selects only among sessions whose shown status is waiting for the user, paused, done or
 awaiting instructions**, in that priority order, with the most recently started breaking a tie. Other shown statuses
 are excluded before choosing the top status, including starting and switching account. With no eligible session, it
-has no badge and its accessible name and tooltip contain only the console's name. Otherwise they include the chosen
-status. The badges are described in "The console switcher" in `docs/product/console-switcher.md`.
+has no badge. The avatar's tooltip and accessible name count all its console's unarchived sessions by shown status,
+as described with the badges in "The console switcher" in `docs/product/console-switcher.md`.
 
 The menu bar icon's session list uses the same four eligible statuses and their priority (see "The icon's menu" in
 `docs/product/menu-bar-icon.md`). This filtering does not change session rows, collapsed-project markers or focus-mode

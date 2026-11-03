@@ -87,8 +87,8 @@ application buttons below. These are:
   toggle's tooltip follows its "Show …" / "Hide …" label (see "The sidebar toggle and the panel toggles" in
   `docs/product/window-layout.md`), and each panel toggle's also names its panel (see "The panel toggles in the top bar"
   in `docs/product/right-pane-panels.md`);
-- the rail's buttons — each console's avatar, whose tooltip is the console's name followed by its eligible top status,
-  when one is present, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
+- the rail's buttons — each console's avatar, whose tooltip lists the same session status counts as its accessible name
+  (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
   one, Turn on notifications and Settings (the rail's Account usage and Processes buttons have none, as said below this
   list);

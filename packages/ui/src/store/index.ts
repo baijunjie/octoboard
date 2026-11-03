@@ -14,6 +14,7 @@ export {
   useArchivedOwnerSessions,
   useConsoleSessions,
   useConsoleStatus,
+  useConsoleStatusCounts,
   useDelegatingIds,
   useHasBoundSessions,
   useOwnerSessions,

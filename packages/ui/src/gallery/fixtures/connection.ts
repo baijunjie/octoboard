@@ -283,7 +283,7 @@ export const connectionScenarios: Scenario[] = [
     group: TERMINAL,
     category: "normal",
     title: "Terminal of a session switching its account",
-    description: "The selected session's account switch is running, as the daemon reports it: its process is down meanwhile, so the session reads interrupted, yet the terminal is covered by a spinner and \"Switching account…\" and takes no input, with no \"Not running\" bar or Resume offered. In the sidebar row and the title bar's breadcrumb the interrupted pause sign gives way to the muted turning arc, whose tooltip reads \"Switching account…\"; Hub, in the same batch, shows it too.",
+    description: "The selected session's account switch is running, as the daemon reports it: its process is down meanwhile, so the session reads interrupted, yet the terminal is covered by a spinner and \"Switching account\" and takes no input, with no \"Not running\" bar or Resume offered. In the sidebar row and the title bar's breadcrumb the interrupted pause sign gives way to the muted turning arc, whose tooltip reads \"Switching account\"; Hub, in the same batch, shows it too.",
     state: switchingAccount(
       snapshotState({
         consoles: [console_],

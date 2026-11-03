@@ -43,6 +43,20 @@ export function useConsoleStatus(consoleId: string): ShownStatusKind | undefined
   });
 }
 
+/** Counts the shown statuses of a console's unarchived sessions, including its console sessions. */
+export function useConsoleStatusCounts(consoleId: string): Partial<Record<ShownStatusKind, number>> {
+  return useDaemonStore(useShallow((s) => {
+    const index = indexSessions(s.sessions);
+    const counts: Partial<Record<ShownStatusKind, number>> = {};
+    for (const session of sessionsOf(index.byConsole, consoleId)) {
+      if (session.status === "archived") continue;
+      const status = sessionShownStatusKind(session, index.delegatingIds, s.queuedAccountSwitches);
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }));
+}
+
 /** The top status (`topStatus`) of all sessions of a project, a kind, so a collapsed project's row renders again only
  * when its marker changes. */
 export function useProjectStatus(projectId: string): ShownStatusKind | undefined {
