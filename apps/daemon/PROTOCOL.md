@@ -3190,7 +3190,7 @@ directory.
   result carries `from`, `to`, `branches` (per branch moved: `branch`; `worktree`, the path when a worktree has it, else
   `null`; `worktree_status`, one of `checked_out`, `gone` (git's record of the worktree is left, the directory is not),
   `none` (no worktree has it) and `unknown` (the worktrees could not be read); and `uncommitted_changes`, `null` unless
-  the worktree is checked out and its changes could be read), `not_handed_over` and a `note`, which names any session
+  the worktree is checked out and its changes could be read), `not_transferred` and a `note`, which names any session
   that could not be told. `open_session` takes the same `branches` as `request_session` does, from a project session
   only, moved to the new session once it is running and named in its opening prompt, with `branches` (names of those
   moved) and a `note` added to its result. See "Transferring branches between sessions of an owner" in

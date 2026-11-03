@@ -91,7 +91,7 @@ pub(in crate::mcp) async fn transfer_branches(
             .iter()
             .map(|(_, branch, worktree)| branch_entry(branch, worktree))
             .collect::<Vec<_>>(),
-        "not_handed_over": moved
+        "not_transferred": moved
             .unmoved
             .iter()
             .map(|branch| branch_name(branch))
@@ -408,6 +408,7 @@ mod tests {
         assert_eq!(result["to"], "other-kid");
         assert_eq!(result["branches"].as_array().unwrap().len(), 1);
         assert_eq!(result["branches"][0]["branch"], "feature");
+        assert_eq!(result["not_transferred"], json!([]));
         let told = output_containing(&from, "do not touch");
         assert!(
             told.contains("You are no longer responsible for it")

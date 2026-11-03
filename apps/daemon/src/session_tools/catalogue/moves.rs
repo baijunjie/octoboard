@@ -26,11 +26,13 @@ pub(super) const TRANSFER_BRANCHES: ToolDef = ToolDef {
                   on disk: the answer lists, per branch, the worktree it is checked out in \
                   (`worktree_status` says `checked_out`, `gone`, `none` or `unknown` when it \
                   could not be read) and whether that holds uncommitted changes, which stay for \
-                  the new session to deal with. The sessions concerned other than this one are \
-                  told. When a session is archived, the cleanup of its branches follows whoever \
-                  is responsible for them by then. `branches` in `get_session` and \
-                  `list_sessions` names the branches a session is responsible for, and \
-                  `list_session_branches` gives their worktrees, so read them first.",
+                  the new session to deal with. `not_transferred` names any branch not moved \
+                  because by then `from` was no longer responsible for it, or it was gone. The \
+                  sessions concerned other than this one are told. When a session is archived, \
+                  the cleanup of its branches follows whoever is responsible for them by then. \
+                  `branches` in `get_session` and `list_sessions` names the branches a session is \
+                  responsible for, and `list_session_branches` gives their worktrees, so read \
+                  them first.",
     schema: || {
         object_schema(
             json!({

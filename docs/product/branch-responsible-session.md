@@ -127,7 +127,7 @@ the caller itself, and the two must differ. No approval is asked: the caller own
   the branch but its directory is gone; `worktree` is that path), `none` (no worktree has it) and `unknown` (the
   worktrees could not be read); and `uncommitted_changes`, `true` or `false` for a checked-out worktree whose changes
   could be read, else `null`. A branch not moved because by then `from` was no longer responsible for it, or it was
-  gone, is named in `not_handed_over`. The `note` says what was transferred and that cleanup follows the new
+  gone, is named in `not_transferred`. The `note` says what was transferred and that cleanup follows the new
   responsible session. If no branch could be moved, or the move could not be recorded, the call is refused.
 - **The sessions concerned are told.** `from` and `to`, each unless it is the caller, are sent a message naming the
   caller as their owner and listing each branch with where it is checked out and whether that worktree holds
