@@ -24,7 +24,7 @@ impl AppState {
     /// Drops what is held of the accounts the session was moved off for a limit, for a session
     /// archived or deleted.
     pub fn forget_left_for_limit(&self, id: &str) {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries(id);
         self.left_for_limit
             .lock()
             .expect("left-for-limit lock poisoned")

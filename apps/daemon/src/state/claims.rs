@@ -135,7 +135,7 @@ impl AppState {
     /// [`Self::lock_account_sharing`]): judged under the same lock as the claim, so a change
     /// either sees the claim or the launch sees the change.
     pub fn begin_launch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries(id);
         self.refuse_while_shutting_down()?;
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) {
@@ -280,7 +280,7 @@ impl AppState {
     /// Claims the session for one interrupt, or `None` while another holds it. The claim ends when
     /// the guard drops, a panic included.
     pub fn claim_interrupt(self: &Arc<Self>, id: &str) -> Option<InterruptClaim> {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries(id);
         let mut interrupts = self.interrupts.lock().expect("interrupt lock poisoned");
         interrupts.insert(id.to_string()).then(|| InterruptClaim {
             state: self.clone(),

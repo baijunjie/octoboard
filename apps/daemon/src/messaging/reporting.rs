@@ -490,6 +490,19 @@ fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnE
     }
 }
 
+/// Reports to the owner a failed turn that ended in `message`, for a session that stopped without
+/// reporting for itself and whose report was held back, as [`synthesise_report`] does.
+///
+/// **Blocks** on writing into the owner.
+pub(crate) fn report_failed_turn(state: &Arc<AppState>, session_id: &str, message: Option<String>) {
+    let turn = hooks::TurnEnd {
+        last_assistant_message: message,
+        failed: true,
+        backstop: false,
+    };
+    synthesise_report(state, session_id, turn, state.turn_opened(session_id));
+}
+
 /// Delivers a report the session itself sent, for a caller on the runtime: what the `report` tool
 /// does, and what a session binding itself to an owner does with its summary.
 ///

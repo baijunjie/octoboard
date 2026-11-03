@@ -21,6 +21,7 @@ use crate::protocol::{
     DEFAULT_ACCOUNT_NAME,
 };
 use crate::session::term::{Launch, LaunchRequest};
+use crate::state::session_as_left::SessionAsLeft;
 use crate::state::{AppState, AutoSwitchHooks};
 
 /// How long after moving a session off an account for its usage limit the session is not moved
@@ -81,15 +82,12 @@ struct RecoveryInner {
 
 #[derive(Clone)]
 pub(crate) struct PendingRecovery {
-    session: Session,
-    live: Arc<crate::session::LiveSession>,
+    session: SessionAsLeft,
     generation: Arc<()>,
     /// Tells this trigger from another of the same session (the clones of one share it), which the
     /// generation does not: a session's later failed turn replaces the trigger parked for an
     /// earlier one.
     token: Arc<()>,
-    input_writes: u64,
-    turn_ends: u64,
     since: i64,
     /// Orders the triggers of a session by when they were captured, which `since` cannot where two
     /// fall in the same millisecond.
@@ -142,26 +140,21 @@ impl RecoveryState {
             inner.newest.insert(id.to_string(), seq);
             (generation, seq)
         };
-        let Some(live) = state.live_session(id) else {
-            self.cancel(id);
-            return Ok(None);
-        };
-        let session = match state.session_record(id) {
-            Ok(session) => session,
+        let session = match SessionAsLeft::capture(state, id) {
+            Ok(Some(session)) => session,
+            Ok(None) => {
+                self.cancel(id);
+                return Ok(None);
+            }
             Err(err) => {
                 self.cancel(id);
                 return Err(err);
             }
         };
-        let input_writes = live.input_writes();
-        let turn_ends = state.turn_ends(id);
         Ok(Some(PendingRecovery {
             session,
-            live,
             generation,
             token: Arc::new(()),
-            input_writes,
-            turn_ends,
             since: crate::time::now_millis(),
             seq,
             verified: None,
@@ -208,27 +201,12 @@ impl PendingRecovery {
                     .is_some_and(|generation| Arc::ptr_eq(generation, &self.generation))
                     && inner.newest.get(id) == Some(&self.seq)
             }
-            && state
-                .live_session(id)
-                .is_some_and(|live| Arc::ptr_eq(&live, &self.live))
-            && !self.live.poll_exit()
-            && self.live.input_writes() == self.input_writes
-            && state.turn_ends(id) == self.turn_ends
-            && state
-                .store
-                .get_session(id)
-                .ok()
-                .flatten()
-                .is_some_and(|session| {
-                    matches!(
-                        state.status_for_switch(&session),
-                        SessionStatus::Working | SessionStatus::Idle
-                    ) && session.account_id == self.session.account_id
-                        && session.config_dir == self.session.config_dir
-                        && session.agent_session_id == self.session.agent_session_id
-                        && session.model == self.session.model
-                        && session.effort == self.session.effort
-                })
+            && self.session.unchanged(state).is_some_and(|session| {
+                matches!(
+                    state.status_for_switch(&session),
+                    SessionStatus::Working | SessionStatus::Idle
+                )
+            })
             && self.verified.as_ref().is_none_or(|(account, dir, at)| {
                 state.store.account_dir(account).ok() == Some(dir.clone())
                     && state.account_quotas.verified_available(

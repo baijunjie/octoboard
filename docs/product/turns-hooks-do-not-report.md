@@ -178,7 +178,8 @@ its prompt. Every turn of a session is covered, its first included.
 - The agent's process is still running, so the session is at its prompt, *paused*, and not *interrupted*.
 - The turn is reported on: a session bound to an owner has a report synthesised for it with status *failed*, carrying
   Codex's own error text and the usual line saying the session stopped without reporting (see "When a session does not
-  report" in `docs/product/reporting-to-owners.md`).
+  report" in `docs/product/reporting-to-owners.md`). A turn that stopped because the selected model was at capacity is
+  retried first, and its report held, as described under "When the selected model is at capacity" below.
 - **Codex sessions only.** Claude Code and Grok Build report a failed turn through their own hook events, and the file
   read here is Codex's own format; neither is watched this way.
 - A turn Codex ends normally, and one the user cancels, are reported by Codex's own hook events, and nothing is read
@@ -186,7 +187,62 @@ its prompt. Every turn of a session is covered, its first included.
 - If the record cannot be read — the prompt submission named no rollout file or no turn, or the turn's end never appears
   there — nothing moves the session, and it keeps reading *working* until something else does.
 
+### When the selected model is at capacity
+
+A Codex turn that failed because **the selected model was at capacity** — the rollout records the turn's error with
+`codex_error_info` `server_overloaded`, and Codex's own text says the selected model is at capacity and to try a
+different model — is retried automatically instead of being reported at once. The failure can come after a turn that
+has already been working for a long time. This is always on, with no setting, and only for Codex; every other error is
+reported at once as above.
+
+- **The retries.** There are at most 3, sent 30 seconds, 60 seconds and 120 seconds after the failure they retry. Each
+  is one Octoboard message written into the same running process, saying that the selected model was at capacity so the
+  last turn stopped, that Octoboard is retrying automatically (retry *n* of 3), and asking it to continue its task.
+  Nothing else is done: the session is never relaunched, its model, reasoning effort and account are never changed, and
+  the automatic account switch does not judge the turn (see "When a session is switched" in
+  `docs/product/automatic-account-switch.md`). Turning that setting on or off does not affect a retry.
+- **While a retry waits**, the session is at its prompt, *paused*, as any failed turn leaves it. Its owner — when it is
+  bound to one and had not reported in the failed turn — is not given the failed report yet: it is told instead that the
+  session's model was at capacity so its turn stopped, that Octoboard will retry automatically in the given number of
+  seconds (retry *n* of 3) in the same session, and not to send it a continue prompt itself. The failed report is held.
+  A session that had already reported in that turn, or has no owner, is retried all the same, with nobody told.
+- **Failures in a row are counted.** The count starts again only when a turn of the session ends without a capacity
+  failure, or when a wait is ended in a way that gives the owner the held report (below). The fourth capacity failure in
+  a row is not retried: it is reported as any failed turn is, and the session is left
+  *paused*; the report adds that Octoboard retried automatically 3 times and the model was still at capacity, and that
+  the user can retry later or switch the session's model manually.
+- **The turn a retry starts** is reported on like any other: when it ends without the session calling `report`, its
+  owner gets the usual synthesised report (see "When a session does not report" in
+  `docs/product/reporting-to-owners.md`).
+
+**Ending a wait without a word.** A turn of the session starting — the user submitting a prompt in its terminal, say —
+or a message being queued for it, such as an owner's instruction, ends the wait: no retry is sent and the owner hears
+nothing more of that failure. The session is at work again, and that turn is reported on as usual; the count stays for
+that turn's end to settle.
+
+**Ending a wait with the held report.** The wait also ends, with no retry sent, on any of these:
+
+- the turn being cancelled — by an owner's `interrupt_session` or a cancel Codex reports;
+- the session being resumed or restarted, switched to another account, or having its model or reasoning effort changed;
+- the session found, when the wait is up, no longer as the failure left it: its process replaced, anything typed or
+  written into its terminal, another turn ended, its account, model, effort or conversation changed, or it is *waiting
+  for the user* or *dormant* rather than at its prompt;
+- the retry message being refused because the session cannot take a message at that moment.
+
+The owner is then given the failed report it was told would not come, carrying Codex's error text and saying that
+Octoboard's automatic retry did not go ahead and that the user can retry later or switch the session's model manually.
+That report never reaches the owner before the notice that a retry was coming. A resume, a restart, an account switch
+or a change of model or effort ends the wait as it starts, and the report is delivered only while the session still has
+its process when the report is delivered: one whose relaunch has already ended the process by then is dropped, as on an
+exit, and that operation's own result or notice tells the owner what became of the session. No report follows for a session that has
+been archived or deleted, which ends its wait too. When the session's process exits during a wait, the wait ends and the
+report cannot be delivered; the owner is told instead that the session ended on its own (see "Notices to an owner" in
+`docs/product/reporting-to-owners.md`).
+
+Waits are held only in the daemon's memory and do not survive a restart of the daemon.
+
 **What this costs to keep working.** The rollout is a file format Codex owns and rewrites on upgrade, and a failed turn
 is recognised by the shape of the record Codex writes for the turn's end; the behaviour was measured against Codex
-0.160.0. A release that changes that shape breaks this silently — there is no error and nothing is reported as having
+0.160.0, and the capacity failure's `server_overloaded` on rollouts of Codex 0.162. A release that renames that value
+breaks only the retry: such a turn is then reported at once as any other failed turn. A release that changes that shape breaks this silently — there is no error and nothing is reported as having
 failed — and the only symptom is a session reading *working* while Codex sits at its prompt.

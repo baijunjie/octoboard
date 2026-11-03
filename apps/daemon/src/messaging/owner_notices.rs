@@ -138,6 +138,28 @@ fn resumed_on_recovery(session: &Session, continued: bool) -> String {
     )
 }
 
+/// Tells the owner of `session` that its model was at capacity and that retry number `attempt` of
+/// `of` is sent in `seconds`, in place of the failed report, as [`tell_owner`] does.
+///
+/// **Blocks** on writing into the owner.
+pub fn tell_owner_it_will_be_retried(
+    state: &Arc<AppState>,
+    session: &Session,
+    attempt: usize,
+    of: usize,
+    seconds: u64,
+) {
+    tell_owner(state, session, |_| {
+        format!(
+            "{NOTICE_PREFIX}: session {}'s model was at capacity, so its turn stopped. {} will \
+             retry automatically in {seconds} seconds (retry {attempt} of {of}) in the same \
+             session; do not send it a continue prompt yourself.",
+            label(session),
+            crate::APP_NAME
+        )
+    });
+}
+
 /// Tells the owner of `session` that it could not be resumed on its own account once that
 /// account's usage quota recovered, for `reason`, as [`tell_owner`] does.
 ///

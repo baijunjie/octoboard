@@ -113,7 +113,7 @@ impl AppState {
     /// orders it against a message written into the session. With no prompt to go by, the oldest
     /// credit is spent by this turn.
     pub fn turn_started(&self, id: &str, prompt: Option<&str>) {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries_silently(id);
         let mut turns = self.turns.lock().expect("turn lock poisoned");
         let turn = turns.entry(id.to_string()).or_default();
         // A prompt that arrives while the turn is open joins it, as one steered into a Codex turn
@@ -201,7 +201,7 @@ impl AppState {
     /// though no report follows: left open, a later clock-attributed end would find it and invent
     /// one.
     pub fn abandon_turn(&self, id: &str) {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries(id);
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             turn.open = false;
             turn.reported = false;
@@ -240,6 +240,15 @@ impl AppState {
             .entry(id.to_string())
             .or_default()
             .ends += 1;
+    }
+
+    /// Whether a turn of this session is open: started and not yet closed.
+    pub fn turn_is_open(&self, id: &str) -> bool {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .get(id)
+            .is_some_and(|turn| turn.open)
     }
 
     /// How many times a turn of this session has ended so far; see [`TurnState::ends`].
@@ -396,6 +405,7 @@ impl AppState {
             turn.reported = false;
             turn.last_event_at = now_millis();
             turn.ends += 1;
+            self.capacity_retries.turn_ended(id);
             return if reported {
                 TurnClose::Reported
             } else {
@@ -431,6 +441,7 @@ impl AppState {
         turn.ends += 1;
         // Only a signal that named its own turn leaves an echo behind; the echo itself does not.
         turn.echo_pending = !clock_attributed;
+        self.capacity_retries.turn_ended(id);
         if reported {
             TurnClose::Reported
         } else {

@@ -149,7 +149,7 @@ impl AppState {
         account_id: Option<&str>,
         config_dir: Option<&str>,
     ) -> Result<()> {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries(id);
         if let Some(session) = self.store.set_session_account(id, account_id, config_dir)? {
             self.publish_session(&session);
             self.publish_account_sharing();
@@ -165,7 +165,7 @@ impl AppState {
         model: &Option<Option<String>>,
         effort: &Option<Option<String>>,
     ) -> Result<()> {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries(id);
         self.store.set_session_launch_overrides(id, model, effort)?;
         self.publish_session_by_id(id);
         Ok(())

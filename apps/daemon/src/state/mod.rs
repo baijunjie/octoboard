@@ -46,8 +46,10 @@ mod live;
 mod mcp_tokens;
 mod process_exit;
 mod record_watch;
+mod recoveries;
 pub(crate) mod refusals;
 mod requests;
+pub(crate) mod session_as_left;
 mod sessions;
 mod sharing_lock;
 mod sharing_status;
@@ -125,6 +127,9 @@ pub struct AppState {
     /// back to one.
     left_for_limit: Mutex<HashMap<String, Vec<AccountLeft>>>,
     pub(crate) quota_recovery: crate::coordinator::auto_switch::RecoveryState,
+    /// The waits to retry Codex turns that stopped at their model's capacity
+    /// (`crate::messaging::capacity_retry`).
+    pub(crate) capacity_retries: crate::messaging::capacity_retry::CapacityRetries,
     /// How the lower layers reach the automatic account switch (see [`auto_switch`]); none until
     /// installed.
     auto_switch: std::sync::OnceLock<AutoSwitchHooks>,
@@ -322,6 +327,7 @@ impl AppState {
             turns: Mutex::new(HashMap::new()),
             left_for_limit: Mutex::new(HashMap::new()),
             quota_recovery: Default::default(),
+            capacity_retries: Default::default(),
             auto_switch: Default::default(),
             #[cfg(test)]
             restart_stop_timeout: Mutex::new(None),

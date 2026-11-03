@@ -386,6 +386,16 @@ pub(crate) fn restart_ended_notice(ended: &str) -> String {
     format!("{NOTICE_PREFIX}: your session was restarted. {ended}")
 }
 
+/// The prompt a session is sent for retry number `attempt` of `of`, after its turn stopped because
+/// its model was at capacity.
+pub(crate) fn capacity_retry_prompt(attempt: usize, of: usize) -> String {
+    format!(
+        "{NOTICE_PREFIX}: the model you selected was at capacity, so your last turn stopped. {} is \
+         retrying automatically (retry {attempt} of {of}). {CONTINUE_AFTER_NOTICE}",
+        crate::APP_NAME
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

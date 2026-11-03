@@ -203,7 +203,7 @@ pub(crate) async fn set_session_model_with(
     refuse_if_owner_must_wait(state, asker, &current)?;
     // Committed to the restart from here: a quota recovery waiting to resume the session would
     // only be cut off by it.
-    state.quota_recovery.cancel(id);
+    state.cancel_recoveries(id);
     state.mark_model_change(id);
     // Borrowed by the restart below, so that it stays held until the restart is over.
     let claim_held = &claim;

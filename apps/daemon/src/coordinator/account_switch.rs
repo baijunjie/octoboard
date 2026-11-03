@@ -269,7 +269,7 @@ pub(crate) async fn switch_session_account_if(
     // relaunched one is being watched, or while the account is put back; refused here when one
     // of those is under way.
     if only_if.recovery.is_none() {
-        state.quota_recovery.cancel(id);
+        state.cancel_recoveries(id);
     }
     let claim = state.begin_account_switch(id, only_if.watch_launch)?;
     if only_if.recovery.is_some_and(|wait| !wait.still_due(state)) {

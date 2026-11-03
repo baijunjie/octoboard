@@ -88,6 +88,12 @@ has decided. Since the switch can read the session's record again for up to 4 se
 another operation's hold on the session to end, a failed turn's report can arrive that much later while the setting is
 on, whatever the error was. With the setting off, nothing waits.
 
+**A Codex turn stopped at its model's capacity is retried before it is reported.** Its failed report is held while
+Octoboard retries the turn in the same session, up to 3 times, and the owner is told of each retry instead of being
+given the report; the automatic account switch does not judge a turn being retried. The report is sent once the retries
+are used up or a retry does not go ahead, and says which. See "When the selected model is at capacity" in
+`docs/product/turns-hooks-do-not-report.md`.
+
 **No report is synthesised for a turn that was cancelled** — by the user in the terminal, or by its owner's
 `interrupt_session` (see `docs/product/interrupting-turns.md`): the session is back at its prompt, awaiting
 instructions. How a cancel that fires no hook event is recognised is in `docs/product/turns-hooks-do-not-report.md`.
@@ -126,6 +132,8 @@ running for another reason once the wait there is over, is not told, then or lat
   view of its background agents, which is no wait for the user (see "Dormant" in `docs/product/session-statuses.md`).
 - **Octoboard switched a session's account by itself**, or tried to and could not bring it back up: see "When the
   switch succeeds" and "When the switch fails" in `docs/product/automatic-account-switch.md`.
+- **Octoboard will retry a Codex turn stopped at its model's capacity**, in place of that turn's failed report: see
+  "When the selected model is at capacity" in `docs/product/turns-hooks-do-not-report.md`.
 - **A session stayed idle after its last report.** When a reporting session has been idle after its last report for **10
   minutes** without a break — `idle_after_report` true in its session record the whole time (see "Session records" in
   `docs/product/what-every-session-reads.md`) — its owner is told once for that report. Idleness is looked at every 30

@@ -77,7 +77,9 @@ and records tests replay.
   of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
   message), `outbox.rs` (the per-session ordered queue), `write_queue.rs` (`AppState`'s queuing, flushing and holds
-  over it), `reporting.rs`, `sharing.rs`, `naming.rs` (how a message names a session, a place, a quoted body),
+  over it), `reporting.rs`, `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
+  waits live in `AppState::capacity_retries`), `sharing.rs`, `naming.rs` (how a message names a session, a place, a
+  quoted body),
   `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
 - `src/handoff/` — the handoff package built for a session another takes over: build, render and file. The
   `handoff_session` operation is `coordinator/handoff.rs`.

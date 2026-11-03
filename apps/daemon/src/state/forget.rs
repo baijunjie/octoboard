@@ -46,7 +46,7 @@ impl AppState {
     }
 
     pub(super) fn forget_session_bookkeeping(&self, id: &str) {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries(id);
         self.revoke_mcp_tokens(id);
         self.turns.lock().expect("turn lock poisoned").remove(id);
         self.forget_request_hand(id);

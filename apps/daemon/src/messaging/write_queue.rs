@@ -240,7 +240,7 @@ impl AppState {
     /// than written even when the session looks ready, so order is structural rather than something
     /// each caller has to get right.
     pub fn queue_message(&self, id: &str, text: &str) -> Ticket {
-        self.quota_recovery.cancel(id);
+        self.cancel_recoveries_silently(id);
         let ticket = self.outbox.push(id, text);
         self.note_activity(id);
         ticket

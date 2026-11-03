@@ -19,7 +19,9 @@
 //! [`ending_in_line`] is the pure half: whether one line is the open turn's `task_complete`, and
 //! how it says the turn ended. [`watch_for_failure`] arms `crate::records::watch` with it from the
 //! turn's `UserPromptSubmit`, and turns a failure into a failed turn ending, the same as Claude
-//! Code's `StopFailure`.
+//! Code's `StopFailure`. A failure whose `codex_error_info` is `server_overloaded` (the selected
+//! model is at capacity) is handed to `crate::messaging::capacity_retry` instead of being reported
+//! at once.
 //!
 //! The rollout is Codex's own and is rewritten on upgrades; see `crate::records::watch` for how a
 //! line this does not recognise is treated.
@@ -31,6 +33,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::hooks::TurnEnd;
+use crate::messaging::capacity_retry::{self, Judgement};
 use crate::protocol::SessionStatus;
 use crate::records::watch::{self, Owed, Start, Watch};
 use crate::state::{AppState, TurnClose};
@@ -47,9 +50,17 @@ enum Ending {
     /// hook that ends it for Octoboard. An interrupted turn has no `task_complete`: `Interrupt`
     /// ends it.
     Completed,
-    /// The turn ended in an error, with the user-facing text where the record carries one.
-    Failed(Option<String>),
+    /// The turn ended in an error, with the user-facing text where the record carries one, and
+    /// whether the cause was the selected model being at capacity.
+    Failed {
+        message: Option<String>,
+        at_capacity: bool,
+    },
 }
+
+/// The `codex_error_info` of a turn that failed because the selected model was at capacity. The
+/// field is a string for most failures but an object for some, so only this string counts.
+const CAPACITY_ERROR: &str = "server_overloaded";
 
 /// How one rollout line says turn `turn_id` ended, if it is that turn's `task_complete`. A line
 /// that is not JSON, or is JSON of another shape, reads as `None`.
@@ -69,9 +80,11 @@ fn ending_in_line(line: &str, turn_id: &str) -> Option<Ending> {
     Some(
         match payload.get("error").filter(|error| !error.is_null()) {
             None => Ending::Completed,
-            Some(error) => Ending::Failed(trimmed_or_none(
-                error.get("message").and_then(Value::as_str),
-            )),
+            Some(error) => Ending::Failed {
+                message: trimmed_or_none(error.get("message").and_then(Value::as_str)),
+                at_capacity: error.get("codex_error_info").and_then(Value::as_str)
+                    == Some(CAPACITY_ERROR),
+            },
         },
     )
 }
@@ -118,7 +131,10 @@ pub fn watch_for_failure(
         |state, session_id, _, ending| match ending {
             // `Stop` is on its way and ends the turn in the usual way.
             Ending::Completed => {}
-            Ending::Failed(message) => end_failed_turn(state, session_id, message),
+            Ending::Failed {
+                message,
+                at_capacity,
+            } => end_failed_turn(state, session_id, message, at_capacity),
         },
     );
 }
@@ -126,14 +142,54 @@ pub fn watch_for_failure(
 /// Ends the open turn as a failed one, as if the agent had fired a failure event for it: the turn
 /// closes, a bound session's owner gets its report, and the session goes back to awaiting
 /// instructions, paused.
-fn end_failed_turn(state: &Arc<AppState>, session_id: &str, message: Option<String>) {
+///
+/// A turn that failed because the model was at capacity is retried by `capacity_retry` while it
+/// has retries left, and its owner is told of that in place of the report; with none left the
+/// report says so.
+pub(crate) fn end_failed_turn(
+    state: &Arc<AppState>,
+    session_id: &str,
+    message: Option<String>,
+    at_capacity: bool,
+) {
+    let judgement = at_capacity.then(|| state.capacity_retries.judge(session_id));
+    let message = match judgement {
+        Some(Judgement::Retry(plan)) => {
+            // Closed here and not through `close_turn_and_report`, which would report the failure.
+            let close = state.close_turn(session_id, false);
+            if !settle_failed_turn(state, session_id, close) {
+                state.capacity_retries.forget(session_id);
+            } else {
+                capacity_retry::arm(
+                    state,
+                    session_id,
+                    plan,
+                    message,
+                    close == TurnClose::OwesReport,
+                );
+            }
+            return;
+        }
+        Some(Judgement::Exhausted) => Some(capacity_retry::failure_text(
+            message,
+            capacity_retry::Outcome::Exhausted,
+        )),
+        None => message,
+    };
     let turn = TurnEnd {
         last_assistant_message: message,
         failed: true,
         backstop: false,
     };
-    match crate::messaging::reporting::close_turn_and_report(state, session_id, turn) {
-        // No turn open means a hook ended it first, and the session is already where it belongs.
+    let close = crate::messaging::reporting::close_turn_and_report(state, session_id, turn);
+    settle_failed_turn(state, session_id, close);
+}
+
+/// Puts the session back at its prompt, paused, after the turn it ended as failed was closed with
+/// `close`. Whether it did: no turn open means a hook ended it first, and the session is already
+/// where it belongs.
+fn settle_failed_turn(state: &Arc<AppState>, session_id: &str, close: TurnClose) -> bool {
+    match close {
         // `NotThisTurn` cannot come back for an end that is not clock-attributed; it is grouped
         // here only to keep the match exhaustive.
         TurnClose::NoTurn | TurnClose::NotThisTurn => {
@@ -141,6 +197,7 @@ fn end_failed_turn(state: &Arc<AppState>, session_id: &str, message: Option<Stri
                 session = %session_id,
                 "a failed turn was found in the rollout, but no turn was open"
             );
+            false
         }
         TurnClose::OwesReport | TurnClose::Reported => {
             tracing::debug!(
@@ -156,6 +213,7 @@ fn end_failed_turn(state: &Arc<AppState>, session_id: &str, message: Option<Stri
                 );
             }
             state.spawn_flush_outbox(session_id, SessionStatus::Idle);
+            true
         }
     }
 }
@@ -191,6 +249,11 @@ mod tests {
     /// The other near-miss: the failed capture cut off after `token_count`, a turn still running.
     const RUNNING: &str = include_str!("../../../testdata/rollout_running_turn.jsonl");
 
+    /// A turn whose model was at capacity, the `task_started` and `task_complete` of one Codex
+    /// 0.162 turn taken verbatim from a rollout: `error.codex_error_info` is `server_overloaded`.
+    const CAPACITY_FAILURE: &str = include_str!("../../../testdata/rollout_capacity_failure.jsonl");
+    const CAPACITY_TURN: &str = "01a182e0-5b29-71a3-90be-ab2f19c4fc55";
+
     /// The first `lines` lines of `text`.
     fn first_lines(text: &str, lines: usize) -> &str {
         let end = text.split_inclusive('\n').take(lines).map(str::len).sum();
@@ -221,13 +284,67 @@ mod tests {
 
     #[test]
     fn a_failed_turn_is_found_with_codexs_own_message() {
-        let Some(Ending::Failed(Some(message))) = ending_of(failed_turn(), FAILED_TURN) else {
+        let Some(Ending::Failed {
+            message: Some(message),
+            ..
+        }) = ending_of(failed_turn(), FAILED_TURN)
+        else {
             panic!("the failed turn was not recognised");
         };
         assert!(
             message.starts_with("You’ve hit your usage limit"),
             "{message}"
         );
+    }
+
+    #[test]
+    fn a_turn_whose_model_was_at_capacity_is_recognised_as_that() {
+        let Some(Ending::Failed {
+            message: Some(message),
+            at_capacity,
+        }) = ending_of(CAPACITY_FAILURE, CAPACITY_TURN)
+        else {
+            panic!("the capacity failure was not recognised");
+        };
+        assert!(at_capacity);
+        assert!(
+            message.starts_with("Selected model is at capacity"),
+            "{message}"
+        );
+    }
+
+    /// The usage limit and every other error, whatever the shape of `codex_error_info`, are not a
+    /// capacity failure.
+    #[test]
+    fn other_failures_are_not_a_capacity_failure() {
+        assert!(matches!(
+            ending_of(failed_turn(), FAILED_TURN),
+            Some(Ending::Failed {
+                at_capacity: false,
+                ..
+            })
+        ));
+        for info in [
+            r#""codex_error_info":{"http_connection_failed":{"http_status_code":500}}"#,
+            r#""codex_error_info":"other""#,
+            r#""codex_error_info":null"#,
+            r#""x":1"#,
+        ] {
+            let line = format!(
+                r#"{{"type":"event_msg","payload":{{"type":"task_complete","turn_id":"t","error":{{"message":"m",{info}}}}}}}
+"#
+            );
+            assert!(
+                matches!(
+                    ending_of(&line, "t"),
+                    Some(Ending::Failed {
+                        at_capacity: false,
+                        ..
+                    })
+                ),
+                "{info}"
+            );
+        }
     }
 
     #[test]
@@ -263,12 +380,12 @@ mod tests {
 
         assert!(matches!(
             ending_of(cut, FAILED_TURN),
-            Some(Ending::Failed(_))
+            Some(Ending::Failed { .. })
         ));
         assert_eq!(ending_of(cut, SECOND_FAILED_TURN), None);
         assert!(matches!(
             ending_of(two, SECOND_FAILED_TURN),
-            Some(Ending::Failed(_))
+            Some(Ending::Failed { .. })
         ));
 
         // A successful turn before a failed one: each id reads its own ending.
@@ -276,7 +393,7 @@ mod tests {
         assert_eq!(ending_of(&mixed, COMPLETED_TURN), Some(Ending::Completed));
         assert!(matches!(
             ending_of(&mixed, FAILED_TURN),
-            Some(Ending::Failed(_))
+            Some(Ending::Failed { .. })
         ));
     }
 
@@ -289,7 +406,7 @@ mod tests {
         );
         assert!(matches!(
             ending_of(&content, FAILED_TURN),
-            Some(Ending::Failed(_))
+            Some(Ending::Failed { .. })
         ));
     }
 
