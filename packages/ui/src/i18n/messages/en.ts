@@ -476,6 +476,7 @@ export const en = {
   "daemon.login_already_running": "A login to {agent} is already running for this account.",
   "daemon.reset_credit_in_progress": "A reset is already being redeemed on this account.",
   "daemon.reset_credit_timed_out": "{agent} did not answer in time. The reset may have been used, so check the account's usage once it updates.",
+  "daemon.process_count_timed_out": "Counting the processes took too long.",
   "daemon.reset_credit_not_signed_in": "{account} ({agent}) is not logged in, so a reset cannot be redeemed on it.",
   "daemon.reset_credit_failed": "{agent} could not redeem the reset: {detail}",
   "daemon.login_codex_busy": "Another {codex} account is logging in. Wait for it to finish, then try again.",
@@ -796,6 +797,14 @@ export const en = {
   "connection.disconnected": "Disconnected from the daemon.",
   "connection.reconnecting": "Disconnected from the daemon. Reconnecting…",
   "connection.retry": "Try again",
+  "connection.incompatible.title": "{appName} and its daemon are different versions",
+  "connection.incompatible.body": "This window cannot read the daemon it connected to, because the two speak different versions of their protocol.",
+  "connection.incompatible.versions": "Window version: {appVersion}. Daemon version: {daemonVersion}.",
+  "connection.incompatible.versionUnknown": "unknown",
+  "connection.incompatible.remedy.desktop": "Quit {appName} and open it again. If this keeps happening, reinstall {appName}.",
+  "connection.incompatible.remedy.browser": "Reload the page. If this keeps happening, update {appName} so that this page and the daemon are the same version.",
+  "connection.incompatible.quit": "Quit {appName}",
+  "connection.incompatible.reload": "Reload",
 
   "notification.waiting.title": "Waiting for you",
 

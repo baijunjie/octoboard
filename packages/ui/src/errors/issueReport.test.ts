@@ -143,7 +143,7 @@ it("collects the names of the user's records, leaving out those too short", () =
   expect(recordNames(state as unknown as Parameters<typeof recordNames>[0]).sort()).toEqual(["/cfg/work", "/work/octo", "Fix login", "Main console", "Octo", "Work", "feat/login", "git@host:me/octo.git", "zsh - fix"]);
 });
 
-const environment = { version: "1.2.3", platform: "tauri" as const, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", language: "en" };
+const environment = { version: "1.2.3", daemonVersion: "1.2.4", platform: "tauri" as const, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", language: "en" };
 const facts = (failures: IssueFacts["failures"], extra: Partial<IssueFacts> = {}): IssueFacts => ({ failures, environment, context, ...extra });
 const BASE = "https://github.com/owner/repo/issues/new";
 const parse = (url: string) => {
@@ -159,7 +159,7 @@ it("describes a thrown error with its sanitized message and stack, and the envir
   expect(title).toBe("Unexpected error: Cannot open <path>");
   expect(body).toContain("### What happened");
   expect(body).toContain(`<!-- ${appConfig.name} keeps its logs in ~/.octoboard/logs/ (daemon.log, desktop.log);`);
-  expect(body).toContain(`- ${appConfig.name}: 1.2.3\n- Platform: desktop app\n- OS: macOS 10.15.7\n- Language: en`);
+  expect(body).toContain(`- ${appConfig.name}: 1.2.3\n- Daemon: 1.2.4\n- Platform: desktop app\n- OS: macOS 10.15.7\n- Language: en`);
   expect(body).toContain("- Kind: unexpected");
   expect(body).toContain("```\nError: Cannot open <path>\n    at run (tauri://localhost/assets/index-1a2b.js:3:4)\n```");
   expect(body).not.toContain("alice");

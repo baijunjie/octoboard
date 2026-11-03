@@ -7,6 +7,7 @@ import { forgetProjectsOtherThan } from "./project-browser/browserState";
 import { LazyLinkedFileViewer } from "./project-browser/files/LazyLinkedFileViewer";
 import { OpenShellTerminal } from "./project-browser/RowActions";
 import { ConnectionBanner } from "./shell/ConnectionBanner";
+import { IncompatibleDaemonScreen } from "./shell/IncompatibleDaemonScreen";
 import { ContentPanel } from "./shell/ContentPanel";
 import { HandOffOnUnmount } from "./components/focus/HandOffOnUnmount";
 import { PaneResizeHandle } from "./layout/PaneResizeHandle";
@@ -255,11 +256,13 @@ export function App(): React.ReactElement {
   });
 
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
-  // window quittable. Only its confirmation is needed here: the main app has no separate "Quit"
-  // control.
-  const { exitConfirmOpen, exitHolders, exitRestarts, closeExitConfirm, confirmExit, requestRestart } = useAppExit({
-    getSessions: allSessions,
-    getShellTerminals: () => Array.from(store.getState().shellTerminals.values()),
+  // window quittable. The main app has no "Quit" control of its own; the screen for a daemon of another
+  // protocol generation does. That daemon is not talked to, and its screen has no room for the quit's
+  // confirmation, so a quit while it is shown asks about nothing.
+  const reachable = () => store.getState().connectionState !== "incompatible";
+  const { exitConfirmOpen, exitHolders, exitRestarts, closeExitConfirm, confirmExit, requestRestart, requestQuit } = useAppExit({
+    getSessions: () => (reachable() ? allSessions() : []),
+    getShellTerminals: () => (reachable() ? Array.from(store.getState().shellTerminals.values()) : []),
     requestShutdown: () => request({ type: "shutdown" }),
   });
 
@@ -461,6 +464,9 @@ export function App(): React.ReactElement {
   // give it back to.
   const focusAfterModal = useStableHandler(() => focusAfterLoss(focusTerminal));
   useEffect(() => setFocusAfterModalLoss(focusAfterModal), [focusAfterModal]);
+
+  // A daemon of another protocol generation: nothing it sent is shown, whatever an earlier connection had loaded.
+  if (connectionState === "incompatible") return <IncompatibleDaemonScreen onQuit={() => void requestQuit()} />;
 
   // Nothing to show until the first snapshot. The toasts belong here all the same, and so does the
   // banner with the Retry the client offers once it has given up — otherwise this screen would say

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { sessionOf } from "./fixtures/builders";
-import type { Event } from "./protocol";
+import { PROTOCOL_GENERATION, type Event } from "./protocol";
 import { DaemonClient } from "./daemon-client";
 import { CodedError } from "./errors/codedError";
 import { setLanguage } from "./i18n/language";
@@ -49,6 +49,12 @@ const open = (socket: FakeSocket) => socket.dispatchEvent(new globalThis.Event("
 const drop = (socket: FakeSocket) => socket.dispatchEvent(new globalThis.Event("close"));
 // The client reads only a snapshot's `type`.
 const snapshot = { type: "snapshot" };
+const hello = (generation = PROTOCOL_GENERATION): Event => ({ type: "hello", generation, daemon_version: "1.4.0" });
+/** A connection opening as the daemon opens it: its hello, then its snapshot. */
+const greet = (socket: FakeSocket) => {
+  socket.receive(hello());
+  socket.receive(snapshot);
+};
 
 it("delivers the broadcasts that arrive between two frames as one batch, in arrival order", () => {
   const client = new DaemonClient("ws://test");
@@ -81,6 +87,8 @@ it("delivers queued broadcasts without a frame once the fallback timer fires, as
 it("answers a request at once, behind the broadcasts that arrived before its reply", async () => {
   const client = new DaemonClient("ws://test");
   const order: string[] = [];
+  FakeSocket.last.receive(hello());
+  frame!();
   client.onEvents((events) => order.push(...events.map((event) => event.type)));
   const reply = client.request({ type: "shutdown" }).then(() => order.push("resolved"));
   const id = (JSON.parse(FakeSocket.last.sent[0]) as { id: string }).id;
@@ -99,12 +107,15 @@ it("fails a request the reconnect cut off in the UI's language, as a closed conn
     const error = await reply.catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(CodedError);
     expect(error).toMatchObject({ code: "connection_closed", message: "守护进程控制连接在收到回复前已重新建立。" });
+    // It waited for a hello that never came, and is not sent on the new socket after it was failed.
+    FakeSocket.last.receive(hello());
+    expect(FakeSocket.all.flatMap((socket) => socket.sent)).toEqual([]);
   } finally {
     setLanguage("en");
   }
 });
 
-it("keeps waiting for a request queued while connecting once the socket opens and sends it", async () => {
+it("keeps waiting for a request queued while connecting once the socket opens and its hello arrives, and sends it", async () => {
   const client = new DaemonClient("ws://test");
   const socket = FakeSocket.last;
   socket.readyState = 0;
@@ -115,6 +126,9 @@ it("keeps waiting for a request queued while connecting once the socket opens an
   );
   socket.readyState = FakeSocket.OPEN;
   open(socket);
+  // Nothing goes out before the hello is read.
+  expect(socket.sent).toEqual([]);
+  socket.receive(hello());
   const id = (JSON.parse(socket.sent[0]) as { id: string }).id;
   vi.advanceTimersByTime(10_000);
   await Promise.resolve();
@@ -153,7 +167,7 @@ it("gives a connection that delivered its snapshot the whole budget again when i
   vi.advanceTimersByTime(500);
   // The next one works, then drops.
   open(FakeSocket.last);
-  FakeSocket.last.receive(snapshot);
+  greet(FakeSocket.last);
   expect(states.at(-1)).toBe("open");
   drop(FakeSocket.last);
   expect(states.at(-1)).toBe("reconnecting");
@@ -163,12 +177,76 @@ it("gives a connection that delivered its snapshot the whole budget again when i
   expect(states.at(-1)).toBe("reconnecting");
   vi.advanceTimersByTime(1000);
   open(FakeSocket.last);
-  FakeSocket.last.receive(snapshot);
+  greet(FakeSocket.last);
   expect(states.at(-1)).toBe("open");
+});
+
+it("reads a hello of its own generation and goes on to the snapshot", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  const received: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  client.onEvent((event) => received.push(event.type));
+  open(FakeSocket.last);
+  greet(FakeSocket.last);
+  frame!();
+  expect(received).toEqual(["hello", "snapshot"]);
+  expect(states.at(-1)).toBe("open");
+});
+
+it("closes for good on a hello of another generation, after handing the hello on, and never reconnects", async () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  const received: Event[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  client.onEvent((event) => received.push(event));
+  const socket = FakeSocket.last;
+  const close = vi.spyOn(socket, "close");
+  open(socket);
+  socket.receive(hello(PROTOCOL_GENERATION + 1));
+  // What follows is of a generation the client cannot read, so it is not handed on.
+  socket.receive(snapshot);
+  expect(received).toEqual([hello(PROTOCOL_GENERATION + 1)]);
+  expect(close).toHaveBeenCalled();
+  expect(states.at(-1)).toBe("incompatible");
+  drop(socket);
+  vi.advanceTimersByTime(10_000);
+  client.reconnect();
+  expect(FakeSocket.all).toHaveLength(1);
+  expect(states.at(-1)).toBe("incompatible");
+  const refused = await client.request({ type: "shutdown" }).catch((cause: unknown) => cause);
+  expect(refused).toMatchObject({ code: "connection_closed" });
+});
+
+it("takes a snapshot with no hello before it as a daemon of another generation", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  const received: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  client.onEvent((event) => received.push(event.type));
+  open(FakeSocket.last);
+  FakeSocket.last.receive(snapshot);
+  frame?.();
+  expect(received).toEqual([]);
+  expect(states.at(-1)).toBe("incompatible");
+});
+
+it("expects a hello again on every new connection", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  open(FakeSocket.last);
+  greet(FakeSocket.last);
+  drop(FakeSocket.last);
+  vi.advanceTimersByTime(500);
+  open(FakeSocket.last);
+  FakeSocket.last.receive(snapshot);
+  expect(states.at(-1)).toBe("incompatible");
 });
 
 it("rejects a reply of another type than its request is answered with as an unexpected reply", async () => {
   const client = new DaemonClient("ws://test");
+  FakeSocket.last.receive(hello());
   const reply = client.request({ type: "list_all_processes" });
   const id = (JSON.parse(FakeSocket.last.sent[0]) as { id: string }).id;
   FakeSocket.last.receive({ type: "ack", id });
@@ -190,7 +268,7 @@ it("fails a request made after close at once, as a closed connection", async () 
   expect(socket.sent).toEqual([]);
 });
 
-it("reports a Retry as reconnecting until the socket opens", () => {
+it("reports a Retry as reconnecting until the socket opens with its hello", () => {
   const client = new DaemonClient("ws://test");
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
@@ -203,13 +281,17 @@ it("reports a Retry as reconnecting until the socket opens", () => {
   client.reconnect();
   expect(states.at(-1)).toBe("reconnecting");
   open(FakeSocket.last);
+  expect(states.at(-1)).toBe("reconnecting");
+  FakeSocket.last.receive(hello());
   expect(states.at(-1)).toBe("open");
 });
 
 it("gives every request its own id, across reconnects", () => {
   const client = new DaemonClient("ws://test");
+  FakeSocket.last.receive(hello());
   void client.request({ type: "shutdown" }).catch(() => {});
   client.reconnect();
+  FakeSocket.last.receive(hello());
   void client.request({ type: "shutdown" }).catch(() => {});
   const ids = [...FakeSocket.all.flatMap((socket) => socket.sent)].map((sent) => (JSON.parse(sent) as { id: string }).id);
   expect(ids).toHaveLength(2);

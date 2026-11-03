@@ -131,7 +131,8 @@ They are not the server form: the server is a single host, and what is remote in
 **Constraint: the UI and the daemon interact only over the network protocol (`apps/daemon/PROTOCOL.md`) — no Tauri
 IPC, no shared state.** Hooks and the MCP server of a session point at the daemon on the host the session runs on. The
 server form is what makes this a hard constraint rather than a tidy one: a browser on another machine has nothing but
-the network.
+the network. What any client of that protocol must implement — framing, replies and broadcasts, absent and null fields,
+the key, and the protocol generation the daemon's first frame states — is PROTOCOL.md's "What every client implements".
 
 **Constraint: in the server form, access has to be a credential, not reachability.** Today it is reachability: the
 daemon trusts whatever connects and is safe only because it binds to loopback — the access guard (`access.rs`) keeps a

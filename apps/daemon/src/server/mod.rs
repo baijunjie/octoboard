@@ -219,6 +219,10 @@ mod tests {
             };
             serde_json::from_str(&text).unwrap()
         }
+        let hello = next_event(&mut events).await;
+        assert_eq!(hello["type"], "hello");
+        assert_eq!(hello["generation"], crate::protocol::GENERATION);
+        assert_eq!(hello["daemon_version"], crate::protocol::DAEMON_VERSION);
         let snapshot = next_event(&mut events).await;
         assert_eq!(snapshot["type"], "snapshot");
         assert_eq!(snapshot["shell_terminals"], serde_json::json!([]));

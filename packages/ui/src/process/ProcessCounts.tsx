@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 
+import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { errorDetails } from "../components/alerts/errorParts";
 import { Button } from "../components/controls/Button";
@@ -10,6 +11,8 @@ import { FadedScroller } from "../components/scroll/scrollFade";
 import { CountBadge } from "../components/status/CountBadge";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import type { ErrorPresentation } from "../errors/errorPresentation";
+import { lacksSummary } from "../errors/daemonMessage";
+import { isUncataloguedFailure } from "../errors/uncataloguedFailure";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { ProcessJump } from "./processJump";
@@ -27,7 +30,8 @@ export interface ProcessRow {
   target: ProcessJump;
 }
 
-/** The popover's contents: a failed refresh, then a row for each of `rows`. */
+/** The popover's contents: a failed refresh, then a row for each of `rows`. A failure the application words says why
+ * ahead of the counts being out of date; one it has no words for leaves its own text to Details. */
 export function ProcessCounts({ rows, error, focusFirst, onPress }: {
   rows: ProcessRow[];
   error: ErrorPresentation | undefined;
@@ -47,7 +51,9 @@ export function ProcessCounts({ rows, error, focusFirst, onPress }: {
     <FadedScroller ref={root} {...{ [PANEL_ATTRIBUTE]: "" }} className="flex max-h-[70vh] flex-col gap-1 p-2">
       {error !== undefined && (
         <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce={hasPainted}>
-          {t("processes.global.refreshFailed")}
+          {typeof error !== "string" && !isUncataloguedFailure(error) && !lacksSummary(error.code)
+            ? <><DaemonErrorMessage error={error} part="summary" />{`${t("common.sentenceSeparator")}${t("processes.global.refreshFailed")}`}</>
+            : t("processes.global.refreshFailed")}
         </ErrorAlert>
       )}
       <ul ref={listRef} className="relative flex min-w-0 flex-col gap-1">

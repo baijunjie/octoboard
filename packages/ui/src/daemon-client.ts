@@ -1,6 +1,6 @@
 import { CodedError } from "./errors/codedError";
 import { t } from "./i18n/language";
-import type { ClientRequest, Event } from "./protocol";
+import { PROTOCOL_GENERATION, type ClientRequest, type Event } from "./protocol";
 import { REPLY_TYPES, type RequestSender, type RequestType } from "./requests";
 
 type Listener = (event: Event) => void;
@@ -31,8 +31,10 @@ function unexpectedReply(request: RequestType, reply: Event): CodedError {
 }
 
 /** `connecting` is the first attempt, before the socket has ever been open — distinct from
- * `reconnecting`, so a window that has never connected does not claim to be re-trying. */
-export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
+ * `reconnecting`, so a window that has never connected does not claim to be re-trying. `open` is a connection whose
+ * hello was of this client's generation. `incompatible` is final: the
+ * daemon speaks another protocol generation, and the client closed the socket for good. */
+export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" | "incompatible";
 
 /**
  * The `/ws/control` connection for the lifetime of the window. Every mutating action (`request`)
@@ -51,6 +53,10 @@ export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
  * something retrying forever would fix), and it re-sends a full `snapshot` on every new control
  * connection, so a reconnect needs no replay logic of its own. Once the budget is spent, `reconnect()` is the way back —
  * called from a user-facing Retry affordance rather than retried automatically forever.
+ *
+ * Every connection opens with the daemon's `hello`. A daemon of another protocol generation, or one that sends its
+ * `snapshot` with no hello before it (older than the hello), is not read on a guess: the client closes for good and
+ * goes `incompatible` (see "Versions and compatibility" in `apps/daemon/PROTOCOL.md`).
  */
 export class DaemonClient {
   private readonly url: string;
@@ -67,7 +73,7 @@ export class DaemonClient {
   private flushTimer?: ReturnType<typeof setTimeout>;
   private connectionListeners = new Set<(state: ConnectionState) => void>();
   private pending = new Map<string, PendingReply>();
-  /** Requests made before the socket reaches `OPEN` are queued rather than dropped or thrown, each
+  /** Requests made before the socket reaches `OPEN` and its hello is read are queued rather than dropped or thrown, each
    * with the timer that gives up on it while it waits. Once sent, a request waits for its reply as
    * long as it takes, as one sent on an open socket does, so the timer is cleared on the flush. */
   private sendQueue: QueuedRequest[] = [];
@@ -76,6 +82,8 @@ export class DaemonClient {
   private connectionState: ConnectionState = "connecting";
   /** Set by `close()` so a deliberate shutdown never schedules a reconnect. */
   private closedPermanently = false;
+  /** Whether the current connection's `hello` has been read, and was of this client's generation. */
+  private greeted = false;
   /** The last request id handed out. Ids only have to be unique among this client's requests, and a counter needs no
    * secure context, which `crypto.randomUUID` does and the desktop webview's page is not reliably counted as. */
   private lastRequestId = 0;
@@ -102,21 +110,38 @@ export class DaemonClient {
     // opened are flushed by the new one.
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.failPending(t("connection.error.connectionReplaced"));
+      // What waited there for the hello was failed with the rest, so it must not go out on the new socket either.
+      for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
     }
     this.socket?.close();
     const socket = new WebSocket(this.url);
     this.socket = socket;
-    socket.addEventListener("open", () => {
-      if (!current()) return;
-      for (const queued of this.sendQueue.splice(0)) {
-        clearTimeout(queued.timer);
-        socket.send(queued.payload);
-      }
-      this.setConnectionState("open");
-    });
+    // A fresh connection opens with a hello again, and nothing is sent on it before that hello is read.
+    this.greeted = false;
     socket.addEventListener("message", (ev) => {
-      if (!current()) return;
+      if (!current() || this.closedPermanently) return;
       const event = JSON.parse(ev.data as string) as Event;
+      if (event.type === "hello") {
+        // Into the store first, so the screen that says the versions differ has the daemon's.
+        this.receive(event);
+        if (event.generation !== PROTOCOL_GENERATION) {
+          this.refuse();
+          return;
+        }
+        // The connection is the client's to use only now: a request sent before the hello was read could reach a
+        // daemon that would take it in another generation's meaning.
+        this.greeted = true;
+        for (const queued of this.sendQueue.splice(0)) {
+          clearTimeout(queued.timer);
+          socket.send(queued.payload);
+        }
+        this.setConnectionState("open");
+        return;
+      }
+      if (event.type === "snapshot" && !this.greeted) {
+        this.refuse();
+        return;
+      }
       // The budget is given back only once the connection has proved itself by delivering its
       // snapshot, not on `open`: the daemon accepts the socket before it builds the snapshot, and
       // one that cannot build it closes the socket right after, so resetting on `open` would retry
@@ -147,9 +172,19 @@ export class DaemonClient {
     });
   }
 
+  /** Gives up on a daemon of another protocol generation: what it sends next cannot be read, and a reconnect would meet
+   * the same daemon, so the socket is closed for good and nothing is retried. */
+  private refuse(): void {
+    this.close();
+    this.failPending(t("connection.error.connectionClosed"));
+    for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
+    this.setConnectionState("incompatible");
+  }
+
   /** Retries right away after the automatic reconnect budget was spent — the user-facing Retry
-   * affordance calls this; nothing calls it automatically. */
+   * affordance calls this; nothing calls it automatically. Does nothing once the client is closed for good. */
   reconnect(): void {
+    if (this.closedPermanently) return;
     this.reconnectAttempts = 0;
     // The banner says a retry is under way until the socket opens or drops again.
     this.setConnectionState("reconnecting");
@@ -247,7 +282,7 @@ export class DaemonClient {
         return;
       }
       const socket = this.socket;
-      if (socket?.readyState === WebSocket.OPEN) {
+      if (socket?.readyState === WebSocket.OPEN && this.greeted) {
         this.pending.set(id, { resolve: settle, reject });
         socket.send(json);
         return;
@@ -258,7 +293,7 @@ export class DaemonClient {
         reject(new CodedError(t("connection.error.connectionIsClosed"), "connection_closed", {}));
         return;
       }
-      // Still connecting, or a reconnect is scheduled: queue it, but bounded — the daemon might
+      // Still connecting, waiting for the hello, or a reconnect is scheduled: queue it, but bounded — the daemon might
       // never come back, and nothing else will reject this once `sendQueue` is the only place it
       // lives.
       this.pending.set(id, { resolve: settle, reject });

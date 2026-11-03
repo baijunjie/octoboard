@@ -20,6 +20,9 @@ export interface TrustPrompt {
 
 export interface State {
   connectionState: ConnectionState;
+  /** The daemon as its `hello` described it: its release version and the protocol generation it speaks. Null until a
+   * hello arrives, and for a daemon too old to send one. */
+  daemon: { version: string; generation: number } | null;
   /** `undefined` until the first `snapshot` arrives — the tree has nothing to render before that. */
   hosts?: Map<string, Host>;
   consoles: Map<string, Console>;
@@ -105,6 +108,7 @@ const INITIAL_AGENT_AVAILABILITY: AgentAvailability[] = AGENTS.map((agent) => ({
 
 const initialState: State = {
   connectionState: "connecting",
+  daemon: null,
   consoles: new Map(),
   projects: new Map(),
   sessions: new Map(),

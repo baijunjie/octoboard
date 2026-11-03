@@ -1,5 +1,6 @@
-//! The control socket (`/ws/control`): the state snapshot a client opens with, the broadcasts
-//! forwarded after it, the requests it sends and the one writer that puts all of them on the wire.
+//! The control socket (`/ws/control`): the hello and the state snapshot a client opens with, the
+//! broadcasts forwarded after them, the requests it sends and the one writer that puts all of them
+//! on the wire.
 
 use std::sync::Arc;
 
@@ -52,8 +53,17 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
     // application ignores a prompt or request it already holds.
     let broadcasts = state.subscribe();
 
-    // The snapshot is unprompted and goes first: it is the only way a client that just connected
-    // learns the current state.
+    // The hello is unprompted and goes first, so that a client learns which protocol generation
+    // it is talking to before it has to read anything of that generation. The snapshot follows:
+    // it is the only way a client that just connected learns the current state. A lag recovery
+    // resends the snapshot only; it is the same connection.
+    let hello = Event::Hello {
+        generation: crate::protocol::GENERATION,
+        daemon_version: crate::protocol::DAEMON_VERSION.to_string(),
+    };
+    if outbound.send(hello).await.is_err() {
+        return;
+    }
     match snapshot(&state) {
         Ok(snapshot) => {
             if outbound.send(snapshot).await.is_err() {

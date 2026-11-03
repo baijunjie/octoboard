@@ -418,6 +418,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.login_already_running": "此账户正在登录 {agent}。",
   "daemon.reset_credit_in_progress": "此账户正在兑换重置。",
   "daemon.reset_credit_timed_out": "{agent} 未在规定时间内响应。重置可能已经使用，请在用量更新后查看。",
+  "daemon.process_count_timed_out": "统计进程数量用时过长。",
   "daemon.reset_credit_not_signed_in": "{account}（{agent}）未登录，无法兑换重置。",
   "daemon.reset_credit_failed": "{agent} 无法兑换重置：{detail}",
   "daemon.login_codex_busy": "另一个 {codex} 账户正在登录。请等它完成后再试。",
@@ -701,6 +702,14 @@ export const zhHans: Translation<"other"> = {
   "connection.disconnected": "已与守护进程断开连接。",
   "connection.reconnecting": "已与守护进程断开连接。正在重新连接…",
   "connection.retry": "重试",
+  "connection.incompatible.title": "{appName} 与其守护进程版本不一致",
+  "connection.incompatible.body": "此窗口无法读取所连接的守护进程，因为两者使用的协议版本不同。",
+  "connection.incompatible.versions": "窗口版本：{appVersion}。守护进程版本：{daemonVersion}。",
+  "connection.incompatible.versionUnknown": "未知",
+  "connection.incompatible.remedy.desktop": "请退出 {appName} 后重新打开。如果问题仍然出现，请重新安装 {appName}。",
+  "connection.incompatible.remedy.browser": "请重新载入页面。如果问题仍然出现，请更新 {appName}，使此页面与守护进程版本一致。",
+  "connection.incompatible.quit": "退出 {appName}",
+  "connection.incompatible.reload": "重新载入",
 
   "notification.waiting.title": "等你回应",
 

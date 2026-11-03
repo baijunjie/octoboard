@@ -30,8 +30,8 @@ The form an empty state takes wherever it fills an area of its own, centred in i
   not enough width. The welcome screen's two actions are described in "What the welcome screen shows" in
   `docs/product/welcome-screen.md`.
 - **an action that reaches something outside the window**, a link in the shape of a secondary button with the
-  external-link glyph. **Report issue** is one, on the screens for a daemon that could not start and for a UI that
-  failed: it follows the recovery where there is one, and is otherwise the row's only action (see "The window chrome
+  external-link glyph. **Report issue** is one, on the screens for a daemon that could not start, for a daemon of
+  another version and for a UI that failed: it follows the recovery where there is one, and is otherwise the row's only action (see "The window chrome
   and the content panel" in `docs/product/window-layout.md`).
 
 The heading is a heading for assistive technology as well, so the panel shows in the outline of the view it fills, at

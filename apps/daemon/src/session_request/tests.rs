@@ -748,7 +748,7 @@ async fn a_dropped_call_is_withdrawn_and_waiting_requests_follow_the_snapshot() 
             requests.push(event["request_id"].as_str().unwrap().to_string());
         }
     }
-    assert_eq!(types[0], "snapshot");
+    assert_eq!(types[..2], ["hello", "snapshot"]);
     assert_eq!(requests, [first_id, second_id]);
 }
 

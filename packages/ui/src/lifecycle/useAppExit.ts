@@ -65,6 +65,8 @@ interface UseAppExitResult {
    * is how an installed update takes effect. It goes through the confirmation like any quit, since a restart
    * ends the sessions as a quit does, and the user can cancel there. */
   requestRestart: () => Promise<void>;
+  /** Asks for a quit from a control of the window's own, as the shell's quit gestures do, confirmation included. */
+  requestQuit: () => Promise<void>;
 }
 
 /**
@@ -140,6 +142,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   };
 
   const requestRestart = () => request(true);
+  const requestQuit = () => request(false);
 
   const confirmExit = async (): Promise<void> => {
     await doQuit(exitRestarts);
@@ -182,5 +185,6 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     closeExitConfirm,
     confirmExit,
     requestRestart,
+    requestQuit,
   };
 }

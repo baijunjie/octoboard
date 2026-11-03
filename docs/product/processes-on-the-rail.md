@@ -90,9 +90,12 @@ The background service shares its counts between readings, from every window and
 worked out less than **2 seconds** earlier answer a reading again, unless a tree has been stopped or kept, or a launch
 has ended, since. Readings that arrive while counts are being worked out wait for that one result rather than each
 working out their own. A reading waits for it at most about **10 seconds**; past that it is answered with the last
-counts worked out, however old, or fails when there are none yet.
+counts worked out, however old, or fails with the code `process_count_timed_out` when there are none yet.
 
 A reading that fails keeps the last counts, on the button and in the rows. While the failure lasts, the popover shows an
 amber warning alert at its top (see "Failures shown on the screen" in `docs/product/error-alerts.md`), titled that the
-list could not be refreshed, saying that the counts shown may be out of date, with **Details**. It is announced to
-assistive technology only when it arrives while the popover is open, and goes with the next reading that succeeds.
+list could not be refreshed, saying that the counts shown may be out of date, with **Details**. Where Octoboard has
+words of its own for the failure, the alert says why first, then that the counts may be out of date: for
+`process_count_timed_out`, that counting the processes took too long. A failure it has no words for says only that the
+counts may be out of date, its own text left to **Details**. It is announced to assistive technology only when it
+arrives while the popover is open, and goes with the next reading that succeeds.

@@ -68,11 +68,92 @@ that keep them private, and they are removed with that directory. A new client t
 no `Origin` or is served from one of the origins above. A client reaching the daemon under any other host name is
 refused until the rule is widened (`host_allowed` in `apps/daemon/src/server/access.rs`).
 
+## What every client implements
+
+The conventions a client has to follow whatever it does, each in a few lines; the details stay in the sections linked.
+
+### Framing and the envelope
+
+Every WebSocket message is a text frame holding one JSON object. A request is its own fields plus an optional `id`
+string in one flat object, so no request field is named `id`; the reply to it carries the same `id` (see
+"`GET /ws/control` — management and status").
+
+### Replies and broadcasts
+
+A request with an `id` is answered on the asking socket with `ack`, `error` or a typed reply carrying that `id`; a
+request's own `error` is never broadcast. A connection opens with `hello`, then `snapshot`, followed by the prompts and
+session requests still waiting, and is sent a fresh `snapshot` (and those again) whenever it fell too far behind the
+broadcasts: these go to that connection alone, and a client replaces its state with each `snapshot` it is sent. Every
+other event without an `id` is a broadcast and goes to every connected client, whoever caused it.
+
+### Absent, null and given
+
+- An update field is tri-state: a key left out leaves the value alone, `null` clears it, a value sets it. In the
+  generated TypeScript such a field reads `?: T | null`. A client generator for another language has to tell a missing
+  key from `null` (Swift's `Codable`, for one, does not by default).
+- In a create, an absent field takes the default. An absent boolean is false.
+- Instants are milliseconds since the epoch.
+
+### Naming
+
+Requests, replies, events and MCP tools follow the rules in "Names": the verbs, the fields a request acts on, and one
+name per operation across the control socket and the MCP tools.
+
+### Path encoding
+
+A path, an entry name or a branch name that comes from the file system or Git travels in one canonical form, with
+`%XX` for each byte that is not part of valid UTF-8; a client decodes it for display and sends back the form it was
+given. Which fields are wire paths is said where they are defined (see "Wire paths").
+
+### Browse requests
+
+The requests that read a project's files share one lane per connection: the `slot` field, budgets on how much is
+pending and how much one reply carries, and the rule for telling a stale reply from a current one (see "Browsing a
+project").
+
+### The key
+
+Every request on every route carries the daemon's key as `?key=`, the WebSocket upgrade included (see "Who may
+connect"). Looking ahead, not yet in the protocol: a device credential, when one comes, is to travel the same way, so a
+client implements one path.
+
+### Versions and compatibility
+
+The first frame on every control connection is `hello`, `{"type": "hello", "generation": 1, "daemon_version":
+"0.1.0"}`: the protocol generation the daemon speaks and its release version. Its shape is frozen across generations, so
+a client of any generation can read it: fields may be added to it, never removed or given another meaning. The
+terminal socket has no hello; the control socket's speaks for the daemon.
+
+Within one generation the protocol only grows, and each side tolerates what it does not know:
+
+- **Daemon to client.** A client ignores an event `type` it does not know, ignores a field it does not know, and takes
+  an enum value it does not know as that enum's stated fallback; where this document states none, the record carrying
+  it is still shown and the client does not act on the unknown value (as for an unknown `code`, whose `message` is
+  shown). Output enums may therefore gain values within a generation: a new agent, status or reason is not a break.
+- **Client to daemon.** The daemon ignores a request field it does not know (requests are never read with
+  `deny_unknown_fields`), answers a `type` it does not know, or an enum value or shape it cannot read, with `error`
+  `unreadable_request`, and never adds a required input within a generation.
+- **A break raises the generation**: a removed or renamed request, event, field or value; a changed type; a newly
+  required input; a changed meaning. Everything else is additive and keeps the number.
+- **On mismatch** the client does not proceed on a guess: a client whose generation differs from the hello's
+  `generation` closes the socket, does not reconnect, and tells the user both versions. A `snapshot` arriving with no
+  hello before it comes from a daemon older than the hello and is treated as a mismatch.
+
+The generation is `GENERATION` in `apps/daemon/src/protocol/version.rs`. The TypeScript bindings,
+`packages/ui/src/protocol.generated.ts`, are rendered from the wire types with
+`OCTOBOARD_WRITE_BINDINGS=1 cargo test -p octoboardd bindings`, which also writes the generation as
+`PROTOCOL_GENERATION`, so a client built from them cannot drift from the daemon's number; without the variable the
+test fails when the committed file is out of date.
+
+### The MCP contract
+
+The MCP route's server key, tool naming and call shape are frozen as well (see "The MCP server as a contract").
+
 ## `GET /ws/control` — management and status
 
-Text frames, JSON, one object per frame. Every client request may carry an `"id"` string; the daemon answers that
-request on the asking socket with `ack` or `error` carrying the same `id`. State changes are broadcast to every
-connected client regardless of who caused them.
+Text frames, JSON, one object per frame. The daemon's first frame on a connection is `hello`, its second `snapshot`.
+Every client request may carry an `"id"` string; the daemon answers that request on the asking socket with `ack` or
+`error` carrying the same `id`. State changes are broadcast to every connected client regardless of who caused them.
 
 The request id and the request's own fields share one flat object, so **no request field is named `id`**: what a
 request acts on is named for its kind — `console`, `project`, `session` (and `console_id` / `project_id` where a record
@@ -126,7 +207,7 @@ the request id as if it were a record id.
 | `read_session_history` | `session` | Replies with `session_history`: what the session's own agent record says the conversation was, for the history view of an archived session. An id with no session is `unknown_session`. It is read fresh from the agent's record (found the way the handoff package finds it, in every account that could hold it, and for a Codex thread that `codex archive` moved out of `sessions/`, in the account's `archived_sessions/`) and nothing is stored. A session that has had no conversation has an empty history. A record that is not found or cannot be read is not an error: the reply carries `unavailable`. Grok keeps only a summary of what came before a compaction, so the history of a compacted Grok session shows the turns since the compaction only |
 | `inspect_session_branches` | `sessions`, `processes?` | Replies with `session_branches_inspected`: the branches and linked worktrees bound to exactly these session ids, as "Branches and worktrees bound to a session" below describes, each with where it stands now. An id with no session is skipped. Runs no `git` when none of the sessions is responsible for a branch. With `processes` true, the reply also carries `processes`: the process trees of those of these sessions that are running whose top has run for at least 30 seconds, what an archive of them would stop (see "Process trees"). This is a fresh inspection, not a promise about a later archive or deletion |
 | `list_processes` | `session_id` or `project_id` | Replies with `processes_listed`: with `session_id`, the process trees of the session's current launch; with `project_id`, those of every running session of the project (each tree carries its `session_id`) followed by the project's trees no session owns, which carry none: its leftovers and the trees kept under it (`kept: true`), oldest first. Ports are read when the list is computed. Clients poll it on a timer while they show it; a list of the same session or project computed less than 2 seconds before answers again, unless a `stop_processes` or `keep_processes` through the daemon, or the end of a launch, came in between. A `session_id` of a session that has no process is refused with `session_not_running`; an unknown session or project with `unknown_session` or `unknown_project`. See "Process trees" |
-| `list_all_processes` | (none) | Replies with `all_processes_listed`: how many process trees each project and each console session has, in `counts`: one entry per project that has any (`project_id` set, in the order the projects are listed), then one per console session that has any (`session_id` set). A tree is counted under the project of its session, of the directory it was left behind in, or it was kept under; no tree is described. Clients poll it; the daemon reuses one reading for two seconds across every client, until a stop, a keep or the end of a launch clears it, and requests that overlap share one computation. A request waits at most about ten seconds for one already under way, then gets the last counts, or an internal error when there are none. See "Process trees" |
+| `list_all_processes` | (none) | Replies with `all_processes_listed`: how many process trees each project and each console session has, in `counts`: one entry per project that has any (`project_id` set, in the order the projects are listed), then one per console session that has any (`session_id` set). A tree is counted under the project of its session, of the directory it was left behind in, or it was kept under; no tree is described. Clients poll it; the daemon reuses one reading for two seconds across every client, until a stop, a keep or the end of a launch clears it, and requests that overlap share one computation. A request waits at most about ten seconds for one already under way, then gets the last counts, or `process_count_timed_out` when there are none. See "Process trees" |
 | `stop_processes` | `ids` | Replies with `processes_stopped`: re-verifies each tree id against the ledger (a tree of a launch being followed, a leftover of a local project, or a kept tree) and stops the trees that still qualify; a kept tree stopped is the user's no more. An id that does not, because the tree is gone or was never one, is left out of the reply, not an error. See "Process trees" |
 | `keep_processes` | `ids` | Replies with `processes_kept`: re-verifies each tree id as `stop_processes` does (a tree of a launch being followed that is not being ended, or a leftover of a local project), and the trees that still qualify become the user's, with everything that descends from them: no session owns them, the daemon never stops them unless a `stop_processes` names them or their project is removed, and `list_processes` of their project lists them with `kept: true` among its processes (the project of the session whose tree it was, or the local project a leftover is in). A console session's tree is not kept, as it belongs to no project, and is left out of the reply like an id that names no tree. Ids that name no such tree are left out of the reply. See "Process trees" |
 | `delete_session` | `session`, `trash_agent_records?`, `only_if_unused?`, `force_remove?`, `keep?` | Removes Octoboard's record of one session and broadcasts `session_deleted`. Refused with `session_not_deletable` unless the session is archived or unused: no turn yet, with no session bound to it, and either independent or opened by the user (`origin` `user`); a session an agent started with `open_session` (`origin` `console`) was dispatched by its parent, which handed it work and expects it to exist, so deleting it would silently cancel that task, and it is archived instead. An unused session that is not archived has its process stopped once its record is gone; a turn landing at the same moment wins and the request is refused. So is a session being launched or resumed right now. Deleting an archived parent (a console session, or a project session that started some) deletes the archived sessions bound to it as well, at both levels — an archived project coordinator among them takes its own archived sessions along — each broadcast as `session_deleted` (a refusal deletes none); deleting an archived child session leaves its parent alone. An archived session whose process is still ending can be deleted; one being resumed right now cannot. Unused sessions' agent records are automatically moved to the system Trash. With `trash_agent_records` (absent means false), used sessions' agent records deleted by the request are also moved to the system Trash after the deletion (recoverable, never deleted outright) — Claude Code's transcript with its subagent directory, Codex's rollout file, Grok's session directory — so the session can no longer be resumed in the agent itself. They are looked for wherever this machine's accounts could hold them, since a session switched to another account leaves its original copy in the old one: the session's own account, every account Octoboard knows of for the agent, and every copy in every Claude project directory. The agent's default account is looked in only for a session on the default account, or on an account sharing the default configuration whose last change of it is complete, whose records live there; a session on any other account never removes anything from the default account's directory, however it is spelled or linked. Only a record named after the session's agent session id the way the agent names it is taken, and the id and any path an agent's hook reported are never trusted beyond that: an id that is not the agent's id shape (a canonical UUID), a record that does not sit at the agent's exact layout depth, one under a linked directory, or a reported path outside the account's records directory, names nothing. A record is left when another remaining session refers to the same agent session id, and one that is missing or whose account location is unknown is skipped. A failure to move one is logged and never fails the request; a process just stopped may still rewrite its transcript afterwards. The project's directory is never touched. `only_if_unused` (absent means false) deletes this session only if it is still unused at the atomic delete; otherwise `session_not_deletable`. Native-record presence does not affect eligibility. This guard never falls back to deleting a used archived session or its group; any native records are moved to the Trash automatically. After the deletion the branches and worktrees bound to every session it deleted are removed and reported as for `archive_session`, `force_remove` and `keep` included |
@@ -177,7 +258,8 @@ the request id as if it were a record id.
 
 | `type` | Fields |
 |---|---|
-| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `account_quotas`, `account_logins`, `account_sharing`, `home_dir`, `shell_terminals` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_logins` is the logins that have started and not ended, empty when none runs — see "Account login" below. `account_sharing` is the sharing state of every account in `Settings.accounts`, as `account_sharing` sends it. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; it is `HOME`, or the user's entry in the system user database when `HOME` is unset or relative, and null when the home settled on that way is the filesystem root. `shell_terminals` is every `ShellTerminal` the daemon holds, running or exited, oldest first; with the records it is all a client needs to rebuild its terminals, so one that lagged loses nothing by the fresh snapshot it is sent |
+| `hello` | `generation`, `daemon_version` — the first frame on every control connection, sent once, unprompted, before the `snapshot`: the protocol generation the daemon speaks and its release version. Its shape is frozen across generations; see "Versions and compatibility" |
+| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `account_quotas`, `account_logins`, `account_sharing`, `home_dir`, `shell_terminals` — sent unprompted right after `hello` when a control socket connects, and again to a connection that fell too far behind the broadcasts. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_logins` is the logins that have started and not ended, empty when none runs — see "Account login" below. `account_sharing` is the sharing state of every account in `Settings.accounts`, as `account_sharing` sends it. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; it is `HOME`, or the user's entry in the system user database when `HOME` is unset or relative, and null when the home settled on that way is the filesystem root. `shell_terminals` is every `ShellTerminal` the daemon holds, running or exited, oldest first; with the records it is all a client needs to rebuild its terminals, so one that lagged loses nothing by the fresh snapshot it is sent |
 | `agent_availability_updated` | `agent_availability` — the whole three-entry list, sent once, when the daemon's one-time determination of it lands; never again afterwards, since nothing re-determines it during a run |
 | `reset_credit_used` | `id`, `outcome` — the reply to `use_codex_reset_credit`; `outcome` is `reset` (the credit was used and the windows that could be reset were), `nothing_to_reset` (no window of the account is eligible for a reset now; whether the credit is kept was not measured), `no_credit` (the account has no credit left) or `already_redeemed` (this request's idempotency key had already succeeded) |
 | `account_quotas_updated` | `account_quotas` — the whole list, sent whenever a reading finishes, an account's reading is dropped (the account was repointed or deleted) or a used reset credit is taken out of its reading; see "Account quotas" below |
@@ -309,6 +391,7 @@ A client also branches on some codes, instead of only showing them:
 | `reset_credit_not_signed_in` | `agent`, `account` (the account's name) | Codex refused `use_codex_reset_credit` for want of a sign-in; the quota is read again |
 | `reset_credit_timed_out` | `agent` | Codex did not answer `use_codex_reset_credit` within 60 seconds; the credit may have been used all the same, and the quota is read again |
 | `reset_credit_failed` | `agent`, `detail` | Codex could not be run, ended without answering, refused the request or answered with something that could not be read; `detail` is what it said, and the quota is read again |
+| `process_count_timed_out` | — | `list_all_processes` waited about ten seconds for a count another request was computing, and no counts had been noted to answer with; the next request asks again |
 | `login_codex_busy` | — | `start_account_login` for a Codex account while a Codex login runs for any account: Codex's browser flow holds one fixed local port |
 | `login_not_running` | `agent` | `cancel_account_login` for an account with no login running |
 | `config_dir_taken` | `agent`, `name` | A requested account config directory, once normalised, equals that of another account of the same agent (symlinks not followed; case folded on macOS) — including the default account's directory; `name` is the name of the account using it |

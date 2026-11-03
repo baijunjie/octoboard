@@ -54,7 +54,8 @@ and records tests replay.
   `callbacks.rs` the hook, git-ref, revert-gate, context-window and MCP routes, `access.rs` the Host/Origin/key guard.
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
   is the `Code` registry (a code can be made only there), `errors.rs` the one mapping from a failure to an `error`
-  reply, `bindings.rs` the test that renders the types into `packages/ui/src/protocol.generated.ts`.
+  reply, `version.rs` the protocol generation and the daemon's version the `hello` frame states, `bindings.rs` the test
+  that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`.
 - `src/cli/` — the command line and the modes above.
 
 ### Coordinator role
@@ -257,7 +258,9 @@ which can only add an edge, never hide one.
 
 - A new control-socket request: its types in `src/protocol/` (and `PROTOCOL.md`), its handler under `src/coordinator/`
   reached from the dispatcher in `mod.rs`; regenerate `packages/ui/src/protocol.generated.ts` by running the
-  `protocol::bindings` test with `OCTOBOARD_WRITE_BINDINGS=1` (the same test fails when the file is stale).
+  `protocol::bindings` test with `OCTOBOARD_WRITE_BINDINGS=1` (the same test fails when the file is stale). It follows
+  the conventions in `PROTOCOL.md`'s "What every client implements" section (naming, tri-state update fields, wire paths,
+  and what raises the protocol generation).
 - A new code the daemon names a failure or notice by: a `pub const` of the matching module in `src/protocol/codes.rs`
   (the only place a `Code` is made); the UI needs its record and wording in the same change.
 - A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool

@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
-import { type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type FileContent, type Launch, type GitStatus, type Host, type Page, type PerAgent, type ProcessTree, type Project, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type FileContent, type Launch, type GitStatus, type Host, type Page, type PerAgent, type ProcessTree, type Project, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import { AGENTS } from "../agents/agents";
 import type { SessionRequest, State, TrustPrompt } from "../store";
@@ -255,8 +255,12 @@ export function accountSharingOf(states: AccountSharing[]): Map<string, AccountS
   return new Map(states.map((sharing) => [sharing.account, sharing]));
 }
 
+/** The release version the fixtures' daemon says it is in its hello. */
+export const FIXTURE_DAEMON_VERSION = "0.1.0";
+
 /** A connected window's state after its first snapshot, over which a scenario lays what it differs
- * in. Only what is given is set; the rest is the empty state. */
+ * in. Only what is given is set; the rest is the empty state. The daemon greeted it with a hello of the window's own
+ * generation unless `daemon` says otherwise. */
 export function snapshotState(parts: {
   consoles?: Console[];
   projects?: Project[];
@@ -271,9 +275,11 @@ export function snapshotState(parts: {
   settings?: Settings;
   accountQuotas?: AccountQuota[];
   accountSharing?: AccountSharing[];
+  daemon?: State["daemon"];
 }): Partial<State> {
   return {
     connectionState: parts.connectionState ?? "open",
+    daemon: parts.daemon === undefined ? { version: FIXTURE_DAEMON_VERSION, generation: PROTOCOL_GENERATION } : parts.daemon,
     hosts: new Map([[LOCAL_HOST.id, LOCAL_HOST]]),
     consoles: new Map((parts.consoles ?? []).map((c) => [c.id, c])),
     projects: new Map((parts.projects ?? []).map((p) => [p.id, p])),

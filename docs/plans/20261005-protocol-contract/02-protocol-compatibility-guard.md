@@ -6,17 +6,22 @@
 > - a removed request, event or field;
 > - a newly required input;
 > - an input that accepts less;
-> - an output that can carry a new kind of value, or loses a type or a required field.
+> - an output that loses a type or a required field.
+>
+> A break of these kinds is allowed only together with a raised protocol generation.
 
 ## Technical design
 
 - [ ] A snapshot of the schema from milestone 01 as last released, refreshed at each release.
 - [ ] A structural comparison of the current schema with the snapshot:
   - Inputs may only widen: types widen, enumerations grow, and no new required properties.
-  - Outputs may only give more: no lost types or required fields, and enumerations only shrink.
+  - Outputs may only give more: no lost types or required fields. Output enumerations may grow within a generation
+    (PROTOCOL.md, "Versions and compatibility": a client takes an unknown value as the enum's fallback).
   - Added requests, events and output fields pass.
 - [ ] A test of the comparison itself, showing that it catches breaks and allows growth.
-- [ ] A protocol generation number that a deliberate break increments.
+- [x] A protocol generation number that a deliberate break increments: `GENERATION` in
+  `apps/daemon/src/protocol/version.rs`, on the wire in the `hello` frame and rendered into `protocol.generated.ts` as
+  `PROTOCOL_GENERATION`. The guard passes a break only when the generation was raised against the snapshot's.
 
 ## Implementation plan
 
@@ -25,5 +30,6 @@
 
 ## Notes for the developer
 
-- **Reusable capabilities**: the schema from milestone 01, and the existing drift check.
+- **Reusable capabilities**: the schema from milestone 01, and the existing drift check. The snapshot can be the last
+  release's `packages/ui/src/protocol.generated.ts`, which carries its generation.
 - **Reference docs**: `apps/daemon/PROTOCOL.md` (including "Coded messages").

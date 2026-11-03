@@ -805,10 +805,10 @@ async fn a_count_that_waits_too_long_for_another_answers_with_the_last_counts_or
     let (release, holder) = hold(&state);
     let first = count(&state);
     under_way(1).await;
-    assert!(
-        impatient(&state).await.is_err(),
-        "no counts were noted to answer with"
-    );
+    let refused = impatient(&state)
+        .await
+        .expect_err("no counts were noted to answer with");
+    assert_eq!(code_of(&refused), error_code::PROCESS_COUNT_TIMED_OUT);
     release.send(()).unwrap();
     holder.join().unwrap();
     let noted = first.await.unwrap();

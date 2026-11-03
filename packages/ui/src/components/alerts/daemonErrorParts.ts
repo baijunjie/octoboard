@@ -19,6 +19,9 @@ export type DaemonErrorParts = {
   uncatalogued: boolean;
   /** The failure is the shell-environment timeout with its command, which has a layout of its own. */
   shellTimeout: boolean;
+  /** The failure needs the rich render: the catalog words it with params (chips), a recovery line or a detail block.
+   * False for a catalogued code with none of those, which is shown from its `message`, already localized by the store's
+   * request wrapper; whether the application has words of its own for a failure is `!isUncataloguedFailure`. */
   worded: boolean;
   /** An `ActionableError`'s `detail`, raw text of its own whatever the catalog says of its code. */
   actionableDetail?: string;

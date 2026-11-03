@@ -6,6 +6,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { DetailsButton } from "../components/alerts/DetailsButton";
 import { HOVER_CLOSE_DELAY_MS } from "../components/hint/hintPopover";
 import { activate, enter, leave, press, mountForTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { CodedError } from "../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { setLanguage } from "../i18n/language";
 import { POLL_MS } from "../process/processPolling";
@@ -42,9 +43,9 @@ beforeEach(() => {
 async function mount(initial: ProcessCount[]) {
   withFakeTimers();
   const onOpen = vi.fn(() => true);
-  const answer = { counts: initial, failing: false };
+  const answer: { counts: ProcessCount[]; failing: boolean; failure?: Error } = { counts: initial, failing: false };
   const request = vi.fn(async (body: { type: string }) => {
-    if (answer.failing) throw new Error("offline");
+    if (answer.failing) throw answer.failure ?? new Error("offline");
     return body.type === "list_all_processes" ? { type: "all_processes_listed", id: null, counts: answer.counts } : { type: "unexpected", id: null };
   });
   const daemon = testDaemon({
@@ -109,6 +110,18 @@ it("warns that the counts may be out of date when a refresh fails, and keeps the
   await advance(POLL_MS.live);
   expect(panel()!.textContent).toContain("Could not refresh the list");
   expect(panel()!.textContent).toContain("The counts shown may be out of date.");
+  expect(panel()!.querySelectorAll("li button")).toHaveLength(2);
+});
+
+it("says why a refresh failed when the daemon names the cause, ahead of the counts being out of date", async () => {
+  const { container, answer, advance } = await mount(COUNTS);
+  press(button(container), "touch");
+  await advance(0);
+  answer.failing = true;
+  // Worded as the store words a daemon's error for its caller.
+  answer.failure = new CodedError("Counting the processes took too long.", "process_count_timed_out", {});
+  await advance(POLL_MS.live);
+  expect(panel()!.textContent).toContain("Counting the processes took too long. The counts shown may be out of date.");
   expect(panel()!.querySelectorAll("li button")).toHaveLength(2);
 });
 

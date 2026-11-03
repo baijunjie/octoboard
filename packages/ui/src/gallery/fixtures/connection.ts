@@ -1,6 +1,7 @@
 import type { Step } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { PROTOCOL_GENERATION } from "../../protocol";
 import { PATH_LINK_FILES, PATH_LINK_WORKTREE_FILES } from "./pathLinkFiles";
 
 const console_ = consoleOf("c-1", "Main");
@@ -52,6 +53,23 @@ export const connectionScenarios: Scenario[] = [
     category: "normal",
     title: "Connecting, no snapshot yet",
     state: { connectionState: "connecting" },
+  },
+  {
+    id: "daemon-other-generation",
+    group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
+    title: "Daemon of another protocol generation",
+    description: "The whole window is the danger-toned screen, whatever the connection had loaded before, with no connection banner: the title, the line saying the window cannot read the daemon, the remedy for the desktop app, then the report guidance sentence and under it the versions of the window (0.1.0) and the daemon (0.2.0). The primary action is Quit Octoboard, as in the desktop app, with Report issue beside it. A browser offers Reload instead: see the next scenario.",
+    updater: { currentVersion: "0.1.0" },
+    state: snapshotState({ consoles: [console_], projects: [project], sessions, connectionState: "incompatible", daemon: { version: "0.2.0", generation: PROTOCOL_GENERATION + 1 } }),
+  },
+  {
+    id: "daemon-other-generation-browser",
+    group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
+    title: "Daemon of another protocol generation, in a browser, no hello",
+    description: "The same screen as in a browser, which cannot quit or update: the primary action is Reload, with Report issue beside it, and the remedy line is the browser's (reload the page, then update Octoboard so that the page and the daemon are the same version). The window's version is unknown, and so is the daemon's, as for a daemon too old to send a hello.",
+    state: snapshotState({ consoles: [console_], projects: [project], sessions, connectionState: "incompatible", daemon: null }),
   },
   {
     id: "daemon-closed-before-snapshot",

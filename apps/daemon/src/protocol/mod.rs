@@ -22,6 +22,7 @@ mod requests;
 mod session_branches;
 mod settings;
 mod terminal;
+mod version;
 
 pub use accounts::*;
 pub use agents::*;
@@ -42,6 +43,7 @@ pub use requests::*;
 pub use session_branches::*;
 pub use settings::*;
 pub use terminal::*;
+pub use version::{DAEMON_VERSION, GENERATION};
 
 #[cfg(test)]
 mod bindings;

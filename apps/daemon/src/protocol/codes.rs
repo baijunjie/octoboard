@@ -308,6 +308,10 @@ pub mod error_code {
     /// `params`.
     pub const ADDED_AGENTS_UNDECIDED: Code = Code("added_agents_undecided");
     pub const UNKNOWN_ACCOUNT: Code = Code("unknown_account");
+    /// A `list_all_processes` waited for a count another request was computing, it did not finish
+    /// in time, and no counts had been noted to answer with. Nothing was counted; the next request
+    /// asks again. No `params`.
+    pub const PROCESS_COUNT_TIMED_OUT: Code = Code("process_count_timed_out");
     /// A `use_codex_reset_credit` for an account whose use of a credit is already running. Nothing
     /// was sent. `params` names `agent`.
     pub const RESET_CREDIT_IN_PROGRESS: Code = Code("reset_credit_in_progress");

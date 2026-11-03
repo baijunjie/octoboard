@@ -33,6 +33,13 @@ use super::settings::Settings;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
+    /// The first frame on every control connection, before the `snapshot`. Its shape is frozen
+    /// across generations so that a client of any generation can read it: fields may be added,
+    /// never removed or given another meaning.
+    Hello {
+        generation: u32,
+        daemon_version: String,
+    },
     /// The answer to `interrupt_session`: whether a running turn was stopped, the session's status
     /// once the interrupt had settled, and what the caller is to know, in prose.
     SessionInterrupted {

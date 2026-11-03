@@ -121,8 +121,8 @@ Errors are queued and normally shown one at a time in arrival order. An identica
 acknowledgement is not queued again: its message, affected session, original diagnostic message, recovery category
 and available daemon code and parameters must all match. Pending errors survive changes between the application's
 screens until acknowledged. They are shown over whichever screen the window is on, so an error nothing caught, or an
-Issue page that could not be opened, still raises one over the screens for a daemon that could not start, for a UI
-that failed and for no daemon address or key being known, which raise none of their own.
+Issue page that could not be opened, still raises one over the screens for a daemon that could not start, for a daemon
+of another version, for a UI that failed and for no daemon address or key being known, which raise none of their own.
 
 When the last pending alert is acknowledged and keyboard focus has nowhere to return to — the control that had it is
 gone, as when a dialog closed before the alert appeared, or the dialog under the alert never had it, as when the alert
@@ -191,9 +191,9 @@ reading edge rather than centred; the raw text on it wraps its long lines rather
 block of it scrolls within itself once taller than its room (see "Names and diagnostic details" below). There is no
 mark beside the heading and no **Details** button. Where the panel fills a pane, a panel or a dialog's body and is
 taller than it, it scrolls in its place (see "Scrolling a surface from the keyboard" in
-`docs/product/scrolling-surfaces.md`). The screens for a daemon that could not start and for a UI that failed take this
-shape too, their row holding the recovery, where there is one, and **Report issue** (see "The window chrome and the
-content panel" in `docs/product/window-layout.md`).
+`docs/product/scrolling-surfaces.md`). The screens for a daemon that could not start, for a daemon of another version
+and for a UI that failed take this shape too, their row holding the recovery, where there is one, and **Report issue**
+(see "The window chrome and the content panel" in `docs/product/window-layout.md`).
 
 **A compact alert** is a component-level error shown among other content — one that blocks what the user is doing,
 or one a component cannot do its job without: in a form dialog, a settings section, a popover or a submenu, or above
@@ -228,9 +228,9 @@ The places with an empty-state failure:
   `docs/product/report-panel.md`);
 - the Processes panel's list when its first reading failed (see "Loading, refreshing and failures" in
   `docs/product/processes-panel.md`);
-- the screens for a daemon that could not start and for a UI that failed, each the whole page, its heading the page's
-  top-level heading and its raw text on the details surface, with **Report issue** after the recovery or, with none,
-  as the one action (see "The window chrome and the content panel" in `docs/product/window-layout.md`). Unlike the
+- the screens for a daemon that could not start, for a daemon of another version and for a UI that failed, each the
+  whole page, its heading the page's top-level heading and its raw text — for a daemon of another version, the two
+  versions — on the details surface, with **Report issue** after the recovery or, with none, as the one action (see "The window chrome and the content panel" in `docs/product/window-layout.md`). Unlike the
   others, each is announced as the page opens, although it is there from the start.
 
 The places with a compact alert:
@@ -260,8 +260,8 @@ The places with a compact alert:
   approval of an owner's handoff" in `docs/product/handing-off-sessions.md`).
 
 Three failures that leave their component doing its job are an **amber warning alert** above or in place of what they
-concern, with a title, one sentence, **Details** where there is more to show and no other button, announced once as
-it appears:
+concern, with a title, one sentence (the rail's Processes popover puts why ahead of it where Octoboard has words for
+the failure), **Details** where there is more to show and no other button, announced once as it appears:
 
 - the Processes panel's list that could not be refreshed while the last one still shows, above it (see "Loading,
   refreshing and failures" in `docs/product/processes-panel.md`);

@@ -2,6 +2,9 @@
 // The wire types of `apps/daemon/src/protocol/`, as the daemon serialises and reads them.
 // The UI imports it only through `protocol.ts`, which re-exports it.
 
+/** The protocol generation this file describes; see `hello`. */
+export const PROTOCOL_GENERATION = 1;
+
 /**
  * A named config directory of one agent, kept once for the whole application and referred to by
  * id wherever a config directory is referred to — a console's per-agent setting, a session's own
@@ -955,6 +958,11 @@ export type DocumentSettings = {
 export type EntryKind = "file" | "directory" | "symlink" | "other";
 
 export type Event = {
+  "type": "hello",
+  generation: number,
+  daemon_version: string,
+}
+| {
   "type": "session_interrupted",
   id: string | null,
   session: string,

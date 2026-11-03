@@ -1,6 +1,6 @@
-//! The contract test: the wire types rendered as TypeScript and compared with the committed
-//! `packages/ui/src/protocol.generated.ts`, which the UI reads its wire types from (through
-//! `packages/ui/src/protocol.ts`).
+//! The contract test: the wire types rendered as TypeScript, with the protocol generation as
+//! `PROTOCOL_GENERATION`, and compared with the committed `packages/ui/src/protocol.generated.ts`,
+//! which the UI reads its wire types from (through `packages/ui/src/protocol.ts`).
 //!
 //! The wire types derive `TS` under `cfg(test)`, so the release binary carries nothing of it. A
 //! field of a type the daemon only reads is `?:` where `serde` lets it be left out (an `Option`,
@@ -27,6 +27,7 @@ use ts_rs::{Config, TypeVisitor, TS};
 
 use super::{
     BrowseRequest, Change, Code, Event, PerAgent, Request, RequestBody, TermControl, TermEvent,
+    GENERATION,
 };
 
 /// Where the rendering is committed, and the variable that makes the test write it instead of
@@ -267,6 +268,11 @@ fn render() -> String {
     collector.visit::<TermControl>();
     collector.visit::<TermEvent>();
     let mut out = HEADER.to_string();
+    // The one value rendered, so that the client's generation is the daemon's and cannot drift.
+    out.push_str("\n/** The protocol generation this file describes; see `hello`. */\n");
+    out.push_str(&format!(
+        "export const PROTOCOL_GENERATION = {GENERATION};\n"
+    ));
     for declaration in collector.declarations.values() {
         out.push('\n');
         out.push_str(declaration);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { appConfig } from "../../appConfig";
@@ -11,6 +11,7 @@ import { diagnosticText } from "../../errors/errorText";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import { issueReportUrl, recordNames, type ReportableFailure } from "../../errors/issueReport";
 import { useOptionalPlatform } from "../../platform/react";
+import { useAppVersion } from "../../platform/useAppVersion";
 import { useDaemonStoreOrEmpty } from "../../store";
 
 export const issueUrl = appConfig.issueUrl;
@@ -50,22 +51,17 @@ export function useIssueReport(failures: readonly ReportableFailure[] | undefine
   const t = useT();
   const platform = useOptionalPlatform();
   const language = useCurrentLanguage();
-  const [version, setVersion] = useState<string>();
   const unexpected = failures !== undefined;
-  useEffect(() => {
-    if (!unexpected) return;
-    let current = true;
-    platform?.updater?.currentVersion().then((found) => { if (current) setVersion(found); }, () => {});
-    return () => { current = false; };
-  }, [unexpected, platform]);
+  const version = useAppVersion(unexpected);
   // Walking every record is only worth it for a failure that is going to be reported.
   const names = useDaemonStoreOrEmpty(useShallow((state) => (unexpected ? recordNames(state) : NO_NAMES)));
   const homeDir = useDaemonStoreOrEmpty((state) => state.homeDir);
+  const daemonVersion = useDaemonStoreOrEmpty((state) => state.daemon?.version);
   const reportUrl = failures
     ? issueReportUrl(issueUrl, {
       failures,
       known: options.known,
-      environment: { version, platform: platform?.kind, userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent, language },
+      environment: { version, daemonVersion, platform: platform?.kind, userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent, language },
       context: { names, homeDir },
     })
     : issueUrl;

@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 
 import { accountOf, pageOf, sessionOf } from "../fixtures/builders";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
+import type { ConnectionState } from "../daemon-client";
 import type { Event, Project, ShellTerminal } from "../protocol";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { createDaemon, dismissAccountLogin, setAccountSwitchesQueued, trackAccountLogin } from ".";
@@ -10,12 +11,13 @@ import { createDaemon, dismissAccountLogin, setAccountSwitchesQueued, trackAccou
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
   onEvents: undefined as ((events: Event[]) => void) | undefined,
+  onConnectionChange: undefined as ((state: ConnectionState) => void) | undefined,
 }));
 vi.mock("../daemon-client", () => ({
   DaemonClient: class {
     onEvent(listener: (event: Event) => void) { client.onEvent = listener; }
     onEvents(listener: (events: Event[]) => void) { client.onEvents = listener; }
-    onConnectionChange() {}
+    onConnectionChange(listener: (state: ConnectionState) => void) { client.onConnectionChange = listener; }
   },
 }));
 
@@ -43,6 +45,20 @@ it("keeps the stored session, and does not notify, when an upsert repeats what i
   expect(daemon.store.getState()).toBe(before);
   expect(daemon.store.getState().sessions.get("s")).toBe(session);
   expect(notified).not.toHaveBeenCalled();
+});
+
+it("holds the daemon the hello describes, none before it", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  expect(daemon.store.getState().daemon).toBeNull();
+  client.onEvents!([{ type: "hello", generation: 1, daemon_version: "1.4.0" }]);
+  expect(daemon.store.getState().daemon).toEqual({ version: "1.4.0", generation: 1 });
+});
+
+it("forgets the daemon its hello described once the connection drops", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  client.onEvents!([{ type: "hello", generation: 1, daemon_version: "1.4.0" }]);
+  client.onConnectionChange!("reconnecting");
+  expect(daemon.store.getState().daemon).toBeNull();
 });
 
 it("applies the events of one batch as a single update", () => {

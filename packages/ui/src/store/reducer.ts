@@ -90,7 +90,9 @@ function withoutSessions(state: State, ids: ReadonlySet<string>): State {
 export function reducer(state: State, action: Action): State {
   switch (action.kind) {
     case "connection":
-      return { ...state, connectionState: action.state };
+      // A dropped connection forgets the daemon its hello described: the next one may meet another daemon, which
+      // greets it again, or sends no hello at all.
+      return { ...state, connectionState: action.state, daemon: action.state === "reconnecting" || action.state === "closed" ? null : state.daemon };
     case "dismiss_trust_prompt":
       return { ...state, trustPrompts: state.trustPrompts.filter((p) => p.session !== action.session) };
     case "track_account_login": {
@@ -109,6 +111,8 @@ export function reducer(state: State, action: Action): State {
     case "event": {
       const event = action.event;
       switch (event.type) {
+        case "hello":
+          return { ...state, daemon: { version: event.daemon_version, generation: event.generation } };
         case "snapshot":
           return {
             ...state,

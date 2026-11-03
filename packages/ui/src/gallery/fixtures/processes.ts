@@ -69,6 +69,9 @@ const scrollingProjectProcesses = [
 ];
 
 const listFailed: FixtureError = { code: "internal_error", params: { detail: "the process table could not be read" }, message: "the process table could not be read" };
+// What counting every project's processes for the rail fails with: the count not finishing in time, a failure the
+// application words itself.
+const countTimedOut: FixtureError = { code: "process_count_timed_out", params: {}, message: "counting the processes did not finish in time" };
 const stopRefused: FixtureError = { code: "internal_error", params: { detail: "the process ledger could not be updated" }, message: "the process ledger could not be updated" };
 
 // The project's sessions again with one archived beside them, which the session filter must not offer.
@@ -417,10 +420,10 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Rail list could not be refreshed",
-    description: "The rail's list was read and shows two project rows, and its latest poll failed: a warning Alert titled \"Could not refresh the list\" stands at the top of the popover, above the rows, saying the counts shown may be out of date, with a Details disclosure for the daemon's own text.",
+    description: "The rail's list was read and shows two project rows, and its latest poll failed: a warning Alert titled \"Could not refresh the list\" stands at the top of the popover, above the rows, saying why (the count did not finish in time) and that the counts shown may be out of date, in one sentence pair with no Details disclosure, since the failure is one the application words.",
     state: railState,
     preferences: panelPreferences,
-    processes: { projectProcesses: { [web.id]: railProcesses[web.id].slice(0, 1), [SAMPLE.api.id]: railProcesses[SAMPLE.api.id] }, listLater: listFailed },
+    processes: { projectProcesses: { [web.id]: railProcesses[web.id].slice(0, 1), [SAMPLE.api.id]: railProcesses[SAMPLE.api.id] }, listLater: countTimedOut },
     // The list is asked again as it opens, which has to come after the failure sets in, a second after the first ask.
     steps: [(ui) => ui.wait(1300), (ui) => railButton(ui, 2)],
   },

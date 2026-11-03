@@ -109,15 +109,16 @@ for the file viewer's header; a report page's own content lines up with it by de
 what it cannot do" in `docs/product/report-panel.md`).
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
-that could not start, for no daemon address or key being known, or for a UI that failed — there is no rail: under the top
-bar, the content panel spans the window.
+that could not start, for a daemon of another version, for no daemon address or key being known, or for a UI that
+failed — there is no rail: under the top bar, the content panel spans the window.
 
-The screens for a daemon that could not start and for a UI that failed are each an empty-state failure of the whole
-page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred in the content panel: a red
-circled `!`, a heading that is the page's top-level heading, a line under it in Octoboard's own words and the remedy
-after that, then a surface of its own holding the failure's raw text, and a centred row of at most two buttons. No
-error alert opens over either screen: the page is the failure's only presentation. Neither holds an alert, a mark
-beside its heading or a **Details** button, and nothing on it but the glyph is drawn in the danger colour.
+The screens for a daemon that could not start, for a daemon of another version and for a UI that failed are each an
+empty-state failure of the whole page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred
+in the content panel: a red circled `!`, a heading that is the page's top-level heading, a line under it in Octoboard's own words and the remedy
+after that, then a surface of its own holding what more there is to say — the failure's raw text, or the versions
+involved — and a centred row of at most two buttons. No error alert opens over any of them: the page is the failure's
+only presentation. None holds an alert, a mark beside its heading or a **Details** button, and nothing on it but the
+glyph is drawn in the danger colour.
 
 - **A UI that failed**: headed that an unexpected error occurred, with the line saying that Octoboard hit an error it
   could not recover from, then the remedy to try again and, if the error comes back, to report it. The surface holds
@@ -129,23 +130,33 @@ beside its heading or a **Details** button, and nothing on it but the glyph is d
   steps above do not resolve it, **Report issue** files an Issue with the steps that led to it; the reason the daemon
   did not start follows (see "Starting up" in `docs/product/application-lifecycle.md`). Its row holds **Report issue**
   alone.
+- **A daemon of another version**: headed that Octoboard and its daemon are different versions, with the line saying
+  that the window cannot read the daemon it connected to because the two speak different versions of their protocol,
+  then the remedy: in the desktop application, to quit Octoboard and open it again, and to reinstall it if this keeps
+  happening; in a browser, to reload the page, and if this keeps happening to update Octoboard so that the page and the
+  daemon are the same version. The surface starts with the same sentence about **Report issue** as the screen for a
+  daemon that could not start, then a line giving the window's version and the daemon's, each said to be unknown where
+  it is not known: the window's version is the application's as the desktop shell reports it, so a browser shows it
+  unknown, and the daemon's is the release version its greeting gave, unknown for a daemon that sent none (see "A
+  daemon of another version" in `docs/product/application-lifecycle.md`). Its row holds **Quit Octoboard** in the desktop application, or
+  **Reload** in a browser, as the primary button, then **Report issue**.
 
 On the screen for no daemon address or key being known, the heading is centred, and the rest — its alert, the
 explanation and the list in it, then the same sentence about reporting as on the screen for a daemon that could not
 start — starts at the reading edge, with **Report issue** centred under it. Its alert is titled that the daemon could
 not be connected to, with the detail under the title.
 
-**Report issue** on these three screens is a link in the shape of a button, with the external-link glyph, and opens a
+**Report issue** on these four screens is a link in the shape of a button, with the external-link glyph, and opens a
 prefilled Issue as the error alert's does (see `docs/product/issue-reports.md`). Where the desktop application cannot
 open links it is left out, and its sentence names the issue address to open in the browser instead; on the screen for
 a UI that failed, which has no such sentence otherwise, that sentence — that this may be a bug, with the address to
 report it at — comes first on the surface, above the stack trace.
 
-None of the three screens has a **Quit** button: the window still quits through `Cmd+Q`, the application menu's
-Quit, the menu bar icon's Quit Octoboard and, where closing the window quits, its close button (see "Quitting" in
-`docs/product/application-lifecycle.md`). As the screens for a daemon that could not start and for a UI that failed
-appear, assistive technology is told their heading and the line under it, once; nothing on them takes keyboard focus
-by itself.
+Of the four screens only the one for a daemon of another version has a **Quit** button, and only in the desktop
+application: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit Octoboard
+and, where closing the window quits, its close button (see "Quitting" in `docs/product/application-lifecycle.md`). As
+the screens for a daemon that could not start, for a daemon of another version and for a UI that failed appear,
+assistive technology is told their heading and the line under it, once; nothing on them takes keyboard focus by itself.
 
 ## What an open dialog, menu or popover covers
 

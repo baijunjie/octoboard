@@ -34,7 +34,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 in `app/`), `AppRoot.tsx` (the provider tree around `App` — platform, language, error boundary, theme, daemon, native
 sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx`,
 `ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `daemon.ts` (locating the daemon from the
-page's address), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch);
+page's address), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch, and the `hello` check that ends in the final connection state `incompatible` when the daemon speaks another protocol generation);
 `requests.ts` (the request-to-reply contract: `REPLY_TYPES` names the reply each request is answered with, `ReplyOf`
 and `RequestSender` type a request's result from it, and `looseRequestSender` adapts a stand-in for the daemon);
 `protocol.ts` (the one door to the wire types: it re-exports `protocol.generated.ts`, which the daemon's
@@ -46,7 +46,8 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 
 - `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by; imports nothing.
 - `src/platform/` — `PlatformAdapter`, the interface to everything native, made of optional capabilities: `tauri.ts`
-  (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`.
+  (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`; `useAppVersion.ts` the hook
+  that asks the shell for the running application's version.
 - `src/preferences/` — the `localStorage` key of every persisted preference, the guarded store behind them, the theme.
 - `src/input/` — shortcut modifier and key predicates, touch, IME and focus workarounds.
 - `src/i18n/` — languages, the typed English catalog and translated ones (`messages/`), lookup, the React side; every
@@ -82,7 +83,7 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
   with its panels in `src/quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
-  host).
+  host), `IncompatibleDaemonScreen` (the whole window while the connection state is `incompatible`).
 - `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, console switching, session
   selection and actions, focus mode, archive view, pane layout and widths, project panels, jumps from the global process
   list to a Processes panel, announcements).
@@ -182,7 +183,8 @@ dependency).
 - A new daemon error code needs its record in `errors/codes.ts` in the same change.
 - A new request names its reply in `REPLY_TYPES` in `requests.ts`; the type check fails until it does.
 - A new wire type is added in the daemon's Rust types (`apps/daemon/src/protocol/`) and `protocol.generated.ts` is
-  regenerated; it is never written by hand in the UI. A rule of the UI about a wire value (a predicate, a list of
+  regenerated; it is never written by hand in the UI. What a client has to do with the wire in general is
+  `apps/daemon/PROTOCOL.md`'s "What every client implements" section. A rule of the UI about a wire value (a predicate, a list of
   codes, a parser of a cause) goes in the layer that owns it, not in `protocol.ts`.
 - A new UI state worth seeing is a scenario under `src/gallery/fixtures/`; data used by both the gallery and the website
   preview or application tests belongs in `src/fixtures/`.

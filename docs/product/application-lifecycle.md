@@ -174,6 +174,25 @@ the failure of a dialog's own action. Session notices that are not failures use 
 What is wrong with one field is said under that field instead (see "Errors under a field" in
 `docs/product/error-alerts.md`).
 
+## A daemon of another version
+
+The window and the daemon speak a protocol with a version of its own, which the two must share. Every connection to
+the daemon opens with the daemon greeting it: the protocol version it speaks and its own release version. The window
+sends nothing on a connection, and does not count it as connected, until that greeting has arrived and named the
+window's own protocol version; requests made meanwhile wait as they do while connecting.
+
+When the greeting names another protocol version, or the daemon sends its state with no greeting before it (a daemon
+older than the greeting), the window reads nothing more from it on a guess: it closes the connection for good, never
+reconnects, and fails any request still waiting, saying that the connection closed. In its place the whole window shows
+the screen for a daemon of another version (see "The window chrome and the content panel" in
+`docs/product/window-layout.md`), even when the window was already in use on an earlier connection: nothing the window
+had shown stays. No connection banner shows and there is no Retry, since another attempt would meet the same daemon.
+The way out is the screen's: in the desktop application, quitting and opening Octoboard again, which brings up the
+daemon bundled with it; in a browser, reloading the page.
+
+A quit while that screen is shown — its own **Quit Octoboard**, or any of the shell's quit gestures (see "Quitting"
+below) — quits at once, asking nothing about running sessions or terminals: that daemon is not talked to.
+
 ## Closing the window
 
 This section and "Quitting" below are the desktop form's. A browser tab has no close that Octoboard sees, and nothing
@@ -234,7 +253,8 @@ Octoboard (see "Quit Octoboard" in `docs/product/menu-bar-icon.md`), the Dock ic
 termination — logging out, restarting or shutting down the machine — and, while keeping Octoboard running in the
 background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close Window item (see "Closing
 the window" above). The one difference is the escape hatch in "Quitting when the window has stopped responding" below,
-which the close gestures have no part in.
+which the close gestures have no part in. Nothing below asks while the window shows a daemon of another version (see
+"A daemon of another version" above).
 
 - **While any session is *starting*, *working*, *waiting for the user*, *dormant* or *working in background*, quitting
   asks for confirmation.** One working in background counts because the quit would also end the work it left running

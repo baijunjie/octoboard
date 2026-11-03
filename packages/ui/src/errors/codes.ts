@@ -226,6 +226,7 @@ export const CODES = {
   path_open_failed: { origin: "daemon", recovery: "openDefaultApplication", detailBlock: true, noSummary: true },
   // A read of the project's files the system denied, where there is no folder to choose instead and nothing is written.
   permission_denied: { origin: "daemon", recovery: "readAccess", detailBlock: true, codeParams: ["path"] },
+  process_count_timed_out: { origin: "daemon", recovery: "none" },
   project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"] },
   project_directory_protected: { origin: "daemon", recovery: "trash" },
   project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"] },

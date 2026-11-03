@@ -164,7 +164,11 @@ pub async fn list_all(state: &Arc<AppState>) -> Result<Vec<ProcessCount>> {
         if let Some(counts) = state.process_ledger.counted_lately(Duration::MAX) {
             return Ok(counts);
         }
-        anyhow::bail!("counting the processes did not finish in time");
+        return Err(CodedError::raised(
+            error_code::PROCESS_COUNT_TIMED_OUT,
+            "counting the processes did not finish in time",
+            &[],
+        ));
     };
     // What the computation this request waited for noted.
     if let Some(counts) = state.process_ledger.counted_lately(floor) {

@@ -35,6 +35,8 @@ export interface SanitizeContext {
 
 export interface IssueEnvironment {
   version?: string;
+  /** The daemon's release version, from its `hello`. */
+  daemonVersion?: string;
   platform?: "tauri" | "browser";
   userAgent?: string;
   language?: string;
@@ -300,6 +302,7 @@ function bodyOf(facts: IssueFacts, diagnostics: ReportedFailure[], diagnosticLim
   const os = osFromUserAgent(environment.userAgent);
   const environmentLines = [
     environment.version && `- ${appConfig.name}: ${environment.version}`,
+    environment.daemonVersion && `- Daemon: ${environment.daemonVersion}`,
     environment.platform && `- Platform: ${environment.platform === "tauri" ? "desktop app" : "browser"}`,
     os && `- OS: ${os}`,
     environment.language && `- Language: ${environment.language}`,
