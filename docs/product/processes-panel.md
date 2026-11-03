@@ -36,9 +36,13 @@ are 14px semibold, smaller than the 16px semibold panel title. Session group hea
 weight and the normal foreground colour, and scroll with their contents.
 
 **With a session filtered on**, only that session's trees are listed, with no heading, and no project processes. A
-note leads the nonempty list, saying that its processes stop automatically when the session ends. **A console
-session's panel** lists its own trees the same way; a console session with no process lists none. The note is absent
-while loading and in the empty state.
+note leads the nonempty list, saying that its processes stop automatically when the session ends, and stays at the
+top while the list scrolls. **A console session's panel** lists its own trees the same way; a console session with no
+process lists none. The note is absent while loading and in the empty state.
+
+Category headings with their notes and the standalone note have the same space above and below, and align with the
+cards' outer edges. Their background covers the content scrolling underneath; the list fades below the whole pinned
+area, and keyboard focus scrolls controls into view below it even when the note wraps.
 
 Within a group, trees are oldest first. A heading too long for its line fades out where it is cut (see "Names too
 long for their space" in `docs/product/labels-and-tooltips.md`).

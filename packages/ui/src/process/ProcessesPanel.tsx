@@ -16,6 +16,7 @@ import { PanelHeader } from "../components/panel/PanelHeader";
 import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "./ProcessTreeDetails";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 import { StickyHeading } from "../components/scroll/StickyHeading";
+import { useStickyHeadingFocus } from "../components/scroll/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
@@ -54,13 +55,15 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
   const scrollRegion = useFadeRegion({ label: t("panel.processes.name") });
   const bodyRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const [categoryHeadingHeight, setCategoryHeadingHeight] = useState(0);
+  const [stickyHeadingHeight, setStickyHeadingHeight] = useState(0);
   const grouped = data.projectId !== undefined && data.sessionId === undefined;
   // Which category headings the list draws: one for the session trees, one for the project's own.
   const hasSessionTrees = grouped && (trees?.some((tree) => tree.session_id !== undefined) ?? false);
   const hasProjectTrees = grouped && (trees?.some((tree) => tree.session_id === undefined) ?? false);
+  const hasSessionNote = !grouped && (trees?.some((tree) => tree.session_id !== undefined) ?? false);
+  const hasStickyHeading = hasSessionTrees || hasProjectTrees || hasSessionNote;
   // Notes wrap with the pane width and language; keep focused rows below the whole pinned header.
-  // Measured again when the set of headings changes; the observer follows their size from there.
+  // Measured on every commit; the observer follows size changes between commits.
   useLayoutEffect(() => {
     const headings = bodyRef.current?.querySelectorAll<HTMLElement>("[data-sticky-heading]");
     const scroller = scrollerRef.current;
@@ -68,7 +71,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
     const measure = () => {
       const top = scroller.getBoundingClientRect().top;
       const heading = Array.from(headings).find((element) => element.getBoundingClientRect().bottom > top);
-      setCategoryHeadingHeight(heading?.getBoundingClientRect().height ?? 0);
+      setStickyHeadingHeight(heading?.getBoundingClientRect().height ?? 0);
     };
     const observer = new ResizeObserver(measure);
     headings.forEach((heading) => observer.observe(heading));
@@ -78,7 +81,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
       observer.disconnect();
       scroller.removeEventListener("scroll", measure);
     };
-  }, [hasSessionTrees, hasProjectTrees]);
+  });
   const [filterOpen, setFilterOpen] = useState(false);
   const filterToggle = useRef<HTMLButtonElement>(null);
   const filterShown = filterOpen || data.sessionId !== undefined;
@@ -154,7 +157,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
       )} />
       {data.projectId && <ProcessSessionSelect projectId={data.projectId} value={data.sessionId} onChange={(id) => { setFilterOpen(true); data.selectSession(id); }} landing={!failed} shown={filterShown} opened={filterOpen} onEmptyBlur={() => setFilterOpen(false)} toggleRef={filterToggle} />}
       <div ref={bodyRef} className={`flex min-h-0 flex-1 flex-col ${scrollRegion.insetRing}`}>
-        <FadedScroller ref={scrollerRef} region={scrollRegion} stickyHeadingHeight={grouped && trees?.length ? categoryHeadingHeight : undefined} className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto ${grouped && trees?.length ? "px-(--pane-inset) pb-4" : "p-(--pane-inset)"}`}>
+        <FadedScroller ref={scrollerRef} region={scrollRegion} stickyHeadingHeight={stickyHeadingHeight} className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-(--pane-inset) ${hasStickyHeading ? "pb-4" : "py-4"}`}>
           {failed ? (
             <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retryList} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} landing />
           ) : (
@@ -240,24 +243,34 @@ function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }
     if (region) focusLanding(region);
   });
   const loading = trees === undefined && error === undefined;
+  const hasNote = !grouped && trees?.some((tree) => tree.session_id !== undefined);
   return (
-    <div ref={rootRef} className="flex min-w-0 flex-1 flex-col gap-4" {...handoff}>
+    <div ref={rootRef} className="flex min-w-0 flex-1 flex-col" {...handoff}>
       {/* Allow the panel's focus announcement to finish before speaking its loading state. */}
       <StatusAnnouncer text={loading ? t("processes.loading") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
-      {!grouped && trees?.some((tree) => tree.session_id !== undefined) && <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>}
-      {loading && <p aria-hidden="true" className="text-sm text-app-muted">{t("processes.loading")}</p>}
-      {trees !== undefined && error !== undefined && (
-        <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce>
-          {t("processes.refreshFailed")}
-        </ErrorAlert>
-      )}
-      {trees?.length === 0 && (
-        <CenteredEmptyPanel icon={SquareActivity} message={t("processes.empty")} description={t(grouped ? "processes.empty.allSessions" : "processes.empty.session")} />
-      )}
-      {trees !== undefined && trees.length > 0 && (!grouped
-        ? <TreeList trees={trees} acting={acting} keepable={keepable} onStop={onStop} onKeep={onKeep} />
-        : <GroupedTrees trees={trees} acting={acting} onStop={onStop} onKeep={onKeep} />)}
+      {hasNote && <StickyProcessNote>{t("processes.panelMessage")}</StickyProcessNote>}
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        {loading && <p aria-hidden="true" className="text-sm text-app-muted">{t("processes.loading")}</p>}
+        {trees !== undefined && error !== undefined && (
+          <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce>
+            {t("processes.refreshFailed")}
+          </ErrorAlert>
+        )}
+        {trees?.length === 0 && (
+          <CenteredEmptyPanel icon={SquareActivity} message={t("processes.empty")} description={t(grouped ? "processes.empty.allSessions" : "processes.empty.session")} />
+        )}
+        {trees !== undefined && trees.length > 0 && (!grouped
+          ? <TreeList trees={trees} acting={acting} keepable={keepable} onStop={onStop} onKeep={onKeep} />
+          : <GroupedTrees trees={trees} acting={acting} onStop={onStop} onKeep={onKeep} />)}
+      </div>
     </div>
+  );
+}
+
+function StickyProcessNote({ children }: { children: React.ReactNode }): React.ReactElement {
+  const { className, ...stickyFocus } = useStickyHeadingFocus(0);
+  return (
+    <p {...stickyFocus} className={`sticky top-0 z-3 -mx-(--pane-inset) shrink-0 bg-panel-sidebar px-(--pane-inset) py-2 ${NOTE_CLASS} ${className}`}>{children}</p>
   );
 }
 

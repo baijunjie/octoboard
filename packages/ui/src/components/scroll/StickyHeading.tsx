@@ -25,7 +25,7 @@ export const STICKY_HEADING_HEIGHT = { list: 38, group: 40 } as const satisfies 
 const PINNED: Record<StickyHeadingVariant, string> = {
   list: "top-0 flow-root bg-panel-sidebar",
   group: "top-[calc(-1*var(--section-padding))] mt-4 flex h-[40px] items-center groove-b bg-overlay text-base font-semibold",
-  category: "top-0 -mx-(--pane-inset) flex shrink-0 flex-col gap-1 bg-panel-sidebar px-(--pane-inset) py-3",
+  category: "top-0 -mx-(--pane-inset) flex shrink-0 flex-col gap-1 bg-panel-sidebar px-(--pane-inset) py-2",
 };
 
 /**
