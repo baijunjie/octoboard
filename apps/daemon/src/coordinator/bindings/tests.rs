@@ -2,13 +2,13 @@ use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
     binding_fixture, bound_coordinator, bound_session, console, no_process_with_conversation,
-    relaunch_stand_in,
+    relaunch_stand_in, resolve_bound_to,
 };
 use crate::mcp;
 use crate::messaging::owner_notices;
 use crate::protocol::{
-    error_code, Agent, CodedError, OrchestrationRole, Project, ProjectSource, RequestBody, Role,
-    Session, SessionStatus,
+    error_code, Agent, CodedError, Project, ProjectSource, RequestBody, Role, Session, SessionKind,
+    SessionStatus,
 };
 use crate::session_tools;
 use crate::store::LOCAL_HOST_ID;
@@ -18,7 +18,7 @@ use crate::test_support::{
 };
 use std::path::Path;
 
-/// A console session is never bound, whatever the request named — `resolve_bound_to` does not
+/// A console session is never bound, whatever the request named — `resolve_owner` does not
 /// even look at `requested` for one.
 #[test]
 fn a_console_session_is_never_bound() {
@@ -27,7 +27,7 @@ fn a_console_session_is_never_bound() {
         &state,
         "console-1",
         None,
-        Role::Console,
+        SessionKind::Console,
         Some("anything".into()),
     )
     .expect("resolved");
@@ -39,7 +39,8 @@ fn a_console_session_is_never_bound() {
 #[test]
 fn a_project_session_named_nothing_to_bind_to_opens_unbound() {
     let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-none");
-    let bound = resolve_bound_to(&state, "console-1", None, Role::Project, None).expect("resolved");
+    let bound =
+        resolve_bound_to(&state, "console-1", None, SessionKind::Project, None).expect("resolved");
     assert_eq!(bound, None);
 }
 
@@ -53,14 +54,14 @@ fn a_project_session_binds_to_the_console_session_it_names() {
         .unwrap();
     state
         .store
-        .insert_session(&bare_session("console-session-1", Role::Console))
+        .insert_session(&bare_session("console-session-1", SessionKind::Console))
         .unwrap();
 
     let bound = resolve_bound_to(
         &state,
         "console-1",
         None,
-        Role::Project,
+        SessionKind::Project,
         Some("console-session-1".to_string()),
     )
     .expect("resolved");
@@ -82,12 +83,12 @@ fn binding_to_an_invalid_target_is_refused() {
     other_console.id = "console-2".to_string();
     state.store.insert_console(&other_console).unwrap();
 
-    let mut elsewhere = bare_session("console-session-elsewhere", Role::Console);
+    let mut elsewhere = bare_session("console-session-elsewhere", SessionKind::Console);
     elsewhere.console_id = "console-2".to_string();
     state.store.insert_session(&elsewhere).unwrap();
     state
         .store
-        .insert_session(&bare_session("project-session-1", Role::Project))
+        .insert_session(&bare_session("project-session-1", SessionKind::Project))
         .unwrap();
 
     // (requested target, why it is not a valid binding)
@@ -107,7 +108,7 @@ fn binding_to_an_invalid_target_is_refused() {
             &state,
             "console-1",
             None,
-            Role::Project,
+            SessionKind::Project,
             Some(target.to_string()),
         )
         .expect_err(why);
@@ -128,7 +129,7 @@ fn a_project_session_binds_only_to_an_unbound_or_bound_coordinator_of_its_own_pr
         .unwrap();
     state
         .store
-        .insert_session(&bare_session("console-session-1", Role::Console))
+        .insert_session(&bare_session("console-session-1", SessionKind::Console))
         .unwrap();
     for id in ["project-1", "project-2"] {
         state
@@ -164,11 +165,11 @@ fn a_project_session_binds_only_to_an_unbound_or_bound_coordinator_of_its_own_pr
         ("coordinator", "project-1", Some("console-session-1"), true),
         ("of-coordinator", "project-1", Some("coordinator"), false),
     ] {
-        let mut session = bare_session(id, Role::Project);
+        let mut session = bare_session(id, SessionKind::Project);
         session.project_id = Some(project.to_string());
         session.bound_to = owner.map(str::to_string);
         if owner.is_some() && !coordinator {
-            session.orchestration_role = OrchestrationRole::Worker;
+            session.role = Role::Worker;
         }
         state.store.insert_session(&session).unwrap();
     }
@@ -177,7 +178,7 @@ fn a_project_session_binds_only_to_an_unbound_or_bound_coordinator_of_its_own_pr
             &state,
             "console-1",
             Some("project-1"),
-            Role::Project,
+            SessionKind::Project,
             Some(target.to_string()),
         )
     };
@@ -253,18 +254,12 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
         assert!(err.to_string().contains(reason), "{session} {owner}: {err}");
     }
     let loner = state.store.get_session("loner").unwrap().unwrap();
-    assert_eq!(
-        (loner.bound_to, loner.orchestration_role),
-        (None, OrchestrationRole::Coordinator)
-    );
+    assert_eq!((loner.bound_to, loner.role), (None, Role::Coordinator));
 
     let (coordinator, _) = bind_session(&state, "starter", "hub").unwrap();
     assert_eq!(
-        (
-            coordinator.bound_to.as_deref(),
-            coordinator.orchestration_role
-        ),
-        (Some("hub"), OrchestrationRole::Coordinator)
+        (coordinator.bound_to.as_deref(), coordinator.role),
+        (Some("hub"), Role::Coordinator)
     );
     assert!(!coordinator.is_worker());
     let mine = state.store.get_session("mine").unwrap().unwrap();
@@ -272,8 +267,8 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
 
     let (joined, _) = bind_session(&state, "loner", "other-starter").unwrap();
     assert_eq!(
-        (joined.bound_to.as_deref(), joined.orchestration_role),
-        (Some("other-starter"), OrchestrationRole::Worker)
+        (joined.bound_to.as_deref(), joined.role),
+        (Some("other-starter"), Role::Worker)
     );
     assert!(joined.is_worker());
     let again = bind_session(&state, "loner", "hub").expect_err("bound already");
@@ -340,10 +335,7 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
         let err = transfer_session(&state, session, from, to).expect_err(reason);
         assert!(err.to_string().contains(reason), "{session} to {to}: {err}");
         let after = state.store.get_session(session).unwrap().unwrap();
-        assert_eq!(
-            (before.bound_to, before.orchestration_role),
-            (after.bound_to, after.orchestration_role)
-        );
+        assert_eq!((before.bound_to, before.role), (after.bound_to, after.role));
     }
 
     // A session that becomes a bound one loses the report panel's tools, so its pages are
@@ -356,11 +348,8 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
     }
     let (coordinator, ..) = transfer_session(&state, "coordinator", "hub", "hub-2").unwrap();
     assert_eq!(
-        (
-            coordinator.bound_to.as_deref(),
-            coordinator.orchestration_role
-        ),
-        (Some("hub-2"), OrchestrationRole::Coordinator)
+        (coordinator.bound_to.as_deref(), coordinator.role),
+        (Some("hub-2"), Role::Coordinator)
     );
     assert_eq!(state.store.list_pages("coordinator").unwrap().len(), 1);
     let child = state.store.get_session("child").unwrap().unwrap();
@@ -368,13 +357,13 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
 
     let (plain, ..) = transfer_session(&state, "plain", "hub", "peer").unwrap();
     assert_eq!(
-        (plain.bound_to.as_deref(), plain.orchestration_role),
-        (Some("peer"), OrchestrationRole::Worker)
+        (plain.bound_to.as_deref(), plain.role),
+        (Some("peer"), Role::Worker)
     );
     let (spare, owner, _) = transfer_session(&state, "spare-coordinator", "hub", "peer").unwrap();
     assert_eq!(
-        (spare.bound_to.as_deref(), spare.orchestration_role),
-        (Some("peer"), OrchestrationRole::Worker)
+        (spare.bound_to.as_deref(), spare.role),
+        (Some("peer"), Role::Worker)
     );
     assert!(spare.is_worker());
     assert_eq!(owner.id, "peer");
@@ -504,10 +493,7 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
         let err = release_session(&state, session, owner, None).expect_err(code.as_str());
         assert_eq!(code_of(&err), code, "{session}: {err}");
         let after = state.store.get_session(session).unwrap().unwrap();
-        assert_eq!(
-            (before.bound_to, before.orchestration_role),
-            (after.bound_to, after.orchestration_role)
-        );
+        assert_eq!((before.bound_to, before.role), (after.bound_to, after.role));
     }
 
     let coordinator = release_session(&state, "coordinator", Some("hub"), None)
@@ -515,8 +501,8 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
         .session;
     assert!(!coordinator.is_worker());
     assert_eq!(
-        (coordinator.bound_to, coordinator.orchestration_role),
-        (None, OrchestrationRole::Coordinator)
+        (coordinator.bound_to, coordinator.role),
+        (None, Role::Coordinator)
     );
     let child = state.store.get_session("child").unwrap().unwrap();
     assert_eq!(child.bound_to.as_deref(), Some("coordinator"));
@@ -524,10 +510,7 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
     let plain = release_session(&state, "plain", Some("hub"), None)
         .unwrap()
         .session;
-    assert_eq!(
-        (plain.bound_to, plain.orchestration_role),
-        (None, OrchestrationRole::Coordinator)
-    );
+    assert_eq!((plain.bound_to, plain.role), (None, Role::Coordinator));
     let released = release_session(&state, "no-process", Some("hub"), None)
         .unwrap()
         .session;
@@ -606,14 +589,7 @@ async fn a_no_process_session_is_told_of_its_new_owner_when_it_next_starts() {
     release_session(&state, "replaced", Some("hub"), None).unwrap();
     state
         .store
-        .set_binding(
-            "replaced",
-            None,
-            "hub-2",
-            OrchestrationRole::Coordinator,
-            false,
-            false,
-        )
+        .set_binding("replaced", None, "hub-2", Role::Coordinator, false, false)
         .unwrap()
         .unwrap();
     owner_notices::running_or_leave(&state, &state.session_record("replaced").unwrap()).unwrap();
@@ -738,14 +714,7 @@ async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
     release_session(&state, "rebound", Some("hub"), Some("Pick up at step 3.")).unwrap();
     state
         .store
-        .set_binding(
-            "rebound",
-            None,
-            "hub-2",
-            OrchestrationRole::Coordinator,
-            false,
-            true,
-        )
+        .set_binding("rebound", None, "hub-2", Role::Coordinator, false, true)
         .unwrap()
         .unwrap();
     assert_eq!(state.store.owner_notice_note("rebound").unwrap(), None);
@@ -895,11 +864,10 @@ async fn a_claimed_session_or_owner_is_not_released() {
 }
 
 /// Every launch of a session — opening, resuming, reopening, a switch of its account — tells it
-/// who it reports to through `owner_of`, and a bound coordinator is told nobody: it gets an unbound
-/// project session's role description and tools, as at its first launch, while a session
-/// bound to it is told the bound coordinator owns it.
+/// who it reports to through `owner_of`: a coordinator is told its console session, which makes
+/// its role description name it, while a session bound to it is told the bound coordinator owns it.
 #[test]
-fn a_bound_coordinator_launches_as_an_unbound_project_session() {
+fn a_bound_coordinator_is_told_its_console_session_at_launch() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-bound-launch");
     let coordinator = bound_coordinator("coordinator", SessionStatus::Interrupted, "hub");
     let of_coordinator = bound_session("of-coordinator", SessionStatus::Interrupted, "coordinator");
@@ -911,7 +879,14 @@ fn a_bound_coordinator_launches_as_an_unbound_project_session() {
         state.store.insert_session(&session).unwrap();
     }
 
-    assert_eq!(owner_of(&state, &coordinator).unwrap(), None);
+    assert_eq!(
+        owner_of(&state, &coordinator).unwrap(),
+        Some(session_tools::Owner::ConsoleOfCoordinator)
+    );
+    assert_eq!(
+        owner_of(&state, &console_session("hub", SessionStatus::Idle)).unwrap(),
+        None
+    );
     assert_eq!(
         owner_of(&state, &of_coordinator).unwrap(),
         Some(session_tools::Owner::Project {

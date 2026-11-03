@@ -116,7 +116,8 @@ use crate::hostfs::place::{looked_within, Place};
 use crate::hostfs::{self, lexically_normalise};
 use crate::paths;
 use crate::protocol::{
-    error_code, notice_code, trust_reason, Agent, CodedError, Event, Notice, Project, Role, Session,
+    error_code, notice_code, trust_reason, Agent, CodedError, Event, Notice, Project, Session,
+    SessionKind,
 };
 use crate::session::wait::QUIET;
 use crate::session::LiveSession;
@@ -155,7 +156,7 @@ const HOOK_FALLBACK: Duration = Duration::from_secs(30);
 /// ([`covered`]). The permission is shared by every agent, so it does not matter which one is
 /// asking.
 async fn consented(state: &AppState, session: &Session, project: Option<&Project>) -> Result<bool> {
-    if session.role == Role::Console {
+    if session.kind == SessionKind::Console {
         return Ok(true);
     }
     let Some(project) = project else {
@@ -790,7 +791,9 @@ pub async fn pending_prompts(state: &AppState) -> Vec<Event> {
     let trusted = state.store.trusted_directories().unwrap_or_default();
     let waiting: Vec<(Arc<LiveSession>, Session, Project)> = waiting_project_sessions(state)
         .into_iter()
-        .filter(|(_, session, project)| session.role != Role::Console && !project.trust_consent)
+        .filter(|(_, session, project)| {
+            session.kind != SessionKind::Console && !project.trust_consent
+        })
         .collect();
     let paths: Vec<String> = waiting
         .iter()

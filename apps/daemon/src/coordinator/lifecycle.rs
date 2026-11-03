@@ -9,8 +9,8 @@ use anyhow::Result;
 use crate::branch_cleanup;
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
-    error_code, CodedError, ConsoleSessionColour, Event, Role, Session, SessionBranchItem,
-    SessionBranchTarget, SessionStatus,
+    error_code, CodedError, ConsoleSessionColour, Event, Session, SessionBranchItem,
+    SessionBranchTarget, SessionKind, SessionStatus,
 };
 use crate::records;
 use crate::state::bindings::{bound_sessions, team};
@@ -494,7 +494,7 @@ fn delete_archived_sessions(
     }
     if let Some(console_session_id) = console_session_id {
         let owner = state.session_record(console_session_id)?;
-        if owner.console_id != console_id || owner.role != Role::Console {
+        if owner.console_id != console_id || owner.kind != SessionKind::Console {
             return Err(CodedError::unknown_session(console_session_id));
         }
     }
@@ -505,7 +505,7 @@ fn delete_archived_sessions(
             && match (project_id, console_session_id) {
                 (Some(project_id), _) => session.project_id.as_deref() == Some(project_id),
                 (None, Some(owner)) => session.bound_to.as_deref() == Some(owner),
-                (None, None) => session.role == Role::Console,
+                (None, None) => session.kind == SessionKind::Console,
             };
         if in_scope && session.status == SessionStatus::Archived {
             ensure_unlocked(std::iter::once(session.clone()).chain(team(state, &session)?))?;
@@ -594,7 +594,7 @@ pub fn set_session_colour(
     id: &str,
     colour: ConsoleSessionColour,
 ) -> Result<Session> {
-    if state.session_record(id)?.role != Role::Console {
+    if state.session_record(id)?.kind != SessionKind::Console {
         anyhow::bail!("only a console session has a colour");
     }
     state.store.set_session_colour(id, colour)?;

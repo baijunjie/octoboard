@@ -3,7 +3,7 @@ use std::path::Path;
 
 use super::*;
 use crate::branch_origin::session_branches::{self, Worktree};
-use crate::protocol::{OrchestrationRole, SessionStatus};
+use crate::protocol::{Role, SessionStatus};
 use crate::test_support::{
     app_state, branch_made_by, console, git, insert_project, repo_with, ScratchDir,
 };
@@ -19,9 +19,9 @@ fn testdata(name: &str) -> PathBuf {
 fn session(id: &str, agent: Agent, config_dir: Option<&Path>) -> Session {
     let mut session: Session = serde_json::from_value(serde_json::json!({
         "id": id, "agent": "claude", "agent_session_id": AGENT_ID, "console_id": "console-1",
-        "project_id": "p1", "host_id": crate::store::LOCAL_HOST_ID, "role": "project",
+        "project_id": "p1", "host_id": crate::store::LOCAL_HOST_ID, "kind":"project",
         "origin": "user", "title": format!("Session {id}"), "status": "idle",
-        "orchestration_role": "coordinator", "has_conversation": true, "pinned": false,
+        "role": "coordinator", "has_conversation": true, "pinned": false,
         "started_at": 0}))
     .unwrap();
     session.agent = agent;
@@ -198,11 +198,11 @@ fn the_package_names_the_session_its_owner_and_the_sessions_it_owns() {
     owner.agent_session_id = None;
     let mut original = session("original", Agent::Claude, Some(&dir.join("account")));
     original.bound_to = Some("owner".to_owned());
-    original.orchestration_role = OrchestrationRole::Worker;
+    original.role = Role::Worker;
     let mut child = session("child", Agent::Claude, None);
     child.agent_session_id = None;
     child.bound_to = Some("original".to_owned());
-    child.orchestration_role = OrchestrationRole::Worker;
+    child.role = Role::Worker;
     child.status = SessionStatus::Archived;
     for stored in [&owner, &original, &child] {
         state.store.insert_session(stored).unwrap();
@@ -439,7 +439,7 @@ fn text_cannot_forge_the_structure_of_the_package() {
             title: "Title\n## Forged".to_owned(),
             agent: Agent::Codex,
             account: "the default account".to_owned(),
-            role: Role::Project,
+            kind: SessionKind::Project,
             place: "project P".to_owned(),
             status: "idle".to_owned(),
             owner: None,

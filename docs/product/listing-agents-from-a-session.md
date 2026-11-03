@@ -71,11 +71,11 @@ seconds:
 Each reading runs the agent's CLI, which is why a session's request is limited per account rather than left to the
 caller: the tool's description tells the agent to ask only when a reading is too old to decide on.
 
-**A worker is told to report a low quota.** The worker's role description tells it that
-its account's quota can run out while it works: to find the account it runs on with `get_session` (no `session`), look
-it up in `list_agents` — where an account the user turned off, possibly its own, is not listed — and, when that
-shows it running low, say so in a `report` with the status `needs_decision`, naming the account and what is left,
-rather than carry on until it stops, its owner deciding whether to switch it to another account or hand it off. It is
-also told that, where the user has turned automatic switching on, Octoboard switches it by itself when a turn stops on
-its account's usage limit, tells it so, and that it then carries on there (see
+**A session with a parent is told to report a low quota.** The role description of a worker, and of a coordinator that
+reports to a console session, tells it that its account's quota can run out while it works: to find the account it runs
+on with `get_session` (no `session`), look it up in `list_agents` — where an account the user turned off, possibly its
+own, is not listed — and, when that shows it running low, say so in a `report` with the status `needs_decision`, naming
+the account and what is left, rather than carry on until it stops, its parent deciding whether to switch it to another
+account or hand it off. It is also told that, where the user has turned automatic switching on, Octoboard switches it by
+itself when a turn stops on its account's usage limit, tells it so, and that it then carries on there (see
 `docs/product/automatic-account-switch.md`).

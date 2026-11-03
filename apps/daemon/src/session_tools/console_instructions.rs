@@ -190,12 +190,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          A project's session role and reporting relationship are separate. A coordinator can \
          manage child sessions; a worker cannot. An independent coordinator answers directly to \
          the user; a session with a parent reports to it. Session records give the capability \
-         in `orchestration_role` and the parent in `owner` (`owner_kind` says console or \
-         project).\n\
+         in `role` and the parent in `owner` (`owner_kind` says console or project).\n\
          \n\
-         - A session `open_session` starts is a worker reporting to you: you drive its whole \
+         - A session `open_session` starts is a coordinator reporting to you: you drive its whole \
          life — instruct it, archive it when it is done, reopen it when it has another task. No \
-         approval is needed.\n\
+         approval is needed. It may start sessions of its own in its project when its task needs \
+         them; those are workers that report to it, and you can read them but not drive them.\n\
          - `request_session` is for a session that should be independent: it reports to the \
          user, and you can only share information with it. The user approves it first; the call \
          waits for their answer.\n\
@@ -358,7 +358,7 @@ pub(super) fn console_session_instruction_filename(agent: Agent) -> &'static str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Role;
+    use crate::protocol::SessionKind;
 
     /// The file is a constant, so the delay it tells of before the notice that a session stayed
     /// idle after its report is written out; it is the delay the notice comes after.
@@ -460,19 +460,16 @@ mod tests {
     fn every_tool_the_instructions_name_is_in_the_console_catalogue() {
         let text = console_session_instructions(None, &RoleOptions::default());
         assert_eq!(text.matches('`').count() % 2, 0, "unbalanced backticks");
-        let catalogue: Vec<&str> = crate::session_tools::catalogue::tools_for(Role::Console, false)
-            .iter()
-            .map(|tool| tool.name)
-            .collect();
+        let catalogue: Vec<&str> =
+            crate::session_tools::catalogue::tools_for(SessionKind::Console, false)
+                .iter()
+                .map(|tool| tool.name)
+                .collect();
         // Every console tool's name holds an underscore, and so do the few field names and values
         // the file puts in backticks; listing them keeps those from being taken for tools missing
         // from the catalogue.
-        const NON_TOOL_NAMES: [&str; 4] = [
-            "owner_kind",
-            "needs_decision",
-            "orchestration_role",
-            "idle_after_report: true",
-        ];
+        const NON_TOOL_NAMES: [&str; 3] =
+            ["owner_kind", "needs_decision", "idle_after_report: true"];
         let named: Vec<&str> = text
             .split('`')
             .skip(1)
@@ -496,7 +493,7 @@ mod tests {
     #[test]
     fn every_console_tool_is_named_in_the_instructions() {
         let text = console_session_instructions(None, &RoleOptions::default());
-        for tool in crate::session_tools::catalogue::tools_for(Role::Console, false) {
+        for tool in crate::session_tools::catalogue::tools_for(SessionKind::Console, false) {
             assert!(
                 text.contains(&format!("`{}`", tool.name)),
                 "`{}` is not named in the console instructions",

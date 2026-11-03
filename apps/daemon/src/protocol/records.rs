@@ -11,17 +11,17 @@ use super::git_workflow::GitWorkflowOverride;
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Role {
+pub enum SessionKind {
     Console,
     Project,
 }
 
-impl Role {
-    /// The kind of session this role makes, as the tools and the messages to a session name it.
-    pub fn kind(self) -> &'static str {
+impl SessionKind {
+    /// The name of this kind of session, as the tools and the messages to a session name it.
+    pub fn name(self) -> &'static str {
         match self {
-            Role::Console => "console",
-            Role::Project => "project",
+            SessionKind::Console => "console",
+            SessionKind::Project => "project",
         }
     }
 }
@@ -399,7 +399,7 @@ pub struct BackgroundTask {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum OrchestrationRole {
+pub enum Role {
     Coordinator,
     Worker,
 }
@@ -424,15 +424,16 @@ pub struct Session {
     pub console_id: String,
     pub project_id: Option<String>,
     pub host_id: String,
-    pub role: Role,
+    pub kind: SessionKind,
     /// Whether the session may own sessions (`Coordinator`) or reports to one and may not
     /// (`Worker`), independent of the parent in `bound_to`: a project coordinator under a console
     /// session keeps the coordinator role, including when it has no children. A console session
-    /// and a session with no parent are always coordinators, and a session created with a parent
-    /// starts as a worker. Binding an independent coordinator to a console session keeps it a
-    /// coordinator, and a transfer to another console session preserves that; a transfer to a
-    /// project session makes it a worker, and a release makes it a coordinator again.
-    pub orchestration_role: OrchestrationRole,
+    /// and a session with no parent are always coordinators; a session created under a console
+    /// session starts as a coordinator and one created under a project coordinator as a worker.
+    /// Binding an independent coordinator to a console session keeps it a coordinator, and a
+    /// transfer to another console session preserves that; a transfer to a project session makes
+    /// it a worker, and a release makes it a coordinator again.
+    pub role: Role,
     pub origin: Origin,
     pub title: String,
     /// Last title emitted by the terminal, retained when its process ends. The store keeps it as
@@ -555,7 +556,7 @@ pub struct Session {
 
 impl Session {
     pub fn is_worker(&self) -> bool {
-        self.orchestration_role == OrchestrationRole::Worker
+        self.role == Role::Worker
     }
 }
 

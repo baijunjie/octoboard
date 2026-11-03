@@ -319,18 +319,18 @@ and adds the step from the previous one, whose schema is kept for the migration 
   renames, archives, the exit watcher, account switches — so each change writes only its own columns, and a change of
   status that must not undo another is a conditional write: a status the agent reports never moves a session out of
   `interrupted` or `archived`, and the process ending never moves it out of `archived`.
-- `Session.bound_to` is the id of a session's parent — a console session or a project coordinator of the same
-  project — or unset for an independent session. `open_session` sets it to the creating session; `transfer_session`
-  changes the parent; `bind_to_session` sets a parent for an independent project coordinator; and `release_session`
-  clears it and makes the session a coordinator again, leaving an independent coordinator. A coordinator that sets a
-  console session as its parent keeps its children and its ability to manage them. `Session.orchestration_role`
-  (`coordinator` or `worker`, stored and sent to clients and MCP records, separately from the parent id) preserves that
-  capability even when it has no children; a project session created with a parent instead starts as a worker.
-  Capability checks use `Session::is_worker()`, which reads the stored role, so every write that sets or clears
-  `bound_to` writes the role with it: a console session and a session with no parent are always coordinators.
-  A project session reporting to another project session is always a worker, so orchestration has at most two levels
-  of reporting relationships. Reports route directly to the parent id because a console may hold several console
-  sessions at once.
+- `Session.bound_to` is the id of a session's parent — a console session or a project coordinator of the same project —
+  or unset for an independent session. `open_session` sets it to the creating session; `transfer_session` changes the
+  parent; `bind_to_session` sets a parent for an independent project coordinator; and `release_session` clears it and
+  makes the session a coordinator again, leaving an independent coordinator. A coordinator that sets a console session
+  as its parent keeps its children and its ability to manage them. `Session.role` (`coordinator` or `worker`, stored and
+  sent to clients and MCP records, separately from the parent id) preserves that capability even when it has no
+  children; a project session created under a console session starts as a coordinator, and one created under a project
+  coordinator as a worker. Capability checks use `Session::is_worker()`, which reads the stored role, so every write
+  that sets or clears `bound_to` writes the role with it: a console session and a session with no parent are always
+  coordinators. A project session reporting to another project session is always a worker, so orchestration has at most
+  two levels of reporting relationships. Reports route directly to the parent id because a console may hold several
+  console sessions at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself

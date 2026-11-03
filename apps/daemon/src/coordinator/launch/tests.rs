@@ -2,8 +2,8 @@ use super::*;
 use crate::agents::launch_settings::normalize_session_launch_setting;
 use crate::coordinator::test_support::{console, project_of};
 use crate::protocol::{
-    error_code, Agent, Event, GitWorkflowSettings, GitWorkflowSettingsChanges, Role, Session,
-    SessionStatus,
+    error_code, Agent, Event, GitWorkflowSettings, GitWorkflowSettingsChanges, Session,
+    SessionKind, SessionStatus,
 };
 use crate::session::term;
 use crate::test_support::code_of;
@@ -37,8 +37,8 @@ fn a_session_launches_with_the_pair_of_the_record_that_owns_it() {
         .insert_project(&project_of("console-1", "plain"))
         .unwrap();
 
-    let launched = |role: Role, project_id: Option<&str>, agent: Agent| {
-        let mut session = bare_session("s", role);
+    let launched = |kind: SessionKind, project_id: Option<&str>, agent: Agent| {
+        let mut session = bare_session("s", kind);
         session.project_id = project_id.map(str::to_string);
         session.agent = agent;
         launch_settings(&state, &session).unwrap()
@@ -48,35 +48,35 @@ fn a_session_launches_with_the_pair_of_the_record_that_owns_it() {
     };
 
     assert_eq!(
-        launched(Role::Console, None, Agent::Claude),
+        launched(SessionKind::Console, None, Agent::Claude),
         pair(Some("console-opus"), None)
     );
     assert_eq!(
-        launched(Role::Console, None, Agent::Codex),
+        launched(SessionKind::Console, None, Agent::Codex),
         pair(None, Some("console-high"))
     );
     assert_eq!(
-        launched(Role::Console, None, Agent::Grok),
+        launched(SessionKind::Console, None, Agent::Grok),
         pair(Some("console-grok"), Some("console-low"))
     );
     assert_eq!(
-        launched(Role::Project, Some("configured"), Agent::Claude),
+        launched(SessionKind::Project, Some("configured"), Agent::Claude),
         pair(Some("project-sonnet"), Some("project-low"))
     );
     assert_eq!(
-        launched(Role::Project, Some("configured"), Agent::Codex),
+        launched(SessionKind::Project, Some("configured"), Agent::Codex),
         pair(Some("project-gpt"), None)
     );
     assert_eq!(
-        launched(Role::Project, Some("configured"), Agent::Grok),
+        launched(SessionKind::Project, Some("configured"), Agent::Grok),
         pair(None, None)
     );
     assert_eq!(
-        launched(Role::Project, Some("plain"), Agent::Claude),
+        launched(SessionKind::Project, Some("plain"), Agent::Claude),
         pair(None, None)
     );
     assert_eq!(
-        launched(Role::Project, Some("plain"), Agent::Codex),
+        launched(SessionKind::Project, Some("plain"), Agent::Codex),
         pair(None, None)
     );
 }
@@ -96,26 +96,40 @@ fn a_stored_best_model_is_read_as_unset_for_claude_only() {
     project.launch.claude.model = Some("best".to_string());
     state.store.insert_project(&project).unwrap();
 
-    let model = |role: Role, project_id: Option<&str>, agent: Agent, own: Option<Option<&str>>| {
-        let mut session = bare_session("s", role);
-        session.project_id = project_id.map(str::to_string);
-        session.agent = agent;
-        session.model = own.map(|own| own.map(str::to_string));
-        launch_settings(&state, &session).unwrap().0
-    };
+    let model =
+        |kind: SessionKind, project_id: Option<&str>, agent: Agent, own: Option<Option<&str>>| {
+            let mut session = bare_session("s", kind);
+            session.project_id = project_id.map(str::to_string);
+            session.agent = agent;
+            session.model = own.map(|own| own.map(str::to_string));
+            launch_settings(&state, &session).unwrap().0
+        };
     let some = |model: &str| Some(model.to_string());
-    assert_eq!(model(Role::Console, None, Agent::Claude, None), None);
-    assert_eq!(model(Role::Console, None, Agent::Codex, None), some("best"));
+    assert_eq!(model(SessionKind::Console, None, Agent::Claude, None), None);
     assert_eq!(
-        model(Role::Project, Some("project-1"), Agent::Claude, None),
+        model(SessionKind::Console, None, Agent::Codex, None),
+        some("best")
+    );
+    assert_eq!(
+        model(SessionKind::Project, Some("project-1"), Agent::Claude, None),
         some("sonnet")
     );
     assert_eq!(
-        model(Role::Console, None, Agent::Claude, Some(Some("best"))),
+        model(
+            SessionKind::Console,
+            None,
+            Agent::Claude,
+            Some(Some("best"))
+        ),
         None
     );
     assert_eq!(
-        model(Role::Console, None, Agent::Claude, Some(Some("opus"))),
+        model(
+            SessionKind::Console,
+            None,
+            Agent::Claude,
+            Some(Some("opus"))
+        ),
         some("opus")
     );
 }
@@ -236,10 +250,13 @@ fn session_launch_overrides_take_precedence_over_live_defaults() {
     project.launch.claude.model = Some("project-model".to_string());
     project.launch.claude.effort = Some("project-effort".to_string());
     state.store.insert_project(&project).unwrap();
-    for (role, project_id) in [(Role::Console, None), (Role::Project, Some("project-1"))] {
-        let mut session = bare_session("s", role);
+    for (kind, project_id) in [
+        (SessionKind::Console, None),
+        (SessionKind::Project, Some("project-1")),
+    ] {
+        let mut session = bare_session("s", kind);
         session.project_id = project_id.map(str::to_string);
-        let defaults = if role == Role::Console {
+        let defaults = if kind == SessionKind::Console {
             (
                 owner.launch.claude.model.clone(),
                 owner.launch.claude.effort.clone(),
@@ -269,7 +286,7 @@ fn session_launch_overrides_take_precedence_over_live_defaults() {
         session.model = normalize_session_launch_setting(Some(None));
         assert_eq!(launch_settings(&state, &session).unwrap(), (None, None));
     }
-    let mut inherited = bare_session("legacy", Role::Project);
+    let mut inherited = bare_session("legacy", SessionKind::Project);
     inherited.project_id = Some("project-1".to_string());
     state.store.insert_session(&inherited).unwrap();
     project.launch.claude.model = Some("changed-model".to_string());
@@ -294,7 +311,7 @@ fn a_project_session_launches_with_its_projects_git_workflow_settings() {
         .unwrap();
     let mut project = project_of("console-1", "project-1");
     state.store.insert_project(&project).unwrap();
-    let mut session = bare_session("s", Role::Project);
+    let mut session = bare_session("s", SessionKind::Project);
     session.project_id = Some("project-1".to_string());
     assert_eq!(
         launch_git_workflow_settings(&state, &session).unwrap(),
@@ -317,7 +334,7 @@ fn a_project_session_launches_with_its_projects_git_workflow_settings() {
             ..GitWorkflowSettings::default()
         })
     );
-    let mut console_session = bare_session("c", Role::Console);
+    let mut console_session = bare_session("c", SessionKind::Console);
     console_session.project_id = Some("project-1".to_string());
     assert_eq!(
         launch_git_workflow_settings(&state, &console_session).unwrap(),
@@ -336,7 +353,7 @@ fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value()
     state.store.insert_console(&owner).unwrap();
     let mut project = project_of("console-1", "project-1");
     state.store.insert_project(&project).unwrap();
-    let mut session = bare_session("s", Role::Project);
+    let mut session = bare_session("s", SessionKind::Project);
     session.project_id = Some("project-1".to_string());
 
     // A console that names no pair: nothing to fall back to.
@@ -382,7 +399,7 @@ fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value()
     );
 
     // A console session reads only the console session pair.
-    let console_session = bare_session("c", Role::Console);
+    let console_session = bare_session("c", SessionKind::Console);
     assert_eq!(
         launch_settings(&state, &console_session).unwrap(),
         (Some("console-session-model".to_string()), None)

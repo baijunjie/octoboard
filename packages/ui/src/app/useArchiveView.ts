@@ -55,7 +55,7 @@ export function useArchiveView({
       const index = indexSessions(s.sessions);
       if (archiveProject) return sessionsOf(index.byProject, archiveProject.id);
       const inConsole = sessionsOf(index.byConsole, archiveConsole.id);
-      return archiveBoundTo ? inConsole : inConsole.filter((session) => session.role === "console");
+      return archiveBoundTo ? inConsole : inConsole.filter((session) => session.kind === "console");
     }),
   );
 

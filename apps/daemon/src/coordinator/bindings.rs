@@ -8,29 +8,29 @@ use anyhow::Result;
 use crate::coordinator::pages;
 use crate::messaging::naming::label;
 use crate::messaging::owner_notices;
-use crate::protocol::{error_code, CodedError, OrchestrationRole, Role, Session, SessionStatus};
+use crate::protocol::{error_code, CodedError, Role, Session, SessionKind, SessionStatus};
 use crate::session_tools;
 use crate::state::bindings::bound_sessions;
 use crate::state::AppState;
 
-/// What a new session should be bound to: always `None` for a console session, which is never
-/// bound; for a project session, whatever `requested` names, which must be a console session of
-/// `console_id`, or a project session of the new session's own project that is unbound or a bound
-/// coordinator session, or the request is refused with `unknown_session` — a binding changes
-/// afterwards only at the session's or its owner's own request, so naming one that does not exist,
-/// or belongs to another console, must not be let through to be discovered later. A project session
-/// with the role of a worker is refused as an owner for the same reason, and this is where the
-/// depth limit is enforced, not only by which tools are offered: a session bound to a bound
-/// coordinator would otherwise make a third level. A session still starting is refused too: its
-/// launch may fail, and a failed launch deletes the session whatever is bound to it.
-pub(super) fn resolve_bound_to(
+/// What a new session should be bound to, as the owner's record: always `None` for a console
+/// session, which is never bound; for a project session, whatever `requested` names, which must be
+/// a console session of `console_id`, or a project session of the new session's own project that is
+/// unbound or a bound coordinator session, or the request is refused with `unknown_session` — a
+/// binding changes afterwards only at the session's or its owner's own request, so naming one that
+/// does not exist, or belongs to another console, must not be let through to be discovered later. A
+/// project session with the role of a worker is refused as an owner for the same reason, and this
+/// is where the depth limit is enforced, not only by which tools are offered: a session bound to a
+/// bound coordinator would otherwise make a third level. A session still starting is refused too:
+/// its launch may fail, and a failed launch deletes the session whatever is bound to it.
+pub(super) fn resolve_owner(
     state: &Arc<AppState>,
     console_id: &str,
     project_id: Option<&str>,
-    role: Role,
+    kind: SessionKind,
     requested: Option<String>,
-) -> Result<Option<String>> {
-    if role == Role::Console {
+) -> Result<Option<Session>> {
+    if kind == SessionKind::Console {
         return Ok(None);
     }
     let Some(target_id) = requested else {
@@ -42,9 +42,9 @@ pub(super) fn resolve_bound_to(
         .filter(|target| {
             target.console_id == console_id
                 && target.status != SessionStatus::Starting
-                && match target.role {
-                    Role::Console => true,
-                    Role::Project => {
+                && match target.kind {
+                    SessionKind::Console => true,
+                    SessionKind::Project => {
                         !target.is_worker()
                             && target.project_id.is_some()
                             && target.project_id.as_deref() == project_id
@@ -52,7 +52,7 @@ pub(super) fn resolve_bound_to(
                 }
         })
         .ok_or_else(|| CodedError::unknown_session(&target_id))?;
-    Ok(Some(target.id))
+    Ok(Some(target))
 }
 
 /// Why `owner` cannot own `session`, in prose for the model, or `None` when it can. These are the
@@ -78,7 +78,7 @@ pub(crate) fn owner_refusal(
             label(owner)
         )));
     }
-    if owner.role == Role::Project {
+    if owner.kind == SessionKind::Project {
         if owner.project_id != session.project_id {
             return Ok(Some(format!(
                 "{} is a session of another project, and a project session owns only sessions of \
@@ -177,7 +177,7 @@ pub fn bind_session(
 ) -> Result<(Session, Session)> {
     let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
-    if session.role == Role::Console {
+    if session.kind == SessionKind::Console {
         anyhow::bail!("a console session cannot be bound to another session");
     }
     if let Some(owner) = &session.bound_to {
@@ -193,22 +193,15 @@ pub fn bind_session(
     }
     // Under a console session it stays the coordinator it is; under a project session it becomes
     // a worker, which may then have no sessions of its own.
-    let to_console = owner.role == Role::Console;
-    let orchestration_role = if to_console {
-        OrchestrationRole::Coordinator
+    let to_console = owner.kind == SessionKind::Console;
+    let role = if to_console {
+        Role::Coordinator
     } else {
-        OrchestrationRole::Worker
+        Role::Worker
     };
     let bound = state
         .store
-        .set_binding(
-            session_id,
-            None,
-            owner_id,
-            orchestration_role,
-            !to_console,
-            false,
-        )?
+        .set_binding(session_id, None, owner_id, role, !to_console, false)?
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the binding changed while it was being made — this session was bound, it gained \
@@ -269,27 +262,18 @@ pub fn transfer_session(
     if let Some(reason) = owner_refusal(state, &session, &owner)? {
         anyhow::bail!(reason);
     }
-    let to_project = owner.role == Role::Project;
-    let orchestration_role = if owner.role == Role::Console
-        && session.orchestration_role == OrchestrationRole::Coordinator
-    {
-        OrchestrationRole::Coordinator
+    let to_project = owner.kind == SessionKind::Project;
+    let role = if owner.kind == SessionKind::Console && session.role == Role::Coordinator {
+        Role::Coordinator
     } else {
-        OrchestrationRole::Worker
+        Role::Worker
     };
     // Decided here, under the claim, and recorded by the binding write itself when there is no
     // process to tell.
     let running = owner_notices::is_running(state, &session);
     let bound = state
         .store
-        .set_binding(
-            session_id,
-            Some(from_id),
-            to_id,
-            orchestration_role,
-            to_project,
-            !running,
-        )?
+        .set_binding(session_id, Some(from_id), to_id, role, to_project, !running)?
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the binding changed while it was being transferred — `{session_id}` was bound \
@@ -337,7 +321,7 @@ pub fn release_session(
 ) -> Result<Released> {
     let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
-    if session.role == Role::Console {
+    if session.kind == SessionKind::Console {
         return Err(CodedError::raised(
             error_code::CONSOLE_SESSION_NEVER_BOUND,
             format!(
@@ -409,22 +393,24 @@ pub(super) async fn release_requested(state: &Arc<AppState>, id: String) -> Resu
     Ok(())
 }
 
-/// Who `session` reports to, for the launch that tells it so: `None` for a session that launches
-/// with an unbound project session's role description and tools, which a bound coordinator does on
-/// every launch, as at its first. An owner that is no longer on record reads as a console session:
-/// the text is the generic one, and a report to it fails on its own.
+/// Who `session` reports to, for the launch that tells it so: `None` for a session with no parent,
+/// which launches with an unbound project session's role description and tools. A coordinator has
+/// a console session for a parent, and its role description names it. An owner that is no longer
+/// on record reads as a console session: the text is the generic one, and a report to it fails on
+/// its own.
 pub(super) fn owner_of(
     state: &Arc<AppState>,
     session: &Session,
 ) -> Result<Option<session_tools::Owner>> {
-    let Some(owner_id) = session.bound_to.as_ref().filter(|_| session.is_worker()) else {
+    let Some(owner_id) = session.bound_to.as_ref() else {
         return Ok(None);
     };
     Ok(Some(match state.store.get_session(owner_id)? {
-        Some(owner) if owner.role == Role::Project => session_tools::Owner::Project {
+        Some(owner) if owner.kind == SessionKind::Project => session_tools::Owner::Project {
             session_id: owner.id,
         },
-        _ => session_tools::Owner::Console,
+        _ if session.is_worker() => session_tools::Owner::Console,
+        _ => session_tools::Owner::ConsoleOfCoordinator,
     }))
 }
 

@@ -6,7 +6,7 @@ use serde_json::json;
 use super::*;
 use crate::branch_origin::repo_key;
 use crate::git::repo_files::repository_of;
-use crate::protocol::{Account, Availability, OrchestrationRole, Role};
+use crate::protocol::{Account, Availability, Role, SessionKind};
 use crate::session_tools::Owner;
 use crate::test_support::{
     app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
@@ -23,18 +23,18 @@ fn session(
     bound_to: Option<&str>,
     coordinator: bool,
 ) -> Session {
-    let orchestration_role = if bound_to.is_none() || coordinator {
-        OrchestrationRole::Coordinator
+    let role = if bound_to.is_none() || coordinator {
+        Role::Coordinator
     } else {
-        OrchestrationRole::Worker
+        Role::Worker
     };
     let session: Session = serde_json::from_value(json!({
         "id": id, "agent": "claude", "agent_session_id": null, "console_id": "console-1",
         "project_id": project.then_some("p1"), "host_id": crate::store::LOCAL_HOST_ID,
-        "role": if project { "project" } else { "console" }, "origin": "user",
+        "kind": if project { "project" } else { "console" }, "origin": "user",
         "title": format!("Session {id}"), "status": status, "has_conversation": true,
         "pinned": false, "started_at": 0, "bound_to": bound_to,
-        "orchestration_role": orchestration_role,
+        "role": role,
         "colour": (!project).then_some("pink"), "ordinal": (!project).then_some(1),
     }))
     .unwrap();
@@ -44,7 +44,7 @@ fn session(
 /// What a handoff must leave alone when it is refused or fails: each session's status, owner and
 /// role, who is responsible for the test branches, and the packages on disk.
 type Snapshot = (
-    Vec<(String, SessionStatus, Option<String>, OrchestrationRole)>,
+    Vec<(String, SessionStatus, Option<String>, Role)>,
     Vec<String>,
     Vec<std::path::PathBuf>,
 );
@@ -163,14 +163,7 @@ impl Fixture {
             .list_sessions()
             .unwrap()
             .into_iter()
-            .map(|session| {
-                (
-                    session.id,
-                    session.status,
-                    session.bound_to,
-                    session.orchestration_role,
-                )
-            })
+            .map(|session| (session.id, session.status, session.bound_to, session.role))
             .collect();
         sessions.sort_by(|a, b| a.0.cmp(&b.0));
         let branches = ["one", "two"]
@@ -233,17 +226,12 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     assert!(fixture.state.has_process(&receiving.id));
     assert_eq!(
         (
-            stored.role,
+            stored.kind,
             stored.project_id.as_deref(),
             stored.bound_to.as_deref(),
-            stored.orchestration_role
+            stored.role
         ),
-        (
-            Role::Project,
-            Some("p1"),
-            None,
-            OrchestrationRole::Coordinator
-        )
+        (SessionKind::Project, Some("p1"), None, Role::Coordinator)
     );
     let launches = fixture.launches.lock().unwrap();
     let (_, owner, task) = &launches[0];
@@ -316,7 +304,7 @@ async fn a_bound_coordinator_is_replaced_by_a_bound_coordinator_of_the_same_cons
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(stored.bound_to.as_deref(), Some("hub"));
-    assert_eq!(stored.orchestration_role, OrchestrationRole::Coordinator);
+    assert_eq!(stored.role, Role::Coordinator);
     assert_eq!(
         fixture.stored("worker").bound_to.as_deref(),
         Some(receiving.id.as_str())
@@ -372,8 +360,8 @@ async fn a_bound_session_is_replaced_by_a_session_bound_to_the_same_owner() {
         "with no task title, the original's name alone"
     );
     assert_eq!(
-        (stored.bound_to.as_deref(), stored.orchestration_role),
-        (Some("boss"), OrchestrationRole::Worker)
+        (stored.bound_to.as_deref(), stored.role),
+        (Some("boss"), Role::Worker)
     );
     assert_eq!(
         fixture.launches.lock().unwrap()[0].1,
@@ -424,11 +412,11 @@ async fn a_console_session_hands_the_sessions_it_owns_to_the_receiving_console_s
     let stored = fixture.stored(&receiving.id);
     assert_eq!(
         (
-            stored.role,
+            stored.kind,
             stored.project_id.as_deref(),
             stored.bound_to.as_deref()
         ),
-        (Role::Console, None, None)
+        (SessionKind::Console, None, None)
     );
     assert!(stored.colour.is_some() && stored.ordinal.is_some());
     for id in ["coordinator", "bound"] {
@@ -437,10 +425,7 @@ async fn a_console_session_hands_the_sessions_it_owns_to_the_receiving_console_s
             Some(receiving.id.as_str())
         );
     }
-    assert_eq!(
-        fixture.stored("coordinator").orchestration_role,
-        OrchestrationRole::Coordinator
-    );
+    assert_eq!(fixture.stored("coordinator").role, Role::Coordinator);
     let told = output_containing(&coordinator, "your parent session has changed");
     assert!(told.contains(&receiving.id), "{told}");
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);

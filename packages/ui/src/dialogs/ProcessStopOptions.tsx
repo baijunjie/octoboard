@@ -71,7 +71,7 @@ export function useProcessStopping(processes: ProcessTree[]): {
 } {
   const t = useT();
   const alwaysIds = useDaemonStore(useShallow((s) => processes
-    .filter((tree) => tree.session_id !== undefined && s.sessions.get(tree.session_id)?.role === "console")
+    .filter((tree) => tree.session_id !== undefined && s.sessions.get(tree.session_id)?.kind === "console")
     .map((tree) => tree.id)));
   const [keptIds, setKeptIds] = useState<ReadonlySet<string>>(new Set());
   const always = processes.filter((tree) => alwaysIds.includes(tree.id));

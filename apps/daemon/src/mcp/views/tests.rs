@@ -70,7 +70,7 @@ fn a_description_carries_the_sessions_context() {
 /// parent and however many children it has.
 #[test]
 fn the_stored_role_is_what_the_record_and_the_wire_carry() {
-    use crate::protocol::OrchestrationRole::{Coordinator, Worker};
+    use crate::protocol::Role::{Coordinator, Worker};
 
     let (state, _dir) = peer_state("stored-session-role");
     let caller = state.session_record("a").unwrap();
@@ -88,20 +88,20 @@ fn the_stored_role_is_what_the_record_and_the_wire_carry() {
         ),
         (
             Session {
-                orchestration_role: Coordinator,
+                role: Coordinator,
                 ..project_session("empty-coordinator", "console-1", Some("a"))
             },
             Coordinator,
             "reporting coordinator without children",
         ),
     ] {
-        assert_eq!(session.orchestration_role, expected, "{name}");
+        assert_eq!(session.role, expected, "{name}");
         assert_eq!(session.is_worker(), expected == Worker, "{name}");
         let wire = state.wire_session(session.clone());
-        assert_eq!(wire.orchestration_role, expected, "{name}");
+        assert_eq!(wire.role, expected, "{name}");
         let record =
             describe_session(&state, &session, &caller, &HashMap::new(), &HashMap::new()).unwrap();
-        assert_eq!(record["orchestration_role"], json!(expected), "{name}");
+        assert_eq!(record["role"], json!(expected), "{name}");
         assert_eq!(record["owner"], json!(session.bound_to), "{name}");
         assert_eq!(record["owned_sessions"], 0);
     }

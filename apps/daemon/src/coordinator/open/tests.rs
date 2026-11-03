@@ -1,9 +1,12 @@
 use super::*;
-use crate::coordinator::bindings::resolve_bound_to;
 use crate::coordinator::lifecycle::{archive_session, delete_session};
 use crate::coordinator::resume::resume_session_with;
-use crate::coordinator::test_support::{open_request, state_for_opening, stub_shell, wait_until};
-use crate::protocol::{error_code, notice_code, CodedError, Event, Role, Session, SessionStatus};
+use crate::coordinator::test_support::{
+    open_request, resolve_bound_to, state_for_opening, stub_shell, wait_until,
+};
+use crate::protocol::{
+    error_code, notice_code, CodedError, Event, Session, SessionKind, SessionStatus,
+};
 use crate::session::term;
 use crate::session::LiveSession;
 use crate::state::AppState;
@@ -295,7 +298,7 @@ async fn a_starting_session_is_refused_as_an_owner() {
         &state,
         "console-1",
         Some("project-1"),
-        Role::Project,
+        SessionKind::Project,
         Some(owner.id.clone()),
     )
     .expect_err("starting");
@@ -374,4 +377,52 @@ async fn a_refused_launch_claim_leaves_no_session_row() {
 
     assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
     assert!(state.store.list_sessions().unwrap().is_empty());
+}
+
+/// The role of a project session follows its parent: a coordinator under a console session, so it
+/// can open sessions of its own, and a worker under a project coordinator, which keeps
+/// orchestration two levels deep. A session with no parent is a coordinator too.
+#[test]
+fn a_session_opened_under_a_console_is_a_coordinator_and_one_under_a_coordinator_a_worker() {
+    use crate::test_support::{console_session, project_session};
+
+    let (state, _dir) = console_with_project_and_accounts("coordinator-open-roles");
+    state
+        .store
+        .insert_session(&console_session("hub", SessionStatus::Idle))
+        .unwrap();
+    let request_under = |owner: Option<&str>| OpenRequest {
+        project_id: Some("project-1".to_string()),
+        bound_to: owner.map(str::to_string),
+        ..open_request()
+    };
+
+    let under_console = resolve_open(&state, &request_under(Some("hub"))).unwrap();
+    assert_eq!(under_console.role, Role::Coordinator);
+
+    let coordinator = Session {
+        bound_to: Some("hub".to_string()),
+        role: under_console.role,
+        ..project_session(
+            "coordinator",
+            crate::protocol::Agent::Claude,
+            SessionStatus::Idle,
+        )
+    };
+    state.store.insert_session(&coordinator).unwrap();
+    let under_coordinator = resolve_open(&state, &request_under(Some("coordinator"))).unwrap();
+    assert_eq!(under_coordinator.role, Role::Worker);
+
+    let independent = Session {
+        id: "independent".to_string(),
+        bound_to: None,
+        ..coordinator
+    };
+    state.store.insert_session(&independent).unwrap();
+    let under_independent = resolve_open(&state, &request_under(Some("independent"))).unwrap();
+    assert_eq!(under_independent.role, Role::Worker);
+    assert_eq!(
+        resolve_open(&state, &request_under(None)).unwrap().role,
+        Role::Coordinator
+    );
 }

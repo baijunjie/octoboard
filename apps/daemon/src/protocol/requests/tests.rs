@@ -729,8 +729,8 @@ fn session_launch_settings_preserve_absent_null_and_values() {
 
         let json = format!(
             r#"{{"id":"s","agent":"claude","agent_session_id":null,
-            "console_id":"c","project_id":null,"host_id":"local","role":"console",
-            "origin":"user","title":"Hub","status":"idle","orchestration_role":"coordinator",
+            "console_id":"c","project_id":null,"host_id":"local","kind":"console",
+            "origin":"user","title":"Hub","status":"idle","role":"coordinator",
             "has_conversation":false,
             "bound_to":null,"colour":null,"ordinal":null,"account_id":null,"config_dir":null,
             "pinned":false,"started_at":0,"ended_at":null{fields}}}"#

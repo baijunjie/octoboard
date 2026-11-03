@@ -5,8 +5,8 @@ use crate::coordinator::test_support::{
 };
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
-    error_code, Agent, CodedError, Event, Origin, Project, ProjectSource, RequestBody, Role,
-    Session, SessionStatus,
+    error_code, Agent, CodedError, Event, Origin, Project, ProjectSource, RequestBody, Session,
+    SessionKind, SessionStatus,
 };
 use crate::records;
 use crate::state::Deletion;
@@ -51,7 +51,7 @@ fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
             git_workflow: Default::default(),
         })
         .unwrap();
-    let add = |id: &str, console: &str, role: Role, project: Option<&str>, status| {
+    let add = |id: &str, console: &str, kind: SessionKind, project: Option<&str>, status| {
         state
             .store
             .insert_session(&Session {
@@ -60,7 +60,7 @@ fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
                 host_id: LOCAL_HOST_ID.to_string(),
                 title: id.to_string(),
                 status,
-                ..bare_session(id, role)
+                ..bare_session(id, kind)
             })
             .unwrap();
     };
@@ -68,28 +68,28 @@ fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
     add(
         "project-archived",
         "console-1",
-        Role::Project,
+        SessionKind::Project,
         Some("project-1"),
         archived,
     );
     add(
         "project-idle",
         "console-1",
-        Role::Project,
+        SessionKind::Project,
         Some("project-1"),
         SessionStatus::Idle,
     );
     add(
         "console-archived",
         "console-1",
-        Role::Console,
+        SessionKind::Console,
         None,
         archived,
     );
     add(
         "other-console-archived",
         "console-2",
-        Role::Console,
+        SessionKind::Console,
         None,
         archived,
     );

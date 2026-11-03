@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 
 use crate::coordinator::{self, open::OpenRequest};
 use crate::messaging::naming::{named_session, one_line, place_of, reports_to, ReportsTo};
-use crate::protocol::{ConversationLocation, Origin, Project, Role, Session, SessionStatus};
+use crate::protocol::{ConversationLocation, Origin, Project, Session, SessionKind, SessionStatus};
 use crate::session_request::{self, Action};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::{AppState, ClaimKind};
@@ -66,7 +66,7 @@ async fn plan(
 ) -> Result<Action> {
     let project = match optional_string(arguments, "project") {
         Some(wanted) => find_project(state, caller, &wanted)?,
-        None if caller.role == Role::Project => own_project(state, caller, None)?,
+        None if caller.kind == SessionKind::Project => own_project(state, caller, None)?,
         None => bail!("`project` is required for a console session"),
     };
     let wanted = required_str(arguments, "conversation")?;
@@ -202,7 +202,7 @@ fn held_elsewhere(state: &Arc<AppState>, holder: &Session, asked: &Project) -> a
     let named = named_session(holder);
     let place = place_of(state, holder);
     match &holder.project_id {
-        Some(project) if holder.role == Role::Project => anyhow!(
+        Some(project) if holder.kind == SessionKind::Project => anyhow!(
             "{named}{place} holds this conversation, and it is not in the project \"{}\" you asked \
              in. Ask again with `project` set to `{project}` to resume it there",
             one_line(&asked.name)

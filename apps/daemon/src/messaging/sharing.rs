@@ -147,7 +147,7 @@ fn render_info_copy(sender: &Session, receiver: &Session, text: &str) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Role;
+    use crate::protocol::SessionKind;
     use crate::test_support::bare_session;
 
     fn session(id: &str, title: &str) -> Session {
@@ -155,7 +155,7 @@ mod tests {
             project_id: Some("project-1".to_string()),
             host_id: "local".to_string(),
             title: title.to_string(),
-            ..bare_session(id, Role::Project)
+            ..bare_session(id, SessionKind::Project)
         }
     }
 

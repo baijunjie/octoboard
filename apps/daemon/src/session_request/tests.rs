@@ -6,8 +6,7 @@ use super::*;
 use crate::branch_origin::{self, repo_key};
 use crate::git::repo_files::repository_of;
 use crate::protocol::{
-    Console, OrchestrationRole, Origin, Project, ProjectSource, Role, SessionRequestAction,
-    SessionStatus,
+    Console, Origin, Project, ProjectSource, Role, SessionKind, SessionRequestAction, SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::bare_session;
@@ -27,7 +26,7 @@ fn project_session(id: &str) -> Session {
         host_id: LOCAL_HOST_ID.to_string(),
         title: format!("Work {id}"),
         has_conversation: true,
-        ..bare_session(id, Role::Project)
+        ..bare_session(id, SessionKind::Project)
     }
 }
 
@@ -210,7 +209,7 @@ impl Launcher {
             }
             None => self.state.store.insert_console_session(
                 Session {
-                    role: Role::Console,
+                    kind: SessionKind::Console,
                     ..session
                 },
                 request.title,
@@ -261,7 +260,7 @@ async fn an_approval_starts_a_session_with_no_owner_in_any_project() {
     )
     .await;
     let Event::SessionRequest {
-        role,
+        kind,
         console,
         project,
         agent,
@@ -271,9 +270,9 @@ async fn an_approval_starts_a_session_with_no_owner_in_any_project() {
         unreachable!()
     };
     assert_eq!(
-        (*role, console.as_str(), project.as_deref(), *agent),
+        (*kind, console.as_str(), project.as_deref(), *agent),
         (
-            Role::Project,
+            SessionKind::Project,
             OTHER_CONSOLE,
             Some("project-2"),
             Agent::Claude
@@ -324,7 +323,7 @@ async fn an_approval_can_start_a_console_session() {
     assert!(matches!(
         event,
         Event::SessionRequest {
-            role: Role::Console,
+            kind: SessionKind::Console,
             project: None,
             ..
         }
@@ -334,7 +333,7 @@ async fn an_approval_can_start_a_console_session() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(started.role, Role::Console);
+    assert_eq!(started.kind, SessionKind::Console);
     let result = outcome_of(call).await.unwrap();
     let note = result["note"].as_str().unwrap();
     assert!(note.contains("console session"), "{note}");
@@ -459,7 +458,7 @@ async fn an_owner_is_told_that_its_session_waits_on_a_request() {
     state
         .store
         .insert_session(&Session {
-            role: Role::Console,
+            kind: SessionKind::Console,
             project_id: None,
             ..project_session("hub")
         })
@@ -468,7 +467,7 @@ async fn an_owner_is_told_that_its_session_waits_on_a_request() {
         .store
         .insert_session(&Session {
             bound_to: Some("hub".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             ..project_session("worker")
         })
         .unwrap();
@@ -1293,7 +1292,7 @@ async fn an_approval_reopens_the_session_that_holds_the_conversation() {
     let event = event_of(&state, "asker").await;
     let Event::SessionRequest {
         action,
-        role,
+        kind,
         project,
         target,
         owner,
@@ -1308,14 +1307,14 @@ async fn an_approval_reopens_the_session_that_holds_the_conversation() {
     assert_eq!(
         (
             *action,
-            *role,
+            *kind,
             project.as_deref(),
             target.as_deref(),
             owner.as_deref()
         ),
         (
             SessionRequestAction::Reopen,
-            Role::Project,
+            SessionKind::Project,
             Some("project-1"),
             Some("held"),
             Some("boss")

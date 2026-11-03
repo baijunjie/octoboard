@@ -86,27 +86,28 @@ the launch environment described below:
   the agent, started fresh per session, and each session's tools are reachable only by that session. The agent's own and
   the project's own MCP servers keep working alongside it. Claude Code and Codex are told to run its tools without
   asking (see "Claude Code" and "Codex" in `docs/product/per-agent-launch-specifics.md`).
-- **A role description** — whether this is a console or project session, and, for a project session, its coordinator
-  or worker role and separate reporting relationship. Every project session's description opens with its responsibility
-  for the current project's tasks under the project's own instructions, conventions and configuration. It then explains
-  its reporting relationship; an independent session's coordination capabilities follow in a separate section. The
+- **A role description** — whether this is a console or project session, and, for a project session, its coordinator or
+  worker role and separate reporting relationship. Every project session's description opens with its responsibility for
+  the current project's tasks under the project's own instructions, conventions and configuration. It then explains its
+  reporting relationship; an independent session's coordination capabilities follow in a separate section. The
   description includes the corresponding reporting conventions. A console session's is short: it is the console session,
   it decomposes requests on its console's projects, dispatches them, follows up and summarizes, does itself any work
   that touches no project, and does not change a project itself, and the rest is in its instruction file, which may end
   with the user's own instructions, which take precedence over the rest of the file wherever they disagree but never let
-  it change a project itself (see "The console session's instruction file" below). A worker with a console parent is
-  told that console session is waiting on its result and how to `report` to it; one bound to a project session is told
-  which project session, by its id, dispatched it and that it reports there; either is told that its owner can hand it
-  to another session, which Octoboard then tells it in a message. One nobody owns — opened by hand without a console
-  session to report to, or started on another session's request — is told that no session dispatched it, that nobody but
-  the user owns it, and not to call `report`; that it may start sessions in its own project and drive them, which report
-  back to it; and that if it binds itself to an owner, that call's result tells it what changes. A coordinator with a
-  parent, bound to a console session only after it was opened, is given that same independent project session's text on
-  every launch, as at its first (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). A
-  worker's text also tells it how to find its own account and to report when its quota runs low (see
-  `docs/product/listing-agents-from-a-session.md`). Every project session's text also sets out how it relates to other
-  sessions: `open_session` for a session of its own where it has it, together with when to start one and how to choose
-  the session a task goes to (see "Choosing the session a task goes to" in `docs/product/hub-orchestration.md`),
+  it change a project itself (see "The console session's instruction file" below). A worker bound to a project session
+  is told which project session, by its id, dispatched it and that it reports there, and a worker bound to a console
+  session that the console session is waiting on its result; either is told that its owner can hand it to another
+  session, which Octoboard then tells it in a message. A coordinator with a console parent is told the same of that
+  console session and how to `report` to it, besides its coordination capabilities, from its first launch when the
+  console session opened it, and from the first launch after the binding when it was bound later (see "Coordinators with
+  a parent session" in `docs/product/hub-orchestration.md`). One nobody owns — opened by hand without a console session
+  to report to, or started on another session's request — is told that no session dispatched it, that nobody but the
+  user owns it, and not to call `report`; that it may start sessions in its own project and drive them, which report
+  back to it; and that if it binds itself to an owner, that call's result tells it what changes. The text of a worker,
+  or of a coordinator with a console parent, also tells it how to find its own account and to report when its quota runs
+  low (see `docs/product/listing-agents-from-a-session.md`). Every project session's text also sets out how it relates
+  to other sessions: `open_session` for a session of its own where it has it, together with when to start one and how to
+  choose the session a task goes to (see "Choosing the session a task goes to" in `docs/product/hub-orchestration.md`),
   `handoff_session`, `switch_session_account`, `transfer_session`, `release_session` and `bind_to_session` where it has
   them, `request_session` for a session that is nobody's, `request_resume_session` for resuming a conversation the user
   asked for, `list_agents` for the agents a session could be opened on, with their tags, and what each account's quota

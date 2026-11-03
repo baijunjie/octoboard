@@ -16,7 +16,7 @@ use crate::adapter::{self, LaunchSpec};
 use crate::env_shell;
 use crate::paths;
 use crate::protocol::{
-    error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
+    error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, SessionKind,
     TerminalAppearance,
 };
 use crate::session::{self, LiveSession, NewSession};
@@ -45,7 +45,7 @@ pub struct Launch {
 pub struct LaunchRequest {
     pub session_id: String,
     pub agent: Agent,
-    pub role: Role,
+    pub kind: SessionKind,
     /// Who the session reports to, if anyone; see `LaunchSpec::owner`.
     pub owner: Option<crate::session_tools::Owner>,
     /// The project's effective git workflow settings; see `LaunchSpec::git_workflow`.
@@ -87,7 +87,7 @@ pub struct LaunchRequest {
     pub daemon_key: String,
     pub self_exe: String,
     pub mcp_token: String,
-    /// What every process of this launch carries, whatever the agent and the session's role; see
+    /// What every process of this launch carries, whatever the agent and the session's kind; see
     /// `crate::processes::ledger`.
     pub process_tag: crate::processes::ledger::ProcessTag,
 }
@@ -99,7 +99,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let LaunchRequest {
         session_id,
         agent,
-        role,
+        kind,
         owner,
         git_workflow,
         ask_questions_as_choices,
@@ -166,7 +166,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let binary = env_shell::resolve_binary(adapter.binary(), &shell_env);
     let spec = LaunchSpec {
         session_id,
-        role,
+        kind,
         owner,
         git_workflow,
         ask_questions_as_choices,
@@ -202,7 +202,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     let mut environment = shell_env.clone();
     environment.extend(plan.env.iter().cloned());
-    if role == Role::Project {
+    if kind == SessionKind::Project {
         environment.extend(session_git_hooks::session_env(
             &shell_env,
             &self_exe,

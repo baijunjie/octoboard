@@ -308,7 +308,7 @@ fn the_role_text_travels_in_rules() {
     assert_eq!(
         plan.args[at + 1],
         session_tools::role::role_description(
-            fixture.role,
+            fixture.kind,
             fixture.owner.as_ref(),
             Agent::Grok,
             &fixture.spec().role_options(),

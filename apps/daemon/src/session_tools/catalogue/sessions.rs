@@ -11,21 +11,22 @@ use super::ToolDef;
 pub(super) const CONSOLE_OPEN_SESSION: ToolDef = ToolDef {
     name: "open_session",
     description: "Start a session in one of this console's projects and hand it a task. It is \
-                  yours for its whole life: it reports to this console session, its owner, and \
-                  you instruct it with `instruct_session`, archive it once it is done and \
-                  reopen it with `resume_session` when it has another task. Needs no approval. \
-                  Returns the new session's id, its agent, the account it opened on \
-                  (`account`, `account_name`) and the `model` and `effort` it was launched \
-                  with (`null` is unset: the default model, which `list_agent_models` names, and \
-                  the agent's own default effort). The brief is rendered into the \
-                  session's opening prompt; `title` names the session in the user's language. \
-                  It prefers the project's default agent. A left-out account is selected by \
-                  the server according to the configured policy. Automatic selection may \
-                  choose another agent when neither agent nor account is named; an explicit \
-                  agent limits selection to it, and an explicit account preserves both. \
-                  Unspecified model and effort follow the final agent. A refusal explains why \
-                  the session could not start. Name another account only when the user asked \
-                  for it. Name another agent only when the user asked for it or when its tags \
+                  yours for its whole life: it reports to this console session, its owner, and you \
+                  instruct it with `instruct_session`, archive it once it is done and reopen it \
+                  with `resume_session` when it has another task. It is a coordinator: it may \
+                  start sessions of its own in its project when its task needs them, and those are \
+                  workers that report to it, not to you. Needs no approval. Returns the new \
+                  session's id, its agent, the account it opened on (`account`, `account_name`) \
+                  and the `model` and `effort` it was launched with (`null` is unset: the default \
+                  model, which `list_agent_models` names, and the agent's own default effort). The \
+                  brief is rendered into the session's opening prompt; `title` names the session \
+                  in the user's language. It prefers the project's default agent. A left-out \
+                  account is selected by the server according to the configured policy. Automatic \
+                  selection may choose another agent when neither agent nor account is named; an \
+                  explicit agent limits selection to it, and an explicit account preserves both. \
+                  Unspecified model and effort follow the final agent. A refusal explains why the \
+                  session could not start. Name another account only when the user asked for it. \
+                  Name another agent only when the user asked for it or when its tags \
                   (`list_agents`) fit the work. Use this when you should keep directing the \
                   session and receiving its reports. To pass your own work on to a peer in the \
                   next session, use `request_session`; if the user only wants notes for the next \

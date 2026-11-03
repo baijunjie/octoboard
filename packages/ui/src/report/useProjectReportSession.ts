@@ -22,7 +22,7 @@ export function useProjectReportSession(owner: AsideOwner | undefined, selected:
   const { request } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
-  const session = owner?.kind === "project" && selected?.role === "project" && selected.project_id === owner.project ? selected.id : undefined;
+  const session = owner?.kind === "project" && selected?.kind === "project" && selected.project_id === owner.project ? selected.id : undefined;
   // How many pages the store holds for the session; `undefined` while it holds no list.
   const count = useDaemonStore((s) => (session === undefined ? undefined : s.pages.get(session)?.length));
   // The last answer for a session, and the session whose listing failed, kept while the store has no list.

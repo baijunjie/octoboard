@@ -182,7 +182,7 @@ async function submitDialog(): Promise<void> {
 }
 
 it("lists every bound descendant before archiving and refreshes the list while open", async () => {
-  const hub = sessionOf("hub", console_.id, undefined, "Console", "idle", { role: "console" });
+  const hub = sessionOf("hub", console_.id, undefined, "Console", "idle", { kind: "console" });
   const manual = sessionOf("manual", console_.id, project.id, "Manual session", "working", { bound_to: hub.id, origin: "user" });
   const coordinator = sessionOf("coordinator", console_.id, project.id, "Bound coordinator", "idle", { bound_to: hub.id });
   const nested = sessionOf("nested", console_.id, project.id, "Nested session", "waiting_user", { bound_to: coordinator.id });
@@ -322,7 +322,7 @@ it("labels archiving for deletion when only locked worktrees are ticked", async 
   expect(confirmText()).toBe("Archive and delete");
 });
 
-const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "idle", { role: "console" });
+const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "idle", { kind: "console" });
 const coordinator = sessionOf("s-coordinator", console_.id, project.id, "Coordinator", "idle", { bound_to: hub.id });
 const bound = sessionOf("s-bound", console_.id, project.id, "Bound", "idle", { bound_to: coordinator.id });
 const unrelated = sessionOf("s-unrelated", console_.id, project.id, "Unrelated", "idle");
@@ -1256,7 +1256,7 @@ it("validates a project rename before requesting it, retaining excess Unicode te
   expect(daemon.request).toHaveBeenCalledWith({ type: "update_project", project: project.id, name: "😀".repeat(100) });
 });
 
-const unbindOwner = sessionOf("s-unbind-owner", console_.id, undefined, "Hub", "idle", { role: "console" });
+const unbindOwner = sessionOf("s-unbind-owner", console_.id, undefined, "Hub", "idle", { kind: "console" });
 const unbindable = sessionOf("s-unbindable", console_.id, project.id, "Worker", "idle", { bound_to: unbindOwner.id });
 const cancelButton = () => document.body.querySelector("[data-slot=alert-dialog-footer] button:first-child");
 
@@ -1326,7 +1326,7 @@ it("closes the unbind confirmation silently when the daemon refuses with session
 
 it("shows session_binding_changed and keeps the unbind confirmation open, naming the new owner once the store has it", async () => {
   const onClose = vi.fn();
-  const newOwner = sessionOf("s-new-owner", console_.id, undefined, "Other hub", "idle", { role: "console" });
+  const newOwner = sessionOf("s-new-owner", console_.id, undefined, "Other hub", "idle", { kind: "console" });
   try {
     const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, newOwner, unbindable], [], {
       onClose,

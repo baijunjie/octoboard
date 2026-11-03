@@ -360,7 +360,7 @@ fn account_ref(
 mod tests {
     use super::*;
     use crate::protocol::{
-        error_code, GitWorkflowSettings, Page, ProjectSource, RequestBody, Role, Session,
+        error_code, GitWorkflowSettings, Page, ProjectSource, RequestBody, Session, SessionKind,
     };
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::bare_session;
@@ -779,14 +779,14 @@ mod tests {
             has_conversation: true,
             account_id: Some("acct-1".to_string()),
             config_dir: Some("/home/u/.claude-work".to_string()),
-            ..bare_session("session-1", Role::Project)
+            ..bare_session("session-1", SessionKind::Project)
         };
         state.store.insert_session(&session_1()).unwrap();
         state
             .store
             .insert_session(&Session {
                 id: "session-2".to_string(),
-                role: Role::Console,
+                kind: SessionKind::Console,
                 project_id: None,
                 title: "Hub".to_string(),
                 ..session_1()

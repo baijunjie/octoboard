@@ -7,8 +7,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use super::rows::{enum_from_row, enum_from_row_opt, enum_from_text, enum_to_text};
 use super::Store;
 use crate::protocol::{
-    Agent, CodedError, ConsoleSessionColour, OrchestrationRole, Origin, RecordTitles, Role,
-    Session, SessionStatus,
+    Agent, CodedError, ConsoleSessionColour, Origin, RecordTitles, Role, Session, SessionKind,
+    SessionStatus,
 };
 
 /// What the agent's records gave a session, to be stored if it differs from what is.
@@ -68,9 +68,9 @@ fn sql_statuses(statuses: &[SessionStatus]) -> String {
 
 pub(super) const SESSION_COLUMNS: &str =
     "id, agent, agent_session_id, console_id, project_id, host_id,
-                               role, origin, title, status, has_conversation, bound_to, colour,
+                               kind, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
-                               orchestration_role, terminal_title, model, effort, model_override,
+                               role, terminal_title, model, effort, model_override,
                                effort_override, context, record_title, record_prompt, locked,
                                observed_model, observed_effort, last_turn_abnormal";
 
@@ -92,8 +92,8 @@ impl Store {
         let conn = self.lock();
         let can_own: bool = conn.query_row(
             "SELECT EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?1
-                              AND owner.orchestration_role = ?2)",
-            params![owner, enum_to_text(&OrchestrationRole::Coordinator)],
+                              AND owner.role = ?2)",
+            params![owner, enum_to_text(&Role::Coordinator)],
             |row| row.get(0),
         )?;
         if !can_own {
@@ -117,13 +117,13 @@ impl Store {
         let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT colour FROM sessions
-             WHERE console_id = ?1 AND role = ?2 AND status != ?3 AND colour IS NOT NULL",
+             WHERE console_id = ?1 AND kind = ?2 AND status != ?3 AND colour IS NOT NULL",
         )?;
         let used_colours: Vec<String> = stmt
             .query_map(
                 params![
                     session.console_id,
-                    enum_to_text(&Role::Console),
+                    enum_to_text(&SessionKind::Console),
                     enum_to_text(&SessionStatus::Archived),
                 ],
                 |row| row.get(0),
@@ -750,8 +750,12 @@ impl Store {
     /// no other write touches.
     pub fn set_session_colour(&self, id: &str, colour: ConsoleSessionColour) -> Result<()> {
         self.lock().execute(
-            "UPDATE sessions SET colour = ?2 WHERE id = ?1 AND role = ?3",
-            params![id, enum_to_text(&colour), enum_to_text(&Role::Console)],
+            "UPDATE sessions SET colour = ?2 WHERE id = ?1 AND kind = ?3",
+            params![
+                id,
+                enum_to_text(&colour),
+                enum_to_text(&SessionKind::Console)
+            ],
         )?;
         Ok(())
     }
@@ -892,9 +896,9 @@ fn assign_console_session_colour(
 fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
     conn.execute(
         "INSERT INTO sessions
-            (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
+            (id, agent, agent_session_id, console_id, project_id, host_id, kind, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at, orchestration_role, terminal_title, model, effort, model_override,
+             started_at, ended_at, role, terminal_title, model, effort, model_override,
              effort_override, context, record_title, record_prompt, locked, observed_model, observed_effort,
              last_turn_abnormal)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
@@ -906,7 +910,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.console_id,
             session.project_id,
             session.host_id,
-            enum_to_text(&session.role),
+            enum_to_text(&session.kind),
             enum_to_text(&session.origin),
             session.title,
             enum_to_text(&session.status),
@@ -919,7 +923,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.pinned,
             session.started_at,
             session.ended_at,
-            enum_to_text(&session.orchestration_role),
+            enum_to_text(&session.role),
             session.terminal_title,
             session.model.as_ref().and_then(|value| value.as_deref()),
             session.effort.as_ref().and_then(|value| value.as_deref()),
@@ -945,7 +949,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         console_id: row.get(3)?,
         project_id: row.get(4)?,
         host_id: row.get(5)?,
-        role: enum_from_row::<Role>(row, 6)?,
+        kind: enum_from_row::<SessionKind>(row, 6)?,
         origin: enum_from_row::<Origin>(row, 7)?,
         title: row.get(8)?,
         status: enum_from_row::<SessionStatus>(row, 9)?,
@@ -954,7 +958,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         paused: row.get(31)?,
         prompt_on_launch: false,
         default_effort: None,
-        orchestration_role: enum_from_row::<OrchestrationRole>(row, 19)?,
+        role: enum_from_row::<Role>(row, 19)?,
         has_conversation: row.get(10)?,
         bound_to: row.get(11)?,
         colour: enum_from_row_opt::<ConsoleSessionColour>(row, 12)?,
@@ -1627,7 +1631,7 @@ mod tests {
 
         let mut project_session = session(None);
         project_session.id = "session-project".to_string();
-        project_session.role = Role::Project;
+        project_session.kind = SessionKind::Project;
         store.insert_session(&project_session).expect("insert");
         store.set_session_colour("session-project", chosen).unwrap();
         assert_eq!(

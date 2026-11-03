@@ -65,17 +65,16 @@ Neither message spares the turn it starts a synthesised report: a session that c
 reported on to its owner as usual (see "When a session does not report" in
 `docs/product/reporting-to-owners.md`).
 
-The call returns `session`, `owner` (the new parent's id), `owner_kind` (`console` or `project`),
-`orchestration_role` (`coordinator` or `worker`) and a `note` saying the
-session now reports to the new owner and is no longer the caller's, and whether each of the two was told, will be told
-as soon as it can take a message, is not running and will be told when it next starts (the session only), is not
-running and will be told once resumed (the new owner, should it have been interrupted by then: the message is kept for
-it, see "Reports and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`), could not be told,
-with the reason, or was not told because the message was written
-into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of the
-agent's background agents — the user having been told to check the session (see "A message written but not
-sent" in `docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the
-transfer with `inform_session`. Once the binding has changed the transfer stands, whatever became of the messages.
+The call returns `session`, `owner` (the new parent's id), `owner_kind` (`console` or `project`), `role` (`coordinator`
+or `worker`) and a `note` saying the session now reports to the new owner and is no longer the caller's, and whether
+each of the two was told, will be told as soon as it can take a message, is not running and will be told when it next
+starts (the session only), is not running and will be told once resumed (the new owner, should it have been interrupted
+by then: the message is kept for it, see "Reports and notices for an interrupted owner" in
+`docs/product/reporting-to-owners.md`), could not be told, with the reason, or was not told because the message was
+written into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of
+the agent's background agents — the user having been told to check the session (see "A message written but not sent" in
+`docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the transfer with
+`inform_session`. Once the binding has changed the transfer stands, whatever became of the messages.
 
 ## Releasing a session from its owner
 
@@ -139,13 +138,13 @@ which the session weighs rather than obeys; that it should no longer count on th
 the session is left with the user. A former owner with no process running is not told, then or later; a later attempt by
 it to drive the session is refused as for any session that is not its own.
 
-The call returns `session`, `orchestration_role: "coordinator"` and a `note` saying that the session has no parent now,
-is no longer the caller's, is the user's own session, is no longer instructed or driven by the caller and no longer
-reports to it, though `inform_session` can still tell it something, and whether it was told, will be told as soon as it
-can take a message, is not running and will be told when it next starts, or was not told because the message was written
-into its input but its agent did not send it to the conversation, the user having been told to check the session (see "A
-message written but not sent" in `docs/product/message-delivery.md`). Once the binding is cleared the release stands,
-whatever became of the message.
+The call returns `session`, `role: "coordinator"` and a `note` saying that the session has no parent now, is no longer
+the caller's, is the user's own session, is no longer instructed or driven by the caller and no longer reports to it,
+though `inform_session` can still tell it something, and whether it was told, will be told as soon as it can take a
+message, is not running and will be told when it next starts, or was not told because the message was written into its
+input but its agent did not send it to the conversation, the user having been told to check the session (see "A message
+written but not sent" in `docs/product/message-delivery.md`). Once the binding is cleared the release stands, whatever
+became of the message.
 
 ## Unbinding a session from the window
 
@@ -204,14 +203,14 @@ but not drive — then gives the caller's `summary`. It counts as the caller's r
 ending without a `report` produces no synthesised report (see "When a session does not report" in
 `docs/product/reporting-to-owners.md`).
 
-The call returns `owner`, `owner_kind`, `orchestration_role` (`coordinator` or `worker`) and a `note` telling the caller
-its role and that it now reports to that parent; that from now on it takes work only from the owner, or from the user
-typing in its terminal, and reports to it with `report` once per round of work, which replaces what its role description
-says about being independent and not calling `report`; that `done` with no open items archives it, subject to "Automatic
-archiving" in `docs/product/reporting-to-owners.md` — refused for a coordinator with a parent while a session it started
-is not archived and no lock blocks automatic archiving — while `needs_decision` or open items leave it running, and that
-items that are the parent's to carry out go in `owner_items`, not `open_items`; that a coordinator with a parent keeps
-its child sessions and goes on driving them with `open_session` and the tools that go with it, and that any other can no
+The call returns `owner`, `owner_kind`, `role` (`coordinator` or `worker`) and a `note` telling the caller its role and
+that it now reports to that parent; that from now on it takes work only from the owner, or from the user typing in its
+terminal, and reports to it with `report` once per round of work, which replaces what its role description says about
+being independent and not calling `report`; that `done` with no open items archives it, subject to "Automatic archiving"
+in `docs/product/reporting-to-owners.md` — refused for a coordinator with a parent while a session it started is not
+archived and no lock blocks automatic archiving — while `needs_decision` or open items leave it running, and that items
+that are the parent's to carry out go in `owner_items`, not `open_items`; that a coordinator with a parent keeps its
+child sessions and goes on driving them with `open_session` and the tools that go with it, and that any other can no
 longer start or drive sessions, with the list of the Octoboard tools it has left, and that any pages it pushed to the
 report panel were withdrawn with the tools for them; what became of its summary as its first report; and not to call
 `bind_to_session` again. The first report is one of:

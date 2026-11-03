@@ -28,7 +28,7 @@ use anyhow::{bail, Result};
 use crate::branch_origin::session_branches::{self, BranchState, Worktree};
 use crate::hostfs::replace::{replace_file, Permissions};
 use crate::messaging::naming::one_line;
-use crate::protocol::{Agent, Role, Session, SessionStatus};
+use crate::protocol::{Agent, Session, SessionKind, SessionStatus};
 use crate::records::conversation::{self, Conversation, Speaker, Todo};
 use crate::records::{conversation_branch, Branch, Locator};
 use crate::state::AppState;
@@ -42,7 +42,7 @@ pub struct Identity {
     pub title: String,
     pub agent: Agent,
     pub account: String,
-    pub role: Role,
+    pub kind: SessionKind,
     /// The project's name and directory, or the console's name.
     pub place: String,
     pub status: String,
@@ -154,7 +154,7 @@ fn build_with(
             title: session.title.clone(),
             agent: session.agent,
             account,
-            role: session.role,
+            kind: session.kind,
             place,
             status: status_word(session.status).to_owned(),
             owner,
@@ -242,7 +242,7 @@ impl Package {
         ));
         out.push_str(&format!(
             "- Kind: {} session in {}\n",
-            session.role.kind(),
+            session.kind.name(),
             one_line(&session.place)
         ));
         out.push_str(&format!("- State when handed off: {}\n", session.status));

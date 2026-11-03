@@ -14,7 +14,7 @@ import { useProcessJump } from "./useProcessJump";
 const first = consoleOf("c1", "First");
 const second = consoleOf("c2", "Second");
 const project = projectOf("p", second.id, "App");
-const hub = sessionOf("hub", first.id, undefined, "Hub", "idle", { role: "console" });
+const hub = sessionOf("hub", first.id, undefined, "Hub", "idle", { kind: "console" });
 
 async function mount(asideFloats = false) {
   const switchConsole = vi.fn();

@@ -1,7 +1,8 @@
 //! The static description of the Octoboard MCP tools and what sessions are told about them: the
 //! tool catalogue ([`catalogue`]), the role description a session is launched with ([`role`]), the
-//! text of the console session's instruction file ([`console_instructions`]), whom a worker reports
-//! to as that text depends on it ([`Owner`]), and the limit on a forwarded call ([`CALL_TIMEOUT`]).
+//! text of the console session's instruction file ([`console_instructions`]), whom a project
+//! session reports to as that text depends on it ([`Owner`]), and the limit on a forwarded call
+//! ([`CALL_TIMEOUT`]).
 //! Pure data and text, with no behavior of its own: whoever announces or runs the tools, or tells a
 //! session about them, reads it from here.
 
@@ -17,16 +18,26 @@ use std::time::Duration;
 /// is in apps/daemon/PROTOCOL.md's "`POST /mcp/:token` — Octoboard's MCP tools" section.
 pub(crate) const CALL_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// Who a worker reports to at launch, as far as what the session is told depends on it. A binding
-/// can change while the session runs, and the session is told of that change in a message or, when
-/// it binds itself, in the call's result; its role text, recorded once by some agents, is written
-/// so that it still holds afterwards.
+/// Who a project session reports to at launch, as far as what the session is told depends on it.
+/// A binding can change while the session runs, and the session is told of that change in a message
+/// or, when it binds itself, in the call's result; its role text, recorded once by some agents, is
+/// written so that it still holds afterwards.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Owner {
+    /// The console session a worker reports to.
     Console,
-    /// A project coordinator, named by Octoboard's id for it: a
-    /// title can be renamed after the text naming it has been recorded for good.
-    Project {
-        session_id: String,
-    },
+    /// The console session a coordinator reports to, which a coordinator has only under a console
+    /// session: the one that opened it, one it bound itself to, or the one it was transferred to.
+    ConsoleOfCoordinator,
+    /// A project coordinator, named by Octoboard's id for it: a title can be renamed after the text
+    /// naming it has been recorded for good.
+    Project { session_id: String },
+}
+
+impl Owner {
+    /// Whether the session that has this owner is a worker, which decides the tools its MCP server
+    /// announces.
+    pub fn of_worker(&self) -> bool {
+        !matches!(self, Owner::ConsoleOfCoordinator)
+    }
 }

@@ -4,7 +4,7 @@ use crate::mcp::test_support::{
     account, arguments, console_session, peer_state, project_session, shared_console_state,
     with_status, RepoState,
 };
-use crate::protocol::{Agent, Console, OrchestrationRole, Project, Session, SessionStatus};
+use crate::protocol::{Agent, Console, Project, Role, Session, SessionStatus};
 use crate::test_support::{running, ScratchDir};
 use anyhow::anyhow;
 use serde_json::{json, Map, Value};
@@ -75,14 +75,14 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
         .as_array()
         .unwrap()
         .iter()
-        .all(|session| session["role"] == "console"));
+        .all(|session| session["kind"] == "console"));
     let projects = live(json!({ "kind": "project" })).await.unwrap();
     assert!(ids(&projects).contains(&"coordinator"));
     assert!(projects["sessions"]
         .as_array()
         .unwrap()
         .iter()
-        .all(|session| session["role"] == "project"));
+        .all(|session| session["kind"] == "project"));
 
     let found = archived(json!({ "branch": "kid-work" })).await.unwrap();
     assert_eq!(ids(&found), ["kid"]);
@@ -632,7 +632,7 @@ async fn the_archive_can_be_listed_without_a_project_and_narrowed() {
     let mut console_archived = console_session("archived-console");
     console_archived.status = SessionStatus::Archived;
     console_archived.bound_to = Some("a".to_string());
-    console_archived.orchestration_role = OrchestrationRole::Worker;
+    console_archived.role = Role::Worker;
     let mut elsewhere = project_session("archived-elsewhere", "console-2", None);
     elsewhere.project_id = Some("project-2".to_string());
     elsewhere.status = SessionStatus::Archived;
@@ -1460,7 +1460,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
             has_conversation: true,
             model: Some(Some("opus".to_string())),
             effort: Some(None),
-            orchestration_role: OrchestrationRole::Coordinator,
+            role: Role::Coordinator,
             ..project_session("coordinator-two", "console-1", Some("a"))
         })
         .unwrap();
@@ -1491,7 +1491,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
     assert_eq!(record["model"], "opus");
     // An explicit choice of the agent's own default is a `null`, not an absent key.
     assert!(record.get("effort").is_some_and(Value::is_null));
-    assert_eq!(record["orchestration_role"], "coordinator");
+    assert_eq!(record["role"], "coordinator");
     // The removed legacy `lead` field, which must not come back.
     assert!(record.get("lead").is_none());
 
@@ -1506,7 +1506,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
     .unwrap();
     assert!(plain.get("model").is_none() && plain.get("effort").is_none());
     assert_eq!(plain["owned_sessions"], 0);
-    assert_eq!(plain["orchestration_role"], "worker");
+    assert_eq!(plain["role"], "worker");
     assert_eq!(plain["agent_session_id"], Value::Null);
     assert_eq!(plain["display_title"], plain["title"]);
 }

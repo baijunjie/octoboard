@@ -406,7 +406,7 @@ pub(crate) const TEST_TIMEOUT: Duration =
 mod tests {
 
     use super::*;
-    use crate::protocol::{Agent, Console, Role, Session};
+    use crate::protocol::{Agent, Console, Session, SessionKind};
     use crate::test_support::{
         bare_session, captured_interrupt, fresh_interrupt, idle_stand_in, within, ScratchDir,
         ScratchFile, StandIn,
@@ -584,7 +584,7 @@ mod tests {
         Session {
             status: SessionStatus::WaitingUser,
             has_conversation: true,
-            ..bare_session(id, Role::Project)
+            ..bare_session(id, SessionKind::Project)
         }
     }
 

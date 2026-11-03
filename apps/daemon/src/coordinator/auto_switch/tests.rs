@@ -1,7 +1,5 @@
 use super::*;
-use crate::protocol::{
-    Account, AccountQuota, Event, OrchestrationRole, QuotaWindow, QuotaWindowKind,
-};
+use crate::protocol::{Account, AccountQuota, Event, QuotaWindow, QuotaWindowKind, Role};
 use crate::test_support::{
     app_state, console, insert_project, output_containing, running, stand_in_launch, Launched,
     ScratchDir, StandIn,
@@ -69,7 +67,7 @@ impl Fixture {
             .insert_session(&Session {
                 project_id: Some("p1".to_string()),
                 bound_to: Some("owner".to_string()),
-                orchestration_role: OrchestrationRole::Worker,
+                role: Role::Worker,
                 has_conversation: true,
                 agent_session_id: Some("a0000000-0000-4000-8000-000000000001".to_string()),
                 ..crate::test_support::project_session("w", Agent::Claude, status)
@@ -2640,7 +2638,7 @@ async fn the_owner_is_not_told_of_a_wait_by_a_usage_limit_dialog() {
         .insert_session(&Session {
             project_id: Some("p1".to_string()),
             bound_to: Some("owner".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             ..crate::test_support::project_session("g", Agent::Grok, SessionStatus::Idle)
         })
         .unwrap();

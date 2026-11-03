@@ -7,7 +7,7 @@ use anyhow::Result;
 use super::automatic::automatic_open_choice;
 use super::session_agent;
 use super::standing::{account_can_open, agent_can_open};
-use crate::protocol::{Agent, Console, Project, Role, Session};
+use crate::protocol::{Agent, Console, Project, Session, SessionKind};
 use crate::state::AppState;
 
 /// The agent and the account of a session `caller` starts in `project` of `console` (none for a
@@ -30,7 +30,7 @@ pub(crate) fn choice_for_started_session(
     // agent is what its sessions run on, unless the call names one.
     let in_own_console = caller.console_id == console.id;
     let follows_callers_agent =
-        in_own_console && !(caller.role == Role::Console && project.is_some());
+        in_own_console && !(caller.kind == SessionKind::Console && project.is_some());
     // Read once: the agent and the account are both settled on it.
     let automatic = state.store.auto_select_account()?;
     let mut agent = match chosen_agent {

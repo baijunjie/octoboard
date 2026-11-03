@@ -51,11 +51,12 @@ to a console session; a worker reports to a console or project session. The perm
 transitions are in `docs/product/hub-orchestration.md` and `docs/product/changing-session-owners.md`.
 
 The parent session is also called the `owner` in APIs and tools. A project session opened without a **Report to**
-choice, or on an approved `request_session`, is an independent coordinator. A session opened with that choice, or
-created by another session with `open_session`, is a worker. Every session can read other sessions and share
-information with them, but information from a session other than its parent does not redirect its work (see
-`docs/product/information-between-sessions.md`). Every session can also ask the user to start an independent session
-in any project or console (see `docs/product/session-requests.md`).
+choice, or on an approved `request_session`, is an independent coordinator. One created by a project coordinator with
+`open_session` is a worker; one created by a console session with `open_session`, or with the **Report to** choice
+naming a console session, is a coordinator. Every session can read other sessions and share information with them, but
+information from a session other than its parent does not redirect its work (see
+`docs/product/information-between-sessions.md`). Every session can also ask the user to start an independent session in
+any project or console (see `docs/product/session-requests.md`).
 
 Selecting a session also gives the window's right pane, beside the terminal, to the session's own owner: a console
 session, whose **report panel** it holds (see `docs/product/report-panel.md`), or a project session's project, whose

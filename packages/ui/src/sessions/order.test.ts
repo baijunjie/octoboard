@@ -15,8 +15,8 @@ const session = (id: string, status: SessionStatus, started_at: number, pinned =
   console_id: "c",
   project_id: "p",
   host_id: "h",
-  role: "project",
-  orchestration_role: bound_to ? "worker" : "coordinator",
+  kind: "project",
+  role: bound_to ? "worker" : "coordinator",
   origin: "user",
   title: id,
   status,
@@ -79,7 +79,7 @@ describe("liveSessions", () => {
   });
 
   it("does not offer a console session that is still starting as an owner", () => {
-    const owners = ["starting", "idle", "archived"].map((status) => ({ ...session(status, status as SessionStatus, 1), role: "console" as const }));
+    const owners = ["starting", "idle", "archived"].map((status) => ({ ...session(status, status as SessionStatus, 1), kind: "console" as const }));
     expect(liveConsoleSessions(owners, "c").map((s) => s.id)).toEqual(["idle"]);
   });
 });
@@ -352,7 +352,7 @@ describe("sessionsInTreeOrder", () => {
 
 describe("notUnderConsoleSession", () => {
   it("keeps the sessions no console session is above, whatever their status, and drops a bound coordinator with its team", () => {
-    const owners = new Map([["s-console", { ...session("s-console", "idle", 0), role: "console" as const }]]);
+    const owners = new Map([["s-console", { ...session("s-console", "idle", 0), kind: "console" as const }]]);
     const sessions = [
       session("unbound", "idle", 1),
       session("archived", "archived", 2),
@@ -429,7 +429,7 @@ describe("archivedSessionRows", () => {
 });
 
 describe("boundElsewhere", () => {
-  const owner = (id: string, started_at: number): Session => ({ ...session(id, "idle", started_at), role: "console", project_id: null });
+  const owner = (id: string, started_at: number): Session => ({ ...session(id, "idle", started_at), kind: "console", project_id: null });
   const owners = new Map([owner("hub-1", 1), owner("hub-2", 2), { ...owner("hub-old", 3), status: "archived" as const }].map((o) => [o.id, o]));
 
   it.each([
@@ -485,7 +485,7 @@ describe("switchStrip", () => {
   const hub = (id: string, status: SessionStatus, started_at: number, extra: Partial<Session> = {}): Session => ({
     ...session(id, status, started_at),
     project_id: null,
-    role: "console",
+    kind: "console",
     origin: "console",
     ...extra,
   });
@@ -616,7 +616,7 @@ describe("STATUS_RANK", () => {
 describe("archivedDeletionScope", () => {
   const console_ = consoleOf("c-1", "Main");
   const project = projectOf("p-1", console_.id, "Search API");
-  const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "archived", { role: "console" });
+  const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "archived", { kind: "console" });
   const coordinator = sessionOf("s-coordinator", console_.id, project.id, "Coordinator", "archived", { bound_to: hub.id });
   const worker = sessionOf("s-worker", console_.id, project.id, "Worker", "archived", { bound_to: coordinator.id });
   const live = sessionOf("s-live", console_.id, project.id, "Live", "idle", { bound_to: hub.id });

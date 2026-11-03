@@ -27,7 +27,7 @@ vi.mock("./RailPanelEntry", async (original) => {
 
 const main = consoleOf("c", "Main");
 const project = projectOf("p", main.id, "App");
-const hub = sessionOf("hub", main.id, undefined, "Hub", "idle", { role: "console" });
+const hub = sessionOf("hub", main.id, undefined, "Hub", "idle", { kind: "console" });
 
 const COUNTS: ProcessCount[] = [
   { project_id: project.id, trees: 2 },

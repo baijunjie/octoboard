@@ -466,7 +466,7 @@ describe("a console session's Pin entry", () => {
 describe("a console's menu", () => {
   it("groups project and archive actions before settings and deletion", () => {
     const handlers = { onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn() };
-    const hub = sessionOf("hub", "c", undefined, "Old hub", "archived", { role: "console" });
+    const hub = sessionOf("hub", "c", undefined, "Old hub", "archived", { kind: "console" });
     const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub]);
     const labels = menu.map((entry) => (entry === "separator" ? entry : entry.label));
     expect(labels).toEqual(["Add project", "View archive", "separator", "Console settings", "separator", "Delete console"]);
@@ -544,8 +544,8 @@ describe("the Copy session ID entry", () => {
     ["console", "idle", "focused"],
     ["console", "starting", "list"],
     ["project", "archived", "nested"],
-  ] as const)("copies a %s session while %s in the %s menu", (role, status, placement) => {
-    const session = sessionOf("session-id", "c", role === "project" ? "p" : undefined, "Title", status);
+  ] as const)("copies a %s session while %s in the %s menu", (kind, status, placement) => {
+    const session = sessionOf("session-id", "c", kind === "project" ? "p" : undefined, "Title", status);
     const handlers = { onCopySessionId: vi.fn() } as unknown as SidebarHandlers;
     const menu = sessionMenu(t, handlers, session, [], {}, { switching: false, placement });
     const labels = menu.map((entry) => entry === "separator" ? entry : entry.label);

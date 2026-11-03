@@ -2179,7 +2179,7 @@ in `docs/product/per-agent-launch-specifics.md`.
 - **Resume re-injects everything.** Hooks and the MCP server are resolved from the launch arguments every time and are
   lost on a resume that omits them, silently. The role description differs: Grok persists `--rules` into the session
   record, while Claude Code records its appended system prompt on the first request and replays it verbatim, so a
-  changed role text is ignored on resume. A session's role is immutable for its lifetime. Grok also freezes its
+  changed role text is ignored on resume. A session's role text is immutable for its lifetime. Grok also freezes its
   project instruction files per session: on a resume and on `--fork-session` it replays the stored original system
   prompt and first-message instructions, so neither a new `--rules` nor an edited `AGENTS.md` reaches it, and only a
   fresh session sees a change (Grok Build 1.0.52).

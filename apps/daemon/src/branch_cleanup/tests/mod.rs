@@ -18,8 +18,8 @@ use super::survey::*;
 use crate::branch_origin::bound::bound_in;
 use crate::git::repo_files::repository_of;
 use crate::protocol::{
-    error_code, Event, OrchestrationRole, RequestBody, Role, Session, SessionBranchCause,
-    SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget, SessionStatus,
+    error_code, Event, RequestBody, Role, Session, SessionBranchCause, SessionBranchItem,
+    SessionBranchKind, SessionBranchState, SessionBranchTarget, SessionKind, SessionStatus,
 };
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
@@ -40,7 +40,7 @@ fn session(id: &str, status: SessionStatus) -> Session {
         status,
         has_conversation: true,
         started_at: now_millis(),
-        ..bare_session(id, Role::Project)
+        ..bare_session(id, SessionKind::Project)
     }
 }
 

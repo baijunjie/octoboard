@@ -832,7 +832,7 @@ mod tests {
             .store
             .insert_session(&crate::test_support::bare_session(
                 "submit-retry-failed",
-                crate::protocol::Role::Project,
+                crate::protocol::SessionKind::Project,
             ))
             .unwrap();
         let live = crate::test_support::fake_live_session(

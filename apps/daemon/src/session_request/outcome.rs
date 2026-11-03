@@ -65,7 +65,7 @@ impl ResumeAction {
 fn describe(state: &Arc<AppState>, session: &Session) -> String {
     format!(
         "the {kind} session `{id}` (\"{title}\", {agent}){place}",
-        kind = session.role.kind(),
+        kind = session.kind.name(),
         id = session.id,
         title = one_line(&session.title),
         agent = session.agent.label(),
@@ -186,7 +186,7 @@ pub(super) fn resume_result(
     let mut result = json!({
         "action": action.as_str(),
         "session": session.id,
-        "role": session.role,
+        "kind": session.kind,
         "agent": session.agent,
         "title": session.title,
         "console": session.console_id,
@@ -206,7 +206,7 @@ pub(super) fn resume_result(
 /// where the caller could.
 fn reach_note(state: &Arc<AppState>, caller: &Session, session: &Session) -> String {
     let tool = |name: &str| qualified_tool_name(caller.agent, name);
-    let has = |name: &str| tool_by_name(caller.role, caller.is_worker(), name).is_some();
+    let has = |name: &str| tool_by_name(caller.kind, caller.is_worker(), name).is_some();
     let reads = if has("get_session") {
         format!(", and `{}` reads it", tool("get_session"))
     } else {

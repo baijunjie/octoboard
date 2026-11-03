@@ -213,7 +213,7 @@ impl AppState {
     /// Deletes the record of a session whose launch failed and tells every client it is gone. The
     /// launch claim is the caller's to hold until this has returned, so nothing else acts on the
     /// session meanwhile. The record goes whatever is bound to it, which is why a session still
-    /// starting is never accepted as an owner (`coordinator::bindings::resolve_bound_to`): nothing
+    /// starting is never accepted as an owner (`coordinator::bindings::resolve_owner`): nothing
     /// of it ran, so a conversation that binding meant to keep never existed.
     pub fn discard_session(&self, id: &str) -> Result<()> {
         self.store.delete_session(id)?;

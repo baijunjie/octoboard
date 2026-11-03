@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::protocol::{Agent, OrchestrationRole, Origin, Role, Session, SessionStatus};
+use crate::protocol::{Agent, Origin, Role, Session, SessionKind, SessionStatus};
 use crate::state::AppState;
 use crate::test_support::bare_session;
 
@@ -12,10 +12,10 @@ pub(crate) fn project_session(title: &str) -> Session {
     Session {
         origin: Origin::Console,
         title: title.to_string(),
-        orchestration_role: OrchestrationRole::Worker,
+        role: Role::Worker,
         has_conversation: true,
         bound_to: Some("console-session-1".to_string()),
-        ..bare_session("session-7", Role::Project)
+        ..bare_session("session-7", SessionKind::Project)
     }
 }
 
@@ -52,7 +52,7 @@ pub(crate) fn team_state(
     state.store.insert_console(&console()).unwrap();
     let hub = Session {
         id: "hub".to_string(),
-        role: Role::Console,
+        kind: SessionKind::Console,
         bound_to: None,
         ..project_session("hub")
     };
@@ -64,10 +64,10 @@ pub(crate) fn team_state(
         let session = Session {
             id: id.to_string(),
             bound_to: Some(owner.to_string()),
-            orchestration_role: if *coordinator {
-                OrchestrationRole::Coordinator
+            role: if *coordinator {
+                Role::Coordinator
             } else {
-                OrchestrationRole::Worker
+                Role::Worker
             },
             status: *status,
             ..project_session(id)
@@ -110,16 +110,16 @@ pub(crate) fn interrupted_hub_state(
     ] {
         let session = Session {
             id: id.to_string(),
-            role: if id == "hub" {
-                Role::Console
+            kind: if id == "hub" {
+                SessionKind::Console
             } else {
-                Role::Project
+                SessionKind::Project
             },
             bound_to: owner.map(str::to_string),
-            orchestration_role: if owner.is_some() {
-                OrchestrationRole::Worker
+            role: if owner.is_some() {
+                Role::Worker
             } else {
-                OrchestrationRole::Coordinator
+                Role::Coordinator
             },
             status,
             ..project_session(id)

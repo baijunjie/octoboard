@@ -130,7 +130,7 @@ export function sessionOf(
     console_id: consoleId,
     project_id: projectId ?? null,
     host_id: LOCAL_HOST.id,
-    role: projectId ? "project" : "console",
+    kind: projectId ? "project" : "console",
     origin: projectId ? "user" : "console",
     title,
     status,
@@ -146,7 +146,7 @@ export function sessionOf(
     ended_at: status === "archived" ? minutesAgo(30) : null,
     ...extra,
     // A session with a parent it reports to is a worker; one without is a coordinator.
-    orchestration_role: extra.orchestration_role ?? (extra.bound_to ? "worker" : "coordinator"),
+    role: extra.role ?? (extra.bound_to ? "worker" : "coordinator"),
   };
 }
 

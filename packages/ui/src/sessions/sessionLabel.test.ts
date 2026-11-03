@@ -99,7 +99,7 @@ it("keeps composed session choice labels raw while sentence display keeps each n
 describe("sessionRowName", () => {
   const session = sessionOf("s", "c", "p", "Work", "idle");
   const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "idle");
-  const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { role: "console" });
+  const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { kind: "console" });
   const name = (owners: (typeof session | undefined)[]) => sessionRowName(t, "en", session, { accounts, defaultNames: {}, owners, modelLabel: "Opus 5.5 · high", status: "idle" });
   const base = sessionAriaLabel(t, "en", session, accounts, undefined, {}, "idle");
 

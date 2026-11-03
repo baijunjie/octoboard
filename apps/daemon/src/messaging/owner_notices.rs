@@ -16,7 +16,7 @@ use crate::messaging::delivery::{
 };
 use crate::messaging::naming::{label, named_session, one_line, place_of, quote};
 use crate::messaging::texts::{capitalised, session_notice_opening, NOTICE_PREFIX, WAITING_PHRASE};
-use crate::protocol::{Agent, OrchestrationRole, Role, Session, SessionStatus};
+use crate::protocol::{Agent, Role, Session, SessionKind, SessionStatus};
 use crate::session_tools::catalogue;
 use crate::state::AppState;
 
@@ -242,7 +242,7 @@ pub(crate) fn tell_owner(
 /// The tools a project session has, as a worker or not, by the names its agent shows them, for
 /// telling a session whose binding has just changed what it has.
 fn project_tools(agent: Agent, worker: bool) -> String {
-    catalogue::tools_for(Role::Project, worker)
+    catalogue::tools_for(SessionKind::Project, worker)
         .iter()
         .map(|tool| format!("`{}`", catalogue::qualified_tool_name(agent, tool.name)))
         .collect::<Vec<_>>()
@@ -394,7 +394,7 @@ pub(crate) fn transferred_to_owner(
     moved: &Session,
     note: &str,
 ) -> String {
-    let role_note = if moved.orchestration_role == OrchestrationRole::Coordinator {
+    let role_note = if moved.role == Role::Coordinator {
         " Its role is coordinator. It keeps its child sessions, which you can read but not drive."
     } else {
         " Its role is worker and it cannot manage child sessions."
@@ -593,7 +593,7 @@ mod tests {
 
     use super::*;
     use crate::messaging::texts::{is_waiting_notice, waiting_notice_session};
-    use crate::protocol::OrchestrationRole;
+    use crate::protocol::Role;
     use crate::test_support::owner_team::{
         hub_heard, hub_heard_of, interrupted_hub_state, kept_texts, project_session, team_state,
     };
@@ -817,7 +817,7 @@ mod tests {
                     id: id.to_string(),
                     agent,
                     bound_to: Some("hub".to_string()),
-                    orchestration_role: OrchestrationRole::Worker,
+                    role: Role::Worker,
                     status: SessionStatus::Idle,
                     ..project_session(id)
                 })
@@ -1068,14 +1068,14 @@ mod tests {
         let (state, _dir, _hub) = team_state("owner-notice-transfer-words", &[]);
         let console_session = |id: &str, title: &str| Session {
             id: id.to_string(),
-            role: Role::Console,
+            kind: SessionKind::Console,
             bound_to: None,
             ..project_session(title)
         };
         let (from, owner) = (console_session("a", "A"), console_session("b", "B"));
         let moved = Session {
             title: "Fix\nthe build".to_string(),
-            orchestration_role: OrchestrationRole::Coordinator,
+            role: Role::Coordinator,
             ..project_session("S")
         };
         assert_eq!(
@@ -1098,7 +1098,7 @@ mod tests {
              Next: tests.\n— end of the transfer note —"
         );
         let worker = Session {
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             ..moved
         };
         assert!(transferred_to_owner(&state, &from, &owner, &worker, "n")

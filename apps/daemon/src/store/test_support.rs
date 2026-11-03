@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::protocol::{
-    Account, Agent, Console, PerAgent, Project, ProjectAccount, ProjectSource, Role, Session,
+    Account, Agent, Console, PerAgent, Project, ProjectAccount, ProjectSource, Session, SessionKind,
 };
 use crate::test_support::{bare_session, ScratchFile};
 
@@ -46,7 +46,7 @@ pub(super) fn session(config_dir: Option<&str>) -> Session {
     Session {
         title: "Hub".to_string(),
         config_dir: config_dir.map(str::to_string),
-        ..bare_session("session-1", Role::Console)
+        ..bare_session("session-1", SessionKind::Console)
     }
 }
 
@@ -74,7 +74,7 @@ pub(super) fn named(id: &str) -> ProjectAccount {
     ProjectAccount::Account { id: id.to_string() }
 }
 
-/// A console session to feed [`Store::insert_console_session`]: a plain `role: Console` record
+/// A console session to feed [`Store::insert_console_session`]: a plain `kind: Console` record
 /// whose colour, ordinal and title that call is going to overwrite, distinguished only by `id`.
 pub(super) fn console_session(id: &str) -> Session {
     let mut built = session(None);

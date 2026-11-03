@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::*;
 use crate::messaging::outbox::Drain;
-use crate::protocol::{Event, OrchestrationRole};
+use crate::protocol::{Event, Role};
 use crate::state::WriteHold;
 use crate::test_support::{app_state, PATIENCE};
 
@@ -495,12 +495,12 @@ async fn an_owner_is_told_when_a_hook_puts_its_session_in_waiting_for_the_user()
     let (state, _dir, owner, path) =
         claude_session_with_transcript("server-owner-waits", SessionStatus::Idle);
     crate::session::spawn_reader_thread((*owner).clone(), 8 * 1024);
-    let worker = crate::test_support::bare_session("w", crate::protocol::Role::Project);
+    let worker = crate::test_support::bare_session("w", crate::protocol::SessionKind::Project);
     state
         .store
         .insert_session(&crate::protocol::Session {
             bound_to: Some("s".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             status: SessionStatus::Idle,
             ..worker
         })

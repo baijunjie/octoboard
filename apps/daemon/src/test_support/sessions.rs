@@ -3,19 +3,19 @@
 use std::path::{Path, PathBuf};
 
 use super::move_modification_time_back;
-use crate::protocol::{Agent, OrchestrationRole, Origin, Page, Role, Session, SessionStatus};
+use crate::protocol::{Agent, Origin, Page, Role, Session, SessionKind, SessionStatus};
 
 pub(crate) fn project_session(id: &str, agent: Agent, status: SessionStatus) -> Session {
     Session {
         agent,
         project_id: Some("project-1".to_string()),
-        role: Role::Project,
+        kind: SessionKind::Project,
         status,
-        ..bare_session(id, Role::Project)
+        ..bare_session(id, SessionKind::Project)
     }
 }
 
-pub(crate) fn bare_session(id: &str, role: Role) -> Session {
+pub(crate) fn bare_session(id: &str, kind: SessionKind) -> Session {
     Session {
         id: id.to_string(),
         agent: Agent::Claude,
@@ -23,7 +23,7 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         console_id: "console-1".to_string(),
         project_id: None,
         host_id: crate::store::LOCAL_HOST_ID.to_string(),
-        role,
+        kind,
         origin: Origin::User,
         title: "Session".to_string(),
         status: SessionStatus::Idle,
@@ -34,7 +34,7 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         paused: false,
         prompt_on_launch: false,
         default_effort: None,
-        orchestration_role: OrchestrationRole::Coordinator,
+        role: Role::Coordinator,
         context: None,
         observed_model: None,
         observed_effort: None,
@@ -57,7 +57,7 @@ pub(crate) fn console_session(id: &str, status: SessionStatus) -> Session {
     Session {
         title: id.to_string(),
         status,
-        ..bare_session(id, Role::Console)
+        ..bare_session(id, SessionKind::Console)
     }
 }
 

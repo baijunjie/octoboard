@@ -18,7 +18,7 @@ use std::time::Duration;
 use crate::messaging::naming::one_line;
 use crate::messaging::owner_notices::tell_owner;
 use crate::messaging::texts::{session_notice_opening, IDLE_PHRASE};
-use crate::protocol::{OrchestrationRole, Session, SessionStatus};
+use crate::protocol::{Role, Session, SessionStatus};
 use crate::session_tools::catalogue;
 use crate::state::{bindings, AppState, LastReport};
 use crate::time::now_millis;
@@ -55,7 +55,7 @@ pub(crate) fn idle_after_report_shown(
         return None;
     }
     // Only a coordinator has sessions of its own; listing the table is left to it.
-    if session.orchestration_role == OrchestrationRole::Coordinator {
+    if session.role == Role::Coordinator {
         let bound = bindings::bound_sessions(state, session).ok()?;
         if bound.iter().any(|bound| state.has_process(&bound.id)) {
             return None;

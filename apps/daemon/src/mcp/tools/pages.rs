@@ -159,7 +159,7 @@ fn page_title(html: &str) -> Option<String> {
 mod tests {
     use crate::mcp::dispatch::call;
     use crate::mcp::test_support::{arguments, bound_coordinator_state, peer_state};
-    use crate::protocol::{Event, OrchestrationRole};
+    use crate::protocol::{Event, Role};
     use serde_json::{json, Map};
 
     /// A console session lists, and reads in full, the pages it pushed, and no other session's.
@@ -403,14 +403,7 @@ mod tests {
         let before_binding = state.session_record("other-project").unwrap();
         state
             .store
-            .set_binding(
-                "other-project",
-                None,
-                "starter",
-                OrchestrationRole::Worker,
-                true,
-                false,
-            )
+            .set_binding("other-project", None, "starter", Role::Worker, true, false)
             .unwrap()
             .unwrap();
         let mut events = state.subscribe();

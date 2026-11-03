@@ -699,7 +699,7 @@ it("follows the selected session's actual agent and account, account switches an
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
@@ -745,7 +745,7 @@ it("opens on the tab of the agent whose quota the button shows, each time, and o
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
@@ -795,7 +795,7 @@ it("opens the shown agent's list scrolled to the selected session's account, wit
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
@@ -830,7 +830,7 @@ it("draws the button's window full, and says so, once its reset time passes whil
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   const used = quota("codex", null, "plus");
@@ -857,7 +857,7 @@ it("hides the mini bar for unread, failed, stale or unavailable quota instead of
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]), accountQuotas: [] }));
@@ -885,7 +885,7 @@ it("keeps the mini bar of a session whose agent was removed", () => {
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
@@ -944,7 +944,7 @@ function mountWithSession(accountId: string | null = "claude-work") {
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: accountId, config_dir: null, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
@@ -1030,7 +1030,7 @@ it("lists a turned-off account only for the selected session that is still runni
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: accounts.map((account) => ({ ...account, disabled: true })), disabled_default_accounts: ["claude"] } }));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
@@ -1076,7 +1076,7 @@ it("drops the tab of an agent whose accounts are all turned off, bar the one the
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
@@ -1127,7 +1127,7 @@ function mountOnTurnedOff(status: Session["status"] = "idle") {
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status, has_conversation: true,
+    kind: "console", role: "coordinator", origin: "console", title: "Selected", status, has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   const setStatus = (next: Session["status"]) => act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: next }]]) }));

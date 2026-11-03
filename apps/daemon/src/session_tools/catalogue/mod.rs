@@ -24,7 +24,7 @@ mod tests;
 
 use serde_json::Value;
 
-use crate::protocol::{Agent, Role};
+use crate::protocol::{Agent, SessionKind};
 
 use messages::{INFORM_SESSION, REPORT};
 use moves::{
@@ -88,16 +88,16 @@ pub struct ToolDef {
 /// `worker` is `Session::is_worker`, not the presence of a parent: a project coordinator
 /// reporting to a console still has the coordinator set. The daemon checks the current capability
 /// on every call, and the MCP child is told when its catalogue changes.
-pub fn tools_for(role: Role, worker: bool) -> &'static [ToolDef] {
-    match (role, worker) {
-        (Role::Console, _) => CONSOLE_SESSION_TOOLS,
-        (Role::Project, true) => WORKER_PROJECT_SESSION_TOOLS,
-        (Role::Project, false) => COORDINATOR_PROJECT_SESSION_TOOLS,
+pub fn tools_for(kind: SessionKind, worker: bool) -> &'static [ToolDef] {
+    match (kind, worker) {
+        (SessionKind::Console, _) => CONSOLE_SESSION_TOOLS,
+        (SessionKind::Project, true) => WORKER_PROJECT_SESSION_TOOLS,
+        (SessionKind::Project, false) => COORDINATOR_PROJECT_SESSION_TOOLS,
     }
 }
 
-pub fn tool_by_name(role: Role, worker: bool, name: &str) -> Option<&'static ToolDef> {
-    tools_for(role, worker)
+pub fn tool_by_name(kind: SessionKind, worker: bool, name: &str) -> Option<&'static ToolDef> {
+    tools_for(kind, worker)
         .iter()
         .find(|tool| tool.name == name)
 }

@@ -21,12 +21,12 @@
 //! - **A role cannot be changed after the first turn.** Claude Code records an appended system
 //!   prompt on the conversation's first request and replays it verbatim afterwards, so different
 //!   text passed on a later launch is silently ignored; Grok persists `--rules` into the session
-//!   record. The role text is therefore a function of the session's role, the owner it had at
+//!   record. The role text is therefore a function of the session's kind, the owner it had at
 //!   launch and its agent alone, and names that owner: a later change of owner is told to the
-//!   session in prose and replaces what the text says (a coordinator, bound only after it was
-//!   launched unbound, is launched as unbound every time). It is still passed on every launch,
-//!   because Claude Code re-renders its snapshot from whatever *that* launch passed after a
-//!   compaction.
+//!   session in prose and replaces what the text says (a coordinator that sets a console parent
+//!   only after it was launched independent is launched with that parent named from then on). It
+//!   is still passed on every launch, because Claude Code re-renders its snapshot from whatever
+//!   *that* launch passed after a compaction.
 //! - **Hooks must fail fast and silently.** Every agent surfaces a failing hook to the user, and a
 //!   hook with no timeout blocks the turn for its full duration. Octoboard owns the hook command
 //!   (`hooks::hook_command`; Codex and Grok run it as the per-session `hook_script`, Claude Code
@@ -57,7 +57,7 @@ use anyhow::Result;
 
 use crate::protocol::{
     error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, GitWorkflowSettings,
-    Notice, Role, TerminalAppearance,
+    Notice, SessionKind, TerminalAppearance,
 };
 use crate::session_tools::Owner;
 
@@ -66,9 +66,9 @@ pub struct LaunchSpec<'a> {
     /// Octoboard's own session id. Not the agent's — it identifies the session to the daemon, and
     /// is what the injected MCP server is launched with.
     pub session_id: &'a str,
-    /// Which side of the orchestration this session is on, which decides both the role text and
-    /// the tools its MCP server announces.
-    pub role: Role,
+    /// Whether this is a console or a project session, which decides both the role text and the
+    /// tools its MCP server announces.
+    pub kind: SessionKind,
     /// Who this session reports to, if anyone, which decides what its role text tells it is
     /// waiting on it and which tools its MCP server announces. Never set for a console session.
     pub owner: Option<Owner>,
@@ -188,16 +188,12 @@ const _: () = assert!(MCP_TOOL_TIMEOUT_SECS > crate::session_tools::CALL_TIMEOUT
 /// Codex exports nothing and Grok's `{{session_id}}` templating does not work, so argv is the one
 /// route all three agree on.
 pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
-    let role = match spec.role {
-        Role::Console => "console",
-        Role::Project => "project",
-    };
     let mut args = vec![
         "mcp".to_string(),
         "--session".to_string(),
         spec.session_id.to_string(),
-        "--role".to_string(),
-        role.to_string(),
+        "--kind".to_string(),
+        spec.kind.name().to_string(),
         "--port".to_string(),
         spec.daemon_port.to_string(),
         "--key".to_string(),
@@ -205,7 +201,7 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
         "--token".to_string(),
         spec.mcp_token.to_string(),
     ];
-    if spec.owner.is_some() {
+    if spec.owner.as_ref().is_some_and(Owner::of_worker) {
         args.push("--worker".to_string());
     }
     (spec.self_exe.to_string(), args)
@@ -459,7 +455,7 @@ pub mod tests {
     /// scratch space — the Grok adapter writes into it, so it cannot be a fiction.
     pub struct SpecFixture {
         pub session_id: String,
-        pub role: crate::protocol::Role,
+        pub kind: crate::protocol::SessionKind,
         pub owner: Option<Owner>,
         pub git_workflow: Option<crate::protocol::GitWorkflowSettings>,
         pub ask_questions_as_choices: bool,
@@ -483,7 +479,7 @@ pub mod tests {
         pub fn spec(&self) -> LaunchSpec<'_> {
             LaunchSpec {
                 session_id: &self.session_id,
-                role: self.role,
+                kind: self.kind,
                 owner: self.owner.clone(),
                 git_workflow: self.git_workflow,
                 ask_questions_as_choices: self.ask_questions_as_choices,
@@ -523,7 +519,7 @@ pub mod tests {
 
         SpecFixture {
             session_id: "session-1".to_string(),
-            role: crate::protocol::Role::Project,
+            kind: crate::protocol::SessionKind::Project,
             owner: Some(Owner::Console),
             git_workflow: Some(crate::protocol::GitWorkflowSettings::default()),
             ask_questions_as_choices: true,
@@ -544,8 +540,9 @@ pub mod tests {
         }
     }
 
-    /// The child starts its catalogue from its own arguments, so a session with an owner has to
-    /// say so there and one without must not; after launch it follows the daemon's answers.
+    /// The child starts its catalogue from its own arguments, so a worker has to say so there, and
+    /// a coordinator, with a console parent or without a parent, must not; after launch it follows
+    /// the daemon's answers.
     #[test]
     fn the_mcp_child_is_told_whether_the_session_is_a_worker() {
         let mut fixture = spec_fixture();
@@ -554,6 +551,9 @@ pub mod tests {
         // The child authenticates to the daemon with the key.
         let key = owned.iter().position(|arg| arg == "--key").expect("--key");
         assert_eq!(owned[key + 1], "feedface");
+        fixture.owner = Some(Owner::ConsoleOfCoordinator);
+        let (_, coordinator) = super::mcp_server_command(&fixture.spec());
+        assert!(!coordinator.contains(&"--worker".to_string()));
         fixture.owner = None;
         let (_, independent) = super::mcp_server_command(&fixture.spec());
         assert!(!independent.contains(&"--worker".to_string()));

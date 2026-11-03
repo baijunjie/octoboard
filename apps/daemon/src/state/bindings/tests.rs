@@ -1,5 +1,5 @@
 use super::*;
-use crate::protocol::{Agent, OrchestrationRole, Role, SessionStatus};
+use crate::protocol::{Agent, Role, SessionKind, SessionStatus};
 use crate::test_support::{bare_session, console_session, project_session};
 
 /// Owned sessions are counted as the walks of a team count them: in any status, and none for a
@@ -8,10 +8,10 @@ use crate::test_support::{bare_session, console_session, project_session};
 fn owned_counts_leave_out_owners_with_the_bound_role() {
     let owned = |id: &str, owner: Option<&str>, coordinator: bool, status: SessionStatus| Session {
         bound_to: owner.map(str::to_string),
-        orchestration_role: if owner.is_none() || coordinator {
-            OrchestrationRole::Coordinator
+        role: if owner.is_none() || coordinator {
+            Role::Coordinator
         } else {
-            OrchestrationRole::Worker
+            Role::Worker
         },
         ..project_session(id, Agent::Claude, status)
     };
@@ -45,10 +45,10 @@ fn the_count_of_one_session_agrees_with_the_count_of_all() {
     let owned = |id: &str, owner: Option<&str>, coordinator: bool, status: SessionStatus| Session {
         project_id: Some("p1".to_string()),
         bound_to: owner.map(str::to_string),
-        orchestration_role: if owner.is_none() || coordinator {
-            OrchestrationRole::Coordinator
+        role: if owner.is_none() || coordinator {
+            Role::Coordinator
         } else {
-            OrchestrationRole::Worker
+            Role::Worker
         },
         ..project_session(id, Agent::Claude, status)
     };
@@ -86,24 +86,24 @@ fn a_group_follows_the_bindings_two_levels_and_a_bound_role_owns_none() {
     let sessions = [
         Session {
             bound_to: Some("hub".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
-            ..bare_session("member", Role::Project)
+            role: Role::Worker,
+            ..bare_session("member", SessionKind::Project)
         },
         Session {
             bound_to: Some("member".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
-            ..bare_session("stray", Role::Project)
+            role: Role::Worker,
+            ..bare_session("stray", SessionKind::Project)
         },
         Session {
             bound_to: Some("hub".to_string()),
-            ..bare_session("coordinator", Role::Project)
+            ..bare_session("coordinator", SessionKind::Project)
         },
         Session {
             bound_to: Some("coordinator".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
-            ..bare_session("led", Role::Project)
+            role: Role::Worker,
+            ..bare_session("led", SessionKind::Project)
         },
-        bare_session("hub", Role::Console),
+        bare_session("hub", SessionKind::Console),
     ];
     let ids = |group: Vec<&Session>| -> Vec<String> {
         group.iter().map(|session| session.id.clone()).collect()

@@ -41,9 +41,9 @@ export const SessionRow = memo(function SessionRow({
   const t = useT();
   const hasBound = useHasBoundSessions(session.id);
   const bound = useSession(session.bound_to);
-  const owner = under ?? (bound?.role === "console" ? bound : undefined);
+  const owner = under ?? (bound?.kind === "console" ? bound : undefined);
   const rowRef = useRef<HTMLDivElement>(null);
-  const badgeOwner = session.role === "console" ? session : owner?.role === "console" ? owner : undefined;
+  const badgeOwner = session.kind === "console" ? session : owner?.kind === "console" ? owner : undefined;
   const status = useSessionShownStatus(session);
   // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
   const { accounts, defaultNames, launch, name } = useSessionRowModel(session, [owner], status);
@@ -67,7 +67,7 @@ export const SessionRow = memo(function SessionRow({
         fixed={badgeOwner?.colour || hasSessionMarks(session) ? (
           <>
             {/* A console session shows its own colour; a bound session shows its owner's. */}
-            {badgeOwner?.colour && <RowIconSlot><BindingBadge owner={badgeOwner} decorative={session.role === "console"} /></RowIconSlot>}
+            {badgeOwner?.colour && <RowIconSlot><BindingBadge owner={badgeOwner} decorative={session.kind === "console"} /></RowIconSlot>}
             <SessionMarkButtons handlers={handlers} session={session} returnFocusTo={rowRef} />
           </>
         ) : undefined}

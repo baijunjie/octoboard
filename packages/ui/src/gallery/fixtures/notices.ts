@@ -130,7 +130,7 @@ const moveState = (request: SessionRequest, options: { target?: typeof ownedSess
 const switchRequestTo = (account: string | null) => requestOf({
   action: "switch",
   session: SAMPLE.consoleSession.id,
-  role: "project",
+  kind: "project",
   console: console_.id,
   project: web.id,
   agent: "claude",
@@ -140,7 +140,7 @@ const switchRequestTo = (account: string | null) => requestOf({
 const handoffRequestOn = (account: string) => requestOf({
   action: "handoff",
   session: SAMPLE.consoleSession.id,
-  role: "project",
+  kind: "project",
   console: console_.id,
   project: web.id,
   agent: "codex",
@@ -158,7 +158,7 @@ const teamUsedUpQuotas = moveQuotas.map((quota) => quota.account === "a-team" ? 
 const reopenOnIncompleteAccount = resumeState("s-api-1", requestOf({
   session: "s-api-1",
   action: "reopen",
-  role: "project",
+  kind: "project",
   console: console_.id,
   project: web.id,
   agent: "claude",
@@ -194,7 +194,7 @@ export const noticeScenarios: Scenario[] = [
     state: snapshotState({
       consoles: [console_],
       projects: [web],
-      sessions: trustSessions.filter((session) => session.project_id === web.id || session.role === "console"),
+      sessions: trustSessions.filter((session) => session.project_id === web.id || session.kind === "console"),
       trustPrompts: [{ session: "s-web-1", agent: "claude", project: web.id, path: web.path, trustDir: "/Users/dev/code" }],
     }),
     steps: [(ui) => ui.press(ui.t("dialog.trust.parent", { directory: "~/code" }))],
@@ -210,7 +210,7 @@ export const noticeScenarios: Scenario[] = [
       consoles: [console_],
       projects: [web],
       sessions: SAMPLE.sessions
-        .filter((session) => session.project_id === web.id || session.role === "console")
+        .filter((session) => session.project_id === web.id || session.kind === "console")
         .map((session) => session.id === "s-web-1" ? { ...session, status: "waiting_user" } : session),
     }),
   },
@@ -232,7 +232,7 @@ export const noticeScenarios: Scenario[] = [
         requestOf({
           action: "start",
           session: "s-api-1",
-          role: "project",
+          kind: "project",
           console: console_.id,
           project: worktreeProject.id,
           agent: "grok",
@@ -250,7 +250,7 @@ export const noticeScenarios: Scenario[] = [
     state: resumeState("s-web-1", requestOf({
       session: "s-web-1",
       action: "reopen",
-      role: "project",
+      kind: "project",
       console: console_.id,
       project: api.id,
       agent: "claude",
@@ -285,7 +285,7 @@ export const noticeScenarios: Scenario[] = [
     state: resumeState("s-web-1", requestOf({
       session: "s-web-1",
       action: "reopen",
-      role: "project",
+      kind: "project",
       console: console_.id,
       project: api.id,
       agent: "claude",
@@ -315,7 +315,7 @@ export const noticeScenarios: Scenario[] = [
     state: snapshotState({
       consoles: [console_],
       projects: [web],
-      sessions: trustSessions.filter((session) => session.project_id === web.id || session.role === "console"),
+      sessions: trustSessions.filter((session) => session.project_id === web.id || session.kind === "console"),
       trustPrompts: [{ session: "s-web-1", agent: "claude", project: web.id, path: web.path, trustDir: "/Users/dev/code" }],
     }),
     trustParentDirError: { code: "trust_directory_unreachable", params: { path: web.path }, message: `\`${web.path}\` or the folder above it did not respond in time, so that folder could not be checked` },
@@ -335,7 +335,7 @@ export const noticeScenarios: Scenario[] = [
       projects: [web, api, grokProject],
       sessions: sessions.map((s) => s.id === "s-web-1" ? { ...s, status: "waiting_user" as const } : s),
       sessionRequests: [
-        requestOf({ action: "start", session: "s-web-1", role: "project", console: console_.id, project: web.id, agent: "claude" }),
+        requestOf({ action: "start", session: "s-web-1", kind: "project", console: console_.id, project: web.id, agent: "claude" }),
       ],
     }),
     sessionRequestAnswerError: { code: "session_request_not_waiting", params: { session: "s-web-1" }, message: "This session is no longer waiting for an answer, so its request was not carried out." },
@@ -367,7 +367,7 @@ export const noticeScenarios: Scenario[] = [
     state: resumeState("s-web-1", requestOf({
       session: "s-web-1",
       action: "reopen",
-      role: "project",
+      kind: "project",
       console: console_.id,
       project: api.id,
       agent: "claude",

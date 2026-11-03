@@ -21,7 +21,7 @@ export function useProjectSessions(projectId: string): Session[] {
 
 /** A console's console sessions, the same array while none of them changes. */
 export function useOwnerSessions(consoleId: string): Session[] {
-  return useDaemonStore(useShallow((s) => sessionsOf(indexSessions(s.sessions).byConsole, consoleId).filter((x) => x.role === "console")));
+  return useDaemonStore(useShallow((s) => sessionsOf(indexSessions(s.sessions).byConsole, consoleId).filter((x) => x.kind === "console")));
 }
 
 /** A console's archived console sessions, the same array while none of them changes: all a console's
@@ -29,7 +29,7 @@ export function useOwnerSessions(consoleId: string): Session[] {
 export function useArchivedOwnerSessions(consoleId: string): Session[] {
   return useDaemonStore(
     useShallow((s) =>
-      sessionsOf(indexSessions(s.sessions).byConsole, consoleId).filter((x) => x.role === "console" && x.status === "archived"),
+      sessionsOf(indexSessions(s.sessions).byConsole, consoleId).filter((x) => x.kind === "console" && x.status === "archived"),
     ),
   );
 }

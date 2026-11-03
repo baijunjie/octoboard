@@ -23,7 +23,7 @@ use super::path_links::PathLink;
 use super::processes::{ProcessCount, ProcessTree};
 use super::quotas::{AccountQuota, ResetCreditOutcome};
 use super::records::{
-    AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, Role, Session,
+    AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, Session, SessionKind,
     SessionStatus, ShellTerminal,
 };
 use super::session_branches::SessionBranchItem;
@@ -251,7 +251,7 @@ pub enum Event {
         action: SessionRequestAction,
         /// Whether the session asked for would be a console session or a project session; for
         /// `switch` and `handoff`, which the target is.
-        role: Role,
+        kind: SessionKind,
         /// The console the new session would be in, or the console of the session to bring back,
         /// switch or hand off.
         console: String,

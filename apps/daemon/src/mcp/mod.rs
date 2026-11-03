@@ -5,7 +5,7 @@
 //! with no owner through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each adapter
-//! registers `octoboardd mcp --session … --role … --port … --key … --token …` as a `command`-type
+//! registers `octoboardd mcp --session … --kind … --port … --key … --token …` as a `command`-type
 //! MCP server, and that child ([`stdio`]) speaks MCP on its stdin/stdout while forwarding every
 //! call to the daemon over loopback HTTP, where [`dispatch`] runs it against the real state. One
 //! mechanism covers all three agents, which is why it was chosen over pointing them at a Streamable

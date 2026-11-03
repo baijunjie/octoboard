@@ -2,7 +2,7 @@
 //! process per session.
 //!
 //! It owns no state of its own but which catalogue it announces. That comes from
-//! [`tools_for`] for the role and binding it was launched with, and follows the binding as
+//! [`tools_for`] for the kind and binding it was launched with, and follows the binding as
 //! the daemon reports it with every answer: a session whose binding changes while it runs has its
 //! agent told the tool list changed (`notifications/tools/list_changed`), for an agent that reads
 //! it again on that. The daemon checks every call against the binding as it stands either way.
@@ -32,14 +32,14 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};
 use serde_json::{json, Value};
 
-use crate::protocol::Role;
+use crate::protocol::SessionKind;
 use crate::session_tools::catalogue::{tool_by_name, tools_for, SERVER_KEY, WITHDRAWN_ON_CANCEL};
 use crate::session_tools::CALL_TIMEOUT;
 
 /// Runs the server until the agent closes the connection.
 pub fn run(
     session: String,
-    role: Role,
+    kind: SessionKind,
     worker: bool,
     port: u16,
     key: String,
@@ -51,7 +51,7 @@ pub fn run(
     runtime.block_on(async move {
         let server = OctoboardMcp {
             session: Arc::new(session),
-            role,
+            kind,
             worker: Arc::new(AtomicBool::new(worker)),
             port,
             key: Arc::new(key),
@@ -69,8 +69,8 @@ struct OctoboardMcp {
     /// resolves the session from the token, so a child that rewrote this argument still cannot act
     /// on a session other than its own.
     session: Arc<String>,
-    role: Role,
-    /// Whether the session is a worker, which decides the catalogue along with the role: the
+    kind: SessionKind,
+    /// Whether the session is a worker, which decides the catalogue along with the kind: the
     /// launch argument at first, then what the daemon's latest answer said.
     worker: Arc<AtomicBool>,
     port: u16,
@@ -107,7 +107,7 @@ impl ServerHandler for OctoboardMcp {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let tools = tools_for(self.role, self.worker.load(Ordering::Relaxed))
+        let tools = tools_for(self.kind, self.worker.load(Ordering::Relaxed))
             .iter()
             .map(|tool| {
                 Tool::new(
@@ -128,7 +128,7 @@ impl ServerHandler for OctoboardMcp {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
-        // A name outside every catalogue this role has is a protocol-level mistake rather than a
+        // A name outside every catalogue this kind has is a protocol-level mistake rather than a
         // tool that failed, so it does not come back as a tool result the model is invited to
         // retry. A name that is only in the other binding's catalogue is forwarded: the binding
         // may have changed since this child last heard of it (a release, or a bind, that the
@@ -190,12 +190,12 @@ impl ServerHandler for OctoboardMcp {
 }
 
 impl OctoboardMcp {
-    /// Whether `name` is a tool of this role's catalogue for either capability. Only a project
-    /// session's capability changes while it runs; for any other role the two are the same.
+    /// Whether `name` is a tool of this kind's catalogue for either capability. Only a project
+    /// session's capability changes while it runs; for any other kind the two are the same.
     fn is_known_tool(&self, name: &str) -> bool {
         [true, false]
             .into_iter()
-            .any(|worker| tool_by_name(self.role, worker, name).is_some())
+            .any(|worker| tool_by_name(self.kind, worker, name).is_some())
     }
 
     /// Takes the capability the daemon's answer reports, and says whether it changed the
@@ -207,7 +207,7 @@ impl OctoboardMcp {
         else {
             return false;
         };
-        self.role == Role::Project && self.worker.swap(worker, Ordering::Relaxed) != worker
+        self.kind == SessionKind::Project && self.worker.swap(worker, Ordering::Relaxed) != worker
     }
 }
 
@@ -457,10 +457,10 @@ mod tests {
         assert!(!message.contains("could not be reached"), "{message}");
     }
 
-    fn server(role: Role, worker: bool) -> OctoboardMcp {
+    fn server(kind: SessionKind, worker: bool) -> OctoboardMcp {
         OctoboardMcp {
             session: Arc::new("s-1".to_string()),
-            role,
+            kind,
             worker: Arc::new(AtomicBool::new(worker)),
             port: 0,
             key: Arc::new("k".to_string()),
@@ -472,27 +472,27 @@ mod tests {
     /// the agent is told of; a console session's never changes.
     #[test]
     fn the_catalogue_follows_the_capability_the_daemon_reports() {
-        let project = server(Role::Project, false);
+        let project = server(SessionKind::Project, false);
         let worker = br#"{"ok":true,"result":{},"worker":true}"#;
         assert!(project.follow_capability(worker));
         assert!(!project.follow_capability(worker));
         assert!(project.worker.load(Ordering::Relaxed));
         assert!(!project.follow_capability(br#"{"ok":false,"error":"x"}"#));
-        assert!(!server(Role::Console, false).follow_capability(worker));
+        assert!(!server(SessionKind::Console, false).follow_capability(worker));
     }
 
     /// A session released from its owner is told of tools its child's catalogue does not have yet,
     /// and following that notice has to reach the daemon, whose answer then updates the catalogue;
-    /// a name no catalogue of the role has stays a protocol error.
+    /// a name no catalogue of the kind has stays a protocol error.
     #[test]
     fn a_tool_of_the_other_capability_is_forwarded_but_an_unknown_one_is_not() {
         for worker in [true, false] {
-            let project = server(Role::Project, worker);
+            let project = server(SessionKind::Project, worker);
             assert!(project.is_known_tool("report"));
             assert!(project.is_known_tool("open_session"));
             assert!(!project.is_known_tool("no_such_tool"));
         }
-        assert!(!server(Role::Console, false).is_known_tool("report"));
+        assert!(!server(SessionKind::Console, false).is_known_tool("report"));
     }
 
     #[test]

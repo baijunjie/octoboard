@@ -122,7 +122,7 @@ it("shows the keys the user set on the menu items, and the default on an item le
     copyId: { code: "KeyI", primary: true, shift: true },
   } as const;
   for (const [command, binding] of Object.entries(changed)) expect(setBinding(command as keyof typeof changed, binding)).toBeUndefined();
-  const session = { ...unused, status: "idle" as const, has_conversation: true, role: "console" as const };
+  const session = { ...unused, status: "idle" as const, has_conversation: true, kind: "console" as const };
   const { container } = mount(session, async () => ({ type: "ack", id: null }));
   press(container.querySelector<HTMLElement>('button[aria-label^="Actions for session"]')!, "mouse");
   await act(async () => {});

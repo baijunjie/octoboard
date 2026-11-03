@@ -28,8 +28,8 @@ fn only_the_withdrawn_calls_and_the_model_change_run_on_the_call() {
 /// named only when the user asked, and `handoff_session` says nothing of tags.
 #[test]
 fn a_session_may_choose_another_agent_by_its_tags_but_an_account_only_when_asked() {
-    let text = |role, tool: &str| {
-        let tool = tool_by_name(role, false, tool).unwrap();
+    let text = |kind, tool: &str| {
+        let tool = tool_by_name(kind, false, tool).unwrap();
         let schema = (tool.schema)();
         (
             tool.description.to_string(),
@@ -43,17 +43,17 @@ fn a_session_may_choose_another_agent_by_its_tags_but_an_account_only_when_asked
                 .to_string(),
         )
     };
-    let (description, agent, _) = text(Role::Project, "open_session");
+    let (description, agent, _) = text(SessionKind::Project, "open_session");
     assert!(description.contains("fits the work better"));
     assert!(agent.contains("fits the work better"));
     assert!(description.contains("`list_agents`"));
     assert!(agent.contains("`list_agents`"));
-    for (role, tool) in [
-        (Role::Console, "open_session"),
-        (Role::Console, "request_session"),
-        (Role::Project, "request_session"),
+    for (kind, tool) in [
+        (SessionKind::Console, "open_session"),
+        (SessionKind::Console, "request_session"),
+        (SessionKind::Project, "request_session"),
     ] {
-        let (description, agent, account) = text(role, tool);
+        let (description, agent, account) = text(kind, tool);
         assert!(
             description.contains("its tags (`list_agents`) fit the work"),
             "{tool}: {description}"
@@ -69,24 +69,24 @@ fn a_session_may_choose_another_agent_by_its_tags_but_an_account_only_when_asked
         );
         assert!(!account.contains("`list_agents`"), "{tool}: {account}");
     }
-    let (description, _, _) = text(Role::Console, "handoff_session");
+    let (description, _, _) = text(SessionKind::Console, "handoff_session");
     assert!(!description.contains("tags"), "{description}");
 }
 
-/// What a session is offered follows from its role and whether it is bound: only a session that
+/// What a session is offered follows from its kind and whether it is bound: only a session that
 /// can own sessions starts, transfers, hands off or drives them, only an unbound one binds itself,
 /// only a project session can report, every session shares information and asks for a session with
 /// no owner, and every read-only tool but `get_project` is offered to all three alike.
 #[test]
-fn the_tools_offered_follow_from_role_and_binding() {
-    let names = |role, worker| -> Vec<&'static str> {
-        tools_for(role, worker)
+fn the_tools_offered_follow_from_kind_and_binding() {
+    let names = |kind, worker| -> Vec<&'static str> {
+        tools_for(kind, worker)
             .iter()
             .map(|tool| tool.name)
             .collect()
     };
     assert_eq!(
-        names(Role::Project, true),
+        names(SessionKind::Project, true),
         [
             "report",
             "get_session",
@@ -108,7 +108,7 @@ fn the_tools_offered_follow_from_role_and_binding() {
         ]
     );
     assert_eq!(
-        names(Role::Project, false),
+        names(SessionKind::Project, false),
         [
             "open_session",
             "instruct_session",
@@ -149,7 +149,7 @@ fn the_tools_offered_follow_from_role_and_binding() {
         ]
     );
     assert_eq!(
-        names(Role::Console, false),
+        names(SessionKind::Console, false),
         [
             "list_projects",
             "add_project",
@@ -208,21 +208,24 @@ fn the_tools_offered_follow_from_role_and_binding() {
         "list_archived_sessions",
         "list_agents",
     ] {
-        let described = |role, worker| {
-            let tool = tool_by_name(role, worker, read).unwrap_or_else(|| panic!("{read}"));
+        let described = |kind, worker| {
+            let tool = tool_by_name(kind, worker, read).unwrap_or_else(|| panic!("{read}"));
             (tool.description.to_string(), (tool.schema)())
         };
-        let console = described(Role::Console, false);
-        assert_eq!(console, described(Role::Project, false), "{read}");
-        assert_eq!(console, described(Role::Project, true), "{read}");
+        let console = described(SessionKind::Console, false);
+        assert_eq!(console, described(SessionKind::Project, false), "{read}");
+        assert_eq!(console, described(SessionKind::Project, true), "{read}");
     }
     // Console sessions are never bound, so the flag changes nothing for them.
-    assert_eq!(names(Role::Console, false), names(Role::Console, true));
+    assert_eq!(
+        names(SessionKind::Console, false),
+        names(SessionKind::Console, true)
+    );
     // A bound project session is a subset of what it may have had while it could own sessions,
     // so a session whose binding changes while it runs never calls a tool its child did not
     // announce.
-    for tool in names(Role::Project, true) {
-        assert!(names(Role::Project, false).contains(&tool), "{tool}");
+    for tool in names(SessionKind::Project, true) {
+        assert!(names(SessionKind::Project, false).contains(&tool), "{tool}");
     }
 }
 
@@ -237,8 +240,8 @@ fn only_the_console_sessions_open_session_asks_for_a_project() {
             .unwrap();
         (tool.schema)()
     };
-    let console = schema(tools_for(Role::Console, false));
-    let project = schema(tools_for(Role::Project, false));
+    let console = schema(tools_for(SessionKind::Console, false));
+    let project = schema(tools_for(SessionKind::Project, false));
     assert!(console["properties"]["project"].is_object());
     assert!(project["properties"]["project"].is_null());
     assert_eq!(project["required"], json!(["brief"]));
@@ -249,12 +252,12 @@ fn only_the_console_sessions_open_session_asks_for_a_project() {
 #[test]
 fn every_model_parameter_points_to_the_tool_that_lists_the_models() {
     let mut checked = 0;
-    for (role, bound) in [
-        (Role::Console, false),
-        (Role::Project, true),
-        (Role::Project, false),
+    for (kind, bound) in [
+        (SessionKind::Console, false),
+        (SessionKind::Project, true),
+        (SessionKind::Project, false),
     ] {
-        let tools = tools_for(role, bound);
+        let tools = tools_for(kind, bound);
         assert!(tools.iter().any(|tool| tool.name == "list_agent_models"));
         for tool in tools {
             let schema = (tool.schema)();
@@ -279,12 +282,12 @@ fn every_model_parameter_points_to_the_tool_that_lists_the_models() {
 #[test]
 fn every_title_says_which_language_to_write_the_name_in() {
     let mut naming = Vec::new();
-    for (role, bound) in [
-        (Role::Console, false),
-        (Role::Project, true),
-        (Role::Project, false),
+    for (kind, bound) in [
+        (SessionKind::Console, false),
+        (SessionKind::Project, true),
+        (SessionKind::Project, false),
     ] {
-        for tool in tools_for(role, bound) {
+        for tool in tools_for(kind, bound) {
             let schema = (tool.schema)();
             let Some(title) = schema["properties"]["title"]["description"].as_str() else {
                 continue;
@@ -329,7 +332,7 @@ fn the_qualified_name_follows_the_agent() {
 /// announces, and the descriptions name the fields the results really carry.
 #[test]
 fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
-    let tool = |name| tool_by_name(Role::Console, false, name).unwrap();
+    let tool = |name| tool_by_name(SessionKind::Console, false, name).unwrap();
     let schema = |name| (tool(name).schema)();
     // A session reads itself by leaving `session` out.
     assert_eq!(schema("get_session")["required"], json!([]));
@@ -394,7 +397,7 @@ fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
             assert!(tool(name).description.contains(field), "{name}: {field}");
         }
     }
-    let project = tool_by_name(Role::Project, true, "get_project").unwrap();
+    let project = tool_by_name(SessionKind::Project, true, "get_project").unwrap();
     assert!((project.schema)()["properties"]["refresh"].is_object());
     // The project entry is described by what it carries.
     assert!(!tool("list_projects").description.contains("`worktrees`"));
@@ -491,12 +494,12 @@ fn the_open_session_schema_points_each_role_at_what_it_can_read() {
 
 #[test]
 fn every_tool_announces_an_object_schema() {
-    for (role, bound) in [
-        (Role::Console, false),
-        (Role::Project, true),
-        (Role::Project, false),
+    for (kind, bound) in [
+        (SessionKind::Console, false),
+        (SessionKind::Project, true),
+        (SessionKind::Project, false),
     ] {
-        for tool in tools_for(role, bound) {
+        for tool in tools_for(kind, bound) {
             let schema = (tool.schema)();
             assert_eq!(schema["type"], "object", "{}", tool.name);
             assert!(schema["properties"].is_object(), "{}", tool.name);

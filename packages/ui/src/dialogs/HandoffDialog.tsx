@@ -143,7 +143,7 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
   const headingId = useId();
   const owned = useDaemonStore((s) => Array.from(s.sessions.values()).filter((candidate) => candidate.bound_to === session.id).length);
   const owner = useDaemonStore((s) => session.bound_to ? s.sessions.get(session.bound_to) : undefined);
-  const inspected = useResponsibleBranches(session.id, session.role !== "console");
+  const inspected = useResponsibleBranches(session.id, session.kind !== "console");
   const rootRef = useRef<HTMLDivElement>(null);
   const markId = useId();
   const handoffFrom = useHandoffAfterRemoval(() => dialogAround(rootRef));

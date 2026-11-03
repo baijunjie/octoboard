@@ -247,7 +247,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     // not left without a role.
     args.push("--rules".to_string());
     args.push(session_tools::role::role_description(
-        spec.role,
+        spec.kind,
         spec.owner.as_ref(),
         Agent::Grok,
         &spec.role_options(),

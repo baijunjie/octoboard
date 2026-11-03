@@ -149,7 +149,7 @@ export function archivedSessionRows(sessions: Session[]): NestedSession[] {
  * `docs/product/order-of-projects-and-sessions.md` for that one, `compareSessions` via `liveSessions`). */
 export function liveConsoleSessions(sessions: Session[], consoleId: string): Session[] {
   return sessions
-    .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived" && s.status !== "starting")
+    .filter((s) => s.console_id === consoleId && s.kind === "console" && s.status !== "archived" && s.status !== "starting")
     .sort((a, b) => b.started_at - a.started_at);
 }
 
@@ -185,7 +185,7 @@ export function hasBoundSessions(sessions: Iterable<Session>, ownerId: string): 
 /** The archived sessions bound to `ownerId`, and those bound to an archived one of them (a bound
  * coordinator's own sessions, two levels under a console session) — exactly what deleting an archived
  * owner takes with it. These are a third filter over the same session records the archive view
- * already serves for a project (`project_id`) and for a console's console sessions (`role`);
+ * already serves for a project (`project_id`) and for a console's console sessions (`kind`);
  * `ArchiveScope`'s `consoleSession` selects it. */
 export function boundArchivedSessions(sessions: Session[], ownerId: string): Session[] {
   const direct = archivedSessions(sessions.filter((s) => s.bound_to === ownerId));
@@ -249,7 +249,7 @@ export function consoleSessionAbove(session: Session, lookup: (id: string) => Se
   while (at?.bound_to && !seen.has(at.id)) {
     seen.add(at.id);
     const owner = lookup(at.bound_to);
-    if (owner?.role === "console") return owner;
+    if (owner?.kind === "console") return owner;
     at = owner;
   }
   return undefined;
@@ -370,7 +370,7 @@ export interface SwitchStripEntry {
  * where it is while statuses change, so cycling through them never skips or repeats one. */
 export function switchStrip(sessions: Session[], consoleId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): SwitchStripEntry[] {
   const consoleSessions = sessions
-    .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived")
+    .filter((s) => s.console_id === consoleId && s.kind === "console" && s.status !== "archived")
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.started_at - b.started_at || (a.id < b.id ? -1 : 1));
   return consoleSessions.map((consoleSession) => ({
     consoleSession,
@@ -396,7 +396,7 @@ export function sessionsInTreeOrder(
   return consoles.flatMap((console) => {
     const mine = picked.filter((s) => s.console_id === console.id);
     return [
-      ...mine.filter((s) => s.role === "console").sort(order),
+      ...mine.filter((s) => s.kind === "console").sort(order),
       ...sortProjects(
         projects.filter((p) => p.console_id === console.id),
         (project) => sessions.filter((s) => s.project_id === project.id),
@@ -406,7 +406,7 @@ export function sessionsInTreeOrder(
       ).flatMap((project) =>
         // Nested as the project's list nests them, so a session bound to a project session follows
         // its owner rather than being ranked against it.
-        nest(mine.filter((s) => s.role !== "console" && s.project_id === project.id).sort(order)).map((row) => row.session),
+        nest(mine.filter((s) => s.kind !== "console" && s.project_id === project.id).sort(order)).map((row) => row.session),
       ),
     ];
   });
@@ -428,7 +428,7 @@ export type ArchivedDeletionRequest = {
 export function archivedDeletionScope(sessions: Session[], request: ArchivedDeletionRequest): { count: number; withThem: number; targetIds: string[] } {
   const consoleSessions = request.project || request.consoleSession
     ? []
-    : sessions.filter((s) => s.console_id === request.console.id && s.role === "console" && s.status === "archived");
+    : sessions.filter((s) => s.console_id === request.console.id && s.kind === "console" && s.status === "archived");
   const withThem = consoleSessions.flatMap((owner) => boundArchivedSessions(sessions, owner.id)).length;
   const roots = request.project
     ? sessions.filter((s) => s.project_id === request.project!.id && s.status === "archived")

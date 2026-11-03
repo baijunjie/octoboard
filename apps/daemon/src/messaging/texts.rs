@@ -98,7 +98,7 @@ pub(crate) fn takeover_prompt(original: &Session, package: &Path, note: Option<&
          Once you are running, Octoboard moves the original's place to you: its owner, its \
          branches and its sessions. It sends you a message saying what you now hold, and archives \
          the original; do not message the original.{note}",
-        kind = original.role.kind(),
+        kind = original.kind.name(),
         label = naming::label(original),
         agent = original.agent.label(),
         path = package.display(),
@@ -221,7 +221,7 @@ pub(crate) fn request_opening_prompt(
 pub(crate) fn session_notice_opening(session: &Session) -> String {
     format!(
         "{NOTICE_PREFIX}: the {} session `{}` (\"",
-        session.role.kind(),
+        session.kind.name(),
         session.id
     )
 }

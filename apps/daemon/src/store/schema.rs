@@ -158,7 +158,7 @@ CREATE TABLE sessions (
     console_id       TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
     project_id       TEXT REFERENCES projects(id) ON DELETE CASCADE,
     host_id          TEXT NOT NULL,
-    role             TEXT NOT NULL,
+    kind             TEXT NOT NULL,
     origin           TEXT NOT NULL,
     title            TEXT NOT NULL,
     terminal_title   TEXT,
@@ -187,9 +187,9 @@ CREATE TABLE sessions (
     -- would remove rows behind the daemon's back, so no `session_deleted` would be
     -- broadcast and every client would keep a ghost row.
     bound_to         TEXT,
-    -- `coordinator` or `worker` (see `Session::orchestration_role`). Written with
-    -- `bound_to`: a console session and a session with no parent are always coordinators.
-    orchestration_role TEXT NOT NULL,
+    -- `coordinator` or `worker` (see `Session::role`). Written with `bound_to`: a console session,
+    -- a session with no parent and one opened under a console session are always coordinators.
+    role             TEXT NOT NULL,
     -- Above 0 while the session has a change of its owner it was not running to be
     -- told of (one count per change): its next launch tells it, from the binding as
     -- it then stands, and clears what it saw.
@@ -199,7 +199,7 @@ CREATE TABLE sessions (
     -- with the release, or with the mark a failed write to the running session left,
     -- and cleared by the next change of owner and by the delivery.
     owner_notice_note TEXT,
-    -- Set only for a console session (`role = 'console'`); NULL for a project session.
+    -- Set only for a console session (`kind = 'console'`); NULL for a project session.
     colour           TEXT,
     ordinal          INTEGER,
     -- The account this session's own agent reads, by id; NULL means the default
@@ -870,8 +870,8 @@ mod tests {
         let conn = Connection::open(path).unwrap();
         conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
         conn.execute_batch(
-            "INSERT INTO sessions (id, agent, console_id, project_id, host_id, role, origin,
-                                   title, status, orchestration_role, started_at)
+            "INSERT INTO sessions (id, agent, console_id, project_id, host_id, kind, origin,
+                                   title, status, role, started_at)
              VALUES ('orphan', 'claude', 'console-1', 'gone', 'local', 'project', 'user', 't',
                      'idle', 'coordinator', 0);",
         )

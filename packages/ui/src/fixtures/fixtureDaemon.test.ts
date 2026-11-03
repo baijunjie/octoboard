@@ -131,7 +131,7 @@ describe("the fixture daemon's session handoff", () => {
     const reply = await daemon.request({ type: "handoff_session", session: coordinator.id, agent: "codex" });
     if (reply.type !== "session_opened") throw new Error("expected session_opened");
     const sessions = daemon.store.getState().sessions;
-    expect(reply.session).toMatchObject({ agent: "codex", project_id: "p", role: "project", title: "Coordinator", bound_to: hub.id, pinned: true, status: "working" });
+    expect(reply.session).toMatchObject({ agent: "codex", project_id: "p", kind: "project", title: "Coordinator", bound_to: hub.id, pinned: true, status: "working" });
     expect(sessions.get(coordinator.id)).toMatchObject({ status: "archived", bound_to: hub.id });
     expect(sessions.get(child.id)?.bound_to).toBe(reply.session.id);
     expect(sessions.get(archivedChild.id)?.bound_to).toBe(reply.session.id);
@@ -141,7 +141,7 @@ describe("the fixture daemon's session handoff", () => {
     const daemon = createFixtureDaemon(scenario);
     const reply = await daemon.request({ type: "handoff_session", session: hub.id, agent: "grok" });
     if (reply.type !== "session_opened") throw new Error("expected session_opened");
-    expect(reply.session).toMatchObject({ role: "console", ordinal: 2, colour: "red" });
+    expect(reply.session).toMatchObject({ kind: "console", ordinal: 2, colour: "red" });
   });
 
   it("fails a branch inspection the scenario stages, and answers the others", async () => {
@@ -451,7 +451,7 @@ describe("the fixture daemon's session creation", () => {
     const reply = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", title: "Coordinate release", model: "chosen-model", effort: "xhigh", bound_to: "ignored-console-binding" });
     expect(reply.type).toBe("session_opened");
     if (reply.type !== "session_opened") throw new Error("Missing opened session");
-    expect(reply.session).toMatchObject({ agent: "codex", role: "console", origin: "user", status: "idle", title: "Coordinate release", account_id: "work", config_dir: accounts[0].config_dir, model: "chosen-model", effort: "xhigh", ordinal: 7 });
+    expect(reply.session).toMatchObject({ agent: "codex", kind: "console", origin: "user", status: "idle", title: "Coordinate release", account_id: "work", config_dir: accounts[0].config_dir, model: "chosen-model", effort: "xhigh", ordinal: 7 });
     expect(reply.session.bound_to).toBeNull();
     expect(daemon.store.getState().sessions.get(reply.session.id)).toEqual(reply.session);
     const defaults = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", account: null, model: null, effort: null });
@@ -461,7 +461,7 @@ describe("the fixture daemon's session creation", () => {
     const blank = await daemon.request({ type: "open_session", console_id: owner.id, title: "", task: "" });
     expect(blank).toMatchObject({ type: "session_opened", session: { origin: "user", status: "working", title: owner.name, ordinal: 9 } });
     const projectReply = await daemon.request({ type: "open_session", console_id: owner.id, project_id: project.id });
-    expect(projectReply).toMatchObject({ type: "session_opened", session: { role: "project", origin: "user", status: "idle", title: project.name } });
+    expect(projectReply).toMatchObject({ type: "session_opened", session: { kind: "project", origin: "user", status: "idle", title: project.name } });
     const repeated = await daemon.request({ type: "open_session", console_id: owner.id });
     expect(repeated).toMatchObject({ type: "session_opened", session: { title: owner.name, ordinal: 10 } });
     expect(daemon.store.getState().consoles.get(owner.id)).toEqual(owner);

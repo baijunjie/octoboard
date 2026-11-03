@@ -19,7 +19,7 @@ const prompt: TrustPrompt = { session: "s-1", agent: "claude", project: "p-1", p
 const request: SessionRequest = {
   requestId: "r-1",
   session: "s-1",
-  role: "project",
+  kind: "project",
   console: "c-1",
   project: "p-1",
   agent: "codex",

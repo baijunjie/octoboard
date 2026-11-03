@@ -6,7 +6,7 @@ use crate::coordinator::test_support::{
 use crate::hostfs;
 use crate::protocol::{
     error_code, Account, Agent, Availability, Change, CodedError, Event, Launch, PerAgent, Project,
-    ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionStatus,
+    ProjectAccount, ProjectSource, RequestBody, Session, SessionKind, SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::bare_session;
@@ -54,7 +54,7 @@ async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
             host_id: LOCAL_HOST_ID.to_string(),
             title: "Project".to_string(),
             status: SessionStatus::Archived,
-            ..bare_session("project", Role::Project)
+            ..bare_session("project", SessionKind::Project)
         })
         .unwrap();
     let delete = || RequestBody::DeleteProject {

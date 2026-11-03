@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{console, console_workdir_in};
-use crate::protocol::{error_code, Agent, Event, OrchestrationRole, RequestBody, Role};
+use crate::protocol::{error_code, Agent, Event, RequestBody, Role, SessionKind};
 use crate::test_support::code_of;
 use crate::test_support::{bare_session, idle_stand_in};
 use std::collections::HashMap;
@@ -23,7 +23,7 @@ async fn a_page_submission_reaches_the_console_session_that_pushed_it() {
     for id in ["owner-a", "owner-b"] {
         state
             .store
-            .insert_session(&bare_session(id, Role::Console))
+            .insert_session(&bare_session(id, SessionKind::Console))
             .unwrap();
         let session = idle_stand_in(id);
         state.register_live(session.clone());
@@ -42,7 +42,7 @@ async fn a_page_submission_reaches_the_console_session_that_pushed_it() {
     // exist is refused.
     state
         .store
-        .insert_session(&bare_session("worker", Role::Project))
+        .insert_session(&bare_session("worker", SessionKind::Project))
         .unwrap();
     state
         .store
@@ -75,9 +75,9 @@ async fn a_page_submission_reaches_the_console_session_that_pushed_it() {
 
     // The newest page of a session that has since become a bound one is refused as no page at
     // all.
-    let mut bound = bare_session("bound-worker", Role::Project);
+    let mut bound = bare_session("bound-worker", SessionKind::Project);
     bound.bound_to = Some("owner-a".to_string());
-    bound.orchestration_role = OrchestrationRole::Worker;
+    bound.role = Role::Worker;
     state.store.insert_session(&bound).unwrap();
     state
         .store

@@ -1,13 +1,13 @@
 //! Fixtures the tests of the state's families share.
 
-use crate::protocol::{BackgroundTask, Role, Session, SessionStatus};
+use crate::protocol::{BackgroundTask, Session, SessionKind, SessionStatus};
 use crate::state::AppState;
 use crate::test_support::bare_session;
 
 pub(crate) fn session_record(id: &str, status: SessionStatus) -> Session {
     Session {
         status,
-        ..bare_session(id, Role::Project)
+        ..bare_session(id, SessionKind::Project)
     }
 }
 

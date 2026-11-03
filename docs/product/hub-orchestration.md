@@ -10,12 +10,14 @@ relationship** says whether they answer directly to the user or report to a pare
 | Role | Reporting relationship | Capabilities |
 |---|---|---|
 | Coordinator | Independent | Works in its project, creates and manages child sessions in that project, and has a report panel. |
-| Coordinator | Reports to a console session | Keeps those capabilities and reports its work to that console session. |
+| Coordinator | Reports to a console session | Keeps those capabilities and reports its work to that console session. A session a console session opens with `open_session`, or that is opened with a console session as its **Report to** choice in the session dialog, starts as one. |
 | Worker | Reports to a console or project session | Works in its project and reports to its parent; cannot create or manage child sessions and has no report panel tools. |
 
-A coordinator does not need to have children. Having a parent alone does not make a session a worker. A worker always
-has a parent; releasing it makes it an independent coordinator. A console session is a separate kind of session, with
-coordination capabilities across its own console's projects.
+A coordinator does not need to have children. Having a parent alone does not make a session a worker: the role follows
+who the parent is. A session a console session opens is a coordinator, so it can open sessions of its own when its task
+needs them; a session a project coordinator opens is a worker. A worker always has a parent; releasing it makes it an
+independent coordinator. A console session is a separate kind of session, with coordination capabilities across its own
+console's projects.
 
 The sessions that can manage children are:
 
@@ -211,7 +213,8 @@ with a reason naming who owns it, and change nothing, for any other: an independ
 session or to another project session, the caller itself, or a console session. For an independent project session,
 `archive_session` aimed at itself is refused pointing to `archive_self` instead.
 
-A child session created with `open_session` is a worker: it is offered `report`, the reads in
+A child session that a project coordinator creates with `open_session` is a worker (one that a console session creates
+is a coordinator, see "Coordinators with a parent session" below): it is offered `report`, the reads in
 `docs/product/what-every-session-reads.md`, `inform_session`, `get_project`, `request_session` and
 `request_resume_session`, and cannot create or manage child sessions. It has no report panel tools. It reports to the
 session that started it; see `docs/product/reporting-to-owners.md`.
@@ -224,13 +227,15 @@ It keeps its coordinator role, including when it has no child sessions. One with
 can first ask the user for one with `request_session`, of kind `console`, and set it as its parent once started
 (see `docs/product/session-requests.md`). A handoff preserves the role and reporting relationship (see
 `docs/product/handing-off-sessions.md`). A session opened with a console parent in the session dialog, or created
-by that console session with `open_session`, starts as a worker.
+by that console session with `open_session`, starts as a coordinator, with the same tools and role description; it is
+never promoted or demoted on request, since its role follows who its parent is.
 
 - **It keeps its child sessions and report panel.** Existing children continue reporting to it, and it can create
   more in its own project with "Project coordinators' tools" above.
-- **It keeps its launch description.** Every launch — a resume, a reopen, a switch of account — gives it the
-  independent coordinator's role description and tool list. The result that sets its parent, and later notices of
-  reporting changes, replace the description's statement that it is independent.
+- **Its launch description names its parent.** Every launch — a resume, a reopen, a switch of account — gives it the
+  coordinator's role description and tool list, with its console parent named as the session waiting on its result. For
+  one that set its parent after it was launched independent, the result that sets the parent, and later notices of
+  reporting changes, replace what an earlier, independent description said.
 - **It reports to its console parent.** Its `report` is accepted and delivered there. A `done` report with no open
   items is refused while its children are unfinished and automatic archiving is not blocked by a lock (see
   "Automatic archiving" in `docs/product/reporting-to-owners.md`). No report is synthesised while a child has a

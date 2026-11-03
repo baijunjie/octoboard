@@ -16,7 +16,7 @@ use super::{injected, interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS}
 use crate::branch_origin::{ref_created, repo_key, RefReport};
 use crate::git::repo_files::repository_of;
 use crate::protocol::{
-    Agent, Console, GitWorkflowSettingsChanges, Project, ProjectSource, Role, Session,
+    Agent, Console, GitWorkflowSettingsChanges, Project, ProjectSource, Session, SessionKind,
     SessionStatus,
 };
 use crate::state::AppState;
@@ -110,7 +110,7 @@ pub(crate) fn session_record(id: &str, project: &str) -> Session {
         status: SessionStatus::Working,
         has_conversation: true,
         started_at: now_millis() - 60_000,
-        ..bare_session(id, Role::Project)
+        ..bare_session(id, SessionKind::Project)
     }
 }
 

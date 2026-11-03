@@ -12,8 +12,8 @@ use crate::accounts::relocate;
 use crate::adapter;
 use crate::env_shell;
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, ConversationLocation, Role, Session, SessionStatus,
-    TerminalAppearance,
+    error_code, Account, Agent, CodedError, ConversationLocation, Session, SessionKind,
+    SessionStatus, TerminalAppearance,
 };
 use crate::records;
 use crate::session::term;
@@ -32,7 +32,7 @@ use crate::accounts::choice::{account_dir, agent_can_open};
 /// never share one transcript.
 pub(super) fn checked_resume_id(
     state: &Arc<AppState>,
-    role: Role,
+    kind: SessionKind,
     project_id: Option<&str>,
     bound_to: Option<&str>,
     requested: Option<String>,
@@ -40,7 +40,7 @@ pub(super) fn checked_resume_id(
     let Some(id) = trimmed_or_none(requested.as_deref()) else {
         return Ok(None);
     };
-    if role == Role::Console {
+    if kind == SessionKind::Console {
         return Err(CodedError::raised(
             error_code::RESUME_FOR_CONSOLE_SESSION,
             "a console session cannot resume a conversation",

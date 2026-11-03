@@ -175,7 +175,7 @@ fn deliver_and_archive(
             None => return Err(archived_owner(&owner)),
         }
     }
-    let mut owner_kind = format!("{} session", owner.role.kind());
+    let mut owner_kind = format!("{} session", owner.kind.name());
 
     let project = match &session.project_id {
         Some(id) => state.store.get_project(id)?.map(|project| project.name),
@@ -212,7 +212,7 @@ fn deliver_and_archive(
     if is_archived_refusal(&delivered) {
         if let Some(new) = rebound_owner(state, session_id, &owner.id)? {
             owner = new;
-            owner_kind = format!("{} session", owner.role.kind());
+            owner_kind = format!("{} session", owner.kind.name());
             delivered = deliver_to(&owner);
         } else if let Some(now) = state
             .session_record(session_id)?
@@ -298,7 +298,7 @@ fn report_note(
 
 /// A failure to write into `owner`, worded from the reporter's side.
 fn from_reporters_side(err: anyhow::Error, owner: &Session) -> anyhow::Error {
-    let owner_kind = format!("{} session", owner.role.kind());
+    let owner_kind = format!("{} session", owner.kind.name());
     match err.downcast_ref::<CodedError>() {
         // "This session is not running" would read as the reporter itself.
         Some(coded) if coded.code == error_code::SESSION_NOT_RUNNING => CodedError::raised(
@@ -355,7 +355,7 @@ fn archived_owner(owner: &Session) -> anyhow::Error {
              not kept for it: an archived session takes nothing until it is reopened. This session \
              was left as it was; tell the user in this terminal what the report says, since your \
              owner will not read it",
-            owner.role.kind(),
+            owner.kind.name(),
             owner.id
         ),
         &[("session", owner.id.as_str())],
@@ -608,7 +608,7 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::protocol::{Agent, OrchestrationRole, Role};
+    use crate::protocol::{Agent, Role, SessionKind};
     use crate::test_support::bare_session;
     use crate::test_support::owner_team::{
         console, hub_heard, hub_heard_of, interrupted_hub_state, kept_texts, project_session,
@@ -734,7 +734,7 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
         let mut unbound = project_session("worker");
         unbound.bound_to = None;
-        unbound.orchestration_role = OrchestrationRole::Coordinator;
+        unbound.role = Role::Coordinator;
         state.store.insert_session(&unbound).unwrap();
 
         let err = deliver_report(&state, &unbound.id, done_report()).expect_err("unbound");
@@ -759,7 +759,7 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
         let mut orphaned = project_session("worker");
         orphaned.bound_to = Some("no-such-session".to_string());
-        orphaned.orchestration_role = OrchestrationRole::Worker;
+        orphaned.role = Role::Worker;
         state.store.insert_session(&orphaned).unwrap();
 
         let err = deliver_report(&state, &orphaned.id, done_report()).expect_err("owner gone");
@@ -792,7 +792,7 @@ mod tests {
         let owner = |id: &str| Session {
             host_id: "local".to_string(),
             title: id.to_string(),
-            ..bare_session(id, Role::Console)
+            ..bare_session(id, SessionKind::Console)
         };
         state.store.insert_session(&owner("owner-a")).unwrap();
         state.store.insert_session(&owner("owner-b")).unwrap();
@@ -807,7 +807,7 @@ mod tests {
 
         let mut worker = project_session("worker");
         worker.bound_to = Some("owner-a".to_string());
-        worker.orchestration_role = OrchestrationRole::Worker;
+        worker.role = Role::Worker;
         state.store.insert_session(&worker).unwrap();
 
         deliver_report(&state, &worker.id, done_report()).expect("delivered");
@@ -846,7 +846,7 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
         let hub = Session {
             id: "hub".to_string(),
-            role: Role::Console,
+            kind: SessionKind::Console,
             bound_to: None,
             ..project_session("hub")
         };
@@ -857,7 +857,7 @@ mod tests {
             let session = Session {
                 id: id.to_string(),
                 bound_to: Some("hub".to_string()),
-                orchestration_role: OrchestrationRole::Worker,
+                role: Role::Worker,
                 ..project_session(id)
             };
             state.store.insert_session(&session).unwrap();
@@ -1037,7 +1037,7 @@ mod tests {
         let worker = Session {
             id: "worker".to_string(),
             bound_to: Some("starter".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             ..project_session("worker")
         };
         state.store.insert_session(&worker).unwrap();
@@ -1078,7 +1078,7 @@ mod tests {
         let worker = Session {
             id: "worker".to_string(),
             bound_to: Some("starter".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             ..project_session("worker")
         };
         state.store.insert_session(&worker).unwrap();
@@ -1430,7 +1430,7 @@ mod tests {
         let (state, _dir) = interrupted_hub_state("reporting-owner-replaced");
         let heir = Session {
             id: "heir".to_string(),
-            role: Role::Console,
+            kind: SessionKind::Console,
             bound_to: None,
             status: SessionStatus::Interrupted,
             ..project_session("heir")
@@ -1463,7 +1463,7 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
         let hub = Session {
             id: "hub".into(),
-            role: Role::Console,
+            kind: SessionKind::Console,
             bound_to: None,
             agent: Agent::Codex,
             ..project_session("hub")
@@ -1472,7 +1472,7 @@ mod tests {
         let mut worker = project_session("worker");
         worker.id = "worker".into();
         worker.bound_to = Some("hub".into());
-        worker.orchestration_role = OrchestrationRole::Worker;
+        worker.role = Role::Worker;
         state.store.insert_session(&worker).unwrap();
         let (transport, listener) = crate::adapter::codex::transport::test_transport();
         let live = crate::test_support::fake_live_session("hub", Agent::Codex, 120, 40, "sleep 30")

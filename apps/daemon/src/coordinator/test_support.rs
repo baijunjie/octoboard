@@ -1,13 +1,14 @@
 //! Fixtures the coordinator tests of more than one submodule share.
 
 use crate::coordinator::account_switch::switch_session_account_with;
+use crate::coordinator::bindings::resolve_owner;
 use crate::coordinator::handle;
 use crate::coordinator::launch::relaunch_session_with;
 use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::open::OpenRequest;
 use crate::protocol::{
-    error_code, Account, Agent, Availability, Console, OrchestrationRole, Origin, Project,
-    ProjectAccount, ProjectSource, RequestBody, Session, SessionStatus,
+    error_code, Account, Agent, Availability, Console, Origin, Project, ProjectAccount,
+    ProjectSource, RequestBody, Role, Session, SessionKind, SessionStatus,
 };
 use crate::session::term;
 use crate::state::AppState;
@@ -240,7 +241,7 @@ pub(super) fn bound_session(id: &str, status: SessionStatus, owner: &str) -> Ses
     Session {
         title: id.to_string(),
         bound_to: Some(owner.to_string()),
-        orchestration_role: OrchestrationRole::Worker,
+        role: Role::Worker,
         ..project_session(id, Agent::Claude, status)
     }
 }
@@ -253,7 +254,7 @@ pub(super) fn status_of(state: &Arc<AppState>, id: &str) -> Option<SessionStatus
 /// opened.
 pub(super) fn bound_coordinator(id: &str, status: SessionStatus, owner: &str) -> Session {
     Session {
-        orchestration_role: OrchestrationRole::Coordinator,
+        role: Role::Coordinator,
         ..bound_session(id, status, owner)
     }
 }
@@ -364,4 +365,15 @@ pub(super) async fn wait_until(mut done: impl FnMut() -> bool) {
         assert!(Instant::now() < deadline, "timed out");
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+}
+
+/// The id [`resolve_owner`] resolves a request for an owner to, for the tests of its rules.
+pub(super) fn resolve_bound_to(
+    state: &Arc<AppState>,
+    console_id: &str,
+    project_id: Option<&str>,
+    kind: SessionKind,
+    requested: Option<String>,
+) -> Result<Option<String>> {
+    Ok(resolve_owner(state, console_id, project_id, kind, requested)?.map(|owner| owner.id))
 }

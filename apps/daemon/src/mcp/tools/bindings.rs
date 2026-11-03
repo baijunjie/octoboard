@@ -19,7 +19,7 @@ use crate::messaging::owner_notices::{
 };
 use crate::messaging::reporting::{self, ReportStatus};
 use crate::messaging::texts::capitalised;
-use crate::protocol::{OrchestrationRole, Session};
+use crate::protocol::{Role, Session};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 
@@ -84,8 +84,8 @@ pub(in crate::mcp) async fn transfer_session(
     Ok(json!({
         "session": moved.id,
         "owner": owner.id,
-        "owner_kind": owner.role.kind(),
-        "orchestration_role": moved.orchestration_role,
+        "owner_kind": owner.kind.name(),
+        "role": moved.role,
         "note": result_note,
     }))
 }
@@ -120,7 +120,7 @@ pub(in crate::mcp) async fn release_session(
     let delivery = tell_released(state, &released, running, note.as_deref()).await;
     Ok(json!({
         "session": released.id,
-        "orchestration_role": released.orchestration_role,
+        "role": released.role,
         "note": format!(
             "Released: `{id}` has no parent session now and is no longer yours. It is the \
              user's own session; you no longer instruct or drive it and it does not report to \
@@ -144,7 +144,7 @@ pub(in crate::mcp) async fn bind_to_session(
     let owner_id = required_str(arguments, "owner")?;
     let summary = required_str(arguments, "summary")?;
     let (bound, owner) = coordinator::bindings::bind_session(state, &caller.id, owner_id)?;
-    let coordinator = bound.orchestration_role == OrchestrationRole::Coordinator;
+    let coordinator = bound.role == Role::Coordinator;
 
     let first_report = first_report_on_bind(coordinator, summary);
     // The binding is this round's report, so the round ending without another is not reported on
@@ -172,8 +172,8 @@ pub(in crate::mcp) async fn bind_to_session(
     );
     Ok(json!({
         "owner": owner.id,
-        "owner_kind": owner.role.kind(),
-        "orchestration_role": bound.orchestration_role,
+        "owner_kind": owner.kind.name(),
+        "role": bound.role,
         "note": note,
     }))
 }
@@ -224,7 +224,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result["owner"], "b");
-        assert_eq!(result["orchestration_role"], "worker");
+        assert_eq!(result["role"], "worker");
         assert!(result["note"].as_str().unwrap().contains("no longer yours"));
         assert_eq!(
             state
@@ -279,7 +279,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(bound["orchestration_role"], "coordinator");
+        assert_eq!(bound["role"], "coordinator");
         assert_eq!(
             bound["note"],
             "Your role is coordinator. You now report to the console session `a` (\"Hub\"), your \
@@ -294,7 +294,7 @@ mod tests {
              summary, as your first report, was delivered to your new parent session. You have a \
              parent session now, so do not call `mcp__octoboard__bind_to_session` again."
         );
-        for (caller, parent, expected, role) in [
+        for (caller, parent, expected, role_words) in [
             (
                 "a",
                 "b",
@@ -318,7 +318,7 @@ mod tests {
             )
             .await
             .unwrap();
-            assert_eq!(moved["orchestration_role"], expected);
+            assert_eq!(moved["role"], expected);
             let told = output_containing(
                 &loose,
                 &format!(
@@ -330,15 +330,15 @@ mod tests {
                     }
                 ),
             );
-            assert!(told.contains(role), "{told}");
+            assert!(told.contains(role_words), "{told}");
             let record = call(&state, "loose", "get_session", &Map::new())
                 .await
                 .unwrap();
-            assert_eq!(record["orchestration_role"], expected);
+            assert_eq!(record["role"], expected);
             assert_eq!(record["owner"], parent);
             assert_eq!(record["owned_sessions"], 0);
             let wire = state.wire_session(state.session_record("loose").unwrap());
-            assert_eq!(json!(wire.orchestration_role), expected);
+            assert_eq!(json!(wire.role), expected);
         }
     }
 
@@ -375,7 +375,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result["session"], "of-a");
-        assert_eq!(result["orchestration_role"], "coordinator");
+        assert_eq!(result["role"], "coordinator");
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("no longer yours"));
         assert!(
@@ -383,10 +383,7 @@ mod tests {
             "{note}"
         );
         let released = state.store.get_session("of-a").unwrap().unwrap();
-        assert_eq!(
-            state.wire_session(released.clone()).orchestration_role,
-            OrchestrationRole::Coordinator
-        );
+        assert_eq!(state.wire_session(released.clone()).role, Role::Coordinator);
         assert_eq!(released.bound_to, None);
         let told = output_containing(&of_a, "you have no parent session now");
         assert!(told.contains("`mcp__octoboard__open_session`"), "{told}");
@@ -426,14 +423,7 @@ mod tests {
         let (state, _dir) = peer_state("release-note");
         state
             .store
-            .set_binding(
-                "other-project",
-                None,
-                "a",
-                OrchestrationRole::Worker,
-                false,
-                false,
-            )
+            .set_binding("other-project", None, "a", Role::Worker, false, false)
             .unwrap()
             .unwrap();
         // A terminal holds no more than 1024 bytes of input that nothing reads, which this message
@@ -545,7 +535,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(result["orchestration_role"], "worker");
+        assert_eq!(result["role"], "worker");
         let note = result["note"].as_str().unwrap();
         assert!(
             note.contains("can no longer start or drive sessions"),

@@ -7,7 +7,7 @@ use crate::coordinator::test_support::{
     archive_during_relaunch, bound_session, shell_env, status_of, temp_dir,
 };
 use crate::protocol::{
-    error_code, Account, Agent, Event, OrchestrationRole, Role, Session, SessionStatus,
+    error_code, Account, Agent, Event, Role, Session, SessionKind, SessionStatus,
 };
 use crate::session::term;
 use crate::test_support::code_of;
@@ -292,14 +292,14 @@ async fn a_switch_whose_relaunch_fails_is_back_on_its_account_and_archives_nothi
     std::fs::create_dir_all(source.join(record).parent().unwrap()).unwrap();
     std::fs::write(source.join(record), "conversation").unwrap();
 
-    let mut hub = bare_session("hub", Role::Console);
+    let mut hub = bare_session("hub", SessionKind::Console);
     hub.has_conversation = true;
     hub.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
     hub.status = SessionStatus::Working;
     state.store.insert_session(&hub).unwrap();
     let mut bound = project_session("bound", Agent::Claude, SessionStatus::Interrupted);
     bound.bound_to = Some("hub".to_string());
-    bound.orchestration_role = OrchestrationRole::Worker;
+    bound.role = Role::Worker;
     state.store.insert_session(&bound).unwrap();
     let live = idle_stand_in("hub");
     state.register_live(live.clone());

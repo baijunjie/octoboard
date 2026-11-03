@@ -370,7 +370,7 @@ impl AgentAdapter for ClaudeAdapter {
         args.push(Self::mcp_config_json(spec));
         args.push("--append-system-prompt".to_string());
         args.push(session_tools::role::role_description(
-            spec.role,
+            spec.kind,
             spec.owner.as_ref(),
             Agent::Claude,
             &spec.role_options(),
@@ -999,7 +999,7 @@ mod tests {
     }
 
     #[test]
-    fn the_role_text_is_the_one_for_this_sessions_role() {
+    fn the_role_text_is_the_one_for_this_sessions_kind() {
         let fixture = spec_fixture();
         let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
         let at = plan
@@ -1010,7 +1010,7 @@ mod tests {
         assert_eq!(
             plan.args[at + 1],
             session_tools::role::role_description(
-                fixture.role,
+                fixture.kind,
                 fixture.owner.as_ref(),
                 Agent::Claude,
                 &fixture.spec().role_options(),

@@ -7,7 +7,7 @@ fn agent_fixture(label: &str) -> (Fixture, PathBuf) {
     fixture.store("owner", SessionStatus::Idle);
     let worker = Session {
         bound_to: Some("owner".to_string()),
-        orchestration_role: OrchestrationRole::Worker,
+        role: Role::Worker,
         ..session("worker", SessionStatus::Idle)
     };
     fixture.state.store.insert_session(&worker).unwrap();

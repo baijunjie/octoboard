@@ -67,7 +67,7 @@ where
             );
             let result = json!({
                 "session": started.id,
-                "role": started.role,
+                "kind": started.kind,
                 "agent": started.agent,
                 "title": started.title,
                 "console": started.console_id,

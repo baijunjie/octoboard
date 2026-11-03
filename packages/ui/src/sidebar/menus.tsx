@@ -304,7 +304,7 @@ export function sessionMenu(
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults, accountOrder, switching);
-  const focusable = session.role === "console" && !archived && !focused;
+  const focusable = session.kind === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <ShortcutKbd command="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
     ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
@@ -330,7 +330,7 @@ export function sessionMenu(
       end: <ShortcutKbd command="copyId" />,
       onClick: () => handlers.onCopySessionId(session),
     },
-    ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
+    ...(session.kind === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(!archived ? ["separator" as const] : []),
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
     ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),

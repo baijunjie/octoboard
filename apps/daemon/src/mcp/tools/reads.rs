@@ -18,7 +18,7 @@ use crate::mcp::lookup::{
 use crate::mcp::views::{
     branch_names_of, describe_project, describe_session, describe_session_shown, owned_counts_of,
 };
-use crate::protocol::{Console, Project, Role, Session, SessionStatus};
+use crate::protocol::{Console, Project, Session, SessionKind, SessionStatus};
 use crate::records::{self, Locator, Resumability};
 use crate::state::bindings::owned_count_of;
 use crate::state::AppState;
@@ -255,7 +255,7 @@ struct SessionFilters {
     console: Option<Console>,
     project: Option<Project>,
     owner: Option<Session>,
-    kind: Option<Role>,
+    kind: Option<SessionKind>,
     branch: Option<String>,
     /// Whether the sessions kept are the caller's own (`true`) or not (`false`); both when left
     /// out.
@@ -280,11 +280,11 @@ impl SessionFilters {
             .transpose()?;
         let kind = match optional_string(arguments, "kind").as_deref() {
             None => None,
-            Some("console") => Some(Role::Console),
-            Some("project") => Some(Role::Project),
+            Some("console") => Some(SessionKind::Console),
+            Some("project") => Some(SessionKind::Project),
             Some(other) => bail!("`kind` must be `console` or `project`, not `{other}`"),
         };
-        if project.is_some() && kind == Some(Role::Console) {
+        if project.is_some() && kind == Some(SessionKind::Console) {
             bail!(
                 "`kind: console` and `project` cannot both hold: a console session is in no project"
             );
@@ -312,7 +312,7 @@ impl SessionFilters {
                 .owner
                 .as_ref()
                 .is_none_or(|owner| session.bound_to.as_deref() == Some(&owner.id))
-            && self.kind.is_none_or(|kind| session.role == kind)
+            && self.kind.is_none_or(|kind| session.kind == kind)
             && self
                 .yours
                 .is_none_or(|yours| (session.bound_to.as_deref() == Some(&caller.id)) == yours)

@@ -94,7 +94,7 @@ pub(crate) enum Command {
         #[arg(long)]
         session: String,
         #[arg(long)]
-        role: McpRole,
+        kind: McpKind,
         /// The session is a worker, which narrows what it is offered.
         #[arg(long)]
         worker: bool,
@@ -108,19 +108,19 @@ pub(crate) enum Command {
     },
 }
 
-/// The `--role` values the MCP mode accepts. A separate type from `protocol::Role` because clap
-/// has to derive a value parser for it, and the protocol types are the wire's, not the CLI's.
+/// The `--kind` values the MCP mode accepts. A separate type from `protocol::SessionKind` because
+/// clap has to derive a value parser for it, and the protocol types are the wire's, not the CLI's.
 #[derive(Clone, Copy, clap::ValueEnum)]
-pub(crate) enum McpRole {
+pub(crate) enum McpKind {
     Console,
     Project,
 }
 
-impl From<McpRole> for protocol::Role {
-    fn from(role: McpRole) -> Self {
-        match role {
-            McpRole::Console => protocol::Role::Console,
-            McpRole::Project => protocol::Role::Project,
+impl From<McpKind> for protocol::SessionKind {
+    fn from(kind: McpKind) -> Self {
+        match kind {
+            McpKind::Console => protocol::SessionKind::Console,
+            McpKind::Project => protocol::SessionKind::Project,
         }
     }
 }
@@ -165,11 +165,11 @@ pub(crate) fn run(command: Command) -> Result<()> {
         // The MCP child owns its stdout for the protocol, so it installs no log subscriber either.
         Command::Mcp {
             session,
-            role,
+            kind,
             worker,
             port,
             key,
             token,
-        } => mcp::stdio::run(session, role.into(), worker, port, key, token),
+        } => mcp::stdio::run(session, kind.into(), worker, port, key, token),
     }
 }

@@ -216,14 +216,14 @@ fn same_standing(a: &Session, b: &Session) -> bool {
         a.status,
         a.pinned,
         a.locked,
-        a.orchestration_role,
+        a.role,
         a.has_conversation,
     ) == (
         b.id.as_str(),
         b.status,
         b.pinned,
         b.locked,
-        b.orchestration_role,
+        b.role,
         b.has_conversation,
     ) && a.agent == b.agent
         && a.agent_session_id == b.agent_session_id
@@ -276,7 +276,7 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, Event, OrchestrationRole, Role};
+    use crate::protocol::{Agent, Event, Role, SessionKind};
     use crate::test_support::{
         console_with_project_and_accounts, project_session, session_ids, PATIENCE,
     };
@@ -344,10 +344,10 @@ mod tests {
                 ),
                 has_conversation: true,
                 bound_to: owner.map(str::to_owned),
-                orchestration_role: if owner.is_some() {
-                    OrchestrationRole::Worker
+                role: if owner.is_some() {
+                    Role::Worker
                 } else {
-                    OrchestrationRole::Coordinator
+                    Role::Coordinator
                 },
                 ..project_session(id, Agent::Claude, SessionStatus::Archived)
             }
@@ -356,7 +356,7 @@ mod tests {
         /// An archived console session of the account, which is what a bound coordinator binds to.
         fn console_session(&self, id: &str) -> Session {
             Session {
-                role: Role::Console,
+                kind: SessionKind::Console,
                 project_id: None,
                 ..self.session(id, None)
             }
@@ -365,7 +365,7 @@ mod tests {
         /// A coordinator under the console session `hub`.
         fn coordinator(&self, id: &str, hub: &str) -> Session {
             Session {
-                orchestration_role: OrchestrationRole::Coordinator,
+                role: Role::Coordinator,
                 ..self.session(id, Some(hub))
             }
         }

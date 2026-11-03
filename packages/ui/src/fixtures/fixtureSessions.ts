@@ -28,14 +28,14 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
   const initial = store.getState();
   const nextConsoleOrdinals = new Map([...initial.consoles.keys()].map((id) => {
-    const sessions = [...initial.sessions.values()].filter((session) => session.console_id === id && session.role === "console");
+    const sessions = [...initial.sessions.values()].filter((session) => session.console_id === id && session.kind === "console");
     return [id, Math.max(0, ...sessions.map((session, index) => session.ordinal ?? index + 1)) + 1];
   }));
 
   /** A console session's colour as the daemon assigns one: the first of the palette that no session of
    * the console that is not archived wears (an interrupted one still holds its colour), else the first. */
   const freshColour = (consoleId: string): ConsoleSessionColour => {
-    const used = new Set([...store.getState().sessions.values()].filter((session) => session.console_id === consoleId && session.role === "console" && session.status !== "archived").map((session) => session.colour));
+    const used = new Set([...store.getState().sessions.values()].filter((session) => session.console_id === consoleId && session.kind === "console" && session.status !== "archived").map((session) => session.colour));
     return CONSOLE_SESSION_COLOURS.find((colour) => !used.has(colour)) ?? CONSOLE_SESSION_COLOURS[0];
   };
   const recordsPresence = (ids: string[]): SessionRecordPresence => {
@@ -188,12 +188,12 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         console_id: session.console_id,
         project_id: session.project_id,
         host_id: session.host_id,
-        role: session.role,
+        kind: session.kind,
         origin: session.origin,
         title: session.title,
         status: "working",
         has_conversation: false,
-        orchestration_role: session.orchestration_role,
+        role: session.role,
         pinned: session.pinned,
         locked: false,
         started_at: Date.now(),
@@ -221,16 +221,16 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         const movedTo = scenario.sessionReleaseMovedTo;
         if (movedTo) {
           // As the daemon's transfer: a coordinator stays one under a console session, and is a worker under any other owner.
-          const stays = session.orchestration_role === "coordinator" && store.getState().sessions.get(movedTo)?.role === "console";
-          store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: movedTo, orchestration_role: stays ? "coordinator" : "worker" }) }));
+          const stays = session.role === "coordinator" && store.getState().sessions.get(movedTo)?.kind === "console";
+          store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: movedTo, role: stays ? "coordinator" : "worker" }) }));
         }
         return fail(scenario.sessionReleaseError);
       }
       // Refused with the daemon's codes and English messages.
-      if (session.role === "console") return fail({ code: "console_session_never_bound", params: { session: session.id }, message: `\`${session.id}\` is a console session, which is never bound, so it has no owner to be released from` });
+      if (session.kind === "console") return fail({ code: "console_session_never_bound", params: { session: session.id }, message: `\`${session.id}\` is a console session, which is never bound, so it has no owner to be released from` });
       if (!session.bound_to) return fail({ code: "session_not_bound", params: { session: session.id }, message: `\`${session.id}\` is not bound to any owner, so there is nothing to release` });
       // Whatever the session owns stays bound to it, and so do its branches; only its own binding goes.
-      store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: null, orchestration_role: "coordinator" }) }));
+      store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: null, role: "coordinator" }) }));
       return { type: "ack", id: null };
     },
     set_session_pinned: (body) => {
@@ -282,8 +282,8 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         console_id: owner.id,
         project_id: project?.id ?? null,
         host_id: project?.host_id ?? "local",
-        role: project ? "project" : "console",
-        orchestration_role: project && body.bound_to ? "worker" : "coordinator",
+        kind: project ? "project" : "console",
+        role: project && body.bound_to ? "worker" : "coordinator",
         origin: "user",
         title: (body.title?.trim() || undefined) ?? project?.name ?? owner.name,
         status: body.task == null ? "idle" : "working",
@@ -392,7 +392,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
               ? s.project_id === body.project
               : body.console_session !== undefined
                 ? s.bound_to === body.console_session
-                : s.role === "console"),
+                : s.kind === "console"),
         )
         .forEach(deleteGroup);
       refuseLocked(all.filter((record) => doomed.has(record.id)));

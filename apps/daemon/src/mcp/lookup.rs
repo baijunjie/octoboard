@@ -15,7 +15,8 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{Map, Value};
 
 use crate::protocol::{
-    Agent, CodedError, Console, LaunchChange, Project, ProjectAccount, Role, Session, SessionStatus,
+    Agent, CodedError, Console, LaunchChange, Project, ProjectAccount, Session, SessionKind,
+    SessionStatus,
 };
 use crate::state::AppState;
 use crate::text::trimmed_or_none;
@@ -495,7 +496,7 @@ pub(super) fn resolve_owned_session(
              to say something, say it to the user"
         );
     }
-    if session.role == Role::Console {
+    if session.kind == SessionKind::Console {
         bail!(
             "session `{wanted}` is a console session; acting on one is the user's to do, not \
              yours.{}",
@@ -511,12 +512,12 @@ pub(super) fn resolve_owned_session(
             let kind = owner_record
                 .as_ref()
                 .map_or("session".to_string(), |owner| {
-                    let article = if owner.role == caller.role {
+                    let article = if owner.kind == caller.kind {
                         "another"
                     } else {
                         "a"
                     };
-                    format!("{article} {} session", owner.role.kind())
+                    format!("{article} {} session", owner.kind.name())
                 });
             let title = owner_record
                 .map(|owner| format!(" (\"{}\")", owner.title))

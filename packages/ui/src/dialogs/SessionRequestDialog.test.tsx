@@ -15,7 +15,7 @@ import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQu
 const request: SessionRequest = {
   requestId: "r-1",
   session: "s-1",
-  role: "project",
+  kind: "project",
   console: "c-1",
   project: "p-1",
   agent: "codex",
@@ -24,7 +24,7 @@ const request: SessionRequest = {
   action: "start",
 };
 
-const consoleRequest: SessionRequest = { ...request, requestId: "r-console", session: "s-2", role: "console", project: null, requestedAt: 1 };
+const consoleRequest: SessionRequest = { ...request, requestId: "r-console", session: "s-2", kind: "console", project: null, requestedAt: 1 };
 
 const ack = () => Promise.resolve({ type: "ack", id: null });
 
@@ -38,7 +38,7 @@ const dialogText = () => (document.body.querySelector("[role=alertdialog]")?.tex
 it.each([
   { asked: request, where: "The session s-1 asks to start a Codex session in the project p-1 of the console c-1" },
   { asked: consoleRequest, where: "The session s-2 asks to start a Codex console session in the console c-1" },
-])("shows who asks, where the session would be, that it reports to the user: $asked.role", ({ asked, where }) => {
+])("shows who asks, where the session would be, that it reports to the user: $asked.kind", ({ asked, where }) => {
   mountPendingQuestionDialog({ sessionRequests: [asked] }, ack);
   expect(dialogText()).toContain("Start a session?");
   expect(dialogText()).toContain(where);

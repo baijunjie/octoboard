@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::env_shell;
 use crate::protocol::{
-    nested_params, notice_code, Agent, CodedError, Console, Notice, OrchestrationRole, Origin,
-    Project, Role, Session, SessionStatus, TerminalAppearance,
+    nested_params, notice_code, Agent, CodedError, Console, Notice, Origin, Project, Role, Session,
+    SessionKind, SessionStatus, TerminalAppearance,
 };
 use crate::session::term;
 use crate::state::AppState;
@@ -20,7 +20,7 @@ use crate::text::trimmed_or_none;
 use crate::time::now_millis;
 
 use super::accounts::refuse_unless_account_usable;
-use super::bindings::resolve_bound_to;
+use super::bindings::resolve_owner;
 use super::launch::{check_launch_settings, start_process, stop_process, SettingsChecked};
 use super::resume::{
     checked_resume_id, locate_conversation_to_resume, refuse_if_conversation_recorded,
@@ -179,13 +179,14 @@ impl OpenError {
 /// What opening a session settles from its request before anything is awaited, launched or
 /// recorded, and refuses for what cannot be opened.
 pub(super) struct ResolvedOpen {
-    role: Role,
+    kind: SessionKind,
     cwd: PathBuf,
     project: Option<Project>,
     console: Console,
     default_title: String,
     resume_agent_session_id: Option<String>,
     bound_to: Option<String>,
+    role: Role,
     pub(super) agent: Agent,
     pub(super) account_id: Option<String>,
     config_dir: Option<String>,
@@ -206,35 +207,44 @@ pub(super) fn resolve_open_with(
 ) -> Result<ResolvedOpen> {
     let console = state.store.require_console(&request.console_id)?;
 
-    let (role, cwd, project, default_title) = match &request.project_id {
+    let (kind, cwd, project, default_title) = match &request.project_id {
         Some(project_id) => {
             let project = state.store.require_project(project_id)?;
             let cwd = PathBuf::from(&project.path);
             let title = project.name.clone();
-            (Role::Project, cwd, Some(project), title)
+            (SessionKind::Project, cwd, Some(project), title)
         }
         None => {
             let workdir = PathBuf::from(&console.workdir);
             // The store reads the current console name when inserting the session.
-            (Role::Console, workdir, None, String::new())
+            (SessionKind::Console, workdir, None, String::new())
         }
     };
 
     // Before `bound_to` is resolved, which would drop a console session's request for one.
     let resume_agent_session_id = checked_resume_id(
         state,
-        role,
+        kind,
         request.project_id.as_deref(),
         request.bound_to.as_deref(),
         request.resume_agent_session_id.clone(),
     )?;
-    let bound_to = resolve_bound_to(
+    let owner = resolve_owner(
         state,
         &request.console_id,
         request.project_id.as_deref(),
-        role,
+        kind,
         request.bound_to.clone(),
     )?;
+
+    // A session opened under a console session is a coordinator and may open sessions of its own;
+    // one opened under a project coordinator is a worker, which keeps orchestration two levels
+    // deep. One with no parent is a coordinator too.
+    let role = match &owner {
+        Some(owner) if owner.kind == SessionKind::Project => Role::Worker,
+        _ => Role::Coordinator,
+    };
+    let bound_to = owner.map(|owner| owner.id);
 
     let preferred = session_agent(request.agent, project.as_ref(), &console);
     let automatic = request.account.is_none()
@@ -276,13 +286,14 @@ pub(super) fn resolve_open_with(
     // Asked again by the launch under its claim; asked here so that nothing is recorded.
     crate::accounts::shared_config::refuse_if_changing(state, account_id.as_deref())?;
     Ok(ResolvedOpen {
-        role,
+        kind,
         cwd,
         project,
         console,
         default_title,
         resume_agent_session_id,
         bound_to,
+        role,
         agent,
         account_id,
         config_dir,
@@ -293,13 +304,14 @@ pub(super) fn resolve_open_with(
 /// (`starting`) and its publication.
 async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<StartingSession> {
     let ResolvedOpen {
-        role,
+        kind,
         cwd,
         project,
         console,
         default_title,
         resume_agent_session_id,
         bound_to,
+        role,
         agent,
         account_id,
         config_dir,
@@ -353,7 +365,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         console_id,
         project_id,
         host_id: LOCAL_HOST_ID.to_string(),
-        role,
+        kind,
         origin,
         title: title.clone().unwrap_or_else(|| default_title.clone()),
         // Until the process is up; `finish_open` moves it to what the launch implies.
@@ -375,13 +387,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         config_dir,
         model,
         effort,
-        // A session is opened bound or unbound; only binding it afterwards makes a coordinator
-        // of one under a console session.
-        orchestration_role: if bound_to.is_some() {
-            OrchestrationRole::Worker
-        } else {
-            OrchestrationRole::Coordinator
-        },
+        role,
         bound_to,
         // Assigned by `insert_console_session` below for a console session; a project session
         // carries no colour or ordinal of its own.
@@ -392,7 +398,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         started_at: now_millis(),
         ended_at: None,
     };
-    let session = if role == Role::Console {
+    let session = if kind == SessionKind::Console {
         state.store.insert_console_session(session, title)?
     } else {
         // `bound_to` was resolved before the launch check above awaited, so the owner may since
@@ -420,7 +426,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
     let recorded = UnrecordOnDrop::new(state, &session.id);
     // The duplicate check ran before the awaits above, so another request may have recorded the
     // same conversation since. Nothing has been launched yet.
-    if let (Role::Project, Some(id)) = (role, &resume_agent_session_id) {
+    if let (SessionKind::Project, Some(id)) = (kind, &resume_agent_session_id) {
         refuse_if_conversation_recorded(
             state,
             id,

@@ -89,7 +89,7 @@ pub(super) fn describe_session_shown(
         Some(owner) => state
             .store
             .get_session(owner)?
-            .map(|owner| owner.role.kind()),
+            .map(|owner| owner.kind.name()),
         None => None,
     };
     // Looked at before the status is read, so that the status, which reads the screen as that look
@@ -136,8 +136,8 @@ pub(super) fn describe_session_shown(
         "locked": session.locked,
         // The names only: the worktree each stands in is `list_session_branches`'.
         "branches": branches.get(&session.id).cloned().unwrap_or_default(),
+        "kind": session.kind,
         "role": session.role,
-        "orchestration_role": session.orchestration_role,
         "console": session.console_id,
         "project": session.project_id,
         // Whether the session is idle after its last report, its own or synthesised, reached its
@@ -148,7 +148,7 @@ pub(super) fn describe_session_shown(
             .is_some(),
         // The session this one reports to. Null for a project session means unbound: the user
         // opened it themselves and kept it outside the orchestration. It is also null for a
-        // console session, which is never bound, so `role` is what tells the two apart. Only a
+        // console session, which is never bound, so `kind` is what tells the two apart. Only a
         // session whose owner is the caller is the caller's to act on.
         "owner": session.bound_to,
         // Whether that owner is a console session or a project session; null with no owner.

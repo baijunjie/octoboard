@@ -1195,7 +1195,7 @@ export type Event = {
    * Whether the session asked for would be a console session or a project session; for
    * `switch` and `handoff`, which the target is.
    */
-  role: Role,
+  kind: SessionKind,
   /**
    * The console the new session would be in, or the console of the session to bring back,
    * switch or hand off.
@@ -1920,8 +1920,6 @@ export type ModelsUnavailable = {
   },
   message: string,
 };
-
-export type OrchestrationRole = "coordinator" | "worker";
 
 export type Origin = "console" | "user";
 
@@ -3672,7 +3670,7 @@ export type ResetCredits = {
   credits: Array<ResetCredit> | null,
 };
 
-export type Role = "console" | "project";
+export type Role = "coordinator" | "worker";
 
 export type Session = {
   id: string,
@@ -3681,17 +3679,18 @@ export type Session = {
   console_id: string,
   project_id: string | null,
   host_id: string,
-  role: Role,
+  kind: SessionKind,
   /**
    * Whether the session may own sessions (`Coordinator`) or reports to one and may not
    * (`Worker`), independent of the parent in `bound_to`: a project coordinator under a console
    * session keeps the coordinator role, including when it has no children. A console session
-   * and a session with no parent are always coordinators, and a session created with a parent
-   * starts as a worker. Binding an independent coordinator to a console session keeps it a
-   * coordinator, and a transfer to another console session preserves that; a transfer to a
-   * project session makes it a worker, and a release makes it a coordinator again.
+   * and a session with no parent are always coordinators; a session created under a console
+   * session starts as a coordinator and one created under a project coordinator as a worker.
+   * Binding an independent coordinator to a console session keeps it a coordinator, and a
+   * transfer to another console session preserves that; a transfer to a project session makes
+   * it a worker, and a release makes it a coordinator again.
    */
-  orchestration_role: OrchestrationRole,
+  role: Role,
   origin: Origin,
   title: string,
   /**
@@ -3924,6 +3923,8 @@ export type SessionContext = {
    */
   used_percent?: number | null,
 };
+
+export type SessionKind = "console" | "project";
 
 export type SessionRecordPresence = "present" | "absent" | "unknown";
 

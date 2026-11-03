@@ -117,7 +117,7 @@ mod tests {
         account, arguments, live_and_watched, peer_state, prepare_relaunch, sessions_as_stored,
         shared_console_state, Launches, Started, CONVERSATION,
     };
-    use crate::protocol::{Agent, OrchestrationRole};
+    use crate::protocol::{Agent, Role};
     use crate::session::term::{Launch, LaunchRequest};
     use crate::test_support::{
         code_of, output_containing, running, stand_in_launch, within, ScratchDir, PATIENCE,
@@ -712,14 +712,7 @@ mod tests {
         let original = live_and_watched(&state, "mine");
         assert!(state
             .store
-            .set_binding(
-                "mine",
-                Some("starter"),
-                "a",
-                OrchestrationRole::Worker,
-                false,
-                false
-            )
+            .set_binding("mine", Some("starter"), "a", Role::Worker, false, false)
             .unwrap()
             .is_some());
 

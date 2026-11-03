@@ -8,7 +8,7 @@ use crate::mcp::test_support::{
 };
 use crate::protocol::{
     AccountQuota, Agent, AgentAvailability, Availability, Event, Project, ProjectAccount,
-    ProjectSource, QuotaWindow, QuotaWindowKind, Role, Session, SessionStatus,
+    ProjectSource, QuotaWindow, QuotaWindowKind, Session, SessionKind, SessionStatus,
 };
 use crate::session_request;
 use crate::state::AppState;
@@ -136,27 +136,27 @@ async fn a_session_request_is_refused_before_the_user_is_asked() {
 #[tokio::test]
 async fn a_session_request_is_for_wherever_the_call_names() {
     let (state, _dir) = shared_console_state("request-where");
-    for (caller, extra, (role, console, project)) in [
+    for (caller, extra, (kind, console, project)) in [
         (
             "a",
             json!({ "kind": "project", "project": "project-2" }),
-            (Role::Project, "console-2", Some("project-2")),
+            (SessionKind::Project, "console-2", Some("project-2")),
         ),
         (
             "loose",
             json!({ "kind": "console" }),
-            (Role::Console, "console-1", None),
+            (SessionKind::Console, "console-1", None),
         ),
         (
             "of-a",
             json!({ "kind": "project" }),
-            (Role::Project, "console-1", Some("project-1")),
+            (SessionKind::Project, "console-1", Some("project-1")),
         ),
     ] {
         let mut args = arguments(json!({ "brief": { "goal": "do the thing" } }));
         args.extend(extra.as_object().unwrap().clone());
         let Event::SessionRequest {
-            role: waiting_role,
+            kind: waiting_kind,
             console: waiting_console,
             project: waiting_project,
             ..
@@ -166,11 +166,11 @@ async fn a_session_request_is_for_wherever_the_call_names() {
         };
         assert_eq!(
             (
-                waiting_role,
+                waiting_kind,
                 waiting_console.as_str(),
                 waiting_project.as_deref()
             ),
-            (role, console, project),
+            (kind, console, project),
             "{caller}"
         );
     }
@@ -706,7 +706,7 @@ fn codex_caller_state(name: &str) -> (Arc<AppState>, ScratchDir, Session) {
         .unwrap();
     let caller = Session {
         agent: Agent::Codex,
-        role: Role::Project,
+        kind: SessionKind::Project,
         project_id: Some("project-1".to_string()),
         account_id: Some("codex-work".to_string()),
         config_dir: Some("/tmp/codex-work".to_string()),
@@ -767,7 +767,7 @@ fn a_started_session_defaults_to_the_callers_agent_and_account() {
 fn a_console_session_starts_sessions_on_the_projects_default_agent() {
     let (state, _dir, project_caller) = codex_caller_state("console-caller-default-agent");
     let caller = Session {
-        role: Role::Console,
+        kind: SessionKind::Console,
         project_id: None,
         ..project_caller.clone()
     };
@@ -995,7 +995,7 @@ fn auto_select_account_falls_back_across_agents_only_for_unnamed_choices() {
 #[test]
 fn auto_select_account_fallback_to_callers_agent_keeps_its_usable_account() {
     let (state, _dir, mut caller) = codex_caller_state("auto-select-caller-fallback");
-    caller.role = Role::Console;
+    caller.kind = SessionKind::Console;
     caller.project_id = None;
     state.store.set_auto_select_account(true).unwrap();
     state

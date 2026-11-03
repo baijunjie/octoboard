@@ -225,7 +225,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
-    use crate::protocol::{Agent, Console, Role, Session};
+    use crate::protocol::{Agent, Console, Session, SessionKind};
     use crate::test_support::{bare_session, idle_stand_in, ScratchDir, ScratchFile, StandIn};
 
     /// Two failed turns of one Codex 0.160.0 session whose account was at its usage limit, taken
@@ -415,7 +415,7 @@ mod tests {
             agent: Agent::Codex,
             status,
             has_conversation: true,
-            ..bare_session(id, Role::Project)
+            ..bare_session(id, SessionKind::Project)
         }
     }
 

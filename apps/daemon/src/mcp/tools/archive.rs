@@ -166,7 +166,7 @@ mod tests {
     use crate::mcp::test_support::{
         arguments, bound_coordinator_state, peer_state, project_session, with_status, RepoState,
     };
-    use crate::protocol::{Agent, OrchestrationRole, Session, SessionStatus};
+    use crate::protocol::{Agent, Role, Session, SessionStatus};
     use crate::session_tools::catalogue::qualified_tool_name;
     use crate::state::AppState;
     use crate::test_support::running;
@@ -364,10 +364,10 @@ mod tests {
                 .store
                 .insert_session(&Session {
                     project_id: Some("repo".to_string()),
-                    orchestration_role: if id == "mid" {
-                        OrchestrationRole::Coordinator
+                    role: if id == "mid" {
+                        Role::Coordinator
                     } else {
-                        OrchestrationRole::Worker
+                        Role::Worker
                     },
                     ..project_session(id, "console-1", Some(owner))
                 })

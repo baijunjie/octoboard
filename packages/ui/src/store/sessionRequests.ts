@@ -1,4 +1,4 @@
-import type { Agent, Event, Role, SessionRequestAction } from "../protocol";
+import type { Agent, Event, SessionKind, SessionRequestAction } from "../protocol";
 
 /** What approving a `session_request` does, every value this client knows. A request with a value it does not know is
  * not offered, and the daemon's timeout ends the call. Written as a record's keys so the type check fails while one is
@@ -13,7 +13,7 @@ interface SessionRequestBase {
   /** The requesting session. */
   session: string;
   /** Whether the session asked for would be a console session or a project session. */
-  role: Role;
+  kind: SessionKind;
   /** The console the new session would be in, or the console of the session to bring back. */
   console: string;
   /** The project the new session would be in, or the project of the session to bring back; null
@@ -74,7 +74,7 @@ export function sessionRequestOf(event: Extract<Event, { type: "session_request"
   const base: SessionRequestBase = {
     requestId: event.request_id,
     session: event.session,
-    role: event.role,
+    kind: event.kind,
     console: event.console,
     project: event.project,
     agent: event.agent,

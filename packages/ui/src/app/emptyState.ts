@@ -34,7 +34,7 @@ export function terminalEmptyState(
     if (inConsole.some((s) => s.project_id === focus.project.id && s.status !== "archived" && !consoleSessionAbove(s, (id) => byId.get(id)))) return undefined;
     return noAgents ?? { kind: "new-session", project: focus.project, binding: { kind: "unbound" } };
   }
-  if (!inConsole.some((s) => s.role === "console" && s.status !== "archived")) {
+  if (!inConsole.some((s) => s.kind === "console" && s.status !== "archived")) {
     return noAgents ?? { kind: "new-console-session" };
   }
   if (listedProjects.length === 0) return { kind: "add-project" };

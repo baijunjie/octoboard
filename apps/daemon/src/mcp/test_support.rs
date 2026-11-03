@@ -2,8 +2,8 @@
 
 use crate::mcp::dispatch::call;
 use crate::protocol::{
-    Account, Agent, Console, Event, OrchestrationRole, Project, ProjectSource, QuotaWindow,
-    QuotaWindowKind, Role, Session, SessionStatus,
+    Account, Agent, Console, Event, Project, ProjectSource, QuotaWindow, QuotaWindowKind, Role,
+    Session, SessionKind, SessionStatus,
 };
 use crate::session_request;
 use crate::state::AppState;
@@ -71,7 +71,7 @@ pub(super) fn console_session(id: &str) -> Session {
     Session {
         host_id: LOCAL_HOST_ID.to_string(),
         title: "Hub".to_string(),
-        ..bare_session(id, Role::Console)
+        ..bare_session(id, SessionKind::Console)
     }
 }
 
@@ -95,15 +95,15 @@ pub(super) async fn wait_for_request(state: &Arc<AppState>, caller: &str) -> Eve
 
 pub(super) fn project_session(id: &str, console_id: &str, bound_to: Option<&str>) -> Session {
     Session {
-        role: Role::Project,
+        kind: SessionKind::Project,
         console_id: console_id.to_string(),
         project_id: Some("project-1".to_string()),
         title: format!("Work {id}"),
         bound_to: bound_to.map(str::to_string),
-        orchestration_role: if bound_to.is_some() {
-            OrchestrationRole::Worker
+        role: if bound_to.is_some() {
+            Role::Worker
         } else {
-            OrchestrationRole::Coordinator
+            Role::Coordinator
         },
         ..console_session(id)
     }
@@ -261,14 +261,7 @@ pub(super) fn bound_coordinator_state(name: &str) -> (Arc<AppState>, ScratchDir)
     let (state, dir) = peer_state(name);
     state
         .store
-        .set_binding(
-            "starter",
-            None,
-            "a",
-            OrchestrationRole::Coordinator,
-            false,
-            false,
-        )
+        .set_binding("starter", None, "a", Role::Coordinator, false, false)
         .unwrap()
         .unwrap();
     (state, dir)

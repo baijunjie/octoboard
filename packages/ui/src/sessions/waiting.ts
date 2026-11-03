@@ -13,7 +13,7 @@ export function countWaitingInTree(consoles: Map<string, Console>, projects: Map
   let count = 0;
   for (const session of sessions.values()) {
     if (session.status !== "waiting_user" || !consoles.has(session.console_id)) continue;
-    if (session.role === "console" || (session.project_id && projects.get(session.project_id)?.console_id === session.console_id)) count += 1;
+    if (session.kind === "console" || (session.project_id && projects.get(session.project_id)?.console_id === session.console_id)) count += 1;
   }
   return count;
 }

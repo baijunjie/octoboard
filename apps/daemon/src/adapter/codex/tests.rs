@@ -258,7 +258,7 @@ fn the_role_text_is_added_as_a_developer_message_not_a_replaced_system_prompt() 
     assert!(overrides.iter().any(|o| o.starts_with(&format!(
         "developer_instructions={}",
         toml_string(&session_tools::role::role_description(
-            fixture.role,
+            fixture.kind,
             fixture.owner.as_ref(),
             Agent::Codex,
             &fixture.spec().role_options(),
@@ -289,13 +289,13 @@ fn claude_compatibility_appends_the_instructions_naming_the_claude_config_dir() 
     let mut spec = fixture.spec();
     spec.claude_compatibility = true;
     let on = instructions(&CodexAdapter.plan(&spec).unwrap());
-    let role = toml_string(&session_tools::role::role_description(
-        fixture.role,
+    let description = toml_string(&session_tools::role::role_description(
+        fixture.kind,
         fixture.owner.as_ref(),
         Agent::Codex,
         &spec.role_options(),
     ));
-    let role_text = role.trim_end_matches('"');
+    let role_text = description.trim_end_matches('"');
     assert!(on.starts_with(&format!("developer_instructions={role_text}")));
     assert!(on.contains("# Claude Code compatibility"));
     assert!(on.contains("/work/claude-home"));

@@ -15,7 +15,7 @@ use crate::messaging::delivery;
 use crate::messaging::owner_notices;
 use crate::protocol::{
     error_code, Agent, CodedError, Console, GitWorkflowSettings, Launch, ProcessTree, Project,
-    Role, Session, SessionStatus, TerminalAppearance,
+    Session, SessionKind, SessionStatus, TerminalAppearance,
 };
 use crate::session::dialogs;
 use crate::session::term;
@@ -388,7 +388,7 @@ fn launch_git_workflow_settings(
     let Some(project_id) = session
         .project_id
         .as_ref()
-        .filter(|_| session.role == Role::Project)
+        .filter(|_| session.kind == SessionKind::Project)
     else {
         return Ok(None);
     };
@@ -415,7 +415,7 @@ pub(super) async fn start_process(
 ) -> Result<()> {
     // Refresh the instruction file on every console launch, resume and account switch. A missing
     // directory is left to the launch, whose refusal names it, rather than failing here on the write.
-    if session.role == Role::Console && cwd.is_dir() {
+    if session.kind == SessionKind::Console && cwd.is_dir() {
         super::console_workdir::refresh_console_session_instructions(
             &state.store,
             &session.console_id,
@@ -449,7 +449,7 @@ pub(super) async fn start_process(
     let request = term::LaunchRequest {
         session_id: session.id.clone(),
         agent: session.agent,
-        role: session.role,
+        kind: session.kind,
         owner: owner_of(state, session)?,
         git_workflow: launch_git_workflow_settings(state, session)?,
         ask_questions_as_choices: state.store.ask_questions_as_choices()?,

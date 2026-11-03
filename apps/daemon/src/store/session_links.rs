@@ -6,46 +6,46 @@ use rusqlite::{params, OptionalExtension};
 
 use super::rows::enum_to_text;
 use super::Store;
-use crate::protocol::{OrchestrationRole, Role, Session, SessionStatus};
+use crate::protocol::{Role, Session, SessionKind, SessionStatus};
 
 impl Store {
     /// Binds the project session `id`, currently bound to `from` (`None` for unbound), to `owner`,
-    /// with `orchestration_role` as its new role, in one statement that matches only while that
-    /// still holds, so of two changes racing for it only one lands. It also matches only while
-    /// `owner` can own sessions — it is a coordinator — and,
-    /// with `childless`, only while no session is bound to `id`: the two conditions that keep
-    /// orchestration two levels deep cannot be undone by a binding that lands between the
-    /// caller's check and this write. Returns the record as it now stands, or `None` when nothing
-    /// changed. What else `owner` may be is the caller's to check. With `owe_notice` the session is
-    /// marked owed a notice of its new owner ([`Self::mark_owner_notice`]) in the same statement,
-    /// so the change and the mark land together. Any parting note a release left owed is dropped:
-    /// the release is no longer the latest change of owner.
+    /// with `role` as its new role, in one statement that matches only while that still holds, so
+    /// of two changes racing for it only one lands. It also matches only while `owner` can own
+    /// sessions — it is a coordinator — and, with `childless`, only while no session is bound to
+    /// `id`: the two conditions that keep orchestration two levels deep cannot be undone by a
+    /// binding that lands between the caller's check and this write. Returns the record as it now
+    /// stands, or `None` when nothing changed. What else `owner` may be is the caller's to check.
+    /// With `owe_notice` the session is marked owed a notice of its new owner
+    /// ([`Self::mark_owner_notice`]) in the same statement, so the change and the mark land
+    /// together. Any parting note a release left owed is dropped: the release is no longer the
+    /// latest change of owner.
     pub fn set_binding(
         &self,
         id: &str,
         from: Option<&str>,
         owner: &str,
-        orchestration_role: OrchestrationRole,
+        role: Role,
         childless: bool,
         owe_notice: bool,
     ) -> Result<Option<Session>> {
         self.update_session_row(
             id,
-            "UPDATE sessions SET bound_to = ?3, orchestration_role = ?4,
+            "UPDATE sessions SET bound_to = ?3, role = ?4,
                     owner_notice_pending = owner_notice_pending + ?8,
                     owner_notice_note = NULL
-             WHERE id = ?1 AND role = ?5 AND bound_to IS ?2
+             WHERE id = ?1 AND kind = ?5 AND bound_to IS ?2
                AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?3
-                             AND owner.orchestration_role = ?6)
+                             AND owner.role = ?6)
                AND (?7 = 0
                     OR NOT EXISTS (SELECT 1 FROM sessions AS bound WHERE bound.bound_to = ?1))",
             params![
                 id,
                 from,
                 owner,
-                enum_to_text(&orchestration_role),
-                enum_to_text(&Role::Project),
-                enum_to_text(&OrchestrationRole::Coordinator),
+                enum_to_text(&role),
+                enum_to_text(&SessionKind::Project),
+                enum_to_text(&Role::Coordinator),
                 childless,
                 owe_notice
             ],
@@ -77,17 +77,17 @@ impl Store {
     ) -> Result<Option<Session>> {
         self.update_session_row(
             id,
-            "UPDATE sessions SET bound_to = NULL, orchestration_role = ?6,
+            "UPDATE sessions SET bound_to = NULL, role = ?6,
                     owner_notice_pending = owner_notice_pending + ?4,
                     owner_notice_note = CASE WHEN ?4 THEN ?5 END
-             WHERE id = ?1 AND role = ?3 AND bound_to IS ?2",
+             WHERE id = ?1 AND kind = ?3 AND bound_to IS ?2",
             params![
                 id,
                 from,
-                enum_to_text(&Role::Project),
+                enum_to_text(&SessionKind::Project),
                 owe_notice,
                 note,
-                enum_to_text(&OrchestrationRole::Coordinator)
+                enum_to_text(&Role::Coordinator)
             ],
         )
     }
@@ -107,15 +107,15 @@ impl Store {
         let tx = conn.transaction()?;
         if let Some(owner) = coordinator_of {
             let bound = tx.execute(
-                "UPDATE sessions SET bound_to = ?2, orchestration_role = ?5, owner_notice_note = NULL
-                 WHERE id = ?1 AND role = ?3 AND bound_to IS NULL
-                   AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?2 AND owner.role = ?4)",
+                "UPDATE sessions SET bound_to = ?2, role = ?5, owner_notice_note = NULL
+                 WHERE id = ?1 AND kind = ?3 AND bound_to IS NULL
+                   AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?2 AND owner.kind = ?4)",
                 params![
                     to,
                     owner,
-                    enum_to_text(&Role::Project),
-                    enum_to_text(&Role::Console),
-                    enum_to_text(&OrchestrationRole::Coordinator)
+                    enum_to_text(&SessionKind::Project),
+                    enum_to_text(&SessionKind::Console),
+                    enum_to_text(&Role::Coordinator)
                 ],
             )?;
             if bound == 0 {
@@ -281,10 +281,10 @@ mod tests {
     fn project_session(id: &str, bound_to: Option<&str>) -> Session {
         let mut built = session(None);
         built.id = id.to_string();
-        built.role = Role::Project;
+        built.kind = SessionKind::Project;
         built.bound_to = bound_to.map(str::to_string);
         if bound_to.is_some() {
-            built.orchestration_role = OrchestrationRole::Worker;
+            built.role = Role::Worker;
         }
         built
     }
@@ -305,8 +305,8 @@ mod tests {
             for session in store.list_sessions().unwrap() {
                 if session.bound_to.is_none() {
                     assert_eq!(
-                        session.orchestration_role,
-                        OrchestrationRole::Coordinator,
+                        session.role,
+                        Role::Coordinator,
                         "{} after {step}",
                         session.id
                     );
@@ -315,14 +315,7 @@ mod tests {
         };
         check("the inserts");
         store
-            .set_binding(
-                "a",
-                None,
-                "session-1",
-                OrchestrationRole::Worker,
-                false,
-                false,
-            )
+            .set_binding("a", None, "session-1", Role::Worker, false, false)
             .unwrap()
             .expect("bound as a worker");
         check("binding a worker");
@@ -332,14 +325,7 @@ mod tests {
             .expect("released");
         check("releasing it");
         store
-            .set_binding(
-                "a",
-                None,
-                "session-1",
-                OrchestrationRole::Coordinator,
-                false,
-                false,
-            )
+            .set_binding("a", None, "session-1", Role::Coordinator, false, false)
             .unwrap()
             .expect("bound as a coordinator");
         check("binding a coordinator");
@@ -378,14 +364,7 @@ mod tests {
 
         // The owner binds itself to a project session after the new session's owner was resolved.
         store
-            .set_binding(
-                "owner",
-                None,
-                "peer",
-                OrchestrationRole::Worker,
-                true,
-                false,
-            )
+            .set_binding("owner", None, "peer", Role::Worker, true, false)
             .expect("binding")
             .expect("the owner had no sessions of its own");
         assert!(!store
@@ -404,7 +383,7 @@ mod tests {
         // The other order: with the child in place, the owner can no longer be bound to a project
         // session.
         assert!(store
-            .set_binding("free", None, "peer", OrchestrationRole::Worker, true, false)
+            .set_binding("free", None, "peer", Role::Worker, true, false)
             .expect("binding")
             .is_none());
 
@@ -489,7 +468,7 @@ mod tests {
                 "coordinator",
                 None,
                 "session-1",
-                OrchestrationRole::Coordinator,
+                Role::Coordinator,
                 false,
                 false,
             )
@@ -508,10 +487,7 @@ mod tests {
             .clear_binding("coordinator", "session-1", true, Some("good luck"))
             .unwrap()
             .expect("cleared");
-        assert_eq!(
-            (cleared.bound_to, cleared.orchestration_role),
-            (None, OrchestrationRole::Coordinator)
-        );
+        assert_eq!((cleared.bound_to, cleared.role), (None, Role::Coordinator));
         // The mark lands with the change, and only with a change that landed.
         assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 1);
         assert_eq!(store.owner_notice_pending("child").unwrap(), 0);
@@ -521,14 +497,7 @@ mod tests {
             Some("good luck")
         );
         store
-            .set_binding(
-                "coordinator",
-                None,
-                "session-1",
-                OrchestrationRole::Worker,
-                false,
-                true,
-            )
+            .set_binding("coordinator", None, "session-1", Role::Worker, false, true)
             .unwrap()
             .expect("bound again");
         assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 2);
@@ -546,14 +515,7 @@ mod tests {
         assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 2);
         // The note goes with the count that delivered it, and stays with a newer mark.
         store
-            .set_binding(
-                "coordinator",
-                None,
-                "session-1",
-                OrchestrationRole::Worker,
-                false,
-                false,
-            )
+            .set_binding("coordinator", None, "session-1", Role::Worker, false, false)
             .unwrap()
             .expect("bound once more");
         store
@@ -574,14 +536,7 @@ mod tests {
             Some("kept")
         );
         store
-            .set_binding(
-                "coordinator",
-                None,
-                "session-1",
-                OrchestrationRole::Worker,
-                false,
-                false,
-            )
+            .set_binding("coordinator", None, "session-1", Role::Worker, false, false)
             .unwrap()
             .expect("bound again");
         store

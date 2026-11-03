@@ -7,8 +7,8 @@ use crate::coordinator::test_support::{
     temp_dir,
 };
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, ConversationLocation, Event, OrchestrationRole, Origin,
-    RequestBody, Role, Session, SessionStatus,
+    error_code, Account, Agent, CodedError, ConversationLocation, Event, Origin, RequestBody, Role,
+    Session, SessionKind, SessionStatus,
 };
 use crate::session::term;
 use crate::state::AppState;
@@ -54,35 +54,35 @@ async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
     let mut holder = project_session("holder", Agent::Claude, SessionStatus::Archived);
     holder.agent_session_id = Some(ID.to_string());
     state.store.insert_session(&holder).unwrap();
-    let check = |role, project: Option<&str>, bound_to: Option<&str>, id: &str| {
-        checked_resume_id(&state, role, project, bound_to, Some(id.to_string()))
+    let check = |kind, project: Option<&str>, bound_to: Option<&str>, id: &str| {
+        checked_resume_id(&state, kind, project, bound_to, Some(id.to_string()))
     };
 
     // (what is refused, the result, the code it is refused with)
     let cases = [
         (
             "a console session",
-            check(Role::Console, None, None, ID),
+            check(SessionKind::Console, None, None, ID),
             error_code::RESUME_FOR_CONSOLE_SESSION,
         ),
         (
             "a session that reports to another",
-            check(Role::Project, Some("project-1"), Some("hub"), ID),
+            check(SessionKind::Project, Some("project-1"), Some("hub"), ID),
             error_code::CONFLICTING_FIELDS,
         ),
         (
             "an id that is not a UUID",
-            check(Role::Project, Some("project-1"), None, "my-title"),
+            check(SessionKind::Project, Some("project-1"), None, "my-title"),
             error_code::RESUME_ID_INVALID,
         ),
         (
             "an id a session of the project holds",
-            check(Role::Project, Some("project-1"), None, ID),
+            check(SessionKind::Project, Some("project-1"), None, ID),
             error_code::CONVERSATION_IN_SESSION,
         ),
         (
             "an id a session of another project holds",
-            check(Role::Project, Some("project-2"), None, ID),
+            check(SessionKind::Project, Some("project-2"), None, ID),
             error_code::CONVERSATION_OUTSIDE_PROJECT,
         ),
     ];
@@ -90,12 +90,12 @@ async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
         assert_eq!(code_of(&result.expect_err(what)), code, "{what}");
     }
     // The session already holding it is named by id, which the UI words as its current title.
-    let err = check(Role::Project, Some("project-1"), None, ID).unwrap_err();
+    let err = check(SessionKind::Project, Some("project-1"), None, ID).unwrap_err();
     assert_eq!(
         err.downcast_ref::<CodedError>().unwrap().params["session"],
         "holder"
     );
-    let err = check(Role::Project, Some("project-2"), None, ID).unwrap_err();
+    let err = check(SessionKind::Project, Some("project-2"), None, ID).unwrap_err();
     assert_eq!(
         err.downcast_ref::<CodedError>().unwrap().params["session"],
         "holder"
@@ -103,7 +103,7 @@ async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
     let free = "99999999-2222-3333-4444-555555555555";
     assert_eq!(
         check(
-            Role::Project,
+            SessionKind::Project,
             Some("project-1"),
             None,
             &format!(" {} \n", free.to_uppercase())
@@ -111,7 +111,7 @@ async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
         .unwrap(),
         Some(free.to_string())
     );
-    assert_eq!(check(Role::Console, None, None, "  ").unwrap(), None);
+    assert_eq!(check(SessionKind::Console, None, None, "  ").unwrap(), None);
 
     // Through `open_session`, where the refusal leaves no record of the one to open.
     let err = open_session(
@@ -490,7 +490,7 @@ async fn the_check_before_asking_to_resume_refuses_a_conversation_that_is_gone()
     state.store.insert_session(&owner).unwrap();
     let mut held = archived_with_conversation("s", Agent::Claude, &account);
     held.bound_to = Some("owner".to_string());
-    held.orchestration_role = OrchestrationRole::Worker;
+    held.role = Role::Worker;
     state.store.insert_session(&held).unwrap();
 
     let err = check_can_resume_with(&state, "s", stub_shell(&dir))
@@ -539,7 +539,7 @@ fn insert_hub_and_worker(state: &Arc<AppState>, hub_account: &Path, worker_accou
         },
         Session {
             bound_to: Some("hub".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             ..archived_with_conversation("worker", Agent::Claude, worker_account)
         },
     ] {
@@ -638,7 +638,7 @@ async fn a_reopen_whose_target_cannot_be_unarchived_leaves_the_owner_archived() 
         .store
         .insert_session(&Session {
             bound_to: Some("hub".to_string()),
-            orchestration_role: OrchestrationRole::Worker,
+            role: Role::Worker,
             ..archived_with_conversation("worker", Agent::Codex, &account)
         })
         .unwrap();

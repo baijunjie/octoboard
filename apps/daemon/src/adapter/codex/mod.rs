@@ -368,7 +368,7 @@ impl AgentAdapter for CodexAdapter {
         }
 
         let mut instructions = session_tools::role::role_description(
-            spec.role,
+            spec.kind,
             spec.owner.as_ref(),
             Agent::Codex,
             &spec.role_options(),

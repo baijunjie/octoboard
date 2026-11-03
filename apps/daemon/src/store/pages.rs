@@ -5,7 +5,7 @@ use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::enum_to_text;
 use super::Store;
-use crate::protocol::{OrchestrationRole, Page};
+use crate::protocol::{Page, Role};
 
 impl Store {
     pub fn get_page(&self, id: &str) -> Result<Option<Page>> {
@@ -31,13 +31,13 @@ impl Store {
             "INSERT INTO pages (id, session_id, html, created_at)
              SELECT ?1, ?2, ?3, ?4
              WHERE NOT EXISTS (SELECT 1 FROM sessions
-                               WHERE id = ?2 AND orchestration_role = ?5)",
+                               WHERE id = ?2 AND role = ?5)",
             params![
                 page.id,
                 page.session_id,
                 page.html,
                 page.created_at,
-                enum_to_text(&OrchestrationRole::Worker),
+                enum_to_text(&Role::Worker),
             ],
         )?;
         Ok(inserted > 0)
@@ -127,13 +127,11 @@ impl Store {
         let mut stmt = conn.prepare(
             "SELECT DISTINCT p.session_id FROM pages p
              JOIN sessions s ON s.id = p.session_id
-             WHERE s.orchestration_role = ?1
+             WHERE s.role = ?1
              ORDER BY p.session_id",
         )?;
         let ids = stmt
-            .query_map(params![enum_to_text(&OrchestrationRole::Worker)], |row| {
-                row.get(0)
-            })?
+            .query_map(params![enum_to_text(&Role::Worker)], |row| row.get(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(ids)
     }

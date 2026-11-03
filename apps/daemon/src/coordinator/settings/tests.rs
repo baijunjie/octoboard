@@ -2,7 +2,9 @@ use super::*;
 use crate::coordinator::accounts::create_account;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::only_account;
-use crate::protocol::{Agent, ApprovalReviewer, ClaudeApprovalMode, Event, RequestBody, Role};
+use crate::protocol::{
+    Agent, ApprovalReviewer, ClaudeApprovalMode, Event, RequestBody, SessionKind,
+};
 use crate::test_support::bare_session;
 
 #[test]
@@ -177,7 +179,7 @@ async fn the_codex_approval_reviewer_applies_to_every_codex_account_and_only_to_
     )
     .unwrap();
     let account = only_account(&state);
-    let mut session = bare_session("session-1", Role::Project);
+    let mut session = bare_session("session-1", SessionKind::Project);
     session.agent = Agent::Codex;
     assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
 
@@ -249,7 +251,7 @@ async fn the_claude_approval_mode_applies_to_every_claude_account_and_only_to_cl
     )
     .unwrap();
     let account = only_account(&state);
-    let mut session = bare_session("session-1", Role::Project);
+    let mut session = bare_session("session-1", SessionKind::Project);
     session.agent = Agent::Claude;
     assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
 

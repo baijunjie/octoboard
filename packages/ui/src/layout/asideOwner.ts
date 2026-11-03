@@ -15,7 +15,7 @@ export type AsideOwner = { kind: "report"; consoleSession: string } | { kind: "p
  * session's project. */
 export function ownerForSession(session: Session | undefined): AsideOwner | undefined {
   if (!session) return undefined;
-  if (session.role === "console") return { kind: "report", consoleSession: session.id };
+  if (session.kind === "console") return { kind: "report", consoleSession: session.id };
   return session.project_id ? { kind: "project", project: session.project_id } : undefined;
 }
 
@@ -28,7 +28,7 @@ export function liveOwner(
 ): AsideOwner | undefined {
   if (!owner) return undefined;
   if (owner.kind === "project") return projects.has(owner.project) ? owner : undefined;
-  return sessions.get(owner.consoleSession)?.role === "console" ? owner : undefined;
+  return sessions.get(owner.consoleSession)?.kind === "console" ? owner : undefined;
 }
 
 /** What is left of `owner` once `consoleId` is the current console: a browser of a project of

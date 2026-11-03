@@ -343,14 +343,13 @@ Every session record the session tools give — `list_projects`' sessions, `get_
 `list_archived_sessions`, and the record `rename_session` and `set_session_pinned` answer with — carries `owner` (the id
 of the session it is bound to, or null when it is independent — always null for a console session, which is never
 bound), `owner_kind` (`console` or `project`, the kind of session that parent is; null when independent) and `yours`
-(whether that parent is the caller). `orchestration_role` is `coordinator` or `worker`: it describes the ability to
-create and manage child sessions, separately from the parent relationship. Console sessions read `coordinator`; project
-sessions use the roles described in `docs/product/hub-orchestration.md`. A coordinator can have a parent and no
-children.
+(whether that parent is the caller). `kind` is `console` or `project`, the kind of session the record is. `role` is
+`coordinator` or `worker`: it describes the ability to create and manage child sessions, separately from the parent
+relationship. Console sessions read `coordinator`; project sessions use the roles described in
+`docs/product/hub-orchestration.md`. A coordinator can have a parent and no children.
 
-Session records sent to windows carry `orchestration_role` too, always, and name the parent `bound_to`. A project
-session's role cannot be inferred from a non-null parent alone, since a coordinator can also have a parent: it is read
-from `orchestration_role`.
+Session records sent to windows carry `role` too, always, and name the parent `bound_to`. A project session's role
+cannot be inferred from a non-null parent alone, since a coordinator can also have a parent: it is read from `role`.
 
 Each record also carries `background_tasks`: for a Claude Code session working in background, the work it left running,
 each entry with `id` and, where Claude Code gives them, `type` and `description`; an empty list for every other session.
@@ -459,5 +458,5 @@ And each record carries what tells sessions apart and what an owner decides on:
   records show.
 - `owned_sessions`, how many sessions are bound to it in any status, archived ones included — the count that decides
   whom it can be bound to (see "Who can own a session" in `docs/product/changing-session-owners.md`). A project
-  coordinator with a console parent reads `coordinator` in `orchestration_role` with `owner_kind` `console` (see
+  coordinator with a console parent reads `coordinator` in `role` with `owner_kind` `console` (see
   "Coordinators with a parent session" in `docs/product/hub-orchestration.md`).

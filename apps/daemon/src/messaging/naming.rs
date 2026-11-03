@@ -32,7 +32,7 @@ pub(crate) fn session_labels<'a>(sessions: impl IntoIterator<Item = &'a Session>
 
 /// A session as a message names it: its kind, id and title.
 pub(crate) fn named_session(session: &Session) -> String {
-    format!("the {} session {}", session.role.kind(), label(session))
+    format!("the {} session {}", session.kind.name(), label(session))
 }
 
 /// Who a session reports to, as the records say.

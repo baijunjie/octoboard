@@ -30,7 +30,7 @@ export function resolveFocus(
     }
     case "consoleSession": {
       const consoleSession = sessions.get(id);
-      return consoleSession?.role === "console" && consoleSession.console_id === consoleId && consoleSession.status !== "archived"
+      return consoleSession?.kind === "console" && consoleSession.console_id === consoleId && consoleSession.status !== "archived"
         ? { consoleSession }
         : undefined;
     }
@@ -95,7 +95,7 @@ export function shortcutOutcome(
 ): { focus: FocusTarget | undefined } | undefined {
   if (focus) return { focus: undefined };
   if (!selected) return undefined;
-  if (selected.role === "console") {
+  if (selected.kind === "console") {
     return selected.status === "archived" ? undefined : { focus: { consoleSession: selected } };
   }
   const project = selected.project_id ? projects.get(selected.project_id) : undefined;

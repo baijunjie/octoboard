@@ -67,7 +67,7 @@ macro_rules! session_record_fields {
          tells beforehand). `model` and `effort`, when present, are the session's own choices, \
          `null` leaving them to the agent's default; absent, it follows its project's (else \
          console's) setting; `set_session_model` changes them for a session of yours. \
-         `orchestration_role` is `coordinator` (can manage child sessions) or `worker` (cannot); \
+         `role` is `coordinator` (can manage child sessions) or `worker` (cannot); \
          `owner` is the parent session, null when independent, and `owner_kind` its kind. A \
          coordinator may have a parent and no child sessions. `owned_sessions` counts child \
          sessions in any status, archived ones included, which is what decides whom it can be \
@@ -88,7 +88,7 @@ pub(super) const GET_SESSION: ToolDef = ToolDef {
          owns it (`owner: null` on a project session) or it reports to a different session: leave \
          it alone. A session that is waiting for the user, or `dormant` over its background-agents \
          view, must be left alone until they have answered or left it. `owner` says whose it is, \
-         `owner_kind` whether that is a console or a project session, and `role` whether the \
+         `owner_kind` whether that is a console or a project session, and `kind` whether the \
          session itself is a console session. An idle session with a non-empty \
          `background_tasks` takes messages like any idle session but still has work running in \
          the background. A non-null `writes_held` says why messages for a running \
@@ -396,7 +396,7 @@ pub(super) const LIST_SESSIONS: ToolDef = ToolDef {
     description: concat!(
         "List the running sessions other than this one, in every console and project, \
          console sessions included (`status` selects the interrupted ones instead, or \
-         both): id, title, agent, status, `role` (a console or a project session), \
+         both): id, title, agent, status, `kind` (a console or a project session), \
          `console`, `project` (null for a console session), and `owner` (the session it \
          reports to, `owner_kind` saying whether that is a console or a project session; \
          null when nobody owns it and it reports to the user). `yours` marks a session \

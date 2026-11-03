@@ -224,7 +224,7 @@ it("retains the daemon reason for rich rendering inside the Alert, which announc
   expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Try again")).toBe(true);
 });
 
-const owner = { id: "owner-1", title: "Release captain", role: "console" } as Session;
+const owner = { id: "owner-1", title: "Release captain", kind: "console" } as Session;
 
 async function mountChild(boundTo: string | null, onSelectSession: ((session: Session) => void) | null = vi.fn()): Promise<HTMLElement> {
   request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });

@@ -194,7 +194,7 @@ function SessionRequestSentence({ request, incomplete }: { request: SessionReque
       </p>
     );
   }
-  const question = request.role === "console"
+  const question = request.kind === "console"
     ? <Message id="dialog.sessionRequest.question.console" params={params} />
     : <Message id="dialog.sessionRequest.question.project" params={{ ...params, project }} />;
   return (

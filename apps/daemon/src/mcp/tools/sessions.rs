@@ -17,7 +17,7 @@ use crate::mcp::lookup::{
 };
 use crate::mcp::views::{account_fields, branch_names_of, describe_session};
 use crate::messaging::texts::{self, branches_opening_prompt, request_opening_prompt};
-use crate::protocol::{Console, Origin, Project, Role, Session};
+use crate::protocol::{Console, Origin, Project, Session, SessionKind};
 use crate::session::term::{Launch, LaunchRequest};
 use crate::session_request;
 use crate::state::bindings::owned_count_of;
@@ -36,7 +36,7 @@ pub(in crate::mcp) async fn open_session(
         + 'static,
 ) -> Result<Value> {
     let (project, open) = session_to_start(state, caller, arguments)?;
-    if caller.role == Role::Console
+    if caller.kind == SessionKind::Console
         && optional_string_list(arguments, "branches")?.is_some_and(|names| !names.is_empty())
     {
         bail!(
@@ -93,13 +93,13 @@ fn session_to_start(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<(Project, OpenRequest)> {
-    let project = match caller.role {
-        Role::Console => resolve_project(
+    let project = match caller.kind {
+        SessionKind::Console => resolve_project(
             state,
             &caller.console_id,
             required_str(arguments, "project")?,
         )?,
-        Role::Project => own_project(state, caller, optional_string(arguments, "project"))?,
+        SessionKind::Project => own_project(state, caller, optional_string(arguments, "project"))?,
     };
     let open = session_in(
         state,
@@ -292,7 +292,7 @@ pub(in crate::mcp) async fn request_session(
             }
             let project = match optional_string(arguments, "project") {
                 Some(wanted) => find_project(state, caller, &wanted)?,
-                None if caller.role == Role::Project => own_project(state, caller, None)?,
+                None if caller.kind == SessionKind::Project => own_project(state, caller, None)?,
                 None => bail!("`project` is required for a session in a project"),
             };
             let console = state

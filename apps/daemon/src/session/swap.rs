@@ -623,7 +623,7 @@ mod tests {
             .store
             .insert_session(&crate::test_support::bare_session(
                 id,
-                crate::protocol::Role::Project,
+                crate::protocol::SessionKind::Project,
             ))
             .unwrap();
     }

@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::branch_origin::transfer::BranchTransfer;
 use crate::coordinator::open::OpenRequest;
-use crate::protocol::{Agent, Event, Role, Session, SessionRequestAction};
+use crate::protocol::{Agent, Event, Session, SessionKind, SessionRequestAction};
 use crate::time::now_millis;
 
 use super::outcome::approval_wording;
@@ -99,10 +99,10 @@ impl Request {
     }
 
     /// Whether the session asked for is a console session, which is opened without a project.
-    fn role(&self) -> Role {
+    fn kind(&self) -> SessionKind {
         match self.project {
-            Some(_) => Role::Project,
-            None => Role::Console,
+            Some(_) => SessionKind::Project,
+            None => SessionKind::Console,
         }
     }
 
@@ -226,7 +226,7 @@ impl Request {
             request_id: self.id.clone(),
             session: self.session.clone(),
             action,
-            role: self.role(),
+            kind: self.kind(),
             console: self.console.clone(),
             project: self.project.clone(),
             agent: self.agent,

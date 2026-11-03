@@ -114,7 +114,7 @@ The call returns:
 |---|---|
 | `action` | `reopened`, `resumed`, `opened` or `already_running`, as above. |
 | `session` | The session reopened, resumed, opened or found running. |
-| `role`, `agent`, `title`, `console`, `project` | That session's, as they stand after the approval. |
+| `kind`, `agent`, `title`, `console`, `project` | That session's, as they stand after the approval. |
 | `owner` | The session it reports to, or null when it reports to the user. |
 | `reopened_owners` | The ids of the archived owners the approval reopened with it; empty for none. |
 | `renamed` | Present only when the request asked for a rename that was still needed: true when it was given, false when it could not be. |

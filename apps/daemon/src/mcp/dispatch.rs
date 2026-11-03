@@ -3,7 +3,7 @@
 //!
 //! The calling session is resolved from the token the call arrived with, never from an argument,
 //! so a child that rewrote its own arguments still cannot act on another session. Which tools it
-//! may call follows from that session's role and whether it has the role of a worker,
+//! may call follows from that session's kind and whether it has the role of a worker,
 //! checked here as well as in the child: the child is a separate process and its announcement is
 //! not something the daemon can rely on.
 //!
@@ -75,7 +75,7 @@ async fn dispatch(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let session = state.session_record(session_id)?;
-    if tool_by_name(session.role, session.is_worker(), tool).is_none() {
+    if tool_by_name(session.kind, session.is_worker(), tool).is_none() {
         bail!("`{tool}` is not a tool this session can call");
     }
 
@@ -208,7 +208,7 @@ mod tests {
         assert!(heard.contains("finished-although-cut-off"), "{heard}");
     }
 
-    /// What a session is offered follows from its role and binding, and the daemon holds to it:
+    /// What a session is offered follows from its kind and binding, and the daemon holds to it:
     /// a session bound to another session has no orchestration tools, whatever its child
     /// announced.
     #[tokio::test]

@@ -34,7 +34,7 @@ use crate::messaging::owner_notices::{
 };
 use crate::messaging::texts::{takeover_prompt, NOTICE_PREFIX};
 use crate::protocol::{
-    error_code, notice_code, Agent, CodedError, Notice, OrchestrationRole, Session, SessionStatus,
+    error_code, notice_code, Agent, CodedError, Notice, Role, Session, SessionStatus,
     TerminalAppearance,
 };
 use crate::session::term;
@@ -203,8 +203,9 @@ pub(crate) fn receiving_request(
         ),
         origin: original.origin,
         // A worker's owner is reported to from the first launch. A coordinator under a console
-        // session is bound after the launch instead, for it launches as an unbound one does, with
-        // the tools of one.
+        // session is bound after the launch instead, by `transfer_binding`, which binds it and
+        // moves the sessions the original owns to it in one transaction once the handoff has gone
+        // through, and it is told its parent with the handoff package.
         bound_to: original
             .is_worker()
             .then(|| original.bound_to.clone())
@@ -294,7 +295,7 @@ async fn move_place_inner(
     receiving: &Session,
     hold: &OutboxHold,
 ) -> Result<Moved> {
-    let coordinator_of = (original.orchestration_role == OrchestrationRole::Coordinator)
+    let coordinator_of = (original.role == Role::Coordinator)
         .then(|| original.bound_to.clone())
         .flatten();
     let ids = state
@@ -427,12 +428,11 @@ pub(super) async fn tell(
 
     let mut held = String::new();
     match &owner {
-        Some(owner) if receiving.orchestration_role == OrchestrationRole::Coordinator => held
-            .push_str(&format!(
-                "\n- Your role is coordinator and your parent session is {}: {}",
-                named_session(owner),
-                duties_under_new_parent(receiving.agent, true),
-            )),
+        Some(owner) if receiving.role == Role::Coordinator => held.push_str(&format!(
+            "\n- Your role is coordinator and your parent session is {}: {}",
+            named_session(owner),
+            duties_under_new_parent(receiving.agent, true),
+        )),
         Some(owner) => held.push_str(&format!(
             "\n- Your role is worker and your parent session is {}: take work only from it, or \
              from the user typing in this terminal, and report to it with `{}`. You cannot create \

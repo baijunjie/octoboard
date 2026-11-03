@@ -18,7 +18,7 @@ use crate::git::repo_files::repository_of;
 use crate::mcp::tools::session_branches::branch_entry;
 use crate::messaging::naming::named_session;
 use crate::messaging::texts::NOTICE_PREFIX;
-use crate::protocol::{Project, Role, Session, SessionStatus};
+use crate::protocol::{Project, Session, SessionKind, SessionStatus};
 use crate::state::AppState;
 
 use super::{branch_names, held_by, refuse_if_at_work, untold_note, Parties};
@@ -122,7 +122,7 @@ pub(in crate::mcp) async fn transfer_branches(
 /// The project of `session`, whose repository the branches are in. A console session is in no
 /// project and is responsible for no branch, so it can neither give nor take one.
 fn project_of(state: &Arc<AppState>, session: &Session) -> Result<Project> {
-    if session.role == Role::Console {
+    if session.kind == SessionKind::Console {
         bail!(
             "{} is a console session, which is responsible for no branch: name a project session \
              as `from` and `to`",
