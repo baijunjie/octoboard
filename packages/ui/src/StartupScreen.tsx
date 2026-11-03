@@ -132,7 +132,7 @@ export function NoAddressMessage(): React.ReactElement {
       </p>
       <ul className="list-disc space-y-3 ps-5">
         <li>
-          <Message id="startup.noAddress.query" params={{ port: code("?port="), key: code("?key=") }} />
+          <Message id="startup.noAddress.queryWithKey" params={{ port: code("?port="), key: code("&key=") }} />
         </li>
         <li>
           <Message id="startup.noAddress.env" params={{ portVar: code("VITE_DAEMON_PORT"), keyVar: code("VITE_DAEMON_KEY") }} />

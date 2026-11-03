@@ -14,7 +14,7 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 | Path | Role |
 |---|---|
 | `nuxt.config.ts`, `site.config.ts` | Nuxt configuration: runtime config from `config/app.json`, fonts, the locale table passed to `@nuxtjs/i18n`, prerendered routes, the sitemap and, on `prerender:done`, `robots.txt`, `404.html` and the agent files; it throws at load when a committed share image is missing. `site.config.ts` holds only the deployment origin (defaulting to the website address in `config/app.json`), base path and site URL |
-| `seo/` | Ordinary project code (not Nuxt's `shared/`) imported by both the Vue app and `nuxt.config.ts`: `site-seo.ts` (locale table, `robots.txt`, canonical and Markdown paths, JSON-LD), `page-outline.ts` (the homepage's feature groups, sections, steps, workflow nodes, privacy sections, walked by both the Vue app and the Markdown renderer), `agent-documents.ts` (renders the Markdown files and `llms*.txt` from the catalogs; Node only) |
+| `seo/` | Ordinary project code (not Nuxt's `shared/`) imported by both the Vue app and `nuxt.config.ts`: `site-seo.ts` (locale table, `robots.txt`, canonical and Markdown paths, JSON-LD), `page-outline.ts` (the homepage's feature groups, sections, steps, workflow nodes, privacy sections and FAQ answer-key selection, shared by the Vue app, Markdown renderer and JSON-LD), `agent-documents.ts` (renders the Markdown files and `llms*.txt` from the catalogs; Node only), `privacy-date.ts` (the policy revision date and its shared UTC formatter) |
 | `app/` | The Vue app: `app.vue` (shell and head), `error.vue`, `pages/` (home, privacy, the unlocalized `404.vue`), `components/` (header, footer, navigation, feature wall and illustrations, workflow demo, product preview host, analytics consent), `composables/` (site SEO, home section tracking, consent, glass, reveal, visible motion, copy interpolation, `usePreviewFrame.ts` the lifecycle of an embedded preview frame), `plugins/` (client-side language detection and analytics consent), `assets/` (CSS, local icons), `utils/` |
 | `i18n/locales/` | All website copy, one JSON catalog per language; English is the source |
 | `scripts/` | `build-preview.mjs` (runs the UI's `build:preview`), `check-locales.mjs` (catalog coverage, keys, placeholders), `generate-og-images.py` (draws one committed 1200×630 share image per route code, `zh` not `zh-Hans`, from `public/wordmark.png` and each catalog's slogan and title lines; not run by `nuxt generate`, and `nuxt.config.ts` throws when an image is missing; its requirements and fonts are in the script's docstring), `preview.mjs` (serves `.output/public` on loopback at the configured base path, on `PORT` or 4318, with the generated error document for missing files and `.md` as `text/markdown`) |
@@ -53,6 +53,8 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 | Need | Entry point |
 |---|---|
 | Locale table, canonical and Markdown paths, JSON-LD | `seo/site-seo.ts` |
+| FAQ answer keys across HTML, Markdown and JSON-LD | `seo/page-outline.ts` (`homeQuestionAnswerKey`) |
+| Privacy revision date across HTML and Markdown | `seo/privacy-date.ts` (`privacyUpdatedDate`, `formatPrivacyDate`) |
 | Product and operator names in copy | `app/composables/useSiteCopy.ts` |
 | SEO head tags on a page | `app/composables/useSiteSeo.ts` |
 | Visibility and reduced-motion gating of animation | `app/composables/useVisibleMotion.ts` |

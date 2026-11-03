@@ -141,7 +141,7 @@ it("keeps the default agent, accounts and session instructions notes visible, an
   await openAdvanced();
   const text = document.body.textContent ?? "";
   expect(text).toContain("A project with its own default agent uses that instead.");
-  expect(text).toContain("Every session of an agent in this console uses its account here");
+  expect(text).toContain("Sessions in this console use the account selected here for their agent, unless the project or session specifies another.");
   expect(text).toContain("take precedence over them where the two conflict.");
   expect(text).not.toContain("Each agent has its own models");
   expect(buttons().some((b) => b.getAttribute("aria-label")?.startsWith("About"))).toBe(false);

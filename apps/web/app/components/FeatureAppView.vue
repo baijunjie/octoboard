@@ -31,7 +31,7 @@ const scale = computed(() => Math.min(1, width.value / canvasWidth.value, height
 
 <template>
   <div ref="host" class="feature-app-view" :class="{ 'is-ready': ready }" aria-hidden="true" inert>
-    <div v-if="!ready" class="app-view-placeholder"><FeatureGlyph name="file" :size="24" /><span>{{ t(failed ? 'previewError' : 'previewLoading') }}</span></div>
+    <div v-if="!ready" class="app-view-placeholder"><FeatureGlyph name="file" :size="24" /><span>{{ t(failed ? 'featurePreviewError' : 'previewLoading') }}</span></div>
     <iframe v-if="visible" :key="source" ref="frame" :src="source" :title="t(`${feature}FeatureTitle`)" :width="canvasWidth" :height="canvasHeight" tabindex="-1" aria-hidden="true" inert sandbox="allow-scripts allow-same-origin" :style="{ width: `${canvasWidth}px`, height: `${canvasHeight}px`, transform: `translate(-50%, -50%) scale(${scale})` }" />
   </div>
 </template>

@@ -43,6 +43,12 @@ export const homeQuestions = [
   "CliResume",
 ] as const;
 
+export function homeQuestionAnswerKey(question: typeof homeQuestions[number]): string {
+  if (question === "Subagents") return "faqProjectIsolationAnswer";
+  if (question === "Brands") return "faqAgentChoiceAnswer";
+  return `faq${question}Answer`;
+}
+
 export const developedPlatform = {
   name: "macOS",
   icon: "apple-logo",

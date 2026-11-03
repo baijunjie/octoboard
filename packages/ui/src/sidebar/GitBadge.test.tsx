@@ -2,7 +2,6 @@
 import React, { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { appConfig } from "../appConfig";
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { enter, leave, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../fixtures/builders";
@@ -184,7 +183,7 @@ for (const placement of PLACEMENTS) {
     expect(popover.contains(document.activeElement)).toBe(true);
     expect(Array.from(popover.querySelectorAll("p"), (p) => p.textContent)).toEqual([
       "Git reported an error the last time this project’s repository was checked or pulled.",
-      `${appConfig.name} checks it again on its own. If the error does not go away, resolve it in the repository with Git.`,
+      "The repository is checked again automatically. If the error persists, resolve it in the repository with Git.",
     ]);
     // Git's text comes last, on a diagnostic block of its own.
     const block = popover.querySelector("pre")!;

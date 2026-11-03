@@ -15,7 +15,7 @@ function mount(element: React.ReactElement) {
 }
 
 const click = (element: Element | null | undefined) => act(async () => void (element as HTMLElement | undefined)?.click());
-const remove = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('button[aria-label^="Stop trusting"]')!;
+const remove = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('button[aria-label^="Remove trusted folder"]')!;
 
 it("lists a folder without a line of its own under it, beneath only the section lead", () => {
   const container = mount(<TrustedFoldersSection />);
@@ -33,7 +33,7 @@ it("asks before removing, saying what is kept, and removes only on confirming", 
   // Written with the home directory as `~`, as the row it came from is.
   expect(dialog.textContent).toContain("~/work");
   expect(dialog.textContent).not.toContain("/home/dev");
-  expect(dialog.textContent).toContain("running sessions and the trust each agent has already recorded are kept");
+  expect(dialog.textContent).toContain("running sessions and trust already recorded by each agent are kept");
   await click([...dialog.querySelectorAll("button")].find((button) => button.textContent === "Remove"));
   expect(request).toHaveBeenCalledWith({ type: "remove_trusted_directory", path: "/home/dev/work" });
 });

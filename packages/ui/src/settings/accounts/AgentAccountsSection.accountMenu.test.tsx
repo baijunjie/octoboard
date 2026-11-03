@@ -512,7 +512,7 @@ describe("an account's actions menu", () => {
   });
 
   it.each([
-    [{ status: "protected" }, "The directory is your home folder, the root of a disk, or holds Octoboard"],
+    [{ status: "protected" }, "The directory is your home folder, the root of a disk, or holds the application’s own data"],
     [{ status: "shared", kind: "account", name: "codex-work", agent: "Codex" }, "The directory overlaps the directory of the Codex account codex-work, so it cannot be moved to the Trash."],
     [{ status: "shared", kind: "default_account", agent: "Claude Code" }, "The directory is, holds or lies inside the default Claude Code account’s directory, so it cannot be moved to the Trash."],
     [{ status: "shared", kind: "project", name: "Site" }, "The directory holds the folder of project Site, so it cannot be moved to the Trash."],
@@ -668,10 +668,10 @@ describe("an account's actions menu", () => {
     expect(inspections()).toBe(2);
     // The first question's answer, a refusal, comes after the second was asked: it is not the second's.
     await act(async () => answer({ status: "protected" }));
-    expect(removeDialog().textContent).not.toContain("holds Octoboard");
+    expect(removeDialog().textContent).not.toContain("holds the application’s own data");
     expect(removeHeld()).toBe(true);
     await act(async () => answer({ status: "ok" }));
-    expect(removeDialog().textContent).not.toContain("holds Octoboard");
+    expect(removeDialog().textContent).not.toContain("holds the application’s own data");
     expect(removeHeld()).toBe(false);
   });
 

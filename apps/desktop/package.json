@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
+    "native:generate": "node scripts/native-localizations.mjs",
     "build:daemon": "node scripts/build-daemon.mjs",
     "build:tauri": "pnpm build:daemon && pnpm --filter @octoboard/ui build",
     "build:app": "node scripts/build-app.mjs",

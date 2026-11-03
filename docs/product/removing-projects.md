@@ -111,12 +111,11 @@ running will still be stopped, announced as it appears, and no count (see "Failu
     (`project_directory_trash_failed`), with the daemon's own text under **Error details** and in no sentence:
     - where one of them did not answer in time, the alert says that the folder, the home folder or Octoboard's data
       folder did not respond in time, so the folder could not be checked and the project was kept, and advises trying
-      again once the volume responds again, or removing the project without moving its folder to the Trash;
+      again once the volume responds;
     - where the project's own folder, or what a link there leads to, could not be read for want of permission, the
       alert says that the folder could not be read, so whether another project's files are in it could not be
       checked, and the project was kept, and advises checking the folder's permissions and granting Octoboard access
-      in the system's privacy settings if needed, then trying again, or removing the project without moving its
-      folder to the Trash;
+      in the system's privacy settings if needed, then trying again;
     - any other case (another error, no inode) is worded as any failed move.
   - For another project, it is refused as shared with that project (`project_directory_shared`). A project known to
     be in the way is named before one that only could not be looked at.

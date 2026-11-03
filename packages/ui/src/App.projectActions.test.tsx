@@ -556,11 +556,11 @@ it("asks before archiving an idle session that has left a process running, and s
   expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "archive_session" }));
   const dialog = document.querySelector('[role="alertdialog"]')!;
   expect(dialog.textContent).toContain("npm run dev");
-  expect(dialog.textContent).toContain("2 processes are stopped.");
+  expect(dialog.textContent).toContain("2 processes will be stopped.");
   const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
   expect(boxes.map((box) => box.checked)).toEqual([true, true]);
   await act(async () => boxes[0].click());
-  expect(dialog.textContent).toContain("1 process is stopped.");
+  expect(dialog.textContent).toContain("1 process will be stopped.");
   await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
   expect(daemon.request).toHaveBeenCalledWith({ type: "archive_session", session: "s-archive", keep_process_ids: ["4242:1"] });
 });

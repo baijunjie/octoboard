@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { formatPrivacyDate } from "./privacy-date.ts";
 import {
   developedPlatform,
   developerSections,
@@ -8,6 +9,7 @@ import {
   featureGroups,
   homeFeatures,
   homeQuestions,
+  homeQuestionAnswerKey,
   homeSteps,
   plannedPlatforms,
   privacySections,
@@ -192,7 +194,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     heading(2, text("faqTitle")),
     ...homeQuestions.flatMap((question) => [
       heading(3, text(`faq${question}Question`)),
-      text(`faq${question}Answer`),
+      text(homeQuestionAnswerKey(question)),
     ]),
     text("ctaNote"),
     link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
@@ -210,11 +212,11 @@ function privacyMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     `Canonical: ${canonical}`,
     text("privacyEyebrow"),
     text("privacyIntro"),
-    text("privacyUpdated"),
+    message(messages, "privacyUpdated", { ...params, date: formatPrivacyDate(locale.language) }),
     link(text("privacyBack"), home),
     ...privacySections.flatMap((section) => [
       heading(2, text(`privacy${section}Title`)),
-      text(section === "Website" ? "privacyWebsiteAnalyticsBody" : `privacy${section}Body`),
+      text(section === "Website" ? "privacyWebsiteConsentBody" : `privacy${section}Body`),
       section === "Website"
         ? link(text("privacyGithubLink"), githubPrivacyUrl)
         : undefined,
@@ -240,7 +242,7 @@ function llmsTxt(copy: AgentCopy): string {
     ...homeFeatures.map((feature) => text(`${feature.key}FeatureDescription`)),
     ...homeQuestions.map(
       (question) =>
-        `${text(`faq${question}Question`)} ${text(`faq${question}Answer`)}`,
+        `${text(`faq${question}Question`)} ${text(homeQuestionAnswerKey(question))}`,
     ),
     `Support: ${copy.contactEmail}`,
     `Repository: ${copy.repositoryUrl}`,

@@ -1,6 +1,7 @@
 import type { SessionProse } from "../terminalScripts";
 
 export const previewCopy = {
+  title: "{appName} product preview",
   demo: "Interactive demo · Sample data",
   unavailable: "The preview could not load. Reload the page to try again.",
   workspace: "Bistro workspace",

@@ -57,8 +57,8 @@ export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protoc
 // when a new read of that kind is not named here.
 // A daemon test (`interface_language.rs`) parses the UI's language list.
 export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
-// A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's `Info.plist`.
-export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.plist"];
+// A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's Info.plist template.
+export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.template.plist"];
 // A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
 export const UI_READS_ELSEWHERE = ["LICENSE"];
 // A verify test (`rerun.test.mjs`) reads the reporter that shares `REPORT_ENV` with `rerun.mjs`.
@@ -88,6 +88,7 @@ export const RULES = [
   { match: ["scripts/lib/git.mjs"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify.mjs`, `scripts/hooks/*.mjs`, `scripts/verify/tree.mjs` and `scripts/lib/env.mjs` (so by the UI's `vite.config.ts` too), and by the desktop release publishing script" },
   { match: ["scripts/lib/env.mjs", "scripts/lib/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },
   { match: ["scripts/cargo.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the command the Rust check steps run (and the Linux CI job), linted with the scripts" },
+  { match: ["scripts/sync-identity.mjs", "scripts/sync-identity.test.mjs"], consumers: ["verify"], why: "generates and checks the LICENSE and Cargo author fields from config/app.json" },
   { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },
   { match: [".gitignore"], consumers: ["verify"], why: "decides which files the working-tree snapshot (`tree.mjs`) counts; no other check reads it" },
   { match: ["config/"], consumers: ALL_PACKAGES, builds: ["ui"], why: "`config/app.json` is the product identity every package reads, and `vite.config.ts` bakes it into the UI build" },

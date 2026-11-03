@@ -140,7 +140,7 @@ it("exports the global regions on their own, the application settings checked an
   const mounted = mount();
   expect(box("Application settings").checked).toBe(true);
   expect(box("Accounts").checked).toBe(false);
-  expect(text()).toContain("No login credentials are included");
+  expect(text()).toContain("Login credentials are not included");
   await act(async () => radio("Do not export consoles").click());
   await act(async () => box("Accounts").click());
   await act(async () => box("Application settings").click());

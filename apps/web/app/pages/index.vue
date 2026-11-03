@@ -4,6 +4,7 @@ import {
   developerSections,
   heroAgents,
   homeQuestions,
+  homeQuestionAnswerKey,
   homeSteps,
   plannedPlatforms,
 } from "../../seo/page-outline";
@@ -228,7 +229,7 @@ useSeoMeta({
             <h3>{{ t(`faq${question}Question`) }}</h3>
             <span class="faq-toggle" aria-hidden="true" />
           </summary>
-          <p>{{ t(`faq${question}Answer`) }}</p>
+          <p>{{ t(homeQuestionAnswerKey(question)) }}</p>
         </details>
       </div>
     </section>

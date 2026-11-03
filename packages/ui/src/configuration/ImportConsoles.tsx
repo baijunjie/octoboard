@@ -93,7 +93,7 @@ function ProjectRow({
                   tone="warning"
                   label={t(project.account_fallbacks.length > 0 ? "configuration.import.project.state.noneAndFallbacksMark" : "configuration.import.project.state.noneMark", { project: isolate(project.name) })}
                 >
-                  <p dir="auto"><Message id="configuration.import.project.state.none" /></p>
+                  <p dir="auto"><Message id="configuration.import.project.state.absentOnHost" /></p>
                   <p dir="auto">{t("configuration.import.project.state.noneRemedy")}</p>
                   <FallbackLines fallbacks={project.account_fallbacks} />
                 </StatusMark>

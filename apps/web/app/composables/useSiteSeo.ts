@@ -2,6 +2,7 @@ import { defineLink } from "@unhead/vue";
 import {
   homeFeatures,
   homeQuestions,
+  homeQuestionAnswerKey,
 } from "../../seo/page-outline";
 import {
   buildJsonLd,
@@ -58,7 +59,7 @@ export function useSiteSeo() {
           ),
           questions: homeQuestions.map((question) => ({
             question: t(`faq${question}Question`),
-            answer: t(`faq${question}Answer`),
+            answer: t(homeQuestionAnswerKey(question)),
           })),
         }),
       ).replaceAll("<", "\\u003c")

@@ -4,8 +4,8 @@
   "version": "../package.json",
   "identifier": "dev.octoboard.desktop",
   "build": {
-    "beforeDevCommand": "pnpm --filter @octoboard/ui dev",
-    "beforeBuildCommand": "pnpm build:tauri",
+    "beforeDevCommand": "pnpm native:generate && pnpm --filter @octoboard/ui dev",
+    "beforeBuildCommand": "pnpm native:generate && pnpm build:tauri",
     "frontendDist": "../../../packages/ui/dist",
     "devUrl": "http://localhost:5174"
   },
@@ -36,8 +36,13 @@
       "icons/AppIcon.icon"
     ],
     "externalBin": ["binaries/octoboardd"],
+    "resources": {
+      "generated-localizations/en.lproj/InfoPlist.strings": "en.lproj/InfoPlist.strings",
+      "generated-localizations/zh-Hans.lproj/InfoPlist.strings": "zh-Hans.lproj/InfoPlist.strings"
+    },
     "macOS": {
       "minimumSystemVersion": "11.0",
+      "infoPlist": "Info.plist",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist",
       "dmg": {

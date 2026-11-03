@@ -40,7 +40,7 @@ export function recoveryParams<V = never>(t: Translate, mark?: (value: string, m
 export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): ReactElement | null {
   const t = useT();
   if (recovery === "none") return null;
-  const id = `error.recovery.${recovery}` as const;
+  const id = `error.recovery.${recovery === "trash" ? "trashRetry" : recovery}` as const;
   const params = recoveryParams(t, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
   return <Message id={id} params={params as never} />;
 }

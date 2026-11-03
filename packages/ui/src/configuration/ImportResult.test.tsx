@@ -240,7 +240,7 @@ it("marks a console and a project whose account fell back with a warning mark af
   expect(marks[2].parentElement!.previousElementSibling?.textContent).toBe("P2");
   expect(container.querySelector("section")!.textContent).not.toContain("is not set up");
   press(marks[1]);
-  expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("Codex account Personal is not set up in Octoboard, so the default account is used.");
+  expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("The Codex account Personal is not set up here, so the default account is used.");
   await openTab("Application settings");
   expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Application settings applied"]);
 });

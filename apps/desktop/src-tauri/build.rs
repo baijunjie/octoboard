@@ -73,5 +73,19 @@ fn main() {
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");
     // Where the update manifests are published (`src/updater.rs`).
     println!("cargo:rustc-env=OCTOBOARD_REPOSITORY_URL={repository_url}");
+    // Cargo-only checks need the same generated resources as the Tauri CLI's before-build hook.
+    for input in [
+        "../scripts/native-localizations.mjs",
+        "localizations/en.json",
+        "localizations/zh-Hans.json",
+        "Info.template.plist",
+    ] {
+        println!("cargo:rerun-if-changed={input}");
+    }
+    let generated = std::process::Command::new("node")
+        .arg("../scripts/native-localizations.mjs")
+        .status()
+        .expect("generate native localizations: Node.js is required");
+    assert!(generated.success(), "generate native localizations");
     tauri_build::build()
 }

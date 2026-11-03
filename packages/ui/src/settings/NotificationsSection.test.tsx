@@ -40,7 +40,7 @@ const base = {
 it("explains that the system manages the notifications and opens its settings on press, in the macOS app", async () => {
   const openSystemSettings = vi.fn(() => Promise.resolve());
   const { container, buttons } = await mount({ ...base, openSystemSettings });
-  expect(container.textContent).toContain("has no switch of its own");
+  expect(container.textContent).toContain("there is no separate in-app switch");
   expect(buttons()).toEqual(["Open System Settings"]);
   await act(async () => {
     container.querySelector("button")!.click();

@@ -229,7 +229,7 @@ export const CODES = {
   process_count_timed_out: { origin: "daemon", recovery: "none" },
   project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"] },
   project_directory_protected: { origin: "daemon", recovery: "trash" },
-  project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"] },
+  project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"], variants: { retryTrash: { nameParams: ["project"] } } },
   project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true, variantOf: (params) => params.cause === "unanswered" || params.cause === "unreadable" ? params.cause : undefined },
   project_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },
   // A push refused because the project's previous one is still running, and says so.

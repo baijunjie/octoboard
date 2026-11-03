@@ -96,8 +96,9 @@ These visuals are static presentations: they accept no pointer or keyboard inter
 assistive technology, which reads each card's title and description instead. Their accounts, tasks, files and
 readings are fictional; they do not connect to a daemon, run commands or agents, read real files, or change stored
 preferences. The application fragments load when approaching the viewport, with a loading placeholder until ready
-and a localized error if startup fails or takes more than 20 seconds. They require JavaScript; the card titles,
-descriptions and other illustrations remain readable without it. The separately embedded product preview retains
+and a localized error if startup fails or takes more than 20 seconds. The error directs visitors to refresh the
+page to retry that illustration. They require JavaScript; the card titles, descriptions and other illustrations
+remain readable without it. The separately embedded product preview retains
 the interactions described in `docs/product/website-product-preview.md`, "Product preview".
 
 Cards form three columns on wide screens, two at widths of 1050 pixels or less, and one at 600 pixels or less. The
@@ -148,8 +149,9 @@ Three subsections develop that position:
   cases and failures, as the deciding quality standard, and reading code alone as insufficient.
 
 The statement connects those beliefs to a workspace for coordinating agents, carrying context forward and following
-delivery, then invites readers who share the belief that people need not write code themselves. It is signed by
-BaiJunjie in every language; the author name is not translated. These are the developer's convictions and motivation,
+delivery, then invites readers who share the belief that people need not write code themselves. It is signed with
+the project's shared author name in every language; the author name is not translated. The same author identity is
+used for the footer copyright and the privacy policy's operator. These are the developer's convictions and motivation,
 not verified claims about AI performance or promises of fully autonomous development or guaranteed software quality.
 
 Section 05 combines local data handling, the source repository and MIT License, and platform availability.
@@ -178,7 +180,8 @@ receive a hover background; an expanded question and its answer share a uniform 
   and loading behavior depends on the tool.
 - Agent brands: the coordinator and each project can use Claude Code, Codex or Grok Build independently, retaining
   their own instructions and toolchains. Tasks, relevant context and reports pass between sessions. The answer
-  presents different brands' strengths as a reason to coordinate them.
+  explains choosing agents by the task and the project's tools, with the coordinator delegating work and bringing
+  the results together.
 - Participation: visitors can enter a project session to add context, adjust requirements or review code. Sessions
   started by the coordinator continue reporting results, open items and decisions needed back to it.
 - Requirements and cost: visitors install and configure the agent CLIs themselves. Octoboard is free and open

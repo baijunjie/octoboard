@@ -89,7 +89,7 @@ it("starts on what the session runs with, waits for a change, and sends only wha
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
   const { request, onClose, onChangeModel } = await mount(session);
 
-  expect(document.body.textContent).toContain("It restarts to take them and keeps its conversation.");
+  expect(document.body.textContent).toContain("It restarts with these settings and keeps its conversation. A turn in progress is interrupted and continues automatically when safe.");
   expect(picker("Model").textContent).toContain("Opus");
   expect(picker("Reasoning effort").textContent).toContain("low");
   expect(confirm().disabled).toBe(true);
@@ -113,7 +113,7 @@ it("clears a value to the agent's own default, and says an interrupted session t
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "interrupted");
   const { onChangeModel } = await mount(session);
 
-  expect(document.body.textContent).toContain("It is not running, so it takes them the next time it is resumed.");
+  expect(document.body.textContent).toContain("It is not running. These settings take effect the next time it resumes.");
   await act(async () => picker("Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
   await act(async () => confirm().click());
 
@@ -258,7 +258,7 @@ it("turns into a failure modal when the session is deleted while the dialog is o
 
 it("says a running session with no conversation yet starts a fresh one", async () => {
   await mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle", { has_conversation: false }));
-  expect(document.body.textContent).toContain("with a fresh conversation, as nothing has been typed into it yet");
+  expect(document.body.textContent).toContain("It restarts with these settings and starts a new conversation because nothing has been typed into it yet.");
   expect(document.body.textContent).not.toContain("keeps its conversation");
 });
 

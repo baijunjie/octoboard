@@ -3,6 +3,7 @@ import type { SessionProse } from "../terminalScripts";
 import type { previewCopy as english } from "./en";
 
 export const previewCopy: typeof english = {
+  title: "{appName} 产品预览",
   demo: "交互演示 · 示例数据",
   unavailable: "预览加载失败，请刷新页面重试。",
   workspace: "餐饮业务工作区",

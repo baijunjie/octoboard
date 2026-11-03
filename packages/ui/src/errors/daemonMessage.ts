@@ -89,12 +89,14 @@ export function referenceNameParams(code: string, params: MessageParams): string
   return ["agent", "appName", "codex", "claude", "grok", "grokBuild", "git", "macOS"].filter((name) => text.includes(`{${name}}`));
 }
 
-/** The code a message is worded under: the daemon's, except where one code has a message of its own for a variant its
- * params name, `<code>.<variant>` (`variantOf` in the code's record in `codes.ts`), as
- * `daemon.account_quota_exhausted.resets` words a refusal that says when the quota resets. */
+/** The catalog suffix for a daemon code and its parameter-selected variant. Corrected meanings use a new suffix
+ * across plain messages, summaries and remedies, so delivered translations keep their original keys. */
 export function messageCode(code: string, params: MessageParams): string {
   const variant = codeRecord(code)?.variantOf?.(params);
-  return variant === undefined ? code : `${code}.${variant}`;
+  const message = variant === undefined ? code : `${code}.${variant}`;
+  if (code === CODE.project_directory_shared || (code === CODE.project_directory_trash_failed && (variant === "unanswered" || variant === "unreadable"))) return `${message}.retryTrash`;
+  if (code === CODE.shell_environment_timeout && ["shell", "command", "timeout"].every((name) => !!params[name])) return `${code}.sessionLaunchBlocked`;
+  return message;
 }
 
 /** A message's params as the UI shapes them: the daemon's over the UI's own (`uiParams` in `codes.ts`). */

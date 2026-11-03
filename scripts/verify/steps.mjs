@@ -3,6 +3,7 @@ import path from "node:path";
 import { ALL_PACKAGES } from "./scope.mjs";
 
 const VERIFY_TESTS = { label: "verify tests", cmd: ["node", "--test", "scripts/**/*.test.mjs"] };
+const IDENTITY_CHECK = { label: "identity check", cmd: ["node", "scripts/sync-identity.mjs", "--check"] };
 const pnpm = (label, args, extra = {}) => ({ label, cmd: ["pnpm", ...args], ...extra });
 // The cache lives under `node_modules` like the root `pnpm lint`'s: a cache file in the repository
 // root would be an untracked file, which `workingTree()` counts, so it would fail the run that wrote it.
@@ -24,6 +25,7 @@ const RUST_STEPS = [
 export function checkSteps(scope) {
   if (scope.mode === "release") {
     return lightFirst([
+      IDENTITY_CHECK,
       lint("application lint", ["packages/ui", "apps/desktop/scripts", "scripts/lib/env.mjs", "scripts/lib/git.mjs"], ["**/src/gallery/**", "**/src/fixtures/**", "**/src/website-preview/**", "**/scripts/gallery*", "**/scripts/wkbench/**"]),
       pnpm("application type check", ["--filter", "@octoboard/ui", "typecheck:app"]),
       pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
@@ -33,7 +35,7 @@ export function checkSteps(scope) {
     ]);
   }
   const packages = scope.mode === "full" ? ALL_PACKAGES : scope.packages;
-  const steps = [];
+  const steps = scope.mode === "unread" ? [] : [IDENTITY_CHECK];
   if (packages.includes("verify")) steps.push(lint("verify lint", ["scripts", "eslint.config.mjs"]), VERIFY_TESTS);
   if (packages.includes("ui")) steps.push(
     lint("ui lint", ["packages/ui"]),

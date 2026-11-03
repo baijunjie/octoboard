@@ -1,3 +1,4 @@
+import { appConfig } from "../appConfig";
 import { installPreviewStorage } from "./storage";
 import { installPreviewKeyboardGuard } from "./keyboard";
 import { installPreviewFocusGuard } from "./focus";
@@ -42,6 +43,7 @@ const scene: PreviewScene =
     : "overview";
 const theme = params.get("theme") === "light" ? "light" : "dark";
 const copy = copyFor(language);
+document.title = copy.title.replace("{appName}", appConfig.name);
 const { scenario, output } = createPreviewScenario(
   scene,
   language,

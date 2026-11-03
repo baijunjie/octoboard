@@ -20,7 +20,9 @@ How the repository is built, checked and released, outside the code of any one e
 - `config/app.json` — the single source for product identity, repository and issue-report destinations, author and
   support contacts, website address, license and copyright year. Read by the UI (`packages/ui/src/appConfig.ts`), the
   website (`apps/web/nuxt.config.ts`) and both Cargo crates' `build.rs`; copies the toolchain requires elsewhere are
-  checked against it (the UI's `appConfig.test.ts`, the build scripts).
+  checked against it (the UI's `appConfig.test.ts`, the build scripts). `author.name` is the only editable source of
+  the author name. After changing it or `copyrightYear`, run `pnpm identity:sync` to regenerate the tracked `LICENSE`
+  copyright line and `Cargo.toml` workspace authors; builds and installation do not rewrite these outputs.
 - `.env.local.example`, `.env.secret.example` — the templates of the gitignored machine-local and release-credential
   files. `scripts/lib/env.mjs` is the reader; it reads `.env.secret` and `.env.local`.
 - `assets/branding/` — brand source artwork that no app serves. `.claude/` holds the agent skills and subagent
@@ -34,6 +36,7 @@ How the repository is built, checked and released, outside the code of any one e
 | `scripts/verify.mjs`, [`scripts/verify/`](../../scripts/verify/README.md) | `pnpm verify`: selects and runs the checks a change calls for |
 | `scripts/hooks/pre-push.mjs`, `scripts/hooks/format-staged.mjs` | The two hook stages, with their tests beside them (see the hooks' README; the pre-push stage takes its baseline from `remoteTargetBase` in `scripts/verify/changes.mjs`); `scripts/pre-push.mjs` and `scripts/format-staged.mjs` are forwarding stubs for hook copies installed before the move |
 | `scripts/cargo.mjs` | `pnpm test:rust`, `pnpm clippy:rust` and the Linux CI `cargo check`: both crates in one cargo invocation, without needing the daemon sidecar (the one place that empties `bundle.externalBin`) |
+| `scripts/sync-identity.mjs` | Generates the required literal author fields in `LICENSE` and `Cargo.toml` from `config/app.json`, or checks them without writing |
 | [`.githooks/`](../../.githooks/README.md) | The hook entry point and its installers for the commit and push hooks |
 | `.github/workflows/` | `quality.yml` (the application checks: `pnpm verify --release --fresh` and a Linux `cargo check` of both crates), `release.yml` (on a version tag: validate, run the checks, build, notarize, sign the update archive in a step of its own that alone holds the update key, and publish), `website.yml` (generate the website, run its tests and lint, deploy it to GitHub Pages) |
 | `.github/release-notes.sh`, `.github/dependabot.yml` | Validates a release tag and prints its notes for `release.yml`; Dependabot's updates of the actions the workflows use |
@@ -59,8 +62,9 @@ How the repository is built, checked and released, outside the code of any one e
 |---|---|
 | Run `git` or another command from a script | `scripts/lib/git.mjs` (`git` probes and answers null; `gitChecked` and `gitCheckedWith` require an answer; `gitResult` returns the exit status) |
 | Read env files with environment precedence | `scripts/lib/env.mjs` |
+| Update or check generated author fields | `pnpm identity:sync` writes the tracked outputs; `pnpm identity:check` checks for drift without writing |
 | Run the checks a change calls for | `pnpm verify` ([`scripts/verify/`](../../scripts/verify/README.md)) |
 | Format staged files | `pnpm format:staged` (the pre-commit hook), never a whole-repository formatter as a delivery step |
 
-Checks that hold this area: the `scripts/**/*.test.mjs` tests, the UI's `appConfig.test.ts`, and the release workflow's
-validation of the tag, the secrets and `Cargo.lock`.
+Checks that hold this area: `pnpm identity:check`, the `scripts/**/*.test.mjs` tests, the UI's `appConfig.test.ts`, and
+the release workflow's validation of the tag, the secrets and `Cargo.lock`.

@@ -124,9 +124,9 @@ it("marks a console and a project whose account is not set up with a warning mar
   // No loose sentence beside the name; the mark follows the heading directly.
   expect(consoleCard("Work laptop").querySelector(":scope > div")!.textContent).not.toContain("is not set up");
   expect(heading.nextElementSibling?.firstElementChild?.getAttribute("aria-label")).toBe(`Accounts not set up for ${isolate("Work laptop")}`);
-  expect(await fallbackSentences(heading.parentElement!)).toContain("Claude Code account Work is not set up in Octoboard, so the default account is used.");
+  expect(await fallbackSentences(heading.parentElement!)).toContain("The Claude Code account Work is not set up here, so the default account is used.");
   expect(row("Search API").textContent).not.toContain("is not set up");
-  expect(await fallbackSentences(row("Search API"))).toContain("Codex account Personal is not set up in Octoboard");
+  expect(await fallbackSentences(row("Search API"))).toContain("The Codex account Personal is not set up here");
   expect(consoleCard("Side projects").querySelector("button[data-status-mark]")).toBeNull();
 });
 
@@ -146,16 +146,16 @@ it("shows a row for every project with where it was found and the labelled paths
   expect(row("Design System").textContent).toContain("Not found; can be cloned from its remote");
   // A project found nowhere has no status line: a warning mark after its name says so. Notes also names an
   // account that is not set up: the same point, so one mark, which says both.
-  expect(row("Notes").textContent).not.toContain("Not found on the machine");
+  expect(row("Notes").textContent).not.toContain("Not found on the daemon host");
   expect(row("Notes").querySelectorAll("button[data-status-mark]")).toHaveLength(1);
   const label = `${isolate("Notes")} not found, and accounts not set up`;
   const mark = row("Notes").querySelector<HTMLButtonElement>(`button[aria-label='${label}']`)!;
   expect(mark).not.toBeNull();
   act(() => mark.click());
   const popover = document.querySelector(`[role=dialog][aria-label='${label}']`)?.textContent;
-  expect(popover).toContain("Not found on the machine running Octoboard.");
+  expect(popover).toContain("Not found on the daemon host.");
   expect(popover).toContain("It is skipped unless you choose a directory for it.");
-  expect(popover).toContain("Codex account Personal is not set up in Octoboard");
+  expect(popover).toContain("The Codex account Personal is not set up here");
   // Leaving a project out places it nowhere: only the exported path is left to show.
   expect(fields("Notes")).toEqual({ "Exported path": "/Users/ana/Documents/Work/Clients/Northwind/Archive/2019/Quarterly-Reports/final-notes" });
 });
@@ -392,7 +392,7 @@ it("imports without the consoles when their region is unchecked: none is asked f
 it("notes what applying each application setting would change with a badge, and what follows only for one it turns on", async () => {
   await reviewingSettings();
   const lines = settingLines();
-  expect(lines["Automatically pull repositories"]).toEqual({ badge: "Turns on", note: "Octoboard then pulls your repositories by itself." });
+  expect(lines["Automatically pull repositories"]).toEqual({ badge: "Turns on", note: "Your repositories will then be pulled automatically." });
   // Turning a setting off, or leaving it as it is, has no consequence line.
   expect(lines["Automatically delete archived sessions whose conversation is gone"]).toEqual({ badge: "Turns off" });
   expect(lines["Automatically select an account"]).toEqual({ badge: "Turns on", note: "A new session then uses the account whose weekly limit resets soonest." });
@@ -425,7 +425,7 @@ it("says applying the file turns off asking questions as choices", async () => {
 it("states what turning on asking questions as choices does", async () => {
   const turningOn = { ...REVIEW, settings: { ...REVIEW.settings!, ask_questions_as_choices: true, current_ask_questions_as_choices: false } };
   await reviewingSettings({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...turningOn }) : reply(body)) });
-  expect(settingLines()["Ask questions as choices"]).toEqual({ badge: "Turns on", note: "Octoboard asks sessions started afterwards to put a question that needs your decision as options you can pick." });
+  expect(settingLines()["Ask questions as choices"]).toEqual({ badge: "Turns on", note: "Sessions started afterwards are asked to present decisions as options you can pick." });
 });
 
 describe("the git workflow settings", () => {
@@ -559,8 +559,8 @@ it("tells each project's result in a row of its console's card, writes a failure
   expect(resultCard("Scratch").textContent).toContain("This console has no projects.");
   // The accounts that fell back are marks after the names of the console and of the project, not a section.
   expect(document.body.textContent).not.toContain("Accounts that fell back");
-  expect(await fallbackSentences(resultCard("Work laptop").querySelector("h3")!.parentElement!)).toContain("Claude Code account Work is not set up in Octoboard");
-  expect(await fallbackSentences(row("Search API"))).toContain("Codex account Personal is not set up in Octoboard");
+  expect(await fallbackSentences(resultCard("Work laptop").querySelector("h3")!.parentElement!)).toContain("The Claude Code account Work is not set up here");
+  expect(await fallbackSentences(row("Search API"))).toContain("The Codex account Personal is not set up here");
   await openTab("Application settings");
   expect(resultSettingLines()["Automatically pull repositories"]).toEqual({ badge: "On" });
 });
@@ -622,7 +622,7 @@ it("ignores another press of Choose file while the open dialog has not answered,
 });
 
 it.each([
-  { error: new ConfigurationFileError("too_large"), shown: "The file is too large to be a configuration file.", raw: undefined },
+  { error: new ConfigurationFileError("too_large"), shown: "The file exceeds the supported size limit.", raw: undefined },
   { error: new ConfigurationFileError("not_text"), shown: "The file is not a text file.", raw: undefined },
   { error: new ConfigurationFileError("io", "Permission denied"), shown: "Could not read the file.", raw: "Permission denied" },
 ])("words a file that could not be read from its kind, the system's text only behind Error details: $shown", async ({ error, shown, raw }) => {

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { LANGUAGES } from "@octoboard/ui/languages";
+import { formatPrivacyDate } from "../seo/privacy-date.ts";
 import { featureGroups, homeFeatures } from "../seo/page-outline.ts";
 import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
 import {
@@ -17,6 +18,7 @@ import {
 } from "../seo/site-seo.ts";
 
 const siteUrl = "https://octoboard.dev/";
+const appConfig = JSON.parse(readFileSync(new URL("../../../config/app.json", import.meta.url), "utf8"));
 
 test("page paths keep the English home unprefixed and privacy as a sibling file", () => {
   assert.equal(pageKind("/"), "home");
@@ -106,7 +108,7 @@ test("structured data describes the macOS app without claiming it can be install
     siteDescription: "Command center",
     origin: "https://octoboard.dev",
     siteUrl,
-    operatorName: "BaiJunjie",
+    operatorName: appConfig.author.name,
     contactEmail: "support@octoboard.dev",
     repositoryUrl: "https://github.com/baijunjie/octoboard",
     logoUrl: `${siteUrl}logo.png`,
@@ -141,7 +143,7 @@ test("structured data describes the macOS app without claiming it can be install
       siteDescription: "Command center",
       origin: "https://octoboard.dev",
       siteUrl,
-      operatorName: "BaiJunjie",
+      operatorName: appConfig.author.name,
       contactEmail: "support@octoboard.dev",
       repositoryUrl: "https://github.com/baijunjie/octoboard",
       logoUrl: `${siteUrl}logo.png`,
@@ -163,7 +165,7 @@ test("agent documents follow the pages and do not publish a download that does n
   const files = renderAgentFiles({
     siteUrl,
     appName: "Octoboard",
-    operatorName: "BaiJunjie",
+    operatorName: appConfig.author.name,
     contactEmail: "support@octoboard.dev",
     repositoryUrl: "https://github.com/baijunjie/octoboard",
     messages,
@@ -172,7 +174,7 @@ test("agent documents follow the pages and do not publish a download that does n
   const llms = files["llms.txt"];
   assert.match(home, /Canonical: https:\/\/octoboard\.dev\//);
   assert.match(home, /macOS on Apple silicon and Intel · Early prototype/);
-  assert.match(home, /Octoboard is free and open source under the MIT License\./);
+  assert.match(home, /The app is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
   assert.match(home, /Switch accounts\. Continue the task\./);
   assert.match(home, /Do I need to set up my projects and CLI configuration again\?/);
@@ -180,6 +182,13 @@ test("agent documents follow the pages and do not publish a download that does n
   for (const locale of locales) {
     const body = files[markdownFile(locale.code === "en" ? "/" : `/${locale.code}/`)];
     const catalog = messages[locale.code];
+    for (const key of ["faqProjectIsolationAnswer", "faqAgentChoiceAnswer"]) {
+      const answer = catalog[key].replaceAll("{appName}", "Octoboard");
+      assert.ok(body.includes(answer), `${locale.code}: current FAQ answer`);
+    }
+    const privacy = files[markdownFile(locale.code === "en" ? "/privacy/" : `/${locale.code}/privacy/`)];
+    assert.ok(privacy.includes(formatPrivacyDate(locale.language)));
+    assert.ok(privacy.includes(catalog.privacyWebsiteConsentBody));
     const headings = [
       "featureWallTitle",
       ...featureGroups.flatMap((group) => [group.key, ...group.features.map((key) => `${key}FeatureTitle`)]),
@@ -206,7 +215,7 @@ test("agent documents follow the pages and do not publish a download that does n
     ]) {
       const text = catalog[key]
         .replaceAll("{appName}", "Octoboard")
-        .replaceAll("{operatorName}", "BaiJunjie");
+        .replaceAll("{operatorName}", appConfig.author.name);
       assert.equal(body.split(text).length - 1, 1, `${locale.code}: ${key} must appear once`);
     }
   }
@@ -223,5 +232,19 @@ test("agent documents follow the pages and do not publish a download that does n
   );
   for (const [name, body] of Object.entries(files)) {
     assert.equal(body.includes("{"), false, name);
+  }
+});
+
+test("the policy revision date stays on October 30 across time zones", () => {
+  const previous = process.env.TZ;
+  try {
+    for (const zone of ["Pacific/Honolulu", "Asia/Tokyo", "UTC"]) {
+      process.env.TZ = zone;
+      assert.equal(formatPrivacyDate("en"), "October 30, 2026");
+      assert.equal(formatPrivacyDate("zh-Hans"), "2026年10月30日");
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
   }
 });

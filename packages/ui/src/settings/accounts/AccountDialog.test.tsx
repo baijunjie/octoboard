@@ -114,12 +114,12 @@ it.each([
 it("shows the config directory hint as a visible description", () => {
   render(work, () => Promise.resolve());
   expect(document.body.textContent).toContain("does not need to exist yet.");
-  expect(document.body.textContent).not.toContain("sessions only keep their login");
+  expect(document.body.textContent).not.toContain("To retain login and conversations");
 });
 
 it("adds the Grok home note to the config directory hint for Grok", () => {
   render({ ...work, agent: "grok" as const }, () => Promise.resolve());
-  expect(document.body.textContent).toContain("but sessions only keep their login and conversation");
+  expect(document.body.textContent).toContain("To retain login and conversations, sessions need a Grok home initialized by running the CLI with that directory. This is checked when a session launches.");
 });
 
 it("fixes the agent when renaming a default account, so no other agent's default can be renamed", async () => {

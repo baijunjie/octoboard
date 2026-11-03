@@ -150,7 +150,7 @@ it("shows each account with its status, what it shares and the directory the fil
   expect(row("Home").querySelector("button[aria-haspopup=listbox]")).toBeNull();
   expect(row("Team").textContent).toContain("Disabled");
   expect(row("Team").textContent).toContain("~/.team");
-  expect(document.body.textContent).toContain("The agent Codex will be added to your agents.");
+  expect(document.body.textContent).toContain("Codex will be added to the agent list.");
   expect(document.body.textContent).toContain("The default account of Claude Code will be named Main.");
   expect(document.body.textContent).toContain("The accounts are created without being logged in.");
 });
@@ -334,7 +334,7 @@ it("tells of each account's outcome in the result, with a note that the new ones
   // The sentence says it once: the failure's own summary under it would repeat it, and the account's name.
   expect(rowText("Work")).not.toContain("Could not finish the sharing change");
   expect(card.querySelector("button[data-status-mark]")).toBeNull();
-  expect(text).toContain("The agent Codex was added to your agents.");
+  expect(text).toContain("Codex was added to the agent list.");
   expect(text).toContain("The default account of Claude Code is now named as in the file.");
   expect(text).toContain("The new accounts are not logged in yet.");
   expect(Array.from(document.body.querySelectorAll("button")).map((button) => button.textContent)).not.toContain("Log in");

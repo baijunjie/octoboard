@@ -523,7 +523,7 @@ it("marks a worktree whose copy of the project's folder is a link at the end of 
   expect(container.textContent).not.toContain("symbolic link");
   press(marks[0]);
   expect(document.querySelector('[role="dialog"]')!.textContent).toBe(
-    "The path to the project's folder in this worktree goes through a symbolic link, which Octoboard does not follow."
+    "The path to the project's folder in this worktree goes through a symbolic link, which is not followed here."
       + "Replace the link with a real folder, then refresh.",
   );
 });

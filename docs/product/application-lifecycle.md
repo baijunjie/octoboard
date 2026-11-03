@@ -36,7 +36,7 @@ command; the address the daemon listens on there does not exist yet.
 
 A page of the UI given no key — or no port, where its own address cannot be the daemon's — connects to nothing and
 shows a screen saying there is no daemon address or key, and how to give them to a page run against a daemon started by hand:
-`?port=` and `?key=` in the page's address, `VITE_DAEMON_PORT` and `VITE_DAEMON_KEY` for the dev server, or
+`?port=<port>&key=<key>` in the page's address, `VITE_DAEMON_PORT` and `VITE_DAEMON_KEY` for the dev server, or
 `OCTOBOARD_DAEMON_PORT` to have the dev server proxy to the daemon, the key still given by `?key=` or `VITE_DAEMON_KEY`.
 The desktop application always gives its window both.
 

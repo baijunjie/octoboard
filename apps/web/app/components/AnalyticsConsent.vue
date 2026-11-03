@@ -71,9 +71,9 @@ onBeforeUnmount(() => {
     tabindex="-1"
     @focusin="entered"
   >
+    <p>{{ t("consentBody") }}</p>
     <p>
-      {{ t("consentBody")
-      }}<NuxtLink class="text-link" :to="localePath('/privacy/')">{{
+      <NuxtLink class="text-link" :to="localePath('/privacy/')">{{
         t("privacyTitle")
       }}</NuxtLink>
     </p>

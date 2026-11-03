@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "A program running in {appName} would like to control other applications.",
+  "NSCameraUsageDescription": "A program running in {appName} would like to use the camera.",
+  "NSMicrophoneUsageDescription": "A program running in {appName} would like to use the microphone.",
+  "NSBluetoothAlwaysUsageDescription": "A program running in {appName} would like to use Bluetooth.",
+  "NSContactsUsageDescription": "A program running in {appName} would like to access your contacts.",
+  "NSCalendarsUsageDescription": "A program running in {appName} would like to access your calendars.",
+  "NSRemindersUsageDescription": "A program running in {appName} would like to access your reminders.",
+  "NSPhotoLibraryUsageDescription": "A program running in {appName} would like to access your photos.",
+  "NSLocationWhenInUseUsageDescription": "A program running in {appName} would like to access your location.",
+  "NSLocationUsageDescription": "A program running in {appName} would like to access your location.",
+  "NSDocumentsFolderUsageDescription": "A program running in {appName} would like to access files in your Documents folder.",
+  "NSDownloadsFolderUsageDescription": "A program running in {appName} would like to access files in your Downloads folder.",
+  "NSDesktopFolderUsageDescription": "A program running in {appName} would like to access files on your Desktop.",
+  "NSRemovableVolumesUsageDescription": "A program running in {appName} would like to access files on a removable volume.",
+  "NSNetworkVolumesUsageDescription": "A program running in {appName} would like to access files on a network volume."
+}

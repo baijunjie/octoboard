@@ -102,6 +102,10 @@ What follows the current language:
 
 What does not follow it:
 
+- **The system's permission prompts.** The explanations for access requested by programs running in the
+  application follow macOS's native language choice independently of the window, with the coverage described in
+  "Other consents programs ask for" in `docs/product/macos-privacy-permissions.md`.
+
 - **Existing session names.** A created name keeps its saved wording when the UI's language changes, including one that
   used the localized default when it was created (see "The session dialog" in `docs/product/opening-sessions.md`).
 - **A report page.** It is content the console session's model wrote, with its own language and direction, and it is

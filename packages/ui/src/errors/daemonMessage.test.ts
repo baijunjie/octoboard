@@ -155,7 +155,7 @@ it("words each branch or worktree still there with its reason in plain text, one
   const message = daemonMessage("en", "session_branches_not_removed", { count: "2", items }, "fallback", { ...records, homeDir: "/home/dev" });
   expect(message).toBe(`These were to be removed and are still there: Removing this failed: ${isolate("~/wt")} (detached HEAD): ${isolate("error: x, y")}. This branch is not merged: ${isolate("fix/a,b")}.`);
   const zh = daemonMessage("zh-Hans", "session_branches_not_removed", { count: "2", items }, "fallback", { ...records, homeDir: "/home/dev" });
-  expect(zh).toBe(`以下内容本应删除，但仍然保留：以下内容删除失败：${isolate("~/wt")}（分离的 HEAD）：${isolate("error: x, y")}。以下分支尚未合并：${isolate("fix/a,b")}。`);
+  expect(zh).toBe(`以下内容本应删除，但仍然保留：以下内容删除失败：${isolate("~/wt")}（HEAD 分离）：${isolate("error: x, y")}。以下分支尚未合并：${isolate("fix/a,b")}。`);
 });
 
 it("puts the reason what goes with a removed project's folder is unknown on a line of its own", () => {
@@ -173,7 +173,7 @@ it("words a worktree kept for a project folder that could not be checked by its 
       + "It may hold another project's files. Once it can be read, check what is in it before you remove it yourself.",
   );
   expect(daemonMessage("zh-Hans", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
-    `无法检查以下工作树是否为或包含其他项目的文件夹：${isolate("~/wt")}（分离的 HEAD）。其中可能有其他项目的文件。请等到可以读取后先检查内容，再自行删除。`,
+    `无法检查以下工作树是否为或包含其他项目的文件夹：${isolate("~/wt")}（HEAD 分离）。其中可能有其他项目的文件。请等到可以读取后先检查内容，再自行删除。`,
   );
 });
 
@@ -297,21 +297,21 @@ it("words an exhausted account's quota, with the time left when the reset is kno
     `${isolate("Work")} (${isolate("Codex")}) cannot run a session because it has reached its 5h limit.`,
   );
   const resetsAt = String(Date.now() + 2 * 60 * 60_000 + 30_000);
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("已达到5 小时限制");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("已达到 5 小时限制");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("It resets in 2h");
 });
 
 it("words the session window as the agent's own interface names it", () => {
   const params = { agent: "Claude Code", account: "Work", window: "5-hour", window_kind: "session" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has reached its session limit.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain("已达到会话限制");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain("已达到 会话限制");
 });
 
 it("words Claude Code's weekly window for all models only beside a model's own weekly window", () => {
   const params = { agent: "Claude Code", account: "Work", window: "Weekly", window_kind: "weekly" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has reached its weekly limit.");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("has reached its weekly limit for all models.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("已达到所有模型的每周限制");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("已达到 所有模型的每周限制");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, agent: "Codex", model_weekly: "true" }, "x", records)).toContain("has reached its weekly limit.");
 });
 
@@ -324,7 +324,7 @@ it("words a credit pool by its period or as credits, and a window without the st
   const codex = { agent: "Codex", account: "Work" };
   const credits = { ...codex, window: "Credits", window_kind: "credit_period" };
   expect(daemonMessage("en", "account_quota_exhausted", credits, "x", records)).toContain("has reached its credit limit.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", credits, "x", records)).toContain("：已达到额度上限。");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", credits, "x", records)).toContain("：已达到 额度上限。");
   expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} limit.`);
   for (const unknown of [{ window_kind: "weekly_model" }, { agent: "Other" }]) {
     expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Weekly", window_kind: "weekly", ...unknown }, "x", records)).toContain(`its ${isolate("Weekly")} limit.`);

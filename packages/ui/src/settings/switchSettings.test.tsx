@@ -32,7 +32,7 @@ const switches = [
   { key: "auto_approve_resume_requests", label: "Automatically approve resume requests", onText: "without asking you first" },
   { key: "auto_approve_account_switches", label: "Automatically approve account switches", onText: "without asking you first" },
   { key: "auto_approve_handoffs", label: "Automatically approve handoffs", onText: "without asking you first" },
-  { key: "ask_questions_as_choices", label: "Ask questions as choices", onText: "Octoboard asks sessions to put a question" },
+  { key: "ask_questions_as_choices", label: "Ask questions as choices", onText: "Sessions are asked to present decisions as options you can pick" },
   { key: "auto_approve_session_requests", label: "Automatically approve session requests", onText: "without asking you first" },
   { key: "auto_select_account", label: "Automatically select an account", onText: "whose weekly limit resets soonest" },
   { key: "auto_switch_on_usage_limit", label: "Automatically switch accounts at the usage limit", onText: "switched to another account with usage left" },

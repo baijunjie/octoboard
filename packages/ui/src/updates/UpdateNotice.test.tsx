@@ -3,6 +3,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../components/alerts/errorAlerts";
+import { t } from "../i18n/language";
+
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { windowAttention } from "../components/announce/windowTestSupport";
 import { LanguageProvider } from "../i18n/react";
@@ -227,4 +230,23 @@ it("announces what it says only once the window is attended, then after the focu
   expect(spoken()).toBe("");
   await act(() => vi.advanceTimersByTimeAsync(1));
   expect(spoken()).toBe("Version 0.2.0 is available.");
+});
+
+it("shows only the remedy for a generic installation failure", async () => {
+  const { updater } = fakeUpdater();
+  updater.install = async () => { throw new Error("network detail"); };
+  const { store } = mount({ kind: "tauri", updater });
+  await act(async () => { await store()!.check("manual"); });
+  await act(async () => { await store()!.install(); });
+  const alert = errorAlerts.getSnapshot().at(-1)!;
+  expect(alert.title).toBe(t("updates.error.install.title"));
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  });
+  act(() => root.render(<>{alert.content}</>));
+  expect([...container.querySelectorAll("p")].map((line) => line.textContent)).toEqual([t("updates.error.install.remedy")]);
 });

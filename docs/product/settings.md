@@ -489,7 +489,7 @@ version running ("Version …"). Then, one row each:
   `github.com/baijunjie/octoboard/issues/new`.
 - **License**: a line saying Octoboard is open-source software under the MIT license, with **View license**, a link to
   the license text in the repository.
-- **Copyright**: the year and the author's name, `© 2026 BaiJunjie`.
+- **Copyright**: the project's shared copyright year and author name, with the name unchanged across UI languages.
 - **Third-party licenses**, with **View licenses**, which opens the dialog described in "The third-party licenses
   dialog" below.
 

@@ -152,7 +152,7 @@ const dialog = () => document.querySelector<HTMLElement>("[role=dialog]");
 // of either of its states.
 const controlNamed = (...names: string[]) => [...dialog()!.querySelectorAll("button")].filter((b) => names.includes(b.getAttribute("aria-label") ?? ""));
 const layoutToggles = () => controlNamed("Show split diff", "Show unified diff");
-const wrapToggles = () => controlNamed("Wrap lines", "Don't wrap lines");
+const wrapToggles = () => controlNamed("Wrap lines", "Do not wrap lines");
 const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 
 const failed: ViewerSubject = { key: "a", path: "src/a.ts", content: { state: "error", message: "src/a.ts is gone." } };
@@ -990,7 +990,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
   act(() => toggle().click());
   expect(wrapped()).toBe("true");
   expect(toggle().getAttribute("aria-pressed")).toBe("true");
-  expect(toggle().getAttribute("aria-label")).toBe("Don't wrap lines");
+  expect(toggle().getAttribute("aria-label")).toBe("Do not wrap lines");
   expect(localStorage.getItem(PREFERENCE_KEYS.wordWrap)).toBe("true");
   show(modified("src/b.ts"));
   await settled();

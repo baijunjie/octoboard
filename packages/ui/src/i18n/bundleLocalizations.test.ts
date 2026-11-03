@@ -8,7 +8,7 @@ import { LANGUAGES } from "./languages";
 // system's language; a language added to the list but not to the bundle would be spoken in English.
 it("declares every offered language as a bundle localization", () => {
   const plist = readFileSync(
-    new URL("../../../../apps/desktop/src-tauri/Info.plist", import.meta.url),
+    new URL("../../../../apps/desktop/src-tauri/Info.template.plist", import.meta.url),
     "utf8",
   );
   const array =

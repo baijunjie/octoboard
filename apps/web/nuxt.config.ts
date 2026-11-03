@@ -67,6 +67,7 @@ export default defineNuxtConfig({
       siteOrigin: site.origin,
       contactEmail: appConfig.support.email,
       operatorName: appConfig.author.name,
+      copyrightYear: appConfig.copyrightYear,
     },
   },
   nitro: {

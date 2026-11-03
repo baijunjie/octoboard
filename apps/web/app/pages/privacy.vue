@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { githubPrivacyUrl, privacySections } from "../../seo/page-outline";
+import { formatPrivacyDate } from "../../seo/privacy-date";
+import { localeByCode } from "../../seo/site-seo";
 
 const { t } = useSiteCopy();
+const { locale } = useI18n();
+const updatedDate = computed(() => formatPrivacyDate(localeByCode(locale.value).language));
 const config = useRuntimeConfig();
 const localePath = useLocalePath();
 useSeoMeta({
@@ -21,7 +25,7 @@ useSeoMeta({
       <p class="eyebrow">{{ t("privacyEyebrow") }}</p>
       <h1>{{ t("privacyTitle") }}</h1>
       <p class="privacy-intro">{{ t("privacyIntro") }}</p>
-      <p class="privacy-updated">{{ t("privacyUpdated") }}</p>
+      <p class="privacy-updated">{{ t("privacyUpdated", { date: updatedDate }) }}</p>
     </header>
     <div class="privacy-sections">
       <section
@@ -33,7 +37,7 @@ useSeoMeta({
         <div>
           <h2>{{ t(`privacy${section}Title`) }}</h2>
           <p>
-            {{ t(section === "Website" ? "privacyWebsiteAnalyticsBody" : `privacy${section}Body`) }}
+            {{ t(section === "Website" ? "privacyWebsiteConsentBody" : `privacy${section}Body`) }}
           </p>
           <a
             v-if="section === 'Website'"

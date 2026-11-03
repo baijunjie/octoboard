@@ -35,9 +35,11 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    when a changed line is one of them. A cross-package read (a test that reads another package's file, an import across
    packages) is declared in `scope.mjs`; `scope.test.mjs` fails when a new one is not. `--full` selects every package
    and `--release` the shipping application only.
-3. **Steps** (`steps.mjs`). A package selects its steps (lint, type check, locales, tests, build, script tests; both
-   Rust crates always run together). Light steps run first and heavy ones (UI tests, Rust builds and tests, the website
-   build) last, and a failure stops the run. The website build runs before its SEO tests, which read the generated
+3. **Steps** (`steps.mjs`). Every non-`unread` plan, including release and quick plans, checks generated identity fields
+   against `config/app.json` without writing (`scripts/sync-identity.mjs --check`). A package selects its other steps
+   (lint, type check, locales, tests, build, script tests; both Rust crates always run together). Light steps run first
+   and heavy ones (UI tests, Rust builds and tests, the website build) last, and a failure stops the run. The website
+   build runs before its SEO tests, which read the generated
    output. `--release` runs the application checks: application lint, production UI type check, application UI tests,
    desktop script tests, rustfmt, clippy and Rust tests; `.github/workflows/quality.yml` runs it unconditionally before
    a release and on request, plus a Linux `cargo check` of both crates.

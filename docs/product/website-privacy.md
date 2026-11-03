@@ -2,8 +2,11 @@
 
 ## Privacy disclosures
 
-The privacy page identifies BaiJunjie as the operator and gives `support@octoboard.dev` for privacy questions.
-Its disclosures distinguish:
+The privacy page identifies the project's shared author as the operator, using the same name as the developer's
+statement and footer copyright in every language without translating it, and gives `support@octoboard.dev` for
+privacy questions.
+Its last-updated date is the policy revision date, October 30, 2026, displayed in the page's language; it does not
+change with the build time, visit time or visitor's time zone. Its disclosures distinguish:
 
 - application configuration and session data stored locally, with no upload of code, conversations, or usage data
   to servers operated by that operator;
@@ -12,9 +15,10 @@ Its disclosures distinguish:
 - task information passed between agent sessions, which can consequently reach more than one provider;
 - the static website, which uses a same-site cookie to remember the selected or detected language for one year, and
   uses Google Analytics to understand website visits only if the visitor allows it when the site asks, Google
-  Analytics then setting cookies and sending usage data to Google; a visitor who declines does not get Google
-  Analytics loaded; the answer is remembered in a cookie for one year and can be changed at any time with the
-  analytics settings at the bottom of each page (see "Analytics consent"); GitHub Pages also logs visitor IP
+  Analytics then setting cookies and sending usage data to Google; declining before allowing prevents it from
+  loading; the answer is remembered in a cookie for one year and can be changed with the analytics settings in the
+  homepage or privacy page footer; withdrawing consent stops further analytics from the current page and removes
+  its Google Analytics cookies (see "Analytics consent"); GitHub Pages also logs visitor IP
   addresses for security, with a link to GitHub's privacy statement;
 - information voluntarily supplied through email or GitHub Issues, including the visibility of public issues.
 
@@ -28,10 +32,10 @@ loaded on any page.
 
 On every homepage and privacy page, in every language, a visitor who has not answered sees a prompt at the bottom of
 the window. It asks whether Google Analytics may be used, says that it sets cookies and sends usage data to Google and
-is not loaded unless allowed, links to that language's privacy page, and offers Allow and Decline as buttons of equal
-weight. The prompt is a labelled region, not a dialog: the page behind it stays usable, and it stays until it is
-answered. The unlocalized 404 page never shows it. The prompt appears only with JavaScript; without it, nothing is
-asked and Google Analytics is not loaded. Its copy is translated into all 17 languages.
+is not loaded unless allowed, links to that language's privacy page in a separate paragraph, and offers Allow and
+Decline as buttons of equal weight. The prompt is a labelled region, not a dialog: the page behind it stays usable,
+and it stays until it is answered. The unlocalized 404 page never shows it. The prompt appears only with JavaScript;
+without it, nothing is asked and Google Analytics is not loaded. Its copy is translated into all 17 languages.
 
 The answer is kept for one year in the same-site cookie `octoboard_analytics_consent`, set for the whole site:
 
@@ -41,10 +45,10 @@ The answer is kept for one year in the same-site cookie `octoboard_analytics_con
 
 With no answer kept, including once the cookie has expired, the prompt appears again.
 
-The footer's navigation ends with an analytics settings button that reopens the prompt, whatever the earlier answer,
-and identifies whether the prompt is open. Choosing Allow there loads Google Analytics at once. Choosing Decline after
-allowing stops Google Analytics from sending anything more from that page and removes its cookies (`_ga` and
-`_ga_<measurement ID>`) from the page's host and each of its parent domains.
+The homepage and privacy page footers end their navigation with an analytics settings button that reopens the prompt,
+whatever the earlier answer, and identifies whether the prompt is open. Choosing Allow there loads Google Analytics
+at once. Choosing Decline after allowing stops Google Analytics from sending anything more from that page and removes
+its cookies (`_ga` and `_ga_<measurement ID>`) from the page's host and each of its parent domains.
 
 While the prompt is shown, the page reserves space at its bottom as tall as the prompt and its clearance from the
 window's edge, so that an element brought into view by keyboard focus stops above the prompt and the footer can scroll

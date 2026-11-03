@@ -4,3 +4,7 @@
 # Sidecar binary, populated by `pnpm build:daemon` (scripts/build-daemon.mjs) from the workspace's
 # `target/release/octoboardd` — a platform-specific build artifact, not something to track.
 /binaries/
+
+# Native permission strings generated from localizations and the shared app configuration
+/generated-localizations/
+/Info.plist

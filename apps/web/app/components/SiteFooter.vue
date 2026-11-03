@@ -52,7 +52,7 @@ const { open, reopen } = useAnalyticsConsent();
           {{ t("footerAnalyticsSettings") }}
         </button>
       </nav>
-      <p>{{ t("footerCopyright", { year: 2026 }) }}</p>
+      <p>{{ t("footerCopyright", { year: config.public.copyrightYear }) }}</p>
     </div>
   </footer>
 </template>

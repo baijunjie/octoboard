@@ -104,3 +104,11 @@ it("opens no error dialog over the page and announces the failure from the page 
   expect(announced.textContent).toContain(t("startup.daemonFailed.description"));
   expect(announced.textContent).not.toContain(DIAGNOSTIC);
 });
+
+it("uses an ampersand for the key after the port query parameter", () => {
+  const container = mount(<NoAddressMessage />);
+  const query = container.querySelector("li")!;
+  expect(query.textContent).toContain("?port=");
+  expect(query.textContent).toContain("&key=");
+  expect(query.textContent).not.toContain("?key=");
+});

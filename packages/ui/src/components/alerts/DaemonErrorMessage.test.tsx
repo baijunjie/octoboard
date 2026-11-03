@@ -127,6 +127,16 @@ it("sets resolved project and session names in chips without changing their type
   expect(container.querySelector("[data-inline-reference]")?.textContent).toBe("Renamed");
 });
 
+it("keeps the overlapping project name in a reference after the Trash remedy changes", () => {
+  const error = new CodedError("plain", "project_directory_shared", { project: "Shared frontend" });
+  const { body } = mountApart(error);
+  expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Shared frontend");
+  expect(body.textContent).toContain("The overlapping project must be removed");
+  act(() => setLanguage("zh-Hans"));
+  expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Shared frontend");
+  expect(body.textContent).toContain("需先移除重叠的项目");
+});
+
 it("keeps a failed launch's name and its nested failure's path as distinct chips", () => {
   const daemon = testDaemon();
   const params = { title: "Draft", reason_code: "path_not_found", path: "/missing/project" };
@@ -378,7 +388,7 @@ it.each([
 ])("says a project_directory_trash_failed with cause %s in its own words, with its own remedy, the daemon's text only in the raw part", (cause, detail) => {
   const error = new CodedError("fallback", "project_directory_trash_failed", { path: "/work/p", detail, cause });
   const { body, raw } = mountApart(error);
-  const words = (language: "en" | "zh-Hans") => ["summary", "recovery"].map((part) => format(language, `daemon.project_directory_trash_failed.${cause}.${part}` as never)).join("");
+  const words = (language: "en" | "zh-Hans") => ["summary", "recovery"].map((part) => format(language, `daemon.project_directory_trash_failed.${cause}.retryTrash.${part}` as never)).join("");
   expect(body.textContent).toBe(words("en"));
   expect(body.textContent).not.toContain(format("en", "daemon.project_directory_trash_failed.summary" as never));
   expect(raw.querySelector("pre")?.textContent).toBe(detail);
@@ -554,9 +564,9 @@ describe("a failed automatic account switch", () => {
 it("uses name chips for fixed agent and product references while leaving plain messages usable", () => {
   const error = new CodedError("fallback", "agent_not_available", { agent: "Codex" });
   const container = mount(<DaemonErrorMessage error={error} />);
-  expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Codex", "Octoboard", "Claude Code", "Codex", "Grok Build"]);
+  expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Codex", "Claude Code", "Codex", "Grok Build"]);
   const plain = daemonMessage("en", error.code, error.params, error.message, createStateStore({}).getState());
-  expect(plain.replace(/[\u2066-\u2069]/g, "")).toContain("supports Claude Code, Codex and Grok Build");
+  expect(plain.replace(/[\u2066-\u2069]/g, "")).toContain("Supported agents are Claude Code, Codex and Grok Build");
 });
 
 it("retains a named quota window as a rich name and a plain isolated value", () => {

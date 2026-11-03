@@ -563,7 +563,7 @@ it("lists the processes an archive stops, stops those ticked by default and keep
   const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] } }, [owner]);
   await act(async () => {});
   expect(sent(daemon, "inspect_session_branches")).toEqual([]);
-  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("2 processes are stopped.");
+  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("2 processes will be stopped.");
   expect(boxes().map((box) => box.checked)).toEqual([true, true]);
   await submitDialog();
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id });
@@ -589,7 +589,7 @@ it("heads each topic of an archive as a labelled group, with a divider only betw
   expect(groups.map((group) => group.querySelector("h3")?.textContent)).toEqual(["Archived with it (1)", "Worktrees and branches", "Background processes"]);
   expect(dialog.querySelectorAll(".groove-t")).toHaveLength(2);
   expect(groups[1].textContent).toContain("Also permanently deletes");
-  expect(groups[2].textContent).toContain("1 process is stopped.");
+  expect(groups[2].textContent).toContain("1 process will be stopped.");
 });
 
 it("lists a console session's trees as rows that are always stopped, with no checkbox, and counts them with the ticked ones", async () => {
@@ -602,9 +602,9 @@ it("lists a console session's trees as rows that are always stopped, with no che
   expect(boxes()).toHaveLength(1);
   expect(dialog.textContent).toContain("A console session's processes are always stopped.");
   expect(dialog.textContent).toContain("node console.js");
-  expect(dialog.textContent).toContain("2 processes are stopped.");
+  expect(dialog.textContent).toContain("2 processes will be stopped.");
   act(() => boxes()[0].click());
-  expect(dialog.textContent).toContain("1 process is stopped.");
+  expect(dialog.textContent).toContain("1 process will be stopped.");
   expect(dialog.textContent).toContain("The process you keep stays running.");
   await submitDialog();
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: consoleSession.id, keep_process_ids: [TREE.id] });
@@ -617,7 +617,7 @@ it("offers no checkbox at all when every process of an archive is a console sess
   expect(boxes()).toHaveLength(0);
   const dialog = document.querySelector("[role=alertdialog]")!;
   expect(dialog.textContent).not.toContain("Uncheck any");
-  expect(dialog.textContent).toContain("1 process is stopped.");
+  expect(dialog.textContent).toContain("1 process will be stopped.");
 });
 
 it("shows no section, and no divider, for an archive with nothing to list", async () => {
@@ -686,7 +686,7 @@ it("states the consequences in the order of the controls, the branch cleanup fir
   act(() => boxes()[2].click());
   const text = document.querySelector("[role=alertdialog]")!.textContent!;
   const forced = text.indexOf("permanently deletes");
-  const stopped = text.indexOf("1 process is stopped.");
+  const stopped = text.indexOf("1 process will be stopped.");
   const kept = text.indexOf("The process you keep stays running");
   expect(forced).toBeGreaterThan(-1);
   expect(stopped).toBeGreaterThan(forced);
@@ -824,7 +824,7 @@ it("lists the project processes a removal stops from the project's process list 
   expect(sent(daemon, "inspect_project_removal")).toEqual([]);
   const group = [...document.querySelectorAll("[role=group]")].find((candidate) => candidate.querySelector(":scope > h3")?.textContent === "Project processes")!;
   expect(group.querySelectorAll("button[aria-expanded]")).toHaveLength(2);
-  expect(group.textContent).toContain("2 processes are stopped.");
+  expect(group.textContent).toContain("2 processes will be stopped.");
   expect(group.querySelector("input[type=checkbox]")).toBeNull();
 });
 
@@ -841,7 +841,7 @@ it("lists the project processes a console's deletion stops, one request per proj
   const dialog = document.querySelector("[role=alertdialog]")!;
   const group = [...dialog.querySelectorAll("[role=group]")].find((candidate) => candidate.querySelector(":scope > h3")?.textContent === "Project processes")!;
   expect(group.querySelectorAll("button[aria-expanded]")).toHaveLength(3);
-  expect(group.textContent).toContain("3 processes are stopped.");
+  expect(group.textContent).toContain("3 processes will be stopped.");
   expect(dialog.querySelectorAll(".groove-t")).toHaveLength(0);
 });
 
@@ -868,7 +868,7 @@ it("says in a console's deletion that a project's processes could not be listed,
   const group = projectProcessesGroup()!;
   expect(group.textContent).toContain("Could not list all the project processes");
   expect(group.textContent).toContain("Any that are running will still be stopped.");
-  expect(group.textContent).not.toContain("is stopped");
+  expect(group.textContent).not.toContain("will be stopped");
 });
 
 it("says in a project's removal that its project processes could not be listed, in place of the section reading as none", async () => {
@@ -879,7 +879,7 @@ it("says in a project's removal that its project processes could not be listed, 
   const group = projectProcessesGroup()!;
   expect(group.querySelector("[role=alert], [data-slot=alert-title]")).not.toBeNull();
   expect(group.textContent).toContain("Could not list the project processes");
-  expect(group.textContent).not.toContain("are stopped");
+  expect(group.textContent).not.toContain("will be stopped");
   expect(group.querySelector(".font-mono")).toBeNull();
 });
 

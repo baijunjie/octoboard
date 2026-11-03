@@ -1,12 +1,19 @@
 # Desktop build, install and release scripts
 
-The Node scripts of `@octoboard/desktop` that build the sidecar and the app, install it locally, produce the signed
-release and publish it for the in-app updates. They run from `apps/desktop/` through its `package.json` scripts (and the
-root `install:macos`); the shared pieces are in `bundle.mjs`. Credentials come from the gitignored repo-root
-`.env.secret` (template `.env.secret.example`), read by `scripts/lib/env.mjs`; a variable already in the environment wins.
+The Node scripts of `@octoboard/desktop` that generate native resources, build the sidecar and the app, install it
+locally, produce the signed release and publish it for the in-app updates. They run from `apps/desktop/` through its
+`package.json` scripts (and the root `install:macos`); the shared pieces are in `bundle.mjs`. Credentials come from the
+gitignored repo-root `.env.secret` (template `.env.secret.example`), read by `scripts/lib/env.mjs`; a variable already
+in the environment wins.
 
 ## External interfaces
 
+- `native-localizations.mjs` (`pnpm native:generate`) — generates the native permission resources from
+  `src-tauri/localizations/{en,zh-Hans}.json` and `src-tauri/Info.template.plist`, substituting the app name from
+  `config/app.json`. Tauri runs it before development and builds; `src-tauri/build.rs` runs the same generator for
+  Cargo-only builds. The ignored `src-tauri/Info.plist` supplies both Tauri development embedding and
+  `bundle.macOS.infoPlist`; the ignored `src-tauri/generated-localizations/` holds the `.lproj/InfoPlist.strings` files
+  mapped into bundle resources. Its exported `generateNativeLocalizations` is tested by `native-localizations.test.mjs`.
 - `build-daemon.mjs` (`pnpm build:daemon`) — builds `apps/daemon/` in release mode and copies it into
   `src-tauri/binaries/` as `octoboardd-<target triple>`, the name Tauri's `externalBin` needs. Tauri runs it as
   `beforeBuildCommand` (through `pnpm build:tauri`); `tauri dev` does not, so it must be run by hand after a daemon

@@ -21,7 +21,7 @@ Both dialogs offer JSON files (`.json`). The name offered for saving is `octoboa
 space, and runs of spaces become one — and `octoboard-configuration.json` for any other export, or for a console whose
 name leaves nothing. The user can change it in the save dialog; a browser may file the download under a name of its
 own. The desktop app's open dialog reads the picked file whole and refuses, before anything is sent to the daemon, one
-larger than 64 MiB, as too large to be a configuration file, and one that is not UTF-8 text, as not a text file; either
+larger than 64 MiB, as exceeding the file-read limit, and one that is not UTF-8 text, as not a text file; either
 is told in an error alert over the import dialog whose remedy is to choose a configuration file a compatible version
 exported, and another file can be chosen.
 

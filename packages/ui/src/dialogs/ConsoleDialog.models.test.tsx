@@ -159,7 +159,7 @@ it("leaves the effort picker operable for a model that takes none, and says why 
   await click(pickerNamed("Model"));
   await choose("Plain");
   expect(locked("Reasoning effort")).toBe(false);
-  expect(document.body.textContent).toContain("This model takes no reasoning effort.");
+  expect(document.body.textContent).toContain("This model does not support a reasoning effort setting.");
   await click(pickerNamed("Reasoning effort"));
   expect(optionTexts()).toEqual([]);
 });

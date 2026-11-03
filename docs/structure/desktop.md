@@ -20,7 +20,7 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 | Path | Role |
 |---|---|
-| `build.rs` | Exposes the app name and repository address from `config/app.json`; fails the build when `tauri.conf.json`, the workspace `repository`/`license` or the two version values disagree (the version lives in `apps/desktop/package.json` and the root `Cargo.toml`) |
+| `build.rs` | Generates native localization resources through `scripts/native-localizations.mjs`, exposes the app name and repository address from `config/app.json`; fails the build when `tauri.conf.json`, the workspace `repository`/`license` or the two version values disagree (the version lives in `apps/desktop/package.json` and the root `Cargo.toml`) |
 | `src/lib.rs`, `src/main.rs` | `run()` builds the Tauri app, wires the menu, exit flow, close request and reopen event, and opens the hidden main window; `main.rs` is the binary entry |
 | `src/sidecar.rs`, `src/recovery.rs` | Starting `octoboardd`, parsing its handshake line into the daemon's address, keeping `DaemonState` and a tail of its stderr; restarting a daemon that ended, with a budget and backoff, and telling the window when the budget is spent or when an installed update is waiting for its restart (the daemon is then left alone) |
 | `src/exit.rs`, `src/background.rs` | The exit-confirmation flow and the `applicationShouldTerminate:` override; running in the background behind the menu bar icon, `bring_to_front` |
@@ -29,13 +29,14 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 | `src/system_settings.rs` | The one way the shell opens a System Settings pane (`open_system_settings`), and the address tables of the privacy and notification panes; `permissions.rs` and `notification_settings.rs` go through it |
 | `src/window_state.rs`, `src/page_isolation.rs`, `src/diagnostics.rs` | Remembering and validating the window frame; blocking every `http(s)` request the page would make; the `diagnostic!` log to stderr and `desktop.log` |
 | `capabilities/default.json`, `permissions/*.toml` | The IPC allowlist and the app-defined permission files it names |
-| `tauri.conf.json`, `Info.plist`, `Entitlements.plist`, `icons/`, `images/` | Where the window's UI comes from (`index.html` with the window's query, which Tauri resolves against `devUrl` under `tauri dev` and against the bundled assets otherwise), the `octoboardd` `externalBin`, bundle targets, the public key that verifies the update archive (`createUpdaterArtifacts` is off: the scripts make and sign the archive); bundle metadata and the privacy usage descriptions (`Info.plist`); the entitlements for the privacy grants (Apple Events, camera, audio input, contacts, calendars, photos, location; `Entitlements.plist`, wired by `bundle.macOS.entitlements`); app and tray icons; the DMG background. `icons/AppIcon.icon/` is the macOS 26 layered icon (an Icon Composer package listed in `bundle.icon`, compiled by Xcode 26's `actool`); its `Assets/octopus.png` is derived by hand from `assets/branding/logo.png` and `icons/tray-template.png` by hand from the app icon, and no script regenerates either |
+| `tauri.conf.json`, `Info.template.plist`, `Entitlements.plist`, `icons/`, `images/` | Where the window's UI comes from (`index.html` with the window's query, which Tauri resolves against `devUrl` under `tauri dev` and against the bundled assets otherwise), the `octoboardd` `externalBin`, bundle targets, the public key that verifies the update archive (`createUpdaterArtifacts` is off: the scripts make and sign the archive); bundle metadata (`Info.template.plist`); the entitlements for the privacy grants (Apple Events, camera, audio input, contacts, calendars, photos, location; `Entitlements.plist`, wired by `bundle.macOS.entitlements`); app and tray icons; the DMG background. `icons/AppIcon.icon/` is the macOS 26 layered icon (an Icon Composer package listed in `bundle.icon`, compiled by Xcode 26's `actool`); its `Assets/octopus.png` is derived by hand from `assets/branding/logo.png` and `icons/tray-template.png` by hand from the app icon, and no script regenerates either |
+| `localizations/`, `generated-localizations/`, `Info.plist` | Native permission catalogs (`en.json`, `zh-Hans.json`) and their generated bundle resources; generation belongs to the scripts module below |
 
 ### [`scripts/`](../../apps/desktop/scripts/README.md) (`apps/desktop/scripts/`)
 
-The sidecar build, local build, local install, release, update-signing and release-publishing scripts, with their shared
-`bundle.mjs`, `update-archive.mjs` (packs and signs the update archive), the testable `release-manifest.mjs` and the
-temporary `actool/` shim. Its README holds their interfaces, how the release
+The native-resource generation, sidecar build, local build, local install, release, update-signing and
+release-publishing scripts, with their shared `bundle.mjs`, `update-archive.mjs` (packs and signs the update archive),
+the testable `release-manifest.mjs` and the temporary `actool/` shim. Its README holds their interfaces, how the release
 is built, published and tagged, and the rule that the version lives in two places.
 
 ## IPC surface

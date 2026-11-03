@@ -144,8 +144,8 @@ it("renders a coded shell timeout with a separate title and command while plain 
 });
 
 it.each([
-  ["account_in_use", { account: "a1", name: "Work", sessions: "2", signing_in: "false" }, "2 of its sessions are working", "Wait for the account’s working sessions to finish"],
-  ["account_in_use", { account: "a1", name: "Work", sessions: "0", signing_in: "true" }, "being signed in", "for any sign-in of it to end"],
+  ["account_in_use", { account: "a1", name: "Work", sessions: "2", signing_in: "false" }, "2 of its sessions are working", "Wait for the account’s working sessions and login to finish, then try again."],
+  ["account_in_use", { account: "a1", name: "Work", sessions: "0", signing_in: "true" }, "being signed in", "Wait for the account’s working sessions and login to finish, then try again."],
   ["account_sharing_in_progress", { account: "a1", name: "Work" }, "is being changed", "Wait for the change to finish"],
   ["account_sharing_failed", { account: "a1", name: "Work", detail: "x", items: "[]" }, "Nothing was rolled back", "try once more with the account’s Share default configuration switch"],
 ])("words the sharing refusal %s with the account and a remedy, not as an unexpected failure", (code, params, sentence, remedy) => {

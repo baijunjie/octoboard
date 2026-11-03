@@ -7,7 +7,7 @@ import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSumm
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { ActionableError } from "../../errors/actionableError";
 import { errorText, unexpectedFailureDiagnostic } from "../../errors/errorText";
-import { globalParam, isMessageKey, type MessageKey } from "../../i18n/catalog";
+import { isMessageKey, type MessageKey } from "../../i18n/catalog";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import { sessionTask } from "../../sessions/sessionLabel";
@@ -220,7 +220,7 @@ export function DaemonErrorMessage({ error, showTitle = true, part }: { error: E
     return detail && (part === "details" || part === "raw") ? <DiagnosticBlock>{detail}</DiagnosticBlock> : null;
   }
   if (part === "summary") return <>{t("daemon.shell_environment_timeout.cause")}</>;
-  const consequence = <Message id="daemon.shell_environment_timeout.consequence" params={{ appName: <InlineReference dir="auto" wrap>{globalParam("appName")}</InlineReference> } as never} />;
+  const consequence = <Message id="daemon.shell_environment_timeout.sessionsBlocked" />;
   if (part === "remedy") return <span className="block">{t("daemon.shell_environment_timeout.recovery")}</span>;
   if (part === "raw") return null;
   if (part === "details" || part === "further") return <><p>{consequence}</p><ShellTimeoutCommand params={error.params} /></>;

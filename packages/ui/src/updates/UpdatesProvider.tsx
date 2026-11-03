@@ -14,14 +14,14 @@ const UpdatesContext = createContext<UpdateStore | undefined>(undefined);
  * updater's own text is behind the alert's disclosure, as raw text always is. */
 function reportUpdateFailure({ action, reason, detail }: UpdateFailure): void {
   const key = reason === "gone" ? "updates.error.install.gone" : action === "check" ? "updates.error.check" : "updates.error.install";
-  const message = t(key);
+  const message = action === "install" && reason !== "gone" ? undefined : t(key);
   const remedy = t(`${key}.remedy`);
   const title = t(action === "check" ? "updates.error.check.title" : "updates.error.install.title");
   errorAlerts.report({
-    message,
+    message: message ?? title,
     title,
-    error: new ActionableError(message, "none"),
-    content: <div className="flex flex-col gap-4"><p>{message}</p><p>{remedy}</p></div>,
+    error: new ActionableError(message ?? title, "none"),
+    content: <div className="flex flex-col gap-4">{message && <p>{message}</p>}<p>{remedy}</p></div>,
     details: detail ? <DiagnosticBlock>{detail}</DiagnosticBlock> : null,
   });
 }

@@ -188,7 +188,7 @@ it("words a periodic refresh that fails after a language change in the new langu
   );
   const current = list();
   expect(current?.state).toBe("error");
-  expect(current?.state === "error" ? errorText(current.message) : "").toContain("此更改过大");
+  expect(current?.state === "error" ? errorText(current.message) : "").toContain("此更改的补丁超过大小上限 1字节，无法在此显示差异。");
 });
 
 it("restarts the interval of a change list when its worktree changes, reading the new worktree at once", async () => {
