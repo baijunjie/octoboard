@@ -20,8 +20,13 @@ pub struct Tools {
     pub trash: fn(&Path) -> Result<(), TrashFailure>,
     /// The shell a shell terminal runs.
     pub shell: fn() -> crate::terminal::shell::ShellCommand,
-    /// The environment a shell terminal is started in, as an agent launch takes it.
+    /// The environment a shell terminal is started in, as an agent launch takes it (and a launch
+    /// resolves Claude Code's configuration in).
     pub shell_env: fn() -> Result<HashMap<String, String>>,
+    /// The environment for a request a person or a tool makes between launches, such as the
+    /// Claude Code model listing: the scheduled snapshot, which is served from the cache for up
+    /// to an hour, so that no picker opened or tool called forks a login shell.
+    pub scheduled_shell_env: fn() -> Result<HashMap<String, String>>,
 }
 
 /// Held on `AppState`.
@@ -37,6 +42,7 @@ impl Default for HostTools {
                 trash: move_to_trash,
                 shell: crate::terminal::shell::login_shell,
                 shell_env: crate::env_shell::launch_snapshot,
+                scheduled_shell_env: crate::env_shell::cached_snapshot,
             }),
         }
     }

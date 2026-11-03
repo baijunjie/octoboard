@@ -112,7 +112,8 @@ pub(super) fn open_session_schema(with_project: bool) -> Value {
         "model": {
             "type": "string",
             "description": format!(
-                "Overrides the model for this one session; blank is the agent's own default. \
+                "Overrides the model for this one session; blank is the default model \
+                 (`list_agent_models` names it). \
                  `list_agent_models` lists the ones the agent offers. Left out, a project \
                  session takes its project's, else the console's project session \
                  model{launch_pointer}.",

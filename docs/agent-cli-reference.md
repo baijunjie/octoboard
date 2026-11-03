@@ -284,14 +284,54 @@ The level a reply ran at is always on record: each main-transcript assistant lin
 also when nothing sets one — every such line of 155 transcripts written by 2.1.286 to 2.1.304, on a `settings.json`
 with no `effortLevel`.
 
-**Discovering models** (Claude Code 2.1.296): there is **no `models` subcommand**, but there is a real alias layer.
-`opus`, `sonnet` and `haiku` resolve to the newest member of each family through the catalogue Claude Code fetches from
-its server (opus-5-5, sonnet-5-5 and haiku-5-5 when measured), so nothing needs listing and no version has to be
-written down. `best` means "the top model if the account has it, else Opus" and **degrades by construction, so it
-cannot be refused**. Three traps: `fable` on its own is gated by the account and **can be refused**; `latest` is a
-reserved word and **not an alias**; `mythos` has no alias. The list Octoboard offers is therefore the four strings
-`best`, `opus`, `sonnet`, `haiku`. `--effort` takes `low`, `medium`, `high`, `xhigh` and `max`, and a level the resolved
-model lacks is silently lowered, so no level is ever refused.
+**Discovering models** (Claude Code 2.1.296, the account catalogue read off disk on 2.1.317): there is **no `models`
+subcommand**, but there is a real alias layer. `fable`, `opus`, `sonnet` and `haiku` resolve to the newest member of
+each family through the catalogue Claude Code fetches from its server (fable-5-1, opus-5-5, sonnet-5-5 and haiku-5-5
+when measured), so no version has to be written down. `best` means "the top model if the account has it, else Opus", but
+it falls back to Opus **without checking that the account may use Opus**, so it is not safe to rely on: a Pro account
+measured here has both `fable` and `opus` disabled. A model the account cannot use is **refused** at launch with `Model
+'X' is not currently available for your account.` followed by the catalogue's notice. `latest` is a reserved word and
+**not an alias**; `mythos` has no alias. The list Octoboard offers is therefore the four strings `fable`, `opus`,
+`sonnet`, `haiku`, best first, and an unset setting launches with the first of them the account may use, unless Claude
+Code's own configuration names a model (below). `--effort` takes `low`, `medium`, `high`, `xhigh` and `max`, and a level
+the resolved model lacks is silently lowered, so no level is ever refused.
+
+Claude Code caches the account's catalogue on disk, which says what each alias resolves to and whether the account may
+use it, without running anything. It is `<config dir>/cache/model-catalog/<organizationUuid>-<hash>-cc.json`, where
+`<config dir>` is `CLAUDE_CONFIG_DIR`, else `~/.claude` (the default account's catalogue is under `~/.claude/` although
+its global config is `~/.claude.json`), `<organizationUuid>` and the account id come from the global config's
+`oauthAccount.organizationUuid` and `oauthAccount.accountUuid`, both lower-cased, and `<hash>` is the first 12 hex
+digits of the SHA-256 of the lower-cased account id. Several organizations' catalogues can share one directory, so the
+organization is part of the name. Beside them lie `*-ccd.json` and `*-headless-failed.json` files, which say nothing
+about the models and are not read. The file is `{version: 2, fetchedAt, staleAt, catalog}`, and `catalog.config` holds
+`models`, a list of `{id, name, short_name, section, disabled?, notice?, runtime}`, and `provider_alias_targets`, a map
+from each alias to `{default: <id>}` (and, as measured on gateway, Bedrock and Vertex accounts, `per_provider` targets,
+which Octoboard does not use: only `provider_alias_targets[alias].default`, the first-party OAuth target, is read). The
+rules: an alias resolves to the `models` row whose `id` is `provider_alias_targets[alias].default`; that row's `name` is
+the version to show (`Opus 5.5`); the account may use it unless `disabled` is `true` or `section` is `deprecated` (a
+disabled row's `notice.text` is Claude Code's reason, such as "Fable is included with Max and Ultra, or available with
+usage credits on Pro."; an enabled one may carry a notice too, a usage warning, which is not a refusal); and
+`runtime.effort_levels` lists the levels. Max and Team accounts measured here have all four enabled, Pro ones have
+`fable` and `opus` disabled. A file past its `staleAt` is still the best answer there is. The global config's
+`modelAccessCache` (`[{apiName, entitled}]`, empty on every account measured) is honoured as a further refusal where an
+entry says `entitled: false`; that `apiName` is the catalogue row's `id` is an assumption, unverified because no
+measured account has an entry. `additionalModelOptionsCache` is not reliable and is ignored.
+
+**Claude Code's own model configuration** (Claude Code's documented settings, not measured here): with no `--model`,
+Claude Code takes the model from `ANTHROPIC_MODEL` in its environment, else the `model` of the merged settings files,
+whose precedence from highest is the managed settings, the project's `.claude/settings.local.json`, the project's
+`.claude/settings.json` and the user's `<config dir>/settings.json`. A settings file's `env` block is applied to Claude
+Code's environment, so an `ANTHROPIC_MODEL` in it outranks any `model`; Octoboard reads it from the same files, higher
+file first. The managed settings are `managed-settings.json` and the `*.json` files of `managed-settings.d/` (merged in
+the order of their names, after the base file) in `/Library/Application Support/ClaudeCode` on macOS and
+`/etc/claude-code` on Linux; policy delivered through an MDM profile or the claude.ai console is in no file and cannot
+be seen. Octoboard counts any of these as the model being set upstream: it then passes no `--model`, so that Claude Code
+applies it (a `--model` would override all of them). Only when none names a model does the launch pass the first usable
+alias. The account-level sources (the user's settings, `ANTHROPIC_MODEL` in the login-shell snapshot or a settings `env`
+block, the managed settings) are also what the listing's `default_model` reports, as the raw string, with
+`default_model_source: configured`; the project's are known only at launch, so a session in a project that sets a model
+can run another one than a picker showed. Known gap: a managed `availableModels` allowlist is not read, so a launch with
+a best-available alias it excludes is refused by Claude Code.
 
 **Permission mode** (Claude Code 2.1.303): `--permission-mode <mode>` is a global flag, so it works alongside `--resume`
 (including `bypassPermissions` with the `--settings` key, which showed no warning on a resume). The listed values are

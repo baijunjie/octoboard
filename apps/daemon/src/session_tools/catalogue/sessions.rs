@@ -16,7 +16,8 @@ pub(super) const CONSOLE_OPEN_SESSION: ToolDef = ToolDef {
                   reopen it with `resume_session` when it has another task. Needs no approval. \
                   Returns the new session's id, its agent, the account it opened on \
                   (`account`, `account_name`) and the `model` and `effort` it was launched \
-                  with (`null` is the agent's own default). The brief is rendered into the \
+                  with (`null` is unset: the default model, which `list_agent_models` names, and \
+                  the agent's own default effort). The brief is rendered into the \
                   session's opening prompt; `title` names the session in the user's language. \
                   It prefers the project's default agent. A left-out account is selected by \
                   the server according to the configured policy. Automatic selection may \
@@ -52,7 +53,8 @@ pub(super) const PROJECT_OPEN_SESSION: ToolDef = ToolDef {
                   weighing the agents' tags in `list_agents`, and an account of it can open a \
                   session. Returns the new session's id, its agent, the account it opened on \
                   (`account`, `account_name`) and the `model` and `effort` it was launched \
-                  with (`null` is the agent's own default), and with `branches` the ones that \
+                  with (`null` is unset: the default model, which `list_agent_models` names, and \
+                  the agent's own default effort), and with `branches` the ones that \
                   moved and a `note` on how the transfer went. The brief is rendered into the \
                   session's opening prompt; `title` names the session in the user's language. \
                   A session started this way cannot start sessions of its own, and only this \
@@ -213,7 +215,8 @@ pub(super) const RESUME_SESSION: ToolDef = ToolDef {
                   move it to another account, use `switch_session_account`). A `model` or \
                   `effort` the agent does not offer is refused, with nothing relaunched. Returns \
                   the session's id, its account (`account`, `account_name`) and the `model` \
-                  and `effort` it was launched with (`null` is the agent's own default). \
+                  and `effort` it was launched with (`null` is unset: the default model, which \
+                  `list_agent_models` names, and the agent's own default effort). \
                   Refused for a session that is not yours (`yours: false`): it is somebody \
                   else's, to be left alone.",
     schema: || {
@@ -227,7 +230,8 @@ pub(super) const RESUME_SESSION: ToolDef = ToolDef {
                 "model": {
                     "type": "string",
                     "description": "Resume it with this model, which then becomes the \
-                                    session's own; blank is the agent's own default. \
+                                    session's own; blank is the default model \
+                                    (`list_agent_models` names it). \
                                     `list_agent_models` lists the ones its agent offers \
                                     under its account. Left out, it keeps the model it had.",
                 },

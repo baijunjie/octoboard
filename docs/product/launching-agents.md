@@ -301,7 +301,8 @@ their own sees those two differences in sessions Octoboard runs. Running `claude
 The session's model and reasoning effort are resolved under the inheritance and override rules in
 `docs/product/model-and-reasoning-effort.md`. Each resolved value is passed as that agent's own launch argument, on
 every launch, a resume and an account switch included, and nothing else about the launch changes. A value left to
-the agent's own default produces no launch argument for that value.
+the agent's own default produces no launch argument for that value, except a Claude Code model, which gets one when
+Octoboard chooses it (see "The default model" in `docs/product/model-and-reasoning-effort.md`).
 
 Octoboard checks neither value against anything at launch. Which models and which effort levels exist is the agent's
 own business — the dialogs that set them offer what the agent itself answers, and the agent is what answers for a
@@ -309,6 +310,7 @@ value it does not know anyway, in the session's own output, like any other compl
 the three do differs, and is worth knowing before a value is set:
 
 - **Claude Code** silently lowers an effort the chosen model does not support down to `high`, rather than refusing it.
+  It refuses a model the account cannot use, with its own message saying so.
 - **Codex** refuses an effort the chosen model does not advertise, with an error of its own naming that model.
 - **Grok Build** takes both as flags and saves them in its per-session configuration copy. Neither value as passed at
   launch reaches the user's own Grok configuration. With a linked source configuration, a model the user selects in the

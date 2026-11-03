@@ -19,6 +19,18 @@ pub enum ModelChangeOutcome {
     Restarted,
 }
 
+/// Where the `default_model` of a `list_agent_models` answer came from.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DefaultModelSource {
+    /// Claude Code's own configuration names it (a settings file or `ANTHROPIC_MODEL`): the model
+    /// is whatever the user set up, not one Octoboard chose.
+    Configured,
+    /// Octoboard chose it: the first listed model the account may use.
+    BestAvailable,
+}
+
 /// One model an agent offers, as `list_agent_models` reports it.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -35,6 +47,17 @@ pub struct AgentModel {
     /// agent, or quietly lowered, as Claude Code does with a level its model does not support, so
     /// a listed level is one to offer, not a promise that it is honoured.
     pub efforts: Vec<String>,
+    /// The concrete version `id` currently stands for, where `id` is an alias (Claude Code's
+    /// `opus` standing for "Opus 5.5"); absent where `id` already names the model, or where the
+    /// catalogue says nothing about it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub version: Option<String>,
+    /// Whether the account can use the model: `false` for one the agent would refuse; absent
+    /// where that is not known, which a client must not read as either answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub available: Option<bool>,
 }
 
 /// Why `list_agent_models` has no list, as a coded message of the same shape as an `error`. It

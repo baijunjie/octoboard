@@ -284,6 +284,17 @@ export type AgentModel = {
    * a listed level is one to offer, not a promise that it is honoured.
    */
   efforts: Array<string>,
+  /**
+   * The concrete version `id` currently stands for, where `id` is an alias (Claude Code's
+   * `opus` standing for "Opus 5.5"); absent where `id` already names the model, or where the
+   * catalogue says nothing about it.
+   */
+  version?: string,
+  /**
+   * Whether the account can use the model: `false` for one the agent would refuse; absent
+   * where that is not known, which a client must not read as either answer.
+   */
+  available?: boolean,
 };
 
 /**
@@ -747,6 +758,11 @@ export type ConversationLocation = {
 | {
   "kind": "not_found"
 };
+
+/**
+ * Where the `default_model` of a `list_agent_models` answer came from.
+ */
+export type DefaultModelSource = "configured" | "best_available";
 
 /**
  * One entry of a directory listing. Only directories are ever listed — a project is a directory —
@@ -1265,6 +1281,11 @@ export type Event = {
   agent: Agent,
   account: string | null,
   models: Array<AgentModel>,
+  default_model?: string,
+  /**
+   * Where `default_model` came from; absent with it.
+   */
+  default_model_source?: DefaultModelSource,
   unavailable: ModelsUnavailable | null,
 }
 | {

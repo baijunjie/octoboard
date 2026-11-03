@@ -18,7 +18,7 @@ use super::configuration::{
 use super::errors::{error_parts, params, Params};
 use super::fields::is_true;
 use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence};
-use super::models::{AgentModel, ModelChangeOutcome, ModelsUnavailable};
+use super::models::{AgentModel, DefaultModelSource, ModelChangeOutcome, ModelsUnavailable};
 use super::path_links::PathLink;
 use super::processes::{ProcessCount, ProcessTree};
 use super::quotas::{AccountQuota, ResetCreditOutcome};
@@ -320,12 +320,21 @@ pub enum Event {
     },
     /// The reply to `list_agent_models`: `agent` and `account` echo the request. `models` is
     /// empty exactly when `unavailable` says why; a client then offers a free-text field or the
-    /// agent's own default rather than an error.
+    /// agent's own default rather than an error. `default_model` is what a session of the account
+    /// gets when no setting names a model (for Claude Code the model its own configuration names,
+    /// else the best one the account may use), absent where the agent's own default applies.
     AgentModels {
         id: Option<String>,
         agent: Agent,
         account: Option<String>,
         models: Vec<AgentModel>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        default_model: Option<String>,
+        /// Where `default_model` came from; absent with it.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        default_model_source: Option<DefaultModelSource>,
         unavailable: Option<ModelsUnavailable>,
     },
     /// The reply to `locate_conversation_to_resume`: where the conversation is held.

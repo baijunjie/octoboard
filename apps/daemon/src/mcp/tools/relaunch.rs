@@ -5,12 +5,12 @@ use crate::coordinator::resume::resumable_agent_session_id;
 use crate::protocol::{Agent, Session};
 use crate::session_tools::catalogue::qualified_tool_name;
 
-/// How a setting the user chose is told: its value, or the agent's own default.
+/// How a setting the user chose is told: its value, or the default for an unset one (for a
+/// model, `list_agent_models`' `default_model`; for an effort, the agent's own).
 pub(super) fn setting_text(value: &Option<String>) -> String {
-    value.as_deref().map_or_else(
-        || "the agent's own default".to_string(),
-        |text| format!("`{text}`"),
-    )
+    value
+        .as_deref()
+        .map_or_else(|| "the default".to_string(), |text| format!("`{text}`"))
 }
 
 /// What the caller (a session of `caller`'s agent) is told of the state a relaunched session came

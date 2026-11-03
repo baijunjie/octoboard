@@ -1,7 +1,7 @@
 import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import { effortLevels, launchSettingOptions } from "../agents/agentLaunchSettings";
+import { effortLevels, type LaunchSettingOption, launchSettingOptions, shownModel } from "../agents/agentLaunchSettings";
 import { FailureBody } from "../components/alerts/errorParts";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -11,16 +11,20 @@ import { failureSummaryText } from "../errors/errorText";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel, Launch } from "../protocol";
+import { modelDisplayName } from "../sessions/sessionModel";
 import { useDaemon, useDaemonStore } from "../store";
 import { AdvancedSection, type AdvancedTab, AdvancedTabs } from "../components/form/AdvancedSection";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { useAgentModels } from "./useAgentModels";
 
-/** The name a listed model is shown under. Claude Code's `best` alias is named in Octoboard's own
- * words by the daemon, so it comes from the catalogue; every other name is the product's or the
- * agent's own and is shown as sent. */
-function modelName(t: Translate, model: AgentModel): string {
-  return model.id === "best" ? t("dialog.agentSettings.modelBest") : model.name;
+/** A listed model as a picker option: its name, with the concrete version it stands for under it
+ * where the daemon knows it, and an "Unavailable" badge where the account cannot use it. The
+ * version is also the option's description for assistive technology, which the line drawn under the
+ * name is hidden from. */
+function modelOption(t: Translate, model: AgentModel): LaunchSettingOption {
+  const badge = model.available === false ? { badge: t("dialog.agentSettings.modelUnavailable") } : {};
+  if (!model.version) return { value: model.id, label: model.name, ...badge };
+  return { value: model.id, label: model.name, ...badge, detail: model.version, reason: { state: model.version } };
 }
 
 /** What the launch pickers of one agent and account need to know of the models it offers, asked of
@@ -35,7 +39,7 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const t = useT();
   const language = useCurrentLanguage();
   const { request } = useDaemon();
-  const { status, models, unavailable, error } = useAgentModels(request, agent, account, enabled);
+  const { status, models, defaultModel, defaultModelSource, unavailable, error } = useAgentModels(request, agent, account, enabled);
   const loading = status === "loading";
   // Selected as the worded text rather than the records it names, so the field follows a rename
   // without re-rendering on every other change to those records.
@@ -51,18 +55,24 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const modelDescription = loading ? modelText : undefined;
   const modelFailure = loading ? undefined : reason;
   const listed = status === "ready" && !unavailable && models.length > 0;
-  return { loading, listed, models, modelText, modelDescription, modelFailure };
+  return { agent, loading, listed, models, defaultModel, defaultModelSource, modelText, modelDescription, modelFailure };
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
 
 /** What an unset picker says in place of "unset": that it inherits, with a badge naming the value it
- * resolves to, or the agent's own setting while that is none. */
+ * resolves to, or that the setting is the owner's own while that is none. */
 function inherited(t: Translate, value: string | null): { placeholder: string; placeholderBadge: string } {
   return {
     placeholder: t("dialog.agentSettings.sameAsConsole"),
     placeholderBadge: value || t("dialog.agentSettings.inheritOwn"),
   };
+}
+
+/** The model a pair resolves to: its own `model` if it names one, else the one it `inherit`s, else the
+ * one Octoboard launches with when nothing names one, else `null`, the agent's own choice. */
+function resolvedModel(launch: LaunchModels, model: string | null, inherit: Launch | undefined): string | null {
+  return shownModel(launch.agent, model) ?? shownModel(launch.agent, inherit?.model ?? null) ?? launch.defaultModel;
 }
 
 /** The warning mark of a Model field whose list of models could not be read: it concerns the whole field,
@@ -112,23 +122,33 @@ export function ModelPicker({
   describedBy,
 }: PickerProps & { model: string | null; onChange: (value: string | null) => void }): React.ReactElement {
   const t = useT();
-  const listed = launch.models.find((candidate) => candidate.id === inherit?.model);
-  const inheritedText = inherit && inherited(t, listed ? modelName(t, listed) : inherit.model);
+  // A badge names the concrete version where the list knows it ("Fable 5.1"), as the options do; an
+  // id the list lacks (a model Claude Code's own configuration names) is read as a session's is.
+  const nameOf = (id: string | null) => {
+    if (id === null) return null;
+    const listed = launch.models.find((candidate) => candidate.id === id);
+    return listed?.version ?? listed?.name ?? modelDisplayName(launch.agent, id);
+  };
+  const shown = shownModel(launch.agent, model);
+  // What an unset picker resolves to, for its badge.
+  const resolved = nameOf(resolvedModel(launch, null, inherit));
+  let unset: { placeholder: string; placeholderBadge?: string } | undefined;
+  if (inherit) unset = inherited(t, resolved);
+  else if (launch.defaultModel !== null) {
+    // A model Claude Code's own configuration names is its own setting, not Octoboard's best pick.
+    const placeholder = launch.defaultModelSource === "configured" ? "dialog.agentSettings.placeholder" : "dialog.agentSettings.modelDefault";
+    unset = { placeholder: t(placeholder), placeholderBadge: resolved ?? undefined };
+  }
   return (
     <OptionSelect
       label={t("dialog.agentSettings.model")}
       hideLabel={hideLabel}
       labelledBy={labelledBy}
-      options={launchSettingOptions(
-        t,
-        launch.models.map((listed) => ({ value: listed.id, label: modelName(t, listed) })),
-        model,
-        launch.listed,
-      )}
-      value={model}
+      options={launchSettingOptions(t, launch.models.map((listed) => modelOption(t, listed)), shown, launch.listed)}
+      value={shown}
       onChange={onChange}
-      placeholder={inheritedText?.placeholder ?? t("dialog.agentSettings.placeholder")}
-      placeholderBadge={inheritedText?.placeholderBadge}
+      placeholder={unset?.placeholder ?? t("dialog.agentSettings.placeholder")}
+      placeholderBadge={unset?.placeholderBadge}
       isDisabled={isDisabled || launch.loading}
       description={launch.modelDescription}
       describedBy={describedBy}
@@ -153,7 +173,7 @@ export function EffortPicker({
   describedBy,
 }: PickerProps & { model: string | null; effort: string | null; onChange: (value: string | null) => void }): React.ReactElement {
   const t = useT();
-  const { levels, none } = effortLevels(launch.models, model ?? inherit?.model ?? null);
+  const { levels, none } = effortLevels(launch.models, resolvedModel(launch, model, inherit));
   const inheritedText = inherit && inherited(t, inherit.effort);
   return (
     <OptionSelect

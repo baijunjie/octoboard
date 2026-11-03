@@ -1,21 +1,30 @@
+import { shownModel } from "../agents/agentLaunchSettings";
 import { consoleProjectLaunch, inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Agent, Console, Launch, Project, Session } from "../protocol";
 
-const CLAUDE_ALIASES = new Set(["opus", "sonnet", "haiku"]);
+const CLAUDE_ALIASES = new Set(["fable", "opus", "sonnet", "haiku"]);
 /** A Claude model id: the family, then the version parts, then optionally a release date. */
 const CLAUDE_ID = /^claude-([a-z]+)((?:-\d{1,2})+)(?:-\d{8})?$/;
+
+/** A model id with a bracketed suffix, as Claude Code takes a context window (`opus[1m]`). */
+const CLAUDE_SUFFIX = /^(.+?)(\[[^\]]+\])$/;
 
 const capitalized = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** A short name for a model id: for Claude, `claude-opus-5-5` reads "Opus 5.5" and the alias
- * `sonnet` reads "Sonnet"; the `best` alias is named in the catalogue, as the launch pickers name
- * it. Claude is the only agent whose ids are long enough to need it; any other agent's id, and a
- * Claude one of a shape not known, is shown as it is. */
-export function modelDisplayName(t: Translate, agent: Agent, model: string): string {
+ * `sonnet` reads "Sonnet". Claude is the only agent whose ids are long enough to need it; any
+ * other agent's id, and a Claude one of a shape not known (the retired `best` alias among them),
+ * is shown as it is. */
+export function modelDisplayName(agent: Agent, model: string): string {
   if (agent !== "claude") return model;
-  if (model === "best") return t("dialog.agentSettings.modelBest");
+  // A context-window suffix (`opus[1m]`) stays on the end of the name it qualifies.
+  const suffixed = CLAUDE_SUFFIX.exec(model);
+  if (suffixed) {
+    const base = modelDisplayName(agent, suffixed[1]);
+    return base === suffixed[1] ? model : `${base} ${suffixed[2]}`;
+  }
   if (CLAUDE_ALIASES.has(model)) return capitalized(model);
   const match = CLAUDE_ID.exec(model);
   if (!match) return model;
@@ -40,7 +49,7 @@ export function inheritedLaunch(session: Session, consoles: Map<string, Console>
 export function sessionModelEffort(session: Session, inherited: Launch): Launch {
   const launched = launchWithOverrides(inherited, session);
   return {
-    model: session.observed_model ?? launched.model,
+    model: session.observed_model ?? shownModel(session.agent, launched.model),
     effort: session.observed_effort ?? session.default_effort ?? launched.effort ?? null,
   };
 }
@@ -49,7 +58,7 @@ export function sessionModelEffort(session: Session, inherited: Launch): Launch 
  * agent tooltip. A value not known reads as the default. */
 export function sessionModelValues(t: Translate, agent: Agent, launch: Launch): { model: string; effort: string } {
   return {
-    model: launch.model === null ? t("session.modelEffort.unknownItem") : modelDisplayName(t, agent, launch.model),
+    model: launch.model === null ? t("session.modelEffort.unknownItem") : modelDisplayName(agent, launch.model),
     effort: launch.effort ?? t("session.modelEffort.unknownItem"),
   };
 }
@@ -59,7 +68,7 @@ export function sessionModelValues(t: Translate, agent: Agent, launch: Launch): 
 export function sessionModelLabel(t: Translate, agent: Agent, launch: Launch): string {
   if (launch.model === null && launch.effort === null) return t("session.modelEffort.default");
   return t("session.modelEffort", {
-    model: launch.model === null ? t("session.modelEffort.unknownItem") : isolate(modelDisplayName(t, agent, launch.model)),
+    model: launch.model === null ? t("session.modelEffort.unknownItem") : isolate(modelDisplayName(agent, launch.model)),
     effort: launch.effort === null ? t("session.modelEffort.unknownItem") : isolate(launch.effort),
   });
 }

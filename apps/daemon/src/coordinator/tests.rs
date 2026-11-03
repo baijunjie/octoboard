@@ -14,6 +14,7 @@ use crate::coordinator::test_support::{
     no_process_with_conversation, only_account, open_request, project_of, relaunch_stand_in,
     set_availability,
 };
+use crate::protocol::DefaultModelSource;
 use crate::protocol::{
     error_code, Agent, Availability, CodedError, Event, Launch, LaunchChange, PerAgent, Project,
     ProjectSource, RequestBody, Session, SessionStatus,
@@ -149,11 +150,15 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
             agent,
             account,
             models,
+            default_model,
+            default_model_source,
             unavailable,
         }) => {
             assert_eq!(id.as_deref(), Some("req-2"));
             assert_eq!((agent, account), (Agent::Claude, None));
             assert_eq!(models.len(), 4);
+            // The test home holds no catalogue, so nothing is known to be usable.
+            assert_eq!((default_model, default_model_source), (None, None));
             assert!(unavailable.is_none());
         }
         other => panic!("expected agent_models, got {other:?}"),
@@ -173,6 +178,69 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
         let coded = refused.downcast_ref::<CodedError>().expect("coded");
         assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT);
     }
+}
+
+/// The reply carries the model an unset picker resolves to: the best model the account may use,
+/// or the one Claude Code's own configuration names.
+#[tokio::test]
+async fn the_agent_models_reply_names_the_default_model_of_the_account() {
+    use crate::agents::models::claude_fixtures::{write_claude_account, CLAUDE_CATALOGUE};
+    let (state, dir) = crate::test_support::app_state("coordinator-agent-models-default");
+    let pinned = dir.join("pinned");
+    std::fs::create_dir_all(&pinned).unwrap();
+    write_claude_account(
+        &pinned.join(".claude.json"),
+        &pinned,
+        "[]",
+        Some(CLAUDE_CATALOGUE),
+    );
+    handle(
+        &state,
+        None,
+        create_account_request(Agent::Claude, "Work", &pinned.to_string_lossy()),
+    )
+    .await
+    .expect("created");
+    let account = only_account(&state).id;
+    let default_model = || async {
+        let reply = handle(
+            &state,
+            None,
+            RequestBody::ListAgentModels {
+                agent: Agent::Claude,
+                account: Some(account.clone()),
+            },
+        )
+        .await
+        .expect("answered");
+        match reply {
+            Some(Event::AgentModels {
+                default_model,
+                default_model_source,
+                models,
+                ..
+            }) => {
+                assert_eq!(models[1].available, Some(true));
+                (default_model, default_model_source)
+            }
+            other => panic!("expected agent_models, got {other:?}"),
+        }
+    };
+    assert_eq!(
+        default_model().await,
+        (
+            Some("opus".to_string()),
+            Some(DefaultModelSource::BestAvailable)
+        )
+    );
+    std::fs::write(pinned.join("settings.json"), r#"{"model":"claude-x-1"}"#).unwrap();
+    assert_eq!(
+        default_model().await,
+        (
+            Some("claude-x-1".to_string()),
+            Some(DefaultModelSource::Configured)
+        )
+    );
 }
 
 #[tokio::test]

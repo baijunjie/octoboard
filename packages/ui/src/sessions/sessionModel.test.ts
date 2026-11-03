@@ -14,16 +14,20 @@ describe("modelDisplayName", () => {
     ["claude-opus-5", "Opus 5"],
     ["claude-opus-4-5-20251101", "Opus 4.5"],
     ["opus", "Opus"],
-    ["best", "Best available"],
+    ["fable", "Fable"],
+    ["best", "best"],
     ["claude-unknown", "claude-unknown"],
+    ["opus[1m]", "Opus [1m]"],
+    ["claude-opus-4-5-20251101[1m]", "Opus 4.5 [1m]"],
+    ["mystery[1m]", "mystery[1m]"],
   ])("shows the Claude model %s as %s", (id, name) => {
-    expect(modelDisplayName(t, "claude", id)).toBe(name);
+    expect(modelDisplayName("claude", id)).toBe(name);
   });
 
   it("shows another agent's id as it is, even one shaped like Claude's", () => {
-    expect(modelDisplayName(t, "codex", "gpt-6.1-sol")).toBe("gpt-6.1-sol");
-    expect(modelDisplayName(t, "grok", "claude-opus-5-5")).toBe("claude-opus-5-5");
-    expect(modelDisplayName(t, "codex", "best")).toBe("best");
+    expect(modelDisplayName("codex", "gpt-6.1-sol")).toBe("gpt-6.1-sol");
+    expect(modelDisplayName("grok", "claude-opus-5-5")).toBe("claude-opus-5-5");
+    expect(modelDisplayName("codex", "best")).toBe("best");
   });
 });
 
@@ -35,6 +39,8 @@ describe("sessionModelEffort", () => {
     expect(sessionModelEffort({ ...base, observed_model: "claude-opus-5-5", observed_effort: "high", model: "x", effort: "y" }, inherited)).toEqual({ model: "claude-opus-5-5", effort: "high" });
     expect(sessionModelEffort({ ...base, model: "opus", effort: "low" }, inherited)).toEqual({ model: "opus", effort: "low" });
     expect(sessionModelEffort(base, inherited)).toEqual(inherited);
+    // The retired alias launches as no model, so it is not shown as one.
+    expect(sessionModelEffort({ ...base, model: "best" }, inherited).model).toBeNull();
   });
 
   it("takes a null override as the agent's default rather than inheriting", () => {

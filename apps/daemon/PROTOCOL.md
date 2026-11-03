@@ -291,7 +291,7 @@ the request id as if it were a record id.
 | `session_opened` | `id`, `session` — the reply to `open_session`, to an approving `answer_session_request` and to `handoff_session`, naming the session it started; for `open_session` it is `starting` (see there) |
 | `agent_detected` | `id`, `agent` — the reply to `detect_directory_agent` and `probe_git_remote`; `agent` is an agent name or null |
 | `conversation_located` | `id`, `location` — the reply to `locate_conversation_to_resume`; `location` is tagged by `kind`: `archived_session` and `live_session` (with `session`, the id of the Octoboard session that records the conversation), `outside_project` (with `session`, the id of the session outside the project that records the conversation), `record` (with `agent` and `account`, an account id or null for the agent's default account) or `not_found` |
-| `agent_models` | `id`, `agent`, `account`, `models`, `unavailable` — the reply to `list_agent_models`; `agent` and `account` echo the request. `models` is `[{id, name, efforts}]` and `unavailable` is null or a coded reason (`{code, params, message}`, worded as an `error` is); see "Agent models" below |
+| `agent_models` | `id`, `agent`, `account`, `models`, `default_model?`, `default_model_source?`, `unavailable` — the reply to `list_agent_models`; `agent` and `account` echo the request. `models` is `[{id, name, efforts, version?, available?}]`, `default_model` is the model a session of the account gets when no setting names one (left out when the agent's own default applies), `default_model_source` says where it came from (`configured` or `best_available`, left out with it) and `unavailable` is null or a coded reason (`{code, params, message}`, worded as an `error` is); see "Agent models" below |
 | `dir_listing` | `id`, `path`, `entries`: `[{name, path, is_git_repo}]` — only directories are listed |
 | `project_source` | `id`, `source` — the reply to `get_project_source`; `source` is a `ProjectSourceInfo` (see "Browsing a project") |
 | `project_dir` | `id`, `project`, `worktree`, `path`, `root_id`, `entries`, `complete` — the reply to `list_project_dir`. `project`, `worktree` and `path` echo the request; `root_id` is the identity of the directory the listing was scoped to; `entries` are `BrowseEntry` records in byte order of their names' wire forms; `complete` is false when the listing was cut at a budget or an entry could not be read |
@@ -1282,8 +1282,11 @@ or reopening a session is not refused for this.
 ### Agent models
 
 `list_agent_models` is how a dialog learns which models to offer, so that no model name is written into a client.
-Each `models` entry is `{id, name, efforts}`: `id` is what Octoboard passes to the agent as its model (the value of a
-setting such as `launch.claude.model`), `name` is what to show, and `efforts` is the reasoning-effort levels to offer
+Each `models` entry is `{id, name, efforts, version?, available?}`: `id` is what Octoboard passes to the agent as its
+model (the value of a setting such as `launch.claude.model`), `name` is what to show, `version` (left out where unknown)
+is the concrete model an alias currently stands for ("Opus 5.5"), `available` (left out where unknown, `false` when the
+account cannot use the model, which the agent would refuse; a client still lets it be chosen, as a setting may be stored
+for later) says whether the account can use it, and `efforts` is the reasoning-effort levels to offer
 for it, in the agent's own spelling. It is never unknown: it is the model's own levels, in the catalogue's order, where
 its catalogue entry gives them, else the agent's whole measured level set (Claude Code `low`, `medium`, `high`, `xhigh`,
 `max`; Codex those and `ultra`; Grok Build `low`, `medium`, `high`, `xhigh`), which is safe because levels, unlike model
@@ -1295,9 +1298,12 @@ its resolved model does not support, so for it an entry is a level accepted, not
 Per agent (the measured CLI facts are in the "Model and reasoning effort" note of each agent's section, "Claude Code",
 "Codex" and "Grok Build", in `docs/agent-cli-reference.md`):
 
-- **Claude Code** is always answered, with no subprocess: `best`, `opus`, `sonnet`, `haiku`, each resolved by Claude
-  Code itself to the newest model of its family (`best` is the newest model the account has, falling back to Opus, so
-  none of the four can be refused), each with `low`, `medium`, `high`, `xhigh`, `max`.
+- **Claude Code** is always answered, with no subprocess: `fable`, `opus`, `sonnet`, `haiku`, best first, each resolved
+  by Claude Code itself to the newest model of its family. The account's catalogue, which Claude Code caches on disk
+  (see "Discovering models" in `docs/agent-cli-reference.md`), supplies each entry's `version`, `available` and
+  `efforts` (`low`, `medium`, `high`, `xhigh`, `max` where it has none); with no catalogue to read, the four are still
+  listed with those two fields left out. The retired `best` alias is not listed, and a stored `best` is read as no
+  model.
 - **Codex** runs `codex debug models` and keeps the entries whose `visibility` is `list`, by ascending `priority`;
   `id` is the `slug`, `name` the `display_name`, `efforts` the `supported_reasoning_levels` (the agent's set when the
   entry has none that can be read; an empty array is none).
@@ -1306,14 +1312,32 @@ Per agent (the measured CLI facts are in the "Model and reasoning effort" note o
   file, gives the id as its name and Grok's set of efforts (an entry saying `supports_reasoning_effort: false` gives
   none). A model the file marks hidden is dropped, and if that drops every printed id the output counts as unreadable.
 
+`default_model` (left out where the agent's own default applies) is what an unset model resolves to at account level,
+and `default_model_source` says how: `configured` when Claude Code's own account-level configuration names a model, and
+`best_available` when Octoboard chose it. Both are left out together. For Claude Code the configured model is the raw
+string of `ANTHROPIC_MODEL` in the login-shell snapshot, else `ANTHROPIC_MODEL` in the `env` block of a settings file,
+else the `model` of a settings file; of the files the managed settings (`managed-settings.json` and
+`managed-settings.d/*.json` under `/Library/Application Support/ClaudeCode` on macOS, `/etc/claude-code` on Linux)
+outrank the user's `settings.json` in the account's configuration directory. Otherwise it is the first listed model with
+`available: true`. It is left out for Codex and Grok Build and when nothing is known to be usable. A client shows an
+unset picker as resolving to it (the `version` when it is a listed alias), and as `Best available` only for
+`best_available`. At launch a Claude Code session whose model is unset at every level gets `--model` with the first
+usable alias, unless Claude Code's own configuration names a model, the project's `.claude/settings.json` and
+`.claude/settings.local.json` in the session's working directory included: nothing is passed then and Claude Code
+applies it. The project's files are known only at launch, so the model such a session runs can differ from the
+`default_model` a picker showed. A managed `availableModels` allowlist is not read: a session launched with a model it
+excludes is refused by Claude Code. Wherever this document says an unset model means the agent's own default, for Claude
+Code's model it means this.
+
 A catalogue belongs to an account, so the command runs in the environment a session of that account would get: the
 login-shell snapshot, with the agent's configuration-directory variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
 `GROK_HOME`) set to the account's directory when `account` names one, and left as the snapshot has it for the default
 account.
 
-The answer is cached in the daemon per agent and configuration directory, so two accounts never share one: a list that
-was read for ten minutes, a failure for thirty seconds (long enough that reopening a dialog does not wait out a
-timeout again, short enough that a login completed meanwhile is seen at once).
+The answer of Codex and Grok Build is cached in the daemon per agent and configuration directory, so two accounts never
+share one: a list that was read for ten minutes, a failure for thirty seconds (long enough that reopening a dialog does
+not wait out a timeout again, short enough that a login completed meanwhile is seen at once). Claude Code's answer is
+two small file reads and is made afresh each time, so that `default_model` never lags behind the account's files.
 
 When there is no list, `models` is empty and `unavailable` says why; the request still succeeds, so a form that asked
 stays usable. A client shows the reason and falls back to the agent's own default or a free-text field.

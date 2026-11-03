@@ -298,15 +298,16 @@ fn accounts_schema(project: bool) -> Value {
 }
 
 /// The `launch` argument and result, or another of the same shape: each agent's model and
-/// reasoning effort, `null` or blank for the agent's own default. `whose` says whose sessions the
-/// pair is for.
+/// reasoning effort, `null` or blank for unset (the default model, the agent's own default
+/// effort). `whose` says whose sessions the pair is for.
 fn launch_schema(whose: &str) -> Value {
     json!({
         "type": "object",
         "description": format!(
             "Each agent's model and reasoning effort for {whose}, keyed by agent (`claude`, \
              `codex`, `grok`) as `{{\"model\": ..., \"effort\": ...}}`; a field left out is left \
-             as it is, and `null` or blank is the agent's own default. They must be ones the \
+             as it is, and `null` or blank is unset (the default model, which `list_agent_models` \
+             names, and the agent's own default effort). They must be ones the \
              agent offers: `list_agent_models` lists them, with the efforts of each. Claude Code's \
              models are always {}.",
             crate::agents::models::claude_model_ids()

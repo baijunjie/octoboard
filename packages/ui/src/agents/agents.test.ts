@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { accountOf } from "../fixtures/builders";
-import { accountsByAgent, agentChoiceBadge, agentPickerOptions, defaultAccountName, listedPickerAgents, noAgentState, projectSessionAgent, selectableAgent, AGENTS } from "./agents";
+import { accountOf, consoleOf, projectOf } from "../fixtures/builders";
+import { accountsByAgent, agentChoiceBadge, agentPickerOptions, defaultAccountName, inheritedSessionLaunch, listedPickerAgents, noAgentState, projectSessionAgent, projectSessionLaunch, selectableAgent, AGENTS } from "./agents";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { type Account, type Agent, type AgentAvailability } from "../protocol";
@@ -171,5 +171,22 @@ describe("defaultAccountName", () => {
     expect(defaultAccountName(t, { codex: "Personal" }, "claude")).toBe("Default");
     expect(defaultAccountName(t, { claude: "  Personal " }, "claude")).toBe("Personal");
     expect(defaultAccountName(t, { claude: "  " }, "claude")).toBe("Default");
+  });
+});
+
+describe("the launch settings a session inherits", () => {
+  it("falls through a project's stored retired `best` model to the console's, as the daemon reads it", () => {
+    const owner = consoleOf("c", "Console", { project_session_launch: { claude: { model: "sonnet" }, codex: { model: "best" } } });
+    const project = projectOf("p", "c", "Project", { launch: { claude: { model: "best", effort: "low" }, codex: { model: "best" } } });
+    expect(projectSessionLaunch(owner, project, "claude")).toEqual({ model: "sonnet", effort: "low" });
+    expect(inheritedSessionLaunch(owner, project, "claude")).toEqual({ model: "sonnet", effort: "low" });
+    // Another agent's model of that name is a model.
+    expect(projectSessionLaunch(owner, project, "codex").model).toBe("best");
+  });
+
+  it("reads a console's stored `best` as unset for a console session", () => {
+    const owner = consoleOf("c", "Console", { launch: { claude: { model: "best", effort: "high" }, codex: { model: "best" } } });
+    expect(inheritedSessionLaunch(owner, undefined, "claude")).toEqual({ model: null, effort: "high" });
+    expect(inheritedSessionLaunch(owner, undefined, "codex").model).toBe("best");
   });
 });

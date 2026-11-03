@@ -172,7 +172,10 @@ export interface Fixture {
   detections?: Record<string, { agent: Agent | null } | FixtureError | "pending">;
   /** What `list_agent_models` answers per agent: a list, a reason there is none, or `"pending"` for a
    * request that is never answered. An agent not listed gets `SAMPLE_CLAUDE_MODELS` for Claude Code
-   * and an empty list for the others. */
+   * and an empty list for the others. The reply's `default_model` is, for Claude Code, the first listed
+   * model known to be usable (`defaultClaudeModel`), as the daemon picks it when no Claude Code
+   * configuration names a model, sent with `default_model_source: "best_available"`; the other
+   * agents have none. */
   agentModels?: Partial<Record<Agent, { models: AgentModel[]; unavailable?: ModelsUnavailable } | "pending">>;
   /** A refused session launch, such as a shell environment that could not be read. */
   sessionOpenError?: FixtureError;

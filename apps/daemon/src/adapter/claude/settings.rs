@@ -101,36 +101,112 @@ pub(super) fn settings_files(
     pinned: Option<&Path>,
     project: &Path,
 ) -> Vec<SettingsFile> {
-    let managed = Path::new(if cfg!(target_os = "macos") {
-        "/Library/Application Support/ClaudeCode"
-    } else {
-        "/etc/claude-code"
-    });
     let mut files = Vec::from(own_settings_files(
         &crate::adapter::account_dir(Agent::Claude, pinned, spec.shell_env),
         project,
     ));
-    files.push(SettingsFile::Other(managed.join("managed-settings.json")));
-    // The entries Claude Code takes from the drop-in directory (read out of Claude Code 2.1.312):
-    // files and links named `*.json`, not hidden.
+    files.extend(managed_settings_files(managed_settings_dir()));
+    files
+}
+
+/// Where Claude Code reads the settings an administrator manages; under test, a directory that
+/// does not exist, so that no test reads the managed settings of the machine it runs on.
+fn managed_settings_dir() -> &'static Path {
+    Path::new(if cfg!(test) {
+        "/nonexistent/octoboard-test-managed"
+    } else if cfg!(target_os = "macos") {
+        "/Library/Application Support/ClaudeCode"
+    } else {
+        "/etc/claude-code"
+    })
+}
+
+/// The managed settings in `managed`, lowest precedence first: `managed-settings.json`, then the
+/// entries Claude Code takes from the drop-in directory (read out of Claude Code 2.1.312): files
+/// and links named `*.json`, not hidden, which it merges in the order of their names.
+fn managed_settings_files(managed: &Path) -> Vec<SettingsFile> {
+    let mut files = vec![SettingsFile::Other(managed.join("managed-settings.json"))];
     if let Ok(entries) = std::fs::read_dir(managed.join("managed-settings.d")) {
-        files.extend(
-            entries
-                .flatten()
-                .filter(|entry| {
-                    let name = entry.file_name();
-                    let name = name.to_string_lossy();
-                    entry
-                        .file_type()
-                        .is_ok_and(|kind| kind.is_file() || kind.is_symlink())
-                        && name.ends_with(".json")
-                        && !name.starts_with('.')
-                })
-                .map(|entry| SettingsFile::Other(entry.path())),
-        );
+        let mut dropped: Vec<PathBuf> = entries
+            .flatten()
+            .filter(|entry| {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                entry
+                    .file_type()
+                    .is_ok_and(|kind| kind.is_file() || kind.is_symlink())
+                    && name.ends_with(".json")
+                    && !name.starts_with('.')
+            })
+            .map(|entry| entry.path())
+            .collect();
+        dropped.sort();
+        files.extend(dropped.into_iter().map(SettingsFile::Other));
     }
     files
 }
+
+/// The model Claude Code itself would pick from its configuration, which Octoboard then leaves
+/// to it: `ANTHROPIC_MODEL` in `shell_env`, else in the `env` block of the highest-precedence
+/// settings file that has one there, else the `model` of the highest-precedence settings file
+/// that gives one (as Claude Code applies a settings file's `env` to its environment, where the
+/// variable outranks `model`). The files are the managed settings, then the project's local and
+/// shared ones when `cwd` (the session's working directory) is given, then the user's in the
+/// configuration directory in effect (`pinned`, else one the shell exports, else `~/.claude`).
+/// Policy delivered through an MDM profile or the claude.ai console is in none of these files and
+/// is not seen, nor is the managed `availableModels`. A blank value, an unreadable file and one
+/// that is not JSON count for nothing.
+pub(crate) fn configured_model(
+    shell_env: &HashMap<String, String>,
+    pinned: Option<&Path>,
+    cwd: Option<&Path>,
+) -> Option<String> {
+    configured_model_in(shell_env, pinned, cwd, managed_settings_dir())
+}
+
+/// [`configured_model`] with the managed settings directory given.
+fn configured_model_in(
+    shell_env: &HashMap<String, String>,
+    pinned: Option<&Path>,
+    cwd: Option<&Path>,
+    managed: &Path,
+) -> Option<String> {
+    let named = |text: &str| {
+        Some(text.trim())
+            .filter(|text| !text.is_empty())
+            .map(str::to_string)
+    };
+    if let Some(model) = shell_env.get(MODEL_VARIABLE).and_then(|model| named(model)) {
+        return Some(model);
+    }
+    let user_dir = crate::adapter::account_dir(Agent::Claude, pinned, shell_env);
+    let (project, mut files) = match cwd {
+        Some(cwd) => {
+            let project = canonical_project(cwd);
+            let files = Vec::from(own_settings_files(&user_dir, &project));
+            (project, files)
+        }
+        None => (
+            PathBuf::new(),
+            vec![SettingsFile::Other(
+                user_dir.join(layout::CLAUDE_SETTINGS_FILE),
+            )],
+        ),
+    };
+    files.extend(managed_settings_files(managed));
+    // Highest precedence first.
+    let settings: Vec<serde_json::Value> = files
+        .iter()
+        .rev()
+        .filter_map(|file| serde_json::from_str(&file.read(&project).ok()?).ok())
+        .collect();
+    let find = |name: &dyn Fn(&serde_json::Value) -> Option<String>| settings.iter().find_map(name);
+    find(&|settings| named(settings.get("env")?.get(MODEL_VARIABLE)?.as_str()?))
+        .or_else(|| find(&|settings| named(settings.get("model")?.as_str()?)))
+}
+
+/// The environment variable that names the model Claude Code starts with.
+const MODEL_VARIABLE: &str = "ANTHROPIC_MODEL";
 
 /// Whether Claude Code would run an HTTP hook for `url` given `files`: it does unless some file
 /// defines `allowedHttpHookUrls`, whose arrays merge across files, and no merged pattern matches. A
@@ -479,6 +555,97 @@ mod tests {
         assert!(!http_hooks_allowed(url, &files, &project));
         std::fs::write(&file, allowlist.to_string()).expect("allowlist");
         assert!(http_hooks_allowed(url, &files, &project));
+    }
+
+    /// The model Claude Code configures itself comes from the environment first, then from the
+    /// highest-precedence settings file that names one, the project's files only when a working
+    /// directory is given; blank, unreadable and non-string values name nothing.
+    #[test]
+    fn the_configured_model_is_the_one_claude_code_would_pick() {
+        let dir = crate::test_support::ScratchDir::new("configured-model");
+        let user = dir.join("user");
+        let cwd = dir.join("project");
+        let managed = dir.join("managed");
+        std::fs::create_dir_all(&user).expect("user dir");
+        std::fs::create_dir_all(cwd.join(".claude")).expect("project dir");
+        std::fs::create_dir_all(managed.join("managed-settings.d")).expect("managed dir");
+        let write = |path: PathBuf, text: &str| std::fs::write(path, text).expect("settings");
+        let configured = |env: &[(&str, &str)], project: bool| {
+            let env: HashMap<String, String> = env
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect();
+            configured_model_in(
+                &env,
+                Some(&user),
+                project.then_some(cwd.as_path()),
+                &managed,
+            )
+        };
+
+        assert_eq!(configured(&[], true), None);
+        write(user.join("settings.json"), r#"{"model":" sonnet "}"#);
+        assert_eq!(configured(&[], false).as_deref(), Some("sonnet"));
+        // The project's files outrank the user's, the local one the shared one, and are not
+        // known until a launch gives the directory.
+        write(cwd.join(".claude/settings.json"), r#"{"model":"opus"}"#);
+        assert_eq!(configured(&[], false).as_deref(), Some("sonnet"));
+        assert_eq!(configured(&[], true).as_deref(), Some("opus"));
+        write(
+            cwd.join(".claude/settings.local.json"),
+            r#"{"model":"haiku"}"#,
+        );
+        assert_eq!(configured(&[], true).as_deref(), Some("haiku"));
+        // A file that names nothing usable is passed over.
+        write(cwd.join(".claude/settings.local.json"), r#"{"model":"  "}"#);
+        write(cwd.join(".claude/settings.json"), r#"{"model":7}"#);
+        assert_eq!(configured(&[], true).as_deref(), Some("sonnet"));
+        write(user.join("settings.json"), "not json");
+        assert_eq!(configured(&[], true), None);
+        // Managed settings outrank the project's, and a later drop-in the base file.
+        write(managed.join("managed-settings.json"), r#"{"model":"base"}"#);
+        write(
+            managed.join("managed-settings.d/10-a.json"),
+            r#"{"model":"a"}"#,
+        );
+        write(
+            managed.join("managed-settings.d/20-b.json"),
+            r#"{"effort":"low"}"#,
+        );
+        write(
+            managed.join("managed-settings.d/.hidden.json"),
+            r#"{"model":"hidden"}"#,
+        );
+        write(cwd.join(".claude/settings.json"), r#"{"model":"opus"}"#);
+        assert_eq!(configured(&[], true).as_deref(), Some("a"));
+        // An `ANTHROPIC_MODEL` in a file's `env` block outranks every `model`, the higher file's
+        // first.
+        write(
+            user.join("settings.json"),
+            r#"{"env":{"ANTHROPIC_MODEL":"from-user-env"}}"#,
+        );
+        assert_eq!(configured(&[], true).as_deref(), Some("from-user-env"));
+        write(
+            cwd.join(".claude/settings.local.json"),
+            r#"{"env":{"ANTHROPIC_MODEL":"from-local-env","OTHER":"x"}}"#,
+        );
+        assert_eq!(configured(&[], true).as_deref(), Some("from-local-env"));
+        write(
+            managed.join("managed-settings.json"),
+            r#"{"env":{"ANTHROPIC_MODEL":" "}}"#,
+        );
+        assert_eq!(configured(&[], true).as_deref(), Some("from-local-env"));
+        write(user.join("settings.json"), "not json");
+        write(cwd.join(".claude/settings.local.json"), "{}");
+        // The variable wins over every file; a blank one counts for nothing.
+        assert_eq!(
+            configured(&[("ANTHROPIC_MODEL", "claude-x")], true).as_deref(),
+            Some("claude-x")
+        );
+        assert_eq!(
+            configured(&[("ANTHROPIC_MODEL", " ")], true).as_deref(),
+            Some("a")
+        );
     }
 
     /// A home directory opened as the project holds the user's own settings and global config,

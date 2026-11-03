@@ -68,16 +68,21 @@ pub(crate) fn host_tools() -> crate::host_tools::Tools {
             args: ["--noprofile", "--norc", "-i"].map(str::to_string).to_vec(),
         },
         shell_env: || Ok(shell_env()),
+        scheduled_shell_env: || Ok(shell_env()),
     }
 }
 
 /// The environment a test's shell terminal starts in: nothing of the developer's, a prompt that
-/// is plain text, and no history written anywhere.
+/// is plain text, and no history written anywhere. It is also the environment a launch and the
+/// Claude Code model listing resolve its configuration in, so its home is a directory that does
+/// not exist, which keeps a test from reading the developer's own `~/.claude`. That home reaches
+/// a test's shell terminals as well; none relies on one.
 pub(crate) fn shell_env() -> HashMap<String, String> {
     [
         ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
         ("PS1", "$ "),
         ("HISTFILE", "/dev/null"),
+        ("HOME", "/nonexistent/octoboard-test-home"),
         // macOS's bash otherwise opens every interactive shell with a notice about zsh.
         ("BASH_SILENCE_DEPRECATION_WARNING", "1"),
     ]
@@ -126,14 +131,20 @@ pub(crate) fn offer_models(state: &AppState, agent: Agent, models: &[(&str, &[&s
             id: id.to_string(),
             name: id.to_string(),
             efforts: efforts.iter().map(|effort| effort.to_string()).collect(),
+            version: None,
+            available: None,
         })
         .collect();
-    state
-        .agent_models
-        .get_or_load(agent, None, || crate::agents::models::Listing {
-            models,
-            unavailable: None,
-        });
+    let listing = crate::agents::models::Listing {
+        models,
+        unavailable: None,
+    };
+    // Claude Code's listing is never cached, so it is put in place another way.
+    if agent == Agent::Claude {
+        state.agent_models.seed(None, listing);
+    } else {
+        state.agent_models.get_or_load(agent, None, || listing);
+    }
 }
 
 /// A console and a project (whose directory does not exist, so a relaunch is refused at the

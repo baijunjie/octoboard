@@ -17,8 +17,9 @@ of an owner's switch" in `docs/product/switching-session-accounts.md`):
 
 - **Inherited** — no session choice is recorded, and the value the defaults above give at that moment is read on
   every launch, including a resume. Sessions with no recorded override follow this rule.
-- **Agent's own default** — the session explicitly clears the value, so Octoboard passes nothing for it even when the
-  console or project sets one.
+- **Agent's own default** — the session explicitly clears the value, so it is unset even when the console or project
+  sets one: Octoboard passes nothing for it, except that a Claude Code model left unset gets the default model (see
+  "The default model" below).
 - **A chosen value** — the session keeps that value and passes it on every launch.
 
 The last two choices are recorded on the session and survive a daemon restart, resuming, reopening and switching
@@ -27,7 +28,9 @@ a running session keeps what it started with.
 
 **The agent's own default means the agent picks**: Octoboard passes nothing, and the agent chooses as it would outside
 Octoboard — including whatever the agent's own configuration pins. It is not a promise of the agent's newest model.
-A value none of the defaults above sets has this meaning too.
+A value none of the defaults above sets has this meaning too. The one exception is Claude Code's model: an unset one
+is resolved as "The default model" below describes, which leaves it to Claude Code only when Claude Code's own
+configuration names a model or nothing is known about what the account can use.
 
 Where defaults are set is in "Editing a console" in `docs/product/consoles.md` and "Editing a project" in
 `docs/product/projects.md`; opening a session is in `docs/product/opening-sessions.md`; how each value reaches the
@@ -75,13 +78,23 @@ sessions'. Edits on one tab are kept while another is shown, and each value is s
 and outside it, since it applies whichever tab is shown, is the console session instructions field (see "Console session
 instructions" in `docs/product/consoles.md`).
 
-An unset picker is empty, showing a placeholder instead of a value. The placeholder stands for the agent's own setting,
-except in the project dialog, where it stands for what the project inherits: "Same as console", with a badge naming the
-console's project session value for that agent — a model by its name in the list where the list holds it — or saying
-it is the agent's own setting when the console sets none. A picked value is cleared, back to that placeholder, by
-clicking the picker's × button, or by pressing Backspace or Delete while its list is closed and its trigger has
-keyboard focus. These keys do not clear the choice while focus is on an option in the open list. Clearing a value in
-the session dialog explicitly chooses the agent's own default for that value.
+An unset picker is empty, showing a placeholder instead of a value. In the console dialog, the session dialog and the
+Change model dialog, an unset Model picker reads:
+
+- **Best available**, with a badge naming the default model by the version it stands for ("Fable 5.1"), when Octoboard
+  chose that model (see "The default model" below);
+- the agent's own setting, with a badge naming the model, when Claude Code's own configuration names it;
+- the agent's own setting alone where there is no default model — always for Codex and Grok Build.
+
+A badge names a model by the version it stands for where the list knows it, else by its name in the list, else by its
+id shortened as "Names" in "The model and effort a session is shown running with" below shortens it. An unset
+Reasoning effort picker there stands for the agent's own setting. In the project dialog either placeholder stands
+instead for what the project inherits: "Same as console", with a badge naming the console's project session value for
+that agent, else, for the model, the default model, or saying it is the agent's own setting when there is neither. A
+picked value is cleared, back to that placeholder, by clicking the picker's × button, or by pressing Backspace or Delete
+while its list is closed and its trigger has keyboard focus. These keys do not clear the choice while focus is on an
+option in the open list. Clearing a value in the session dialog explicitly chooses the agent's own default for that
+value.
 
 What is stored is what was given, trimmed, with a blank value treated as the agent's own default. A value is checked
 when it is saved for a console or a project, or given to a session as it is opened or as its owner resumes it with
@@ -106,12 +119,18 @@ lag behind the agent's releases:
 
 | Agent | What is offered |
 |---|---|
-| Claude Code | Its four version-free aliases — "Best available", Opus, Sonnet and Haiku — which Claude Code itself resolves to the newest model of each family. A pick therefore never names a version and never goes stale. Nothing is run to list them. |
+| Claude Code | Its four version-free aliases, best first — Fable, Opus, Sonnet and Haiku — which Claude Code itself resolves to the newest model of each family. A pick therefore never names a version and never goes stale. Nothing is run to list them: what each stands for and whether the account can use it are read from the model catalogue Claude Code keeps on disk for the account. |
 | Codex | Codex's own catalogue, by the name each entry carries, in the order Codex itself ranks them; entries it marks as not for listing are left out. |
 | Grok Build | The models Grok offers, in the order Grok itself lists them, by the display names Grok records in its own home and by their ids where it records none; models Grok marks as hidden are left out. |
 
 What is stored, and passed to the agent, is the identifier behind the entry — Claude Code's alias, or the Codex or Grok
 Build catalogue's own id — not the name shown.
+
+Where the agent says so — Claude Code, from that catalogue — an option shows under its name the concrete version it
+currently stands for ("Opus 5.5"), which assistive technology reads as the option's description, and a model the
+account cannot use carries an **Unavailable** badge. Such a model can still be picked and saved, since a setting may be
+stored for later, but Claude Code refuses to launch a session with it. Where the account's catalogue cannot be read,
+the four aliases are listed with neither a version nor a badge.
 
 A catalogue belongs to an account, so the list is asked for the account that agent's sessions would run under: in the
 console dialog the account the dialog is currently set to for the agent whose tab is shown, and in the project dialog
@@ -122,18 +141,53 @@ session uses" in `docs/product/opening-sessions.md`).
 
 The Change model dialog asks as soon as it opens; elsewhere nothing is asked until the Advanced section is opened for
 the first time. It is asked again whenever the agent or that account changes; an answer to a question the dialog has
-since moved off is dropped. An answer is reused for ten minutes, and a reason there is none for thirty seconds, so
-opening the section again does not run the agent's command each time. Sessions read the same list, from the same
+since moved off is dropped. A Codex or Grok Build answer is reused for ten minutes, and a reason there is none for
+thirty seconds, so opening the section again does not run the agent's command each time; Claude Code's, which runs
+nothing, is read afresh each time, so it never lags behind the account's files. Sessions read the same list, from the same
 answers, with `list_agent_models` (see "Reading the models an agent offers" in
 `docs/product/what-every-session-reads.md`).
+
+## The default model
+
+Claude Code's own fallback model is not checked against what the account can use, so a Claude Code session whose model
+is unset — at every level, or cleared on the session — is not simply left to Claude Code. At each launch, a resume and
+an account switch included:
+
+1. When Claude Code's own configuration names a model, Octoboard passes none and Claude Code applies its own. It counts
+   as named by `ANTHROPIC_MODEL` in the launch environment or in the `env` block of a Claude Code settings file, or by
+   the `model` of a settings file. The settings files are the managed settings (`managed-settings.json` and the `*.json`
+   files of `managed-settings.d/`, under `/Library/Application Support/ClaudeCode` on macOS and `/etc/claude-code` on
+   Linux), the project's `.claude/settings.local.json` and `.claude/settings.json` in the session's working directory,
+   and the user's `settings.json` in the account's configuration directory. Settings delivered through a device
+   management profile or the claude.ai console are in no file and are not seen.
+2. Otherwise Octoboard passes the first of Fable, Opus, Sonnet and Haiku the account can use, as "The models offered"
+   above reads it.
+3. When nothing is known about what the account can use — its catalogue cannot be read — Octoboard passes none and
+   Claude Code picks.
+
+A managed `availableModels` allowlist is not read: a session launched with an alias it excludes is refused by Claude
+Code.
+
+The model an unset picker names, and `list_agent_models` reports as the account's `default_model` (see "Reading the
+models an agent offers" in `docs/product/what-every-session-reads.md`), is worked out the same way from the account's
+configuration alone — the launch environment's `ANTHROPIC_MODEL`, the managed settings and the user's settings — with
+its source: `configured` when Claude Code's configuration names it, `best_available` when Octoboard chose it. There is
+none when Claude Code picks, and never for Codex or Grok Build, whose unset model is always left to the agent. A
+project's own Claude Code settings are known only at launch, so a session in a project whose settings name a model can
+run a different model from the one a picker named.
+
+The retired Claude Code alias `best` is read as unset wherever it is stored — console, project or session — so a
+project's falls through to its console's project session value and a console's or session's resolves to the default
+model; the pickers show it as unset rather than as a value missing from the list, and a session holding it is not
+refused when only its effort is changed.
 
 ## The reasoning effort offered
 
 The levels follow the chosen model, and are each agent's own business rather than a list Octoboard keeps:
 
 - a model whose entry states the levels it takes offers exactly those;
-- with no model chosen — where an unset model inherits one, as in the project dialog, the levels of that model
-  instead — or for one whose entry does not say — a stored model the list does not hold included — the
+- with no model chosen — where an unset model resolves to one, inherited as in the project dialog or else the default
+  model (see "The default model" below), the levels of that model instead — or for one whose entry does not say — a stored model the list does not hold included — the
   levels of every listed model, each once, in the order they were listed;
 - a model that takes no reasoning effort at all offers nothing, and the field says so. The picker is then locked,
   except that a value already stored stays clearable, so the setting can always be undone.
@@ -264,9 +318,10 @@ An item none of these gives — the agent's own default where Octoboard cannot t
 **Default**; a session knowing neither reads **Default model** instead of the pair.
 
 **Names.** A Claude Code model id is shortened to its family and version, its release date dropped: `claude-opus-5-5`
-reads "Opus 5.5". Claude Code's aliases are capitalised — Opus, Sonnet, Haiku — and the `best` alias is named "Best
-available", as the launch pickers name it. Every other id, a Claude Code one of an unfamiliar shape included, and every
-effort is shown as the agent spells it.
+reads "Opus 5.5". Claude Code's aliases are capitalised — Fable, Opus, Sonnet, Haiku — and a bracketed suffix, such as
+a context window, stays after the name it qualifies: `opus[1m]` reads "Opus [1m]". Every other id, a Claude Code one of
+an unfamiliar shape included, and every effort is shown as the agent spells it. A stored `best` gives nothing at steps 3
+and 4 (see "The default model" above).
 
 **What the records show.** The daemon reads, as each agent records them:
 

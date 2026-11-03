@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import type { Agent, AgentModel, ModelsUnavailable } from "../protocol";
+import type { Agent, AgentModel, DefaultModelSource, ModelsUnavailable } from "../protocol";
 import type { RequestSender } from "../requests";
 import { shownError } from "./shownError";
 
@@ -15,11 +15,17 @@ export type AgentModelsStatus = "idle" | "loading" | "ready" | "failed";
 export interface AgentModels {
   status: AgentModelsStatus;
   models: AgentModel[];
+  /** The model a session of the agent gets when no setting names one; `null` where the agent's own
+   * default applies. */
+  defaultModel: string | null;
+  /** Where `defaultModel` came from: Claude Code's own configuration, or Octoboard's choice of the
+   * best model the account may use; `null` exactly when `defaultModel` is. */
+  defaultModelSource: DefaultModelSource | null;
   unavailable: ModelsUnavailable | null;
   error?: ErrorPresentation;
 }
 
-const NONE: Pick<AgentModels, "models" | "unavailable"> = { models: [], unavailable: null };
+const NONE: Pick<AgentModels, "models" | "defaultModel" | "defaultModelSource" | "unavailable"> = { models: [], defaultModel: null, defaultModelSource: null, unavailable: null };
 const LOADING: AgentModels = { status: "loading", ...NONE };
 const IDLE: AgentModels = { status: "idle", ...NONE };
 
@@ -48,7 +54,7 @@ export function useAgentModels(
     const { request, agent, account, send } = latest.current;
     void send({
       request: () => request({ type: "list_agent_models", agent, ...(account && { account }) }),
-      accept: (event) => () => ({ status: "ready", models: event.models, unavailable: event.unavailable }),
+      accept: (event) => () => ({ status: "ready", models: event.models, defaultModel: event.default_model ?? null, defaultModelSource: event.default_model_source ?? null, unavailable: event.unavailable }),
       failed: (failure, _held, t) => ({ status: "failed", ...NONE, error: shownError(failure, t) }),
     });
   }, [key, reconnects]);

@@ -1,5 +1,5 @@
 import type { Translate } from "../i18n/catalog";
-import type { AgentModel } from "../protocol";
+import type { Agent, AgentModel } from "../protocol";
 
 // How each agent takes a model and an effort, and what it does with one it cannot honour, is in
 // the "Model and reasoning effort" note of each agent's section ("Claude Code", "Codex",
@@ -7,8 +7,19 @@ import type { AgentModel } from "../protocol";
 // kept here: the daemon lists it when the dialog asks (`list_agent_models`), so it cannot go stale
 // in this source.
 
-/** One entry of a launch-setting picker. */
-export type LaunchSettingOption = { value: string; label: string; badge?: string };
+/** One entry of a launch-setting picker. A `detail` (what a model stands for, "Opus 5.5") comes with
+ * the `reason` line the picker draws it as under the label. */
+export type LaunchSettingOption = { value: string; label: string; badge?: string } & (
+  | { detail?: undefined; reason?: undefined }
+  | { detail: string; reason: { state: string } }
+);
+
+/** A stored model as the pickers show it: the retired Claude alias `best` stands for no model at
+ * all, as the daemon reads it at launch, so it is shown as unset rather than as a value that is not
+ * in the list. */
+export function shownModel(agent: Agent, model: string | null): string | null {
+  return agent === "claude" && model === "best" ? null : model;
+}
 
 /** The reasoning effort levels the agent's models accept, for the effort picker. A chosen model that
  * is listed gets exactly its own, and `[]` (it takes none) is `none`. Otherwise — nothing chosen or

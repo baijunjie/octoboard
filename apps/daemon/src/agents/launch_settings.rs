@@ -12,13 +12,15 @@
 //! afterwards, rather than holding a copy across the wait.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Result;
 
 use crate::agents::models::Listing;
-use crate::protocol::{error_code, Agent, CodedError, Launch, LaunchChange, PerAgent};
+use crate::protocol::{
+    error_code, Agent, CodedError, DefaultModelSource, Launch, LaunchChange, PerAgent,
+};
 use crate::state::AppState;
 use crate::text::trimmed_or_none;
 
@@ -188,12 +190,165 @@ pub async fn agent_listing(
     account_id: &Option<String>,
 ) -> Result<Listing> {
     let config_dir = state.store.account_dir(account_id)?;
+    let request = Resolve {
+        configuration: false,
+        ..Resolve::new(agent, config_dir)
+    };
+    Ok(resolve(state, request).await?.listing)
+}
+
+/// The model a session resolves to when no setting names one, and where that came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultModel {
+    pub id: String,
+    pub source: DefaultModelSource,
+}
+
+/// The models `agent` offers under the account `account_id` and the model a session of the
+/// account with no setting naming one resolves to as far as the account can tell: for Claude Code
+/// the model its own configuration names (see [`configured_model`]), else the best one the
+/// account may use. `None` for the other agents, and for Claude Code when nothing is known, which
+/// leaves the choice to the agent. Project settings are not known per account, so a session may
+/// resolve to another model at launch (see [`launch_default_model`]).
+///
+/// [`configured_model`]: crate::adapter::claude::settings::configured_model
+pub async fn agent_models(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: &Option<String>,
+) -> Result<(Listing, Option<DefaultModel>)> {
+    let config_dir = state.store.account_dir(account_id)?;
+    let resolved = resolve(state, Resolve::new(agent, config_dir)).await?;
+    let default = match resolved.configured {
+        Some(id) => Some(DefaultModel {
+            id,
+            source: DefaultModelSource::Configured,
+        }),
+        None => resolved.listing.default_model().map(|id| DefaultModel {
+            id: id.to_string(),
+            source: DefaultModelSource::BestAvailable,
+        }),
+    };
+    Ok((resolved.listing, default))
+}
+
+/// The model to pass to a session of `agent` that no setting names one for: for Claude Code the
+/// best model the account may use, so that it never falls to the alias Claude Code would pick on
+/// its own, which does not check what the account may use. `None` leaves the choice to the
+/// agent: for the other agents, when the account's models are not known, and for Claude Code when
+/// its own configuration names a model — the user's, a managed one, `ANTHROPIC_MODEL`, or the
+/// project's in `cwd` — which `--model` would override. `config_dir` is the session's pinned
+/// account directory and `shell_env` the environment the launch runs in, taken here when the
+/// caller has none.
+pub async fn launch_default_model(
+    state: &Arc<AppState>,
+    agent: Agent,
+    config_dir: Option<String>,
+    cwd: &Path,
+    shell_env: Option<HashMap<String, String>>,
+) -> Result<Option<String>> {
+    let request = Resolve {
+        shell_env,
+        cwd: Some(cwd.to_path_buf()),
+        for_launch: true,
+        ..Resolve::new(agent, config_dir)
+    };
+    let resolved = resolve(state, request).await?;
+    Ok(match resolved.configured {
+        Some(_) => None,
+        None => resolved.listing.default_model().map(str::to_string),
+    })
+}
+
+/// What [`resolve`] found.
+struct Resolved {
+    listing: Listing,
+    /// The model Claude Code's own configuration names; `None` for the other agents and when the
+    /// request did not ask for it.
+    configured: Option<String>,
+}
+
+/// What [`resolve`] is asked.
+struct Resolve {
+    agent: Agent,
+    config_dir: Option<String>,
+    /// The environment to read Claude Code's files in; else a snapshot is taken.
+    shell_env: Option<HashMap<String, String>>,
+    /// The session's working directory, whose project settings count too.
+    cwd: Option<PathBuf>,
+    /// Whether the configured model is wanted, or the listing alone.
+    configuration: bool,
+    /// Whether this runs for a launch, which takes the launch's snapshot, rather than for a
+    /// picker or a tool call, which takes the scheduled one and so never forks a login shell.
+    for_launch: bool,
+}
+
+impl Resolve {
+    fn new(agent: Agent, config_dir: Option<String>) -> Self {
+        Self {
+            agent,
+            config_dir,
+            shell_env: None,
+            cwd: None,
+            configuration: true,
+            for_launch: false,
+        }
+    }
+}
+
+/// The one rule for which agents have Octoboard name a default model: only Claude Code does, since
+/// it is the one whose own default is not checked against what the account may use.
+fn names_default_model(agent: Agent) -> bool {
+    agent == Agent::Claude
+}
+
+/// The listing for the agent and, for one that has a default model and when asked, what its
+/// configuration says. Claude Code's listing is two small file reads, so it is read afresh each
+/// time rather than cached: a cached one would let a default that is no longer true drive
+/// launches.
+async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
     let state = state.clone();
     Ok(tokio::task::spawn_blocking(move || {
+        let Resolve {
+            agent,
+            config_dir,
+            shell_env,
+            cwd,
+            configuration,
+            for_launch,
+        } = request;
         let dir = config_dir.as_deref().map(Path::new);
-        state
-            .agent_models
-            .get_or_load(agent, dir, || crate::agents::models::load(agent, dir))
+        if !names_default_model(agent) {
+            let listing = state
+                .agent_models
+                .get_or_load(agent, dir, || crate::agents::models::load(agent, dir));
+            return Resolved {
+                listing,
+                configured: None,
+            };
+        }
+        // A failed snapshot still reads `~/.claude`, where the default account lives.
+        let shell_env = shell_env.unwrap_or_else(|| {
+            let tools = state.host_tools.get();
+            let take = if for_launch {
+                tools.shell_env
+            } else {
+                tools.scheduled_shell_env
+            };
+            take().unwrap_or_default()
+        });
+        let listing = crate::agents::models::claude_listing(&shell_env, dir);
+        #[cfg(test)]
+        let listing = state.agent_models.seeded(dir).unwrap_or(listing);
+        let configured = configuration
+            .then(|| {
+                crate::adapter::claude::settings::configured_model(&shell_env, dir, cwd.as_deref())
+            })
+            .flatten();
+        Resolved {
+            listing,
+            configured,
+        }
     })
     .await?)
 }
@@ -201,6 +356,89 @@ pub async fn agent_listing(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agents::models::claude_fixtures::{
+        claude_home, write_claude_account, CLAUDE_CATALOGUE,
+    };
+
+    /// Claude Code gets the first model of its listing the account may use, unless its own
+    /// configuration names one (then it is left to apply it), and the other agents and an
+    /// unknown account are left to the agent's own default.
+    #[tokio::test]
+    async fn an_unset_claude_model_defaults_to_the_best_the_account_may_use() {
+        let (state, dir) = crate::test_support::app_state("launch-settings-default-model");
+        let env = claude_home(&dir, "[]", Some(CLAUDE_CATALOGUE));
+        let cwd = dir.join("project");
+        std::fs::create_dir_all(cwd.join(".claude")).unwrap();
+        let default = |agent: Agent, env: &HashMap<String, String>| {
+            launch_default_model(&state, agent, None, &cwd, Some(env.clone()))
+        };
+        assert_eq!(
+            default(Agent::Claude, &env).await.unwrap().as_deref(),
+            Some("opus")
+        );
+        assert_eq!(default(Agent::Codex, &env).await.unwrap(), None);
+        // Each place Claude Code reads a model from leaves the choice to it.
+        let mut named = env.clone();
+        named.insert("ANTHROPIC_MODEL".to_string(), "sonnet".to_string());
+        assert_eq!(default(Agent::Claude, &named).await.unwrap(), None);
+        let user = dir.join(".claude/settings.json");
+        std::fs::create_dir_all(user.parent().unwrap()).unwrap();
+        std::fs::write(&user, r#"{"model":"haiku"}"#).unwrap();
+        assert_eq!(default(Agent::Claude, &env).await.unwrap(), None);
+        std::fs::write(&user, "{}").unwrap();
+        assert!(default(Agent::Claude, &env).await.unwrap().is_some());
+        std::fs::write(
+            cwd.join(".claude/settings.local.json"),
+            r#"{"model":"opus"}"#,
+        )
+        .unwrap();
+        assert_eq!(default(Agent::Claude, &env).await.unwrap(), None);
+        // Nothing known to be usable leaves the choice to Claude Code.
+        let empty = HashMap::from([("HOME".to_string(), "/nonexistent".to_string())]);
+        assert_eq!(default(Agent::Claude, &empty).await.unwrap(), None);
+    }
+
+    /// What an unset picker shows is the model Claude Code's account-level configuration names,
+    /// else the best the account may use; the project's settings are not part of it.
+    #[tokio::test]
+    async fn the_default_model_of_an_account_is_what_its_configuration_names_else_the_best() {
+        let (state, dir) = crate::test_support::app_state("launch-settings-account-default");
+        let pinned = dir.join("pinned");
+        std::fs::create_dir_all(&pinned).unwrap();
+        write_claude_account(
+            &pinned.join(".claude.json"),
+            &pinned,
+            "[]",
+            Some(CLAUDE_CATALOGUE),
+        );
+        let account = crate::protocol::Account {
+            id: "claude-work".to_string(),
+            agent: Agent::Claude,
+            name: "Work".to_string(),
+            config_dir: pinned.to_string_lossy().into_owned(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+        };
+        state.store.insert_account(&account).unwrap();
+        let id = Some("claude-work".to_string());
+        let (listing, default) = agent_models(&state, Agent::Claude, &id).await.unwrap();
+        assert_eq!(listing.models[1].version.as_deref(), Some("Opus 5.5"));
+        assert_eq!(default.as_ref().map(|d| d.id.as_str()), Some("opus"));
+        assert_eq!(default.unwrap().source, DefaultModelSource::BestAvailable);
+        std::fs::write(pinned.join("settings.json"), r#"{"model":"claude-x-1"}"#).unwrap();
+        let (_, default) = agent_models(&state, Agent::Claude, &id).await.unwrap();
+        assert_eq!(
+            default,
+            Some(DefaultModel {
+                id: "claude-x-1".to_string(),
+                source: DefaultModelSource::Configured
+            })
+        );
+        // The other agents have none to name, whatever Claude Code's files hold.
+        let (_, default) = agent_models(&state, Agent::Codex, &None).await.unwrap();
+        assert_eq!(default, None);
+    }
 
     /// A record that sets no model of its own is checked against the model it takes from the record
     /// behind it, and one that sets its own keeps it.

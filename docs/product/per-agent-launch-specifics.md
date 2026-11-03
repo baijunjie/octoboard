@@ -26,9 +26,10 @@ agent.
 
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
 Octoboard's tools" below and the Codex list below for why). A value the session leaves to the agent's default — no
-model, no effort, **Follow account configuration** — passes nothing for it. The variables a launch sets for each agent,
-`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME` and `GROK_THEME` among them, are in "The launch environment" in
-`docs/product/launching-agents.md`.
+model, no effort, **Follow account configuration** — passes nothing for it, except that Claude Code may be passed a
+model then (see "The default model" in `docs/product/model-and-reasoning-effort.md`). The variables a launch sets for
+each agent, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME` and `GROK_THEME` among them, are in "The launch
+environment" in `docs/product/launching-agents.md`.
 
 A new session's initial task is passed as the agent's prompt argument. On a resume only Claude Code is given a prompt
 argument, and only when Octoboard has an instruction or a prompt to continue for it; Codex and Grok Build are given none

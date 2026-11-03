@@ -96,11 +96,12 @@ in the app also take the foreground colour on hover. Preserve this shared visual
 choice, while retaining the component's layout, selection and keyboard behaviour.
 
 A status label such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
-account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's change
-status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
-`InlineReference`. It is the shared `StatusBadge`, the only small badge component for a status; a bare count after a
-row's name (the rail processes panel's rows, a Focus view chip's count) uses `CountBadge`, which reuses the default
-small bordered `StatusBadge`: green (`success`) in the processes list and neutral in a Focus view chip.
+account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a model's
+"Unavailable", a file's change status or size, "Read-only"), is a badge after the name, never parenthesised text in the
+name's own style and never an `InlineReference`. It is the shared `StatusBadge`, the only small badge component for a
+status; a bare count after a row's name (the rail processes panel's rows, a Focus view chip's count) uses `CountBadge`,
+which reuses the default small bordered `StatusBadge`: green (`success`) in the processes list and neutral in a Focus
+view chip.
 
 Rail counts, notification dots and console avatar markers use HeroUI `Badge` with its default typography, sizing,
 border and colours, selected through its semantic props. Neither `Badge` nor `Badge.Anchor` has a style override.
@@ -153,13 +154,16 @@ the secondary text colour (`text-app-muted`, at least 4.5:1 in both themes) and 
 a select option never gets `data-disabled`, see below), and so is its fade of a menu item's `Label`
 (`[data-disabled=true] .label`, cancelled with `opacity-100` on the `Label`), so no text is faded below AA by opacity.
 The option's badge, checkmark and a reason line under the name stay at full opacity; the reason is the text that
-explains the disabled state, so it must stay readable. A menu's note, a line of text disabled only so that it cannot be
-chosen, keeps its muted text at full opacity the same way. HeroUI has a disabled menu item's row ignore the pointer; its
-name takes the pointer back, so that a clipped name shows its tooltip and runs its marquee while the pointer is on it.
-The row then matches `:hover` and `:active` under the name, so HeroUI's hover fill and press shrink are cancelled on it
-(`data-[disabled=true]:hover:bg-transparent`, `data-[disabled=true]:active:transform-none`), and the name shows the
-arrow the rest of the row shows rather than HeroUI's `not-allowed` (`cursor-default`). These overrides change HeroUI's
-default disabled look, an approved exception by the user's decision (see "Do not change how a HeroUI component looks").
+explains the disabled state, so it must stay readable. A select option's line under the name may also say what the
+option stands for (a model alias's version, an account's usage); either way the option's accessible name is its label
+and badge alone, on one row, and that line is its description, so nothing is read twice. A menu's note, a line of text
+disabled only so that it cannot be chosen, keeps its muted text at full opacity the same way. HeroUI has a disabled menu
+item's row ignore the pointer; its name takes the pointer back, so that a clipped name shows its tooltip and runs its
+marquee while the pointer is on it. The row then matches `:hover` and `:active` under the name, so HeroUI's hover fill
+and press shrink are cancelled on it (`data-[disabled=true]:hover:bg-transparent`,
+`data-[disabled=true]:active:transform-none`), and the name shows the arrow the rest of the row shows rather than
+HeroUI's `not-allowed` (`cursor-default`). These overrides change HeroUI's default disabled look, an approved exception
+by the user's decision (see "Do not change how a HeroUI component looks").
 
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 5.7:1 dark on the panel's popover), a

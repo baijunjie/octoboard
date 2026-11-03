@@ -1,6 +1,6 @@
 import { Description, Label, ListBox, Select } from "@heroui/react";
 import React, { useId, useRef } from "react";
-import { ButtonContext } from "react-aria-components";
+import { ButtonContext, Text } from "react-aria-components";
 
 import { FieldErrorMessage } from "./FieldErrorMessage";
 import { FadeOverflow } from "../text/FadeOverflow";
@@ -29,10 +29,12 @@ export type Option<T extends string> = {
 } & (
   | { detail?: undefined; reason?: undefined }
   | {
-    /** A note about the option, which assistive technology reads as its description and which is not drawn. */
+    /** A note about the option, which assistive technology reads as its description, apart from its name
+     * (the label and badge), and which is not drawn. */
     detail: string;
-    /** A short note drawn under the label (why a disabled option cannot be chosen), hidden from assistive
-     * technology, which has `detail`, so a `reason` always comes with one. */
+    /** A short note drawn under the label (why a disabled option cannot be chosen, or what an option
+     * stands for), hidden from assistive technology, which has `detail`, so a `reason` always comes with
+     * one. */
     reason?: Reason;
   }
 );
@@ -88,9 +90,10 @@ function FadeLabel({ label, badge, lang, className, as }: {
  * trigger while it is the chosen one. An option with `isDisabled` is shown, named, but cannot be
  * chosen — the current `value` may still be one, so the reason it cannot be changed away *to* is on
  * screen without taking away what is already picked. An option's `detail` is its description for
- * assistive technology and its `reason` the short note drawn under its label (why an option is
- * disabled). `isDisabled` locks the whole select, and `description` is a note under it. A label too
- * long for the control fades at its clipped edge and runs as a marquee on hover.
+ * assistive technology and its `reason` the short note drawn under its label (why it cannot be
+ * chosen, or what it stands for). `isDisabled` locks the whole select, and `description` is a note
+ * under it. A label too long for the control fades at its clipped edge and runs as a marquee on
+ * hover.
  *
  * With `inline` it is only as wide as its value and `label` is its accessible name alone, for a
  * control whose own row already shows the name (a setting). With `joined` it is one part of an
@@ -321,15 +324,20 @@ export function OptionSelect<T extends string>({
                 </span>
               )}
               {option.detail ? (
-                <span className={`flex min-w-0 flex-col ${option.badge && !option.badgeInLabel ? "" : "flex-1"}`}>
-                  <FadeLabel lang={option.lang} className={option.isDisabled ? `min-w-0 ${DISABLED_NAME}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  {/* The option's name is its label and badge alone: the `label` slot keeps the description
+                      (and the note under the label) out of it, so a screen reader does not say it twice. */}
+                  <Text slot="label" className="flex min-w-0 items-center gap-2">
+                    <FadeLabel as="span" lang={option.lang} className={option.isDisabled ? `min-w-0 ${DISABLED_NAME}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
+                    {option.badge && !option.badgeInLabel && <StatusBadge>{option.badge}</StatusBadge>}
+                  </Text>
                   <Description className="sr-only">{option.detail}</Description>
                   {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
                 </span>
               ) : (
                 <FadeLabel lang={option.lang} className={`${option.badge && !option.badgeInLabel ? "min-w-0" : "min-w-0 flex-1"}${option.isDisabled ? ` ${DISABLED_NAME}` : ""}`} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
               )}
-              {option.badge && !option.badgeInLabel && <StatusBadge>{option.badge}</StatusBadge>}
+              {option.badge && !option.badgeInLabel && !option.detail && <StatusBadge>{option.badge}</StatusBadge>}
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}

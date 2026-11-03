@@ -1,14 +1,29 @@
 import type { Agent, AgentModel } from "../protocol";
 
-/** What the fixture daemon lists for Claude Code when a scenario says nothing else: its version-free
- * aliases, with the levels each takes spread so every case of the effort picker is on show — a full
+/** What the fixture daemon lists for Claude Code when a scenario says nothing else: its aliases,
+ * best first, with the version each stands for and whether the account may use it (here all of
+ * them), and the levels each takes spread so every case of the effort picker is on show — a full
  * set, a narrower one, and a model that takes none. */
 export const SAMPLE_CLAUDE_MODELS: AgentModel[] = [
-  { id: "best", name: "Best available", efforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "opus", name: "Opus", efforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "sonnet", name: "Sonnet", efforts: ["low", "medium", "high"] },
-  { id: "haiku", name: "Haiku", efforts: [] },
+  { id: "fable", name: "Fable", version: "Fable 5.1", available: true, efforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "opus", name: "Opus", version: "Opus 5.5", available: true, efforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "sonnet", name: "Sonnet", version: "Sonnet 5.5", available: true, efforts: ["low", "medium", "high"] },
+  { id: "haiku", name: "Haiku", version: "Haiku 5.5", available: true, efforts: [] },
 ];
+
+/** The list of an account that cannot use the two best models (a Pro account): Fable and Opus are
+ * listed but unavailable, so the model a session gets when nothing names one is Sonnet. */
+export const SAMPLE_CLAUDE_MODELS_PRO: AgentModel[] = SAMPLE_CLAUDE_MODELS.map((model) =>
+  model.id === "fable" || model.id === "opus" ? { ...model, available: false } : model,
+);
+
+/** The model the daemon picks as Claude Code's default when no Claude Code configuration names a
+ * model: the first listed model known to be usable (`available: true`), or none where there is
+ * not one, the list being empty or its availability unknown, and Claude Code then picks its own
+ * default. */
+export function defaultClaudeModel(models: AgentModel[]): string | undefined {
+  return models.find((model) => model.available === true)?.id;
+}
 
 /** The same for Codex, whose model names and effort levels come from `codex debug models`. */
 export const SAMPLE_CODEX_MODELS: AgentModel[] = [

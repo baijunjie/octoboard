@@ -8,6 +8,7 @@ import {
   type Project,
   type Settings,
 } from "../protocol";
+import { shownModel } from "./agentLaunchSettings";
 
 /** Every agent, in the order the window lists them by default. Written as a record's keys so the type check fails while
  * an agent is missing. */
@@ -146,11 +147,12 @@ export function consoleProjectLaunch(owner: Console, agent: Agent): Launch {
 
 /** The model and reasoning effort a project session of `agent` runs with when it chose neither,
  * each value taken from the project, else from the console's project session pair, else `null`,
- * the agent's own default. */
+ * the agent's own default. A stored model that is no model (see `shownModel`) counts as unset at
+ * each level, as the daemon reads it at launch, so it falls through to the next. */
 export function projectSessionLaunch(owner: Console, project: Project, agent: Agent): Launch {
   const fallback = consoleProjectLaunch(owner, agent);
   return {
-    model: project.launch[agent].model ?? fallback.model,
+    model: shownModel(agent, project.launch[agent].model) ?? shownModel(agent, fallback.model),
     effort: project.launch[agent].effort ?? fallback.effort,
   };
 }
@@ -159,7 +161,8 @@ export function projectSessionLaunch(owner: Console, project: Project, agent: Ag
  * else its console's project session one; a console session's console session one. */
 export function inheritedSessionLaunch(owner: Console, project: Project | undefined, agent: Agent): Launch {
   if (project) return projectSessionLaunch(owner, project, agent);
-  return owner.launch[agent];
+  const launch = owner.launch[agent];
+  return { model: shownModel(agent, launch.model), effort: launch.effort };
 }
 
 /** `inherited` with each value an override sets: absent follows `inherited`, `null` is the agent's

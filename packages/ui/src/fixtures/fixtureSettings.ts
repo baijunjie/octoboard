@@ -3,7 +3,7 @@
 import { AGENT_LABEL, AGENTS } from "../agents/agents";
 import { type Agent, type ClientRequestBody } from "../protocol";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
-import { SAMPLE_MODELS } from "./agentModels";
+import { defaultClaudeModel, SAMPLE_MODELS } from "./agentModels";
 import { effectiveClaudeCompatibility } from "./builders";
 import { HOME, neverReplied, normalizedPath, normalizeTags, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
@@ -107,7 +107,8 @@ export function createSettingsReplies({ scenario, store, fail, claudeCompatibili
       const listed = scenario.agentModels?.[body.agent];
       if (listed === "pending") return neverReplied();
       const { models, unavailable = null } = listed ?? { models: SAMPLE_MODELS[body.agent] };
-      return { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models, unavailable };
+      const defaultModel = body.agent === "claude" ? defaultClaudeModel(models) : undefined;
+      return { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models, ...(defaultModel && { default_model: defaultModel, default_model_source: "best_available" as const }), unavailable };
     },
   };
 }

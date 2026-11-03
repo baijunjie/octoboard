@@ -305,10 +305,17 @@ id or by name, or `default`; left out, the agent's default account. An account t
 another agent, is refused. It lists what the model pickers list for that account (see "The models offered" and "The
 reasoning effort offered" in `docs/product/model-and-reasoning-effort.md`), from the same answers the pickers reuse, so
 a call runs nothing while an answer is fresh. The answer is `agent`, `account` (the account's id, or `default`),
-`models` and `unavailable`:
+`models`, `default_model`, `default_model_source` and `unavailable`:
 
 - each model is `id` — what a `model` argument takes — `name` and `efforts`, the levels an `effort` argument takes for
-  that model;
+  that model, and, only where the agent says so (Claude Code), `version`, the concrete model the id currently stands
+  for (`Opus 5.5`), and `available`, `false` for a model the agent refuses to launch for this account; each is left out
+  where it is not known;
+- `default_model` is the model a session of the account gets when no setting names one, and `default_model_source`
+  is `configured` when Claude Code's own configuration names it or `best_available` when Octoboard chose it; both are
+  `null` where the agent's own default applies (see "The default model" in
+  `docs/product/model-and-reasoning-effort.md`). A left-out or blank `model` elsewhere gets this model, not Claude
+  Code's own fallback, though a project's own Claude Code settings still win at launch;
 - `unavailable` is `null`, or, when the agent cannot be asked, `code` and `message` saying why (as in "While the list
   is being fetched, and when there is none" there), with `models` empty.
 

@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 import { press } from "../components/alerts/detailsTestSupport";
 import { projectOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { Agent, ModelsUnavailable, ProjectAccount } from "../protocol";
+import type { Agent, AgentModel, ModelsUnavailable, ProjectAccount } from "../protocol";
 import { type Pending, work, personal, render, input, type, settle, click, answer, chooseSource, buttons, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
 
 const PLACEHOLDER = "Same as console, The agent's own setting";
@@ -19,7 +19,7 @@ const optionTexts = () => Array.from(document.body.querySelectorAll('[role="opti
 const modelRequests = (pending: Pending[]) => pending.filter((p) => p.body.type === "list_agent_models");
 
 /** Answers the latest question about models with a list, or with a reason there is none. */
-const answerModels = (pending: Pending[], unavailable: ModelsUnavailable | null = null) =>
+const answerModels = (pending: Pending[], unavailable: ModelsUnavailable | null = null, extra: { models?: AgentModel[]; default_model?: string } = {}) =>
   act(async () => {
     const asked = modelRequests(pending).at(-1)!;
     const body = asked.body as { agent: Agent; account?: string };
@@ -28,7 +28,8 @@ const answerModels = (pending: Pending[], unavailable: ModelsUnavailable | null 
       id: null,
       agent: body.agent,
       account: body.account ?? null,
-      models: unavailable ? [] : [{ id: "alpha", name: "Alpha", efforts: ["low", "high"] }, { id: "beta", name: "Beta", efforts: [] }],
+      models: unavailable ? [] : extra.models ?? [{ id: "alpha", name: "Alpha", efforts: ["low", "high"] }, { id: "beta", name: "Beta", efforts: [] }],
+      ...(extra.default_model && { default_model: extra.default_model }),
       unavailable,
     });
   });
@@ -67,6 +68,20 @@ it("shows an unset launch setting as its placeholder, and names what the account
   await click(buttonText("Advanced"));
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   expect(pickerNamed("Reasoning effort").textContent).toContain(PLACEHOLDER);
+});
+
+it("names the version of the default model an unset Model picker resolves to when the console sets none", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  await click(buttonText("Advanced"));
+  await answerModels(pending, null, {
+    models: [{ id: "fable", name: "Fable", efforts: ["low", "high"], version: "Fable 5.1", available: true }],
+    default_model: "fable",
+  });
+  expect(pickerNamed("Model").textContent).toContain("Same as console, Fable 5.1");
+  // The efforts are those of that model, as nothing else is chosen.
+  await click(pickerNamed("Reasoning effort"));
+  expect(optionTexts()).toEqual(["low", "high"]);
 });
 
 it("offers no account picker for an agent with no account of its own", async () => {
@@ -427,7 +442,7 @@ it("offers the stored model alone and the reason when the agent cannot list its 
 it("names the console's project session value on the unset launch pickers, each value on its own", async () => {
   render(projectOf("p-2", "c-1", "Site"), [], { project_session_launch: { claude: { model: "opus" } } });
   await click(buttonText("Advanced"));
-  expect(pickerNamed("Model").textContent).toContain("Same as console, opus");
+  expect(pickerNamed("Model").textContent).toContain("Same as console, Opus");
   expect(pickerNamed("Reasoning effort").textContent).toContain("Same as console, The agent's own setting");
 });
 

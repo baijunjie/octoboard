@@ -8,7 +8,7 @@ import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeNotification } from "../../fixtures/builders";
 import { agentAvailability } from "./liveChanges";
-import { SAMPLE_CODEX_MODELS } from "../../fixtures/agentModels";
+import { SAMPLE_CLAUDE_MODELS_PRO, SAMPLE_CODEX_MODELS } from "../../fixtures/agentModels";
 import { IMAGES } from "../../fixtures/viewerImages";
 
 const { console: console_, web, api, sessions } = SAMPLE;
@@ -162,6 +162,11 @@ const inheritingState = snapshotState({
   sessions: [],
   settings: accountsState.settings,
 });
+
+// A project that sets nothing under a console that sets nothing, so its launch pickers are all unset and name what an
+// unset one resolves to: the model the daemon launches with when nothing names one.
+const plainProject = projectOf("p-plain", "c-plain", "Plain Site");
+const plainState = snapshotState({ consoles: [consoleOf("c-plain", "Plain console")], projects: [plainProject], sessions: [] });
 
 // A project that holds its own squashing, delivery and revert gate, while development and rebase follow global values.
 const gitWorkflowProject = projectOf("p-git-workflow", console_.id, "Workflow Site", {
@@ -763,7 +768,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console advanced settings",
-    description: "Without named accounts every agent in the \"Agent default accounts\" section has a picker holding only its default account, as \"Default\", with the icon-only key button named \"Manage accounts\" beside the section title. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note. No line about each agent having its own models sits above the tabs. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding it missing while the dialog is open: its tab fades out and the one after it slides into its place, and \"Codex installed\" brings it back. With reduced motion the tab goes and returns at once.",
+    description: "Without named accounts every agent in the \"Agent default accounts\" section has a picker holding only its default account, as \"Default\", with the icon-only key button named \"Manage accounts\" beside the section title. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings; on Claude Code both unset Model fields read Best available followed by a grey badge naming Fable 5.1, the model sessions launch with when nothing names one. At its foot the empty Console session instructions field with its placeholder and note. No line about each agent having its own models sits above the tabs. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding it missing while the dialog is open: its tab fades out and the one after it slides into its place, and \"Codex installed\" brings it back. With reduced motion the tab goes and returns at once.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -1494,13 +1499,44 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project model choices with a retained model",
-    description: "The open Model list ends with the model the project still stores but the agent no longer lists, selected, with a grey Not in the list badge after its name in the option as well as in the field. The Reasoning effort list keeps its stored value the same way.",
+    description: "The open Model list names Fable, Opus, Sonnet and Haiku, best first, each with its version on a smaller line under the name and no Best available option, then ends with the model the project still stores but the agent no longer lists, selected, with a grey Not in the list badge after its name in the option as well as in the field. The Reasoning effort list keeps its stored value the same way.",
     steps: [
       (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
       // The picker is named by the model it holds, followed by the badge.
       (ui) => ui.press(describing("the Model picker holding the retired model", (name) => name.startsWith(RETIRED_MODEL))),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: plainState,
+    agentModels: { claude: { models: SAMPLE_CLAUDE_MODELS_PRO } },
+    id: "dialog-edit-project-model-choices-unavailable",
+    group: "Projects",
+    category: "normal",
+    title: "Project model choices on an account without the best models",
+    description: "For an account that cannot use Fable and Opus, the open Model list still names all four with their versions, but Fable and Opus carry a grey Unavailable badge after the name, while Sonnet and Haiku carry none; the options stay selectable.",
+    steps: [
+      (ui) => projectActions(ui, plainProject.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      // The unset picker is named by its placeholder and the badge after it, which names the model it resolves to.
+      (ui) => ui.press(describing("the unset Model picker", (name) => name.startsWith(ui.t("dialog.agentSettings.sameAsConsole")) && name.includes("Sonnet"))),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: plainState,
+    id: "dialog-edit-project-launch-settings-unset",
+    group: "Projects",
+    category: "normal",
+    title: "Project launch settings with nothing set anywhere",
+    description: "Advanced is open on Launch settings of a project whose console sets no model either. The Model field reads Same as console followed by a grey badge naming Fable 5.1, the model a session launches with when nothing names one.",
+    steps: [
+      (ui) => projectActions(ui, plainProject.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
   {

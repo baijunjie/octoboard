@@ -155,7 +155,8 @@ fn session_in(
         project_id: project.map(|project| project.id),
         agent,
         // Without one, the session takes the project's account for its agent, else the
-        // console's; a blank model or effort is the agent's own default.
+        // console's; a blank model or effort is unset (the default model, the agent's own
+        // effort).
         account,
         model: present_text(arguments, "model")?,
         effort: present_text(arguments, "effort")?,
@@ -259,7 +260,7 @@ pub(in crate::mcp) async fn resume_session(
     )
     .await?;
     // What the relaunch used, as the launch reads it: the session's own choice, else its project's
-    // (or console's) setting. `null` is the agent's own default.
+    // (or console's) setting. `null` is unset (the default model, the agent's own effort).
     let resumed = state.session_record(&target.id)?;
     let (model, effort) = coordinator::launch::launch_settings(state, &resumed)?;
     let (account, account_name) =

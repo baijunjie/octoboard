@@ -18,17 +18,21 @@ vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "
 const parentConsole = consoleOf("c-1", "Main");
 const project = projectOf("p-1", parentConsole.id, "Search API", { launch: { claude: { model: "opus", effort: "high" } } });
 
-async function mount(session: Session, models: "pending" | "unavailable" | "empty" | "listed" = "listed") {
+async function mount(session: Session, models: "pending" | "unavailable" | "empty" | "listed" | "versioned" = "listed") {
   const request = vi.fn(async (body: { type: string; agent?: string; account?: string | null }) => {
     if (body.type !== "list_agent_models") return { type: "ack", id: null };
     if (models === "pending") return new Promise<never>(() => {});
     return { type: "agent_models", agent: body.agent, account: body.account ?? null, ...(models === "unavailable"
       ? { models: [], unavailable: { code: "models_binary_not_found", params: { binary: "claude" }, message: "claude was not found" } }
       : models === "empty" ? { models: [], unavailable: null }
-        : { models: [
-          { id: "opus", name: "Opus", efforts: ["low", "high"] },
-          { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
-        ], unavailable: null }) };
+        : models === "versioned" ? { models: [
+          { id: "fable", name: "Fable", efforts: ["low", "max"], version: "Fable 5.1", available: true },
+          { id: "opus", name: "Opus", efforts: ["low", "high"], version: "Opus 5.5", available: true },
+        ], default_model: "fable", unavailable: null }
+          : { models: [
+            { id: "opus", name: "Opus", efforts: ["low", "high"] },
+            { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
+          ], unavailable: null }) };
   });
   const daemon = testDaemon({
     state: {
@@ -118,6 +122,28 @@ it("clears a value to the agent's own default, and says an interrupted session t
   await act(async () => confirm().click());
 
   expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: null });
+});
+
+it("names the version of the best available model an unset Model picker resolves to, and the efforts of that model", async () => {
+  const session = sessionOf("s-1", parentConsole.id, undefined, "Fix search", "interrupted");
+  await mount(session, "versioned");
+
+  expect(picker("Model").textContent).toContain("Best available, Fable 5.1");
+  await act(async () => picker("Reasoning effort").click());
+  expect(optionElements().map((option) => option.textContent)).toEqual(["low", "max"]);
+});
+
+it("takes clearing the Model picker back to unset over a stored retired `best` for no change", async () => {
+  const session = sessionOf("s-1", parentConsole.id, undefined, "Fix search", "interrupted", { model: "best" });
+  const { onChangeModel } = await mount(session, "versioned");
+
+  expect(picker("Model").textContent).toContain("Best available");
+  await act(async () => picker("Model").click());
+  await act(async () => optionElements().find((option) => option.textContent?.startsWith("Opus"))!.click());
+  expect(confirm().disabled).toBe(false);
+  await act(async () => picker("Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+  expect(confirm().disabled).toBe(true);
+  expect(onChangeModel).not.toHaveBeenCalled();
 });
 
 it("does not offer Confirm while the session is starting", async () => {

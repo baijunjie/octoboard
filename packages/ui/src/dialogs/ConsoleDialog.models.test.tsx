@@ -177,10 +177,23 @@ it("keeps a stored effort clearable once a model that takes none is chosen", asy
   ]);
 });
 
-it("names the daemon's own alias for the best model from the catalogue and every other model as sent", async () => {
-  render(undefined, [], async (body) => listing(body, [{ id: "best", name: "daemon words", efforts: ["low"] }, { id: "opus", name: "Opus", efforts: ["low"] }]));
+const CLAUDE = [
+  { id: "fable", name: "Fable", version: "Fable 5.1", available: false, efforts: ["low"] },
+  { id: "opus", name: "Opus", version: "Opus 5.5", available: true, efforts: ["low"] },
+  { id: "haiku", name: "Haiku", efforts: ["low"] },
+];
+
+it("shows each model as sent, with the version it stands for and an Unavailable badge where the account cannot use it", async () => {
+  render(undefined, [], async (body) => listing(body, CLAUDE, null, "opus"));
   await openAdvanced();
   await click(pickerNamed("Model"));
-  expect(optionTexts()).toEqual(["Best available", "Opus"]);
+  expect(optionTexts()).toEqual(["Fable, UnavailableFable 5.1Fable 5.1", "OpusOpus 5.5Opus 5.5", "Haiku"]);
 });
 
+it("names the model an unset picker resolves to, and leaves a retired best as unset", async () => {
+  render(consoleOf("c-1", "Main", { launch: { claude: { model: "best" } } }), [], async (body) => listing(body, CLAUDE, null, "opus"));
+  await openAdvanced();
+  expect(pickerNamed("Model").textContent).toBe("Best available, Opus 5.5");
+  await click(pickerNamed("Model"));
+  expect(optionTexts()).toEqual(["Fable, UnavailableFable 5.1Fable 5.1", "OpusOpus 5.5Opus 5.5", "Haiku"]);
+});

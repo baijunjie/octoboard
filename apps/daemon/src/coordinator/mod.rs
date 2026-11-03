@@ -359,11 +359,14 @@ async fn handle_inner(
 
         RequestBody::ListAgentModels { agent, account } => {
             let account_id = checked_account_reference(state, agent, account)?;
-            let listing = launch_settings::agent_listing(state, agent, &account_id).await?;
+            let (listing, default) =
+                launch_settings::agent_models(state, agent, &account_id).await?;
             Ok(Some(Event::AgentModels {
                 id: request_id,
                 agent,
                 account: account_id,
+                default_model: default.as_ref().map(|default| default.id.clone()),
+                default_model_source: default.map(|default| default.source),
                 models: listing.models,
                 unavailable: listing.unavailable,
             }))

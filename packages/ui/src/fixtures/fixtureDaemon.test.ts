@@ -9,6 +9,7 @@ import { broadcastNotification } from "../store/notifications";
 
 import type { Agent, ClientRequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
+import { SAMPLE_CLAUDE_MODELS, SAMPLE_CLAUDE_MODELS_PRO } from "./agentModels";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import type { Fixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -41,6 +42,25 @@ describe("the fixture daemon's session archiving", () => {
     const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, child] }), sessionArchiveError: error });
     await expect(daemon.request({ type: "archive_session", session: owner.id })).rejects.toMatchObject({ code: error.code, params: error.params });
     expect([...daemon.store.getState().sessions.values()]).toEqual([owner, child]);
+  });
+});
+
+describe("the fixture daemon's model lists", () => {
+  const ask = (agent: Agent, agentModels?: Fixture["agentModels"]) => createFixtureDaemon({ agentModels }).request({ type: "list_agent_models", agent });
+
+  it("names the first model the account may use as Claude Code's default, and none for the other agents", async () => {
+    await expect(ask("claude")).resolves.toMatchObject({ default_model: "fable", default_model_source: "best_available" });
+    await expect(ask("claude", { claude: { models: SAMPLE_CLAUDE_MODELS_PRO } })).resolves.toMatchObject({ default_model: "sonnet", default_model_source: "best_available" });
+    await expect(ask("codex")).resolves.not.toHaveProperty("default_model");
+    await expect(ask("codex")).resolves.not.toHaveProperty("default_model_source");
+  });
+
+  it("names no default where the list is empty or no model is known to be usable", async () => {
+    await expect(ask("claude", { claude: { models: [] } })).resolves.not.toHaveProperty("default_model");
+    await expect(ask("claude", { claude: { models: [] } })).resolves.not.toHaveProperty("default_model_source");
+    const unknown = SAMPLE_CLAUDE_MODELS.map(({ available: _available, ...model }) => model);
+    await expect(ask("claude", { claude: { models: unknown } })).resolves.not.toHaveProperty("default_model");
+    await expect(ask("claude", { claude: { models: SAMPLE_CLAUDE_MODELS.map((model) => ({ ...model, available: false })) } })).resolves.not.toHaveProperty("default_model");
   });
 });
 

@@ -14,8 +14,9 @@ use crate::state::AppState;
 use crate::mcp::lookup::{optional_string, parse_agent, required_str, resolve_account};
 
 /// The models `agent` offers under `account` (an account's id or name, else the default account),
-/// each with its efforts. When the agent cannot be asked, `models` is empty and `unavailable` says
-/// why, as the application's own listing does.
+/// each with its efforts, and the model a session gets when no setting names one. When the agent
+/// cannot be asked, `models` is empty and `unavailable` says why, as the application's own
+/// listing does.
 pub(in crate::mcp) async fn list_agent_models(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
@@ -25,10 +26,12 @@ pub(in crate::mcp) async fn list_agent_models(
         Some(wanted) => resolve_account(state, agent, &wanted)?,
         None => None,
     };
-    let listing = launch_settings::agent_listing(state, agent, &account).await?;
+    let (listing, default) = launch_settings::agent_models(state, agent, &account).await?;
     Ok(json!({
         "agent": agent,
         "account": account.as_deref().unwrap_or("default"),
+        "default_model": default.as_ref().map(|default| &default.id),
+        "default_model_source": default.as_ref().map(|default| default.source),
         "models": listing.models,
         "unavailable": listing
             .unavailable
@@ -89,6 +92,47 @@ mod tests {
         }
     }
 
+    /// The result names the model a session of the account gets when no setting names one, with
+    /// each model's version and availability, and the account's Claude Code configuration wins.
+    #[tokio::test]
+    async fn the_default_model_and_what_each_model_is_are_listed() {
+        use crate::agents::models::claude_fixtures::{write_claude_account, CLAUDE_CATALOGUE};
+        let (state, dir) = peer_state("list-agent-models-default");
+        let pinned = dir.join("pinned");
+        std::fs::create_dir_all(&pinned).unwrap();
+        write_claude_account(
+            &pinned.join(".claude.json"),
+            &pinned,
+            "[]",
+            Some(CLAUDE_CATALOGUE),
+        );
+        state
+            .store
+            .insert_account(&account(
+                "claude-work",
+                Agent::Claude,
+                "Work",
+                pinned.to_string_lossy(),
+            ))
+            .unwrap();
+        let input = json!({ "agent": "claude", "account": "Work" });
+        let listed = list(&state, "a", input.clone()).await.unwrap();
+        assert_eq!(listed["default_model"], "opus");
+        assert_eq!(listed["default_model_source"], "best_available");
+        assert_eq!(listed["models"][0]["version"], "Fable 5.1");
+        assert_eq!(listed["models"][0]["available"], false);
+        assert_eq!(listed["models"][1]["available"], true);
+        std::fs::write(pinned.join("settings.json"), r#"{"model":"sonnet"}"#).unwrap();
+        let listed = list(&state, "a", input).await.unwrap();
+        assert_eq!(listed["default_model"], "sonnet");
+        assert_eq!(listed["default_model_source"], "configured");
+        // The default account's home is unknown under test, and Codex has no default.
+        let listed = list(&state, "a", json!({ "agent": "codex" }))
+            .await
+            .unwrap();
+        assert!(listed["default_model"].is_null() && listed["default_model_source"].is_null());
+    }
+
     /// The catalogue read is the named account's: a listing held for its directory is what comes
     /// back, and a listing that failed comes back empty with its reason.
     #[tokio::test]
@@ -114,6 +158,8 @@ mod tests {
                     id: "gpt-test".to_string(),
                     name: "GPT Test".to_string(),
                     efforts: vec!["low".to_string(), "high".to_string()],
+                    version: None,
+                    available: None,
                 }],
                 unavailable: None,
             },

@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use crate::agents::launch_settings::{normalize_session_launch_setting, LaunchCheck};
+use crate::agents::launch_settings::{self, normalize_session_launch_setting, LaunchCheck};
+use crate::agents::models::legacy_claude_model;
 use crate::messaging::delivery;
 use crate::messaging::owner_notices;
 use crate::protocol::{
@@ -135,6 +136,7 @@ pub(crate) async fn relaunch_session_with(
         prompt.as_deref(),
         resume_id.as_deref(),
         terminal_appearance,
+        shell_env.clone(),
         // The snapshot the caller resolved something from is the one the launch must use.
         move |request| {
             launch(term::LaunchRequest {
@@ -206,10 +208,20 @@ pub(crate) async fn relaunch_session_with(
     }
 }
 
+/// A stored model as a launch reads it: the retired Claude alias `best` is no model, so it
+/// reads as unset wherever it is stored.
+fn readable_model(agent: Agent, model: &Option<String>) -> Option<String> {
+    model
+        .clone()
+        .filter(|model| agent != Agent::Claude || !legacy_claude_model(model))
+}
+
 /// The model and reasoning effort a session of `project` launches `agent` with when it chose
 /// neither: for each value independently, the project's own, else its console's project session
-/// value, else `None`, the agent's own default. Each agent has its own pair, since each has its own
-/// model names.
+/// value, else `None`, unset: the effort is then the agent's own default, and the model
+/// [`launch_settings::launch_default_model`]'s (for Claude Code, the best one the account may use
+/// unless Claude Code's own configuration names a model; see [`start_process`]). Each agent has
+/// its own pair, since each has its own model names.
 pub(crate) fn project_launch_settings(
     project: &Project,
     console: &Console,
@@ -218,7 +230,8 @@ pub(crate) fn project_launch_settings(
     let own = project.launch.get(agent);
     let console_launch = console.project_session_launch.get(agent);
     Launch {
-        model: own.model.clone().or_else(|| console_launch.model.clone()),
+        model: readable_model(agent, &own.model)
+            .or_else(|| readable_model(agent, &console_launch.model)),
         effort: own.effort.clone().or_else(|| console_launch.effort.clone()),
     }
 }
@@ -231,7 +244,13 @@ fn inherited_launch(project: Option<&Project>, console: &Console, agent: Agent) 
     match project {
         Some(project) => project_launch_settings(project, console, agent),
         // A console session's own pair: each agent has its own model names.
-        None => console.launch.get(agent).clone(),
+        None => {
+            let launch = console.launch.get(agent);
+            Launch {
+                model: readable_model(agent, &launch.model),
+                effort: launch.effort.clone(),
+            }
+        }
     }
 }
 
@@ -239,7 +258,8 @@ fn inherited_launch(project: Option<&Project>, console: &Console, agent: Agent) 
 /// reads its console's console session pair, a project session its project's with its console's
 /// project session pair behind it (see [`project_launch_settings`]), unless that field has a
 /// session override. Inherited values are read at every launch, while an override (including
-/// explicitly leaving the choice to the agent) survives resumes and account switches.
+/// explicitly leaving it unset, so that the default model applies) survives resumes and account
+/// switches.
 pub(crate) fn launch_settings(
     state: &Arc<AppState>,
     session: &Session,
@@ -247,7 +267,10 @@ pub(crate) fn launch_settings(
     let (project, console) = session_scope(state, session)?;
     let inherited = inherited_launch(project.as_ref(), &console, session.agent);
     Ok((
-        session.model.clone().unwrap_or(inherited.model),
+        match &session.model {
+            Some(own) => readable_model(session.agent, own),
+            None => inherited.model,
+        },
         session.effort.clone().unwrap_or(inherited.effort),
     ))
 }
@@ -278,10 +301,9 @@ pub(super) async fn check_launch_settings(
     effort: Option<Option<String>>,
     checked: SettingsChecked<'_>,
 ) -> Result<(Option<Option<String>>, Option<Option<String>>)> {
-    let (model, effort) = (
-        normalize_session_launch_setting(model),
-        normalize_session_launch_setting(effort),
-    );
+    // A stored `best` is no model, so it is no change when the model is edited back to unset.
+    let model = normalize_session_launch_setting(model).map(|model| readable_model(agent, &model));
+    let effort = normalize_session_launch_setting(effort);
     // A session that chose no model takes the project's, else the console's project session one,
     // or for a console session the console's console session one.
     let effective_model = match &model {
@@ -322,7 +344,8 @@ pub(super) fn session_scope(
 }
 
 /// The model and reasoning effort a user changed for a switch or a resume, each absent to leave the
-/// session's own override as it is, `Some(None)` for the agent's own default.
+/// session's own override as it is, `Some(None)` for unset (the default model, see
+/// [`launch_settings::launch_default_model`], with Claude Code's own configuration winning).
 #[derive(Default)]
 pub(crate) struct LaunchEdit {
     pub model: Option<Option<String>>,
@@ -387,6 +410,7 @@ pub(super) async fn start_process(
     task: Option<&str>,
     resume_agent_session_id: Option<&str>,
     terminal_appearance: Option<TerminalAppearance>,
+    shell_env: Option<HashMap<String, String>>,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     // Refresh the instruction file on every console launch, resume and account switch. A missing
@@ -398,6 +422,22 @@ pub(super) async fn start_process(
         )?;
     }
     let (model, effort) = launch_settings(state, session)?;
+    // Where nothing up the chain names a model, Claude Code gets the best one the account may use
+    // rather than choosing for itself, unless its own configuration names one: `shell_env` is the
+    // snapshot the launch runs in (the one the caller resolved something from, else the launch's).
+    let model = match model {
+        Some(model) => Some(model),
+        None => {
+            launch_settings::launch_default_model(
+                state,
+                session.agent,
+                session.config_dir.clone(),
+                cwd,
+                shell_env,
+            )
+            .await?
+        }
+    };
     // A sharing account's links are repaired before its agent starts, and the agent is told
     // where the shared directory is.
     let sharing = crate::accounts::shared_config::before_launch(state, session).await?;

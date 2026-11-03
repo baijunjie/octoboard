@@ -519,6 +519,7 @@ async fn finish_open(
             task.as_deref(),
             resume_agent_session_id.as_deref(),
             terminal_appearance,
+            resume_shell_env.clone(),
             // The snapshot the conversation to resume was found with is the one the launch must use.
             move |request| {
                 launch(term::LaunchRequest {

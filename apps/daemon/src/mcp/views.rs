@@ -48,7 +48,7 @@ pub(super) fn account_fields(
 
 /// Puts the `model` and `effort` the session has of its own into `result`; a session that follows
 /// its project's (else console's) setting has neither field, which is different from a `null`,
-/// the agent's own default.
+/// an explicit unset.
 pub(super) fn insert_own_launch(result: &mut Value, session: &Session) {
     if let Some(model) = &session.model {
         result["model"] = json!(model);

@@ -162,11 +162,12 @@ pub(super) const HANDOFF_SESSION: ToolDef = ToolDef {
                 },
                 "model": {
                     "type": "string",
-                    "description": "The new session's model; blank is the agent's own default. \
-                                    `list_agent_models` lists the ones the agent offers. Left \
-                                    out, it takes the model its project (else its console) \
-                                    sets for sessions; a project session reads it in \
-                                    `get_project`'s `effective.launch`.",
+                    "description": "The new session's model; blank is the default model \
+                                    (`list_agent_models` names it). `list_agent_models` lists \
+                                    the ones the agent offers. Left out, it takes the model \
+                                    its project (else its console) sets for sessions; a \
+                                    project session reads it in `get_project`'s \
+                                    `effective.launch`.",
                 },
                 "effort": {
                     "type": "string",
@@ -265,10 +266,10 @@ pub(super) const SET_SESSION_MODEL: ToolDef = ToolDef {
                 },
                 "model": {
                     "type": "string",
-                    "description": "The model it runs with from now on; blank is the agent's \
-                                    own default. `list_agent_models` lists the ones its agent \
-                                    offers under its account. Left out, it keeps the model it \
-                                    has.",
+                    "description": "The model it runs with from now on; blank is the default \
+                                    model (`list_agent_models` names it). `list_agent_models` \
+                                    lists the ones its agent offers under its account. Left \
+                                    out, it keeps the model it has.",
                 },
                 "effort": {
                     "type": "string",

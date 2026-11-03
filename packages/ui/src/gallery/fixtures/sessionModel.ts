@@ -38,7 +38,8 @@ const changeToOpus = [
   (ui: Ui) => ui.press(ui.session(running.title)),
   ...openDialog(running.title),
   (ui: Ui) => ui.press(describing("the Model picker holding Sonnet", (name) => name.startsWith("Sonnet"))),
-  (ui: Ui) => ui.press("Opus"),
+  // The option is named by the model (and its badge, if any); the version under it is its description.
+  (ui: Ui) => ui.press(describing("the Opus option", (name) => name.startsWith("Opus"))),
   (ui: Ui) => ui.confirm(),
 ];
 

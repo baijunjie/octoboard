@@ -177,6 +177,31 @@ it("dims a disabled option's name by colour and its icon by fade, and announces 
   expect(option("Busy").textContent).toBe("Busy");
 });
 
+it("names an option by its label and badge alone, describes it by its detail, and draws label and badge in one row", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<OptionSelect label="Model" value="a" onChange={() => {}} options={[
+    { value: "a", label: "Opus", detail: "Opus 5.5", reason: { state: "Opus 5.5" } },
+    { value: "b", label: "Fable", badge: "Unavailable", detail: "Fable 5.1", reason: { state: "Fable 5.1" } },
+  ]} />));
+  await act(async () => container.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
+  const option = (name: string) => [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.textContent?.startsWith(name))!;
+  const text = (item: HTMLElement, attribute: string) =>
+    (item.getAttribute(attribute) ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
+  expect(text(option("Opus"), "aria-labelledby")).toBe("Opus");
+  expect(text(option("Opus"), "aria-describedby")).toBe("Opus 5.5");
+  // The badge is part of the name, not of the description.
+  expect(text(option("Fable"), "aria-labelledby")).toContain("Unavailable");
+  expect(text(option("Fable"), "aria-labelledby")).not.toContain("5.1");
+  expect(text(option("Fable"), "aria-describedby")).toBe("Fable 5.1");
+  // One row holds the label and the badge, with the version line below it.
+  const name = document.getElementById(option("Fable").getAttribute("aria-labelledby")!.split(" ")[0]!)!;
+  expect(name.textContent).toContain("Fable");
+  expect(name.textContent).toContain("Unavailable");
+  expect(name.parentElement!.className).toContain("flex-col");
+});
+
 it("keeps aria-disabled in step with an option that becomes disabled and enabled again", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

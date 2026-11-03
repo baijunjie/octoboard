@@ -4,10 +4,17 @@
 //! "Model and reasoning effort" note of each agent's section ("Claude Code", "Codex",
 //! "Grok Build") in `docs/agent-cli-reference.md`, and summarised here.
 //!
-//! - **Claude Code** has no list command, but its `best`, `opus`, `sonnet` and `haiku` aliases
-//!   always resolve to the newest model of their family from its own catalogue, and `best` falls
-//!   back to Opus on an account without the top model, so the answer is those four and no
-//!   subprocess is run.
+//! - **Claude Code** has no list command, but its `fable`, `opus`, `sonnet` and `haiku` aliases
+//!   always resolve to the newest model of their family, so those four are the answer, best
+//!   first, and no subprocess is run. Claude Code caches a catalogue per account on disk
+//!   (`cache/model-catalog/` in its configuration directory, found through the organization and
+//!   account ids in the global config file), which says which model each alias resolves to and
+//!   whether the account may use it; each entry carries that as `version` and `available`. A
+//!   missing or unreadable catalogue leaves both unknown, and the four aliases still listed. The
+//!   `best` alias is not offered: it falls back to Opus without checking that the account may use
+//!   it, so the first available entry of the list is what a session with no model setting gets
+//!   ([`Listing::default_model`]), unless Claude Code's own configuration names a model, which
+//!   it then applies itself (see `launch_settings::launch_default_model`).
 //! - **Codex** answers `codex debug models` with its catalogue as JSON: the models whose
 //!   `visibility` is `list`, ordered by ascending `priority`.
 //! - **Grok Build** answers `grok models` with the visible ids as text, which also refreshes
@@ -26,9 +33,11 @@
 //! Every model carries effort levels, never "unknown": the model's own where its catalogue entry
 //! gives them (an empty list meaning it takes none), else the agent's measured set. Levels are
 //! not versioned the way models are, so the fallback is safe, and it is what Claude Code gets for
-//! every alias. Failing to produce a list is never an error to the caller: it is an empty list
-//! with a reason (`ModelsUnavailable`), because the form asking must stay usable. Results are
-//! cached per agent and configuration directory ([`ModelCache`]).
+//! every alias that has no catalogue row. Failing to produce a list is never an error to the
+//! caller: it is an empty list with a reason (`ModelsUnavailable`), because the form asking must
+//! stay usable. Results are cached per agent and configuration directory ([`ModelCache`]), except
+//! Claude Code's, which is two small file reads and is read afresh each time so that the default
+//! model it names never goes stale.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -36,10 +45,12 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::adapter;
 use crate::adapter::account_cli::{self, NotRun, QueryFailure};
-use crate::agents::layout::GROK_MODELS_CACHE;
+use crate::adapter::claude::settings::global_config_file;
+use crate::agents::layout::{CLAUDE_MODEL_CATALOGUE_DIR, GROK_MODELS_CACHE};
 use crate::env_shell;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{models_unavailable_code as code, Agent, AgentModel, ModelsUnavailable};
@@ -50,12 +61,14 @@ use crate::protocol::{models_unavailable_code as code, Agent, AgentModel, Models
 /// (compare the ten seconds the login-shell snapshot gets).
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// The most a catalogue command may print or its cache may hold. Codex's runs to about 600 KB
-/// because it carries every model's full instructions; this is far above that and far below
-/// anything that would hurt.
+/// The most a catalogue command may print or a file read for a listing may hold: Grok's models
+/// cache, and Claude Code's global config file and cached catalogue. Codex's output runs to about
+/// 600 KB because it carries every model's full instructions; this is far above that and far
+/// below anything that would hurt.
 const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
-/// How long a list that was read is reused. A catalogue changes when the agent is updated or the
+/// How long a list that was read is reused (not Claude Code's, which is never cached; see the
+/// module documentation). A catalogue changes when the agent is updated or the
 /// account's plan changes, both rare against how often a dialog is opened, and a refresh touches
 /// the network; ten minutes absorbs a session of opening and closing dialogs while still showing
 /// a new model within the time it takes to notice one.
@@ -66,14 +79,23 @@ const FOUND_TTL: Duration = Duration::from_secs(10 * 60);
 /// see it, but long enough that reopening a dialog does not wait out a timeout again each time.
 const FAILED_TTL: Duration = Duration::from_secs(30);
 
-/// Claude Code's aliases and how to show them. `best` is the newest model the account has,
-/// degrading to Opus; the three families resolve to their newest member. None can be refused.
+/// Claude Code's aliases and how to show them, best first: each resolves to the newest model of
+/// its family, which an account may or may not be allowed to use.
 const CLAUDE_MODELS: [(&str, &str); 4] = [
-    ("best", "Best available"),
+    ("fable", "Fable"),
     ("opus", "Opus"),
     ("sonnet", "Sonnet"),
     ("haiku", "Haiku"),
 ];
+
+/// The alias Claude Code accepted before the list stopped offering it. A stored value of it is
+/// read as no model at all ([`legacy_claude_model`]).
+const CLAUDE_LEGACY_BEST: &str = "best";
+
+/// Whether `model` is the retired `best` alias, which is read as unset wherever it is stored.
+pub fn legacy_claude_model(model: &str) -> bool {
+    model == CLAUDE_LEGACY_BEST
+}
 
 /// The ids Claude Code's aliases go by, for a tool description that tells a model what it may pick.
 pub fn claude_model_ids() -> Vec<&'static str> {
@@ -81,7 +103,8 @@ pub fn claude_model_ids() -> Vec<&'static str> {
 }
 
 /// What `--effort` takes. Claude Code lowers a level the chosen model does not support to `high`
-/// rather than refusing it, so it is offered for every alias. Measured on 2.1.296.
+/// rather than refusing it, so it is offered for every alias whose catalogue row gives none.
+/// Measured on 2.1.296.
 const CLAUDE_EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
 /// What Codex's `model_reasoning_effort` parser accepts, measured on 0.160.0: the levels offered
@@ -123,6 +146,16 @@ pub struct Listing {
 }
 
 impl Listing {
+    /// The model a session of the agent gets when no setting names one: the first listed model the
+    /// account may use. `None` when no model is known to be usable, which leaves the choice to
+    /// the agent's own default.
+    pub fn default_model(&self) -> Option<&str> {
+        self.models
+            .iter()
+            .find(|model| model.available == Some(true))
+            .map(|model| model.id.as_str())
+    }
+
     fn found(models: Vec<AgentModel>) -> Self {
         Self {
             models,
@@ -139,11 +172,10 @@ impl Listing {
 }
 
 /// The listing for `agent` under `config_dir` (the pinned account's directory, `None` for the
-/// default account), in the user's shell environment. Blocking: it may run a subprocess.
+/// default account), in the user's shell environment. Blocking: it may run a subprocess. Claude
+/// Code's is read through [`claude_listing`] with the environment its caller holds instead, since
+/// it is not cached.
 pub fn load(agent: Agent, config_dir: Option<&Path>) -> Listing {
-    if agent == Agent::Claude {
-        return claude_listing();
-    }
     // Human-paced, but the result is cached anyway, so the cached snapshot keeps a dialog from
     // forking a login shell on top of the command.
     match env_shell::cached_snapshot() {
@@ -159,18 +191,138 @@ pub fn load(agent: Agent, config_dir: Option<&Path>) -> Listing {
     }
 }
 
-fn claude_listing() -> Listing {
-    let efforts = fallback_efforts(Agent::Claude);
+/// The aliases of [`CLAUDE_MODELS`] with what the account's cached catalogue says about each (see
+/// [`claude_catalogue`]); every alias is listed whatever it says, and one it cannot answer for has
+/// no `version` and no `available`.
+pub(crate) fn claude_listing(
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+) -> Listing {
+    let (catalogue, denied) = claude_catalogue(shell_env, config_dir);
     Listing::found(
         CLAUDE_MODELS
             .iter()
-            .map(|(id, name)| AgentModel {
-                id: id.to_string(),
-                name: name.to_string(),
-                efforts: efforts.clone(),
-            })
+            .map(|(id, name)| claude_model(id, name, catalogue.as_ref(), &denied))
             .collect(),
     )
+}
+
+/// The cached catalogue of the account whose global config file `shell_env` and `config_dir` lead
+/// to, and the model ids that config file says the account is not entitled to. Claude Code names
+/// the catalogue file `<organization id>-<first 12 hex digits of the SHA-256 of the account
+/// id>-cc.json`, both ids lower-cased, because several accounts' catalogues can share a
+/// directory. Either is `None` or empty when the file is not there or cannot be read. A catalogue
+/// past its own `staleAt` is still the best answer there is, so it is read all the same.
+fn claude_catalogue(
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+) -> (Option<Value>, Vec<String>) {
+    let read = |file: &Path| -> Option<Value> {
+        serde_json::from_str(&crate::hostfs::read_regular_text(file, OUTPUT_LIMIT).ok()?).ok()
+    };
+    let Some(global) = read(&global_config_file(shell_env, config_dir)) else {
+        return (None, Vec::new());
+    };
+    let denied = global
+        .get("modelAccessCache")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|entry| entry.get("entitled").and_then(Value::as_bool) == Some(false))
+        .filter_map(|entry| entry.get("apiName").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect();
+    let account = global.get("oauthAccount");
+    let id_of = |key: &str| {
+        account
+            .and_then(|account| account.get(key))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_lowercase)
+    };
+    let catalogue = id_of("organizationUuid")
+        .zip(id_of("accountUuid"))
+        .and_then(|(organization, account)| {
+            let file = claude_catalogue_file(
+                &adapter::account_dir(Agent::Claude, config_dir, shell_env),
+                &organization,
+                &account,
+            );
+            read(&file)
+        });
+    (catalogue, denied)
+}
+
+/// Where Claude Code caches the catalogue of the account `account_id` of organization
+/// `organization_id` (both lower-cased) under the configuration directory `dir`.
+fn claude_catalogue_file(dir: &Path, organization_id: &str, account_id: &str) -> PathBuf {
+    let digest = Sha256::digest(account_id.as_bytes());
+    let hash: String = digest[..6]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    dir.join(CLAUDE_MODEL_CATALOGUE_DIR)
+        .join(format!("{organization_id}-{hash}-cc.json"))
+}
+
+/// One alias as the catalogue describes it: the row of the model the alias targets
+/// (`provider_alias_targets`) gives its version name (`name`, "Opus 5.5"), its effort levels, and
+/// whether the account can use it: not `disabled`, not in the `deprecated` section, and not
+/// refused by `denied`. A catalogue with no such row leaves all three at their fallbacks.
+fn claude_model(
+    alias: &str,
+    name: &str,
+    catalogue: Option<&Value>,
+    denied: &[String],
+) -> AgentModel {
+    let config = catalogue.and_then(|catalogue| catalogue.get("catalog")?.get("config"));
+    let target = config
+        .and_then(|config| {
+            config
+                .get("provider_alias_targets")?
+                .get(alias)?
+                .get("default")
+        })
+        .and_then(Value::as_str);
+    let row = target.and_then(|target| {
+        config?
+            .get("models")?
+            .as_array()?
+            .iter()
+            .find(|row| row.get("id").and_then(Value::as_str) == Some(target))
+    });
+    let version = row
+        .and_then(|row| row.get("name")?.as_str())
+        .map(str::trim)
+        .filter(|version| !version.is_empty())
+        .map(str::to_string);
+    let available = row.map(|row| {
+        row.get("disabled").and_then(Value::as_bool) != Some(true)
+            && row.get("section").and_then(Value::as_str) != Some("deprecated")
+            && !target.is_some_and(|target| denied.iter().any(|api_name| api_name == target))
+    });
+    let efforts = row
+        .and_then(|row| entry_levels(row.get("runtime")?.get("effort_levels")?))
+        .unwrap_or_else(|| fallback_efforts(Agent::Claude));
+    AgentModel {
+        id: alias.to_string(),
+        name: name.to_string(),
+        efforts,
+        version,
+        available,
+    }
+}
+
+/// The strings of a catalogue's level array, `None` when it has none to give.
+fn entry_levels(levels: &Value) -> Option<Vec<String>> {
+    let levels: Vec<String> = levels
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
+    (!levels.is_empty()).then_some(levels)
 }
 
 /// [`load`] over an already-captured environment and with its deadline given, which is what makes
@@ -182,7 +334,7 @@ pub(crate) fn list(
     timeout: Duration,
 ) -> Listing {
     match agent {
-        Agent::Claude => claude_listing(),
+        Agent::Claude => claude_listing(shell_env, config_dir),
         Agent::Codex => run(agent, shell_env, config_dir, &["debug", "models"], timeout)
             .and_then(|stdout| parse_codex(&stdout).map_err(|()| unreadable(agent)))
             .map_or_else(Listing::unavailable, Listing::found),
@@ -308,6 +460,8 @@ fn parse_codex(stdout: &str) -> Result<Vec<AgentModel>, ()> {
                     id: slug.to_string(),
                     name: name.to_string(),
                     efforts,
+                    version: None,
+                    available: None,
                 },
             ))
         })
@@ -362,6 +516,8 @@ fn decorate_grok(ids: &[String], cache: Option<&str>) -> Vec<AgentModel> {
                     id: id.clone(),
                     name: id.clone(),
                     efforts: fallback_efforts(Agent::Grok),
+                    version: None,
+                    available: None,
                 });
             };
             if info.get("hidden").and_then(Value::as_bool) == Some(true) {
@@ -387,6 +543,8 @@ fn decorate_grok(ids: &[String], cache: Option<&str>) -> Vec<AgentModel> {
                 id: id.clone(),
                 name: name.to_string(),
                 efforts,
+                version: None,
+                available: None,
             })
         })
         .collect()
@@ -398,11 +556,36 @@ fn decorate_grok(ids: &[String], cache: Option<&str>) -> Vec<AgentModel> {
 #[derive(Default)]
 pub struct ModelCache {
     entries: Mutex<HashMap<CacheKey, (Instant, Listing)>>,
+    /// Claude Code listings a test put in place of reading its files; see [`Self::seed`].
+    #[cfg(test)]
+    seeded: Mutex<HashMap<CacheKey, Listing>>,
 }
 
 type CacheKey = (Agent, Option<PathBuf>);
 
 impl ModelCache {
+    /// Makes the Claude Code listing of `config_dir` this one, for a test that must not read the
+    /// machine's own files. Claude Code's listing is never cached, so this is not `get_or_load`.
+    #[cfg(test)]
+    pub fn seed(&self, config_dir: Option<&Path>, listing: Listing) {
+        let key = (Agent::Claude, config_dir.map(Path::to_path_buf));
+        self.seeded
+            .lock()
+            .expect("model cache lock poisoned")
+            .insert(key, listing);
+    }
+
+    /// The listing [`Self::seed`] put in place for `config_dir`, if any.
+    #[cfg(test)]
+    pub fn seeded(&self, config_dir: Option<&Path>) -> Option<Listing> {
+        let key = (Agent::Claude, config_dir.map(Path::to_path_buf));
+        self.seeded
+            .lock()
+            .expect("model cache lock poisoned")
+            .get(&key)
+            .cloned()
+    }
+
     /// The cached listing for the key if it is still fresh, else `load()`'s, which is then kept.
     /// `load` runs outside the lock, so two requests arriving together both run it and the later
     /// answer wins; harmless, and it spares every other key from waiting on a slow command.
@@ -450,8 +633,70 @@ impl ModelCache {
     }
 }
 
+/// A scratch Claude Code home and catalogue for tests that must not read the machine's own.
+#[cfg(test)]
+pub(crate) mod claude_fixtures {
+    use super::*;
+    use crate::test_support::ScratchDir;
+
+    /// A Claude Code catalogue with the four aliases targeting rows that are usable (Opus),
+    /// `disabled` with a notice (Fable), `deprecated` (Sonnet), and missing (Haiku).
+    pub const CLAUDE_CATALOGUE: &str = r#"{"version":2,"fetchedAt":1,"staleAt":2,"catalog":{
+        "surface":"cc","config":{
+        "models":[
+            {"id":"claude-opus-5-5","name":"Opus 5.5","section":"main",
+             "runtime":{"effort_levels":["low","high"]}},
+            {"id":"claude-fable-5-1","name":"Fable 5.1","section":"main","disabled":true,
+             "notice":{"text":"Fable needs Max"}},
+            {"id":"claude-sonnet-5-5","name":"Sonnet 5.5","section":"deprecated"}],
+        "provider_alias_targets":{
+            "fable":{"default":"claude-fable-5-1"},"opus":{"default":"claude-opus-5-5"},
+            "sonnet":{"default":"claude-sonnet-5-5"},"haiku":{"default":"claude-haiku-5-5"}}}}}"#;
+
+    /// Claude Code's global config file `config` for one account and, when `catalogue` is given,
+    /// its cached catalogue where Claude Code keeps it under the configuration directory `dir`.
+    pub fn write_claude_account(
+        config: &Path,
+        dir: &Path,
+        access_cache: &str,
+        catalogue: Option<&str>,
+    ) {
+        std::fs::write(
+            config,
+            format!(
+                r#"{{"oauthAccount":{{"organizationUuid":"ORG-1","accountUuid":"Acct-1"}},
+                    "modelAccessCache":{access_cache}}}"#
+            ),
+        )
+        .unwrap();
+        if let Some(catalogue) = catalogue {
+            let file = claude_catalogue_file(dir, "org-1", "acct-1");
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, catalogue).unwrap();
+        }
+    }
+
+    /// A home with the account of [`write_claude_account`] in it. Returns the shell environment
+    /// pointing at it.
+    pub fn claude_home(
+        dir: &ScratchDir,
+        access_cache: &str,
+        catalogue: Option<&str>,
+    ) -> HashMap<String, String> {
+        let home: &Path = dir;
+        write_claude_account(
+            &home.join(".claude.json"),
+            &home.join(".claude"),
+            access_cache,
+            catalogue,
+        );
+        HashMap::from([("HOME".to_string(), home.to_string_lossy().into_owned())])
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::claude_fixtures::{claude_home, CLAUDE_CATALOGUE};
     use super::*;
     use crate::test_support::{fake_agent, ScratchDir};
 
@@ -468,16 +713,103 @@ mod tests {
     }
 
     #[test]
-    fn claude_offers_its_four_aliases_with_every_effort_and_runs_nothing() {
-        let listing = claude_listing();
-        assert_eq!(ids(&listing.models), ["best", "opus", "sonnet", "haiku"]);
+    fn the_catalogue_file_is_named_by_the_organization_and_a_hash_of_the_account() {
+        // The digest of `acct-1`, first twelve hex digits.
+        assert_eq!(
+            claude_catalogue_file(Path::new("/c"), "org-1", "acct-1"),
+            Path::new("/c/cache/model-catalog/org-1-ba36a4edd92d-cc.json")
+        );
+    }
+
+    #[test]
+    fn claude_lists_its_aliases_best_first_with_what_the_catalogue_says() {
+        let dir = ScratchDir::new("agent-models-claude-catalogue");
+        let env = claude_home(&dir, "[]", Some(CLAUDE_CATALOGUE));
+        let listing = claude_listing(&env, None);
+        assert_eq!(ids(&listing.models), ["fable", "opus", "sonnet", "haiku"]);
         assert!(listing.unavailable.is_none());
-        for model in &listing.models {
-            assert_eq!(model.efforts, CLAUDE_EFFORTS.map(String::from));
+        let facts: Vec<_> = listing
+            .models
+            .iter()
+            .map(|model| (model.version.as_deref(), model.available))
+            .collect();
+        assert_eq!(
+            facts,
+            [
+                (Some("Fable 5.1"), Some(false)),
+                (Some("Opus 5.5"), Some(true)),
+                (Some("Sonnet 5.5"), Some(false)),
+                (None, None),
+            ]
+        );
+        // The row's own levels where it gives them, else the measured set.
+        assert_eq!(listing.models[1].efforts, ["low", "high"].map(String::from));
+        assert_eq!(listing.models[3].efforts, CLAUDE_EFFORTS.map(String::from));
+        // The first usable model is the one a session without a setting gets.
+        assert_eq!(listing.default_model(), Some("opus"));
+    }
+
+    #[test]
+    fn an_account_the_config_file_says_is_not_entitled_is_unavailable() {
+        let dir = ScratchDir::new("agent-models-claude-denied");
+        let env = claude_home(
+            &dir,
+            r#"[{"apiName":"claude-opus-5-5","entitled":false},
+                {"apiName":"claude-fable-5-1","entitled":true}]"#,
+            Some(&CLAUDE_CATALOGUE.replace(r#","disabled":true"#, "")),
+        );
+        let listing = claude_listing(&env, None);
+        let available: Vec<_> = listing.models.iter().map(|m| m.available).collect();
+        assert_eq!(available, [Some(true), Some(false), Some(false), None]);
+        assert_eq!(listing.default_model(), Some("fable"));
+    }
+
+    #[test]
+    fn a_missing_or_unreadable_catalogue_leaves_the_aliases_listed_and_unknown() {
+        let dir = ScratchDir::new("agent-models-claude-missing");
+        let broken = claude_home(&dir, "[]", Some("not json"));
+        let missing = HashMap::from([(
+            "HOME".to_string(),
+            dir.join("nowhere").to_string_lossy().into_owned(),
+        )]);
+        for env in [broken, missing] {
+            let listing = claude_listing(&env, None);
+            assert_eq!(ids(&listing.models), ["fable", "opus", "sonnet", "haiku"]);
+            for model in &listing.models {
+                assert_eq!((model.version.as_deref(), model.available), (None, None));
+                assert_eq!(model.efforts, CLAUDE_EFFORTS.map(String::from));
+            }
+            // Nothing is known usable, so Claude Code is left to choose.
+            assert_eq!(listing.default_model(), None);
         }
+    }
+
+    #[test]
+    fn a_pinned_account_reads_the_catalogue_in_its_own_directory() {
+        let dir = ScratchDir::new("agent-models-claude-pinned");
+        let pinned = dir.join("pinned");
+        let file = claude_catalogue_file(&pinned, "org-1", "acct-1");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, CLAUDE_CATALOGUE).unwrap();
+        std::fs::write(
+            pinned.join(".claude.json"),
+            r#"{"oauthAccount":{"organizationUuid":"Org-1","accountUuid":"ACCT-1"}}"#,
+        )
+        .unwrap();
+        let listing = claude_listing(&HashMap::new(), Some(&pinned));
+        assert_eq!(listing.models[1].version.as_deref(), Some("Opus 5.5"));
+    }
+
+    #[test]
+    fn the_retired_best_alias_is_recognised_but_never_offered() {
+        let dir = ScratchDir::new("agent-models-retired-best");
+        let env = HashMap::from([("HOME".to_string(), dir.to_string_lossy().into_owned())]);
+        assert!(legacy_claude_model("best"));
+        assert!(!legacy_claude_model("opus"));
+        let listing = claude_listing(&env, None);
+        assert!(!ids(&listing.models).contains(&"best"));
         // No binary on PATH and still an answer, because nothing is run.
-        let empty = HashMap::new();
-        assert_eq!(list(Agent::Claude, &empty, None, COMMAND_TIMEOUT), listing);
+        assert_eq!(list(Agent::Claude, &env, None, COMMAND_TIMEOUT), listing);
     }
 
     #[test]
@@ -741,6 +1073,8 @@ mod tests {
             id: id.to_string(),
             name: id.to_string(),
             efforts: Vec::new(),
+            version: None,
+            available: None,
         }])
     }
 

@@ -33,6 +33,9 @@ alacritty_terminal = { version = "0.26", default-features = false }
 # Encodes a binary file body for the JSON control socket; the version the lockfile already
 # resolves for other dependencies.
 base64 = "0.22"
+# Derives the file name Claude Code caches an account's model catalogue under; the version the
+# lockfile already resolves for other dependencies.
+sha2 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }

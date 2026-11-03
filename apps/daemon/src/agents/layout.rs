@@ -180,6 +180,10 @@ pub(crate) const GROK_CONFIG_FILE: &str = "config.toml";
 /// Grok Build's cached model catalogue.
 pub(crate) const GROK_MODELS_CACHE: &str = "models_cache.json";
 
+/// Where Claude Code caches the model catalogue of each account that has used this configuration
+/// directory, inside it: one `<organization>-<account hash>-cc.json` file per account.
+pub(crate) const CLAUDE_MODEL_CATALOGUE_DIR: &str = "cache/model-catalog";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,6 +256,7 @@ mod tests {
         assert_eq!(GROK_SIGN_IN_FILE, "auth.json");
         assert_eq!(GROK_CONFIG_FILE, "config.toml");
         assert_eq!(GROK_MODELS_CACHE, "models_cache.json");
+        assert_eq!(CLAUDE_MODEL_CATALOGUE_DIR, "cache/model-catalog");
     }
 
     /// `crate::records`' `index_records_at` takes a record as the last level of its walk

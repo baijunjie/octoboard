@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { effortLevels, launchSettingOptions } from "./agentLaunchSettings";
+import { effortLevels, launchSettingOptions, shownModel } from "./agentLaunchSettings";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import type { AgentModel } from "../protocol";
@@ -71,5 +71,14 @@ describe("effortLevels", () => {
 
   it("offers nothing without a list", () => {
     expect(effortLevels([], "a")).toEqual({ levels: [], none: false });
+  });
+});
+
+describe("shownModel", () => {
+  it("shows the retired Claude alias best as unset and everything else as stored", () => {
+    expect(shownModel("claude", "best")).toBeNull();
+    expect(shownModel("claude", "opus")).toBe("opus");
+    expect(shownModel("claude", null)).toBeNull();
+    expect(shownModel("codex", "best")).toBe("best");
   });
 });

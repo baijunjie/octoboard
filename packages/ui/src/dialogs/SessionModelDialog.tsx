@@ -2,6 +2,7 @@ import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { ActionableError } from "../errors/actionableError";
+import { shownModel } from "../agents/agentLaunchSettings";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { InlineReference } from "../i18n/InlineReference";
@@ -76,7 +77,10 @@ export function SessionModelDialog({
   );
   if (!parentConsole && !failure) return null;
   const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent) : { model: null, effort: null };
-  return <SessionModelForm session={session} start={launchWithOverrides(inherited, { model: session.model, effort: session.effort })} failure={failure} onClose={onClose} onChangeModel={onChangeModel} />;
+  const own = launchWithOverrides(inherited, { model: session.model, effort: session.effort });
+  // A stored retired `best` is no model, so clearing the picker back to unset over it is no edit.
+  const start = { ...own, model: shownModel(session.agent, own.model) };
+  return <SessionModelForm session={session} start={start} failure={failure} onClose={onClose} onChangeModel={onChangeModel} />;
 }
 
 function SessionModelForm({

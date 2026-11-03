@@ -24,13 +24,20 @@ export const MODELS: AgentModel[] = [
   { id: "plain", name: "Plain", efforts: [] },
 ];
 
-/** The reply to a `list_agent_models` request: `models` as listed, or why there are none. */
-export const listing = (body: ClientRequestBody, models: AgentModel[], unavailable: ModelsUnavailable | null = null): Event => ({
+/** The reply to a `list_agent_models` request: `models` as listed, or why there are none, and the
+ * model a session gets when no setting names one. */
+export const listing = (
+  body: ClientRequestBody,
+  models: AgentModel[],
+  unavailable: ModelsUnavailable | null = null,
+  defaultModel?: string,
+): Event => ({
   type: "agent_models",
   id: null,
   agent: (body as { agent: "claude" }).agent,
   account: (body as { account?: string }).account ?? null,
   models,
+  ...(defaultModel && { default_model: defaultModel }),
   unavailable,
 });
 

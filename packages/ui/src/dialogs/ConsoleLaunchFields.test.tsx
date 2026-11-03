@@ -8,9 +8,9 @@ import type { AgentModels } from "./useAgentModels";
 import { openAdvanced, pickerNamed, render } from "./consoleDialogTestSupport";
 
 // The list of models, set by each test, as the daemon's answers would leave it.
-const FAILED: AgentModels = { status: "ready", models: [], unavailable: { code: "models_timed_out", params: { agent: "Claude Code" }, message: "x" } };
-const LISTED: AgentModels = { status: "ready", models: [{ id: "alpha", name: "Alpha", efforts: [] }], unavailable: null };
-const LOADING: AgentModels = { status: "loading", models: [], unavailable: null };
+const FAILED: AgentModels = { status: "ready", models: [], unavailable: { code: "models_timed_out", params: { agent: "Claude Code" }, message: "x" }, defaultModel: null, defaultModelSource: null };
+const LISTED: AgentModels = { status: "ready", models: [{ id: "alpha", name: "Alpha", efforts: [] }], unavailable: null, defaultModel: null, defaultModelSource: null };
+const LOADING: AgentModels = { status: "loading", models: [], unavailable: null, defaultModel: null, defaultModelSource: null };
 let models = FAILED;
 const listeners = new Set<() => void>();
 const setModels = (next: AgentModels) => act(() => {

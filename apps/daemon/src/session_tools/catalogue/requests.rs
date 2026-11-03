@@ -104,7 +104,8 @@ pub(super) fn request_session_schema() -> Value {
          `effective.accounts`. Pass one only when the user asked for it."
     );
     schema["properties"]["model"]["description"] = json!(
-        "Overrides the model for this one session; blank is the agent's own default. \
+        "Overrides the model for this one session; blank is the default model \
+         (`list_agent_models` names it). \
          `list_agent_models` lists the ones the agent offers. Left out, a project session takes \
          its project's, else the console's project session model (a project session reads its \
          own project's in `get_project`'s `effective.launch`)."
@@ -157,8 +158,9 @@ fn request_resume_session_schema() -> Value {
             "model": {
                 "type": "string",
                 "description": "Only when no session holds the conversation, which opens a new \
-                                session: overrides its model; blank is the agent's own default \
-                                (`list_agent_models` lists the ones the agent offers). A \
+                                session: overrides its model; blank is the default model \
+                                (`list_agent_models` names it and lists the ones the agent \
+                                offers). A \
                                 session that holds the conversation keeps its own, and the \
                                 call is refused if this is given.",
             },

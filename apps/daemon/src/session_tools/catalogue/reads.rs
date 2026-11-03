@@ -301,17 +301,26 @@ pub(super) const LIST_ARCHIVED_SESSIONS: ToolDef = ToolDef {
 /// be among. Offered to every role, since every role can pass them.
 pub(super) const LIST_AGENT_MODELS: ToolDef = ToolDef {
     name: "list_agent_models",
-    description: "The models an agent offers right now, read-only, each with its `id` (what \
-                  a `model` takes), `name` and `efforts` (the reasoning-effort levels an `effort` \
-                  takes for that model, in the agent's own spelling). Use it before passing a \
-                  `model` or `effort`, or a `launch` that holds them, to any tool you have that \
-                  takes one; an `effort` can still be refused or lowered by the agent \
+    description: "The models an agent offers right now, read-only, each with its `id` (what a \
+                  `model` takes), `name`, `efforts` (the reasoning-effort levels an `effort` \
+                  takes for that model, in the agent's own spelling), and where the agent says \
+                  so `version` (the model an alias resolves to, such as `Opus 5.5`) and \
+                  `available` (`false`: the agent refuses it for this account at launch; absent: \
+                  not known). `default_model` is the model a session of the account gets when no \
+                  setting names one, and `default_model_source` says where it came from: \
+                  `configured` (Claude Code's own configuration names it, and it is left to \
+                  Claude Code) or `best_available` (the first listed model that is \
+                  `available`). A left-out or blank `model` gets `default_model`, not Claude \
+                  Code's built-in default; a project's own Claude Code settings still win at \
+                  launch. Both are `null` when the agent's own default applies. Use it before \
+                  passing a `model` or `effort`, or a `launch` that holds them, to any tool you \
+                  have that takes one; an `effort` can still be refused or lowered by the agent \
                   for a model that does not advertise it. A catalogue belongs to an account, so \
-                  name `account` to read another account's. The answer is kept for ten minutes, \
-                  as it is for the application's own model pickers, because reading it can run \
-                  the agent. When the agent cannot be asked, `models` is empty and `unavailable` \
-                  (`code` and `message`) says why: leave `model` out then, which is the agent's \
-                  own default.",
+                  name `account` to read another account's. The answer of Codex and Grok Build \
+                  is kept for ten minutes, as it is for the application's own model pickers, \
+                  because reading it can run the agent. When the agent cannot be asked, \
+                  `models` is empty and `unavailable` (`code` and `message`) says why: leave \
+                  `model` out then, which takes the default.",
     schema: || {
         object_schema(
             json!({
@@ -465,7 +474,8 @@ pub(super) const GET_PROJECT: ToolDef = ToolDef {
          of each agent start with) as set on the project, where `null` or `inherit` means \
          unset, and `effective`, those three resolved against the console's settings: the \
          project's default agent, the account id (or `default`) and the model and effort \
-         (`null` is the agent's own default) a session of each agent gets when nothing names \
+         (`null` is unset: the default model, which `list_agent_models` names, and the \
+         agent's own default effort) a session of each agent gets when nothing names \
          otherwise, before session-specific selection, and `git_workflow` (the project's own \
          `override` of the git workflow settings, `null` following the application-wide value, \
          and the `effective` resolved values; `squash_before_delivery`, `rebase_before_delivery` \
