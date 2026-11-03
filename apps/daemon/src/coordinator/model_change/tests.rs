@@ -3,11 +3,12 @@ use crate::coordinator::handle;
 use crate::coordinator::launch::stop_process;
 use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::lifecycle::archive_record;
-use crate::coordinator::test_support::{code_of, shell_env, status_of};
+use crate::coordinator::test_support::{shell_env, status_of};
 use crate::protocol::{
     error_code, Agent, Event, ModelChangeOutcome, RequestBody, Session, SessionStatus,
 };
 use crate::session::term;
+use crate::test_support::code_of;
 use crate::test_support::{
     console_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
     project_session,

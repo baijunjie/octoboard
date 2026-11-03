@@ -120,7 +120,7 @@ mod tests {
     use crate::protocol::{Agent, OrchestrationRole};
     use crate::session::term::{Launch, LaunchRequest};
     use crate::test_support::{
-        output_containing, running, stand_in_launch, within, ScratchDir, PATIENCE,
+        code_of, output_containing, running, stand_in_launch, within, ScratchDir, PATIENCE,
     };
 
     /// A Claude Code transcript whose last turn a restart cut off on a tool call.
@@ -394,12 +394,6 @@ mod tests {
         assert!(launches.lock().unwrap().is_empty(), "nothing was launched");
     }
 
-    fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
-        err.downcast_ref::<crate::protocol::CodedError>()
-            .unwrap_or_else(|| panic!("a coded error: {err:#}"))
-            .code
-    }
-
     /// The status of the last `session_upserted` for `id` among the events waiting in `events`.
     fn last_published_status(
         events: &mut tokio::sync::broadcast::Receiver<crate::protocol::Event>,
@@ -540,8 +534,7 @@ mod tests {
         let snapshot = prepare(&state, &dir, "mine");
         // No exit watcher: nothing records the process down.
         let _original = running(&state, "mine");
-        *state.model_change_stop_timeout.lock().unwrap() =
-            Some(std::time::Duration::from_millis(200));
+        *state.restart_stop_timeout.lock().unwrap() = Some(std::time::Duration::from_millis(200));
 
         let err = user_asks(&state, snapshot, |_| panic!("nothing is relaunched"))
             .await
@@ -874,8 +867,7 @@ mod tests {
         let caller = running(&state, "starter");
         // No exit watcher: nothing records the process down, so the change fails to stop it.
         let _original = running(&state, "mine");
-        *state.model_change_stop_timeout.lock().unwrap() =
-            Some(std::time::Duration::from_millis(200));
+        *state.restart_stop_timeout.lock().unwrap() = Some(std::time::Duration::from_millis(200));
         let released = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let held = released.clone();
         let snapshot = move || {

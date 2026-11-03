@@ -19,9 +19,9 @@ use crate::records;
 use crate::session::term;
 use crate::state::AppState;
 
-use super::account_choice::{account_dir, agent_can_open};
 use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit};
 use super::lifecycle::trash_agent_records_with;
+use crate::accounts::choice::{account_dir, agent_can_open};
 
 /// The conversation id `requested` to resume, trimmed, or `None` for none (blank counting as
 /// none), refused before anything is launched or written. A console session takes none, and a
@@ -259,7 +259,7 @@ fn find_conversation_to_resume(
 /// stored no conversation, and resuming by id fails with "No conversation found" — so a launch
 /// without an id opens a fresh conversation instead, in the same project and under the same
 /// session. A switch relocates exactly the conversation a resume would ask for.
-pub(super) fn resumable_agent_session_id(session: &Session) -> Option<String> {
+pub(crate) fn resumable_agent_session_id(session: &Session) -> Option<String> {
     if session.has_conversation {
         session.agent_session_id.clone()
     } else {
@@ -329,39 +329,15 @@ pub(super) async fn resume_session_with(
     .await
 }
 
-/// [`resume_session`] that also changes the model and reasoning effort the session is reopened
-/// with, as an owner reopening it over MCP asks. They are checked against what the session's agent
-/// offers under its own account before anything is launched, recorded as the session's own just
-/// before its relaunch, and put back when the relaunch fails. Any archived owner reopened with it
-/// keeps its settings.
+/// [`resume_session_with`] with the model and reasoning effort the session is reopened with, as an
+/// owner reopening it over MCP asks, and the process start `launch`, called once for each session
+/// reopened. They are checked against what the session's agent offers under its own account before
+/// anything is launched, recorded as the session's own just before its relaunch, and put back when
+/// the relaunch fails. Any archived owner reopened with it keeps its settings.
 ///
-/// The login-shell snapshot and the process start `launch` are supplied by the caller:
-/// `env_shell::launch_snapshot` and `term::launch` outside the tests, which cannot start an
-/// agent.
-pub(crate) async fn resume_session_edited_with(
-    state: &Arc<AppState>,
-    id: &str,
-    instruction: Option<&str>,
-    terminal_appearance: Option<TerminalAppearance>,
-    launch_edit: LaunchEdit,
-    shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
-    launch: impl Fn(term::LaunchRequest) -> Result<term::Launch> + Clone + Send + 'static,
-) -> Result<()> {
-    resume_session_with_launch(
-        state,
-        id,
-        instruction,
-        terminal_appearance,
-        launch_edit,
-        shell_snapshot,
-        launch,
-    )
-    .await
-}
-
-/// [`resume_session_with`] with the model and effort to reopen the session with, and the process
-/// start `launch`, called once for each session reopened.
-async fn resume_session_with_launch(
+/// The login-shell snapshot and `launch` are supplied by the caller: `env_shell::launch_snapshot`
+/// and `term::launch` outside the tests, which cannot start an agent.
+pub(crate) async fn resume_session_with_launch(
     state: &Arc<AppState>,
     id: &str,
     instruction: Option<&str>,

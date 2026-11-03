@@ -227,7 +227,7 @@ fn delivery_of(drain: Drain, ticket: Ticket) -> Result<Delivery> {
         Drain::Diverted(_) => Ok(Delivery::Written),
         Drain::Uncertain(uncertain) if uncertain < ticket => Ok(Delivery::Queued),
         Drain::Uncertain(uncertain) if uncertain > ticket => Ok(Delivery::Written),
-        Drain::Uncertain(_) => Err(crate::adapter::codex::transport::UncertainSubmission(
+        Drain::Uncertain(_) => Err(term::UncertainSubmission(
             "the native message queue did not confirm acceptance; the message may already be \
              queued and will not be sent again, so check the conversation before retrying"
                 .into(),
@@ -359,35 +359,68 @@ pub(crate) fn write_to_owner(
     text: &str,
     kept: impl Fn(&str) -> String,
 ) -> Result<Delivery> {
+    let kept_text = || {
+        let line = format!(
+            "Kept for you while you were interrupted; it dates from {}. What it says of the \
+             session may no longer hold, so check the session with `{}` before acting on it.",
+            time::readable_utc_minute(now_millis()),
+            catalogue::qualified_tool_name(owner.agent, "get_session"),
+        );
+        kept(&line)
+    };
+    write_or_keep(
+        state,
+        &owner.id,
+        text,
+        "this session is archived, so it takes nothing until it is reopened",
+        kept_text,
+        Some(about),
+    )
+}
+
+/// Writes `text` into the session `id`, queued while it cannot take a message: an archived session
+/// is refused with `archived` as the reason, and an interrupted one has `kept_text()` kept for it
+/// instead, to be written into it once it is resumed ([`Delivery::Kept`]).
+///
+/// `about` is the session an owner is told about, for the write into an owner: such a write waits
+/// out a claim on the owner (see [`write_to_owner`]), and what it keeps drops the notices that
+/// `about` waits for the user which were kept before it. A write with none does neither.
+///
+/// **Blocks** like [`write_message`], and on the claim when `about` is given.
+pub(crate) fn write_or_keep(
+    state: &Arc<AppState>,
+    id: &str,
+    text: &str,
+    archived: &str,
+    kept_text: impl Fn() -> String,
+    about: Option<&Session>,
+) -> Result<Delivery> {
     let mut waited = false;
     loop {
-        // Read again each time round: the owner may have been archived, or resumed, since.
-        let status = state.session_record(&owner.id)?.status;
+        // Read again each time round: the session may have been archived, or resumed, since.
+        let status = state.session_record(id)?.status;
         if status == SessionStatus::Archived {
             return Err(CodedError::raised(
                 error_code::SESSION_ARCHIVED,
-                "this session is archived, so it takes nothing until it is reopened",
-                &[("session", owner.id.as_str())],
+                archived,
+                &[("session", id)],
             ));
         }
         if status == SessionStatus::Interrupted {
-            let line = format!(
-                "Kept for you while you were interrupted; it dates from {}. What it says of the \
-                 session may no longer hold, so check the session with `{}` before acting on it.",
-                time::readable_utc_minute(now_millis()),
-                catalogue::qualified_tool_name(owner.agent, "get_session"),
-            );
-            if let Some(row) = state.keep_message_if_not_running(&owner.id, &kept(&line))? {
-                drop_kept_waits(state, &owner.id, about, row);
+            if let Some(row) = state.keep_message_if_not_running(id, &kept_text())? {
+                if let Some(about) = about {
+                    drop_kept_waits(state, id, about, row);
+                }
                 return Ok(Delivery::Kept);
             }
         }
-        if !waited && state.live_session(&owner.id).is_none() && state.is_launching(&owner.id) {
-            wait_out_claim(state, &owner.id);
+        if about.is_some() && !waited && state.live_session(id).is_none() && state.is_launching(id)
+        {
+            wait_out_claim(state, id);
             waited = true;
             continue;
         }
-        return write_message(state, &owner.id, text, WhenBlocked::Queue);
+        return write_message(state, id, text, WhenBlocked::Queue);
     }
 }
 

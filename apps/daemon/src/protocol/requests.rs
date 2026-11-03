@@ -460,7 +460,7 @@ pub enum RequestBody {
     /// of the same agent is `switch_session_account`). `account`, `model` and `effort` are as in
     /// `open_session`. The session must exist, not be archived, locked or starting, and not be in
     /// the middle of a turn. Answered with `session_opened` for the receiving session once it is
-    /// running and the place has moved. See `crate::handoff::operation`.
+    /// running and the place has moved. See `crate::coordinator::handoff`.
     HandOffSession {
         session: String,
         agent: Agent,

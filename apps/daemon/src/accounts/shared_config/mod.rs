@@ -52,10 +52,6 @@ pub struct Sharing {
     /// What resumes the sessions a change ended, in place of starting their agents.
     #[cfg(test)]
     pub(crate) relaunch: std::sync::Mutex<Option<Launcher>>,
-    /// How long a change waits for a session it ended to be recorded down, in place of the
-    /// switch's generous wait.
-    #[cfg(test)]
-    pub(crate) stop_timeout: std::sync::Mutex<Option<std::time::Duration>>,
 }
 
 /// A stand-in for `term::launch`.

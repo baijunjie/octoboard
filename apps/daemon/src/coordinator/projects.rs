@@ -20,16 +20,17 @@ use crate::protocol::{
     Project, ProjectAccount, ProjectSource, Session, SessionBranchTarget,
 };
 use crate::removal_safety::project;
+use crate::state::refusals::ensure_unlocked;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 
-use super::account_choice::{agent_is_available, checked_project_account};
 use super::bindings::binding_depth;
-use super::lifecycle::{archive_session, ensure_unlocked, report_not_removed, session_ids_where};
+use super::lifecycle::{archive_session, report_not_removed, session_ids_where};
 use super::validate::{
     absolute_path, check_text_length, field_required, normalise_tags, required_text,
     PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT,
 };
+use crate::accounts::choice::{agent_is_available, checked_project_account};
 
 /// One association request. A struct rather than a parameter list because the callers differ in
 /// more than one field — the user's control-socket request, the console session's tool call, and a
@@ -145,13 +146,20 @@ pub async fn add_project(
     let directories: Vec<PathBuf> = match source {
         ProjectSource::Local => {
             let path = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
-            hostfs::require_directory(&path)?;
+            let path = tokio::task::spawn_blocking(move || {
+                hostfs::require_directory(&path)?;
+                Ok::<_, anyhow::Error>(path)
+            })
+            .await??;
             check_new_project_launch(state, &console, &settings, &accounts, check_launch).await?;
             vec![path]
         }
         ProjectSource::Parent => {
             let parent = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
-            let repos = hostfs::listing::discover_repos(&parent)?;
+            let listed = parent.clone();
+            let repos =
+                tokio::task::spawn_blocking(move || hostfs::listing::discover_repos(&listed))
+                    .await??;
             if repos.is_empty() {
                 return Err(CodedError::raised(
                     error_code::NO_REPOSITORIES_FOUND,
@@ -195,19 +203,43 @@ pub async fn add_project(
         None
     };
 
-    let mut associated = associated_directories(state, &console_id).await?;
+    // What can stall — each directory's identity, its remote URL, its agent — is read before the
+    // claim below, for the directories not associated yet by a first look; the claim itself only
+    // covers one more bounded look and the inserts. A directory another request associates in
+    // between simply leaves what was read for it unused.
+    let directories = tokio::task::spawn_blocking(move || {
+        directories
+            .into_iter()
+            .map(hostfs::identity::Resolved::of)
+            .collect::<Vec<_>>()
+    })
+    .await?;
+    let first_look = associated_directories(state, &console_id).await?;
     let reading = state.clone();
-    let remote_urls = directory_remote_urls(&associated, source, &directories, move |path| {
+    let remote_urls = directory_remote_urls(&first_look, source, &directories, move |path| {
         project_git::remote::read_remote_url(&reading, path)
     })
     .await?;
+    let detected_agents = if default_agent.is_none() && detect_default_agent {
+        directory_agents(state, &first_look, &directories).await
+    } else {
+        HashMap::new()
+    };
+    drop(first_look);
+
+    // Held from the confirming read of what is associated through the inserts, so that a second
+    // request for the console waits and then finds this one's projects, instead of both passing
+    // the check below.
+    let _association = state.claim_project_association(&console_id).await;
+    let mut associated = associated_directories(state, &console_id).await?;
 
     let mut added = Vec::new();
-    for directory in directories {
-        let path_text = directory.to_string_lossy().into_owned();
-        if associated.contains(&directory) {
+    for resolved in directories {
+        if associated.contains_resolved(&resolved) {
             continue;
         }
+        let directory = resolved.path.clone();
+        let path_text = directory.to_string_lossy().into_owned();
         // A clone keeps the URL it was given; the other sources take the one read above.
         let project_remote_url = match source {
             ProjectSource::Git => remote_url.clone(),
@@ -225,11 +257,8 @@ pub async fn add_project(
             host_id: LOCAL_HOST_ID.to_string(),
             name: project_name,
             path: path_text,
-            default_agent: default_agent.or_else(|| {
-                detect_default_agent
-                    .then(|| detect_project_agent(state, &directory))
-                    .flatten()
-            }),
+            default_agent: default_agent
+                .or_else(|| detected_agents.get(&directory).copied().flatten()),
             source,
             remote_url: project_remote_url,
             accounts: accounts.clone(),
@@ -240,8 +269,10 @@ pub async fn add_project(
             description: description.clone(),
             git_workflow: settings.git_workflow,
         };
-        state.store.insert_project(&project)?;
-        associated.insert(&directory);
+        if !insert_unless_associated(state, &project)? {
+            continue;
+        }
+        associated.insert_resolved(&resolved);
         project_git::watch::add(state, &project);
         state.broadcast(Event::ProjectUpserted {
             project: project.clone(),
@@ -476,7 +507,10 @@ pub(super) async fn delete_project(
     // in place for a retry. Without `trash_directory` only the association goes away: the
     // directory is the user's. The repository is found first, as it cannot be once the
     // directory is gone.
-    let repository = crate::git::repo_files::repository_of(Path::new(&deleted.path));
+    let repository = {
+        let path = PathBuf::from(&deleted.path);
+        tokio::task::spawn_blocking(move || crate::git::repo_files::repository_of(&path)).await?
+    };
     if let Some(directory) = to_trash {
         // Off the runtime's worker: a move across volumes copies.
         let trash = state.host_tools.get().trash;
@@ -651,7 +685,7 @@ async fn identities_within(
 async fn directory_remote_urls(
     associated: &hostfs::identity::DirectoryIdentities,
     source: ProjectSource,
-    directories: &[PathBuf],
+    directories: &[hostfs::identity::Resolved],
     read: impl Fn(&Path) -> Option<String> + Send + Sync + 'static,
 ) -> Result<HashMap<PathBuf, String>> {
     if source == ProjectSource::Git {
@@ -659,8 +693,8 @@ async fn directory_remote_urls(
     }
     let unassociated: Vec<PathBuf> = directories
         .iter()
-        .filter(|directory| !associated.contains(directory))
-        .cloned()
+        .filter(|directory| !associated.contains_resolved(directory))
+        .map(|directory| directory.path.clone())
         .collect();
     let urls = each_blocking(unassociated, move |directory| {
         let url = read(&directory);
@@ -671,6 +705,51 @@ async fn directory_remote_urls(
         .into_iter()
         .filter_map(|(directory, url)| Some((directory, url?)))
         .collect())
+}
+
+/// The agent `detect_project_agent` finds for each of `directories` that is not already
+/// associated, read like `directory_remote_urls`' reads: a few at a time on blocking threads. A
+/// directory whose read did not come back is absent, which stores the project with no default
+/// agent.
+async fn directory_agents(
+    state: &Arc<AppState>,
+    associated: &hostfs::identity::DirectoryIdentities,
+    directories: &[hostfs::identity::Resolved],
+) -> HashMap<PathBuf, Option<Agent>> {
+    let unassociated: Vec<PathBuf> = directories
+        .iter()
+        .filter(|directory| !associated.contains_resolved(directory))
+        .map(|directory| directory.path.clone())
+        .collect();
+    let state = state.clone();
+    each_blocking(unassociated, move |directory| {
+        let agent = detect_project_agent(&state, &directory);
+        (directory, agent)
+    })
+    .await
+    .into_iter()
+    .collect()
+}
+
+/// Stores `project`, answering whether it was: `false` when the store's unique index on a
+/// console's project paths refuses it. The claim and the identity check keep that from happening
+/// for one directory twice; the index is the backstop for what they cannot tell apart, such as two
+/// non-UTF-8 names that collide once converted to text. Any other failure is the caller's.
+fn insert_unless_associated(state: &AppState, project: &Project) -> Result<bool> {
+    match state.store.insert_project(project) {
+        Ok(()) => Ok(true),
+        Err(err) => {
+            let err = anyhow::Error::from(err);
+            let already = err
+                .downcast_ref::<CodedError>()
+                .is_some_and(|coded| coded.code == error_code::ALL_PROJECTS_ALREADY_ADDED);
+            if already {
+                Ok(false)
+            } else {
+                Err(err)
+            }
+        }
+    }
 }
 
 /// The agent to store for a project associated with no default agent chosen: the one its

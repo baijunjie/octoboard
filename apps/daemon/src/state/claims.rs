@@ -26,6 +26,34 @@ impl Drop for InterruptClaim {
     }
 }
 
+/// A console's claim for associating projects, taken by [`AppState::claim_project_association`].
+/// Released on drop, which also removes the console's entry once no other claim for it is held
+/// or waiting.
+pub struct ProjectAssociationClaim {
+    state: Arc<AppState>,
+    console_id: String,
+    guard: Option<tokio::sync::OwnedMutexGuard<()>>,
+}
+
+impl Drop for ProjectAssociationClaim {
+    fn drop(&mut self) {
+        let mut associations = self
+            .state
+            .project_associations
+            .lock()
+            .expect("project association lock poisoned");
+        // Released under the map's lock, so a claim being taken for the console either finds the
+        // entry and waits on it, or finds none and makes a new one.
+        drop(self.guard.take());
+        let unshared = associations
+            .get(&self.console_id)
+            .is_some_and(|lock| Arc::strong_count(lock) == 1);
+        if unshared {
+            associations.remove(&self.console_id);
+        }
+    }
+}
+
 /// What a session's claim is held for (see [`AppState::claim_kind`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClaimKind {
@@ -260,6 +288,31 @@ impl AppState {
         })
     }
 
+    /// Claims the right to associate projects with the console, waiting for another holder to
+    /// finish: an association reads the console's associated directories and then inserts, and two
+    /// of them overlapping would both pass the check. Waiting rather than refusing, so the second
+    /// finds the first's projects and refuses or skips them by their own check. Released when the
+    /// guard drops, a panic included, which removes the console's entry unless another claim for
+    /// it is waiting.
+    pub async fn claim_project_association(
+        self: &Arc<Self>,
+        console_id: &str,
+    ) -> ProjectAssociationClaim {
+        let lock = self
+            .project_associations
+            .lock()
+            .expect("project association lock poisoned")
+            .entry(console_id.to_string())
+            .or_default()
+            .clone();
+        let guard = lock.lock_owned().await;
+        ProjectAssociationClaim {
+            state: self.clone(),
+            console_id: console_id.to_string(),
+            guard: Some(guard),
+        }
+    }
+
     /// Whether the session's claim is held (a launch, resume, switch, handoff, handover of branches or
     /// binding change is under way). Unlike [`Self::has_process`] this is false for a session whose process is up
     /// and whose claim is already released.
@@ -329,4 +382,28 @@ pub(crate) fn session_archived(id: &str) -> anyhow::Error {
         "an archived session cannot be locked, switched or handed off; reopen it first",
         &[("session", id)],
     )
+}
+
+#[cfg(test)]
+mod tests {
+    /// A console's entry in the association map goes with its last claim, and stays while another
+    /// claim for the console waits.
+    #[tokio::test]
+    async fn a_consoles_association_entry_is_removed_with_its_last_claim() {
+        let (state, _dir) = crate::test_support::app_state("claims-project-association-entry");
+        let entries = || state.project_associations.lock().unwrap().len();
+
+        drop(state.claim_project_association("console-1").await);
+        assert_eq!(entries(), 0);
+
+        let first = state.claim_project_association("console-1").await;
+        let waiting = {
+            let state = state.clone();
+            tokio::spawn(async move { drop(state.claim_project_association("console-1").await) })
+        };
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        drop(first);
+        waiting.await.unwrap();
+        assert_eq!(entries(), 0);
+    }
 }

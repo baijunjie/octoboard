@@ -70,7 +70,7 @@ pub fn should_continue(agent: Agent, record: &Path) -> bool {
 /// Whether the last turn of the conversation `record` (as for [`should_continue`]) stopped because
 /// the plan's usage limit was reached: the one case of [`should_continue`] that is not a turn cut
 /// off mid-way, which a running session's record shows all the time. What Octoboard's own account
-/// switch is triggered by (`crate::accounts::auto_switch`). `false` for a record that cannot be
+/// switch is triggered by (`crate::coordinator::auto_switch`). `false` for a record that cannot be
 /// read.
 pub fn stopped_on_usage_limit(agent: Agent, record: &Path) -> bool {
     verdict(agent, record, true)

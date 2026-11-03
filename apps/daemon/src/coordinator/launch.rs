@@ -11,7 +11,6 @@ use anyhow::Result;
 
 use crate::agents::launch_settings::{normalize_session_launch_setting, LaunchCheck};
 use crate::git_workflow::GitWorkflowSettings;
-use crate::mcp;
 use crate::messaging::delivery;
 use crate::messaging::owner_notices;
 use crate::protocol::{
@@ -225,6 +224,18 @@ pub(crate) fn project_launch_settings(
     }
 }
 
+/// The model and reasoning effort a session of `agent` launches with when it chose neither: a
+/// console session (`project` none) reads its console's console session pair, a project session
+/// its project's with its console's project session pair behind it (see
+/// [`project_launch_settings`]).
+fn inherited_launch(project: Option<&Project>, console: &Console, agent: Agent) -> Launch {
+    match project {
+        Some(project) => project_launch_settings(project, console, agent),
+        // A console session's own pair: each agent has its own model names.
+        None => console.launch.get(agent).clone(),
+    }
+}
+
 /// The model and reasoning effort `session` is launched with, for its own agent: a console session
 /// reads its console's console session pair, a project session its project's with its console's
 /// project session pair behind it (see [`project_launch_settings`]), unless that field has a
@@ -234,18 +245,8 @@ pub(crate) fn launch_settings(
     state: &Arc<AppState>,
     session: &Session,
 ) -> Result<(Option<String>, Option<String>)> {
-    let inherited = match &session.project_id {
-        Some(project_id) => {
-            let project = state.store.require_project(project_id)?;
-            let console = state.store.require_console(&session.console_id)?;
-            project_launch_settings(&project, &console, session.agent)
-        }
-        None => {
-            let console = state.store.require_console(&session.console_id)?;
-            // A console session's own pair: each agent has its own model names.
-            console.launch.get(session.agent).clone()
-        }
-    };
+    let (project, console) = session_scope(state, session)?;
+    let inherited = inherited_launch(project.as_ref(), &console, session.agent);
     Ok((
         session.model.clone().unwrap_or(inherited.model),
         session.effort.clone().unwrap_or(inherited.effort),
@@ -286,10 +287,7 @@ pub(super) async fn check_launch_settings(
     // or for a console session the console's console session one.
     let effective_model = match &model {
         Some(model) => model.clone(),
-        None => match project {
-            Some(project) => project_launch_settings(project, console, agent).model,
-            None => console.launch.get(agent).model.clone(),
-        },
+        None => inherited_launch(project, console, agent).model,
     };
     let given = |value: &Option<Option<String>>, had: Option<&Option<Option<String>>>| {
         value.clone().filter(|_| had != Some(value)).flatten()
@@ -395,7 +393,7 @@ pub(super) async fn start_process(
     // Refresh the instruction file on every console launch, resume and account switch. A missing
     // directory is left to the launch, whose refusal names it, rather than failing here on the write.
     if session.role == Role::Console && cwd.is_dir() {
-        mcp::console_instructions::refresh_console_session_instructions(
+        super::console_workdir::refresh_console_session_instructions(
             &state.store,
             &session.console_id,
         )?;

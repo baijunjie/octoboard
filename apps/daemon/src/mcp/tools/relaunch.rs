@@ -1,6 +1,7 @@
 //! What the tools that relaunch a session on its conversation (`switch_session_account`,
 //! `set_session_model`, `handoff_session`) tell the caller in the same words.
 
+use crate::coordinator::resume::resumable_agent_session_id;
 use crate::protocol::{Agent, Session};
 use crate::session_tools::catalogue::qualified_tool_name;
 
@@ -33,7 +34,7 @@ pub(super) fn relaunch_note(caller: Agent, cut_off_by: &str, continued: bool) ->
 /// What the caller is told of a relaunched `session` that had no conversation to continue, or
 /// nothing when it had one. `place` is where it starts fresh, with its leading space, or empty.
 pub(super) fn no_conversation_note(session: &Session, place: &str) -> String {
-    if session.has_conversation && session.agent_session_id.is_some() {
+    if resumable_agent_session_id(session).is_some() {
         String::new()
     } else {
         format!(" It had no conversation yet, so it starts fresh{place}.")

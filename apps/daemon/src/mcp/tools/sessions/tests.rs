@@ -7,7 +7,7 @@ use crate::mcp::test_support::{
     RepoState, Started,
 };
 use crate::protocol::{
-    Account, AccountQuota, Agent, AgentAvailability, Availability, Event, Project, ProjectAccount,
+    AccountQuota, Agent, AgentAvailability, Availability, Event, Project, ProjectAccount,
     ProjectSource, QuotaWindow, QuotaWindowKind, Role, Session, SessionStatus,
 };
 use crate::session_request;
@@ -773,7 +773,7 @@ fn a_console_session_starts_sessions_on_the_projects_default_agent() {
     };
     let project = state.store.get_project("project-1").unwrap().unwrap();
     let console = state.store.get_console("console-1").unwrap().unwrap();
-    let expected = coordinator::account_choice::session_agent(None, Some(&project), &console);
+    let expected = choice::session_agent(None, Some(&project), &console);
     assert_ne!(expected, Agent::Codex);
 
     // An omitted agent resolves later, from the project: the request names none.

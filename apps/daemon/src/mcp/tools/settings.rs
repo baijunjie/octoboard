@@ -19,6 +19,7 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
 
+use crate::accounts::choice;
 use crate::coordinator::{
     self, consoles::ConsoleChanges, projects::ProjectChanges, settings::SettingsChanges,
 };
@@ -29,9 +30,7 @@ use crate::mcp::lookup::{
 };
 use crate::mcp::views::{describe_console, describe_project};
 use crate::project_git::remote_url;
-use crate::protocol::{
-    default_account_name_in, error_code, Agent, CodedError, Project, ProjectSource, Session,
-};
+use crate::protocol::{error_code, Agent, CodedError, Project, ProjectSource, Session};
 use crate::state::AppState;
 
 pub(in crate::mcp) async fn update_project(
@@ -171,38 +170,28 @@ pub(in crate::mcp) async fn update_console(
 }
 
 pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
-    let accounts = state.store.list_accounts()?;
-    let default_names = state.store.default_account_names()?;
-    let disabled_defaults = state.store.disabled_default_accounts()?;
     // The default account of each agent is no row, so it is listed under the id the tools'
     // `accounts` arguments take for it. Each agent's accounts come in the order automatic account
     // selection weighs them.
     let mut listed = Vec::new();
     for agent in Agent::ALL {
-        for id in coordinator::account_choice::account_candidates(state, agent)? {
-            match id {
-                None => listed.push(json!({
+        for candidate in choice::candidate_accounts(state, agent)? {
+            listed.push(match candidate.id {
+                None => json!({
                     "id": "default",
                     "agent": agent,
-                    "name": default_account_name_in(&default_names, agent),
+                    "name": candidate.name,
                     "default": true,
-                    "disabled": disabled_defaults.contains(agent.wire_name()),
-                })),
-                Some(id) => {
-                    if let Some(account) = accounts
-                        .iter()
-                        .find(|account| account.agent == agent && account.id == id)
-                    {
-                        listed.push(json!({
-                            "id": account.id,
-                            "agent": account.agent,
-                            "name": account.name,
-                            "default": false,
-                            "disabled": account.disabled,
-                        }));
-                    }
-                }
-            }
+                    "disabled": candidate.disabled,
+                }),
+                Some(id) => json!({
+                    "id": id,
+                    "agent": agent,
+                    "name": candidate.name,
+                    "default": false,
+                    "disabled": candidate.disabled,
+                }),
+            });
         }
     }
     // A removed agent keeps its tags in the store, but a session is not shown them; every agent's

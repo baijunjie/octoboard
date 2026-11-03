@@ -14,7 +14,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{Map, Value};
 
 use crate::coordinator::{self, open::OpenRequest};
-use crate::messaging::sharing::{named_session, one_line, place_of, reports_to, ReportsTo};
+use crate::messaging::naming::{named_session, one_line, place_of, reports_to, ReportsTo};
 use crate::protocol::{ConversationLocation, Origin, Project, Role, Session, SessionStatus};
 use crate::session_request::{self, Action};
 use crate::session_tools::catalogue::qualified_tool_name;

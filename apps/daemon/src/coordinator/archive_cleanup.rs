@@ -150,7 +150,7 @@ fn delete_unresumable_groups(state: &Arc<AppState>, locator: &Locator) -> Vec<Se
         match delete_group_if_unresumable(
             state,
             locator,
-            &coordinator::bindings::group_in(&sessions, root),
+            &crate::state::bindings::group_in(&sessions, root),
         ) {
             Ok(Judged::SwitchedOff) => break,
             Ok(Judged::Deleted(gone)) => {
@@ -251,7 +251,7 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
     let Some(root) = sessions.iter().find(|session| session.id == judged[0].id) else {
         return Ok(Judged::Deleted(Vec::new()));
     };
-    let current = coordinator::bindings::group_in(&sessions, root);
+    let current = crate::state::bindings::group_in(&sessions, root);
     let unchanged = current.len() == judged.len()
         && judged.iter().all(|before| {
             current
@@ -609,7 +609,7 @@ mod tests {
         let judged = state.store.list_sessions().unwrap();
         let judged_group = || {
             let hub = judged.iter().find(|session| session.id == "hub").unwrap();
-            coordinator::bindings::group_in(&judged, hub)
+            crate::state::bindings::group_in(&judged, hub)
         };
         let leaf = |change: &dyn Fn(&mut Session)| {
             let mut session = state.store.get_session("leaf").unwrap().unwrap();
@@ -647,7 +647,7 @@ mod tests {
         }
         let judged = state.store.list_sessions().unwrap();
         let hub = judged.iter().find(|session| session.id == "hub").unwrap();
-        let group = coordinator::bindings::group_in(&judged, hub);
+        let group = crate::state::bindings::group_in(&judged, hub);
         state
             .store
             .insert_session(&account.session("late", Some("hub")))
@@ -718,7 +718,7 @@ mod tests {
         }
         let judged = state.store.list_sessions().unwrap();
         let hub = judged.iter().find(|session| session.id == "hub").unwrap();
-        let group = coordinator::bindings::group_in(&judged, hub);
+        let group = crate::state::bindings::group_in(&judged, hub);
         let claim = state.begin_launch("leaf").unwrap();
         assert!(gone(delete_judged(&state, &group).unwrap()).is_empty());
         assert_eq!(session_ids(&state), ["hub", "leaf"]);

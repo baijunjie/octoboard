@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 use crate::branch_origin::handover::{branch_noun_and_pronoun, named_branches, Handed};
 use crate::coordinator;
-use crate::messaging::sharing::{one_line, place_of, reports_to, ReportsTo};
+use crate::messaging::naming::{label, one_line, place_of, reports_to, ReportsTo};
 use crate::protocol::Session;
 use crate::session_tools::catalogue::{qualified_tool_name, tool_by_name};
 use crate::state::AppState;
@@ -32,6 +32,31 @@ pub(super) fn approval_wording(automatic: bool, action: &Action) -> &'static str
         (true, Action::Resume { .. } | Action::ResumeRecord { .. }) => {
             "Octoboard approved the request automatically, as the user has chosen to have resume \
              requests approved without asking"
+        }
+    }
+}
+
+/// What a resuming request did, as the call's result names it in `action`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ResumeAction {
+    /// Opened a session on an agent's own record of the conversation.
+    Opened,
+    /// Brought the archived session back.
+    Reopened,
+    /// Brought the interrupted session back.
+    Resumed,
+    /// Found the session running by then and did nothing.
+    AlreadyRunning,
+}
+
+impl ResumeAction {
+    /// The value the call's result carries.
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Opened => "opened",
+            Self::Reopened => "reopened",
+            Self::Resumed => "resumed",
+            Self::AlreadyRunning => "already_running",
         }
     }
 }
@@ -94,16 +119,24 @@ pub(super) fn resume_outcome_note(
     state: &Arc<AppState>,
     caller: &Session,
     session: &Session,
-    action: &str,
+    action: ResumeAction,
     reopened_owners: &[String],
     rename_failure: Option<&str>,
     approval: &str,
 ) -> String {
     let described = describe(state, session);
     let done = match action {
-        "reopened" => format!("Octoboard reopened {described}, continuing its conversation"),
-        "resumed" => format!("Octoboard resumed {described}, continuing its conversation"),
-        _ => format!("{described} was already running by then, so Octoboard did nothing"),
+        ResumeAction::Reopened => {
+            format!("Octoboard reopened {described}, continuing its conversation")
+        }
+        ResumeAction::Resumed => {
+            format!("Octoboard resumed {described}, continuing its conversation")
+        }
+        ResumeAction::AlreadyRunning => {
+            format!("{described} was already running by then, so Octoboard did nothing")
+        }
+        // A session opened on an agent's own record is worded by `record_outcome_note`.
+        ResumeAction::Opened => unreachable!("an opened record is not a resume of a session"),
     };
     let owners = if reopened_owners.is_empty() {
         String::new()
@@ -111,7 +144,7 @@ pub(super) fn resume_outcome_note(
         let names = reopened_owners
             .iter()
             .map(|id| match state.store.get_session(id) {
-                Ok(Some(owner)) => format!("`{id}` (\"{}\")", one_line(&owner.title)),
+                Ok(Some(owner)) => label(&owner),
                 _ => format!("`{id}`"),
             })
             .collect::<Vec<_>>()
@@ -119,11 +152,9 @@ pub(super) fn resume_outcome_note(
         format!(" Its archived owners were reopened with it: {names}.")
     };
     let reports_to = match reports_to(state, session) {
-        ReportsTo::Session(owner) => format!(
-            "reports to its owner `{}` (\"{}\"), as before",
-            owner.id,
-            one_line(&owner.title)
-        ),
+        ReportsTo::Session(owner) => {
+            format!("reports to its owner {}, as before", label(&owner))
+        }
         ReportsTo::Unreadable => "reports to its owner, as before".to_string(),
         ReportsTo::User => "reports to the user, as before".to_string(),
     };
@@ -131,7 +162,7 @@ pub(super) fn resume_outcome_note(
         format!(" It could not be renamed ({reason}); it keeps its name.")
     });
     // A session found running was not given anything by this request.
-    let waits = if action == "already_running" {
+    let waits = if action == ResumeAction::AlreadyRunning {
         ""
     } else {
         ", and it was given no instruction, so it waits at its prompt"
@@ -146,14 +177,14 @@ pub(super) fn resume_outcome_note(
 
 /// The result of a resuming request, the same whichever way it was carried out.
 pub(super) fn resume_result(
-    action: &str,
+    action: ResumeAction,
     session: &Session,
     reopened_owners: &[String],
     renamed: Option<bool>,
     note: &str,
 ) -> Value {
     let mut result = json!({
-        "action": action,
+        "action": action.as_str(),
         "session": session.id,
         "role": session.role,
         "agent": session.agent,

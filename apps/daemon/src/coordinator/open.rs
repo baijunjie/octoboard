@@ -18,17 +18,17 @@ use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 use crate::time::now_millis;
 
-use super::account_choice::{
-    automatic_open_choice, refuse_if_account_not_signed_in, refuse_if_account_quota_exhausted,
-    refuse_if_agent_unavailable, refuse_unless_agent_added, session_account, session_agent,
-};
-use super::accounts::refuse_if_account_disabled;
+use super::accounts::refuse_unless_account_usable;
 use super::bindings::resolve_bound_to;
 use super::launch::{check_launch_settings, start_process, stop_process, SettingsChecked};
 use super::resume::{
     checked_resume_id, locate_conversation_to_resume, refuse_if_conversation_recorded,
 };
 use super::Followup;
+use crate::accounts::choice::{
+    automatic_open_choice, refuse_if_agent_unavailable, refuse_unless_agent_added, session_account,
+    session_agent,
+};
 
 /// One session to open. A struct rather than a parameter list because the two callers differ in
 /// more than one field — the user opening a session by hand, and the console session dispatching
@@ -265,21 +265,13 @@ pub(super) fn resolve_open_with(
             .map(|(_, account)| account)
             .or_else(|| request.account.clone()),
     )?;
-    refuse_if_account_disabled(state, agent, account_id.as_deref())?;
-    if enforce_quota {
-        refuse_if_account_quota_exhausted(
-            state,
-            agent,
-            account_id.as_deref(),
-            config_dir.as_deref(),
-        )?;
-        refuse_if_account_not_signed_in(
-            state,
-            agent,
-            account_id.as_deref(),
-            config_dir.as_deref(),
-        )?;
-    }
+    refuse_unless_account_usable(
+        state,
+        agent,
+        account_id.as_deref(),
+        config_dir.as_deref(),
+        enforce_quota,
+    )?;
     // Asked again by the launch under its claim; asked here so that nothing is recorded.
     crate::accounts::shared_config::refuse_if_changing(state, account_id.as_deref())?;
     Ok(ResolvedOpen {
@@ -423,22 +415,22 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
             }
             None => state.store.insert_session(&session)?,
         }
-        // The duplicate check ran before the awaits above, so another request may have recorded
-        // the same conversation since. Nothing has been launched yet.
-        if let Some(id) = &resume_agent_session_id {
-            if let Err(err) = refuse_if_conversation_recorded(
-                state,
-                id,
-                session.project_id.as_deref(),
-                Some(&session.id),
-            ) {
-                state.store.delete_session(&session.id)?;
-                return Err(err);
-            }
-        }
         session
     };
+    // From the insert on, every refusal below leaves the guard to delete the row again.
+    let recorded = UnrecordOnDrop::new(state, &session.id);
+    // The duplicate check ran before the awaits above, so another request may have recorded the
+    // same conversation since. Nothing has been launched yet.
+    if let (Role::Project, Some(id)) = (role, &resume_agent_session_id) {
+        refuse_if_conversation_recorded(
+            state,
+            id,
+            session.project_id.as_deref(),
+            Some(&session.id),
+        )?;
+    }
     let claim = state.begin_launch(&session.id)?;
+    recorded.keep();
     if task.is_some() {
         state.expect_prompt_on_launch(&session.id);
     }
@@ -452,6 +444,46 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         resume_shell_env,
         terminal_appearance,
     })
+}
+
+/// Deletes the row [`begin_open`] has inserted unless [`Self::keep`] is called, so that a refusal
+/// after the insert leaves no session stuck in `starting`: nothing would ever move it, and
+/// `starting` sessions refuse deletion and resume.
+struct UnrecordOnDrop {
+    state: Arc<AppState>,
+    id: String,
+    kept: bool,
+}
+
+impl UnrecordOnDrop {
+    fn new(state: &Arc<AppState>, id: &str) -> Self {
+        Self {
+            state: state.clone(),
+            id: id.to_string(),
+            kept: false,
+        }
+    }
+
+    fn keep(mut self) {
+        self.kept = true;
+    }
+}
+
+impl Drop for UnrecordOnDrop {
+    fn drop(&mut self) {
+        if self.kept {
+            return;
+        }
+        if let Err(err) = self.state.store.delete_session(&self.id) {
+            tracing::warn!(
+                session = %self.id,
+                %err,
+                "deleting a session whose opening was refused failed"
+            );
+            // The row stays, so it must not stay `starting`.
+            mark_interrupted(&self.state, &self.id);
+        }
+    }
 }
 
 /// Launches the agent of a session [`begin_open`] recorded, through `launch`, and publishes it

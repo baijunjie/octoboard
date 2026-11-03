@@ -17,6 +17,7 @@ use crate::mcp::lookup::{required_str, resolve_account, resolve_owned_session};
 use crate::mcp::views::{account_fields, insert_own_launch};
 use crate::protocol::Session;
 use crate::session_request::{self, Change, Edits, Perform, Performed};
+use crate::state::refusals::refuse_if_archived;
 use crate::state::AppState;
 
 use super::relaunch::{no_conversation_note, relaunch_note, setting_text};
@@ -71,7 +72,7 @@ pub(in crate::mcp) async fn switch_session_account(
         .await;
     }
     // Where nothing the user changes in the dialog could help.
-    coordinator::lifecycle::refuse_if_archived(&target)?;
+    refuse_if_archived(&target)?;
     coordinator::account_switch::refuse_if_on_account(&target, &account)?;
     coordinator::accounts::refuse_if_account_disabled(state, target.agent, account.as_deref())?;
     let change = Change::Switch {

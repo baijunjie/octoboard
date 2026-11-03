@@ -1,11 +1,11 @@
 //! The agent accounts: how two account names are compared (`account_name_key`, and
 //! `clears_default_account_name` for the default account's), where each keeps its configuration,
 //! signing one in, its plan quota, moving a removed one's directory to the Trash, sharing the
-//! default account's configuration, and switching a session to another account (copying its
-//! conversation over, carrying on with its turn, and doing so on its own when a turn stops on the
-//! usage limit), with what keeps Codex's thread database in step with where its rollouts are.
+//! default account's configuration, which agent and account a session opens with (`choice`), and
+//! switching a session to another account (copying its conversation over, carrying on with its
+//! turn), with what keeps Codex's thread database in step with where its rollouts are.
 
-pub(crate) mod auto_switch;
+pub(crate) mod choice;
 pub(crate) mod cli_run;
 pub(crate) mod codex_threads;
 pub(crate) mod dirs;

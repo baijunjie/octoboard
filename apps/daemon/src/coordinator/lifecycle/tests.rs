@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
-    bound_session, code_of, console, console_workdir, lead_session, status_of, wait_until,
+    bound_session, console, console_workdir_in, lead_session, status_of, wait_until,
 };
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
@@ -11,6 +11,7 @@ use crate::protocol::{
 use crate::records;
 use crate::state::Deletion;
 use crate::store::LOCAL_HOST_ID;
+use crate::test_support::code_of;
 use crate::test_support::{
     console_session, console_with_project_and_accounts, idle_stand_in, project_session, session_ids,
 };
@@ -23,7 +24,7 @@ use std::time::{Duration, Instant};
 #[test]
 fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
     let (state, dir) = crate::test_support::app_state("coordinator-delete-sessions");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     for id in ["console-1", "console-2"] {
         let mut other = console(Agent::Claude, &workdir);
         other.id = id.to_string();
@@ -976,4 +977,81 @@ async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
     for id in ["hub", "lead", "no-process"] {
         assert_eq!(status_of(&state, id), Some(Archived), "{id}");
     }
+}
+
+/// A session's own archive as finished work: the `Team` rule asks every session below the owner,
+/// both levels, to be archived and the owner to report to nobody, the `Direct` rule only the
+/// sessions bound to it, and either refuses a lock anywhere in the group, naming it, before
+/// anything is changed. A session archived meanwhile is left as it is.
+#[tokio::test]
+async fn a_finished_sessions_own_archive_follows_its_rule() {
+    use SessionStatus::{Archived, Idle, Interrupted};
+    let (state, _dir) = console_with_project_and_accounts("coordinator-archive-finished");
+    for session in [
+        console_session("hub", Idle),
+        lead_session("lead", Archived, "hub"),
+        bound_session("under-lead", Interrupted, "lead"),
+        bound_session("own", Archived, "hub"),
+    ] {
+        state.store.insert_session(&session).unwrap();
+    }
+
+    let Finish::Refused(why) = archive_finished(&state, "hub", Finished::Team).unwrap() else {
+        panic!("a session two levels down is not archived");
+    };
+    let hub = state.session_record("hub").unwrap();
+    let text = why.refusal(&hub);
+    assert!(
+        text.starts_with(
+            "this session cannot archive itself while sessions under it are not archived. "
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "`under-lead` (\"under-lead\") under the project coordinator `lead`: not yours"
+        ),
+        "{text}"
+    );
+    // The same group is finished for the rule that looks at the sessions bound directly.
+    let Finish::Archived(archived) = archive_finished(&state, "hub", Finished::Direct).unwrap()
+    else {
+        panic!("every session bound to it is archived");
+    };
+    assert_eq!(archived.len(), 2, "the unarchived one below and the owner");
+    assert_eq!(status_of(&state, "hub"), Some(Archived));
+    assert!(matches!(
+        archive_finished(&state, "hub", Finished::Direct).unwrap(),
+        Finish::AlreadyArchived
+    ));
+
+    for session in [
+        console_session("hub-2", Idle),
+        Session {
+            locked: true,
+            ..bound_session("locked", Archived, "hub-2")
+        },
+    ] {
+        state.store.insert_session(&session).unwrap();
+    }
+    let Finish::Refused(why) = archive_finished(&state, "hub-2", Finished::Team).unwrap() else {
+        panic!("a session under it is locked");
+    };
+    assert_eq!(
+        why.refusal(&state.session_record("hub-2").unwrap()),
+        "this session cannot archive itself while sessions under it are locked: `locked` \
+         (\"locked\"). The user has to unlock them first"
+    );
+    assert_eq!(status_of(&state, "hub-2"), Some(Idle));
+
+    state
+        .store
+        .insert_session(&bound_session("bound", Idle, "hub"))
+        .unwrap();
+    let Finish::Refused(why) = archive_finished(&state, "bound", Finished::Team).unwrap() else {
+        panic!("a session that reports to an owner does not archive itself");
+    };
+    assert!(why
+        .refusal(&state.session_record("bound").unwrap())
+        .starts_with("this session reports to an owner, so it does not archive itself"));
 }

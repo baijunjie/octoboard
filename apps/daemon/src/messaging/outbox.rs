@@ -374,7 +374,7 @@ impl Outbox {
                 }
                 Err(partial)
                     if partial.error.get_ref().is_some_and(|error| {
-                        error.is::<crate::adapter::codex::transport::UncertainSubmission>()
+                        error.is::<crate::session::term::UncertainSubmission>()
                     }) =>
                 {
                     self.mark_written(ticket);
@@ -1249,11 +1249,9 @@ mod tests {
                 attempts.push((ticket, text.to_string()));
                 Err(PartialWrite {
                     written: 1,
-                    error: std::io::Error::other(
-                        crate::adapter::codex::transport::UncertainSubmission(
-                            "connection closed after add".into(),
-                        ),
-                    ),
+                    error: std::io::Error::other(crate::session::term::UncertainSubmission(
+                        "connection closed after add".into(),
+                    )),
                 })
             },
             &agent,

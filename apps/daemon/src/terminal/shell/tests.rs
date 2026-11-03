@@ -6,9 +6,10 @@ use tokio::sync::broadcast;
 
 use super::{close, close_all, create, rename, shell_environment, ShellProcess};
 use crate::git::isolated::IsolatedGit;
-use crate::protocol::{error_code, CodedError, Event, Request, ShellTerminal, ShellTerminalState};
+use crate::protocol::{error_code, Event, Request, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
 use crate::terminal::pty::PtyCore;
+use crate::test_support::code_of;
 use crate::test_support::{
     app_state, assert_gone_by, console, git, insert_project, is_running, isolated_git_env,
     repo_with, within, ScratchDir, PATIENCE, SYSTEM_GIT,
@@ -46,12 +47,6 @@ fn add_project(state: &AppState, id: &str, console_id: &str, path: &std::path::P
 async fn request(state: &Arc<AppState>, json: &str) -> anyhow::Result<Option<Event>> {
     let request: Request = serde_json::from_str(json).expect(json);
     crate::coordinator::handle(state, request.id, request.body).await
-}
-
-fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .code
 }
 
 fn process(state: &AppState, terminal: &ShellTerminal) -> Arc<ShellProcess> {

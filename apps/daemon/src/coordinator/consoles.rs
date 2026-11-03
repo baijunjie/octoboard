@@ -7,16 +7,20 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use crate::agents::launch_settings::{self, normalized_launches, trimmed_or_none, LaunchCheck};
-use crate::mcp;
 use crate::protocol::{
     error_code, Agent, CodedError, Console, Event, Launch, LaunchChange, PerAgent, Present, Project,
 };
+use crate::state::refusals::ensure_unlocked;
 use crate::state::AppState;
 use crate::time::now_millis;
 
-use super::account_choice::checked_account_reference;
-use super::lifecycle::{ensure_unlocked, session_ids_where};
+use super::console_workdir::{
+    refresh_console_session_instructions, remove_console_workdir,
+    write_console_session_instructions_from_settings,
+};
+use super::lifecycle::session_ids_where;
 use super::validate::{normalize_icon, required_text};
+use crate::accounts::choice::checked_account_reference;
 
 /// A console to create, as the request carries it: account references by id, models and efforts
 /// as typed.
@@ -96,13 +100,10 @@ pub(super) fn store_new_console(
     // Written before the record is stored: nothing else can touch a console no one has been told
     // of yet, and a failed write then leaves no console behind. Either failing takes the new
     // working directory with it, so a refused create leaves nothing under `consoles/`.
-    let stored = mcp::console_instructions::write_console_session_instructions_from_settings(
-        &state.store,
-        &console,
-    )
-    .and_then(|()| Ok(state.store.insert_console(&console)?));
+    let stored = write_console_session_instructions_from_settings(&state.store, &console)
+        .and_then(|()| Ok(state.store.insert_console(&console)?));
     if let Err(err) = stored {
-        if let Err(removal) = mcp::console_instructions::remove_console_workdir(&console.workdir) {
+        if let Err(removal) = remove_console_workdir(&console.workdir) {
             tracing::warn!(workdir = %console.workdir, %removal, "removing the new console's working directory failed");
         }
         return Err(err);
@@ -224,9 +225,7 @@ pub async fn update_console(
         // agent's new console sessions read the change, and a resumed one does on Claude Code and
         // Codex, never on Grok. A failure here is logged, not returned, since the change is saved
         // and told to every client: the next launch's refresh writes the file.
-        if let Err(err) =
-            mcp::console_instructions::refresh_console_session_instructions(&state.store, id)
-        {
+        if let Err(err) = refresh_console_session_instructions(&state.store, id) {
             tracing::warn!(console = %id, %err, "refreshing the console's instruction file failed");
         }
         return Ok(stored);
@@ -277,7 +276,7 @@ pub(super) async fn delete_console(state: &Arc<AppState>, id: String) -> Result<
     crate::processes::requests::stop_project_processes(state, &projects).await;
     // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
     // directory is ever touched by this.
-    if let Err(err) = mcp::console_instructions::remove_console_workdir(&console.workdir) {
+    if let Err(err) = remove_console_workdir(&console.workdir) {
         if err.kind() != std::io::ErrorKind::NotFound {
             tracing::warn!(workdir = %console.workdir, %err, "removing the console working directory failed");
         }

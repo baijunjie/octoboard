@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::messaging::delivery::{self, Delivery, WhenBlocked};
-use crate::protocol::{error_code, CodedError, Session, SessionStatus};
+use crate::messaging::delivery::{self, Delivery};
+use crate::messaging::naming::{one_line, quote};
+use crate::protocol::{error_code, CodedError, Session};
 use crate::state::AppState;
 
 /// What became of the copy of shared information that goes to the receiving session's owner.
@@ -74,20 +75,14 @@ pub fn deliver_info(
 ///
 /// **Blocks** like [`delivery::write_message`].
 fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery> {
-    let session = state.session_record(id)?;
-    if session.status == SessionStatus::Archived {
-        return Err(CodedError::raised(
-            error_code::SESSION_ARCHIVED,
-            "this session is archived, so it takes no information until it is reopened",
-            &[("session", id)],
-        ));
-    }
-    if session.status == SessionStatus::Interrupted
-        && state.keep_message_if_not_running(id, text)?.is_some()
-    {
-        return Ok(Delivery::Kept);
-    }
-    delivery::write_message(state, id, text, WhenBlocked::Queue)
+    delivery::write_or_keep(
+        state,
+        id,
+        text,
+        "this session is archived, so it takes no information until it is reopened",
+        || text.to_string(),
+        None,
+    )
 }
 
 /// Why a copy failed, from the sender's side: the error text speaks of "this session", which the
@@ -107,75 +102,6 @@ fn copy_failure(err: &anyhow::Error) -> String {
         }
         _ => "its owner could not be written to".to_string(),
     }
-}
-
-/// The text on one line, for quoting inline into a message. What a model or the user wrote may span
-/// several lines, which would let it pass for the lines of Octoboard's own around it.
-pub(crate) fn one_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// A session as a message names it: its kind, id and title.
-pub(crate) fn named_session(session: &Session) -> String {
-    format!(
-        "the {} session `{}` (\"{}\")",
-        session.role.kind(),
-        session.id,
-        one_line(&session.title)
-    )
-}
-
-/// Who a session reports to, as the records say.
-pub(crate) enum ReportsTo {
-    /// Bound to nobody: it reports to the user.
-    User,
-    /// Bound to this session, its owner.
-    Session(Box<Session>),
-    /// Bound to a session whose record cannot be read.
-    Unreadable,
-}
-
-/// Who `session` reports to.
-pub(crate) fn reports_to(state: &Arc<AppState>, session: &Session) -> ReportsTo {
-    match session
-        .bound_to
-        .as_deref()
-        .map(|id| state.store.get_session(id))
-    {
-        Some(Ok(Some(owner))) => ReportsTo::Session(Box::new(owner)),
-        Some(_) => ReportsTo::Unreadable,
-        None => ReportsTo::User,
-    }
-}
-
-/// Where `session` runs, for a message to name it: ` in the project "…"`, or ` in the console "…"`
-/// for a console session, and nothing when the record is gone.
-pub(crate) fn place_of(state: &Arc<AppState>, session: &Session) -> String {
-    match &session.project_id {
-        Some(id) => state
-            .store
-            .get_project(id)
-            .ok()
-            .flatten()
-            .map(|project| format!(" in the project \"{}\"", one_line(&project.name))),
-        None => state
-            .store
-            .get_console(&session.console_id)
-            .ok()
-            .flatten()
-            .map(|console| format!(" in the console \"{}\"", one_line(&console.name))),
-    }
-    .unwrap_or_default()
-}
-
-/// The body with every line quoted, blank ones included, so that no line of it can read as a
-/// header of Octoboard's own. U+2028 and U+2029 break lines too: control-character stripping
-/// leaves them in, and a model may read them as line breaks.
-pub(crate) fn quote(text: &str) -> String {
-    text.split(['\n', '\u{2028}', '\u{2029}'])
-        .map(|line| format!("> {}", line.strip_suffix('\r').unwrap_or(line)))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// How [`render_info`] begins.

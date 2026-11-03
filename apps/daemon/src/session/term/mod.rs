@@ -323,6 +323,19 @@ pub const HELD_FRAGMENT: &str = concat!(
      sent now waits until then."
 );
 
+/// Acceptance could not be established after the queue request was sent. Retrying could duplicate
+/// it.
+#[derive(Debug)]
+pub struct UncertainSubmission(pub String);
+
+impl std::fmt::Display for UncertainSubmission {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for UncertainSubmission {}
+
 #[cfg(test)]
 pub fn send_message(
     session: &LiveSession,

@@ -44,8 +44,13 @@ impl DirectoryIdentities {
     }
 
     pub fn insert(&mut self, path: &Path) {
-        self.lexical.insert(lexically_normalise(path));
-        if let Some(inode) = of_path(path) {
+        self.insert_resolved(&Resolved::of(path));
+    }
+
+    /// [`Self::insert`] for a path already looked at: reads nothing.
+    pub fn insert_resolved(&mut self, candidate: &Resolved) {
+        self.lexical.insert(lexically_normalise(&candidate.path));
+        if let Some(inode) = candidate.inode {
             self.inodes.insert(inode);
         }
     }
@@ -53,9 +58,33 @@ impl DirectoryIdentities {
     /// Whether `path` names a member: the same text once normalised, or the same directory on
     /// disk. The text counts even where `path` cannot be read, so a byte-identical path always
     /// matches.
+    #[cfg(test)]
     pub fn contains(&self, path: &Path) -> bool {
-        self.lexical.contains(&lexically_normalise(path))
-            || of_path(path).is_some_and(|inode| self.inodes.contains(&inode))
+        self.contains_resolved(&Resolved::of(path))
+    }
+
+    /// [`Self::contains`] for a path already looked at: reads nothing.
+    pub fn contains_resolved(&self, candidate: &Resolved) -> bool {
+        self.lexical.contains(&lexically_normalise(&candidate.path))
+            || candidate
+                .inode
+                .is_some_and(|inode| self.inodes.contains(&inode))
+    }
+}
+
+/// A path with its identity read ahead of time, so a caller on an async worker can look at a
+/// set of directories on a blocking thread once and then ask [`DirectoryIdentities`] about them
+/// without touching the file system again. Blocking to make: [`Self::of`] reads the file system.
+pub struct Resolved {
+    pub path: PathBuf,
+    inode: Option<Identity>,
+}
+
+impl Resolved {
+    pub fn of(path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
+        let inode = of_path(&path);
+        Self { path, inode }
     }
 }
 

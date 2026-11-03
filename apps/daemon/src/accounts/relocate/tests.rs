@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::ScratchDir;
+use crate::test_support::{code_of, ScratchDir};
 
 fn temp_dir(name: &str) -> ScratchDir {
     ScratchDir::new(&format!("relocate-{name}"))
@@ -27,12 +27,6 @@ fn cause_of(err: &anyhow::Error) -> String {
         .get("cause")
         .cloned()
         .expect("a cause")
-}
-
-fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .code
 }
 
 /// The record keeps the path it has relative to the config directory, whatever the agent put

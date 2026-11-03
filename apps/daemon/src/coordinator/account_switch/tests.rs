@@ -4,12 +4,13 @@ use crate::coordinator::launch::stop_process;
 use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::restart::keep_what_a_failed_restart_carried;
 use crate::coordinator::test_support::{
-    archive_during_relaunch, bound_session, code_of, shell_env, status_of, temp_dir,
+    archive_during_relaunch, bound_session, shell_env, status_of, temp_dir,
 };
 use crate::protocol::{
     error_code, Account, Agent, Event, OrchestrationRole, Role, Session, SessionStatus,
 };
 use crate::session::term;
+use crate::test_support::code_of;
 use crate::test_support::{
     bare_session, console_session, console_with_project_and_accounts, fake_live_session,
     idle_stand_in, project_session,
@@ -209,12 +210,12 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
     let relocation = plan.relocation.expect("a conversation to relocate");
     assert_eq!(
         relocation,
-        (
-            default_dir.clone(),
-            PathBuf::from(&target),
-            PathBuf::from("projects/slug/a0000000-0000-4000-8000-000000000001.jsonl"),
-            "a0000000-0000-4000-8000-000000000001".to_owned()
-        )
+        Relocation {
+            from: default_dir.clone(),
+            to: PathBuf::from(&target),
+            record: PathBuf::from("projects/slug/a0000000-0000-4000-8000-000000000001.jsonl"),
+            agent_session_id: "a0000000-0000-4000-8000-000000000001".to_owned(),
+        }
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert_eq!(
@@ -267,7 +268,12 @@ fn a_compressed_codex_rollout_is_planned_for_a_switch() {
     let planned = plan(THREAD).unwrap();
     assert_eq!(
         planned.relocation,
-        Some((source, target, PathBuf::from(&record), THREAD.to_owned()))
+        Some(Relocation {
+            from: source,
+            to: target,
+            record: PathBuf::from(&record),
+            agent_session_id: THREAD.to_owned(),
+        })
     );
     assert_eq!(planned.shell_env.unwrap()["CODEX_SQLITE_HOME"], "db");
 }

@@ -13,11 +13,17 @@ use crate::protocol::{
     SessionBranchTarget, SessionStatus,
 };
 use crate::records;
-use crate::state::{session_archived, AppState, Deletion};
+use crate::state::bindings::{bound_sessions, team};
+use crate::state::refusals::ensure_unlocked;
+use crate::state::{AppState, Deletion};
 
-use super::bindings::{bound_sessions, team};
 use super::launch::stop_process;
 use super::validate::required_text;
+
+mod finished;
+pub(crate) use finished::{
+    archivable_self, archive_finished, unfinished, Finish, Finished, Unfinished,
+};
 
 /// Ends the session's process and archives it. What archiving means beyond ending the process
 /// belongs here and not in [`stop_process`], which a switch of the session's account shares.
@@ -222,31 +228,11 @@ pub(super) async fn inspect_session_branches(
     }))
 }
 
-pub(crate) fn ensure_unlocked(sessions: impl IntoIterator<Item = Session>) -> Result<()> {
-    if let Some(session) = sessions.into_iter().find(|session| session.locked) {
-        return Err(CodedError::raised(
-            error_code::SESSION_LOCKED,
-            "this operation includes a locked session; unlock it first",
-            &[("session", &session.id)],
-        ));
-    }
-    Ok(())
-}
-
 /// English fallback titles; clients use the structured IDs to word and render the list.
 fn session_titles(sessions: &[Session]) -> String {
     sessions
         .iter()
         .map(|session| session.title.as_str())
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// Each session as an id and its title, for a refusal that names sessions to the model.
-pub(crate) fn session_labels<'a>(sessions: impl IntoIterator<Item = &'a Session>) -> String {
-    sessions
-        .into_iter()
-        .map(|session| format!("`{}` (\"{}\")", session.id, session.title))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -267,15 +253,6 @@ pub(super) fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
             session = %id, %err,
             "dropping the messages kept for an archived session failed"
         );
-    }
-    Ok(())
-}
-
-/// Refuses an archived session, which a switch is refused for, before the user is asked to approve
-/// one.
-pub(crate) fn refuse_if_archived(session: &Session) -> Result<()> {
-    if session.status == SessionStatus::Archived {
-        return Err(session_archived(&session.id));
     }
     Ok(())
 }

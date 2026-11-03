@@ -66,8 +66,8 @@ const CLAUDE_AGENT_LIST_FOCUS: &str = "claude_agent_list_focus";
 impl Dialog {
     /// Whether this is the dialog an agent raises on reaching its usage limit. A session whose only
     /// wait is this one is switched to another account all the same: ending the modal is the point
-    /// of the switch (see `crate::accounts::auto_switch`). Only Grok Build raises one when a turn
-    /// stops on the limit; Claude Code prints the limit in its conversation (its
+    /// of the switch (see `crate::coordinator::auto_switch`). Only Grok Build raises one when a
+    /// turn stops on the limit; Claude Code prints the limit in its conversation (its
     /// `/rate-limit-options` menu is not recognised as a dialog here), and Codex's "Approaching
     /// rate limits" screen is raised before the limit, and is not one.
     pub fn is_usage_limit(&self) -> bool {

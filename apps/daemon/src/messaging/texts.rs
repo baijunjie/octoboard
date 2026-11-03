@@ -1,18 +1,20 @@
 //! The fixed texts Octoboard writes into sessions in its own name: the prefix every notice begins
 //! with, how each kind of message it writes begins (the `*_OPENING` constants), by which its
 //! messages are told apart from what the user typed when a session's history is read, the brief a
-//! session is handed, the opening prompts of a session started at another session's request or
-//! handed branches by the session that started it, a report panel form submission, the title a
-//! brief earns, and how the notice that a session waits for the user begins, with how one kept
-//! for an owner is recognised.
+//! session is handed, the prompt of a session that takes another's work over, the opening prompts
+//! of a session started at another session's request or handed branches by the session that
+//! started it, a report panel form submission, the title a brief earns, and how the notice that a
+//! session waits for the user begins, with how one kept for an owner is recognised.
 //!
 //! The texts are what the agents read, and a session's history is read back by how they begin, so
 //! a change of wording is a change of behaviour.
 
+use std::path::Path;
+
 use crate::branch_origin::handover::{
     branch_noun_and_pronoun, named_branches_with_targets, Handover,
 };
-use crate::messaging::sharing;
+use crate::messaging::naming;
 use crate::protocol::Session;
 
 /// How every notice Octoboard writes into a session begins, worded after it at several places. A
@@ -67,6 +69,39 @@ pub fn render_brief(
         }
     }
     prompt
+}
+
+/// How [`takeover_prompt`] begins.
+pub(crate) const TAKEOVER_OPENING: &str = "You are taking over the work of the ";
+
+/// The receiving session's opening prompt: where the package is, to be read before anything else,
+/// and the note of the owner that asked for the handoff, when it left one.
+pub(crate) fn takeover_prompt(original: &Session, package: &Path, note: Option<&str>) -> String {
+    let note = note.map_or_else(String::new, |note| {
+        format!(
+            "\n\nThe owner that handed the work off left you this note:\n\n{}",
+            naming::quote(note)
+        )
+    });
+    format!(
+        "{TAKEOVER_OPENING}{kind} session {label}, a {agent} \
+         session. Octoboard is handing it off to you because the work moves to another agent. Its \
+         conversation cannot be resumed here, so Octoboard built a handoff package from its \
+         records:\n\n{path}\n\nRead that file first, all of it, before you do anything else. It \
+         holds its whole conversation (every user message and every reply, with tool output left \
+         out), its latest todo list, the files its edits changed, the git state of the branches \
+         it was responsible for, and the sessions it owned. Work out the goal, what was tried and \
+         what comes next from it, and carry on where the original stopped; do not start over. \
+         If the package names an earlier handoff package, read that one too, and so on back \
+         along the chain, before you carry on.\n\n\
+         Once you are running, Octoboard moves the original's place to you: its owner, its \
+         branches and its sessions. It sends you a message saying what you now hold, and archives \
+         the original; do not message the original.{note}",
+        kind = original.role.kind(),
+        label = naming::label(original),
+        agent = original.agent.label(),
+        path = package.display(),
+    )
 }
 
 /// What a report panel form submission is written into the console session as. Plain prose, like
@@ -141,7 +176,7 @@ pub(crate) fn branches_opening_prompt(
          This is the brief it wrote:\n\n{brief}",
         named_branches_with_targets(&handover.branches, &handover.targets),
         id = caller.id,
-        title = sharing::one_line(&caller.title),
+        title = naming::one_line(&caller.title),
     )
 }
 
@@ -170,11 +205,10 @@ pub(crate) fn request_opening_prompt(
         )
     });
     format!(
-        "{REQUEST_OPENING}`{id}` (\"{title}\"), {approval}. Nobody \
+        "{REQUEST_OPENING}{label}, {approval}. Nobody \
          owns you but the user: that session is not your owner, and it and you can only share \
          information with each other.{handed} This is the brief it wrote:\n\n{brief}",
-        id = caller.id,
-        title = sharing::one_line(&caller.title),
+        label = naming::label(caller),
     )
 }
 

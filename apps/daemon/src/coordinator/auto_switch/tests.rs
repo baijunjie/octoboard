@@ -398,7 +398,7 @@ async fn manual_input_or_a_new_turn_cancels_quota_recovery() {
                 .set_session_launch_overrides("w", &None, &None)
                 .unwrap(),
             "archive" => {
-                coordinator::lifecycle::archive_session(&fixture.state, "w").unwrap();
+                crate::coordinator::lifecycle::archive_session(&fixture.state, "w").unwrap();
             }
             "setting" => {
                 fixture
@@ -1390,7 +1390,7 @@ async fn a_switch_is_refused_under_its_claim_when_the_record_it_was_decided_on_i
         let fixture = &fixture;
         let env = fixture.env();
         async move {
-            coordinator::account_switch::switch_session_account_if(
+            crate::coordinator::account_switch::switch_session_account_if(
                 &fixture.state,
                 id,
                 Some(Some("claude-a".to_string())),
@@ -1405,7 +1405,7 @@ async fn a_switch_is_refused_under_its_claim_when_the_record_it_was_decided_on_i
             .expect_err("refused")
         }
     };
-    let refusal = |failed: &coordinator::account_switch::SwitchFailed| {
+    let refusal = |failed: &crate::coordinator::account_switch::SwitchFailed| {
         assert!(!failed.ended_process);
         failed.error.downcast_ref::<NoLongerDue>().map(|due| due.0)
     };
@@ -1978,7 +1978,7 @@ async fn a_grok_session_showing_its_usage_limit_dialog_passes_every_wait_check()
 
     // Under the claim the wait is not what refuses it: the switch goes on to its own checks,
     // and refuses the Grok target there.
-    let err = coordinator::account_switch::switch_session_account_if(
+    let err = crate::coordinator::account_switch::switch_session_account_if(
         &fixture.state,
         "g",
         Some(Some("grok-a".to_string())),
@@ -2003,7 +2003,7 @@ async fn a_grok_session_showing_its_usage_limit_dialog_passes_every_wait_check()
     );
 
     // Without the usage-limit part, and for a dialog of another kind, it is still a wait.
-    let plain = coordinator::account_switch::switch_session_account_if(
+    let plain = crate::coordinator::account_switch::switch_session_account_if(
         &fixture.state,
         "g",
         Some(Some("grok-a".to_string())),
@@ -2185,7 +2185,7 @@ async fn a_relaunch_that_dies_after_a_switch_asked_for_still_tells_the_owner() {
     let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
     let env = fixture.env();
 
-    let failed = coordinator::account_switch::switch_session_account_if(
+    let failed = crate::coordinator::account_switch::switch_session_account_if(
         &fixture.state,
         "w",
         Some(Some("claude-a".to_string())),
@@ -2242,7 +2242,7 @@ async fn a_restore_waits_for_another_claim_on_the_session() {
     });
     let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
 
-    coordinator::account_switch::restore_after_failed_switch(
+    crate::coordinator::account_switch::restore_after_failed_switch(
         &fixture.state,
         &before,
         None,
@@ -2264,7 +2264,7 @@ async fn a_restore_touches_nothing_of_a_session_that_is_not_down() {
         ..fixture.worker()
     };
 
-    let err = coordinator::account_switch::restore_after_failed_switch(
+    let err = crate::coordinator::account_switch::restore_after_failed_switch(
         &fixture.state,
         &before,
         None,
@@ -2289,7 +2289,7 @@ async fn a_restore_touches_nothing_of_a_session_that_is_not_down() {
         })
         .await
     );
-    let err = coordinator::account_switch::restore_after_failed_switch(
+    let err = crate::coordinator::account_switch::restore_after_failed_switch(
         &fixture.state,
         &before,
         None,
@@ -2324,7 +2324,7 @@ async fn a_restore_does_not_undo_an_account_change_somebody_else_made() {
         .set_session_account("w", Some("claude-b"), moved_dir.to_str())
         .unwrap();
 
-    coordinator::account_switch::restore_after_failed_switch(
+    crate::coordinator::account_switch::restore_after_failed_switch(
         &fixture.state,
         &before,
         Some("claude-a"),
@@ -2397,7 +2397,7 @@ async fn the_accounts_left_for_a_limit_are_forgotten_with_an_archived_session() 
         [None]
     );
 
-    coordinator::lifecycle::archive_session(&fixture.state, "w").unwrap();
+    crate::coordinator::lifecycle::archive_session(&fixture.state, "w").unwrap();
 
     assert!(fixture
         .state

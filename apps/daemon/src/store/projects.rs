@@ -6,7 +6,9 @@ use rusqlite::{params, OptionalExtension, Row};
 use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
 use super::Store;
 use crate::git_workflow::GitWorkflowOverride;
-use crate::protocol::{Agent, CodedError, PerAgent, Project, ProjectAccount, ProjectSource};
+use crate::protocol::{
+    error_code, Agent, CodedError, PerAgent, Project, ProjectAccount, ProjectSource,
+};
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
                                remote_url, claude_account_id, codex_account_id, grok_account_id,
@@ -18,8 +20,9 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
 
 impl Store {
     /// Inserts the project. A second project at a path its console already has trips the unique
-    /// index on `(console_id, path)` and fails with an error naming the path; `coordinator`
-    /// refuses it before it gets here, so this only fires for two requests racing past that check.
+    /// index on `(console_id, path)` and fails with `all_projects_already_added`, naming the path.
+    /// `coordinator` checks and claims before it gets here, so this is a backstop for what that
+    /// check cannot tell apart, such as two non-UTF-8 names that collide once converted to text.
     pub fn insert_project(&self, project: &Project) -> Result<()> {
         self.lock()
             .execute(
@@ -70,10 +73,13 @@ impl Store {
                 rusqlite::Error::SqliteFailure(failure, _)
                     if failure.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
                 {
-                    StoreError::from(anyhow::anyhow!(
-                        "console {} already has a project at {}",
-                        project.console_id,
-                        project.path
+                    StoreError::from(CodedError::raised(
+                        error_code::ALL_PROJECTS_ALREADY_ADDED,
+                        format!(
+                            "console {} already has a project at {}",
+                            project.console_id, project.path
+                        ),
+                        &[],
                     ))
                 }
                 err => err.into(),

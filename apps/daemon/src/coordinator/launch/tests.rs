@@ -1,9 +1,10 @@
 use super::*;
 use crate::agents::launch_settings::normalize_session_launch_setting;
-use crate::coordinator::test_support::{code_of, console, project_of};
+use crate::coordinator::test_support::{console, project_of};
 use crate::git_workflow::{GitWorkflowSettings, GitWorkflowSettingsChanges};
 use crate::protocol::{error_code, Agent, Event, Role, Session, SessionStatus};
 use crate::session::term;
+use crate::test_support::code_of;
 use crate::test_support::{
     bare_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
     project_session,

@@ -8,8 +8,9 @@ use anyhow::Result;
 
 use super::claims::LaunchClaim;
 use super::live::{LiveSessions, Running};
-use super::write_queue::OutboxHold;
 use super::AppState;
+use crate::messaging::outbox::Ticket;
+use crate::messaging::write_queue::OutboxHold;
 use crate::protocol::Session;
 
 pub(super) struct SharingLockEntry {
@@ -177,6 +178,25 @@ impl Drop for AccountSharingLock {
 }
 
 impl AppState {
+    /// [`Self::queue_message`] for a session a change of its account's sharing is restarting, and
+    /// `None` for any other. The check and the push are one step under the `live` lock, which
+    /// [`AccountSharingLock::end_restart`] takes to let the session go before it ends the hold, so
+    /// a message is never pushed after the hold has dropped what it held.
+    ///
+    /// [`AccountSharingLock::end_restart`]: AccountSharingLock::end_restart
+    pub(crate) fn queue_if_restarting(&self, id: &str, text: &str) -> Option<Ticket> {
+        let ticket = {
+            let live = self.live.read().expect("live sessions lock poisoned");
+            live.sharing_locks
+                .values()
+                .any(|entry| entry.restarting.contains(id))
+                .then(|| self.outbox.push(id, text))
+        }?;
+        // After the lock: it reads the live sessions again.
+        self.note_activity(id);
+        Some(ticket)
+    }
+
     /// Locks `account` for a change of its sharing, in one step with `admit`, which is shown
     /// whether the account is locked already and the sessions running or holding a claim, and
     /// refuses by answering an error: no claim can be taken or let go in between, and from then on

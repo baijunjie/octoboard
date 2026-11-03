@@ -1,6 +1,6 @@
 //! The tool with which an owner hands a session of its own off to a new session of another agent,
 //! `handoff_session`. What moves and what is refused is the operation's
-//! (`crate::handoff::operation`); what is here is the caller's side: that the session is its own,
+//! (`crate::coordinator::handoff`); what is here is the caller's side: that the session is its own,
 //! the user being asked first unless they chose to have handoffs approved without asking
 //! (`session_request`), and what the result tells it, since it is not sent the message that tells
 //! an owner of a handoff.
@@ -10,8 +10,8 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
 
-use crate::coordinator;
-use crate::handoff::operation;
+use crate::accounts::choice::choice_for_started_session;
+use crate::coordinator::{self, handoff};
 use crate::mcp::lookup::{
     optional_string, parse_agent, present_text, required_str, resolve_account,
     resolve_owned_session,
@@ -22,10 +22,9 @@ use crate::session_request::{self, Change, Edits, Perform, Performed};
 use crate::state::AppState;
 
 use super::relaunch::setting_text;
-use super::sessions::{automatic_choice, callers_account};
 
 /// Hands a session of the caller's off to a new session of another agent, which takes its place and
-/// stays the caller's; see `handoff::operation` for what moves and what is refused. The caller is
+/// stays the caller's; see `coordinator::handoff` for what moves and what is refused. The caller is
 /// not sent the message that tells an owner of a handoff, since the result tells it.
 ///
 /// Unless the user has chosen to have handoffs approved without asking, the call
@@ -80,8 +79,8 @@ pub(in crate::mcp) async fn handoff_session(
         .await;
     }
     // Where nothing the user changes in the dialog could help.
-    operation::refuse_unless_it_can_be_handed_off(&target, agent)?;
-    let open = operation::receiving_request(state, &target, &asked.handoff(&target), None);
+    handoff::refuse_unless_it_can_be_handed_off(&target, agent)?;
+    let open = handoff::receiving_request(state, &target, &asked.handoff(&target), None);
     let account = coordinator::open::check_open_asking(state, &open).await?;
     let change = Change::Handoff {
         target: target_id,
@@ -111,18 +110,14 @@ pub(in crate::mcp) async fn handoff_session(
 
 /// The account of the session of `agent` that `target` is handed off to when neither the call nor
 /// the user names one: as for a session the caller starts in `target`'s project naming `agent`
-/// ([`automatic_choice`], of that agent alone, while automatic account selection is on), so `None`
-/// leaves it to the project's account for the agent, else the console's.
+/// ([`choice_for_started_session`]), so `None` leaves it to the project's account for the agent,
+/// else the console's.
 fn unnamed_account(
     state: &Arc<AppState>,
     caller: &Session,
     target: &Session,
     agent: Agent,
 ) -> Result<Option<Option<String>>> {
-    if !state.store.auto_select_account()? {
-        // A session the caller owns is always in the caller's own console.
-        return callers_account(state, caller, agent);
-    }
     let console = state
         .store
         .get_console(&target.console_id)?
@@ -131,10 +126,15 @@ fn unnamed_account(
         Some(id) => state.store.get_project(id)?,
         None => None,
     };
-    Ok(
-        automatic_choice(state, caller, agent, &console, project.as_ref(), false)?
-            .map(|(_, account)| account),
-    )
+    Ok(choice_for_started_session(
+        state,
+        caller,
+        &console,
+        project.as_ref(),
+        Some(agent),
+        |_| Ok(None),
+    )?
+    .1)
 }
 
 /// What the call asked for.
@@ -149,8 +149,8 @@ struct Asked {
 
 impl Asked {
     /// The operation's request for `target` as asked.
-    fn handoff(&self, target: &Session) -> operation::Handoff {
-        operation::Handoff {
+    fn handoff(&self, target: &Session) -> handoff::Handoff {
+        handoff::Handoff {
             session: target.id.clone(),
             agent: self.agent,
             account: self.account.clone(),
@@ -199,9 +199,9 @@ async fn perform(
     };
     let chose_otherwise = !as_asked || account != asked.account;
     let (set_model, set_effort) = (model.clone(), effort.clone());
-    let moved = operation::hand_off_with(
+    let moved = handoff::hand_off_with(
         state,
-        operation::Handoff {
+        handoff::Handoff {
             session: target.id.clone(),
             agent,
             account,

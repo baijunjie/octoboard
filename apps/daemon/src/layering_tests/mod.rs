@@ -214,43 +214,23 @@ const UPWARD: &[Upward] = &[
     },
     Upward {
         from: "state",
-        to: "session",
-        scope: Scope::Items(&["term::FRAGMENT_HAZARD"]),
-        reason: "the notice for a dropped write queue explains the hazard in the words the \
-                 session's own write uses",
-    },
-    Upward {
-        from: "state",
         to: "titles",
         scope: Scope::Items(&["project_names", "resolve"]),
         reason: "a session's title is resolved where AppState publishes it",
     },
     Upward {
-        from: "accounts",
-        to: "coordinator",
-        scope: Scope::Items(&[
-            "account_choice",
-            "account_switch",
-            "launch::LaunchEdit",
-            "open::report_failed_launch",
-            "restart::record_needs_shell_env",
-        ]),
-        reason: "accounts::auto_switch answers a usage limit with the coordinator's account \
-                 switch and launch, the path a switch the user asks for takes",
-    },
-    Upward {
-        from: "handoff",
-        to: "coordinator",
-        scope: Scope::Items(&["bindings", "lifecycle", "open"]),
-        reason: "a handoff opens the receiving session and archives the original through the \
-                 coordinator's own open and lifecycle",
-    },
-    Upward {
         from: "messaging",
         to: "coordinator",
-        scope: Scope::Items(&["bindings", "lifecycle"]),
-        reason: "messaging::reporting acts on a worker's final report, archiving its team, \
-                 through the coordinator's bindings and lifecycle",
+        scope: Scope::Items(&[
+            "lifecycle::archive_finished",
+            "lifecycle::Finish",
+            "lifecycle::Finished",
+            "lifecycle::Unfinished",
+            "lifecycle::unfinished",
+        ]),
+        reason: "messaging::reporting archives a session that reported it is done, and checks \
+                 beforehand that it may be, through the coordinator's archive of a finished \
+                 session",
     },
 ];
 

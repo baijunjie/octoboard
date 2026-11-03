@@ -10,7 +10,7 @@ use crate::coordinator::projects::{
     add_project, update_project, AddProjectRequest, NewProjectSettings, ProjectChanges,
 };
 use crate::coordinator::test_support::{
-    binding_fixture, bound_session, code_of, console, console_workdir, create_account_request,
+    binding_fixture, bound_session, console, console_workdir_in, create_account_request,
     no_process_with_conversation, only_account, open_request, project_of, relaunch_stand_in,
     set_availability,
 };
@@ -20,6 +20,7 @@ use crate::protocol::{
 };
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
+use crate::test_support::code_of;
 use crate::test_support::{console_session, project_session};
 use std::sync::Arc;
 use std::time::Duration;
@@ -51,7 +52,7 @@ async fn a_session_record_takes_what_is_held_for_it_with_it() {
     ];
     for request in requests {
         let (state, dir) = crate::test_support::app_state("coordinator-saved-output-deleted");
-        let workdir = console_workdir(&dir);
+        let workdir = console_workdir_in(&dir);
         state
             .store
             .insert_console(&console(Agent::Claude, &workdir))
@@ -208,7 +209,7 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
         Agent::Claude,
         &[("fallback", &["low"]), ("other", &["high"])],
     );
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     let mut owner = console(Agent::Claude, &workdir);
     owner.project_session_launch.claude.model = Some("fallback".to_string());
     state.store.insert_console(&owner).unwrap();
@@ -419,16 +420,20 @@ fn interrupted_owner(id: &str) -> Session {
     }
 }
 
-fn report(
+async fn report(
+    state: &Arc<AppState>,
+    session_id: &str,
     summary: &str,
     status: crate::messaging::reporting::ReportStatus,
-) -> crate::messaging::reporting::Report<'_> {
-    crate::messaging::reporting::Report {
-        summary,
+) -> anyhow::Result<(String, crate::messaging::delivery::Delivery)> {
+    crate::messaging::reporting::deliver_own_report(
+        state,
+        session_id,
+        summary.to_string(),
         status,
-        open_items: &[],
-        synthesised: false,
-    }
+        Vec::new(),
+    )
+    .await
 }
 
 /// A report to an owner that is interrupted is kept for it, and a `done` one archives the
@@ -436,7 +441,7 @@ fn report(
 /// came among the information kept for it.
 #[tokio::test]
 async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
-    use crate::messaging::reporting::{deliver_report, ReportStatus};
+    use crate::messaging::reporting::ReportStatus;
     let (state, _dir, _live) = binding_fixture(
         "kept-report",
         vec![
@@ -452,8 +457,9 @@ async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
     };
 
     share("first news");
-    let note =
-        deliver_report(&state, "worker", report("all done", ReportStatus::Done)).expect("kept");
+    let (note, _) = report(&state, "worker", "all done", ReportStatus::Done)
+        .await
+        .expect("kept");
     assert!(
         note.contains("kept for the project session `starter`"),
         "{note}"
@@ -463,12 +469,9 @@ async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
         state.session_record("worker").unwrap().status,
         SessionStatus::Archived
     );
-    let note = deliver_report(
-        &state,
-        "asker",
-        report("which cache?", ReportStatus::NeedsDecision),
-    )
-    .expect("kept");
+    let (note, _) = report(&state, "asker", "which cache?", ReportStatus::NeedsDecision)
+        .await
+        .expect("kept");
     assert!(!note.contains("archived"), "{note}");
     assert_eq!(
         state.session_record("asker").unwrap().status,
@@ -495,9 +498,9 @@ async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
 /// A report to an archived owner is refused, keeps nothing and leaves the reporter as it was,
 /// and the refusal names the owner rather than reading as the reporter's own state; a reporter
 /// archived with its owner is told that too.
-#[test]
-fn a_report_to_an_archived_owner_is_refused_naming_the_owner() {
-    use crate::messaging::reporting::{deliver_report, ReportStatus};
+#[tokio::test]
+async fn a_report_to_an_archived_owner_is_refused_naming_the_owner() {
+    use crate::messaging::reporting::ReportStatus;
     let (state, _dir, _live) = binding_fixture(
         "report-archived-owner",
         vec![
@@ -511,7 +514,8 @@ fn a_report_to_an_archived_owner_is_refused_naming_the_owner() {
         &[],
     );
 
-    let err = deliver_report(&state, "left-out", report("done", ReportStatus::Done))
+    let err = report(&state, "left-out", "done", ReportStatus::Done)
+        .await
         .expect_err("refused");
     assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED, "{err}");
     assert!(
@@ -525,12 +529,9 @@ fn a_report_to_an_archived_owner_is_refused_naming_the_owner() {
         SessionStatus::Idle
     );
 
-    let err = deliver_report(
-        &state,
-        "archived-with-it",
-        report("done", ReportStatus::Done),
-    )
-    .expect_err("refused");
+    let err = report(&state, "archived-with-it", "done", ReportStatus::Done)
+        .await
+        .expect_err("refused");
     assert!(
         err.to_string().contains("your owner `starter` is archived"),
         "{err}"

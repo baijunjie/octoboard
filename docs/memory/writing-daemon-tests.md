@@ -115,7 +115,7 @@ Applies to a daemon request handler or task that runs an agent CLI for an effect
 `env_shell` snapshots take their real login shell, so the CLI that runs is the one installed on the machine, signed in
 to their default config directory, and the spend is real. A test meant only to check a refusal is no guard: an agent
 whose availability has not been determined yet counts as available (`agent_is_available` in
-`apps/daemon/src/coordinator/account_choice.rs`), so a request the test expects to be refused for that goes through to
+`apps/daemon/src/accounts/choice.rs`), so a request the test expects to be refused for that goes through to
 the CLI.
 
 So such a handler never calls an `env_shell` snapshot directly: it takes its shell environment from a

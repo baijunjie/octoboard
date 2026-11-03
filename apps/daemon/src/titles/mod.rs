@@ -53,7 +53,7 @@ pub fn resolve(
         records
             .prompt
             .as_ref()
-            .filter(|prompt| !prompt.starts_with(crate::handoff::operation::TAKEOVER_OPENING))
+            .filter(|prompt| !prompt.starts_with(crate::messaging::texts::TAKEOVER_OPENING))
             .cloned()
     })
 }

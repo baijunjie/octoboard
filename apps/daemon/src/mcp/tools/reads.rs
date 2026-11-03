@@ -11,7 +11,6 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::coordinator;
 use crate::mcp::lookup::{
     console_projects, find_console, find_project_in, optional_bool, optional_count,
     optional_string, own_console, resolve_session, session_or_caller,
@@ -21,7 +20,9 @@ use crate::mcp::views::{
 };
 use crate::protocol::{Console, Project, Role, Session, SessionStatus};
 use crate::records::{self, Locator, Resumability};
+use crate::state::bindings::owned_count_of;
 use crate::state::AppState;
+use crate::terminal::plain_text::strip_escapes;
 
 use super::settings::refresh_git_status;
 
@@ -151,7 +152,7 @@ pub(in crate::mcp) async fn get_session(
         .unwrap_or(DEFAULT_OUTPUT_TAIL);
     let output = recent_output(state, &target.id, tail).await;
     let branches = branch_names_of(state, vec![target.clone()]).await?;
-    let owned = coordinator::bindings::owned_count_of(state, &target)?;
+    let owned = owned_count_of(state, &target)?;
     let (mut description, status) =
         describe_session_shown(state, &target, caller, &branches, &owned)?;
     // Interrupted or archived: no process, and its conversation to be resumed.
@@ -508,42 +509,10 @@ pub(in crate::mcp) async fn list_sessions(
 /// renderer emits by the thousand carry no information once the frames are gone, and left in they
 /// are most of what the console session would be reading.
 fn readable_output(bytes: &[u8]) -> String {
-    let text = String::from_utf8_lossy(bytes);
+    let text = strip_escapes(&String::from_utf8_lossy(bytes));
     let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
+    for ch in text.chars() {
         match ch {
-            '\x1b' => match chars.peek() {
-                // CSI: parameters and intermediates, then one final byte in `@`..`~`.
-                Some('[') => {
-                    chars.next();
-                    while let Some(&next) = chars.peek() {
-                        chars.next();
-                        if ('@'..='~').contains(&next) {
-                            break;
-                        }
-                    }
-                }
-                // OSC and the other string-introducing sequences run to a terminator rather than
-                // to a single final byte.
-                Some(']') | Some('P') | Some('X') | Some('^') | Some('_') => {
-                    chars.next();
-                    while let Some(next) = chars.next() {
-                        if next == '\x07' {
-                            break;
-                        }
-                        if next == '\x1b' && chars.peek() == Some(&'\\') {
-                            chars.next();
-                            break;
-                        }
-                    }
-                }
-                // Anything else is a two-byte escape; drop both.
-                Some(_) => {
-                    chars.next();
-                }
-                None => {}
-            },
             '\n' | '\t' => out.push(ch),
             '\r' => {}
             ch if (ch as u32) < 0x20 || ch as u32 == 0x7f => {}

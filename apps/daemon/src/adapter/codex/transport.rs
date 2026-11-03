@@ -15,23 +15,12 @@ use tokio_tungstenite::tungstenite::{self, Message, WebSocket};
 
 use crate::adapter::codex::PrivateServerPlan;
 use crate::agents::{codex_app_server, json_rpc};
+use crate::session::term;
 use crate::terminal::ptyio::PartialWrite;
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(5);
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 const STOP_GRACE: Duration = Duration::from_secs(2);
-
-/// Acceptance could not be established after the queue request was sent. Retrying could duplicate it.
-#[derive(Debug)]
-pub struct UncertainSubmission(pub String);
-
-impl std::fmt::Display for UncertainSubmission {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for UncertainSubmission {}
 
 struct SocketDirectory(PathBuf);
 
@@ -229,7 +218,7 @@ impl CodexTransport {
 fn uncertain(detail: impl Into<String>) -> PartialWrite {
     PartialWrite {
         written: 1,
-        error: io::Error::other(UncertainSubmission(detail.into())),
+        error: io::Error::other(term::UncertainSubmission(detail.into())),
     }
 }
 
@@ -615,7 +604,11 @@ mod tests {
         });
         let error = transport.send("accepted or lost", "same-id").unwrap_err();
         assert_eq!(error.written, 1);
-        assert!(error.error.get_ref().unwrap().is::<UncertainSubmission>());
+        assert!(error
+            .error
+            .get_ref()
+            .unwrap()
+            .is::<term::UncertainSubmission>());
         server.join().unwrap();
     }
 

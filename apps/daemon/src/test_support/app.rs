@@ -33,6 +33,7 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
         dir.join("handoff"),
         crate::processes::ledger::ProcessLedger::new(&dir),
     ));
+    state.install_auto_switch(crate::coordinator::auto_switch::hooks());
     state.process_ledger.without_scanner();
     state.host_tools.replace(host_tools());
     // Stand-in sessions run no hooks, so nothing written into one is ever reported sent; a test of

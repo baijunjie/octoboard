@@ -3,14 +3,14 @@ use crate::accounts::dirs::normalize_account_dir;
 use crate::accounts::login;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
-    code_of, console, create_account_request, only_account, pins, project_of, set_availability,
-    temp_dir,
+    console, create_account_request, only_account, pins, project_of, set_availability, temp_dir,
 };
 use crate::paths;
 use crate::protocol::{
     error_code, error_parts, Agent, Availability, CodedError, Event, ProjectAccount, RequestBody,
 };
 use crate::state::AppState;
+use crate::test_support::code_of;
 use crate::test_support::console_with_project_and_accounts;
 use anyhow::Result;
 use std::path::Path;

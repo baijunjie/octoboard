@@ -16,7 +16,6 @@
 //! under; where that file is and its removal are `package_file.rs`'s, and [`remove`] is the end
 //! of that file's life.
 
-pub mod operation;
 pub(crate) mod package_file;
 #[cfg(test)]
 mod tests;
@@ -28,7 +27,8 @@ use anyhow::{bail, Result};
 
 use crate::branch_origin::session_branches::{self, BranchState, Worktree};
 use crate::hostfs::replace::{replace_file, Permissions};
-use crate::protocol::{Agent, Role, Session};
+use crate::messaging::naming::one_line;
+use crate::protocol::{Agent, Role, Session, SessionStatus};
 use crate::records::conversation::{self, Conversation, Speaker, Todo};
 use crate::records::{conversation_branch, Branch, Locator};
 use crate::state::AppState;
@@ -123,7 +123,7 @@ fn build_with(
         .map(|other| Owned {
             id: other.id.clone(),
             title: other.title.clone(),
-            status: word(&other.status),
+            status: status_word(other.status).to_owned(),
         })
         .collect();
 
@@ -155,7 +155,7 @@ fn build_with(
             account,
             role: session.role,
             place,
-            status: word(&session.status),
+            status: status_word(session.status).to_owned(),
             owner,
         },
         brief: brief
@@ -189,19 +189,16 @@ fn compaction_files(record: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// The wire spelling of an enum, as the protocol's other prose uses it.
-fn word(value: &impl serde::Serialize) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|value| value.as_str().map(|text| text.replace('_', " ")))
-        .unwrap_or_default()
-}
-
-fn agent_name(agent: Agent) -> &'static str {
-    match agent {
-        Agent::Claude => "Claude Code",
-        Agent::Codex => "Codex",
-        Agent::Grok => "Grok Build",
+/// A session's status as the package and the notices of a handoff word it.
+pub(crate) fn status_word(status: SessionStatus) -> &'static str {
+    match status {
+        SessionStatus::Starting => "starting",
+        SessionStatus::Working => "working",
+        SessionStatus::WaitingUser => "waiting for the user",
+        SessionStatus::Dormant => "viewing its background agents",
+        SessionStatus::Idle => "awaiting instructions",
+        SessionStatus::Interrupted => "interrupted",
+        SessionStatus::Archived => "archived",
     }
 }
 
@@ -242,7 +239,7 @@ impl Package {
         out.push_str(&format!("- Id: {}\n", session.id));
         out.push_str(&format!(
             "- Agent: {}, using {}\n",
-            agent_name(session.agent),
+            session.agent.label(),
             session.account
         ));
         out.push_str(&format!(
@@ -426,11 +423,6 @@ fn push_fenced(out: &mut String, text: &str) {
     }
     let fence = "`".repeat(longest.max(2) + 1);
     out.push_str(&format!("{fence}\n{text}\n{fence}\n"));
-}
-
-/// `text` as one line, for a place that takes a name and not a block.
-fn one_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn render_todo(out: &mut String, todo: &Todo) {

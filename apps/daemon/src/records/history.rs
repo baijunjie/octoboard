@@ -19,14 +19,14 @@ use crate::protocol::{Account, Agent, HistoryMessage, HistorySpeaker, Session};
 use crate::records::conversation::{for_each_line, line_entries, Entry};
 use crate::records::{history_branch, Branch, Hints, Locator};
 use crate::state::AppState;
-use crate::{handoff, time};
+use crate::time;
 
 /// How the messages Octoboard writes into a session begin, by what wrote them. The notices are
 /// worded at several places and all begin alike.
 const OCTOBOARD_OPENINGS: [&str; 8] = [
     texts::NOTICE_PREFIX,
     texts::REQUEST_OPENING,
-    handoff::operation::TAKEOVER_OPENING,
+    texts::TAKEOVER_OPENING,
     texts::BRIEF_OPENING,
     texts::REPORT_OPENING,
     texts::PAGE_SUBMISSION_OPENING,
@@ -352,7 +352,7 @@ mod tests {
             texts::request_opening_prompt(&caller, None, false, "the brief"),
             texts::request_opening_prompt(&caller, Some(&handover), true, "the brief"),
             texts::branches_opening_prompt(&caller, &handover, "the brief"),
-            handoff::operation::brief(&caller, Path::new("/tmp/package.md"), Some("a note")),
+            texts::takeover_prompt(&caller, Path::new("/tmp/package.md"), Some("a note")),
         ];
         for prompt in prompts {
             assert!(from_octoboard(&prompt), "{prompt}");

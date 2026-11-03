@@ -1,4 +1,4 @@
-//! The facade over the per-session write queues in `crate::messaging::outbox`: queuing a message,
+//! `AppState`'s side of the per-session write queues in [`super::outbox`]: queuing a message,
 //! flushing the queue into the running agent, the holds on a queue, and the reasons nothing is
 //! written into a session for now.
 
@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use super::AppState;
-use crate::messaging::outbox::{Drain, PromptSignal, Ticket};
+use super::outbox::{Drain, PromptSignal, Ticket};
 use crate::protocol::{notice_code, Agent, Notice, SessionStatus};
 use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
+use crate::state::AppState;
 
 /// A session's queue paused by [`AppState::pause_outbox`].
 pub struct OutboxPause {
@@ -142,11 +142,6 @@ impl Drop for OutboxHold {
     }
 }
 
-/// How long a message written to an idle session is given to be reported sent before it is taken
-/// to be sitting unsent in the input box. A prompt's `UserPromptSubmit` normally arrives well
-/// within a second of the Enter that sent it.
-pub(super) const SEND_WAIT: Duration = Duration::from_secs(3);
-
 /// A running session's prompts as its hooks report them, for the outbox to tell a message the agent
 /// sent from one it left in the input box.
 struct HookPrompts<'a> {
@@ -270,50 +265,6 @@ impl AppState {
             .iter()
             .filter(|(row, _)| !self.outbox.is_row_queued(*row))
             .count())
-    }
-
-    /// Keeps `text` in the store for the session `id`, to be queued at its next resume, and returns
-    /// the row it is kept in, unless it has a process or is being launched, in which case it
-    /// returns `None` and keeps nothing. Shared information is kept this way, and so are the
-    /// reports and notices for an owner (`crate::messaging::delivery`'s `write_to_owner`). The
-    /// check and the insert are one step under the `live` lock, which [`Self::begin_launch`] takes
-    /// for writing before it reads the store, so a launch that begins either sees the row or is
-    /// seen by this check, and a message is never kept for a session that has already read what was
-    /// kept. (An archive can still land between this check and the insert; its rows are then
-    /// cleared by the next archive or delete of the session, and are harmless until a reopen.)
-    pub fn keep_message_if_not_running(&self, id: &str, text: &str) -> Result<Option<i64>> {
-        let live = self.live.read().expect("live sessions lock poisoned");
-        if live.sessions.contains_key(id) || live.launching.contains(id) {
-            return Ok(None);
-        }
-        Ok(Some(self.store.add_kept_message(id, text)?))
-    }
-
-    /// [`Self::queue_message`] for a session a change of its account's sharing is restarting, and
-    /// `None` for any other. The check and the push are one step under the `live` lock, which
-    /// [`AccountSharingLock::end_restart`] takes to let the session go before it ends the hold, so
-    /// a message is never pushed after the hold has dropped what it held.
-    ///
-    /// [`AccountSharingLock::end_restart`]: super::AccountSharingLock::end_restart
-    pub(crate) fn queue_if_restarting(&self, id: &str, text: &str) -> Option<Ticket> {
-        let ticket = {
-            let live = self.live.read().expect("live sessions lock poisoned");
-            live.sharing_locks
-                .values()
-                .any(|entry| entry.restarting.contains(id))
-                .then(|| self.outbox.push(id, text))
-        }?;
-        // After the lock: it reads the live sessions again.
-        self.note_activity(id);
-        Some(ticket)
-    }
-
-    /// Tells the session's account a message queued, written or left unsent may have changed
-    /// whether the session is working.
-    fn note_activity(&self, id: &str) {
-        if let Ok(Some(session)) = self.store.get_session(id) {
-            self.note_sharing_activity(&session);
-        }
     }
 
     /// Writes out whatever is queued for this session, and says what became of it.
@@ -569,7 +520,7 @@ impl AppState {
     /// Forgets what is queued for `id`, a session that will never take it, and says so as a
     /// `sharing_messages_dropped` notice when `for_sharing` or `handoff_messages_dropped` otherwise,
     /// when anything was queued.
-    pub(super) fn drop_held_queue(&self, id: &str, for_sharing: bool) {
+    pub(crate) fn drop_held_queue(&self, id: &str, for_sharing: bool) {
         let dropped = self.outbox.forget(id);
         if dropped == 0 {
             return;

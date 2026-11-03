@@ -10,7 +10,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::mcp::lookup::optional_string_list;
-use crate::messaging::sharing::named_session;
+use crate::messaging::naming::named_session;
 use crate::messaging::texts::NOTICE_PREFIX;
 use crate::processes::ledger::{MoveRefused, ProcessTree};
 use crate::protocol::{Session, SessionStatus};

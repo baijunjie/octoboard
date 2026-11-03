@@ -20,10 +20,11 @@ use crate::protocol::{
 use crate::state::{broadcast_settings, AppState};
 use crate::store::ReorderOutcome;
 
-use super::account_choice::{
-    account_of_agent, checked_account_reference, refuse_if_agent_unavailable,
+use super::validate::required_text;
+use crate::accounts::choice::{
+    account_of_agent, checked_account_reference, refuse_if_account_not_signed_in,
+    refuse_if_account_quota_exhausted, refuse_if_agent_unavailable,
 };
-use super::validate::field_required;
 
 /// The name of the account whose name collides with `name` within `agent`, if any — the default
 /// account's name takes part, compared against [`crate::protocol::DEFAULT_ACCOUNT_NAME`] since the
@@ -179,6 +180,28 @@ pub(crate) fn refuse_if_account_disabled(
     ))
 }
 
+/// Refuses to put a session on an account that cannot take one: turned off
+/// ([`refuse_if_account_disabled`]) and, when `enforce_quota`, whose quota is used up
+/// ([`refuse_if_account_quota_exhausted`]) or that was found logged out
+/// ([`refuse_if_account_not_signed_in`]), in that order. `config_dir` is the account's directory as
+/// [`Store::account_dir`] resolves it.
+///
+/// [`Store::account_dir`]: crate::store::Store::account_dir
+pub(crate) fn refuse_unless_account_usable(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<&str>,
+    config_dir: Option<&str>,
+    enforce_quota: bool,
+) -> Result<()> {
+    refuse_if_account_disabled(state, agent, account_id)?;
+    if enforce_quota {
+        refuse_if_account_quota_exhausted(state, agent, account_id, config_dir)?;
+        refuse_if_account_not_signed_in(state, agent, account_id, config_dir)?;
+    }
+    Ok(())
+}
+
 /// Refuses a name that collides within its agent, naming the account it collides with.
 fn check_account_name_unique(
     state: &Arc<AppState>,
@@ -258,11 +281,7 @@ fn check_account_dir_unique(
 
 /// A name as stored: trimmed, and refused if that leaves nothing.
 pub(crate) fn normalize_account_name(name: &str) -> Result<String> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err(field_required("name"));
-    }
-    Ok(trimmed.to_string())
+    required_text("name", name)
 }
 
 pub(super) fn create_account(
@@ -574,6 +593,18 @@ pub(super) fn remove_agent(state: &Arc<AppState>, agent: Agent) -> Result<()> {
         return Err(added_agents_undecided("removed from"));
     }
     if state.store.remove_added_agent(agent)? {
+        broadcast_settings(state)?;
+    }
+    Ok(())
+}
+
+/// Puts the accounts of `agent` in the given order and broadcasts the settings if that changed it.
+pub(super) fn reorder_accounts(
+    state: &Arc<AppState>,
+    agent: Agent,
+    order: &[Option<String>],
+) -> Result<()> {
+    if state.store.reorder_accounts(agent, order)? {
         broadcast_settings(state)?;
     }
     Ok(())

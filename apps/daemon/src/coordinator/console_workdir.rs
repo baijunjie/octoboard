@@ -1,5 +1,5 @@
-//! Writes the console session's instruction file into a console's working directory: `AGENTS.md`,
-//! with `CLAUDE.md` a symlink to it, and removes a deleted console's working directory. The text is
+//! A console's working directory: the console session's instruction file written into it,
+//! `AGENTS.md` with `CLAUDE.md` a symlink to it, and its removal with the console. The text is
 //! built elsewhere; this puts it on disk.
 
 use std::path::{Path, PathBuf};

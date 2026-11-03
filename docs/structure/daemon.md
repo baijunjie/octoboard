@@ -60,16 +60,25 @@ the captured agent screens and records tests replay.
 
 - `src/coordinator/` — what each control-socket request does to the stored records and which host-role work it triggers:
   `mod.rs` the dispatcher, then one file per request family (`consoles`, `projects`, `open`, `resume`, `launch`,
-  `restart`, `bindings`, `lifecycle`, `account_switch`, `model_change`, `account_sharing`, `accounts`, `settings`,
-  `pages`, `messages`, `account_choice` for which agent and account a session opens with, `validate` for the checks of
-  request text fields), plus `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`) and
-  `archive_cleanup.rs` (a daemon task).
+  `restart` (what the restarts of a session's process share: `run` drives the stop and relaunch of an account switch
+  and a model change, the other helpers also serve a sharing change), `bindings`, `lifecycle` (archiving, deleting,
+  and a session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `account_switch`,
+  `model_change`, `account_sharing`, `accounts`,
+  `settings`, `pages`, `messages`, `auto_switch` (moving a session off an account whose usage limit stopped a turn;
+  lower layers reach it through `AppState`'s hooks), `validate` for the checks of request text fields), plus
+  `console_workdir.rs` (a console's working directory: its instruction file written into it, and its removal),
+  `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`) and `archive_cleanup.rs` (a daemon
+  task).
 - `src/session_request/` — a session asking the user to approve something (`request_session`, `request_resume_session`,
-  account switch, handoff): pending requests, the wait, the carrying out.
+  account switch, handoff): `mod.rs` the wait, `registry.rs` the requests the daemon holds, `request.rs` what a request
+  is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
+  of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
-  message), `outbox.rs` (the per-session ordered queue), `reporting.rs`, `sharing.rs`, `owner_notices.rs` (every notice
-  to an owner), `texts.rs` (fixed texts in Octoboard's own name).
-- `src/handoff/` — the handoff package built for a session another takes over, and the `hand_off_session` operation.
+  message), `outbox.rs` (the per-session ordered queue), `write_queue.rs` (`AppState`'s queuing, flushing and holds
+  over it), `reporting.rs`, `sharing.rs`, `naming.rs` (how a message names a session, a place, a quoted body),
+  `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
+- `src/handoff/` — the handoff package built for a session another takes over: build, render and file. The
+  `hand_off_session` operation is `coordinator/handoff.rs`.
 - `src/branch_origin/` — which session is responsible for a git branch: the record (`record.rs`, `target.rs`), the
   reconcile against the repository's branches (`reconcile.rs`), forks (`forks.rs`), handover (`handover.rs`), the
   listing, and `gate.rs` with `KeyedGates`, the keyed mutex branch cleanup shares.
@@ -91,7 +100,9 @@ the captured agent screens and records tests replay.
   the store's own `Result` and `StoreError`, which codes the SQLite failures to read or write Octoboard's database the
   user can fix (read-only data folder, full disk, a file that cannot be opened or read) as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
-  titles, turns, sharing status, git status, requests, availability, write queue facade, forgetting a record).
+  titles, turns, sharing status, git status, requests, availability, hooks to the automatic account switch, forgetting
+  a record), plus `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the
+  locked and archived refusals every operation on a session shares).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability, models, launch
   settings, `layout.rs` (where each agent keeps its files, one `AgentLayout` each), `codex_app_server.rs` (Codex's
   app-server handshake and start arguments), `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server and
@@ -103,8 +114,10 @@ the captured agent screens and records tests replay.
   (background sign-in), `cli_run.rs` (running an agent CLI as an account for a short query), `dirs.rs`, `relocate.rs`
   (copying a session's record into another account's directory for a switch), `codex_threads.rs` (Codex's thread state
   database, shared by the switch's copy and the shared configuration), `files.rs` (file helpers for account code and its
-  coordinator callers), `trash.rs`, `switch_continue.rs`, `auto_switch.rs` (automatic continuation of turns stopped by
-  a usage limit).
+  coordinator callers), `trash.rs`, `switch_continue.rs`, `choice/` (which agent and account a session opens with:
+  `mod.rs` resolving a session's own, `started.rs` one a session starts for another, `automatic.rs` automatic
+  selection and the order of an agent's accounts, `standing.rs` whether and why an account cannot open one,
+  `refusals.rs` the refusals of one that cannot).
 - [`src/accounts/shared_config/`](../../apps/daemon/src/accounts/shared_config/README.md) — an account sharing its
   agent's default configuration directory.
 
@@ -135,8 +148,10 @@ the captured agent screens and records tests replay.
 
 - `src/terminal/` — PTY processes and what clients see of them (`pty.rs` the descriptor, input, reader thread and child
   lifecycle, `fan.rs` the output fan-out of replay ring, parsed screen and attached clients, `ptyio.rs`, `ringbuf.rs`,
-  snapshots, titles, reply routing, `shell/` project shell terminals).
-- `src/session/` — one running agent process (`LiveSession`), input and message-write gates, `term/` launch, `draft.rs`,
+  snapshots, titles, reply routing, `plain_text.rs` output without its escape sequences, `shell/` project shell
+  terminals).
+- `src/session/` — one running agent process (`LiveSession`), input and message-write gates, `term/` launch and writing a
+  message into the process (and `UncertainSubmission`, the error of a write whose outcome is unknown), `draft.rs`,
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations, `interrupt/`, `wait.rs` (polling a
   condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`).
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
@@ -168,7 +183,8 @@ the captured agent screens and records tests replay.
 - `src/session_tools/` — the static description of the Octoboard MCP tools and what sessions are told of them:
   `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, then one file per tool family and `schemas.rs`
   the shared schema builders), `role.rs` the role description, `console_instructions.rs` the console session's
-  instruction text, and `Owner` and `CALL_TIMEOUT` in `mod.rs`.
+  instruction text (written to the console's directory by `coordinator/console_workdir.rs`), and `Owner` and
+  `CALL_TIMEOUT` in `mod.rs`.
 - `src/mcp/` — the Octoboard MCP server a session drives Octoboard with, over the catalogue in `src/session_tools/`:
   - `dispatch.rs` checks and runs one call through the same coordinator and reporting functions the control socket uses.
   - `tools/` has one file per tool or small group of related tools, named for it — for example `sessions.rs`,
@@ -180,8 +196,7 @@ the captured agent screens and records tests replay.
   - `lookup.rs` reads the arguments of a call (including the per-agent ones) and finds the records they name,
     `resolve_account` and `page_bounds` among them; `views.rs` describes a session, project or console back to the
     agent and holds the result fields tools share.
-  - `console_instructions.rs` writes the console session's instruction file, `stdio.rs` is the `mcp` mode and
-    `test_support.rs` the tests' shared fixtures.
+  - `stdio.rs` is the `mcp` mode and `test_support.rs` the tests' shared fixtures.
 
 ## Dependency direction
 
@@ -241,11 +256,8 @@ the rest of its type is read as production code, which can only add an edge, nev
 | `state` | `accounts` | `shared_config::in_use`, `shared_config::runs_under`, `shared_config::sharing_in_progress` | the sharing locks and claims `AppState` holds decide what an account's sharing change covers by `shared_config`'s own rules, and refuse with its error |
 | `state` | `handoff` | `package_file::remove_in` | forgetting a session removes its handoff package; `remove_in` is std-only file work |
 | `state` | `project_git` | `header::apply_header` | the git status `AppState` holds takes a fresh header the way `project_git` reads it |
-| `state` | `session` | `term::FRAGMENT_HAZARD` | the notice for a dropped write queue explains the hazard in the words the session's own write uses |
 | `state` | `titles` | `project_names`, `resolve` | a session's title is resolved where `AppState` publishes it |
-| `accounts` | `coordinator` | `account_choice`, `account_switch`, `launch::LaunchEdit`, `open::report_failed_launch`, `restart::record_needs_shell_env` | `accounts::auto_switch` answers a usage limit with the coordinator's account switch and launch, the path a switch the user asks for takes |
-| `handoff` | `coordinator` | `bindings`, `lifecycle`, `open` | a handoff opens the receiving session and archives the original through the coordinator's own open and lifecycle |
-| `messaging` | `coordinator` | `bindings`, `lifecycle` | `messaging::reporting` acts on a worker's final report, archiving its team, through the coordinator's bindings and lifecycle |
+| `messaging` | `coordinator` | `lifecycle::archive_finished`, `lifecycle::Finish`, `lifecycle::Finished`, `lifecycle::Unfinished`, `lifecycle::unfinished` | `messaging::reporting` archives a session that reported it is done, and checks beforehand that it may be, through the coordinator's archive of a finished session |
 
 ## Where new code goes
 
@@ -273,7 +285,7 @@ the rest of its type is read as production code, which can only add an edge, nev
   works for any agent reads the descriptor's fields.
 - Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
   (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`
-  and `owner_team.rs`).
+  and `owner_team.rs`, and holds `code_of`, the code of a coded error).
 
 ## Shared entry points
 
@@ -296,7 +308,15 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`) |
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |
 | Word what became of a delivery | `Delivery::note` (`src/messaging/delivery.rs`) |
-| Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `role_after_owner_change`, `duties_under_new_parent`) |
+| Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `parent_changed_notice`, `new_owner_notice`, `handed_over_to_you`, `handed_over_to_owner`, `first_report_on_bind`, `role_after_owner_change`, `duties_under_new_parent`) |
+| Name a session or put a title on one line in a model-facing message | `src/messaging/naming.rs` (`label`, `named_session`, `one_line`, `quote`) |
+| Which agent and account a session started for another opens with; the accounts of an agent as a listing shows them; why one cannot open a session | `src/accounts/choice/` (`started.rs`: `choice_for_started_session`; `automatic.rs`: `candidate_accounts`; `standing.rs`: `cannot_open`) |
+| Refuse an operation on a locked or an archived session | `state::refusals::ensure_unlocked`, `refuse_if_archived` (`src/state/refusals.rs`) |
+| Walk which sessions are bound to which (an owner's sessions, its team, a group, owned counts) | `src/state/bindings.rs` (`bound_sessions`, `team`, `group_in`, `owned_counts`) |
+| Serialize adding projects to one console | `AppState::claim_project_association` (`src/state/claims.rs`) |
+| Word what a session taking over another's work is told | `TAKEOVER_OPENING` and `takeover_prompt` (`src/messaging/texts.rs`); the handoff package itself is `src/handoff/` |
+| Archive a session whose work is finished (an owner archiving itself, a `done` report) | `coordinator::lifecycle::archive_finished` with its `Finished` rule (`src/coordinator/lifecycle/finished.rs`) |
+| Strip escape sequences from terminal output | `terminal::plain_text::strip_escapes` |
 | Share the steps of the two handover tools | `Parties` and friends in `src/mcp/tools/handover/mod.rs` |
 | Change a session's model and effort; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |

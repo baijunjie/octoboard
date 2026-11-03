@@ -3,8 +3,8 @@ use crate::coordinator::handle;
 use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::open::{open_session, OpenRequest};
 use crate::coordinator::test_support::{
-    archive_during_relaunch, bound_session, code_of, lead_session, shell_env, status_of,
-    stub_shell, temp_dir,
+    archive_during_relaunch, bound_session, lead_session, shell_env, status_of, stub_shell,
+    temp_dir,
 };
 use crate::protocol::{
     error_code, Account, Agent, CodedError, ConversationLocation, Event, OrchestrationRole, Origin,
@@ -12,6 +12,7 @@ use crate::protocol::{
 };
 use crate::session::term;
 use crate::state::AppState;
+use crate::test_support::code_of;
 use crate::test_support::{
     console_session, console_with_project_and_accounts, idle_stand_in, project_session,
 };

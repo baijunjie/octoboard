@@ -10,11 +10,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
-use crate::coordinator::{
-    self,
-    account_switch::{NoLongerDue, SwitchOnlyIf},
-    launch::LaunchEdit,
-};
+use super::account_switch::{self, NoLongerDue, SwitchOnlyIf};
+use super::launch::LaunchEdit;
+use super::{open, restart};
 use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::owner_notices;
 use crate::messaging::texts::NOTICE_PREFIX;
@@ -23,7 +21,7 @@ use crate::protocol::{
     DEFAULT_ACCOUNT_NAME,
 };
 use crate::session::term::{Launch, LaunchRequest};
-use crate::state::AppState;
+use crate::state::{AppState, AutoSwitchHooks};
 
 /// How long after moving a session off an account for its usage limit the session is not moved
 /// back onto that account.
@@ -186,7 +184,7 @@ impl PendingRecovery {
             account,
             dir.as_deref(),
             self.since + 1,
-        ) && coordinator::account_choice::account_can_open(state, self.session.agent, account)?
+        ) && crate::accounts::choice::account_can_open(state, self.session.agent, account)?
             && !account.is_some_and(|id| state.sharing_locked(id).is_some()))
     }
 
@@ -271,8 +269,16 @@ fn recovery_env(
     }
 }
 
+/// The entry points the lower layers reach through `AppState`, for it to install where it is built.
+pub(crate) fn hooks() -> AutoSwitchHooks {
+    AutoSwitchHooks {
+        after_quota_refresh,
+        after_failed_turn,
+    }
+}
+
 /// Only a newly recorded, successful probe is a reason to reconsider the waits.
-pub(crate) fn after_quota_refresh(
+fn after_quota_refresh(
     state: &Arc<AppState>,
     agent: Agent,
     account: Option<String>,
@@ -343,7 +349,7 @@ async fn recover_after_refresh(
         if switchable_session(state, &id).ok().flatten().is_none() {
             continue;
         }
-        if !coordinator::account_choice::account_can_open(state, agent, account.as_deref())
+        if !crate::accounts::choice::account_can_open(state, agent, account.as_deref())
             .unwrap_or(false)
             || account
                 .as_deref()
@@ -429,7 +435,7 @@ pub(crate) static MOVES: std::sync::Mutex<Vec<(String, tokio::sync::oneshot::Rec
 /// usage limit and the setting is on. Runs in the background, off the turn's path; the task it
 /// runs on ends in whether the session was moved, or resumed on its own account, which its owner
 /// is then told of. `None` when the setting is off, and nothing is judged.
-pub fn after_failed_turn(state: &Arc<AppState>, id: &str) -> Option<tokio::task::JoinHandle<bool>> {
+fn after_failed_turn(state: &Arc<AppState>, id: &str) -> Option<tokio::task::JoinHandle<bool>> {
     match state.store.auto_switch_on_usage_limit() {
         Ok(true) => {}
         Ok(false) => return None,
@@ -568,16 +574,15 @@ async fn try_switch_captured(
     // account has no directory of its own); the switch is given it in place of the original, which
     // is spent. Otherwise the switch takes the original itself.
     type Snapshot = Box<dyn FnOnce() -> Result<HashMap<String, String>> + Send>;
-    let (shell_env, snapshot): (_, Snapshot) =
-        if coordinator::restart::record_needs_shell_env(&session) {
-            let env = tokio::task::spawn_blocking(snapshot)
-                .await?
-                .context("snapshotting the user's shell environment")?;
-            (Some(env.clone()), Box::new(move || Ok(env)))
-        } else {
-            (None, Box::new(snapshot))
-        };
-    if !coordinator::account_switch::wait_for_usage_limit(&session, shell_env).await? {
+    let (shell_env, snapshot): (_, Snapshot) = if restart::record_needs_shell_env(&session) {
+        let env = tokio::task::spawn_blocking(snapshot)
+            .await?
+            .context("snapshotting the user's shell environment")?;
+        (Some(env.clone()), Box::new(move || Ok(env)))
+    } else {
+        (None, Box::new(snapshot))
+    };
+    if !account_switch::wait_for_usage_limit(&session, shell_env).await? {
         return Ok(false);
     }
     // The wait took time: what the session is doing is read again, and the account the limit was
@@ -724,12 +729,7 @@ async fn wait_for_claim(state: &Arc<AppState>, id: &str) {
 fn pick_target(state: &Arc<AppState>, session: &Session) -> Result<Option<Option<String>>> {
     let mut except = state.recently_left_for_limit(&session.id, LEFT_FOR_LIMIT_FOR);
     except.push(session.account_id.clone());
-    coordinator::account_choice::preferred_weekly_account_except(
-        state,
-        session.agent,
-        &except,
-        true,
-    )
+    crate::accounts::choice::preferred_weekly_account_except(state, session.agent, &except, true)
 }
 
 /// The session `id` as it stands if it is in a state to be switched now: a process at its prompt or
@@ -790,7 +790,7 @@ async fn switch_to_with_recovery(
         watch_launch: true,
         note: Some(&note),
     };
-    let continued = match coordinator::account_switch::switch_session_account_if(
+    let continued = match account_switch::switch_session_account_if(
         state,
         id,
         Some(target.clone()),
@@ -898,9 +898,7 @@ async fn restore(
     target: Option<&str>,
     launch: impl FnOnce(LaunchRequest) -> Result<Launch> + Send + 'static,
 ) -> Result<()> {
-    match coordinator::account_switch::restore_after_failed_switch(state, session, target, launch)
-        .await
-    {
+    match account_switch::restore_after_failed_switch(state, session, target, launch).await {
         Ok(()) => Ok(()),
         Err(err) if is_quiet(&err) || is_already_up(&err) || state.is_shutting_down() => Ok(()),
         Err(err) => {
@@ -915,7 +913,7 @@ async fn restore(
 }
 
 async fn tell_recovery_failed(state: &Arc<AppState>, session: &Session, err: &anyhow::Error) {
-    coordinator::open::report_failed_launch(state, session, err);
+    open::report_failed_launch(state, session, err);
     let (state, session, reason) = (state.clone(), session.clone(), format!("{err:#}"));
     let _ = tokio::task::spawn_blocking(move || {
         owner_notices::tell_owner_the_recovery_failed(&state, &session, &reason)

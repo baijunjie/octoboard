@@ -2,13 +2,12 @@ use super::*;
 use crate::coordinator::bindings::resolve_bound_to;
 use crate::coordinator::lifecycle::{archive_session, delete_session};
 use crate::coordinator::resume::resume_session_with;
-use crate::coordinator::test_support::{
-    code_of, open_request, state_for_opening, stub_shell, wait_until,
-};
+use crate::coordinator::test_support::{open_request, state_for_opening, stub_shell, wait_until};
 use crate::protocol::{error_code, notice_code, CodedError, Event, Role, Session, SessionStatus};
 use crate::session::term;
 use crate::session::LiveSession;
 use crate::state::AppState;
+use crate::test_support::code_of;
 use crate::test_support::console_with_project_and_accounts;
 use anyhow::Result;
 use std::sync::Arc;
@@ -359,4 +358,20 @@ async fn a_session_opened_with_a_task_shows_as_prompting_until_it_is_launched() 
         }
         assert_eq!(last, Some(false));
     }
+}
+
+/// A refusal after the row is recorded, here the launch claim refused because the daemon is
+/// shutting down, leaves no session row behind.
+#[tokio::test]
+async fn a_refused_launch_claim_leaves_no_session_row() {
+    let (state, _dir) = state_for_opening("coordinator-open-claim-refused");
+    state.stop_all_sessions().await;
+
+    let err = match begin_open(&state, open_request()).await {
+        Ok(_) => panic!("opened while shutting down"),
+        Err(err) => err,
+    };
+
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
+    assert!(state.store.list_sessions().unwrap().is_empty());
 }

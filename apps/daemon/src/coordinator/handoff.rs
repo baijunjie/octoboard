@@ -20,23 +20,26 @@
 //! deleting the session removes it (`AppState::forget_handoff_package`).
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use uuid::Uuid;
 
-use crate::coordinator::{self, open::OpenRequest};
+use super::open::OpenRequest;
+use crate::handoff::status_word;
 use crate::messaging::delivery::{self, WhenBlocked};
-use crate::messaging::owner_notices::{duties_under_new_parent, INDEPENDENT_COORDINATOR_ROLE};
-use crate::messaging::sharing::{named_session, one_line, place_of, quote};
-use crate::messaging::texts::NOTICE_PREFIX;
+use crate::messaging::naming::{label, named_session, place_of};
+use crate::messaging::owner_notices::{
+    duties_under_new_parent, new_owner_notice, parent_changed_notice, INDEPENDENT_COORDINATOR_ROLE,
+};
+use crate::messaging::texts::{takeover_prompt, NOTICE_PREFIX};
 use crate::protocol::{
     error_code, notice_code, Agent, CodedError, Notice, OrchestrationRole, Session, SessionStatus,
     TerminalAppearance,
 };
 use crate::session::term;
 use crate::session_tools::catalogue::qualified_tool_name;
+use crate::state::refusals::ensure_unlocked;
 use crate::state::{AppState, OutboxHold};
 
 /// What a handoff is asked for. The receiving session is another agent's; `account`, `model` and
@@ -80,7 +83,7 @@ pub(crate) async fn hand_off_with(
     // Held from the claim on, before anything is read: a refusal just drops it.
     let hold = state.hold_outbox(&request.session);
     let original = state.session_record(&request.session)?;
-    coordinator::bindings::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
+    super::bindings::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
     refuse_unless_it_can_be_handed_off(&original, request.agent)?;
     // Its conversation is read from its account's directory, which a change of sharing moves.
     crate::accounts::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
@@ -89,22 +92,23 @@ pub(crate) async fn hand_off_with(
     let open = receiving_request(state, &original, &request, Some(key.clone()));
 
     // Refused here for what opening would refuse, before the package is read and written.
-    coordinator::open::check_open(state, &open).await?;
+    super::open::check_open(state, &open).await?;
 
     // The original's brief is not kept anywhere, so the package has none; the first user message in
     // its conversation is the same text.
     let path = {
         let (state, original, key) = (state.clone(), original.clone(), key.clone());
-        tokio::task::spawn_blocking(move || super::prepare(&state, &original, None, &key)).await??
+        tokio::task::spawn_blocking(move || crate::handoff::prepare(&state, &original, None, &key))
+            .await??
     };
     let open = OpenRequest {
-        task: Some(brief(&original, &path, request.note.as_deref())),
+        task: Some(takeover_prompt(&original, &path, request.note.as_deref())),
         ..open
     };
-    let receiving = match coordinator::open::open_session_with(state, open, launch).await {
+    let receiving = match super::open::open_session_with(state, open, launch).await {
         Ok(receiving) => receiving,
         Err(err) => {
-            if let Err(remove_err) = super::remove(state, &key) {
+            if let Err(remove_err) = crate::handoff::remove(state, &key) {
                 tracing::warn!(%remove_err, "removing the package of a handoff that did not start failed");
             }
             return Err(err);
@@ -124,7 +128,7 @@ pub(crate) async fn hand_off_with(
     });
     // No branch cleanup follows the archive: the branches the original was responsible for have
     // moved to the receiving session, and any that could not move are not the archive's to remove.
-    coordinator::lifecycle::archive_session(state, &original.id).map_err(|err| {
+    super::lifecycle::archive_session(state, &original.id).map_err(|err| {
         // The original stays as it is, and what it started stays its own.
         if let Some(launch) = &carried {
             state.process_ledger.withdraw_hand_over(launch);
@@ -212,7 +216,7 @@ pub(crate) fn receiving_request(
 }
 
 pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agent) -> Result<()> {
-    let named = format!("`{}` (\"{}\")", original.id, one_line(&original.title));
+    let named = label(original);
     match original.status {
         SessionStatus::Archived => {
             return Err(CodedError::raised(
@@ -244,7 +248,7 @@ pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agen
         | SessionStatus::Idle
         | SessionStatus::Interrupted => {}
     }
-    coordinator::lifecycle::ensure_unlocked([original.clone()])?;
+    ensure_unlocked([original.clone()])?;
     if agent == original.agent {
         return Err(CodedError::raised(
             error_code::HANDOFF_TO_SAME_AGENT,
@@ -258,40 +262,6 @@ pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agen
         ));
     }
     Ok(())
-}
-
-/// How [`brief`] begins.
-pub(crate) const TAKEOVER_OPENING: &str = "You are taking over the work of the ";
-
-/// The receiving session's opening prompt: where the package is, to be read before anything else,
-/// and the note of the owner that asked for the handoff, when it left one.
-pub(crate) fn brief(original: &Session, package: &Path, note: Option<&str>) -> String {
-    let note = note.map_or_else(String::new, |note| {
-        format!(
-            "\n\nThe owner that handed the work off left you this note:\n\n{}",
-            quote(note)
-        )
-    });
-    format!(
-        "{TAKEOVER_OPENING}{kind} session `{id}` (\"{title}\"), a {agent} \
-         session. Octoboard is handing it off to you because the work moves to another agent. Its \
-         conversation cannot be resumed here, so Octoboard built a handoff package from its \
-         records:\n\n{path}\n\nRead that file first, all of it, before you do anything else. It \
-         holds its whole conversation (every user message and every reply, with tool output left \
-         out), its latest todo list, the files its edits changed, the git state of the branches \
-         it was responsible for, and the sessions it owned. Work out the goal, what was tried and \
-         what comes next from it, and carry on where the original stopped; do not start over. If the \
-         package names an earlier handoff package, read that one too, and so on back along the \
-         chain, before you carry on.\n\n\
-         Once you are running, Octoboard moves the original's place to you: its owner, its \
-         branches and its sessions. It sends you a message saying what you now hold, and archives \
-         the original; do not message the original.{note}",
-        kind = original.role.kind(),
-        id = original.id,
-        title = one_line(&original.title),
-        agent = original.agent.label(),
-        path = package.display(),
-    )
 }
 
 /// What moved to the receiving session.
@@ -401,14 +371,15 @@ pub(super) async fn tell(
                 continue;
             }
         };
-        let text = format!(
-            "{NOTICE_PREFIX}: your parent session has changed. {from} was handed off to {to}, which took \
-             its place. {owner_now} This replaces what you were told of your parent session when you \
-             were started. `{from_id}` no longer drives you; it is archived.",
-            from = named_session(original),
-            to = named_session(receiving),
-            owner_now = crate::messaging::owner_notices::owner_from_now_on(session.agent, "It"),
-            from_id = original.id,
+        let text = parent_changed_notice(
+            &format!(
+                ". {from} was handed off to {to}, which took its place.",
+                from = named_session(original),
+                to = named_session(receiving),
+            ),
+            session.agent,
+            "It",
+            &format!(". `{}` no longer drives you; it is archived.", original.id),
         );
         let told = match crate::messaging::owner_notices::running_or_leave(state, &session) {
             Ok(running) => {
@@ -432,20 +403,19 @@ pub(super) async fn tell(
         owner.status != SessionStatus::Archived && asked_by != Some(owner.id.as_str())
     });
     if let Some(owner) = to_tell {
-        let text = format!(
-            "{NOTICE_PREFIX}: {from}, which reported to you, was handed off to a session \
-             of {agent}, because its work moves to another agent. {to}{place} took its place and \
-             reports to you from now on: you drive it like any session of yours, with \
-             `{instruct_session}`, `{archive_session}` and `{reopen_session}`. The original is \
-             archived. The new session read a package built from the original's conversation \
-             and has its branches and its child sessions.",
-            from = named_session(original),
-            agent = receiving.agent.label(),
-            to = named_session(receiving),
-            place = place_of(state, receiving),
-            instruct_session = tool(owner.agent, "instruct_session"),
-            archive_session = tool(owner.agent, "archive_session"),
-            reopen_session = tool(owner.agent, "reopen_session"),
+        let text = new_owner_notice(
+            owner.agent,
+            &format!(
+                "{from}, which reported to you, was handed off to a session of {agent}, because \
+                 its work moves to another agent. {to}{place} took its place and reports to you \
+                 from now on:",
+                from = named_session(original),
+                agent = receiving.agent.label(),
+                to = named_session(receiving),
+                place = place_of(state, receiving),
+            ),
+            " The original is archived. The new session read a package built from the original's \
+             conversation and has its branches and its child sessions.",
         );
         // Kept for an owner that is interrupted, as a session's own report to it would be.
         if let Err(err) =
@@ -495,7 +465,7 @@ pub(super) async fn tell(
         held.push_str(&format!(
             "\n- Your child session: {} ({}).",
             named_session(session),
-            word_of(session.status)
+            status_word(session.status)
         ));
     }
     let text = format!(
@@ -583,18 +553,6 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
             session = %original, %err,
             "clearing the messages kept for the original session failed"
         );
-    }
-}
-
-fn word_of(status: SessionStatus) -> &'static str {
-    match status {
-        SessionStatus::Starting => "starting",
-        SessionStatus::Working => "working",
-        SessionStatus::WaitingUser => "waiting for the user",
-        SessionStatus::Dormant => "viewing its background agents",
-        SessionStatus::Idle => "awaiting instructions",
-        SessionStatus::Interrupted => "interrupted",
-        SessionStatus::Archived => "archived",
     }
 }
 

@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::branch_cleanup;
-use crate::coordinator;
+use crate::coordinator::lifecycle::{self, Finish, Finished};
 use crate::mcp::lookup::{optional_bool, required_str, resolve_owned_session};
 use crate::mcp::views::branch_names_of;
 use crate::protocol::{Agent, Session, SessionStatus};
@@ -33,7 +33,7 @@ pub(in crate::mcp) async fn archive_session(
     }
     let keep = optional_bool(arguments, "keep")?.unwrap_or(false);
     let target = resolve_owned_session(state, caller, wanted)?;
-    let archived = coordinator::lifecycle::archive_session(state, &target.id)?;
+    let archived = lifecycle::archive_session(state, &target.id)?;
     let mut answer = json!({ "session": target.id, "status": SessionStatus::Archived });
     if keep {
         // Nothing is removed, so nothing is waited for: the records stay bound to the archived
@@ -133,15 +133,14 @@ fn keep_note(
 /// they can go without forcing anything. What will stay is judged before the archive, since the
 /// answer has to be on its way before the process is ended.
 pub(in crate::mcp) async fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
-    let caller = archivable_self(state, caller)?;
+    let caller = lifecycle::archivable_self(state, caller)?;
     let left = branch_cleanup::survey::left_by(state, vec![caller.clone()]).await;
-    // Taken only now, and the checks made again under it, so a lock set while the branches were
-    // judged cannot slip past them; held across that wait, it would refuse every change of a lock
-    // in the daemon for as long as the judging took.
-    let archived = {
-        let _removal = state.claim_session_removal();
-        let caller = archivable_self(state, &caller)?;
-        coordinator::lifecycle::archive_session(state, &caller.id)?
+    // The checks are made again, so a lock set while the branches were judged cannot slip past
+    // them.
+    let archived = match lifecycle::archive_finished(state, &caller.id, Finished::Team)? {
+        Finish::Archived(archived) => archived,
+        Finish::AlreadyArchived => Vec::new(),
+        Finish::Refused(why) => bail!(why.refusal(&caller)),
     };
     branch_cleanup::remove::remove_in_background(state, archived);
     let mut answer = json!({
@@ -159,90 +158,6 @@ pub(in crate::mcp) async fn archive_self(state: &Arc<AppState>, caller: &Session
         );
     }
     Ok(answer)
-}
-
-/// The caller's own record, once it is a session that may archive itself now; otherwise why not.
-fn archivable_self(state: &Arc<AppState>, caller: &Session) -> Result<Session> {
-    let caller = state.session_record(&caller.id)?;
-    // A coordinator with a parent is offered the tool with the unbound session's set, so being
-    // bound is checked here.
-    if caller.bound_to.is_some() {
-        bail!(
-            "this session reports to an owner, so it does not archive itself: call `{}` with \
-             status `done` and no open items, which archives it once the report is accepted",
-            qualified_tool_name(caller.agent, "report")
-        );
-    }
-    if caller.locked {
-        bail!("this session is locked, so it cannot be archived; the user has to unlock it first");
-    }
-    let team = coordinator::bindings::team(state, &caller)?;
-    let locked: Vec<Session> = team
-        .iter()
-        .filter(|session| session.locked)
-        .cloned()
-        .collect();
-    if !locked.is_empty() {
-        bail!(
-            "this session cannot archive itself while sessions under it are locked: {}. The user \
-             has to unlock them first",
-            coordinator::lifecycle::session_labels(&locked)
-        );
-    }
-    let unarchived: Vec<Session> = team
-        .into_iter()
-        .filter(|session| session.status != SessionStatus::Archived)
-        .collect();
-    if let Some(refusal) = unarchived_refusal(caller.agent, &caller.id, &unarchived) {
-        bail!(refusal);
-    }
-    Ok(caller)
-}
-
-/// What refuses `archive_self` while sessions under the caller are not archived, or `None` when
-/// there are none. A session bound to a project coordinator is not the caller's to archive, so it
-/// is named under its coordinator with different advice from the caller's direct sessions.
-fn unarchived_refusal(caller: Agent, caller_id: &str, unarchived: &[Session]) -> Option<String> {
-    let archive_session = qualified_tool_name(caller, "archive_session");
-    let (direct, under_leads): (Vec<&Session>, Vec<&Session>) = unarchived
-        .iter()
-        .partition(|session| session.bound_to.as_deref() == Some(caller_id));
-    let mut advice = Vec::new();
-    if !direct.is_empty() {
-        advice.push(format!(
-            "{}: an owner archives its sessions once their tasks are done, so an unarchived one \
-             means its task is not finished; finish it and archive it with `{archive_session}` first",
-            coordinator::lifecycle::session_labels(direct)
-        ));
-    }
-    let mut leads: Vec<&str> = under_leads
-        .iter()
-        .filter_map(|session| session.bound_to.as_deref())
-        .collect();
-    leads.sort_unstable();
-    leads.dedup();
-    for lead in leads {
-        let named = coordinator::lifecycle::session_labels(
-            under_leads
-                .iter()
-                .copied()
-                .filter(|session| session.bound_to.as_deref() == Some(lead)),
-        );
-        advice.push(format!(
-            "{} under the project coordinator `{lead}`: not yours to archive; wait for the \
-             coordinator to finish them (its `done` report archives it), or archive `{lead}` with \
-             `{archive_session}`, which takes along its sessions that have no process running and \
-             is refused while any has one",
-            named
-        ));
-    }
-    (!advice.is_empty()).then(|| {
-        format!(
-            "this session cannot archive itself while sessions under it are not archived. {}. \
-             Then archive yourself",
-            advice.join(". ")
-        )
-    })
 }
 
 #[cfg(test)]

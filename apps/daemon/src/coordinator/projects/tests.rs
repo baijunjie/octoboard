@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
-    bound_session, console, console_workdir, lead_session, pins, project_of, status_of,
+    bound_session, console, console_workdir_in, lead_session, pins, project_of, status_of,
 };
 use crate::hostfs;
 use crate::protocol::{
@@ -22,7 +22,7 @@ use std::time::Duration;
 #[tokio::test]
 async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
     let (state, dir) = crate::test_support::app_state("coordinator-delete-project-stop");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -109,7 +109,7 @@ async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
 #[tokio::test]
 async fn remote_urls_are_read_for_unassociated_directories_of_the_directory_sources_only() {
     let (state, dir) = crate::test_support::app_state("coordinator-directory-remote-urls");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -118,7 +118,10 @@ async fn remote_urls_are_read_for_unassociated_directories_of_the_directory_sour
     let mut associated = project_of("console-1", "taken");
     associated.path = taken.to_string_lossy().into_owned();
     state.store.insert_project(&associated).unwrap();
-    let directories = vec![taken.clone(), fresh.clone(), bare.clone()];
+    let directories: Vec<_> = [&taken, &fresh, &bare]
+        .into_iter()
+        .map(|path| hostfs::identity::Resolved::of(path.clone()))
+        .collect();
 
     let reads = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let reader = |reads: &std::sync::Arc<std::sync::Mutex<Vec<PathBuf>>>| {
@@ -162,7 +165,7 @@ async fn remote_urls_are_read_for_unassociated_directories_of_the_directory_sour
 #[tokio::test]
 async fn add_project_detects_the_agent_only_when_none_is_given() {
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-detect");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -219,7 +222,7 @@ async fn add_project_detects_the_agent_only_when_none_is_given() {
 #[tokio::test]
 async fn add_project_applies_a_description_to_a_single_project_only() {
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-description");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -263,7 +266,7 @@ async fn add_project_applies_a_description_to_a_single_project_only() {
 #[tokio::test]
 async fn add_project_refuses_a_directory_spelled_another_way() {
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-spellings");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -316,7 +319,7 @@ async fn add_project_associates_a_linked_repository_of_a_parent_once() {
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-parent-link");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
         .unwrap();
     let parent = dir.join("parent");
     std::fs::create_dir_all(parent.join("repo").join(".git")).unwrap();
@@ -393,7 +396,7 @@ async fn adding_project_text_checks_trimmed_character_limits_before_storing_or_c
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-text-limits");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
         .unwrap();
     let repo = dir.join("repo");
     std::fs::create_dir(&repo).unwrap();
@@ -444,7 +447,7 @@ async fn derived_names_and_ignored_parent_text_do_not_block_association() {
     let (state, dir) = crate::test_support::app_state("coordinator-derived-project-text");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
         .unwrap();
     let long_name = "a".repeat(101);
     let repo = dir.join(&long_name);
@@ -501,7 +504,7 @@ async fn project_text_updates_preserve_legacy_values_and_reject_new_overlong_tex
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-text-limits");
     state
         .store
-        .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+        .insert_console(&console(Agent::Claude, &console_workdir_in(&dir)))
         .unwrap();
     let mut legacy = project_of("console-1", "project-1");
     legacy.name = format!("  {}  ", "n".repeat(101));
@@ -587,7 +590,7 @@ async fn project_text_updates_preserve_legacy_values_and_reject_new_overlong_tex
 async fn add_project_stores_its_own_git_workflow_values_for_every_project_added() {
     use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-git-workflow");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -632,7 +635,7 @@ async fn add_project_stores_its_own_git_workflow_values_for_every_project_added(
 async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
     use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-git-workflow");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -726,7 +729,7 @@ async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
 #[tokio::test]
 async fn a_project_description_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-description");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -797,7 +800,7 @@ fn update_project_request(project: &str, edit: impl FnOnce(&mut RequestBody)) ->
 #[tokio::test]
 async fn a_project_launch_setting_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-launch");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -841,7 +844,7 @@ async fn a_project_launch_setting_is_left_set_or_cleared_by_an_update() {
 #[tokio::test]
 async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-account");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -977,7 +980,7 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
 #[tokio::test]
 async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account() {
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-settings");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -1103,4 +1106,142 @@ async fn removing_a_project_with_a_lead_session_leaves_its_console_session_alone
     assert_eq!(session_ids(&state), ["hub"]);
     assert_eq!(status_of(&state, "hub"), Some(Idle));
     assert!(!live[0].poll_exit(), "the console session keeps running");
+}
+
+/// A project at a path its console already has is refused by the store as
+/// `all_projects_already_added` rather than as an internal error, and `insert_unless_associated`
+/// turns that into a skip, while another console's project at the path does not count.
+#[tokio::test]
+async fn a_project_at_an_associated_path_is_refused_by_the_store_and_skipped() {
+    let (state, dir) = crate::test_support::app_state("coordinator-insert-unless-associated");
+    let workdir = console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(Agent::Claude, &workdir))
+        .unwrap();
+    let mut other = console(Agent::Claude, &workdir);
+    other.id = "console-2".to_string();
+    other.name = "Other".to_string();
+    state.store.insert_console(&other).unwrap();
+    let first = project_of("console-1", "first");
+    assert!(insert_unless_associated(&state, &first).unwrap());
+
+    let mut again = project_of("console-1", "again");
+    again.path = first.path.clone();
+    let refused = anyhow::Error::from(state.store.insert_project(&again).unwrap_err());
+    assert_eq!(
+        refused.downcast_ref::<CodedError>().map(|coded| coded.code),
+        Some(error_code::ALL_PROJECTS_ALREADY_ADDED)
+    );
+    assert!(!insert_unless_associated(&state, &again).unwrap());
+    assert_eq!(state.store.project_paths("console-1").unwrap().len(), 1);
+
+    let mut elsewhere = project_of("console-2", "elsewhere");
+    elsewhere.path = first.path.clone();
+    assert!(insert_unless_associated(&state, &elsewhere).unwrap());
+}
+
+/// A second association for a console waits for the first one's claim to drop, while another
+/// console's goes ahead.
+#[tokio::test]
+async fn associating_projects_with_one_console_is_serialised() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-project-association-claim");
+    let first = state.claim_project_association("console-1").await;
+
+    let waiting = {
+        let state = state.clone();
+        tokio::spawn(async move { drop(state.claim_project_association("console-1").await) })
+    };
+    drop(state.claim_project_association("console-2").await);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(
+        !waiting.is_finished(),
+        "the second claim for the console waits"
+    );
+
+    drop(first);
+    tokio::time::timeout(Duration::from_secs(5), waiting)
+        .await
+        .expect("the claim is granted once released")
+        .unwrap();
+}
+
+async fn add_local(state: Arc<AppState>, path: PathBuf) -> Result<Vec<Project>> {
+    add_project(
+        &state,
+        AddProjectRequest {
+            console_id: "console-1".to_string(),
+            source: ProjectSource::Local,
+            path: Some(path.to_string_lossy().into_owned()),
+            remote_url: None,
+            name: None,
+            default_agent: None,
+            settings: NewProjectSettings::default(),
+            detect_default_agent: false,
+            tags: None,
+            description: None,
+            check_launch: true,
+            check_text_limits: true,
+        },
+    )
+    .await
+}
+
+/// An association does not store anything while another holds the console's claim, and goes
+/// ahead once it is released.
+#[tokio::test]
+async fn add_project_waits_for_the_consoles_claim_before_storing() {
+    let (state, dir) = crate::test_support::app_state("coordinator-add-project-claim-wait");
+    let workdir = console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(Agent::Claude, &workdir))
+        .unwrap();
+    let target = dir.join("target");
+    std::fs::create_dir(&target).unwrap();
+
+    let claim = state.claim_project_association("console-1").await;
+    let adding = tokio::spawn(add_local(state.clone(), target));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(!adding.is_finished(), "the association waits for the claim");
+    assert!(state.store.project_paths("console-1").unwrap().is_empty());
+
+    drop(claim);
+    let added = tokio::time::timeout(Duration::from_secs(5), adding)
+        .await
+        .expect("the association goes ahead once the claim is released")
+        .unwrap()
+        .unwrap();
+    assert_eq!(added.len(), 1);
+}
+
+/// Two overlapping associations of one directory store one project: the second is refused as
+/// already added.
+#[tokio::test]
+async fn two_concurrent_add_projects_for_one_directory_store_one_project() {
+    let (state, dir) = crate::test_support::app_state("coordinator-add-project-concurrent");
+    let workdir = console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(Agent::Claude, &workdir))
+        .unwrap();
+    let target = dir.join("target");
+    std::fs::create_dir(&target).unwrap();
+
+    let (first, second) = tokio::join!(
+        add_local(state.clone(), target.clone()),
+        add_local(state.clone(), target)
+    );
+
+    let results = [first, second];
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    let refused = results
+        .into_iter()
+        .find_map(Result::err)
+        .expect("one is refused");
+    assert_eq!(
+        refused.downcast_ref::<CodedError>().map(|coded| coded.code),
+        Some(error_code::ALL_PROJECTS_ALREADY_ADDED)
+    );
+    assert_eq!(state.store.project_paths("console-1").unwrap().len(), 1);
 }

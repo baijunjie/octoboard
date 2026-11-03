@@ -15,7 +15,7 @@ use crate::branch_origin::handover::{
 use crate::branch_origin::session_branches::{self, Worktree};
 use crate::git::repo_files::repository_of;
 use crate::mcp::tools::session_branches::branch_entry;
-use crate::messaging::sharing::named_session;
+use crate::messaging::naming::named_session;
 use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{Project, Role, Session, SessionStatus};
 use crate::state::AppState;

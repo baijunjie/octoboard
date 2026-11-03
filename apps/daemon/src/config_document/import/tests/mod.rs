@@ -6,14 +6,10 @@ mod settings;
 
 use super::*;
 use crate::protocol::{Launch, Project, ProjectSource};
-use crate::test_support::{app_state, ScratchDir, PATIENCE};
+use crate::test_support::{app_state, code_of, ScratchDir, PATIENCE};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-
-pub(super) fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
-    err.downcast_ref::<CodedError>().expect("coded").code
-}
 
 pub(super) fn project(name: &str, path: &str) -> DocumentProject {
     DocumentProject {

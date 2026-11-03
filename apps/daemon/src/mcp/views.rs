@@ -7,20 +7,19 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Value};
 
+use crate::accounts::choice;
 use crate::branch_origin::session_branches;
 use crate::coordinator;
 use crate::git_workflow;
 use crate::project_git::remote_url;
 use crate::protocol::{Agent, Console, Project, ProjectAccount, Session, SessionStatus};
-use crate::state::{AppState, WriteHold};
+use crate::state::{bindings, AppState, WriteHold};
 
 /// How many sessions are bound to each session, by id, for the sessions of a listing to be
 /// described with (see [`describe_session`]). Read once for the listing: counting per session is
 /// a scan of the whole table each time.
 pub(super) fn owned_counts_of(state: &Arc<AppState>) -> Result<HashMap<String, usize>> {
-    Ok(coordinator::bindings::owned_counts(
-        &state.store.list_sessions()?,
-    ))
+    Ok(bindings::owned_counts(&state.store.list_sessions()?))
 }
 
 /// The names of the branches each of `sessions` is responsible for, read on the blocking pool
@@ -301,7 +300,7 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
         // The same resolution a launch makes, so that what an agent reads is what a session
         // started in this project gets when nothing names otherwise.
         "effective": {
-            "default_agent": coordinator::account_choice::session_agent(None, Some(project), &console),
+            "default_agent": choice::session_agent(None, Some(project), &console),
             "accounts": per_agent_object(|agent| {
                 json!(console
                     .resolve_project_account(agent, project.accounts.get(agent))

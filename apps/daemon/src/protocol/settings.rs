@@ -72,7 +72,7 @@ pub struct Settings {
     /// keeps its target agent.
     pub auto_select_account: bool,
     /// Whether Octoboard itself moves a session to another account when its turn stopped on the
-    /// account's usage limit (see `crate::accounts::auto_switch`). Off unless the user turned it
+    /// account's usage limit (see `crate::coordinator::auto_switch`). Off unless the user turned it
     /// on. Only that: it does not choose a new session's account (`auto_select_account`) or answer
     /// an agent's request for a switch (`auto_approve_account_switches`).
     pub auto_switch_on_usage_limit: bool,

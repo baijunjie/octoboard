@@ -10,9 +10,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
+use crate::accounts::choice::{self, CannotOpen};
 use crate::accounts::quotas::{self, ShellSource};
-use crate::coordinator;
-use crate::protocol::{Account, Agent, QuotaWindow};
+use crate::protocol::{Agent, QuotaWindow};
 use crate::state::AppState;
 use crate::time::now_millis;
 
@@ -39,8 +39,8 @@ const SHARING_IN_PROGRESS: &str = "A change of its sharing settings is in progre
 /// order the user keeps them in, every agent while the list is undecided; a removed agent is not
 /// listed, so its tags are not shown, and neither is one that is not installed. One not yet
 /// detected is listed, its accounts not read yet. The accounts are in the order automatic account
-/// selection weighs them (`account_choice::account_candidates`): the order the user keeps them in,
-/// the ones it does not name after it. An account the user turned off is left out, the caller's
+/// selection weighs them (`account_candidates` in `accounts::choice`): the order the user keeps
+/// them in, the ones it does not name after it. An account the user turned off is left out, the caller's
 /// own included: it is shown on the account settings page alone. An account is judged exhausted by
 /// the rule that keeps it from opening a session (`AccountQuotas::exhausted`), and `can_open` also
 /// takes in an account the last reading found not logged in and a running change of its sharing,
@@ -79,7 +79,6 @@ async fn list_agents_with(
         };
         quotas::refresh_on_demand(state, &scope, shell).await;
     }
-    let stored = state.store.list_accounts()?;
     let now = now_millis();
     let added = state
         .store
@@ -91,13 +90,13 @@ async fn list_agents_with(
         if only.is_some_and(|only| only != agent) {
             continue;
         }
-        if !coordinator::account_choice::agent_is_available(state, agent) {
+        if !choice::agent_is_available(state, agent) {
             continue;
         }
         listed.push(json!({
             "agent": agent,
             "tags": tags.get(agent.wire_name()).cloned().unwrap_or_default(),
-            "accounts": agent_accounts(state, agent, &stored, now)?,
+            "accounts": agent_accounts(state, agent, now)?,
         }));
     }
     Ok(json!({
@@ -107,59 +106,32 @@ async fn list_agents_with(
 }
 
 /// The accounts of `agent` a session could be opened on, with the reading held for each, as
-/// [`list_agents`] describes them. `stored` is every stored account.
-fn agent_accounts(
-    state: &Arc<AppState>,
-    agent: Agent,
-    stored: &[Account],
-    now: i64,
-) -> Result<Vec<Value>> {
-    let mut candidates = Vec::new();
-    for id in coordinator::account_choice::account_candidates(state, agent)? {
-        candidates.push(match id {
-            None => (
-                None,
-                None,
-                state.store.default_account_name(agent)?,
-                state.store.account_disabled(agent, None)?,
-            ),
-            Some(id) => {
-                let Some(account) = stored
-                    .iter()
-                    .find(|account| account.agent == agent && account.id == id)
-                else {
-                    continue;
-                };
-                (
-                    Some(account.id.as_str()),
-                    Some(account.config_dir.as_str()),
-                    account.name.clone(),
-                    account.disabled,
-                )
-            }
-        });
-    }
+/// [`list_agents`] describes them.
+fn agent_accounts(state: &Arc<AppState>, agent: Agent, now: i64) -> Result<Vec<Value>> {
     let mut listed = Vec::new();
-    for (id, config_dir, name, disabled) in candidates {
-        if disabled {
+    for candidate in choice::candidate_accounts(state, agent)? {
+        if candidate.disabled {
             continue;
         }
-        let (held, exhausted) = state
-            .account_quotas
-            .held_and_exhausted(agent, id, config_dir, now);
-        let cannot_open = if exhausted.is_some() {
-            Some(USED_UP)
-        } else if state.account_quotas.signed_out(agent, id, config_dir) {
-            Some(NOT_SIGNED_IN)
-        } else if id.is_some_and(|id| state.sharing_locked(id).is_some()) {
-            Some(SHARING_IN_PROGRESS)
-        } else {
-            None
+        let id = candidate.id.as_deref();
+        let cannot_open = match choice::cannot_open(state, agent, id)? {
+            // Turned off or removed meanwhile: left out, as a turned-off account always is.
+            Some(CannotOpen::Unusable) => continue,
+            Some(CannotOpen::SignedOut) => Some(NOT_SIGNED_IN),
+            Some(CannotOpen::QuotaUsedUp(_)) => Some(USED_UP),
+            Some(CannotOpen::SharingInProgress) => Some(SHARING_IN_PROGRESS),
+            None => None,
         };
+        let (held, exhausted) = state.account_quotas.held_and_exhausted(
+            agent,
+            id,
+            candidate.config_dir.as_deref(),
+            now,
+        );
         listed.push(json!({
             "agent": agent,
             "account": id.unwrap_or("default"),
-            "account_name": name,
+            "account_name": candidate.name,
             "plan": held.as_ref().and_then(|quota| quota.plan.as_deref()),
             "fetched_at": held.as_ref().map(|quota| quota.fetched_at),
             "exhausted": exhausted.is_some(),

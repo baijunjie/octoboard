@@ -1,17 +1,20 @@
-use super::*;
+//! The tests of `crate::accounts::choice`, which open sessions through the coordinator.
+
+use crate::accounts::choice::*;
 use crate::coordinator::account_switch::switch_session_account;
 use crate::coordinator::accounts::set_account_disabled;
 use crate::coordinator::open::{
     check_open, open_session, open_session_detached, resolve_open, resolve_open_with, OpenRequest,
 };
 use crate::coordinator::test_support::{
-    code_of, console, console_workdir, open_request, pins, project_of, shell_env, state_for_opening,
+    console, console_workdir_in, open_request, pins, project_of, shell_env, state_for_opening,
 };
 use crate::protocol::{
     error_code, Account, Agent, Availability, CodedError, Origin, Project, ProjectAccount,
     SessionStatus,
 };
 use crate::state::AppState;
+use crate::test_support::code_of;
 use crate::test_support::{console_with_project_and_accounts, project_session};
 use crate::time::now_millis;
 use std::path::Path;
@@ -22,7 +25,7 @@ use std::sync::Arc;
 #[tokio::test]
 async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
     let (state, dir) = crate::test_support::app_state("coordinator-open-session-agent-unavailable");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -73,7 +76,7 @@ fn opening_a_session_is_refused_on_an_account_whose_quota_is_used_up() {
     use crate::protocol::{AccountQuota, Params, QuotaWindow, QuotaWindowKind};
 
     let (state, dir) = crate::test_support::app_state("coordinator-open-quota-exhausted");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -1010,5 +1013,79 @@ fn a_session_agent_falls_back_through_the_project_to_the_project_session_default
     assert_eq!(
         session_agent(Some(Agent::Claude), Some(&project), &console),
         Agent::Claude
+    );
+}
+
+/// What a listing says of an account's reason: turned off or gone first, then logged out, then a
+/// used-up quota, and a running sharing change last, so an account found logged out is not named
+/// for a quota it also happens to have used up.
+#[test]
+fn why_an_account_cannot_open_is_judged_in_a_fixed_order() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-cannot-open");
+    let why = |account: Option<&str>| cannot_open(&state, Agent::Claude, account).unwrap();
+    assert!(why(None).is_none());
+
+    hold_used_up(&state, None, Some(60_000), false);
+    assert!(matches!(why(None), Some(CannotOpen::QuotaUsedUp(_))));
+    hold_used_up(&state, None, Some(60_000), true);
+    assert!(matches!(why(None), Some(CannotOpen::SignedOut)));
+
+    insert_claude_account(&state, "off", true);
+    insert_claude_account(&state, "on", false);
+    assert!(matches!(why(Some("off")), Some(CannotOpen::Unusable)));
+    assert!(matches!(why(Some("gone")), Some(CannotOpen::Unusable)));
+    assert!(why(Some("on")).is_none());
+    let account = state.store.get_account("on").unwrap().unwrap();
+    let (_, lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+    assert!(matches!(
+        why(Some("on")),
+        Some(CannotOpen::SharingInProgress)
+    ));
+    drop(lock);
+    assert!(why(Some("on")).is_none());
+}
+
+/// The accounts of an agent as a listing shows them: the default account first under the name the
+/// user gave it, then the stored ones, each with its directory and whether it is turned off.
+#[test]
+fn the_candidate_accounts_are_listed_with_their_names_and_directories() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-candidate-accounts");
+    insert_claude_account(&state, "off", true);
+    state
+        .store
+        .set_default_account_name(Agent::Claude, Some("Mine"))
+        .unwrap();
+
+    let listed: Vec<_> = candidate_accounts(&state, Agent::Claude)
+        .unwrap()
+        .into_iter()
+        .map(|candidate| {
+            (
+                candidate.id,
+                candidate.config_dir,
+                candidate.name,
+                candidate.disabled,
+            )
+        })
+        .collect();
+
+    let dir_of = |id: &str| state.store.get_account(id).unwrap().unwrap().config_dir;
+    assert_eq!(
+        listed,
+        [
+            (None, None, "Mine".to_string(), false),
+            (
+                Some("claude-a".to_string()),
+                Some(dir_of("claude-a")),
+                "claude-a".to_string(),
+                false
+            ),
+            (
+                Some("off".to_string()),
+                Some("/tmp/off".to_string()),
+                "off".to_string(),
+                true
+            ),
+        ]
     );
 }

@@ -6,26 +6,20 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::accounts::relocate;
 use crate::accounts::switch_continue;
 use crate::agents::launch_settings::normalize_session_launch_setting;
 use crate::env_shell;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus, TerminalAppearance};
 use crate::session::term;
+use crate::state::refusals::refuse_if_archived;
 use crate::state::{session_archived, AppState};
 
-use super::account_choice::account_dir;
 use super::bindings::refuse_unless_still_askers;
 use super::launch::{
-    check_launch_settings, relaunch_session_with, session_scope, wait_until_down,
-    wait_until_down_within, LaunchEdit, SettingsChecked, SWITCH_STOP_TIMEOUT,
+    check_launch_settings, relaunch_session_with, session_scope, wait_until_down, LaunchEdit,
+    SettingsChecked,
 };
-use super::lifecycle::refuse_if_archived;
-use super::restart::{
-    came_up_under_claim, give_up_what_a_restart_held, record_needs_shell_env,
-    stop_carrying_processes,
-};
-use super::resume::resumable_agent_session_id;
+use super::restart::{self, came_up_under_claim, record_needs_shell_env};
 use super::validate::field_required;
 
 /// What [`set_session_model_with`] did.
@@ -211,124 +205,99 @@ pub(crate) async fn set_session_model_with(
     // only be cut off by it.
     state.quota_recovery.cancel(id);
     state.mark_model_change(id);
-    let (held_for_relaunch, ended_a_process) = stop_carrying_processes(state, id).await?;
-    if let Err(err) = wait_until_down_within(state, id, stop_timeout(state)).await {
-        let stopped = err
-            .downcast_ref::<CodedError>()
-            .is_some_and(|coded| coded.code == error_code::SESSION_DID_NOT_STOP);
-        return Err(if stopped {
-            CodedError::raised(
-                error_code::MODEL_CHANGE_DID_NOT_STOP,
-                "the session's process did not end in time, so its model was not changed",
-                &[("session", id)],
-            )
-        } else {
-            err
-        });
-    }
-    // From here the process is down; a failure that follows is the restart's, whatever it was.
-    let after_stop = async {
-        // Archiving it meanwhile is the user's later word on the matter. Hooks may also have
-        // learned the conversation's identity while validation or the shell snapshot was pending.
-        let stopped = state.session_record(id)?;
-        if stopped.status == SessionStatus::Archived {
-            return Err(session_archived(id));
-        }
-        let reading_state = state.clone();
-        let shell = shell_env.clone();
-        let (carry_on, boundary) = tokio::task::spawn_blocking(move || {
-            let boundary = crate::records::collector::observed_boundary(
-                &reading_state,
-                &stopped,
-                shell.clone(),
-            );
-            let carry_on = ended_a_process
-                && resumable_agent_session_id(&stopped).is_some_and(|agent_session_id| {
-                    let dir =
-                        account_dir(stopped.agent, stopped.config_dir.as_deref(), shell.as_ref());
-                    relocate::locate(stopped.agent, &dir, &agent_session_id).is_ok_and(|record| {
-                        switch_continue::should_continue(stopped.agent, &dir.join(record))
-                    })
-                });
-            (carry_on, boundary)
-        })
-        .await?;
-
-        let boundary = serde_json::to_string(&boundary)?;
-        if !state.store.set_session_launch_overrides_unless_archived(
-            id,
-            &model,
-            &effort,
-            Some(&boundary),
-        )? {
-            return Err(session_archived(id));
-        }
-        state.publish_session_by_id(id);
-        let put_back = || {
-            if let Err(revert) =
-                state.set_session_launch_overrides(id, &before.model, &before.effort)
-            {
-                tracing::warn!(
-                    session = %id,
-                    %revert,
-                    "putting the session's model and effort back failed"
-                );
-            }
-        };
-        if let Err(err) = relaunch_session_with(
-            state,
-            &claim,
-            id,
-            carry_on.then_some(switch_continue::CONTINUE_PROMPT),
-            false,
-            shell_env,
-            terminal_appearance,
-            launch,
-        )
-        .await
-        {
-            put_back();
-            return Err(err);
-        }
-        if !came_up_under_claim(state, id).await {
-            // Once the exit watcher has recorded it interrupted, so the record put back is the one
-            // every client is left with.
-            if let Err(err) = wait_until_down(state, id).await {
-                tracing::warn!(session = %id, %err, "the relaunched process was not recorded as ended");
-            }
-            put_back();
-            return Err(CodedError::raised(
-                error_code::MODEL_CHANGE_DID_NOT_COME_UP,
-                "the session ended as soon as it was relaunched with the new model, so it keeps the \
-                 model and effort it had",
-                &[("session", id)],
-            ));
-        }
-        Ok(carry_on)
-    };
-    let restarted = after_stop.await;
-    give_up_what_a_restart_held(
+    // Borrowed by the restart below, so that it stays held until this function returns.
+    let claim = &claim;
+    // From the process being down, a failure that follows is the restart's, whatever it was.
+    let restarted = restart::run(
         state,
         id,
-        held_for_relaunch,
-        restarted.is_err() && ended_a_process,
-    )
-    .await;
-    let carry_on = restarted?;
-    Ok(ModelChange::Restarted {
-        continued: carry_on,
-    })
-}
+        |err| {
+            if err
+                .downcast_ref::<CodedError>()
+                .is_some_and(|coded| coded.code == error_code::SESSION_DID_NOT_STOP)
+            {
+                CodedError::raised(
+                    error_code::MODEL_CHANGE_DID_NOT_STOP,
+                    "the session's process did not end in time, so its model was not changed",
+                    &[("session", id)],
+                )
+            } else {
+                err
+            }
+        },
+        |ended_a_process| async move {
+            // Archiving it meanwhile is the user's later word on the matter. Hooks may also have
+            // learned the conversation's identity while validation or the shell snapshot was
+            // pending.
+            let stopped = state.session_record(id)?;
+            if stopped.status == SessionStatus::Archived {
+                return Err(session_archived(id));
+            }
+            let reading_state = state.clone();
+            let shell = shell_env.clone();
+            let (carry_on, boundary) = tokio::task::spawn_blocking(move || {
+                let boundary = crate::records::collector::observed_boundary(
+                    &reading_state,
+                    &stopped,
+                    shell.clone(),
+                );
+                let carry_on =
+                    restart::carry_on_in_place(&stopped, shell.as_ref(), ended_a_process);
+                (carry_on, boundary)
+            })
+            .await?;
 
-/// How long a change of a session's model waits for the process it ended to be recorded down:
-/// [`SWITCH_STOP_TIMEOUT`], shortened by a test.
-#[cfg_attr(not(test), allow(unused_variables))]
-fn stop_timeout(state: &AppState) -> std::time::Duration {
-    #[cfg(test)]
-    if let Some(shorter) = *state.model_change_stop_timeout.lock().unwrap() {
-        return shorter;
-    }
-    SWITCH_STOP_TIMEOUT
+            let boundary = serde_json::to_string(&boundary)?;
+            if !state.store.set_session_launch_overrides_unless_archived(
+                id,
+                &model,
+                &effort,
+                Some(&boundary),
+            )? {
+                return Err(session_archived(id));
+            }
+            state.publish_session_by_id(id);
+            if let Err(err) = relaunch_session_with(
+                state,
+                claim,
+                id,
+                carry_on.then_some(switch_continue::CONTINUE_PROMPT),
+                false,
+                shell_env,
+                terminal_appearance,
+                launch,
+            )
+            .await
+            {
+                restart::put_back_model_and_effort(state, &before);
+                return Err(err);
+            }
+            if !came_up_under_claim(state, id).await {
+                // Once the exit watcher has recorded it interrupted, so the record put back is the
+                // one every client is left with.
+                if let Err(err) = wait_until_down(state, id).await {
+                    tracing::warn!(
+                        session = %id,
+                        %err,
+                        "the relaunched process was not recorded as ended"
+                    );
+                }
+                restart::put_back_model_and_effort(state, &before);
+                return Err(CodedError::raised(
+                    error_code::MODEL_CHANGE_DID_NOT_COME_UP,
+                    "the session ended as soon as it was relaunched with the new model, so it \
+                     keeps the model and effort it had",
+                    &[("session", id)],
+                ));
+            }
+            Ok(carry_on)
+        },
+    )
+    .await
+    .map_err(|failed| failed.error)?;
+    Ok(ModelChange::Restarted {
+        continued: restarted,
+    })
 }
 
 /// Refuses a change of the model of `session` an owner asked for while the session waits for the

@@ -12,7 +12,7 @@
 //!   process ends.
 //! - [`mcp_tokens`], [`turns`], [`left_for_limit`]: the per-session MCP tokens, the turn
 //!   bookkeeping a synthesised report rests on, and the accounts a session left for a usage limit.
-//! - [`write_queue`]: a facade over the write queue in `crate::messaging::outbox`.
+//! - [`auto_switch`]: the hooks through which lower layers reach the automatic account switch.
 //! - [`requests`]: the hands a waiting session request (`crate::session_request`) raises and the
 //!   status each such session's agent is at meanwhile.
 //! - [`background`], [`record_watch`]: each session's background tasks, default effort and record
@@ -21,6 +21,11 @@
 //!   project from racing and the timestamp that keeps them from piling up across several clients.
 //! - [`agent_availability`]: each agent's availability; [`forget`]: what is dropped where a record
 //!   is removed.
+//! - [`bindings`], [`refusals`]: free functions rather than `AppState` methods: the reads of which
+//!   sessions are bound to which, and the refusals every operation on a session shares.
+//!
+//! The write queues' methods on `AppState` (queuing, flushing, holds) are in
+//! `crate::messaging::write_queue`.
 //!
 //! What is held in memory for a session, project or console is dropped where its record is
 //! removed, the records the store removes by cascade included, except for what a later pass drops
@@ -29,7 +34,9 @@
 //! The types other modules name are re-exported here, so they are reached as `crate::state::X`.
 
 mod agent_availability;
+mod auto_switch;
 mod background;
+pub(crate) mod bindings;
 mod claims;
 mod forget;
 mod git_status;
@@ -39,6 +46,7 @@ mod live;
 mod mcp_tokens;
 mod process_exit;
 mod record_watch;
+pub(crate) mod refusals;
 mod requests;
 mod sessions;
 mod sharing_lock;
@@ -48,8 +56,9 @@ mod status;
 pub(crate) mod test_support;
 mod titles;
 mod turns;
-mod write_queue;
 
+pub use crate::messaging::write_queue::{OutboxHold, WriteHold};
+pub(crate) use auto_switch::AutoSwitchHooks;
 #[cfg(test)]
 pub(crate) use background::EMPTY_TASKS_DELAY;
 pub(crate) use claims::session_archived;
@@ -59,7 +68,6 @@ pub use live::Running;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
 pub use turns::TurnClose;
-pub use write_queue::{OutboxHold, WriteHold};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -83,7 +91,11 @@ use self::left_for_limit::AccountLeft;
 use self::live::LiveSessions;
 use self::sharing_status::SharingStatus;
 use self::turns::TurnState;
-use self::write_queue::SEND_WAIT;
+
+/// How long a message written to an idle session is given to be reported sent before it is taken
+/// to be sitting unsent in the input box. A prompt's `UserPromptSubmit` normally arrives well
+/// within a second of the Enter that sent it.
+const SEND_WAIT: Duration = Duration::from_secs(3);
 
 pub struct AppState {
     pub store: Store,
@@ -109,14 +121,18 @@ pub struct AppState {
     /// process goes away.
     turns: Mutex<HashMap<String, TurnState>>,
     /// The accounts Octoboard moved each session off because a turn stopped on their usage limit,
-    /// and when (`crate::accounts::auto_switch`), so that it does not move the session straight
+    /// and when (`crate::coordinator::auto_switch`), so that it does not move the session straight
     /// back to one.
     left_for_limit: Mutex<HashMap<String, Vec<AccountLeft>>>,
-    pub(crate) quota_recovery: crate::accounts::auto_switch::RecoveryState,
-    /// How long a change of a session's model waits for the process it ended to be recorded down,
-    /// in place of the switch's generous wait (`crate::coordinator::launch::SWITCH_STOP_TIMEOUT`).
+    pub(crate) quota_recovery: crate::coordinator::auto_switch::RecoveryState,
+    /// How the lower layers reach the automatic account switch (see [`auto_switch`]); none until
+    /// installed.
+    auto_switch: std::sync::OnceLock<AutoSwitchHooks>,
+    /// How long a restart of a session (`crate::coordinator::restart`) waits for the process it
+    /// ended to be recorded down, in place of the switch's generous wait
+    /// (`crate::coordinator::launch::SWITCH_STOP_TIMEOUT`).
     #[cfg(test)]
-    pub(crate) model_change_stop_timeout: Mutex<Option<std::time::Duration>>,
+    pub(crate) restart_stop_timeout: Mutex<Option<std::time::Duration>>,
     /// The generation each session's record watch (`crate::records::watch`, run for Claude Code by
     /// `crate::records::watch::claude_transcript` and for Codex by
     /// `crate::records::watch::codex_rollout`) is currently on. Starting a watch records a fresh
@@ -133,7 +149,7 @@ pub struct AppState {
     record_offsets: Mutex<HashMap<String, (std::path::PathBuf, u64)>>,
     /// The per-session write queues. Every message Octoboard sends into a running agent goes
     /// through them; see `crate::messaging::outbox`.
-    outbox: Outbox,
+    pub(crate) outbox: Outbox,
     /// The hook events received and not yet applied, per session (`crate::hooks::queue`).
     pub hook_queues: crate::hooks::queue::HookQueues,
     /// Each project's live git status, broadcast as `project_git_status` on every change and
@@ -268,6 +284,10 @@ pub struct AppState {
     /// The sessions an `interrupt_session` is sending keys into now (`crate::session::interrupt`),
     /// so two at once cannot send a second interrupt key. Held in memory only.
     interrupts: Mutex<HashSet<String>>,
+    /// Per console, the lock that serialises associating projects with it
+    /// ([`Self::claim_project_association`]). Held in memory only. A console's entry is removed
+    /// when its last claim is dropped.
+    project_associations: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Per console, the look at its projects' directories that outran its deadline and whose
     /// blocking thread is still stuck (`crate::coordinator::projects`). Held in memory only.
     pub stalled_directory_passes: StalledPasses<String>,
@@ -302,8 +322,9 @@ impl AppState {
             turns: Mutex::new(HashMap::new()),
             left_for_limit: Mutex::new(HashMap::new()),
             quota_recovery: Default::default(),
+            auto_switch: Default::default(),
             #[cfg(test)]
-            model_change_stop_timeout: Mutex::new(None),
+            restart_stop_timeout: Mutex::new(None),
             request_hands: Mutex::new(HashMap::new()),
             ended_turns: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
@@ -361,6 +382,7 @@ impl AppState {
             shutdown: tokio::sync::Notify::new(),
             shutting_down: AtomicBool::new(false),
             interrupts: Mutex::new(HashSet::new()),
+            project_associations: Mutex::new(HashMap::new()),
             stalled_directory_passes: Default::default(),
             unresolved_removals: Default::default(),
             process_ledger,

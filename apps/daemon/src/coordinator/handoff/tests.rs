@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Mutex;
 
 use serde_json::json;
@@ -53,12 +54,12 @@ struct Fixture {
 
 impl Fixture {
     fn new(name: &str) -> Self {
-        let (state, dir) = app_state(&format!("handoff-operation-{name}"));
+        let (state, dir) = app_state(&format!("coordinator-handoff-{name}"));
         let console = console(&dir);
         std::fs::create_dir_all(&console.workdir).unwrap();
         state.store.insert_console(&console).unwrap();
         let repo = repo_with(
-            &format!("handoff-operation-{name}-repo"),
+            &format!("coordinator-handoff-{name}-repo"),
             &[(b"a.txt", b"one\n")],
         );
         insert_project(&state, &repo);
@@ -634,8 +635,11 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
 #[test]
 fn the_opening_prompt_tells_the_receiving_session_to_follow_earlier_packages() {
     let original = session("original", true, "idle", None, false);
-    let task = brief(&original, Path::new("/handoff/receiving.md"), None);
-    assert!(task.starts_with(TAKEOVER_OPENING), "{task}");
+    let task = takeover_prompt(&original, Path::new("/handoff/receiving.md"), None);
+    assert!(
+        task.starts_with(crate::messaging::texts::TAKEOVER_OPENING),
+        "{task}"
+    );
     assert!(
         task.contains("If the package names an earlier handoff package, read that one too"),
         "{task}"
@@ -949,7 +953,7 @@ async fn what_the_original_started_is_carried_over_to_the_receiving_session() {
         .trees_of_sessions(&["original".to_string()], std::time::Duration::ZERO)
         .is_empty());
 
-    coordinator::lifecycle::archive_session(&fixture.state, &receiving.id).unwrap();
+    crate::coordinator::lifecycle::archive_session(&fixture.state, &receiving.id).unwrap();
     assert!(
         stops_running(child).await,
         "kept running past the receiving session"
@@ -978,7 +982,7 @@ async fn a_receiving_session_that_does_not_start_leaves_what_the_original_starte
     assert!(crate::test_support::is_running(child));
     assert_eq!(fixture.stored("original").status, SessionStatus::Idle);
 
-    coordinator::lifecycle::archive_session(&fixture.state, &original.id).unwrap();
+    crate::coordinator::lifecycle::archive_session(&fixture.state, &original.id).unwrap();
     assert!(stops_running(child).await, "kept running past the original");
 }
 
@@ -1016,7 +1020,7 @@ async fn a_failed_archive_takes_back_the_carry_over_of_what_the_original_started
         .store
         .set_session_locked("original", false)
         .unwrap();
-    coordinator::lifecycle::archive_session(&fixture.state, &original.id).unwrap();
+    crate::coordinator::lifecycle::archive_session(&fixture.state, &original.id).unwrap();
     assert!(
         stops_running(child).await,
         "carried to the receiving session though the handoff failed"
@@ -1115,4 +1119,38 @@ fn a_failed_move_of_an_uncoded_failure_nests_an_internal_error() {
     assert_eq!(code, error_code::HANDOFF_MOVE_FAILED);
     assert_eq!(params["reason_code"], "internal_error");
     assert_eq!(params["reason"], "disk exploded");
+}
+
+/// A session the handoff moved to the receiving session without a process, archived or
+/// interrupted, is left owed the notice of its new owner for its next launch.
+#[tokio::test]
+async fn a_moved_session_without_a_process_is_left_owed_the_notice_of_its_owner() {
+    let (state, dir) = app_state("coordinator-handoff-owner-notice");
+    state.store.insert_console(&console(&dir)).unwrap();
+    let repo = repo_with(
+        "coordinator-handoff-owner-notice-repo",
+        &[(b"a.txt", b"one\n")],
+    );
+    insert_project(&state, &repo);
+    let original = session("original", true, "idle", None, true);
+    let receiving = Session {
+        agent: Agent::Codex,
+        ..session("receiving", true, "idle", None, true)
+    };
+    let asleep = session("asleep", true, "interrupted", Some("receiving"), false);
+    let archived = session("archived", true, "archived", Some("receiving"), false);
+    for stored in [&original, &receiving, &asleep, &archived] {
+        state.store.insert_session(stored).unwrap();
+    }
+    let moved = Moved {
+        receiving,
+        owned: vec![asleep, archived],
+        branches: Ok(Vec::new()),
+    };
+
+    tell(&state, &original, &moved, None).await;
+
+    for id in ["asleep", "archived"] {
+        assert_eq!(state.store.owner_notice_pending(id).unwrap(), 1, "{id}");
+    }
 }

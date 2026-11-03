@@ -36,6 +36,14 @@ pub(crate) use scratch::*;
 pub(crate) use sessions::*;
 pub(crate) use stand_in::*;
 
+/// The code of the coded error `err` is, which a test that something is refused asserts beside the
+/// message.
+pub(crate) fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
+    err.downcast_ref::<crate::protocol::CodedError>()
+        .unwrap_or_else(|| panic!("a coded error: {err:#}"))
+        .code
+}
+
 /// How long a test waits for something a spawned shell does: a snapshot it should produce, a file
 /// it should write, a process it should end. Not a measure of speed: on a machine whose
 /// endpoint-security software stalls every `exec` for seconds at a time under a parallel burst, a

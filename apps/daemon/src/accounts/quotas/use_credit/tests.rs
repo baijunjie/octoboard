@@ -5,14 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::accounts::quotas::tests::{key, quota_of};
-use crate::protocol::{error_code, Agent, Code, CodedError, Event, ResetCreditOutcome};
+use crate::protocol::{error_code, Agent, CodedError, Event, ResetCreditOutcome};
 use crate::state::AppState;
-
-fn code_of(err: &anyhow::Error) -> Code {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .code
-}
+use crate::test_support::code_of;
 
 /// The held reading of Codex's default account, listing a credit that expires first.
 fn hold_credits(state: &Arc<AppState>) {

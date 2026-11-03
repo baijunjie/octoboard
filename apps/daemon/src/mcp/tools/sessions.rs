@@ -7,6 +7,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
+use crate::accounts::choice;
 use crate::branch_origin::handover::{branch_name, move_branches, Handed, Handover};
 use crate::coordinator::{self, launch::LaunchEdit, open::OpenRequest};
 use crate::mcp::lookup::{
@@ -16,9 +17,10 @@ use crate::mcp::lookup::{
 };
 use crate::mcp::views::{account_fields, branch_names_of, describe_session};
 use crate::messaging::texts::{self, branches_opening_prompt, request_opening_prompt};
-use crate::protocol::{Agent, Console, Origin, Project, Role, Session};
+use crate::protocol::{Console, Origin, Project, Role, Session};
 use crate::session::term::{Launch, LaunchRequest};
 use crate::session_request;
+use crate::state::bindings::owned_count_of;
 use crate::state::AppState;
 
 use super::handover::{branch_names, held_by};
@@ -136,51 +138,18 @@ fn session_in(
         optional_text(brief, "constraints")?.as_deref(),
     );
 
-    // Only in the caller's own console does a session follow the caller's agent and account:
-    // another console is set up apart, and its sessions run on what it and its projects set. A
-    // console session does not follow its own agent into a project either: the project's default
-    // agent is what its sessions run on, unless the call names one.
-    let in_own_console = caller.console_id == console.id;
-    let follows_callers_agent =
-        in_own_console && !(caller.role == Role::Console && project.is_some());
-    let chosen_agent = optional_agent(arguments, "agent")?;
-    // Read once: the agent and the account are both settled on it.
-    let automatic = state.store.auto_select_account()?;
-    let mut agent = match chosen_agent {
-        Some(agent) => Some(agent),
-        None if follows_callers_agent
-            && (automatic || coordinator::account_choice::agent_can_open(state, caller.agent)?) =>
-        {
-            Some(caller.agent)
-        }
-        None => None,
-    };
-    // An account is one agent's, so it is read for the agent the session will be of, as
-    // `coordinator::account_choice::session_agent` settles it.
-    let session_agent =
-        coordinator::account_choice::session_agent(agent, project.as_ref(), console);
-    let account = match optional_string(arguments, "account") {
-        Some(wanted) => Some(resolve_account(state, session_agent, &wanted)?),
-        None if automatic => {
-            match automatic_choice(
-                state,
-                caller,
-                session_agent,
-                console,
-                project.as_ref(),
-                chosen_agent.is_none(),
-            )? {
-                Some((picked_agent, picked_account)) => {
-                    agent = Some(picked_agent);
-                    Some(picked_account)
-                }
-                None => None,
-            }
-        }
-        None if in_own_console => callers_account(state, caller, session_agent)?,
-        // Inherit the project, else the console.
-        None => None,
-    };
+    let (agent, account) = choice::choice_for_started_session(
+        state,
+        caller,
+        console,
+        project.as_ref(),
+        optional_agent(arguments, "agent")?,
+        |session_agent| {
+            optional_string(arguments, "account")
+                .map(|wanted| resolve_account(state, session_agent, &wanted))
+                .transpose()
+        },
+    )?;
     Ok(OpenRequest {
         console_id: console.id.clone(),
         project_id: project.map(|project| project.id),
@@ -203,58 +172,6 @@ fn session_in(
         session_id: None,
         terminal_appearance: None,
     })
-}
-
-/// The agent and account of a session `caller` starts, or hands one off to, in `project` of
-/// `console` (none for a console session), when the call names no account and automatic account
-/// selection is on: what [`coordinator::account_choice::automatic_open_choice`] picks, as for a
-/// session the user opens without choosing one, of `agent` alone unless `other_agents`. `caller`'s
-/// own account (`callers_account`) is what the session inherits in `caller`'s own console. `None`
-/// when nothing is picked: the session then takes the project's account for its agent, else the
-/// console's.
-pub(super) fn automatic_choice(
-    state: &Arc<AppState>,
-    caller: &Session,
-    agent: Agent,
-    console: &Console,
-    project: Option<&Project>,
-    other_agents: bool,
-) -> Result<Option<(Agent, Option<String>)>> {
-    let inherited = if caller.console_id == console.id {
-        callers_account(state, caller, caller.agent)?.map(|account| (caller.agent, account))
-    } else {
-        None
-    };
-    coordinator::account_choice::automatic_open_choice(
-        state,
-        agent,
-        console,
-        project,
-        inherited,
-        other_agents,
-    )
-}
-
-/// The account a session of `agent` that `caller` starts runs on when the call names none:
-/// `caller`'s own, for a session of `caller`'s own agent, so that work a session hands out goes on
-/// in the same agent and account unless the user asked otherwise. `None` — the project's account
-/// for the agent, else the console's — for another agent, and when `caller`'s account could not
-/// open a session now: removed since, turned off, logged out, or with its quota used up.
-pub(super) fn callers_account(
-    state: &Arc<AppState>,
-    caller: &Session,
-    agent: Agent,
-) -> Result<Option<Option<String>>> {
-    if agent != caller.agent
-        || !coordinator::account_choice::account_can_open(
-            state,
-            agent,
-            caller.account_id.as_deref(),
-        )?
-    {
-        return Ok(None);
-    }
-    Ok(Some(caller.account_id.clone()))
 }
 
 /// Stops the turn a session of the caller's is running, through the same function the control
@@ -287,7 +204,7 @@ pub(in crate::mcp) async fn rename_session(
         &renamed,
         caller,
         &branches,
-        &coordinator::bindings::owned_count_of(state, &renamed)?,
+        &owned_count_of(state, &renamed)?,
     )
 }
 
@@ -306,7 +223,7 @@ pub(in crate::mcp) async fn set_session_pinned(
         &updated,
         caller,
         &branches,
-        &coordinator::bindings::owned_count_of(state, &updated)?,
+        &owned_count_of(state, &updated)?,
     )
 }
 
@@ -324,7 +241,7 @@ pub(in crate::mcp) async fn reopen_session(
     // resume takes it as the launch's prompt; for the other agents it is queued inside the
     // launch, because whichever hook would release it can fire the moment the agent starts, and a
     // refusal there also undoes it.
-    coordinator::resume::resume_session_edited_with(
+    coordinator::resume::resume_session_with_launch(
         state,
         &target.id,
         // Blank text is no instruction: announcing a prompt and then sending none (or queueing an

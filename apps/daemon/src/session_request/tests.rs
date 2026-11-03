@@ -1,11 +1,13 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
+use super::carry_out::refused_as_running;
 use super::*;
 use crate::branch_origin::{self, repo_key};
 use crate::git::repo_files::repository_of;
 use crate::protocol::{
-    Console, OrchestrationRole, Origin, Project, ProjectSource, SessionRequestAction, SessionStatus,
+    Console, OrchestrationRole, Origin, Project, ProjectSource, Role, SessionRequestAction,
+    SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{

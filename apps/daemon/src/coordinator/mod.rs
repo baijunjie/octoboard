@@ -5,25 +5,28 @@
 //! This file dispatches each request; the submodules carry the requests out:
 //!
 //! - [`consoles`], [`projects`]: creating, changing and removing consoles and projects.
+//! - [`console_workdir`]: a console's working directory, with the console session's instruction file
+//!   written into it, and its removal.
 //! - [`open`], [`resume`], [`launch`]: opening a session, resuming one, and starting and stopping
 //!   the agent process of a session, with the checks of its launch settings.
-//! - [`bindings`]: which session reports to which, and the walks of a team.
+//! - [`bindings`]: which session reports to which: binding, transferring and releasing a session.
+//! - [`handoff`]: handing a session off to a new session of another agent, which takes its whole
+//!   place.
 //! - [`lifecycle`]: archiving and deleting sessions with what goes with them, and their title, pin,
 //!   lock and colour.
 //! - [`account_switch`], [`model_change`], [`account_sharing`]: moving a session to another
 //!   account, or to another model or effort, and a change of an account's sharing, which ends and
 //!   resumes its idle sessions.
 //! - [`restart`]: what those three share when they restart a session's process.
-//! - [`account_choice`]: which agent and account a session opens with, and the refusals of one that
-//!   cannot open it.
+//! - [`auto_switch`]: moving a session to another account, or resuming it on its own, when a turn
+//!   stops on the usage limit.
 //! - [`accounts`], [`settings`]: the accounts and the agent list, and the settings.
-//! - [`messages`]: the user's own writes into a session.
+//! - [`messages`], [`pages`]: the user's own message into a session; the report panel's page list
+//!   and form submission, withdrawing a new worker's pages and the sweep of stray ones at start-up.
 //! - [`validate`]: the checks of the text fields requests carry.
-//! - [`pages`], [`archive_cleanup`], [`exit_watch`]: not request handlers. `pages` withdraws a
-//!   worker's pages from the report panel, and sweeps at daemon start the pages left on workers;
-//!   `archive_cleanup` is the daemon task that deletes archived sessions whose conversation can no
-//!   longer be resumed; `exit_watch` is the exit watcher every launch starts, and the sequence
-//!   that drops a live session.
+//! - [`archive_cleanup`], [`exit_watch`]: not request handlers. `archive_cleanup` is the daemon
+//!   task that deletes archived sessions whose conversation can no longer be resumed; `exit_watch`
+//!   is the exit watcher every launch starts, and the sequence that drops a live session.
 //!
 //! Writing into a running session is `crate::messaging::delivery`'s, the notices an owner is sent
 //! are `crate::messaging::owner_notices`', and the console session's reports, synthesis and
@@ -31,14 +34,18 @@
 //! the hooks (`crate::hooks::apply`) reach them without going through a control-socket request at
 //! all.
 
-pub mod account_choice;
+#[cfg(test)]
+mod account_choice_tests;
 pub mod account_sharing;
 pub mod account_switch;
 pub mod accounts;
 pub mod archive_cleanup;
+pub mod auto_switch;
 pub mod bindings;
+pub mod console_workdir;
 pub mod consoles;
 pub mod exit_watch;
+pub mod handoff;
 pub mod launch;
 pub mod lifecycle;
 mod messages;
@@ -70,14 +77,16 @@ use crate::protocol::{Agent, Event, ModelChangeOutcome, Origin, RequestBody};
 use crate::records;
 use crate::records::history;
 use crate::session::trust;
-use crate::state::{broadcast_settings, AppState};
+use crate::state::AppState;
 
-use account_choice::{agent_is_available, checked_account_reference, refuse_if_agent_unavailable};
+use crate::accounts::choice::{
+    agent_is_available, checked_account_reference, refuse_if_agent_unavailable,
+};
 use account_switch::switch_session_account;
 use accounts::{
     add_agent, create_account, delete_account_requested, refresh_account_quotas, remove_agent,
-    reorder_agents, set_account_disabled, set_default_account_name, start_account_login,
-    update_account_requested,
+    reorder_accounts, reorder_agents, set_account_disabled, set_default_account_name,
+    start_account_login, update_account_requested,
 };
 use bindings::release_requested;
 use consoles::{
@@ -89,9 +98,10 @@ use lifecycle::{
     inspect_session_records, rename_session, set_session_colour, set_session_locked,
     set_session_pinned,
 };
-use messages::{send_message, submit_page};
+use messages::send_message;
 use model_change::{set_session_model, ModelChange};
 use open::{open_session_detached, OpenRequest};
+use pages::{list_pages, submit_page};
 use projects::{
     add_project, delete_project, detect_project_agent, inspect_project_removal, refresh_git_status,
     update_project, AddProjectRequest, NewProjectSettings, ProjectChanges,
@@ -301,7 +311,11 @@ async fn handle_inner(
 
         RequestBody::ListDir { path } => {
             let expanded = hostfs::expand(&path);
-            let entries = hostfs::listing::list_dir(&expanded)?;
+            let (expanded, entries) = tokio::task::spawn_blocking(move || {
+                let entries = hostfs::listing::list_dir(&expanded)?;
+                Ok::<_, anyhow::Error>((expanded, entries))
+            })
+            .await??;
             Ok(Some(Event::DirListing {
                 id: request_id,
                 path: expanded.to_string_lossy().into_owned(),
@@ -311,8 +325,12 @@ async fn handle_inner(
 
         RequestBody::DetectDirectoryAgent { path } => {
             let directory = absolute_path(&path)?;
-            hostfs::require_directory(&directory)?;
-            let agent = detect_project_agent(state, &directory);
+            let detecting = state.clone();
+            let agent = tokio::task::spawn_blocking(move || {
+                hostfs::require_directory(&directory)?;
+                Ok::<_, anyhow::Error>(detect_project_agent(&detecting, &directory))
+            })
+            .await??;
             Ok(Some(Event::AgentDetected {
                 id: request_id,
                 agent,
@@ -548,9 +566,9 @@ async fn handle_inner(
             effort,
             terminal_appearance,
         } => {
-            let moved = crate::handoff::operation::hand_off(
+            let moved = handoff::hand_off(
                 state,
-                crate::handoff::operation::Handoff {
+                handoff::Handoff {
                     session,
                     agent,
                     account,
@@ -723,16 +741,7 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::ListPages { session } => {
-            // A project session can have pages too; only a session that does not exist is unknown.
-            state.session_record(&session)?;
-            let pages = state.store.list_pages(&session)?;
-            Ok(Some(Event::PageList {
-                id: request_id,
-                session_id: session,
-                pages,
-            }))
-        }
+        RequestBody::ListPages { session } => list_pages(state, request_id, session),
 
         RequestBody::SubmitPage {
             page: page_id,
@@ -1032,9 +1041,7 @@ async fn handle_inner(
         }
 
         RequestBody::ReorderAccounts { agent, accounts } => {
-            if state.store.reorder_accounts(agent, &accounts)? {
-                broadcast_settings(state)?;
-            }
+            reorder_accounts(state, agent, &accounts)?;
             Ok(None)
         }
 

@@ -42,6 +42,23 @@ pub struct Running {
 }
 
 impl AppState {
+    /// Keeps `text` in the store for the session `id`, to be queued at its next resume, and returns
+    /// the row it is kept in, unless it has a process or is being launched, in which case it
+    /// returns `None` and keeps nothing. Shared information is kept this way, and so are the
+    /// reports and notices for an owner (`crate::messaging::delivery`'s `write_to_owner`). The
+    /// check and the insert are one step under the `live` lock, which [`Self::begin_launch`] takes
+    /// for writing before it reads the store, so a launch that begins either sees the row or is
+    /// seen by this check, and a message is never kept for a session that has already read what was
+    /// kept. (An archive can still land between this check and the insert; its rows are then
+    /// cleared by the next archive or delete of the session, and are harmless until a reopen.)
+    pub fn keep_message_if_not_running(&self, id: &str, text: &str) -> Result<Option<i64>> {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        if live.sessions.contains_key(id) || live.launching.contains(id) {
+            return Ok(None);
+        }
+        Ok(Some(self.store.add_kept_message(id, text)?))
+    }
+
     pub fn live_session(&self, id: &str) -> Option<Arc<LiveSession>> {
         self.live
             .read()

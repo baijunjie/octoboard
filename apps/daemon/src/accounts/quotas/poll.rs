@@ -494,13 +494,7 @@ fn finish_reading(
 ) -> Option<tokio::task::JoinHandle<()>> {
     let (key, started_at) = (claim.key.clone(), claim.started_at);
     if state.account_quotas.finish(state, claim, quota) {
-        crate::accounts::auto_switch::after_quota_refresh(
-            state,
-            key.agent,
-            key.account,
-            key.config_dir,
-            started_at,
-        )
+        state.after_quota_refresh(key.agent, key.account, key.config_dir, started_at)
     } else {
         None
     }

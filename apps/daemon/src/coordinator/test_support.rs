@@ -6,14 +6,15 @@ use crate::coordinator::launch::relaunch_session_with;
 use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::open::OpenRequest;
 use crate::protocol::{
-    error_code, Account, Agent, Availability, CodedError, Console, OrchestrationRole, Origin,
-    Project, ProjectAccount, ProjectSource, RequestBody, Session, SessionStatus,
+    error_code, Account, Agent, Availability, Console, OrchestrationRole, Origin, Project,
+    ProjectAccount, ProjectSource, RequestBody, Session, SessionStatus,
 };
 use crate::session::term;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
-    console_session, console_with_project_and_accounts, idle_stand_in, project_session, ScratchDir,
+    code_of, console_session, console_with_project_and_accounts, idle_stand_in, project_session,
+    ScratchDir,
 };
 use anyhow::Result;
 use std::collections::HashMap;
@@ -39,7 +40,7 @@ pub(super) fn console(default_agent: Agent, workdir: &Path) -> Console {
 
 /// A console workdir inside a store's scratch directory, kept apart from the database, which
 /// deleting the console would otherwise wipe.
-pub(super) fn console_workdir(dir: &Path) -> PathBuf {
+pub(super) fn console_workdir_in(dir: &Path) -> PathBuf {
     let workdir = dir.join("workdir");
     std::fs::create_dir(&workdir).expect("workdir");
     workdir
@@ -96,12 +97,6 @@ pub(super) fn only_account(state: &Arc<AppState>) -> Account {
     let accounts = state.store.list_accounts().unwrap();
     assert_eq!(accounts.len(), 1, "{accounts:?}");
     accounts.into_iter().next().unwrap()
-}
-
-pub(super) fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .code
 }
 
 pub(super) fn shell_env(
@@ -355,7 +350,7 @@ pub(super) fn open_request() -> OpenRequest {
 
 pub(super) fn state_for_opening(name: &str) -> (Arc<AppState>, ScratchDir) {
     let (state, dir) = crate::test_support::app_state(name);
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))

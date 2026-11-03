@@ -1,18 +1,25 @@
 //! What the restarts of a session's process share: a switch of its account, a change of its model
 //! or effort and a change of its account's sharing end the process and relaunch it, carrying over
 //! what it started, and judge the relaunch by whether it stays up; and whether finding the
-//! session's conversation record needs the shell snapshot.
+//! session's conversation record needs the shell snapshot. [`run`] drives the stop, the wait for
+//! the process to be down and the give-up; what happens between is the caller's.
 
+use std::collections::HashMap;
+use std::future::Future;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::accounts::choice::account_dir;
+use crate::accounts::{relocate, switch_continue};
 use crate::processes::ledger::HeldForLaunch;
-use crate::protocol::{Session, SessionStatus};
+use crate::protocol::{Agent, Session, SessionStatus};
 use crate::state::AppState;
 
-use super::launch::{came_up, stop_process};
+use super::launch::{came_up, stop_process, wait_until_down_within, SWITCH_STOP_TIMEOUT};
+use super::resume::resumable_agent_session_id;
 
 /// How long a relaunched session has to stay up before a switch counts it as having come up. An
 /// agent that cannot find the conversation it was asked to resume says so and exits within a
@@ -29,6 +36,114 @@ use super::launch::{came_up, stop_process};
 /// on its own sign-in instead of exiting — Grok Build included, which waits on a browser
 /// device-code approval — so a switch to such an account counts as having come up.
 const SWITCH_SETTLE: Duration = Duration::from_secs(4);
+
+/// How long a restart waits for the process it ended to be recorded down: [`SWITCH_STOP_TIMEOUT`],
+/// shortened by a test.
+#[cfg_attr(not(test), allow(unused_variables))]
+fn stop_timeout(state: &AppState) -> Duration {
+    #[cfg(test)]
+    if let Some(shorter) = *state.restart_stop_timeout.lock().unwrap() {
+        return shorter;
+    }
+    SWITCH_STOP_TIMEOUT
+}
+
+/// Waits for `id`, a session a restart ended, to be recorded down, for [`stop_timeout`].
+pub(super) async fn wait_until_stopped(state: &Arc<AppState>, id: &str) -> Result<()> {
+    wait_until_down_within(state, id, stop_timeout(state)).await
+}
+
+/// Why [`run`] failed: the error, and whether the restart had ended the session's process and seen
+/// it down by then, which leaves the session interrupted and not as it was. A process that did not
+/// stop in time, or one that had exited by itself before the stop, is not "ended" by the restart.
+#[derive(Debug)]
+pub(crate) struct Failed {
+    pub error: anyhow::Error,
+    pub ended_process: bool,
+}
+
+impl<E: Into<anyhow::Error>> From<E> for Failed {
+    fn from(error: E) -> Self {
+        Self {
+            error: error.into(),
+            ended_process: false,
+        }
+    }
+}
+
+/// Restarts `id`, a session whose claim the caller holds: ends its process with what it started
+/// carried over ([`stop_carrying_processes`]), waits for it to be recorded down, runs `after_stop`
+/// (told whether this stopped a running process) and gives up what was held for the relaunch
+/// ([`give_up_what_a_restart_held`]), kept when `after_stop` failed after the process had been
+/// ended. `did_not_stop` words the failure of the wait for the process to be down.
+pub(crate) async fn run<T, Fut>(
+    state: &Arc<AppState>,
+    id: &str,
+    did_not_stop: impl FnOnce(anyhow::Error) -> anyhow::Error,
+    after_stop: impl FnOnce(bool) -> Fut,
+) -> Result<T, Failed>
+where
+    Fut: Future<Output = Result<T>>,
+{
+    let not_ended = |error| Failed {
+        error,
+        ended_process: false,
+    };
+    let (held, ended_a_process) = stop_carrying_processes(state, id)
+        .await
+        .map_err(not_ended)?;
+    if let Err(err) = wait_until_stopped(state, id).await {
+        return Err(not_ended(did_not_stop(err)));
+    }
+    let restarted = after_stop(ended_a_process).await;
+    give_up_what_a_restart_held(state, id, held, restarted.is_err() && ended_a_process).await;
+    restarted.map_err(|error| Failed {
+        error,
+        ended_process: ended_a_process,
+    })
+}
+
+/// Whether a restart that `ended` a process carries on the turn it cut off, or that a usage limit
+/// had stopped: the conversation record at `record`, relative to the account directory `dir`,
+/// says so (`switch_continue::should_continue`). A process that had ended before was left there by
+/// something else.
+pub(crate) fn carry_on(agent: Agent, dir: &Path, record: &Path, ended: bool) -> bool {
+    ended && switch_continue::should_continue(agent, &dir.join(record))
+}
+
+/// [`carry_on`] for `stopped`, a session restarted on its own account: its record is found there,
+/// where `shell_env` resolves the default account. A record that cannot be found carries nothing
+/// on. Blocking.
+pub(crate) fn carry_on_in_place(
+    stopped: &Session,
+    shell_env: Option<&HashMap<String, String>>,
+    ended: bool,
+) -> bool {
+    ended
+        && resumable_agent_session_id(stopped).is_some_and(|agent_session_id| {
+            let dir = account_dir(stopped.agent, stopped.config_dir.as_deref(), shell_env);
+            relocate::locate(stopped.agent, &dir, &agent_session_id)
+                .is_ok_and(|record| carry_on(stopped.agent, &dir, &record, ended))
+        })
+}
+
+/// Records the model and effort `before` had, for a restart that recorded others for its relaunch
+/// and failed. A revert that fails is logged, never allowed to hide the reason the restart failed.
+pub(crate) fn put_back_model_and_effort(state: &Arc<AppState>, before: &Session) {
+    if let Ok(now) = state.session_record(&before.id) {
+        if (&now.model, &now.effort) != (&before.model, &before.effort) {
+            if let Err(revert) =
+                state.set_session_launch_overrides(&before.id, &before.model, &before.effort)
+            {
+                tracing::warn!(
+                    session = %before.id,
+                    %revert,
+                    "putting the session's model and effort back failed"
+                );
+            }
+        }
+    }
+}
 
 /// Ends the process of `id`, a session about to be restarted by a switch, a change of its model or
 /// a change of its account's sharing, the way archiving ends it, with what the process started

@@ -4,7 +4,7 @@ use crate::protocol::{BackgroundTask, Role, Session, SessionStatus};
 use crate::state::AppState;
 use crate::test_support::bare_session;
 
-pub(super) fn session_record(id: &str, status: SessionStatus) -> Session {
+pub(crate) fn session_record(id: &str, status: SessionStatus) -> Session {
     Session {
         status,
         ..bare_session(id, Role::Project)

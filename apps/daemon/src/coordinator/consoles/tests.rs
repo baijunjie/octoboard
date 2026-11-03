@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::projects::{update_project, ProjectChanges};
-use crate::coordinator::test_support::{console, console_workdir};
+use crate::coordinator::test_support::{console, console_workdir_in};
 use crate::protocol::{
     error_code, Agent, CodedError, Launch, LaunchChange, PerAgent, Project, ProjectAccount,
     ProjectSource, RequestBody,
@@ -190,7 +190,7 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
 #[tokio::test]
 async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-project-session-agent");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -249,7 +249,7 @@ async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
 #[tokio::test]
 async fn a_console_session_launch_setting_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-console-launch");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     let mut seeded = console(Agent::Claude, &workdir);
     seeded.launch.claude.model = Some("opus".to_string());
     seeded.launch.grok.model = Some("grok-4".to_string());
@@ -298,7 +298,7 @@ async fn a_console_session_launch_setting_is_left_set_or_cleared_by_an_update() 
 #[tokio::test]
 async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-console-prompt");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -412,7 +412,7 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
 #[tokio::test]
 async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-validation");
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     state
         .store
         .insert_console(&console(Agent::Claude, &workdir))
@@ -546,7 +546,7 @@ async fn the_project_session_pair_is_left_set_or_cleared_by_an_update() {
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-pair");
     crate::test_support::offer_models(&state, Agent::Codex, &[("gpt-5", &["high"])]);
     crate::test_support::offer_models(&state, Agent::Claude, &[("opus", &["medium"])]);
-    let workdir = console_workdir(&dir);
+    let workdir = console_workdir_in(&dir);
     let mut seeded = console(Agent::Claude, &workdir);
     seeded.project_session_launch.claude.model = Some("opus".to_string());
     seeded.project_session_launch.grok.effort = Some("low".to_string());

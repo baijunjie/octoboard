@@ -3,8 +3,7 @@
 //! `bind_to_session`, with which an unbound project session binds itself to an owner. What may own
 //! what is `coordinator::bindings::owner_refusal`'s, and the notices that tell a session its owner
 //! changed are [`crate::messaging::owner_notices`]'s; what is here is reading each tool's
-//! arguments, the notices of a handover to the session and its new owner, and telling the caller
-//! what became of each session concerned.
+//! arguments and telling the caller what became of each session concerned.
 
 use std::sync::Arc;
 
@@ -13,13 +12,13 @@ use serde_json::{json, Map, Value};
 
 use crate::coordinator::{self, bindings::Released};
 use crate::messaging::delivery::{self, Delivery, SentBy};
+use crate::messaging::naming::named_session;
 use crate::messaging::owner_notices::{
-    duties_under_new_parent, owner_from_now_on, role_after_owner_change, tell_now_or_leave,
-    tell_released,
+    duties_under_new_parent, first_report_on_bind, handed_over_to_owner, handed_over_to_you,
+    tell_now_or_leave, tell_released,
 };
 use crate::messaging::reporting::{self, ReportStatus};
-use crate::messaging::sharing;
-use crate::messaging::texts::{capitalised, NOTICE_PREFIX};
+use crate::messaging::texts::capitalised;
 use crate::protocol::{OrchestrationRole, Session};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
@@ -56,36 +55,8 @@ pub(in crate::mcp) async fn transfer_session(
     let (moved, owner, running) =
         coordinator::bindings::transfer_session(state, &session.id, &caller.id, to)?;
 
-    let role = role_after_owner_change(&moved, session.is_worker());
-    let to_session = format!(
-        "{NOTICE_PREFIX}: your parent session has changed. {from} handed you over to {to}. \
-         {owner_now} This replaces what you were told of your parent session when you were \
-         started; `{from_id}` no longer drives you. {role}",
-        from = sharing::named_session(caller),
-        to = sharing::named_session(&owner),
-        owner_now = owner_from_now_on(moved.agent, "It"),
-        from_id = caller.id,
-    );
-    let owner_tool = |name: &str| qualified_tool_name(owner.agent, name);
-    let role_note = if moved.orchestration_role == OrchestrationRole::Coordinator {
-        " Its role is coordinator. It keeps its child sessions, which you can read but not drive."
-    } else {
-        " Its role is worker and it cannot manage child sessions."
-    };
-    let to_owner = format!(
-        "{NOTICE_PREFIX}: {from} handed its session `{id}` (\"{title}\"){place} over to \
-         you. It is yours from now on: it reports to you, and you drive it like any session of \
-         yours, with `{instruct_session}`, `{archive_session}` and `{reopen_session}`.{role_note} The \
-         handover note:\n\n{note}\n— end of the handover note —",
-        from = sharing::named_session(caller),
-        id = moved.id,
-        title = sharing::one_line(&moved.title),
-        place = sharing::place_of(state, &moved),
-        instruct_session = owner_tool("instruct_session"),
-        archive_session = owner_tool("archive_session"),
-        reopen_session = owner_tool("reopen_session"),
-        note = sharing::quote(&note),
-    );
+    let to_session = handed_over_to_you(caller, &owner, &moved, session.is_worker());
+    let to_owner = handed_over_to_owner(state, caller, &owner, &moved, &note);
     // Neither message credits the turn it starts: if the moved session or its new owner carries on
     // and stops without reporting, the report Octoboard synthesises is the safety net, and it is
     // wanted there.
@@ -96,7 +67,7 @@ pub(in crate::mcp) async fn transfer_session(
     let mut result_note = format!(
         "Handed over: `{id}` now reports to {to} and is no longer yours. {child} {owner}",
         id = moved.id,
-        to = sharing::named_session(&owner),
+        to = named_session(&owner),
         child = told(&child, "The notice of the handover", "the session"),
         owner = told(
             &told_owner,
@@ -175,24 +146,7 @@ pub(in crate::mcp) async fn bind_to_session(
     let (bound, owner) = coordinator::bindings::bind_session(state, &caller.id, owner_id)?;
     let coordinator = bound.orchestration_role == OrchestrationRole::Coordinator;
 
-    let first_report = if coordinator {
-        format!(
-            "This project coordinator set you as its parent session: it is yours to drive from \
-             now on, and reports to you. It keeps the sessions it started in its own project \
-             and drives them itself; you can read those but not drive them.\n\
-             \n\
-             What it is doing and needs:\n\
-             {summary}"
-        )
-    } else {
-        format!(
-            "This project session is now a worker reporting to you: it is yours to drive from \
-             now on, and reports to you.\n\
-             \n\
-             What it is doing and needs:\n\
-             {summary}"
-        )
-    };
+    let first_report = first_report_on_bind(coordinator, summary);
     // The binding is this round's report, so the round ending without another is not reported on
     // a second time.
     let delivered = reporting::deliver_own_report(
@@ -210,7 +164,7 @@ pub(in crate::mcp) async fn bind_to_session(
     let note = format!(
         "Your role is {role}. You now report to {owner}, your parent session: {duties} {first} \
          You have a parent session now, so do not call `{bind}` again.",
-        owner = sharing::named_session(&owner),
+        owner = named_session(&owner),
         role = if coordinator { "coordinator" } else { "worker" },
         duties = duties_under_new_parent(bound.agent, coordinator),
         bind = tool("bind_to_session"),

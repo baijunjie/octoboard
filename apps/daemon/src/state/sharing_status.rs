@@ -34,6 +34,14 @@ struct Entry {
 }
 
 impl AppState {
+    /// Tells the session's account a message queued, written or left unsent may have changed
+    /// whether the session is working.
+    pub(crate) fn note_activity(&self, id: &str) {
+        if let Ok(Some(session)) = self.store.get_session(id) {
+            self.note_sharing_activity(&session);
+        }
+    }
+
     /// Publishes the sharing states when what was just published of `session`, its stored
     /// record, moved it between working and idle, or its process came or went. Cheap otherwise: a
     /// session's record is published on every change of its title or status.

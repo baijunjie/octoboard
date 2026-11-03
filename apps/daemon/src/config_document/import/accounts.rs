@@ -553,12 +553,13 @@ fn place_after_existing(state: &Arc<AppState>, agent: Agent, created: &[String])
 #[cfg(test)]
 mod tests {
     use super::super::tests::{
-        account, at, code_of, console, directory, document, project, stored_projects,
+        account, at, console, directory, document, project, stored_projects,
     };
     use super::super::{apply, inspect, AccountFallback, DirectoryChoice, Inspection};
     use super::*;
     use crate::config_document::export::{AccountName, ProjectAccountRef};
     use crate::protocol::ProjectAccount;
+    use crate::test_support::code_of;
     use crate::test_support::{app_state, ScratchDir};
     use serde_json::json;
     use std::path::Path;

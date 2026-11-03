@@ -5,7 +5,7 @@ use super::*;
 use crate::coordinator::account_sharing::set;
 use crate::coordinator::handle;
 use crate::protocol::{notice_code, AgentAvailability, Availability, RequestBody, SessionStatus};
-use crate::test_support::{self, ScratchDir};
+use crate::test_support::{self, code_of, ScratchDir};
 
 /// A console with accounts `claude-a`, `codex-a` and `grok-a` (directories `<dir>/<id>`), and
 /// each agent's default directory at `<dir>/default-<agent>`, created.
@@ -113,12 +113,6 @@ fn backups(dir: &Path, name: &str) -> Vec<PathBuf> {
         .collect();
     found.sort();
     found
-}
-
-fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .code
 }
 
 /// A Claude Code default directory and account holding a bit of everything turning sharing on
@@ -1672,9 +1666,9 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
         .map(drop),
     );
     in_progress(
-        crate::handoff::operation::hand_off_with(
+        crate::coordinator::handoff::hand_off_with(
             &fixture.state,
-            crate::handoff::operation::Handoff {
+            crate::coordinator::handoff::Handoff {
                 session: "s".to_string(),
                 agent: Agent::Codex,
                 account: None,
@@ -2475,7 +2469,7 @@ async fn a_session_that_does_not_stop_holds_the_change_back_and_the_others_are_r
         let (_, account) = claude_setup(&fixture);
         let launches = Launches::default();
         launches.resume_through(&fixture.state, false);
-        *fixture.state.account_sharing.stop_timeout.lock().unwrap() =
+        *fixture.state.restart_stop_timeout.lock().unwrap() =
             Some(std::time::Duration::from_millis(500));
         idle_session(&fixture, "fine", Agent::Claude);
         // Its process ends, but nothing watches it, so it is never seen down.

@@ -13,9 +13,9 @@ use anyhow::Result;
 use crate::messaging::delivery::{
     self, is_archived_refusal, rebound_owner, write_notice_to_owner, Delivery, WhenBlocked,
 };
-use crate::messaging::sharing;
+use crate::messaging::naming::{label, named_session, one_line, place_of, quote};
 use crate::messaging::texts::{capitalised, waiting_opening, NOTICE_PREFIX, WAITING_PHRASE};
-use crate::protocol::{Agent, Role, Session, SessionStatus};
+use crate::protocol::{Agent, OrchestrationRole, Role, Session, SessionStatus};
 use crate::session_tools::catalogue;
 use crate::state::AppState;
 
@@ -31,7 +31,7 @@ pub fn tell_owner_it_ended(state: &Arc<AppState>, session: &Session) {
              user closed it in its terminal. It is recorded as interrupted, and the work it was \
              doing stopped with it. Look at it with `{get_session}`, and relaunch it with \
              `{reopen_session}` if the work should go on.",
-            session = sharing::named_session(session),
+            session = named_session(session),
             get_session = catalogue::qualified_tool_name(owner.agent, "get_session"),
             reopen_session = catalogue::qualified_tool_name(owner.agent, "reopen_session"),
         )
@@ -59,7 +59,7 @@ pub fn tell_owner_the_switch_failed(state: &Arc<AppState>, session: &Session, re
              ({reason}). It is interrupted, and the work it was doing stopped with it. Look at it \
              with `{get_session}`, and relaunch it with `{reopen_session}` if the work should go \
              on.",
-            session = sharing::named_session(session),
+            session = named_session(session),
             get_session = catalogue::qualified_tool_name(owner.agent, "get_session"),
             reopen_session = catalogue::qualified_tool_name(owner.agent, "reopen_session"),
         )
@@ -106,7 +106,7 @@ fn it_was_switched(
                 catalogue::qualified_tool_name(owner.agent, "instruct_session")
             )
         },
-        named = sharing::named_session(session),
+        named = named_session(session),
     )
 }
 
@@ -148,10 +148,9 @@ pub fn tell_owner_the_recovery_failed(state: &Arc<AppState>, session: &Session, 
 /// The notice of [`tell_owner_the_recovery_failed`].
 fn recovery_failed(session: &Session, reason: &str) -> String {
     format!(
-        "{NOTICE_PREFIX}: session `{}` (\"{}\") could not resume after its account's usage quota \
+        "{NOTICE_PREFIX}: session {} could not resume after its account's usage quota \
          recovered. It is interrupted and its work is stopped. Reason: {reason}",
-        session.id,
-        sharing::one_line(&session.title)
+        label(session)
     )
 }
 
@@ -182,7 +181,7 @@ pub fn tell_owner_it_waits(state: &Arc<AppState>, id: &str) {
              get it going: a message to it is held until they are done. Carry on with the rest of \
              your work.",
             opening = waiting_opening(&session),
-            title = sharing::one_line(&session.title),
+            title = one_line(&session.title),
         )
     });
 }
@@ -297,6 +296,120 @@ pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
     )
 }
 
+/// The notice to a session whose parent session has changed, the one place that words the part of
+/// it every path shares: that the parent session changed, whose session it is from now on, and
+/// that this replaces what the session was told when it was started.
+///
+/// `happened` follows "has changed" with its own punctuation (what became of the change, or " while
+/// you were not running."); `owner` names the new parent session, as [`owner_from_now_on`] takes
+/// it; `after` follows "when you were started" with its own punctuation and ends the notice (the
+/// role the session now has, for one).
+pub(crate) fn parent_changed_notice(
+    happened: &str,
+    agent: Agent,
+    owner: &str,
+    after: &str,
+) -> String {
+    format!(
+        "{NOTICE_PREFIX}: your parent session has changed{happened} {owner_now} This replaces \
+         what you were told of your parent session when you were started{after}",
+        owner_now = owner_from_now_on(agent, owner),
+    )
+}
+
+/// The notice to an owner that a session reports to it from now on, the one place that words how
+/// it drives that session, in the words of `owner_agent`'s tool names.
+///
+/// `lead` is what the notice says first, ending where "you drive it" follows on; `rest` follows
+/// the sentence, with its own leading space.
+pub(crate) fn new_owner_notice(owner_agent: Agent, lead: &str, rest: &str) -> String {
+    let tool = |name: &str| catalogue::qualified_tool_name(owner_agent, name);
+    format!(
+        "{NOTICE_PREFIX}: {lead} you drive it like any session of yours, with \
+         `{instruct_session}`, `{archive_session}` and `{reopen_session}`.{rest}",
+        instruct_session = tool("instruct_session"),
+        archive_session = tool("archive_session"),
+        reopen_session = tool("reopen_session"),
+    )
+}
+
+/// The notice to `moved`, a session its owner `from` handed over to `to`, which is no longer
+/// `from`'s. `was_worker` is whether it was a worker before (see [`role_after_owner_change`]).
+pub(crate) fn handed_over_to_you(
+    from: &Session,
+    to: &Session,
+    moved: &Session,
+    was_worker: bool,
+) -> String {
+    parent_changed_notice(
+        &format!(
+            ". {from} handed you over to {to}.",
+            from = capitalised(&named_session(from)),
+            to = named_session(to),
+        ),
+        moved.agent,
+        "It",
+        &format!(
+            "; `{}` no longer drives you. {}",
+            from.id,
+            role_after_owner_change(moved, was_worker)
+        ),
+    )
+}
+
+/// The notice to `owner`, the session `from` handed `moved` over to, with `from`'s `note`, quoted.
+pub(crate) fn handed_over_to_owner(
+    state: &Arc<AppState>,
+    from: &Session,
+    owner: &Session,
+    moved: &Session,
+    note: &str,
+) -> String {
+    let role_note = if moved.orchestration_role == OrchestrationRole::Coordinator {
+        " Its role is coordinator. It keeps its child sessions, which you can read but not drive."
+    } else {
+        " Its role is worker and it cannot manage child sessions."
+    };
+    new_owner_notice(
+        owner.agent,
+        &format!(
+            "{from} handed its session {moved}{place} over to you. It is yours from now on: it \
+             reports to you, and",
+            from = named_session(from),
+            moved = label(moved),
+            place = place_of(state, moved),
+        ),
+        &format!(
+            "{role_note} The handover note:\n\n{}\n— end of the handover note —",
+            quote(note)
+        ),
+    )
+}
+
+/// The first report a project session that bound itself to an owner sends it: what it now is to
+/// the owner, and `summary`, what it is doing and needs. `coordinator` is whether it is a
+/// coordinator, which keeps the sessions it started, else a worker.
+pub(crate) fn first_report_on_bind(coordinator: bool, summary: &str) -> String {
+    if coordinator {
+        format!(
+            "This project coordinator set you as its parent session: it is yours to drive from \
+             now on, and reports to you. It keeps the sessions it started in its own project \
+             and drives them itself; you can read those but not drive them.\n\
+             \n\
+             What it is doing and needs:\n\
+             {summary}"
+        )
+    } else {
+        format!(
+            "This project session is now a worker reporting to you: it is yours to drive from \
+             now on, and reports to you.\n\
+             \n\
+             What it is doing and needs:\n\
+             {summary}"
+        )
+    }
+}
+
 /// Whether `session` has a process to write into. Decided by the one who changes its owner, while
 /// it holds the claim a launch needs, and handed to [`tell_now_or_leave`]; a session with none is
 /// left owed a notice for its next launch (see [`owner_notice`]). Also what decides whether a
@@ -357,14 +470,14 @@ pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<S
     };
     // An owner no longer on record is named by its id alone, as a report to it would be.
     let owner = match state.store.get_session(owner_id)? {
-        Some(owner) => sharing::named_session(&owner),
+        Some(owner) => named_session(&owner),
         None => format!("`{owner_id}`"),
     };
-    Ok(format!(
-        "{NOTICE_PREFIX}: your parent session has changed while you were not running. {owner} \
-         This replaces what you were told of your parent session when you were started. {role}",
-        owner = owner_from_now_on(session.agent, &owner),
-        role = role_after_owner_change(session, false),
+    Ok(parent_changed_notice(
+        " while you were not running.",
+        session.agent,
+        &owner,
+        &format!(". {}", role_after_owner_change(session, false)),
     ))
 }
 
@@ -409,7 +522,7 @@ pub(crate) async fn tell_former_owner(
          drive or archive it, and it does not report to you. You can still tell it something \
          with `{send_message}`, which it weighs rather than obeys. Do not count on it any more, \
          and treat any work you handed it as left with the user.",
-        released = sharing::named_session(released),
+        released = named_session(released),
         send_message = catalogue::qualified_tool_name(owner.agent, "send_message"),
     );
     delivery::write_message_off_runtime(state, owner_id, text, WhenBlocked::Queue)
@@ -423,7 +536,7 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
     let note = match note {
         Some(note) => format!(
             " Your former parent session left this note:\n\n{note}\n— end of the note —",
-            note = sharing::quote(note),
+            note = quote(note),
         ),
         None => String::new(),
     };
@@ -846,6 +959,132 @@ mod tests {
                  session you reported to, and you are the user's own session: "
             ),
             "{text}"
+        );
+    }
+
+    /// The parent-changed notice is worded the same on every path that builds it: a handoff of the
+    /// session's parent and the wording of a transfer by the parent, each ending as its own path
+    /// does.
+    #[test]
+    fn the_parent_changed_notice_is_worded_as_fixed_for_each_path() {
+        let moved = project_session("child");
+        assert_eq!(
+            parent_changed_notice(
+                ". the console session `a` (\"A\") was handed off to the console session `b` \
+                 (\"B\"), which took its place.",
+                moved.agent,
+                "It",
+                ". `a` no longer drives you; it is archived.",
+            ),
+            "Message from Octoboard: your parent session has changed. the console session `a` \
+             (\"A\") was handed off to the console session `b` (\"B\"), which took its place. It \
+             is your parent session from now on: take work only from it, or from the user typing \
+             in this terminal, and report to it with `mcp__octoboard__report`. This replaces what \
+             you were told of your parent session when you were started. `a` no longer drives \
+             you; it is archived."
+        );
+        assert_eq!(
+            parent_changed_notice(
+                ". the console session `a` (\"A\") handed you over to the console session `b` \
+                 (\"B\").",
+                moved.agent,
+                "It",
+                "; `a` no longer drives you. Your role remains coordinator: you can create and \
+                 manage child sessions.",
+            ),
+            "Message from Octoboard: your parent session has changed. the console session `a` \
+             (\"A\") handed you over to the console session `b` (\"B\"). It is your parent session \
+             from now on: take work only from it, or from the user typing in this terminal, and \
+             report to it with `mcp__octoboard__report`. This replaces what you were told of your \
+             parent session when you were started; `a` no longer drives you. Your role remains \
+             coordinator: you can create and manage child sessions."
+        );
+    }
+
+    /// The new-owner notice is worded the same on every path that builds it, with the owner's
+    /// agent's tool names.
+    #[test]
+    fn the_new_owner_notice_is_worded_as_fixed_for_each_path() {
+        assert_eq!(
+            new_owner_notice(
+                Agent::Grok,
+                "`a` handed its session `s` (\"S\") over to you. It is yours from now on: it \
+                 reports to you, and",
+                " Its role is worker and it cannot manage child sessions.",
+            ),
+            "Message from Octoboard: `a` handed its session `s` (\"S\") over to you. It is yours \
+             from now on: it reports to you, and you drive it like any session of yours, with \
+             `octoboard__instruct_session`, `octoboard__archive_session` and \
+             `octoboard__reopen_session`. Its role is worker and it cannot manage child sessions."
+        );
+        assert_eq!(
+            new_owner_notice(
+                Agent::Claude,
+                "`a`, which reported to you, was handed off to a session of Codex. `b` took its \
+                 place and reports to you from now on:",
+                " The original is archived.",
+            ),
+            "Message from Octoboard: `a`, which reported to you, was handed off to a session of \
+             Codex. `b` took its place and reports to you from now on: you drive it like any \
+             session of yours, with `mcp__octoboard__instruct_session`, \
+             `mcp__octoboard__archive_session` and `mcp__octoboard__reopen_session`. The original \
+             is archived."
+        );
+    }
+
+    /// The notices of a transfer by the owner are worded as fixed, to the session and to its new
+    /// owner, and a bind's first report likewise.
+    #[test]
+    fn the_notices_of_a_transfer_and_a_bind_are_worded_as_fixed() {
+        let (state, _dir, _hub) = team_state("owner-notice-transfer-words", &[]);
+        let console_session = |id: &str, title: &str| Session {
+            id: id.to_string(),
+            role: Role::Console,
+            bound_to: None,
+            ..project_session(title)
+        };
+        let (from, owner) = (console_session("a", "A"), console_session("b", "B"));
+        let moved = Session {
+            title: "Fix\nthe build".to_string(),
+            orchestration_role: OrchestrationRole::Coordinator,
+            ..project_session("S")
+        };
+        assert_eq!(
+            handed_over_to_you(&from, &owner, &moved, true),
+            "Message from Octoboard: your parent session has changed. The console session `a` \
+             (\"A\") handed you over to the console session `b` (\"B\"). It is your parent \
+             session from now on: take work only from it, or from the user typing in this \
+             terminal, and report to it with `mcp__octoboard__report`. This replaces what you \
+             were told of your parent session when you were started; `a` no longer drives you. \
+             Your role remains coordinator: you can create and manage child sessions."
+        );
+        assert_eq!(
+            handed_over_to_owner(&state, &from, &owner, &moved, "Half done.\nNext: tests."),
+            "Message from Octoboard: the console session `a` (\"A\") handed its session \
+             `session-7` (\"Fix the build\") in the console \"Console\" over to you. It is yours \
+             from now on: it reports to you, and you drive it like any session of yours, with \
+             `mcp__octoboard__instruct_session`, `mcp__octoboard__archive_session` and \
+             `mcp__octoboard__reopen_session`. Its role is coordinator. It keeps its child \
+             sessions, which you can read but not drive. The handover note:\n\n> Half done.\n> \
+             Next: tests.\n— end of the handover note —"
+        );
+        let worker = Session {
+            orchestration_role: OrchestrationRole::Worker,
+            ..moved
+        };
+        assert!(handed_over_to_owner(&state, &from, &owner, &worker, "n")
+            .contains("Its role is worker and it cannot manage child sessions. The handover note"));
+        assert_eq!(
+            first_report_on_bind(true, "Ready."),
+            "This project coordinator set you as its parent session: it is yours to drive from \
+             now on, and reports to you. It keeps the sessions it started in its own project and \
+             drives them itself; you can read those but not drive them.\n\nWhat it is doing and \
+             needs:\nReady."
+        );
+        assert_eq!(
+            first_report_on_bind(false, "Ready."),
+            "This project session is now a worker reporting to you: it is yours to drive from now \
+             on, and reports to you.\n\nWhat it is doing and needs:\nReady."
         );
     }
 }

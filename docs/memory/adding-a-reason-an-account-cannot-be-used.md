@@ -11,14 +11,15 @@ or starts the work anyway where nothing refuses it.
 - Daemon refusals: opening a session (`resolve_open` in `apps/daemon/src/coordinator/open.rs`) and switching a
   session's account (`switch_session_account_with` in `apps/daemon/src/coordinator/account_switch.rs`). If the refusal
   has a new error code, the UI classifies that code too.
-- Daemon choices made without asking: automatic account selection (`account_can_open` in
-  `apps/daemon/src/coordinator/account_choice.rs`), the MCP fallback to the calling session's account
-  (`callers_account` and `automatic_choice` in `apps/daemon/src/mcp/tools/sessions.rs`), and the descriptions of that
-  fallback in the MCP tool descriptions and schemas (`apps/daemon/src/session_tools/catalogue/`) and in
-  `apps/daemon/PROTOCOL.md`.
+- Daemon choices made without asking: automatic account selection (`account_can_open` and `cannot_open` in
+  `apps/daemon/src/accounts/choice/standing.rs`, where a new reason becomes a `CannotOpen` variant judged by
+  `blocked_by`), the MCP fallback to the calling session's account (`choice_for_started_session` in
+  `apps/daemon/src/accounts/choice/started.rs`), and the descriptions of that fallback in the MCP tool
+  descriptions and schemas (`apps/daemon/src/session_tools/catalogue/`) and in `apps/daemon/PROTOCOL.md`.
 - What agents are told before they pick: `list_agents`'s `can_open` and `cannot_open_reason` (`agent_accounts` in
-  `apps/daemon/src/mcp/tools/agents.rs`), which re-derive each reason inline rather than calling `account_can_open`,
-  and the list of reasons in its description (`apps/daemon/src/session_tools/catalogue/reads.rs`).
+  `apps/daemon/src/mcp/tools/agents.rs`), which word each `CannotOpen` the choice module reports, except a turned-off or
+  removed account, which it leaves out (a new variant is a new arm there), and the list of reasons in its
+  description (`apps/daemon/src/session_tools/catalogue/reads.rs`).
 - Daemon work that spends an account: starting usage windows automatically (`AccountQuotas::kick_allowed` in
   `apps/daemon/src/accounts/quotas/poll.rs`, which both the kick itself and the due mark an on-demand refresh leaves for
   the poller consult).

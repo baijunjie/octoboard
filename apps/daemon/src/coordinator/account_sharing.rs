@@ -23,8 +23,6 @@ use crate::protocol::{
 };
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 
-use super::launch::SWITCH_STOP_TIMEOUT;
-
 /// Records `share` as the account's choice and carries it out at once, answering once it has
 /// ended; `account` is the account's id, and `None` names the default account, which has no
 /// choice to make, being the directory the others share. Asking again for the choice already
@@ -262,27 +260,15 @@ async fn stop(
     }
     let mut first = None;
     for session in &stopped {
-        if wait_until_down(state, &session.id).await.is_err() && first.is_none() {
+        if super::restart::wait_until_stopped(state, &session.id)
+            .await
+            .is_err()
+            && first.is_none()
+        {
             first = Some(session_did_not_stop(account, &session.id));
         }
     }
     (stopped, first)
-}
-
-/// Waits for `id`, a session the change ended, to be recorded down.
-async fn wait_until_down(state: &Arc<AppState>, id: &str) -> Result<()> {
-    #[allow(unused_mut)]
-    let mut timeout = SWITCH_STOP_TIMEOUT;
-    #[cfg(test)]
-    if let Some(shorter) = *state
-        .account_sharing
-        .stop_timeout
-        .lock()
-        .expect("stop timeout seam lock poisoned")
-    {
-        timeout = shorter;
-    }
-    super::launch::wait_until_down_within(state, id, timeout).await
 }
 
 fn session_did_not_stop(account: &Account, session: &str) -> anyhow::Error {

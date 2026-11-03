@@ -37,6 +37,7 @@ use crate::agents::layout::GROK_SIGN_IN_FILE;
 use crate::processes::leader;
 use crate::protocol::{login_failure_code as code, Agent, LoginFailure, LoginStatus};
 use crate::state::AppState;
+use crate::terminal::plain_text::strip_escapes;
 
 /// How a login ended.
 pub(super) enum Outcome {
@@ -596,31 +597,10 @@ fn looks_like_device_code(line: &str) -> bool {
     is_group(groups.next()) && is_group(groups.next()) && groups.next().is_none()
 }
 
-/// Removes the colour and cursor sequences some CLIs print even into a pipe.
-fn strip_ansi(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c != '\u{1b}' {
-            out.push(c);
-            continue;
-        }
-        if chars.peek() == Some(&'[') {
-            chars.next();
-            for next in chars.by_ref() {
-                if ('@'..='~').contains(&next) {
-                    break;
-                }
-            }
-        }
-    }
-    out
-}
-
-/// A CLI running in a session of its own, with the lines of its stdout and stderr (colour
-/// stripped, trimmed) arriving on [`Self::lines`]. A cancel ([`Self::stop`]) kills the whole
-/// session, and so does dropping it, as a flow's end by a timeout or the daemon's exit does: some
-/// helpers of an agent CLI move into process groups of their own, where a signal to its group
+/// A CLI running in a session of its own, with the lines of its stdout and stderr (escape
+/// sequences stripped, trimmed) arriving on [`Self::lines`]. A cancel ([`Self::stop`]) kills the
+/// whole session, and so does dropping it, as a flow's end by a timeout or the daemon's exit does:
+/// some helpers of an agent CLI move into process groups of their own, where a signal to its group
 /// would miss them. A CLI that exits by itself is only reaped, its session left as it is: the
 /// browser a login opens can be in it, started directly by `xdg-open` on a Linux desktop.
 struct Process {
@@ -797,7 +777,7 @@ fn forward_lines(pipe: impl tokio::io::AsyncRead + Unpin + Send + 'static, tx: m
         while let Ok(Some(cut)) = read_line_capped(&mut reader, &mut bytes).await {
             let line = String::from_utf8_lossy(&bytes);
             let line = Line {
-                text: strip_ansi(&line).trim().to_string(),
+                text: strip_escapes(&line).trim().to_string(),
                 cut,
             };
             match tx.try_send(line) {
@@ -891,15 +871,6 @@ mod tests {
         );
         assert_eq!(line("failed", true).into_words(), None);
         assert_eq!(line("", false).into_words(), None);
-    }
-
-    #[test]
-    fn colour_sequences_are_taken_out_of_what_a_cli_prints() {
-        assert_eq!(
-            strip_ansi("\u{1b}[1;32mABCDE-12345\u{1b}[0m"),
-            "ABCDE-12345"
-        );
-        assert_eq!(strip_ansi("plain ✓"), "plain ✓");
     }
 
     #[test]

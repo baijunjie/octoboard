@@ -13,30 +13,37 @@ use crate::accounts::switch_continue;
 use crate::adapter;
 use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus, TerminalAppearance};
 use crate::session::term;
+use crate::state::refusals::refuse_if_archived;
 use crate::state::{session_archived, AppState};
 
-use super::account_choice::{
-    account_dir, checked_account_reference, refuse_if_account_not_signed_in,
-    refuse_if_account_quota_exhausted,
-};
-use super::accounts::refuse_if_account_disabled;
+use super::accounts::refuse_unless_account_usable;
 use super::bindings::refuse_unless_still_askers;
 use super::launch::{checked_launch_overrides, relaunch_session_with, wait_until_down, LaunchEdit};
-use super::lifecycle::refuse_if_archived;
-use super::restart::{came_up_under_claim, give_up_what_a_restart_held, stop_carrying_processes};
+use super::restart::{self, came_up_under_claim};
 use super::resume::resumable_agent_session_id;
 use super::validate::field_required;
+use crate::accounts::choice::{account_dir, checked_account_reference};
 
 /// What a switch worked out before it ended anything.
 struct SwitchPlan {
     /// The snapshot the default account was resolved from, handed on to the relaunch so the copy
     /// and the launch cannot disagree about where the default account is.
     shell_env: Option<HashMap<String, String>>,
-    /// The conversation to copy: from the source account's directory to the target's, the path
-    /// relative to both of the record, and the agent session id it belongs to. What the agent
-    /// keeps beside it is listed only once the process is down, as it may still be creating
-    /// some. None for a session with no conversation on the agent's side.
-    relocation: Option<(PathBuf, PathBuf, PathBuf, String)>,
+    /// The conversation to copy. What the agent keeps beside it is listed only once the process is
+    /// down, as it may still be creating some. None for a session with no conversation on the
+    /// agent's side.
+    relocation: Option<Relocation>,
+}
+
+/// A conversation to copy from the source account's directory to the target's.
+#[derive(Debug, PartialEq)]
+struct Relocation {
+    from: PathBuf,
+    to: PathBuf,
+    /// The path of the record, relative to both directories.
+    record: PathBuf,
+    /// The agent session id the record belongs to.
+    agent_session_id: String,
 }
 
 /// Everything a switch can refuse before it ends the session's process: the launch rule on the
@@ -72,7 +79,12 @@ fn prepare_switch(
     let record = relocate::locate(agent, &from, resume_id)?;
     Ok(SwitchPlan {
         shell_env,
-        relocation: Some((from, to, record, resume_id.to_owned())),
+        relocation: Some(Relocation {
+            from,
+            to,
+            record,
+            agent_session_id: resume_id.to_owned(),
+        }),
     })
 }
 
@@ -82,7 +94,7 @@ fn prepare_switch(
 /// the switch cut a turn off or a usage limit had stopped one (see
 /// `crate::accounts::switch_continue`). The user or an owner asks for it, and so does Octoboard
 /// itself for a session whose turn stopped on its account's usage limit, while
-/// `auto_switch_on_usage_limit` is on (see `crate::accounts::auto_switch`).
+/// `auto_switch_on_usage_limit` is on (see `crate::coordinator::auto_switch`).
 ///
 /// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
@@ -169,7 +181,7 @@ pub(crate) async fn switch_session_account_with(
 #[derive(Clone, Copy, Default)]
 pub(crate) struct SwitchOnlyIf<'a> {
     /// The failed turn and process whose verified quota recovery authorizes this restart.
-    pub recovery: Option<&'a crate::accounts::auto_switch::PendingRecovery>,
+    pub recovery: Option<&'a super::auto_switch::PendingRecovery>,
     /// The account the session must still be on (`Some(None)` the default account).
     pub on_account: Option<Option<&'a str>>,
     /// The session must not be shown as waiting for the user, by whatever route, nor as dormant
@@ -198,22 +210,8 @@ pub(crate) struct SwitchOnlyIf<'a> {
 
 /// Why [`switch_session_account_if`] failed: the error as every other caller sees it, untouched,
 /// and whether the switch had ended the session's process and seen it down by then, which leaves
-/// the session interrupted and not as it was. A process that did not stop in time, or one that had
-/// exited by itself before the stop, is not "ended" by the switch.
-#[derive(Debug)]
-pub(crate) struct SwitchFailed {
-    pub error: anyhow::Error,
-    pub ended_process: bool,
-}
-
-impl<E: Into<anyhow::Error>> From<E> for SwitchFailed {
-    fn from(error: E) -> Self {
-        Self {
-            error: error.into(),
-            ended_process: false,
-        }
-    }
-}
+/// the session interrupted and not as it was (see [`restart::Failed`]).
+pub(crate) type SwitchFailed = restart::Failed;
 
 /// The switch was refused because what it was decided on no longer holds; nothing was changed.
 #[derive(Debug)]
@@ -285,23 +283,17 @@ pub(crate) async fn switch_session_account_if(
     let same_account = before.account_id == target_account;
     if !only_if
         .recovery
-        .is_some_and(crate::accounts::auto_switch::PendingRecovery::permits_current_account)
+        .is_some_and(super::auto_switch::PendingRecovery::permits_current_account)
     {
         refuse_if_on_account(&before, &target_account)?;
     }
     let target_dir = state.store.account_dir(&target_account)?;
-    refuse_if_account_disabled(state, before.agent, target_account.as_deref())?;
-    refuse_if_account_quota_exhausted(
+    refuse_unless_account_usable(
         state,
         before.agent,
         target_account.as_deref(),
         target_dir.as_deref(),
-    )?;
-    refuse_if_account_not_signed_in(
-        state,
-        before.agent,
-        target_account.as_deref(),
-        target_dir.as_deref(),
+        true,
     )?;
     // Asked under the claim, which a change of the source's sharing counts as a session starting.
     crate::accounts::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
@@ -326,8 +318,8 @@ pub(crate) async fn switch_session_account_if(
 
     if only_if.usage_limited {
         let stopped = match &plan.relocation {
-            Some((from, _, record, _)) => {
-                let (agent, record) = (before.agent, from.join(record));
+            Some(relocation) => {
+                let (agent, record) = (before.agent, relocation.from.join(&relocation.record));
                 tokio::task::spawn_blocking(move || {
                     switch_continue::stopped_on_usage_limit(agent, &record)
                 })
@@ -356,114 +348,130 @@ pub(crate) async fn switch_session_account_if(
             }
         }
     }
-    let (held_for_relaunch, ended_a_process) = stop_carrying_processes(state, id).await?;
-    wait_until_down(state, id).await?;
-    // From here the process is down. A failure that follows leaves the session interrupted when
-    // this switch ended it, and is marked so; one whose process had ended before is not this
-    // switch's to report.
-    let after_stop = async {
-        // Archiving it meanwhile is the user's later word on the matter.
-        if state.session_record(id)?.status == SessionStatus::Archived {
-            return Err(session_archived(id));
-        }
-        // The process is down, so what the account it ran on holds now is final: a Codex thread may
-        // have started a segment since the plan, and that head is the one carried. Only a turn this
-        // switch ended, or that was waiting out a usage limit in the process it ended, is carried
-        // on: a session whose process had ended before was left there by something else.
-        let (relocation, carry_on) = match plan.relocation {
-            Some((from, to, record, agent_session_id)) => {
-                let agent = before.agent;
-                tokio::task::spawn_blocking(move || -> Result<_> {
-                    let record = match agent {
-                        Agent::Codex => relocate::locate(agent, &from, &agent_session_id)?,
-                        _ => record,
-                    };
-                    let carry_on = ended_a_process
-                        && switch_continue::should_continue(agent, &from.join(&record));
-                    Ok((Some((from, to, record, agent_session_id)), carry_on))
-                })
-                .await??
+    // Borrowed by the restart below, so that it stays held until this function returns.
+    let claim = &claim;
+    // From the process being down, a failure that follows leaves the session interrupted when this
+    // switch ended it, and is marked so; one whose process had ended before is not this switch's
+    // to report.
+    restart::run(
+        state,
+        id,
+        |err| err,
+        |ended_a_process| async move {
+            // Archiving it meanwhile is the user's later word on the matter.
+            if state.session_record(id)?.status == SessionStatus::Archived {
+                return Err(session_archived(id));
             }
-            None => (None, false),
-        };
+            // The process is down, so what the account it ran on holds now is final: a Codex
+            // thread may have started a segment since the plan, and that head is the one carried.
+            // Only a turn this switch ended, or that was waiting out a usage limit in the process
+            // it ended, is carried on: a session whose process had ended before was left there by
+            // something else.
+            let (relocation, carry_on) = match plan.relocation {
+                Some(mut relocation) => {
+                    let agent = before.agent;
+                    tokio::task::spawn_blocking(move || -> Result<_> {
+                        if agent == Agent::Codex {
+                            relocation.record = relocate::locate(
+                                agent,
+                                &relocation.from,
+                                &relocation.agent_session_id,
+                            )?;
+                        }
+                        let carry_on = restart::carry_on(
+                            agent,
+                            &relocation.from,
+                            &relocation.record,
+                            ended_a_process,
+                        );
+                        Ok((Some(relocation), carry_on))
+                    })
+                    .await??
+                }
+                None => (None, false),
+            };
 
-        // Held from before the copy until the session is recorded on the target, and given up
-        // before the relaunch, which takes it itself: no change of sharing moves what the copy
-        // writes.
-        let copying = crate::accounts::shared_config::before_switch_copy(
-            state,
-            before.agent,
-            target_account.as_deref(),
-        )
-        .await?;
-        if let Some((from, to, record, agent_session_id)) =
-            relocation.filter(|(from, to, _, _)| from != to)
-        {
-            let agent = before.agent;
-            // The environment the relaunch will see, which with the target's `config.toml` says
-            // where a Codex home keeps its database.
-            let launch_env = plan.shell_env.clone().unwrap_or_default();
-            tokio::task::spawn_blocking(move || {
-                let companions = relocate::companions(agent, &from, &record, &agent_session_id);
-                relocate::copy(&from, &to, &record, &companions)?;
-                relocate::repoint_thread_row(agent, &to, &record, &agent_session_id, &launch_env)
-            })
-            .await??;
-        }
-        state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
-        drop(copying);
-        if let Some((model, effort)) = &overrides {
-            if let Err(err) = state.set_session_launch_overrides(id, model, effort) {
+            // Held from before the copy until the session is recorded on the target, and given up
+            // before the relaunch, which takes it itself: no change of sharing moves what the copy
+            // writes.
+            let copying = crate::accounts::shared_config::before_switch_copy(
+                state,
+                before.agent,
+                target_account.as_deref(),
+            )
+            .await?;
+            if let Some(relocation) =
+                relocation.filter(|relocation| relocation.from != relocation.to)
+            {
+                let agent = before.agent;
+                // The environment the relaunch will see, which with the target's `config.toml` says
+                // where a Codex home keeps its database.
+                let launch_env = plan.shell_env.clone().unwrap_or_default();
+                tokio::task::spawn_blocking(move || {
+                    let Relocation {
+                        from,
+                        to,
+                        record,
+                        agent_session_id,
+                    } = relocation;
+                    let companions = relocate::companions(agent, &from, &record, &agent_session_id);
+                    relocate::copy(&from, &to, &record, &companions)?;
+                    relocate::repoint_thread_row(
+                        agent,
+                        &to,
+                        &record,
+                        &agent_session_id,
+                        &launch_env,
+                    )
+                })
+                .await??;
+            }
+            state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
+            drop(copying);
+            if let Some((model, effort)) = &overrides {
+                if let Err(err) = state.set_session_launch_overrides(id, model, effort) {
+                    put_back_on_account(state, &before);
+                    return Err(err);
+                }
+            }
+
+            let prompt_to_carry_on = match only_if.note {
+                Some(note) => format!("{note}\n\n{}", switch_continue::CONTINUE_AFTER_NOTICE),
+                None => switch_continue::CONTINUE_PROMPT.to_string(),
+            };
+            if let Err(err) = relaunch_session_with(
+                state,
+                claim,
+                id,
+                carry_on.then_some(prompt_to_carry_on.as_str()),
+                false,
+                plan.shell_env,
+                terminal_appearance,
+                launch,
+            )
+            .await
+            {
                 put_back_on_account(state, &before);
                 return Err(err);
             }
-        }
-
-        let prompt_to_carry_on = match only_if.note {
-            Some(note) => format!("{note}\n\n{}", switch_continue::CONTINUE_AFTER_NOTICE),
-            None => switch_continue::CONTINUE_PROMPT.to_string(),
-        };
-        if let Err(err) = relaunch_session_with(
-            state,
-            &claim,
-            id,
-            carry_on.then_some(prompt_to_carry_on.as_str()),
-            false,
-            plan.shell_env,
-            terminal_appearance,
-            launch,
-        )
-        .await
-        {
-            put_back_on_account(state, &before);
-            return Err(err);
-        }
-        if !came_up_under_claim(state, id).await {
-            put_back_once_down(state, &before).await;
-            return Err(CodedError::raised(
-                error_code::SWITCH_DID_NOT_COME_UP,
-                "the session ended as soon as it was relaunched, so it stays on the account it had",
-                &[("session", id)],
-            ));
-        }
-        if only_if.usage_limited && !same_account {
-            // Noted under the claim, so that a turn waiting for it to end never picks this account.
-            state.note_left_for_limit(id, before.account_id.as_deref());
-        }
-        Ok(carry_on)
-    };
-    let switched = after_stop.await;
-    give_up_what_a_restart_held(
-        state,
-        id,
-        held_for_relaunch,
-        switched.is_err() && ended_a_process,
+            if !came_up_under_claim(state, id).await {
+                put_back_once_down(state, &before).await;
+                return Err(CodedError::raised(
+                    error_code::SWITCH_DID_NOT_COME_UP,
+                    "the session ended as soon as it was relaunched, so it stays on the account it \
+                     had",
+                    &[("session", id)],
+                ));
+            }
+            if only_if.usage_limited && !same_account {
+                // Noted under the claim, so that a turn waiting for it to end never picks this
+                // account.
+                state.note_left_for_limit(id, before.account_id.as_deref());
+            }
+            Ok(carry_on)
+        },
     )
-    .await;
-    switched.map_err(|error| SwitchFailed {
-        error,
-        ended_process: ended_a_process,
-    })
+    .await
 }
 
 /// How long a switch for a usage limit waits for the limit to show in the conversation record. An
@@ -517,11 +525,11 @@ pub(crate) async fn wait_for_usage_limit(
 /// (`before` is its record from before the switch), as a resume does and without a prompt: it was
 /// at its prompt before the switch, and its turn is not carried on, since the account's usage limit
 /// would stop it again. Octoboard's own switch makes this, so that its failure leaves the session
-/// as it was (see `crate::accounts::auto_switch`). Refused, with nothing launched, when the session
-/// is running or being started by then (somebody brought it back meanwhile) or archived; fails when
-/// the process cannot be started or does not stay up. `target` is the account the failed switch was
-/// to move it to (`None` the default account): a session found on neither that nor `before`'s
-/// account was moved by somebody else meanwhile, and is left as they left it.
+/// as it was (see `crate::coordinator::auto_switch`). Refused, with nothing launched, when the
+/// session is running or being started by then (somebody brought it back meanwhile) or archived;
+/// fails when the process cannot be started or does not stay up. `target` is the account the
+/// failed switch was to move it to (`None` the default account): a session found on neither that
+/// nor `before`'s account was moved by somebody else meanwhile, and is left as they left it.
 pub(crate) async fn restore_after_failed_switch(
     state: &Arc<AppState>,
     before: &Session,
@@ -584,19 +592,7 @@ fn is_already_starting(err: &anyhow::Error) -> bool {
 /// revert that fails is logged, never allowed to hide the reason the switch failed.
 fn put_back_on_account(state: &Arc<AppState>, before: &Session) {
     // The model and effort a switch recorded for its relaunch go back with the account.
-    if let Ok(now) = state.session_record(&before.id) {
-        if (&now.model, &now.effort) != (&before.model, &before.effort) {
-            if let Err(revert) =
-                state.set_session_launch_overrides(&before.id, &before.model, &before.effort)
-            {
-                tracing::warn!(
-                    session = %before.id,
-                    %revert,
-                    "putting the session's model and effort back failed"
-                );
-            }
-        }
-    }
+    restart::put_back_model_and_effort(state, before);
     if let Err(revert) = state.set_session_account(
         &before.id,
         before.account_id.as_deref(),

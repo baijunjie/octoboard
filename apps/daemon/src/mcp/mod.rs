@@ -19,14 +19,7 @@
 //! catalogue and runs its calls: [`dispatch`] checks and routes a call, [`tools`] holds one file
 //! per family of tools, and [`lookup`] and [`views`] are what the tools share, reading arguments
 //! and finding the records they name, and describing a record back to the agent.
-//!
-//! [`console_instructions`] writes the console session's instruction files to its working
-//! directory, and removes that directory.
-//!
-//! TODO: this file I/O belongs with the console's lifecycle in the coordinator; it stays here
-//! until the coordinator rework that may move it has settled.
 
-pub mod console_instructions;
 pub(crate) mod dispatch;
 mod lookup;
 pub mod stdio;
