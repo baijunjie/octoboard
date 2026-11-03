@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { QuotaBar } from "../../accounts/quotaFormat";
+import type { QuotaBar } from "../accounts/quotaFormat";
 
 /** The longest the clock goes unread, so a reset that passes while the system sleeps (when timers may
  * pause) is noticed within a minute of waking. */

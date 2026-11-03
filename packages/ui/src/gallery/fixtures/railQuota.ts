@@ -1,10 +1,10 @@
 import { AGENT_LABEL } from "../../agents/agents";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "../../protocol";
+import { AGENTS, type Account, type Agent, type AgentAvailability, type AccountQuota, type Settings } from "../../protocol";
 import { describing, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "../../fixtures/builders";
+import { accountOf, SAMPLE, minutesAgo, snapshotState } from "../../fixtures/builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
@@ -21,18 +21,18 @@ const LONG_NAME = "Acme Corporation internal platform research and billing";
 function railQuotaState(
   accounts: Account[],
   accountQuotas: AccountQuota[],
-  { installed = ["claude", "codex"], added = ALL_AGENTS, defaultNames, turnedOffDefaults }: { installed?: Agent[]; added?: Agent[]; defaultNames?: Settings["default_account_names"]; turnedOffDefaults?: Agent[] } = {},
+  { installed = ["claude", "codex"], added = AGENTS, defaultNames, turnedOffDefaults }: { installed?: readonly Agent[]; added?: readonly Agent[]; defaultNames?: Settings["default_account_names"]; turnedOffDefaults?: Agent[] } = {},
 ) {
   return {
     ...snapshotState({
       consoles: [console_],
       projects: [web, api],
       sessions,
-      settings: { ...DEFAULT_SETTINGS, added_agents: added, default_clone_dir: "/Users/dev/Projects", accounts, default_account_names: defaultNames ?? {}, disabled_default_accounts: turnedOffDefaults ?? [] },
+      settings: { ...DEFAULT_SETTINGS, added_agents: [...added], default_clone_dir: "/Users/dev/Projects", accounts, default_account_names: defaultNames ?? {}, disabled_default_accounts: turnedOffDefaults ?? [] },
       accountQuotas,
     }),
     agentAvailability: new Map<Agent, AgentAvailability>(
-      (["claude", "codex", "grok"] as const).map((agent) => [
+      AGENTS.map((agent) => [
         agent,
         { agent, availability: installed.includes(agent) ? "available" : "unavailable", default_account_dir: `/Users/dev/.${agent}` },
       ]),
@@ -69,14 +69,14 @@ const readState = railQuotaState([...claudeAccounts, ...codexAccounts], [
 const reorderedState = railQuotaState(
   [...claudeAccounts, ...codexAccounts],
   [...readState.accountQuotas!, quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)])],
-  { installed: ALL_AGENTS, added: ["codex", "claude"], defaultNames: { claude: "Studio laptop" } },
+  { installed: AGENTS, added: ["codex", "claude"], defaultNames: { claude: "Studio laptop" } },
 );
 
 /** Every agent installed, added and read, one tab each. */
 const liveState = railQuotaState(
   [...claudeAccounts, ...codexAccounts],
   [...readState.accountQuotas!, quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)])],
-  { installed: ALL_AGENTS, defaultNames: { claude: "Studio laptop" } },
+  { installed: AGENTS, defaultNames: { claude: "Studio laptop" } },
 );
 
 /** An account another window adds to Claude Code's, between its default account and Work. */
@@ -122,7 +122,7 @@ const shortTabsState = railQuotaState(
     quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
     quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)]),
   ],
-  { installed: ALL_AGENTS },
+  { installed: AGENTS },
 );
 
 /** Claude Code's default account and eight more (`manyClaudeAccounts`), more than the panel's list is tall. Hub runs
@@ -164,7 +164,7 @@ const turnedOffHiddenState = railQuotaState(
     quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
     quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)]),
   ],
-  { installed: ALL_AGENTS, turnedOffDefaults: ["claude", "codex"] },
+  { installed: AGENTS, turnedOffDefaults: ["claude", "codex"] },
 );
 
 /** Hub runs on Claude Code's Work, which is turned off, as is Side project; the default account and Client are on. */
@@ -464,7 +464,7 @@ export const railQuotaScenarios: Scenario[] = [
     category: "normal",
     title: "Rail usage panel with agents installed but none added",
     description: "Every agent is installed but none is added, so the panel shows the empty state (a bot glyph, \"No agent added\", \"Add an agent to see its usage here.\" and an Add agent button) rather than the PATH hint. The panel has no footer: its Manage accounts link would only repeat the button.",
-    state: railQuotaState([], [], { installed: ALL_AGENTS, added: [] }),
+    state: railQuotaState([], [], { installed: AGENTS, added: [] }),
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {

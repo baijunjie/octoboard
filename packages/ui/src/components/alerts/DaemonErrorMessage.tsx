@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 
 import { CodedError } from "../../errors/codedError";
-import { daemonParams, hasTrustDiagnostic, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow } from "../../errors/daemonMessage";
+import { daemonParams, NO_RECORDS, hasTrustDiagnostic, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow } from "../../errors/daemonMessage";
 import { leftBranchDetail, leftBranchGroups, leftBranchName, type LeftBranchItem } from "../../errors/branchCleanupItems";
 import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
@@ -24,8 +24,6 @@ export function DaemonErrorTitle(): React.ReactElement {
   const t = useT();
   return <>{t("daemon.shell_environment_timeout.title")}</>;
 }
-
-const NO_RECORDS = new Map<string, never>();
 
 /** The three layers of a failure: `summary` is what happened and `remedy` the one main thing to do about
  * it, both in the application's own words and always visible (a code with `noSummary` has no summary, as its
@@ -92,10 +90,10 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
   const language = useCurrentLanguage();
   // The records are subscribed to only for a message that names one, so a failure that does not
   // re-renders with none of them.
-  const consoles = useDaemonStoreOrEmpty((s) => ("console" in error.params ? s.consoles : NO_RECORDS));
-  const projects = useDaemonStoreOrEmpty((s) => ("project" in error.params ? s.projects : NO_RECORDS));
-  const sessions = useDaemonStoreOrEmpty((s) => ("session" in error.params || "receiving_session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS));
-  const shellTerminals = useDaemonStoreOrEmpty((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS));
+  const consoles = useDaemonStoreOrEmpty((s) => ("console" in error.params ? s.consoles : NO_RECORDS.consoles));
+  const projects = useDaemonStoreOrEmpty((s) => ("project" in error.params ? s.projects : NO_RECORDS.projects));
+  const sessions = useDaemonStoreOrEmpty((s) => ("session" in error.params || "receiving_session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS.sessions));
+  const shellTerminals = useDaemonStoreOrEmpty((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS.shellTerminals));
   const accounts = useDaemonStoreOrEmpty((s) => (error.code === "unknown_account" ? s.settings.accounts : undefined));
   const id = `daemon.${richMessageCode(error.code, error.params)}`;
   const parts = daemonErrorParts(error);

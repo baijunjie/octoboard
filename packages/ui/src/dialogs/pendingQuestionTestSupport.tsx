@@ -4,15 +4,19 @@ import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
-import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import { errorAlerts } from "../components/alerts/errorAlerts";
+import type { RequestHandler } from "../requests";
+import type { Daemon, State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { PendingQuestionDialog } from "./PendingQuestionDialog";
 
 export interface MountedDialog {
   store: Daemon["store"];
   /** The bodies of the requests sent to the daemon, in order. */
   sent: () => unknown[];
-  /** The arguments of each `raiseError` call. */
-  toasts: () => unknown[][];
+  /** The error alerts raised, each as the error it is for, its title and the session it is about. */
+  alerts: () => { error: unknown; title: unknown; session: string | undefined }[];
   /** Whether a dialog is on screen. */
   onScreen: () => boolean;
 }
@@ -29,39 +33,35 @@ export function mountPendingQuestionDialog(
   reply: () => Promise<unknown>,
   { under, after, strict = false }: { under?: React.ReactNode; after?: React.ReactNode; strict?: boolean } = {},
 ): MountedDialog {
-  const daemon: Daemon = {
-    store: createStateStore(state),
-    request: vi.fn(reply) as never,
-    raiseError: vi.fn(),
-    showNotice: vi.fn(),
-    onNotification: () => () => {},
+  const daemon: Daemon = testDaemon({
+    state,
+    request: vi.fn(reply as RequestHandler),
     // What the real one does, so a prompt answered from the dialog leaves the queue and the next
     // one comes up, as it would in the application.
     dismissTrustPrompt: (session) =>
       act(() => {
         daemon.store.setState((s) => ({ trustPrompts: s.trustPrompts.filter((p) => p.session !== session) }));
       }),
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
+    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   });
   const tree = (
-    <DaemonProvider value={daemon}>
+    <TestHost daemon={daemon}>
       {under}
       <PendingQuestionDialog />
       {after}
-    </DaemonProvider>
+    </TestHost>
   );
   act(() => root.render(strict ? <StrictMode>{tree}</StrictMode> : tree));
   return {
     store: daemon.store,
     sent: () => vi.mocked(daemon.request).mock.calls.map(([body]) => body),
-    toasts: () => vi.mocked(daemon.raiseError).mock.calls,
+    alerts: () => errorAlerts.getSnapshot().map(({ error, title, session }) => ({ error, title, session })),
     onScreen: () => document.body.querySelector("[role=alertdialog]") !== null,
   };
 }

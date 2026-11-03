@@ -17,7 +17,7 @@ export function useSessionRecords(sessionIds: string[]): SessionRecordsPresence 
     const { request, send } = latest.current;
     void send({
       request: () => request({ type: "inspect_session_records", sessions: JSON.parse(key) as string[] }),
-      accept: (result) => () => (result.type === "session_records_inspected" ? result.presence : "unknown"),
+      accept: (result) => () => result.presence,
       // An unavailable inspection must leave the cleanup option available.
       failed: () => "unknown",
     });

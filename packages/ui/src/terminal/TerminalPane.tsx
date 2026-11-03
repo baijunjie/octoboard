@@ -11,7 +11,7 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
 import { hasNoProcess, isLive, type Session } from "../protocol";
-import { useDaemon } from "../store";
+import { useAccountSwitchHeld, useDaemon } from "../store";
 import type { ViewedFile } from "../viewer/viewedFile";
 import type { TerminalController } from "./TerminalController";
 import { SessionHistoryView } from "./history/SessionHistoryView";
@@ -138,7 +138,8 @@ export function TerminalPane({
   }, [isArchived, focusTerminal]);
   // An account switch holds the session: the terminal is covered and inert for its whole length, so
   // no key reaches the process, and focus that was in it goes back once it is released.
-  const switching = session?.switching_account === true && !isArchived;
+  const switchHeld = useAccountSwitchHeld(session);
+  const switching = switchHeld && !isArchived;
   const focusWasInTerminalRef = useRef(false);
   useLayoutEffect(() => {
     if (switching) focusWasInTerminalRef.current = rootRef.current?.contains(document.activeElement) ?? false;

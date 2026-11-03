@@ -14,6 +14,6 @@ import type { MessageParams } from "../protocol";
  * (`connection.error.*`, `error.unexpectedReply`) in the current language, never an English literal). */
 export function isUncataloguedFailure(error: ErrorPresentation | { code: string; params: MessageParams }): boolean {
   if (typeof error === "string" || error.code === "" || error instanceof ActionableError || codeRecord(error.code)?.origin === "client") return false;
-  if (error.code === CODE.internal_error || error.code === "unexpected_error") return true;
+  if (error.code === CODE.internal_error || error.code === CODE.unexpected_error) return true;
   return !isMessageKey(`daemon.${messageCode(error.code, withUiParams(error.code, error.params))}`);
 }

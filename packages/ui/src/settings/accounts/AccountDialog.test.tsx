@@ -31,7 +31,6 @@ function render(
   const daemon = testDaemon({
     state: { settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: options.accounts ?? [work] }, agentAvailability },
     request: handler as never,
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   mountHost(<AccountDialog account={editing} agent="claude" renameDefault={renameDefault} onClose={() => {}} />, { daemon });

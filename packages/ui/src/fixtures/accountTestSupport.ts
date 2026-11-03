@@ -1,5 +1,5 @@
 // The accounts the dialog test files share.
-import { accountOf } from "../fixtures/builders";
+import { accountOf } from "./builders";
 import type { Account } from "../protocol";
 
 export const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-work");

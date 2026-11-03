@@ -21,7 +21,7 @@ const MINUTE = 60_000;
 
 const NO_QUOTA: StatusItemQuotaSource = { language: "en", now: NOW, accounts: [], addedAgents: null, agentAvailability: new Map(), accountQuotas: [] };
 
-const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA) =>
+const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA, queuedSwitches: ReadonlySet<string> = new Set()) =>
   buildStatusItemMenu(t, {
     quota,
     consoles,
@@ -30,6 +30,7 @@ const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA) =>
     consoleMap: new Map(consoles.map((c) => [c.id, c])),
     projectMap: new Map(projects.map((p) => [p.id, p])),
     delegating: delegatingSessionIds(sessions),
+    queuedSwitches,
     byStatus: true,
   });
 
@@ -89,6 +90,8 @@ describe("buildStatusItemMenu", () => {
       const switching = sessionOf("s", "c", "p", "s", status, { switching_account: true });
       expect(menuOf([switching]).sections).toEqual([{ heading: "No sessions to show", items: [] }]);
       expect(menuOf([switching]).attention).toBe(false);
+      const queued = sessionOf("q", "c", "p", "q", status);
+      expect(menuOf([queued], NO_QUOTA, new Set(["q"])).sections).toEqual([{ heading: "No sessions to show", items: [] }]);
     }
   });
 
@@ -397,7 +400,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const quota = source({ accounts: [work], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
-      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), byStatus: true,
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), queuedSwitches: new Set(), byStatus: true,
       consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
     });
     const headers = (status: SessionStatus) => menu(status).submenus.flatMap((submenu) => submenu.items.filter((item) => item.kind === "header").map((item) => (item as { title: string }).title.replace(/[\u2068\u2069]/g, "")));
@@ -412,7 +415,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const quota = source({ accounts: [work], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
-      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), byStatus: true,
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), queuedSwitches: new Set(), byStatus: true,
       consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
     });
     expect(menu("idle").quota_label).toContain("Work");

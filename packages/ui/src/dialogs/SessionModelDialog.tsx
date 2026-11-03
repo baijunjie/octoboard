@@ -13,7 +13,7 @@ import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
 import type { AcknowledgementView } from "../components/alerts/errorAlerts";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
-import { useDaemonStore } from "../store";
+import { useAccountSwitchHeld, useDaemonStore } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { LaunchPickers, useLaunchModels } from "./LaunchSettingsFields";
@@ -109,7 +109,8 @@ function SessionModelForm({
   const { model, effort } = launchWithOverrides(start, picked);
   // The daemon would refuse these; the menu does not offer the dialog for them, but one can come about while it
   // is open, so Confirm waits. Any other refusal comes after the dialog has closed, as an error alert.
-  const held = session.status === "starting" || session.switching_account === true;
+  const switching = useAccountSwitchHeld(session);
+  const held = session.status === "starting" || switching;
   const running = session.status !== "interrupted" && session.status !== "archived";
   // A value picked back to the session's own is no edit: the field follows the session again.
   const pick = (field: keyof ModelEdits, value: string | null) => setPicked((now) => {
@@ -145,7 +146,7 @@ function SessionModelForm({
           status="warning"
           announce={painted}
           announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
-          title={t(session.switching_account ? "dialog.sessionModel.heldSwitching" : "dialog.sessionModel.heldStarting")}
+          title={t(switching ? "dialog.sessionModel.heldSwitching" : "dialog.sessionModel.heldStarting")}
           remedy={t("dialog.sessionModel.heldRemedy")}
         />
       )}

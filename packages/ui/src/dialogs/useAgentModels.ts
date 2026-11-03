@@ -3,8 +3,8 @@ import { useEffect } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import { useT } from "../i18n/react";
-import type { Agent, AgentModel, Event, ModelsUnavailable, RequestBody } from "../protocol";
+import type { Agent, AgentModel, ModelsUnavailable } from "../protocol";
+import type { RequestSender } from "../requests";
 import { shownError } from "./shownError";
 
 /** `idle`: not asked, as nothing needs the list yet. `loading`: the answer for the agent and account
@@ -30,17 +30,16 @@ const IDLE: AgentModels = { status: "idle", ...NONE };
  * moved off, or for a dialog that has closed, is dropped.
  */
 export function useAgentModels(
-  request: (body: RequestBody) => Promise<Event>,
+  request: RequestSender,
   agent: Agent,
   account: string | null,
   enabled: boolean,
 ): AgentModels {
-  const t = useT();
   const key = enabled ? JSON.stringify([agent, account]) : undefined;
   const { value, send, reconnects } = useLatestRequest<AgentModels>({
     scope: key, initial: LOADING,
   });
-  const latest = useLatest({ request, agent, account, send, t });
+  const latest = useLatest({ request, agent, account, send });
 
   useEffect(() => {
     // An answer is kept across the section being collapsed and opened again: the scope the answer is
@@ -49,13 +48,7 @@ export function useAgentModels(
     const { request, agent, account, send } = latest.current;
     void send({
       request: () => request({ type: "list_agent_models", agent, ...(account && { account }) }),
-      accept: (event) => {
-        const answer: AgentModels =
-          event.type === "agent_models"
-            ? { status: "ready", models: event.models, unavailable: event.unavailable }
-            : { status: "failed", ...NONE, error: latest.current.t("dialog.agentSettings.modelsUnexpected") };
-        return () => answer;
-      },
+      accept: (event) => () => ({ status: "ready", models: event.models, unavailable: event.unavailable }),
       failed: (failure, _held, t) => ({ status: "failed", ...NONE, error: shownError(failure, t) }),
     });
   }, [key, reconnects]);

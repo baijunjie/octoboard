@@ -24,7 +24,7 @@ async function mount(handler: (body: RequestBody) => Promise<Event>, initialSele
   const request = vi.fn(handler);
   const daemon = testDaemon({
     state: { projects: new Map([[project.id, project]]), sessions: new Map([[first.id, first], [second.id, second]]) },
-    request, raiseError: vi.fn(), showNotice: vi.fn(),
+    request, showNotice: vi.fn(),
   });
   let owner: AsideOwner = { kind: "project", project: project.id };
   let selected: string | undefined = initialSelection;

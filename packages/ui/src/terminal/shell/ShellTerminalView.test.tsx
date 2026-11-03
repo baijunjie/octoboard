@@ -5,6 +5,9 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import type { ShellTerminal } from "../../protocol";
+import type { Daemon, State } from "../../store";
+import { TestHost } from "../../test/TestHost";
+import { testDaemon } from "../../test/testDaemon";
 import type { TermStatus } from "../TerminalController";
 import { MAX_AUTO_RECONNECT_ATTEMPTS } from "../reconnectPolicy";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
@@ -53,13 +56,10 @@ const { FakeController } = vi.hoisted(() => {
   return { FakeController };
 });
 vi.mock("../TerminalController", () => ({ TerminalController: FakeController }));
-const daemon = vi.hoisted(() => ({ terminalUrl: () => "", terminalReconnectDelay: () => 0, request: vi.fn(), raiseError: vi.fn() }));
-const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open" }));
-vi.mock("../../store", () => ({
-  useDaemon: () => daemon,
-  useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
-}));
-vi.mock("../../platform/react", () => ({ usePlatform: () => ({ links: undefined }) }));
+let daemon: Daemon;
+const host = (ui: React.ReactNode) => <TestHost daemon={daemon}>{ui}</TestHost>;
+/** Updates the daemon's state the way a broadcast would. */
+const setState = (state: Partial<State>) => act(() => daemon.store.setState(state));
 vi.mock("../../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 vi.mock("../TerminalEditMenu", () => ({ TerminalEditMenu: () => null }));
 
@@ -70,8 +70,8 @@ const terminal: ShellTerminal = {
 const roots: Root[] = [];
 beforeEach(() => {
   vi.useFakeTimers();
-  store.connectionState = "open";
-  store.snapshotEpoch = 0;
+  // Every automatic attempt follows the last at once, so a test spends them without waiting out the backoff.
+  daemon = testDaemon({ state: { connectionState: "open" }, terminalReconnectDelay: () => 0 });
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -84,7 +84,7 @@ function mount(shown = true, record: ShellTerminal = terminal) {
   const root = createRoot(container);
   roots.push(root);
   const ref = createRef<ShellTerminalViewHandle>();
-  const show = (next: boolean) => act(() => root.render(<ShellTerminalView terminal={record} shown={next} onClose={() => {}} ref={ref} />));
+  const show = (next: boolean) => act(() => root.render(host(<ShellTerminalView terminal={record} shown={next} onClose={() => {}} ref={ref} />)));
   show(shown);
   return { container, ref, show };
 }
@@ -217,7 +217,7 @@ it("mounts empty status regions as a troubled tab is shown", () => {
   expect(spoken(container)).toEqual(["Reconnecting the terminal…"]);
 });
 
-// The delay the mocked daemon's `terminalReconnectDelay` gives every attempt.
+// The delay the test daemon's `terminalReconnectDelay` gives every attempt.
 const RECONNECT_DELAY_MS = 0;
 const failAttempt = () => {
   FakeController.last.settle("closed");
@@ -263,7 +263,7 @@ it("does not offer Reconnect while the control connection is down", () => {
   const { container, show } = mount();
   giveUp();
   expect(reconnectOf(container)).toBeDefined();
-  store.connectionState = "closed";
+  setState({ connectionState: "closed" });
   show(true);
   expect(reconnectOf(container)).toBeUndefined();
 });
@@ -272,7 +272,7 @@ it("recovers a shell that gave up when a fresh snapshot arrives, without taking 
   const { container, show } = mount();
   giveUp();
   const attaches = FakeController.last.attaches.length;
-  store.snapshotEpoch += 1;
+  setState({ snapshotEpoch: daemon.store.getState().snapshotEpoch + 1 });
   show(true);
   expect(FakeController.last.attaches.length).toBe(attaches + 1);
   expect(FakeController.last.attaches.at(-1)).toBe(false);
@@ -283,7 +283,7 @@ it("leaves a snapshot alone while the automatic attempts are not spent", () => {
   const { show } = mount();
   FakeController.last.settle("closed");
   const attaches = FakeController.last.attaches.length;
-  store.snapshotEpoch += 1;
+  setState({ snapshotEpoch: daemon.store.getState().snapshotEpoch + 1 });
   show(true);
   expect(FakeController.last.attaches.length).toBe(attaches);
 });
@@ -304,7 +304,7 @@ function mountObserved(props: { shown: boolean; resizing: boolean }) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  const show = (next: { shown: boolean; resizing: boolean }) => act(() => root.render(<ShellTerminalView terminal={terminal} {...next} onClose={() => {}} />));
+  const show = (next: { shown: boolean; resizing: boolean }) => act(() => root.render(host(<ShellTerminalView terminal={terminal} {...next} onClose={() => {}} />)));
   show(props);
   return { show, notify: () => observers.forEach((notify) => notify()) };
 }

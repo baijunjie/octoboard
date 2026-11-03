@@ -83,12 +83,6 @@ export function sharingRawReason(error: { code: string; params: MessageParams; m
   return { raw: error.code === CODE.account_sharing_failed ? error.params.detail : error.message };
 }
 
-/** Whether a change that failed as a whole has a reason to put in front of the user: the cause's own line, or the raw
- * reason behind Details that the guidance points at. */
-export function hasSharingReason(cause: string | undefined, detail: string | undefined): boolean {
-  return sharingReasonKey(cause) !== undefined || !!detail;
-}
-
 /** The catalog key of the line that says what to do about a cause before turning the switch again, or nothing when
  * turning it again is all there is to do (`not_found`) or the warning says what to do itself (`default_moved`).
  * `rawBelow` is for a place that shows the raw reason right after the line rather than behind Details. */

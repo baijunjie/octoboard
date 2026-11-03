@@ -80,7 +80,8 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
         if (receiving === undefined) throw err;
         onHandedOff(receiving);
         onClose();
-        // The title is the fallback: the code's own `alertTitle` wins over it.
+        // The title is the fallback: the code's own `alertTitle` wins over it. No `session`: the message names the
+        // receiving session and refers to the original by role, and the two usually share a name.
         raiseError(err, { title: t("dialog.handOff.failedTitle") });
         return;
       }

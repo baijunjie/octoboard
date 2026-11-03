@@ -26,7 +26,7 @@ import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionAccountModelLine, sessionDisplayTitle, statusLabel } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useDelegatingIds, useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../store";
+import { useDelegatingIds, useHasBoundSessions, useProjectSessions, useQueuedAccountSwitches, useSessionProjectId } from "../store";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionShownStatus } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { CountBadge } from "../components/status/CountBadge";
@@ -131,11 +131,12 @@ export function ProjectFocusView({
   const includeConsoleSessions = projectFocusIncludeConsoleSessions.useValue();
   const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
   const delegating = useDelegatingIds();
-  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), delegating, byStatus);
+  const queuedSwitches = useQueuedAccountSwitches();
+  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), delegating, queuedSwitches, byStatus);
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
   const archived = archivedSessions(sessions);
-  const elsewhere = boundElsewhere(sessions, owners, delegating, byStatus);
+  const elsewhere = boundElsewhere(sessions, owners, delegating, queuedSwitches, byStatus);
   const noAgentToStart = useNoAgentToStart();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
@@ -242,12 +243,13 @@ export function ConsoleSessionFocusView({
   const selectedProjectId = useSessionProjectId(selectedSessionId);
   const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
   const delegating = useDelegatingIds();
-  const groups = focusGroups(projects, sessions, consoleSession.id, delegating, byStatus);
+  const queuedSwitches = useQueuedAccountSwitches();
+  const groups = focusGroups(projects, sessions, consoleSession.id, delegating, queuedSwitches, byStatus);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
   const archived = boundArchivedSessions(sessions, consoleSession.id);
   const newSession = (project: Project): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
-  const strip = switchStrip(sessions, parentConsole.id, delegating);
+  const strip = switchStrip(sessions, parentConsole.id, delegating, queuedSwitches);
 
   return (
     <>
@@ -436,7 +438,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const boundHere = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return focusGroupRows(sessionsOf(index.byConsole, parentConsole.id), project, consoleSessionId, index.delegatingIds, s.settings.sidebar_order_by_status);
+    return focusGroupRows(sessionsOf(index.byConsole, parentConsole.id), project, consoleSessionId, index.delegatingIds, s.queuedAccountSwitches, s.settings.sidebar_order_by_status);
   });
   const sessions = useProjectSessions(project.id);
   const archived = boundArchivedSessions(sessions, consoleSessionId);

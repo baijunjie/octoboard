@@ -49,21 +49,30 @@ export function sessionStatusKind(session: Pick<Session, "id" | "status" | "paus
 }
 
 /** What a status glyph and label show: a `StatusKind`, or *switching account*, which a session
- * shows over its own status while an account switch holds it (`Session.switching_account`). Only
+ * shows over its own status while an account switch holds it (`holdsAccountSwitch`). Only
  * what is drawn follows it; ordering and the other decisions about a session go by `StatusKind`. */
 export type ShownStatusKind = StatusKind | "switching";
 
-/** Whether a session shows *switching account* over its own status: an account switch holds it, and
- * an archived session is past any switch. */
-export function showsSwitching(session: Pick<Session, "status" | "switching_account">): boolean {
-  return !!session.switching_account && session.status !== "archived";
+/** Whether an account switch holds `session`: the daemon says one does (`Session.switching_account`), or an
+ * account-switch batch of this window has not finished with it, queued or running (`queuedSwitches`, the store's
+ * `queuedAccountSwitches`, which the daemon knows nothing of). The store keeps the daemon's record as sent, so a
+ * session's own `switching_account` alone misses the second; whatever waits on a switch asks this. */
+export function holdsAccountSwitch(session: Pick<Session, "id" | "switching_account">, queuedSwitches: ReadonlySet<string>): boolean {
+  return session.switching_account === true || queuedSwitches.has(session.id);
+}
+
+/** Whether a session shows *switching account* over its own status: an account switch holds it
+ * (`holdsAccountSwitch`), and an archived session is past any switch. */
+export function showsSwitching(session: Pick<Session, "id" | "status" | "switching_account">, queuedSwitches: ReadonlySet<string>): boolean {
+  return holdsAccountSwitch(session, queuedSwitches) && session.status !== "archived";
 }
 
 export function sessionShownStatusKind(
   session: Pick<Session, "id" | "status" | "paused" | "background_tasks" | "has_conversation" | "switching_account">,
   delegating: ReadonlySet<string>,
+  queuedSwitches: ReadonlySet<string>,
 ): ShownStatusKind {
-  return showsSwitching(session) ? "switching" : sessionStatusKind(session, delegating);
+  return showsSwitching(session, queuedSwitches) ? "switching" : sessionStatusKind(session, delegating);
 }
 
 /** The statuses surfaced by the menu bar list and console avatars. Other statuses stay on session rows. */

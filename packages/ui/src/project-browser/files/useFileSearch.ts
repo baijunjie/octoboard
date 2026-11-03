@@ -39,7 +39,7 @@ export function useFileSearch(project: string, query: string, active: boolean, i
       request: () => request({ type: "search_project_files", project, query, ...(includeIgnored && { include_ignored: true }), slot }),
       pending: (result) => (result.state === "loaded" ? result : { state: "loading" }),
       accept: (reply) =>
-        reply.type === "project_file_matches" && reply.project === project && reply.query === query
+        reply.project === project && reply.query === query
           ? () => ({ state: "loaded", paths: reply.paths, ignored: new Set(reply.ignored), complete: reply.complete })
           : undefined,
       failed: (failure, _held, t) => ({ state: "error", message: failure.kind === "failed" ? failure.message : t("browser.error.folderChanged") }),

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Lists the components and hooks the React Compiler leaves uncompiled. The compiler skips such a function silently
 // (most causes pass lint), so this runs it over the given files, or over every production file under `src/` when none
-// is given, with a logger for `CompileError` events, and exits 1 when any is found. A function left uncompiled on
-// purpose carries `"use no memo"`, which the compiler honours without logging an error.
+// is given, with a logger for `CompileError` events, and exits 1 when any is found. `"use no memo"` keeps a function
+// off the list only when the compiler finds no error in it: a ref access or a mutation during render is still logged.
 //
 // Usage: node scripts/compiler-bailouts.mjs [file ...]
 import { readdirSync, readFileSync } from "node:fs";

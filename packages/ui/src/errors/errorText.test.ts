@@ -3,12 +3,12 @@ import { expect, it } from "vitest";
 
 import { CodedError } from "./codedError";
 import { diagnosticText, failureSummaryText } from "./errorText";
-import { format } from "../i18n/catalog";
+import { translatorFor } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Console, Project, Session } from "../protocol";
 
 const records = { consoles: new Map<string, Console>(), projects: new Map<string, Project>(), sessions: new Map<string, Session>() };
-const t: Parameters<typeof failureSummaryText>[0] = (key, ...args) => format("en", key, args[0]);
+const t: Parameters<typeof failureSummaryText>[0] = translatorFor("en");
 
 it.each([
   ["an uncatalogued failure is the generic sentence", new CodedError("daemon words", "models_something_new", {}), "Something unexpected went wrong."],

@@ -1,12 +1,11 @@
 import type { Language } from "../i18n/languages";
-import type { Agent, AgentAvailability, Session } from "../protocol";
+import { AGENTS, type Agent, type AgentAvailability, type Session } from "../protocol";
 import type { State } from "../store";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
 import { quotaOf, quotaWindow } from "../fixtures/quotas";
 import {
-  ALL_AGENTS,
   consoleOf,
   gitStatusOf,
   pageOf,
@@ -27,7 +26,7 @@ export type PreviewScene = "overview" | "focus" | "changes";
 
 /** Every agent installed, so each has a quota tab and the selected session its rail indicator. */
 const agentAvailability = new Map<Agent, AgentAvailability>(
-  ALL_AGENTS.map((agent) => [
+  AGENTS.map((agent) => [
     agent,
     { agent, availability: "available", default_account_dir: `/demo/.${agent}` },
   ]),
@@ -232,7 +231,7 @@ export function createPreviewScenario(
             ahead: 0,
           }),
         ),
-        settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: "/demo" },
+        settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: "/demo" },
         accountQuotas: previewQuotas(),
       }),
       agentAvailability,

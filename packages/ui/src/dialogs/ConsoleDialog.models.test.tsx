@@ -184,10 +184,3 @@ it("names the daemon's own alias for the best model from the catalogue and every
   expect(optionTexts()).toEqual(["Best available", "Opus"]);
 });
 
-it("says so when the daemon answers the question with something else", async () => {
-  render(undefined, [], async () => ({ type: "ack", id: null }) as Event);
-  await openAdvanced();
-  expect((await exposedStatusesAfterFirstWrite()).map((node) => node.textContent)).toEqual(["The daemon answered with something unexpected."]);
-  press(document.body.querySelector("button[data-status-mark][aria-label='Could not load the models']")!);
-  expect(document.querySelector("[data-status-mark-popover]")?.textContent).toContain("The daemon answered with something unexpected.");
-});

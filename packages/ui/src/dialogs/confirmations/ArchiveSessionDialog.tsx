@@ -33,7 +33,7 @@ export function ArchiveSessionDialog({ requested, inspection, onClose }: {
   const t = useT();
   const { request } = useDaemon();
   const session = useSession(requested.id) ?? requested;
-  const withIt = useDaemonStore(useShallow((s) => boundSessionsArchivedWith(Array.from(s.sessions.values()), requested.id, indexSessions(s.sessions).delegatingIds)));
+  const withIt = useDaemonStore(useShallow((s) => boundSessionsArchivedWith(Array.from(s.sessions.values()), requested.id, indexSessions(s.sessions).delegatingIds, s.queuedAccountSwitches)));
   const inspected = useArchiveInspection([session.id, ...withIt.map((s) => s.id)], inspection);
   const cleanup = useBranchCleanup(inspected);
   const processes = useProcessStopping(inspected.processes);

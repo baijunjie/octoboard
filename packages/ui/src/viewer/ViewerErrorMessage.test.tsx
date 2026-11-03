@@ -5,8 +5,9 @@ import { afterEach, expect, it, onTestFinished } from "vitest";
 
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { CodedError } from "../errors/codedError";
+import { NO_RECORDS } from "../errors/daemonMessage";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import { format, globalParam, type Translate } from "../i18n/catalog";
+import { format, globalParam, translatorFor, type Translate } from "../i18n/catalog";
 import { setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
 import { BodiesFailureReason, ViewerErrorMessage } from "./ViewerErrorMessage";
@@ -98,10 +99,9 @@ it("does not shorten shared errors outside the viewer", () => {
   expect(container.querySelector("code")?.textContent).toBe("src/gone.ts");
 });
 
-const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 
 it.each<Language>(["en", "zh-Hans"])("uses the same compact reasons in plain-text body failures in %s", (language) => {
-  const t: Translate = (key, ...args) => format(language, key, args[0]);
+  const t: Translate = translatorFor(language);
   const text = (error: ErrorPresentation) => viewerErrorText(t, language, error, "src/gone.ts", NO_RECORDS);
   expect(text(new CodedError("gone", "file_not_found", { path: "src/gone.ts" })))
     .toBe(format(language, "viewer.error.fileNotFound"));
@@ -117,13 +117,13 @@ it.each([
   new CodedError("database is locked", "internal_error", { detail: "database is locked" }),
   new CodedError("a newer daemon's text", "a_newer_code", {}),
 ])("says a body failure the application has no words for as its generic sentence, its text kept as the raw detail: $code", (error) => {
-  const t: Translate = (key, ...args) => format("en", key, args[0]);
+  const t: Translate = translatorFor("en");
   expect(viewerErrorText(t, "en", error, "src/gone.ts", NO_RECORDS)).toBe("Something unexpected went wrong.");
   expect(rawFailureText(error)).toBe(error.message);
 });
 
 it.each<Language>(["en", "zh-Hans"])("words a failure of another path as its summary sentence, without the raw reason, in %s", (language) => {
-  const t: Translate = (key, ...args) => format(language, key, args[0]);
+  const t: Translate = translatorFor(language);
   const text = (error: ErrorPresentation) => viewerErrorText(t, language, error, "src/gone.ts", NO_RECORDS);
   const parent = text(new CodedError("raw", "source_unavailable", { path: "src", detail: "Permission denied" }));
   expect(parent).toContain("src");
@@ -137,7 +137,7 @@ it.each<Language>(["en", "zh-Hans"])("words a failure of another path as its sum
 });
 
 it("knows the sentence of a body failure worded before the language changed", () => {
-  const t: Translate = (key, ...args) => format("en", key, args[0]);
+  const t: Translate = translatorFor("en");
   const error = new CodedError("denied", "permission_denied", { path: "src/gone.ts", detail: "Access denied" });
   const { message, messageKey } = bodiesFailure(changeBodiesFailure(t, "en", error, "src/gone.ts", NO_RECORDS));
   expect(message).toBe(format("en", "viewer.error.permissionDenied.summary"));
@@ -147,7 +147,7 @@ it("knows the sentence of a body failure worded before the language changed", ()
 });
 
 it("words any viewer sentence of a body failure in the live language", () => {
-  const t: Translate = (key, ...args) => format("en", key, args[0]);
+  const t: Translate = translatorFor("en");
   const error = new CodedError("gone", "file_not_found", { path: "src/gone.ts" });
   const { message, messageKey } = bodiesFailure(changeBodiesFailure(t, "en", error, "src/gone.ts", NO_RECORDS));
   expect(messageKey).toBe("viewer.error.fileNotFound");

@@ -6,7 +6,9 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { archiveNeedsConfirmation } from "../sessions/order";
+import { holdsAccountSwitch } from "../sessions/sessionStatus";
 import { useDaemon, useDaemonStore } from "../store";
+import { raiseError } from "../components/alerts/raiseError";
 import { ringForAutomaticFocus } from "../input/touchInput";
 
 /**
@@ -29,7 +31,7 @@ export function useArchiveSession({
   focusTerminal: () => void;
 }) {
   const t = useT();
-  const { request, raiseError, store } = useDaemon();
+  const { request, store } = useDaemon();
   // Archiving at once takes the row away from under a menu that returns focus to its trigger in
   // that row, so once the session reads archived focus is handed to the terminal, where the
   // keyboard user works next. The session's status is read here, as a value, because nothing else
@@ -54,7 +56,7 @@ export function useArchiveSession({
   const launchQuestionLatest = useLatest(launchQuestionOpen);
   const inspectingArchive = useRef(new Set<string>());
   const asksBeforeArchiving = (session: Session) =>
-    resuming.current.has(session.id) || session.switching_account === true || archiveNeedsConfirmation(Array.from(store.getState().sessions.values()), session);
+    resuming.current.has(session.id) || holdsAccountSwitch(session, store.getState().queuedAccountSwitches) || archiveNeedsConfirmation(Array.from(store.getState().sessions.values()), session);
   const archiveSession = (session: Session) => {
     const live = store.getState().sessions.get(session.id) ?? session;
     if (asksBeforeArchiving(live)) {

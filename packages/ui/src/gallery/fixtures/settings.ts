@@ -1,10 +1,10 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { AGENT_LABEL } from "../../agents/agents";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
-import type { AccountLogin, AccountSharing, Agent, AgentAvailability } from "../../protocol";
+import { AGENTS, type AccountLogin, type AccountSharing, type Agent, type AgentAvailability } from "../../protocol";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
+import { accountOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
 import { noneAddedState } from "./empty";
 import { agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
@@ -83,7 +83,7 @@ const quotaState: Scenario["state"] = {
   ...approvalState,
   settings: {
     ...approvalState.settings!,
-    added_agents: ALL_AGENTS,
+    added_agents: [...AGENTS],
     claude_approval_mode: "auto",
     codex_approval_reviewer: "auto_review",
   },
@@ -139,7 +139,7 @@ const manyAccountsState: Scenario["state"] = {
  * availability is not determined as still being checked. */
 const unavailableQuotaState: Scenario["state"] = {
   ...browserState,
-  settings: { ...browserState.settings!, added_agents: ALL_AGENTS },
+  settings: { ...browserState.settings!, added_agents: [...AGENTS] },
   agentAvailability: new Map(browserState.agentAvailability).set("grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }),
   accountQuotas: [
     quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage.") }),

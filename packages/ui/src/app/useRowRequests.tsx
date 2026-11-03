@@ -23,7 +23,7 @@ import { alertFailure } from "../components/alerts/raiseError";
 export function useRowRequests() {
   const t = useT();
   const { links } = usePlatform();
-  const { request, showNotice, raiseError } = useDaemon();
+  const { request, showNotice } = useDaemon();
   const copy = useCopyWithNotice();
 
   const pullProjectBranch = (project: Project) => {
@@ -61,8 +61,7 @@ export function useRowRequests() {
       listLane.send(() => request({ type: "list_project_branches", project: project.id })),
       listLane.send(() => request({ type: "get_project_source", project: project.id })),
     ]);
-    if (reply.type !== "project_branches") throw new Error(t("sidebar.project.branchesFailed"));
-    const git = source.type === "project_source" ? source.source.git : undefined;
+    const git = source.source.git;
     const currentBranch = git?.worktrees.find((worktree) => worktree.id === git.worktree)?.branch;
     const entries: ActionMenuEntry[] = reply.branches.map((branch) => {
       const name = displayWirePath(branch.name);
@@ -85,13 +84,11 @@ export function useRowRequests() {
   };
 
   const setSessionColour = (session: Session, colour: ConsoleSessionColour) => {
-    request({ type: "set_session_colour", session: session.id, colour }).catch((err: unknown) =>
-      raiseError(err, { title: t("sidebar.session.colourFailedTitle"), session: session.id }));
+    request({ type: "set_session_colour", session: session.id, colour }).catch(alertFailure({ title: t("sidebar.session.colourFailedTitle"), session: session.id }));
   };
 
   const setLocked = (session: Session, locked: boolean) => {
-    request({ type: "set_session_locked", session: session.id, locked }).catch((err: unknown) =>
-      raiseError(err, { title: t(locked ? "sidebar.session.lockFailedTitle" : "sidebar.session.unlockFailedTitle"), session: session.id }));
+    request({ type: "set_session_locked", session: session.id, locked }).catch(alertFailure({ title: t(locked ? "sidebar.session.lockFailedTitle" : "sidebar.session.unlockFailedTitle"), session: session.id }));
   };
 
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
@@ -99,7 +96,7 @@ export function useRowRequests() {
       "project" in target
         ? [{ type: "update_project", project: target.project.id, pinned } as const, pinned ? "sidebar.project.pinFailedTitle" as const : "sidebar.project.unpinFailedTitle" as const, undefined]
         : [{ type: "set_session_pinned", session: target.session.id, pinned } as const, pinned ? "sidebar.session.pinFailedTitle" as const : "sidebar.session.unpinFailedTitle" as const, target.session.id];
-    request(body).catch((err: unknown) => raiseError(err, { title: t(failedTitle), session }));
+    request(body).catch(alertFailure({ title: t(failedTitle), session }));
   };
 
   const stableSetSessionColour = useStableHandler(setSessionColour);

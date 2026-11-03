@@ -4,9 +4,9 @@
 // What the daemon would work out from the filesystem is written out here by hand.
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import { ALL_AGENTS, effectiveClaudeCompatibility } from "./builders";
+import { effectiveClaudeCompatibility } from "./builders";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
-import type { AccountFallback, Agent, GitWorkflowSettings, InspectedProject } from "../protocol";
+import { AGENTS, type AccountFallback, type Agent, type GitWorkflowSettings, type InspectedProject } from "../protocol";
 
 /** A reference to an account this machine has none by that name of. The inspection lists it whether or not the document's
  * own accounts would create one of that name: the review decides from the accounts and the user's choices whether it
@@ -33,7 +33,7 @@ const FILE_AGENT_TAGS = { codex: ["review", "backend", "nightly"] };
 
 /** This machine's Claude compatibility as an import's review reports it: the values in effect for both agents. The
  * machines the document is set up on have every agent added and no explicit choice, so both are on. */
-export const THIS_CLAUDE_COMPATIBILITY = effectiveClaudeCompatibility({}, ALL_AGENTS);
+export const THIS_CLAUDE_COMPATIBILITY = effectiveClaudeCompatibility({}, AGENTS);
 
 /** An inspection of a document that carries no settings and no accounts unless `parts` gives them: the regions a document
  * does not carry are `null`, as the daemon sends them. */

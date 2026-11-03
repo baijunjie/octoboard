@@ -16,7 +16,7 @@ import { Toasts } from "./Toasts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const daemon = testDaemon({ request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
+const daemon = testDaemon({ request: vi.fn(), showNotice: vi.fn() });
 
 class FakeResizeObserver {
   observe(): void {}

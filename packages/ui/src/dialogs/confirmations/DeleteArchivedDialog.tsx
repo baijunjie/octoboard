@@ -3,10 +3,10 @@ import React, { useEffect, useState } from "react";
 import { ConfirmConsequences } from "../../components/dialog/ConfirmConsequences";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { useT } from "../../i18n/react";
+import { archivedDeletionScope } from "../../sessions/order";
 import { useDaemon, useDaemonStoreEqual } from "../../store";
 import type { DialogRequest } from "../dialogRequest";
 import { useSessionDeletionOptions } from "../useSessionDeletionOptions";
-import { archivedDeletionScope } from "./archivedDeletionScope";
 
 /** The confirmation of deleting many archived sessions at once, with the option of also moving the
  * agent's own records of them to the Trash. How many the archive view lists, and how many archived

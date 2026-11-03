@@ -1,8 +1,8 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { DEFAULT_ACCOUNT_NAME, type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
+import { AGENTS, DEFAULT_ACCOUNT_NAME, type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState, broadcastErrorToast, sessionNoticeToast } from "../../fixtures/builders";
+import { accountOf, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState, broadcastErrorToast, sessionNoticeToast } from "../../fixtures/builders";
 import { quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
@@ -65,7 +65,7 @@ const accounts: Account[] = [
 ];
 const resumeSettings: Settings = {
   ...DEFAULT_SETTINGS,
-  added_agents: ALL_AGENTS,
+  added_agents: [...AGENTS],
   default_clone_dir: "/Users/dev/Projects",
   accounts,
 };

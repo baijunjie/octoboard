@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import { raiseError } from "../../components/alerts/raiseError";
 import { gitModeWorktree } from "../../project-browser/gitModeWorktree";
 import { t } from "../../i18n/language";
 import { hostPathRecovery } from "../../errors/errorRecovery";
@@ -128,7 +129,7 @@ export function takeShellTerminalFocus(terminal: string): boolean {
  * id, or nothing when none was started.
  */
 export function startShellTerminal(
-  daemon: Pick<Daemon, "request" | "store" | "raiseError">,
+  daemon: Pick<Daemon, "request" | "store">,
   project: string,
   { ifNone = false, place, focus = false }: { ifNone?: boolean; place?: ShellTerminalPlace; focus?: boolean } = {},
 ): Promise<string | undefined> {
@@ -147,12 +148,11 @@ export function startShellTerminal(
   return started;
 }
 
-async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "raiseError">, project: string, place: ShellTerminalPlace | undefined, focus: boolean): Promise<string | undefined> {
+async function createShellTerminal(daemon: Pick<Daemon, "request" | "store">, project: string, place: ShellTerminalPlace | undefined, focus: boolean): Promise<string | undefined> {
   setStarting(project, true);
   try {
     const { worktree, path } = place ?? { worktree: gitModeWorktree(project) };
     const reply = await daemon.request({ type: "create_shell_terminal", project, ...(worktree !== undefined && { worktree }), ...(path !== undefined && { path }) });
-    if (reply.type !== "shell_terminal_created") return undefined;
     if (focus) focusRequested = { terminal: reply.shell_terminal.id, at: Date.now() };
     // The broadcast of the record can come after this reply; seeded here (a record the broadcast
     // already brought stands), the pending state never ends on a store without it.
@@ -160,7 +160,7 @@ async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "r
     setActiveShellTerminal(project, reply.shell_terminal.id);
     return reply.shell_terminal.id;
   } catch (err) {
-    daemon.raiseError(err, { title: t("shellTerminal.newFailedTitle"), recovery: place?.path ? hostPathRecovery(err) : undefined });
+    raiseError(err, { title: t("shellTerminal.newFailedTitle"), recovery: place?.path ? hostPathRecovery(err) : undefined });
     return undefined;
   } finally {
     setStarting(project, false);

@@ -3,11 +3,12 @@ import { useEffect, useRef } from "react";
 import { useStableHandler } from "../../components/hooks/useLatest";
 import { useT } from "../../i18n/react";
 import { useDaemon } from "../../store";
+import { raiseError } from "../../components/alerts/raiseError";
 
 /** The daemon checks the unused state atomically before deleting and cleaning up native records. */
 export function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClose: () => void }): null {
   const t = useT();
-  const { request, raiseError } = useDaemon();
+  const { request } = useDaemon();
   const close = useStableHandler(onClose);
   const deletion = useRef<ReturnType<typeof request> | undefined>(undefined);
   useEffect(() => {
@@ -22,6 +23,6 @@ export function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string;
       close();
     });
     return () => { active = false; };
-  }, [sessionId, request, raiseError, close, t]);
+  }, [sessionId, request, close, t]);
   return null;
 }

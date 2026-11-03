@@ -30,7 +30,6 @@ function mount(initial: Partial<State> = {}) {
   const daemon = testDaemon({
     state: initial,
     request: vi.fn(async () => ({ type: "session_opened", id: null, session: sessionOf("s-new", parent.id, project.id, "", "idle") })) as Daemon["request"],
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   const onOpened = vi.fn();

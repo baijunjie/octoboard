@@ -25,7 +25,6 @@ import {
   sectionEntry,
   sessions,
   settings,
-  raiseError,
   startDaemon,
 } from "./agentAccountsSectionTestState";
 import { SettingsFocusContext } from "../useSectionRefocus";
@@ -47,7 +46,6 @@ beforeEach(() => {
   HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
-  raiseError.mockClear();
   settings.added_agents = ["claude", "codex", "grok"];
   consoles.clear();
   projects.clear();

@@ -3,8 +3,9 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
-import type { Agent, AgentAvailability, Session } from "../protocol";
+import { AGENTS, type Agent, type AgentAvailability, type Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
 import { accountOf, type ProjectExtra, sessionOf } from "../fixtures/builders";
 import { DaemonProvider } from "../store";
@@ -18,8 +19,7 @@ vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "
 /** An `agentAvailability` map with every agent `unavailable` — "no agent available at all". Named
  * distinctly from `agents.ts`'s own `noAgentState`, which this is only a fixture for. */
 function everyAgentUnavailable(): Map<Agent, AgentAvailability> {
-  const agents: Agent[] = ["claude", "codex", "grok"];
-  return new Map(agents.map((agent) => [agent, { agent, availability: "unavailable" as const, default_account_dir: null }]));
+  return new Map(AGENTS.map((agent) => [agent, { agent, availability: "unavailable" as const, default_account_dir: null }]));
 }
 
 const hub2 = sessionOf("s-hub-2", parentConsole.id, undefined, "Hub 2", "working", { colour: "pink", started_at: 200 });
@@ -82,7 +82,7 @@ it.each(["archived", "removed"])("turns a fixed-owner form into a failure modal 
     container.remove();
   });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   act(() => root.render(
     <DaemonProvider value={daemon}>
       <SessionDialog
@@ -97,7 +97,7 @@ it.each(["archived", "removed"])("turns a fixed-owner form into a failure modal 
     </DaemonProvider>,
   ));
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("Hub is no longer available, so a session cannot be opened for it.");
   expect(dialog?.querySelector("form")).toBeNull();
@@ -108,13 +108,13 @@ it.each(["archived", "removed"])("turns a fixed-owner form into a failure modal 
 });
 
 it("says only the owner's loss when both the fixed owner and every agent are unavailable", () => {
-  const { container, root, daemon, onClose } = renderDialog([], { agentAvailability: everyAgentUnavailable() }, {}, { kind: "bound", to: hub1 });
+  const { container, root, onClose } = renderDialog([], { agentAvailability: everyAgentUnavailable() }, {}, { kind: "bound", to: hub1 });
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("is no longer available");
   expect(dialog?.textContent).not.toContain("No agent is available");
@@ -143,7 +143,7 @@ it("keeps the owner select, back on none, when the chosen console session is arc
     ),
   );
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
   expect(ownerTrigger).toBeDefined();
   await act(async () => ownerTrigger?.click());
@@ -156,9 +156,9 @@ it("keeps the owner select, back on none, when the chosen console session is arc
 });
 
 it("turns into an acknowledgement-only failure modal when no agent is available at all", () => {
-  const { container, root, onClose, daemon } = renderDialog([], { agentAvailability: everyAgentUnavailable() });
+  const { container, root, onClose } = renderDialog([], { agentAvailability: everyAgentUnavailable() });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No agent is available to open a session.");
   act(() => root.unmount());
   container.remove();
@@ -318,11 +318,11 @@ it("opens on the first added agent when the console's default agent is not added
 });
 
 it("turns into the same failure modal when agents are installed but none is added", () => {
-  const { container, root, onClose, daemon } = renderDialog([], {
+  const { container, root, onClose } = renderDialog([], {
     settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
   });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No agent is available to open a session.");
   act(() => root.unmount());
   container.remove();

@@ -1,12 +1,12 @@
 import React from "react";
 
-import { exhaustedQuotaWindow } from "../../accounts/quotaFormat";
-import { INACTIVE_VEIL_CLASS } from "../../components/status/inactiveVeil";
-import { useNow } from "../../format/useNow";
-import type { Agent } from "../../protocol";
-import { AccountNameLine, AccountQuotaSummary } from "../../quota/AccountQuotaSummary";
-import { ResetCreditsLine } from "../../quota/ResetCredits";
-import { useAccountQuota } from "../../quota/useAccountQuota";
+import { exhaustedQuotaWindow } from "../accounts/quotaFormat";
+import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
+import { useNow } from "../format/useNow";
+import type { Agent } from "../protocol";
+import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
+import { ResetCreditsLine } from "./ResetCredits";
+import { useAccountQuota } from "./useAccountQuota";
 
 /** Asks to use a reset credit of an account (its id, null for the default account) under the name the panel shows it by. */
 export type ResetRequest = (account: string | null, name: string) => void;

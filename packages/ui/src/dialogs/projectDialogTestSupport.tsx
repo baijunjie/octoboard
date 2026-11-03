@@ -9,7 +9,7 @@ import type { Account, Agent, AgentAvailability, Event, Project, RequestBody } f
 import { DaemonProvider } from "../store";
 import { buttons, click, inputLabelled, pickerNamed, type } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
-import { personal, work } from "./accountTestSupport";
+import { personal, work } from "../fixtures/accountTestSupport";
 import { ProjectDialog } from "./ProjectDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
@@ -46,7 +46,6 @@ export function render(
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     },
     request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   const container = document.body.appendChild(document.createElement("div"));

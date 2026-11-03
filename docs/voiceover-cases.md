@@ -860,7 +860,7 @@ mapping.
   separately open with Enter and close with Escape. The viewer's outer dialog is already open for the mark checks; quota
   is in the main window.
 - **Mechanism.** `packages/ui/src/components/status/StatusMark.tsx` (`StatusMark`, `PopoverMark`, `MarkButton`) and
-  `packages/ui/src/shell/RailQuotaEntry.tsx` (`RailQuotaEntry`) with `packages/ui/src/shell/rail-quota/QuotaPanel.tsx`
+  `packages/ui/src/shell/RailQuotaEntry.tsx` (`RailQuotaEntry`) with `packages/ui/src/quota/QuotaPanel.tsx`
   (`QuotaPanel`) share
   `packages/ui/src/components/hint/hintPopover.tsx` (`PopoverHint`, `useHoverPopover`). E6 source wiring opens hover
   non-modally without a focus move, using a focusable `div` with `role="dialog"`, `aria-modal="false"` and

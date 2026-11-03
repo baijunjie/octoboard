@@ -1,5 +1,5 @@
 import { BROWSE_SLOTS, documentImageLane } from "../../browse/budget";
-import type { Event, RequestBody } from "../../protocol";
+import type { ReplyOf, RequestSender } from "../../requests";
 
 /**
  * Reads an image a document names, in the window's lane for them: a document can name dozens, and
@@ -11,11 +11,11 @@ import type { Event, RequestBody } from "../../protocol";
  * with the signal's reason then.
  */
 export function readDocumentImage(
-  request: (body: RequestBody) => Promise<Event>,
+  request: RequestSender,
   project: string,
   path: string,
   signal: AbortSignal,
-): Promise<Event> {
+): Promise<ReplyOf<"read_project_file">> {
   const slot = BROWSE_SLOTS.documentImage;
   return documentImageLane.send(() => request({ type: "read_project_file", project, path, slot }), { signal });
 }

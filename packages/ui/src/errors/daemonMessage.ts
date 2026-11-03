@@ -32,8 +32,9 @@ export interface RecordNames {
 }
 
 /** No records to name anything by, for a message about none of them (a quota reading, a login) or worded where the
- * store is out of reach: a record id is then shown as it came. */
-export const NO_RECORDS: RecordNames = { consoles: new Map(), projects: new Map(), sessions: new Map() };
+ * store is out of reach: a record id is then shown as it came. Each of its maps also stands for one a reader of the store
+ * does not subscribe to. */
+export const NO_RECORDS: Required<Pick<RecordNames, "consoles" | "projects" | "sessions" | "shellTerminals">> = { consoles: new Map(), projects: new Map(), sessions: new Map(), shellTerminals: new Map() };
 
 /** A structured list never infers boundaries from user-provided names or punctuation. */
 export function runningSessionIds(params: MessageParams): string[] | undefined {

@@ -1,5 +1,5 @@
 import { CodedError } from "./codedError";
-import { codeRecord } from "./codes";
+import { CODE, codeRecord } from "./codes";
 import { daemonMessage, type RecordNames } from "./daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, type ErrorPresentation } from "./errorPresentation";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
@@ -41,7 +41,7 @@ export function errorDiagnostic(error: { name: string; message: string; stack?: 
  * message; a wrapped JavaScript error is its message and then its stack, the message put first when the stack lacks it
  * (see `stackLedBy`). */
 export function unexpectedFailureDiagnostic(error: { code: string; message: string; stack?: string }): string {
-  if (error.code !== "unexpected_error" || !error.stack) return error.message;
+  if (error.code !== CODE.unexpected_error || !error.stack) return error.message;
   return stackLedBy(error.message, error.stack);
 }
 

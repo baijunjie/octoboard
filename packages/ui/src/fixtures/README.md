@@ -35,7 +35,7 @@ It is excluded from the production type check and from release verification, and
 - `pageFrame.ts` and `preferences.ts` are the page set-up the gallery and the website preview do before the app loads;
   they import nothing from the app that reads a stored preference at load.
 - Sample data shared by scenarios and tests: `archiveSessions.ts`, `configurationReview.ts`, `restoreSample.ts`,
-  `quotas.ts`, `agentModels.ts`.
+  `quotas.ts`, `agentModels.ts`, and `accountTestSupport.ts` (the two accounts the dialog tests share).
 
 ## Conventions for teaching the fixture daemon a reply
 

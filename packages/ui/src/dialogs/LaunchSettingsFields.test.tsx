@@ -27,7 +27,7 @@ function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
     }
     return { type: "ack", id: null };
   });
-  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ request: request as Daemon["request"], showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -235,7 +235,7 @@ it.each([
     if (reload) return new Promise<never>(() => {});
     return { type: "agent_models", id: null, models: [], unavailable: { code: "agent-not-found", message: "Gone", params: {} } };
   });
-  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ request: request as Daemon["request"], showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });

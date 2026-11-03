@@ -38,14 +38,25 @@ export function useStableNodes(nodes: TreeNode[]): TreeNode[] {
         return result;
       });
     const result = stable(nodes);
-    // A cache kept across renders, which the React Compiler's rules forbid: this hook stays
-    // uncompiled, as the sharing it exists for needs.
-    // eslint-disable-next-line react-hooks/immutability
-    previous.clear();
-    // eslint-disable-next-line react-hooks/immutability
-    for (const [key, node] of seen) previous.set(key, node);
+    remember(previous, seen);
     return result;
   }, [nodes]);
+}
+
+/** Replaces what `previous` holds, a cache kept across renders, with `seen`. */
+function remember(previous: Map<string, TreeNode>, seen: ReadonlyMap<string, TreeNode>): void {
+  previous.clear();
+  for (const [key, node] of seen) previous.set(key, node);
+}
+
+/** The stand-in row of the collapsed directory at `path`, made once and kept in `standIns`. */
+function standInFor(standIns: Map<string, TreeNode[]>, path: string): TreeNode[] {
+  let standIn = standIns.get(path);
+  if (!standIn) {
+    standIn = [{ type: "status", key: `collapsed:${path}`, dir: path, status: "loading" }];
+    standIns.set(path, standIn);
+  }
+  return standIn;
 }
 
 function sameEntry(a: BrowseEntry | undefined, b: BrowseEntry | undefined): boolean {
@@ -138,13 +149,7 @@ export function FileTree({
   const standIns = useMemo(() => new Map<string, TreeNode[]>(), []);
   const childrenOf = (node: Extract<TreeNode, { type: "directory" }>): TreeNode[] => {
     if (node.children.length > 0) return node.children;
-    let standIn = standIns.get(node.path);
-    if (!standIn) {
-      standIn = [{ type: "status", key: `collapsed:${node.path}`, dir: node.path, status: "loading" }];
-      // eslint-disable-next-line react-hooks/immutability -- kept across renders on purpose, which leaves the tree uncompiled
-      standIns.set(node.path, standIn);
-    }
-    return standIn;
+    return standInFor(standIns, node.path);
   };
   // The directories whose listing failed, drawn collapsed whatever `expanded` says.
   const failed = useMemo(() => new Set([...byKey].filter(([, node]) => node.type === "directory" && node.failure !== undefined).map(([key]) => key)), [byKey]);

@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 
 import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "../focus/modalFocus";
 import { CodedError } from "../../errors/codedError";
+import { CODE } from "../../errors/codes";
 import { errorPresentation } from "../../errors/errorPresentation";
 import { errorText } from "../../errors/errorText";
 import { classifyError, type ErrorClassification, type ErrorRecovery } from "../../errors/errorRecovery";
@@ -13,7 +14,12 @@ export interface ErrorAlertRequest {
    * (`flex flex-col gap-4`, the gap the alert leaves before its remedy line). */
   content?: ReactNode;
   title?: string | ReactElement;
+  /** The session the alert is about, by id: the alert names it, and its project or console, from the store when it shows
+   * (`AlertSessionLines`), and offers Change model for it where that is the remedy. */
   session?: string;
+  /** The name to call the session by where the store does not hold it: the one a failed launch's notice carries, the
+   * session being gone. */
+  sessionName?: string;
   error?: unknown;
   recovery?: ErrorRecovery;
   failures?: readonly ErrorAlertFailure[];
@@ -64,7 +70,7 @@ function viewOf(request: ErrorAlertRequest): { view: ErrorAlertView; signature: 
   const classification = classifications.find((failure) => failure.kind === "unexpected") ?? classifications[0];
   const metadata = failures.map(({ error: source }, index) => [
     classifications[index],
-    source instanceof CodedError && source.code !== "unexpected_error" ? [source.code, source.message, Object.entries(source.params).sort(([a], [b]) => a.localeCompare(b))] : errorText(errorPresentation(source)),
+    source instanceof CodedError && source.code !== CODE.unexpected_error ? [source.code, source.message, Object.entries(source.params).sort(([a], [b]) => a.localeCompare(b))] : errorText(errorPresentation(source)),
   ]);
   const signature = JSON.stringify([request.message, request.session, metadata]);
   // The one remedy of every failure the alert is about, if there is one (it can carry a button for it).

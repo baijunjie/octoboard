@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 
-import { format, type Translate } from "../i18n/catalog";
+import { translatorFor, type Translate } from "../i18n/catalog";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { IS_MAC } from "../input/keys";
 import { bindingParts, bindingsEqual, describeBinding, eventKey, matches, parseBinding, toAccelerator, type Binding } from "./binding";
@@ -11,7 +11,7 @@ import { validateBinding } from "./validate";
 
 const press = (binding: Binding, extra: KeyboardEventInit = {}) => new KeyboardEvent("keydown", { ...eventKey(binding), ...extra });
 const defaults = effectiveBindings({});
-const say = (language: "en" | "zh-Hans"): Translate => (key, ...args) => format(language, key, args[0] as Record<string, string | number> | undefined);
+const say = (language: "en" | "zh-Hans"): Translate => translatorFor(language);
 const primary = IS_MAC ? { metaKey: true } : { ctrlKey: true };
 
 afterEach(() => restoreAllBindings());

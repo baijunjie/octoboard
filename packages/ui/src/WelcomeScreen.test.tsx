@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
-import type { Agent, AgentAvailability } from "./protocol";
+import { AGENTS, type Agent, type AgentAvailability } from "./protocol";
 import { DaemonProvider, type State } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { WelcomeScreen } from "./WelcomeScreen";
@@ -16,7 +16,7 @@ import { WelcomeScreen } from "./WelcomeScreen";
 const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", configurationFile: { save: vi.fn(), open: vi.fn() } };
 
 function mount(onOpenDialog = vi.fn(), state: Partial<State> = {}, platform: PlatformAdapter = { kind: "browser" }): HTMLElement {
-  const daemon = testDaemon({ state, request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ state, request: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -49,7 +49,7 @@ it("is a named region of the window", () => {
 
 it("always lists supported tools and keeps the action enabled when none is detected", () => {
   const unavailable = new Map<Agent, AgentAvailability>(
-    (["claude", "codex", "grok"] as const).map((agent) => [agent, { agent, availability: "unavailable", default_account_dir: null }]),
+    AGENTS.map((agent) => [agent, { agent, availability: "unavailable", default_account_dir: null }]),
   );
   const pending = mount();
   expect(pending.querySelectorAll("li")).toHaveLength(3);

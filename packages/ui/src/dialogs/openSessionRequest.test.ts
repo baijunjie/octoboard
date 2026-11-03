@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project } from "../protocol";
-import { format, type Translate } from "../i18n/catalog";
+import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project } from "../protocol";
+import { translatorFor, type Translate } from "../i18n/catalog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { defaultOpenSessionRequest, openSessionRequest, quickCreateUnavailable } from "./openSessionRequest";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
@@ -19,13 +19,13 @@ const opened = (...args: Parameters<typeof quick>) => {
   return result.request;
 };
 
-const t: Translate = (key, ...args) => format("en", key, args[0]);
+const t: Translate = translatorFor("en");
 
 const parent = consoleOf("c-1", "Main", { default_agent: "codex", accounts: { claude: "w" } });
 const accounts: Account[] = [accountOf("w", "claude", "Work", "/w")];
 const project = projectOf("p-1", parent.id, "Search API");
 const available = (...unavailable: Agent[]): Map<Agent, AgentAvailability> =>
-  new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: unavailable.includes(agent) ? "unavailable" : "available", default_account_dir: null }]));
+  new Map(AGENTS.map((agent) => [agent, { agent, availability: unavailable.includes(agent) ? "unavailable" : "available", default_account_dir: null }]));
 
 it("opens untouched on the parent's agent and account, with the localized default name and no model, effort or owner", () => {
   expect(opened(t, parent, project, { kind: "choose" }, accounts, available(), null)).toEqual({
@@ -59,7 +59,7 @@ it("binds to the console session only when the binding fixes one", () => {
 });
 
 it("localizes default project and console names and preserves custom names", () => {
-  const zh: Translate = (key, ...args) => format("zh-Hans", key, args[0]);
+  const zh: Translate = translatorFor("zh-Hans");
   expect(opened(zh, parent, project, { kind: "unbound" }, accounts, available(), null).title).toBe("Search API 会话");
   expect(opened(zh, parent, undefined, { kind: "unbound" }, accounts, available(), null).title).toBe("Main 会话");
   expect(openSessionRequest(zh, { console: parent, project, choice: { agent: "codex", account: null }, title: "  Custom  ", appearance: "dark" }).title).toBe("Custom");

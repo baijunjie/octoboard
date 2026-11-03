@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
-import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../git/gitWorkflow";
+import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS } from "../git/gitWorkflow";
 import { useT } from "../i18n/react";
 import type { GitDelivery, GitDevelopment, GitWorkflowOverride } from "../protocol";
 import { useDaemonStore } from "../store";
@@ -38,14 +38,15 @@ export function GitWorkflowField({
   const handoff = useFocusHandoff(() => rows.current?.querySelector("button")?.focus());
   const sameAsGlobal = t("dialog.project.gitWorkflow.sameAsGlobal");
 
-  const developmentLabel = t("settings.gitWorkflow.development.label");
+  const developmentLabel = t(GIT_WORKFLOW_ITEMS.development.label);
   const development = DEVELOPMENT_CHOICES.map(({ value: choice, label }) => ({ value: choice, label: t(label) }));
   const developmentOptions: Option<Follow | GitDevelopment>[] = [
     { value: FOLLOW, label: sameAsGlobal, badge: development.find((option) => option.value === global.development)?.label, badgeInLabel: true },
     ...development,
   ];
 
-  const flagPicker = (item: "squash_before_delivery" | "rebase_before_merge" | "revert_gate", label: string) => {
+  const flagPicker = (item: "squash_before_delivery" | "rebase_before_merge" | "revert_gate") => {
+    const label = t(GIT_WORKFLOW_ITEMS[item].label);
     const options: Option<Follow | "on" | "off">[] = [
       { value: FOLLOW, label: sameAsGlobal, badge: onOff(global[item]), badgeInLabel: true },
       { value: "on", label: onOff(true) },
@@ -65,7 +66,7 @@ export function GitWorkflowField({
     );
   };
 
-  const deliveryLabel = t("settings.gitWorkflow.delivery.label");
+  const deliveryLabel = t(GIT_WORKFLOW_ITEMS.delivery.label);
   const delivery = DELIVERY_CHOICES.map(({ value: choice, label }) => ({ value: choice, label: t(label) }));
   const deliveryOptions: Option<Follow | GitDelivery>[] = [
     { value: FOLLOW, label: sameAsGlobal, badge: delivery.find((option) => option.value === global.delivery)?.label, badgeInLabel: true },
@@ -88,8 +89,8 @@ export function GitWorkflowField({
           </GroupRow>
           {onOwnBranch && (
             <>
-              {flagPicker("squash_before_delivery", t("settings.gitWorkflow.squash.label"))}
-              {flagPicker("rebase_before_merge", t("settings.gitWorkflow.rebaseBeforeDelivery.label"))}
+              {flagPicker("squash_before_delivery")}
+              {flagPicker("rebase_before_merge")}
               <GroupRow label={deliveryLabel}>
                 <OptionSelect
                   hideLabel
@@ -102,7 +103,7 @@ export function GitWorkflowField({
               </GroupRow>
             </>
           )}
-          {flagPicker("revert_gate", t("settings.gitWorkflow.revertGate.label"))}
+          {flagPicker("revert_gate")}
         </GroupRows>
       </div>
     </LabelledGroup>

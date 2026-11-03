@@ -190,7 +190,7 @@ it("a go-ahead that fails keeps the dialog's failure title", async () => {
   const failure = new CodedError("could not start", "launch_failed", { session: "s-1" });
   const dialog = mount([prompt], () => Promise.reject(failure));
   await confirm();
-  expect(dialog.toasts()).toEqual([[failure, { title: "Could not answer the trust confirmation", keepTitle: true, session: "s-1" }]]);
+  expect(dialog.alerts()).toEqual([{ error: failure, title: "Could not answer the trust confirmation", session: "s-1" }]);
 });
 
 // Carrying the trust entry over failing is not a failed answer: it keeps its code's title, as its session notice does.
@@ -198,5 +198,5 @@ it("a go-ahead whose trust entry is not carried over keeps the code's title", as
   const failure = new CodedError("not carried over", "trust_not_carried_over", { session: "s-1" });
   const dialog = mount([prompt], () => Promise.reject(failure));
   await confirm();
-  expect(dialog.toasts()).toEqual([[failure, { title: "Could not answer the trust confirmation", keepTitle: false, session: "s-1" }]]);
+  expect(dialog.alerts()).toEqual([{ error: failure, title: "Trust not carried over", session: "s-1" }]);
 });

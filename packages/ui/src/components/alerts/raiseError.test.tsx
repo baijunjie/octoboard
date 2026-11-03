@@ -4,10 +4,9 @@ import { act, type ReactNode } from "react";
 import { afterEach, expect, it } from "vitest";
 
 import { CodedError } from "../../errors/codedError";
-import { consoleOf, projectOf, sessionOf } from "../../fixtures/builders";
 import { errorAlerts } from "./errorAlerts";
 import { alertFailure, errorAlertOf, raiseError } from "./raiseError";
-import { createStateStore, errorNotification } from "../../store";
+import { errorNotification } from "../../store";
 
 afterEach(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 
@@ -55,25 +54,10 @@ it("words a rejection that is not an Error as the standard unexpected failure, i
   expect(textOf(queued().details)).toContain("a bare string");
 });
 
-it("names the session and its project ahead of the body, from the records", () => {
-  const store = createStateStore({
-    consoles: new Map([["c", consoleOf("c", "Main")]]),
-    projects: new Map([["p", projectOf("p", "c", "Octoboard")]]),
-    sessions: new Map([["s", sessionOf("s", "c", "p", "Fix login", "idle")]]),
-  });
-  const request = errorNotification(new Error("boom"), { title: "Could not do it", session: "s" });
-  const text = textOf(errorAlertOf(request, store.getState()).content);
-  expect(text).toContain("Session: ");
-  expect(text).toContain("Fix login");
-  expect(text).toContain("Project: ");
-  expect(text).toContain("Octoboard");
-});
-
-it("names a session that is gone from the name its notice left, with no place", () => {
+it("keeps the session an alert is about by id, for the alert to name when it shows, with the name its notice carried", () => {
+  raiseError(new Error("boom"), { title: "Could not do it", session: "s" });
+  expect(queued()).toMatchObject({ session: "s", sessionName: undefined });
+  expect(textOf(queued().content)).not.toContain("Session: ");
   const request = errorNotification(new Error("boom"), { title: "Could not do it", session: "s9" });
-  const gone = errorAlertOf({ ...request, daemonTitle: new CodedError("", "x", { title: "Fix login" }) }, createStateStore().getState());
-  const text = textOf(gone.content);
-  expect(text).toContain("Fix login");
-  expect(text).not.toContain("Project: ");
-  expect(errorAlertOf(request, createStateStore().getState()).session).toBe("s9");
+  expect(errorAlertOf({ ...request, daemonTitle: new CodedError("", "x", { title: "Fix login" }) })).toMatchObject({ session: "s9", sessionName: "Fix login" });
 });

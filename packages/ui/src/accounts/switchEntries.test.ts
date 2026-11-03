@@ -38,11 +38,12 @@ describe("switchEntries", () => {
 
 describe("handoffBlock", () => {
   const t = ((key: string) => key) as Translate;
-  const base = { status: "idle", locked: false, switching_account: false } as const;
+  const base = { status: "idle", locked: false } as const;
+  const free = { switching: false, ownChanging: false };
 
   it("says a session still starting is not ready, not that it is mid-turn", () => {
-    expect(handoffBlock(t, { ...base, status: "starting" }, false)).toEqual({ detail: "accountChoice.handoff.starting" });
-    expect(handoffBlock(t, { ...base, status: "working" }, false)?.detail).toBe("accountChoice.handoff.working");
-    expect(handoffBlock(t, base, false)).toBeUndefined();
+    expect(handoffBlock(t, { ...base, status: "starting" }, free)).toEqual({ detail: "accountChoice.handoff.starting" });
+    expect(handoffBlock(t, { ...base, status: "working" }, free)?.detail).toBe("accountChoice.handoff.working");
+    expect(handoffBlock(t, base, free)).toBeUndefined();
   });
 });

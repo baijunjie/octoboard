@@ -7,6 +7,7 @@ import type { Inspection } from "../../configuration/importPlan";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
 import {
+  AGENTS,
   DEFAULT_ACCOUNT_NAME,
   type DocumentSettings,
   type ImportedAccount,
@@ -19,7 +20,7 @@ import type { Ui, Step } from "../../fixtures/interact";
 import type { ConfigurationFixture } from "../../fixtures/fixture";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, projectOf, snapshotState } from "../../fixtures/builders";
+import { accountOf, SAMPLE, consoleOf, projectOf, snapshotState } from "../../fixtures/builders";
 import { fallback, failure, imported, inspected, inspectedProject, MIXED_RESULT, REVIEW, THIS_CLAUDE_COMPATIBILITY } from "../../fixtures/configurationReview";
 
 const GROUP = "Configuration";
@@ -52,11 +53,11 @@ const layout = {
 };
 const state = snapshotState({
   ...layout,
-  settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const autoPulling = snapshotState({
   ...layout,
-  settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 // The machine the accounts of a document are imported on: Grok is not among its added agents, and its default account
 // already has a name of its own.
@@ -76,13 +77,13 @@ const MACHINE_AGENT_TAGS = { claude: ["personal"], grok: ["trial"] };
 /** The machine of the application settings scenarios: the one of the other import scenarios with agents that have tags. */
 const taggedState = snapshotState({
   ...layout,
-  settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts, agent_tags: MACHINE_AGENT_TAGS },
+  settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts, agent_tags: MACHINE_AGENT_TAGS },
 });
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { ...DEFAULT_SETTINGS, added_agents: [...AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));

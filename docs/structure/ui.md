@@ -24,7 +24,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 | `packages/ui/scripts/compiler-bailouts.mjs` | `pnpm compiler:bailouts`: lists the components and hooks the React Compiler leaves uncompiled, and exits 1 when there is any (run by hand; not part of `pnpm verify`) |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
-| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`), its providers (`TestHost`) and `mountHost`, which renders under them |
+| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`, with `withEmptyReplies` to turn a stand-in's `ack` into the empty reply of the requests that have one), its providers (`TestHost`) and `mountHost`, which renders under them |
 
 ## Directory map of `src/`
 
@@ -53,7 +53,7 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/format/` — small pure formatting helpers (paths, relative time, sizes, `Reason`).
 - `src/agents/` — agent names, install pages, model and effort picker rules, per-agent launch settings.
 - `src/git/` — git workflow settings and git-badge wording, repository host links.
-- `src/sessions/` — pure session rules and wording (index, order, labels, status derivation, colours, filtering, waiting).
+- `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, status derivation, colours, filtering, waiting).
 - `src/accounts/` — pure account rules: order, quota of an account, quota formatting, how an account is found among the
   records (`accountRecords.ts`), and the account picker split by concern (`choiceEntries.ts`, `accountInheritance.ts`,
   `accountRanking.ts`, `openingChoice.ts`, `switchEntries.ts`).
@@ -74,10 +74,10 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/`, `focus/`, `announce/`, `panel/`, `host/`,
   `rows/` (the tree row, its icon and mark buttons, section headings, the hover-actions class), `hooks/` (breakpoints,
-  `createLauncher`, `retryableLazy`, polling, the latest-request hook, `useSerialPush`, `settle`, a `try`/`finally`
+  `createLauncher`, `retryableLazy`, polling, the latest-request hook, `useLatest` and `useRenderLatest`, `useSerialPush`, `settle`, a `try`/`finally`
   helper kept outside components because the React Compiler skips a function holding one).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
-  with its panels in `rail-quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
+  with its panels in `src/quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
   host).
 - `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, console switching, session
@@ -108,7 +108,8 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/viewer/` — the read-only file viewer modal (the shell at its root), and the app's Markdown and code rendering
   library, which `terminal/history/` uses too: `markdown/` (documents, Mermaid, formulas, fenced code), `code/` (the
   code and diff renderer and its budgets) and `find/` (the find bar); `@pierre/diffs` is imported only inside it.
-- `src/quota/` — plan quota wording, meters, reset credits.
+- `src/quota/` — plan quota wording, meters, reset credits, and the rail's quota panels (`RailQuotaBars`, `QuotaPanel`,
+  `AgentPanel`, `QuotaAccount`).
 - `src/settings/` — the settings modal and its sections (`sections.ts` holds the section ids and `SettingsNavigation`);
   `accounts/` the Agent accounts section.
 - `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
@@ -117,8 +118,8 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
   lookups (detected agent, located conversation, agent models, session records, branch inspections) are built on
   `useLatestRequest`; `branchInspection.ts` holds the pure part of a branch inspection and `useBranchInspections.ts`
   its hooks.
-- `src/process/` — the Processes panel and its data, and the polled global process count the rail shows
-  (`processPolling.ts` holds the polling paces).
+- `src/process/` — the Processes panel and its data, the polled global process count the rail shows
+  (`processPolling.ts` holds the polling paces), and the rail's process panel (`ProcessCounts`).
 - `src/configuration/` — configuration export and import dialogs (with the cards and parts they share, `SettingsCard.tsx`
   and `importParts.tsx`), and the list of plain switch settings.
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
@@ -189,11 +190,12 @@ New code uses these rather than a second implementation. None is enforced by a c
 
 | Need | Entry point |
 |---|---|
-| Raise an error alert for a failure | `raiseError`, `alertFailure` (as a request's catch handler) and `errorAlertOf` in `src/components/alerts/raiseError.tsx`; for a failure about a session, `Daemon.raiseError` (`src/store/connection.ts`). Alerts are drawn through `ErrorAlert` and the two built on it (`FailureAlert`, `ChoiceWarning`) |
-| What a daemon broadcast or failure shows as a notification (a toast, or an error alert to acknowledge) | `broadcastNotification` and `errorNotification` in `src/store/notifications.ts`, which `Daemon.showNotice` and `Daemon.raiseError` feed to the window through `onNotification` (used by the store and the fixture daemon) |
+| Raise an error alert for a failure | `raiseError`, or `alertFailure` as a request's catch handler, in `src/components/alerts/raiseError.tsx`, the one route, which takes the id of the session a failure is about (`session`); `errorAlertOf` there turns a daemon's error broadcast into the same alert. The alert names the session from the store as it shows (`AlertSessionLines`). Alerts are drawn through `ErrorAlert` and the two built on it (`FailureAlert`, `ChoiceWarning`) |
+| What a daemon broadcast or failure shows as a notification (a toast, or an error alert to acknowledge) | `broadcastNotification` in `src/store/notifications.ts`, which the daemon's broadcasts and `Daemon.showNotice` feed to the window through `onNotification` (used by the store and the fixture daemon); `errorNotification` there is the request `raiseError` builds |
 | Wording and handling of an error code | one record per code in `src/errors/codes.ts` (`CODES`; `Code` and `CODE` name a code, `variantOf` on a record picks the message variant) |
 | A request to the daemon, and the type of its reply | `Daemon.request` (`src/store/connection.ts`) typed by `REPLY_TYPES` in `src/requests.ts`; a reply of another type rejects with the client code `unexpected_reply` (checked in `DaemonClient.request`, which `Daemon.request` wraps). A stand-in for the daemon (fixture daemon, preview, `testDaemon`) wraps its handler in `looseRequestSender`, which does not check the reply type |
 | A failure carrying a daemon or client code | `CodedError` (`src/errors/codedError.ts`) |
+| Whether an account switch holds a session, the daemon's or one this window queued | `holdsAccountSwitch` (`src/sessions/sessionStatus.ts`), or `useAccountSwitchHeld` in a component; never `Session.switching_account` alone, as the store keeps the daemon's record as sent |
 | Keep unchanged data by identity when a reducer rebuilds it | `sameValue` (`src/values/sameValue.ts`), as the `settings_updated` reducer does |
 | A tree row in a list, with its icon and mark buttons and the heading above a section | `TreeRow`, `RowIconButton`, `RowMarkButton`, `SectionHeading` and `HOVER_ACTIONS_CLASS` in `src/components/rows/`; a list that animates its reordering uses `useListMotion` (`src/components/motion/`), not a row-level FLIP |
 | Pin and lock buttons of a session row; its derived state | `PinButton`, `LockButton` and `SessionMarkButtons` (`src/sidebar/MarkButtons.tsx`); `sessionRowModel` (`src/sessions/sessionRowModel.ts`) with the `useSessionRowModel` hook (`src/sidebar/`) |

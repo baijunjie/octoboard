@@ -19,7 +19,7 @@ import { PlatformProvider } from "./platform/react";
 import type { PlatformAdapter } from "./platform";
 import type { Project } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
-import { testDaemon } from "./test/testDaemon";
+import { testDaemon, withEmptyReplies } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { FileViewer } from "./viewer/FileViewer";
 
@@ -74,8 +74,8 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   const sessions = withSession ? [sessionOf("s-archive", console_.id, "p-actions", "Fix bug", "idle")] : [];
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects, sessions }),
-    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), showNotice: vi.fn(),
+    request: vi.fn(withEmptyReplies(async () => ({ type: "ack", id: null }))) as never,
+    showNotice: vi.fn(),
   });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser", clipboard, links }}>
@@ -346,9 +346,11 @@ it("says a truncated branch list is limited, as a muted note after the branches 
       ahead: 0, behind: 0, activity: "idle", error: null,
     }),
   })));
-  vi.mocked(daemon.request).mockImplementation((async (body: { type: string }) => body.type === "list_project_branches"
-    ? { type: "project_branches", id: null, project: project.id, branches: [{ name: "alpha" }, { name: "beta" }], complete: false }
-    : { type: "ack", id: null }) as never);
+  vi.mocked(daemon.request).mockImplementation((async (body: { type: string }) => {
+    if (body.type === "list_project_branches") return { type: "project_branches", id: null, project: project.id, branches: [{ name: "alpha" }, { name: "beta" }], complete: false };
+    if (body.type === "get_project_source") return { type: "project_source", id: null, source: { project: project.id, root: "/r", resolved_root: "/r", root_id: "r", git_error: null } };
+    return { type: "ack", id: null };
+  }) as never);
   await openProjectMenu(project.name);
   await press("Git");
   await press("Switch branch");
@@ -652,7 +654,7 @@ it("sends only the edited values when a model is changed, and announces the rest
   expect(said()).toBeUndefined();
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(said()).toContain("restarted with its new model settings");
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("announces values recorded for the next resume after the focus move", async () => {
@@ -693,14 +695,14 @@ it("holds an announcement while the window is not attended, then says it after t
 
 it("holds an announcement while a modal is open over the window", async () => {
   windowAttention();
-  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" }));
+  await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" }));
   await act(async () => errorAlerts.report({ message: "Something else failed.", recovery: "none" }));
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS * 3);
   expect(said()).toBeUndefined();
   await act(async () => errorAlerts.acknowledge());
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(said()).toContain("will use its new model settings when it is resumed");
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("announces a batch of account switches once its last switch is done", async () => {
@@ -727,23 +729,23 @@ it("announces a batch of account switches once its last switch is done", async (
 
 it("announces nothing when the session had the model settings already", async () => {
   windowAttention();
-  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "unchanged" }));
+  await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "unchanged" }));
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("points a launch setting the agent does not offer back to Change model", async () => {
   const error = new CodedError("No.", "invalid_launch_setting", { field: "model", value: "sonnet", agent: "Codex" });
-  const { daemon } = await pickSonnetInChangeModel((body) => {
+  await pickSonnetInChangeModel((body) => {
     if (body.type === "set_session_model") throw error;
     return { type: "ack", id: null };
   });
-  expect(daemon.raiseError).toHaveBeenCalledExactlyOnceWith(error, { title: "Could not change the model", session: "s-archive", recovery: "changeModelSetting" });
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ error, title: "Could not change the model", session: "s-archive", recovery: "changeModelSetting" })]);
 });
 
 it("opens Change model for the session from the alert of a launch setting the agent does not offer", async () => {
-  const { daemon } = mountApp(false, undefined, true);
+  mountApp(false, undefined, true);
   await act(async () => errorAlerts.report({
     message: "No.", session: "s-archive", title: "Could not change the model", recovery: "changeModelSetting",
   }));
@@ -752,16 +754,16 @@ it("opens Change model for the session from the alert of a launch setting the ag
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Change model");
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("The session Fix bug will run");
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("reports a refused model change under its own title for the session", async () => {
   const error = new CodedError("Did not stop.", "model_change_did_not_stop", { session: "s-archive" });
-  const { daemon } = await pickSonnetInChangeModel((body) => {
+  await pickSonnetInChangeModel((body) => {
     if (body.type === "set_session_model") throw error;
     return { type: "ack", id: null };
   });
-  expect(daemon.raiseError).toHaveBeenCalledExactlyOnceWith(error, { title: "Could not change the model", session: "s-archive", recovery: undefined });
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ error, title: "Could not change the model", session: "s-archive", recovery: undefined })]);
   expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
 });
 

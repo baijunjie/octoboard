@@ -4,11 +4,10 @@ import type { ReplyOf } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { currentLanguage } from "../i18n/language";
-import type { Agent, Event, Launch, LaunchChange, PerAgent, RequestBody, Session } from "../protocol";
+import { AGENTS, type Agent, type Event, type Launch, type LaunchChange, type PerAgent, type RequestBody, type Session } from "../protocol";
 import { createStateStore } from "../store";
 import type { Fixture } from "./fixture";
 import { createGitReplies } from "./fixtureGit";
-import { ALL_AGENTS } from "./builders";
 import type { FixtureError, FixtureFiles } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
 import type { FixtureGit } from "./changeFixtures";
@@ -35,7 +34,7 @@ export const trimmedOrNull = (text: string | null | undefined): string | null =>
 /** One per-agent group after a request's `Partial<PerAgent<…>>`: an agent the request leaves out keeps its value, and
  * `change` says what the request's value for one agent makes of the current one. */
 export function changedPerAgent<T, C>(current: PerAgent<T>, changes: Partial<PerAgent<C>> | undefined, change: (value: T, change: C) => T): PerAgent<T> {
-  return Object.fromEntries(ALL_AGENTS.map((agent) => {
+  return Object.fromEntries(AGENTS.map((agent) => {
     const requested = changes?.[agent];
     return [agent, requested === undefined ? current[agent] : change(current[agent], requested)];
   })) as PerAgent<T>;

@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * The value of the latest committed render, for code that runs later to read when it runs: a
@@ -32,4 +32,31 @@ export function useLatest<T>(value: T): { readonly current: T } {
 export function useStableHandler<A extends unknown[], R>(handler: (...args: A) => R): (...args: A) => R {
   const latest = useLatest(handler);
   return useCallback((...args: A) => latest.current(...args), [latest]);
+}
+
+/** A cell `useRenderLatest` keeps the latest render's value in. A method sets it, so that the write is no ref
+ * access for the React Compiler to refuse; setting the value a render already holds changes nothing. */
+class RenderCell<T> {
+  value: T;
+  constructor(value: T) {
+    this.value = value;
+  }
+  set(value: T): void {
+    this.value = value;
+  }
+  get = (): T => this.value;
+}
+
+/**
+ * A function, stable for the component's lifetime, that returns the value of the latest render, set during
+ * render: for a callback that children read while they render or from their own effects in the same commit,
+ * and so must already see this render's value, which `useLatest` cannot give. A render React throws away
+ * leaks its value here: use `useLatest` wherever a reader runs only after the commit. The function's identity never
+ * changes, so it does not make a memoized reader render again: a child that must show a changed value needs that
+ * value passed to it some other way.
+ */
+export function useRenderLatest<T>(value: T): () => T {
+  const [cell] = useState(() => new RenderCell(value));
+  cell.set(value);
+  return cell.get;
 }

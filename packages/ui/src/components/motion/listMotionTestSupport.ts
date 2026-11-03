@@ -39,7 +39,7 @@ export function stubListMotion({ reduced = false }: { reduced?: boolean } = {}):
   });
   return {
     // Only the collection's own: other parts (a popover's entry) animate too.
-    played: () => played.filter(({ element }) => element.matches("[data-list-motion], [data-flip], [data-list-motion-ghost]")),
+    played: () => played.filter(({ element }) => element.matches("[data-list-motion], [data-list-motion-ghost]")),
     clear: () => { played.length = 0; },
     reduce: () => {
       reduce = true;

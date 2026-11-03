@@ -67,7 +67,7 @@ export function useBranchComparison(
         request({ type: "compare_project_branches", project, left, left_remote: leftKind === "remote" || undefined, left_empty: leftKind === "empty" || undefined, right, slot }),
       pending: (comparison) => (comparison.state === "loaded" || (comparison.state === "error" && background) ? comparison : { state: "loading" }),
       accept: (reply) => {
-        if (reply.type !== "project_comparison" || reply.project !== project || reply.left.branch !== left || reply.right.branch !== right) return undefined;
+        if (reply.project !== project || reply.left.branch !== left || reply.right.branch !== right) return undefined;
         const accepted = { left: reply.left, right: reply.right, base: reply.base, complete: reply.complete, receivedAt: gitMoment() };
         return () => ({ state: "loaded", ...accepted, items: changeItems(reply.changes) });
       },

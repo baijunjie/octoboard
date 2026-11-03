@@ -22,6 +22,7 @@ import type {
   SideVersion,
 } from "../../protocol";
 import { WORKTREE_UNAVAILABLE } from "../../protocol";
+import type { ReplyOf } from "../../requests";
 import { useDaemon, type Daemon } from "../../store";
 import {
   bodyFromFileContent,
@@ -178,7 +179,7 @@ function bodiesLoader(
   const text = (side: SideRead) => (side.state === "present" && side.file ? fileText(side.file) : undefined);
   return async () => {
     try {
-      let bodies: Event;
+      let bodies: ReplyOf<"read_project_change_bodies" | "read_project_comparison_change_bodies" | "read_project_commit_change_bodies">;
       if (entry.group !== "committed") {
         bodies = await request({
           type: "read_project_change_bodies",
@@ -195,9 +196,6 @@ function bodiesLoader(
         const { commit, parent } = origin;
         bodies = await request({ type: "read_project_commit_change_bodies", project, commit, parent, change: sides, ...versions, slot: BODIES_SLOT });
       } else {
-        throw new ChangeBodiesError("unavailable");
-      }
-      if (bodies.type !== "project_change_bodies" && bodies.type !== "project_comparison_change_bodies" && bodies.type !== "project_commit_change_bodies") {
         throw new ChangeBodiesError("unavailable");
       }
       const oldText = text(bodies.old);

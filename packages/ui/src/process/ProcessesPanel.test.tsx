@@ -42,7 +42,6 @@ async function mount(scope: ProcessesScope, request: (body: RequestBody) => Prom
   const daemon = testDaemon({
     state: { sessions: new Map(sessions.map((s) => [s.id, s])), projects: new Map([[project.id, project]]) },
     request: handler,
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   let switchScope!: (scope: ProcessesScope) => void;

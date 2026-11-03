@@ -1,16 +1,15 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import type { Agent } from "../../protocol";
+import { AGENTS } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { archiveProject as project, archivedLead, boundArchived, boundConsoleSession, console_, otherConsoleSession, otherOwnerArchived, unboundArchived, underArchivedLead } from "../../fixtures/archiveSessions";
 import { accountOf, branchItemOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
 
 const GROUP = "Archive view";
 
-const AGENTS: Agent[] = ["claude", "codex", "grok"];
 
 const archived = Array.from({ length: 70 }, (_, i) =>
   sessionOf(`s-a${i}`, console_.id, project.id, i % 7 === 3 ? `Audit the retry path ${i}` : i % 11 === 5 ? `A very long archived session title that does not fit one row ${i}` : `Archived session ${i}`, "archived", {
-    agent: AGENTS[i % 3],
+    agent: AGENTS[i % AGENTS.length],
     ...(i === 0 ? { terminal_title: "Explain the differences between the three galleries" } : i === 1 ? { terminal_title: "Review a very long archived agent task title and preserve its original session name" } : {}),
     started_at: minutesAgo(120 + i * 400),
     ended_at: minutesAgo(20 + i * 400),
@@ -93,7 +92,7 @@ const longArchiveState = {
     ...archiveState.sessions,
     ...Array.from({ length: 6 }, (_, i) => {
       const session = sessionOf(`s-older${i}`, console_.id, boundProject.id, `Older archived session ${i + 1}`, "archived", {
-        agent: AGENTS[i % 3],
+        agent: AGENTS[i % AGENTS.length],
         ended_at: minutesAgo(200 + i * 30),
         ...(i === 0 ? { context: contextOf(91) } : i % 2 === 0 ? { context: { tokens: 12_345 + i * 98_000 } } : {}),
       });

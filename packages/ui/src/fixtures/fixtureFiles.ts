@@ -84,6 +84,11 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
     const absolute = absoluteLinkPath(project, path);
     return Object.entries(scenario.pathLinks ?? {}).find(([given]) => normalizedPath(given) === normalizedPath(absolute))?.[1];
   };
+  /** Whether a path found is a file the viewer shows, which the daemon answers `viewer_only` in the probe and refuses
+   * to open from a link: every file of the project or its worktrees is one, a folder and a file outside the projects
+   * are not. */
+  const isViewerOnly = (found: NonNullable<ReturnType<typeof pathLinkFound>>) =>
+    typeof found === "object" && "view" in found && found.view !== undefined && (!("kind" in found) || found.kind === "file");
   /** A browse request's path, or the daemon error it is answered with, worded as the store words one. */
   const browsed = (files: FixtureFiles, path: string): FixtureFile => {
     const file = files[path];
@@ -151,6 +156,10 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
           message: `${body.path} is not opened from a link: ${found.refused}`,
         });
       }
+      // A file the viewer shows is never opened on the host, so the daemon refuses it as one it would launch.
+      if (found !== undefined && isViewerOnly(found)) {
+        return fail({ code: "path_link_refused", params: { path: body.path, cause: "launchable" }, message: `${body.path} is not opened from a link: launchable` });
+      }
       return { type: "ack", id: null };
     },
     probe_path_links: (body) => {
@@ -158,11 +167,9 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
         const found = pathLinkFound(body.project, path);
         if (found === undefined) return { path, kind: "none" };
         if (typeof found === "string") return { path, kind: found };
-        if ("gone" in found) return { path, kind: found.kind };
-        if ("outside" in found) return { path, kind: found.kind, ...(found.view && { view: found.view }) };
-        if ("refused" in found) return { path, kind: found.kind, ...(found.view && { view: found.view }) };
-        if ("kind" in found) return { path, kind: found.kind, view: found.view };
-        return { path, kind: "file", view: found.view, ...(found.viewerOnly && { viewer_only: true }) };
+        const kind = "kind" in found ? found.kind : "file";
+        const view = "view" in found ? found.view : undefined;
+        return { path, kind, ...(view && { view }), ...(isViewerOnly(found) && { viewer_only: true }) };
       });
       return { type: "path_links", id: null, links };
     },

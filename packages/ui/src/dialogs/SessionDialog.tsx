@@ -200,7 +200,7 @@ export function SessionDialog({
         // the dialog open.
         if (target.kind !== "running") await onResume(target.session.id);
         const name = foundName.trim();
-        if (target.kind === "archived" && name && name !== target.session.title) await request({ type: "rename_session", session: target.session.id, title: name }).catch(alertFailure({ title: t("dialog.rename.failedTitle") }));
+        if (target.kind === "archived" && name && name !== target.session.title) await request({ type: "rename_session", session: target.session.id, title: name }).catch(alertFailure({ title: t("dialog.rename.failedTitle"), session: target.session.id }));
         onOpened(target.session.id);
         onClose();
         return;

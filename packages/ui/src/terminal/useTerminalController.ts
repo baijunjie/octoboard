@@ -55,11 +55,11 @@ export function useTerminalController({
   options?: TerminalControllerOptions;
 }): void {
   const t = useT();
-  const { request, raiseError } = useDaemon();
+  const { request } = useDaemon();
   const { links, clipboard } = usePlatform();
   const { resolved: colorTheme } = useOctoboardTheme();
   const resizingRef = useLatest(resizing);
-  const latest = useLatest({ t, request, raiseError, project: project ?? undefined, viewFile });
+  const latest = useLatest({ t, request, project: project ?? undefined, viewFile });
   // What the controller's theme currently is: the construction below reads it for the initial
   // value, and the `colorTheme` effect further down both reads and updates it. One ref rather than
   // two so the two can never claim different things about the same instance.
@@ -76,7 +76,7 @@ export function useTerminalController({
         pathLinks: {
           probe: async (paths) => {
             const reply = await latest.current.request({ type: "probe_path_links", project: latest.current.project, paths });
-            return reply.type === "path_links" ? reply.links.map(({ kind, view, viewer_only }) => ({ kind, view, viewerOnly: viewer_only })) : [];
+            return reply.links.map(({ kind, view, viewer_only }) => ({ kind, view, viewerOnly: viewer_only }));
           },
           open: (target, onHost) =>
             openPathTarget({
@@ -85,7 +85,6 @@ export function useTerminalController({
               project: latest.current.project,
               request: latest.current.request,
               viewFile: latest.current.viewFile,
-              raiseError: latest.current.raiseError,
             }),
         },
       },

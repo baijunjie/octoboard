@@ -5,15 +5,15 @@ import { pickableAgents } from "../agents/agents";
 import { keepsEscapeFromPanel } from "../components/hint/Hint";
 import { STATUS_MARK_POPOVER } from "../components/status/StatusMark";
 import { useT } from "../i18n/react";
-import type { SettingsSectionId } from "../settings/SettingsDialog";
+import type { OpenSettings } from "../settings/settingsLauncher";
 import { useDaemon, useDaemonStore } from "../store";
 import { UseResetCreditDialog, useResetFocusReturn } from "../quota/ResetCredits";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { nestedPopovers } from "./nestedPopover";
 import { RailPanelEntry } from "./RailPanelEntry";
-import { QuotaPanel } from "./rail-quota/QuotaPanel";
-import { RailQuotaBars } from "./rail-quota/RailQuotaBars";
-import { useResetClock } from "./rail-quota/useResetClock";
+import { QuotaPanel } from "../quota/QuotaPanel";
+import { RailQuotaBars } from "../quota/RailQuotaBars";
+import { useResetClock } from "../quota/useResetClock";
 
 /** The one of the status marks' popovers that a mouse hover opened, which Escape closes before it closes the panel. */
 const NESTED_TOPMOST = `${STATUS_MARK_POPOVER}[data-escape-topmost]`;
@@ -29,7 +29,7 @@ const nested = nestedPopovers(OWNER);
  * that are due. */
 export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   selectedSessionId?: string;
-  onOpenSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;
+  onOpenSettingsAt: OpenSettings;
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();

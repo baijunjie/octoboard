@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { CodedError } from "../errors/codedError";
+import { NO_RECORDS } from "../errors/daemonMessage";
 import { isolate } from "../i18n/isolate";
 import { t } from "../i18n/language";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
@@ -154,7 +155,6 @@ const layoutToggles = () => controlNamed("Show split diff", "Show unified diff")
 const wrapToggles = () => controlNamed("Wrap lines", "Don't wrap lines");
 const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 
-const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 const failed: ViewerSubject = { key: "a", path: "src/a.ts", content: { state: "error", message: "src/a.ts is gone." } };
 const binary: ViewerSubject = { key: "b", path: "bin/b.wasm", content: { state: "file", body: { kind: "binary", size: 3 } } };
 

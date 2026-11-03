@@ -4,11 +4,11 @@ import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
-import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
+import { AGENTS, type Account, type Agent, type AgentAvailability, type AgentModel, type Console, type Event, type ModelsUnavailable, type RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider } from "../store";
 import { buttons, click, inputLabelled, type as typeInto } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
-import { personal, work } from "./accountTestSupport";
+import { personal, work } from "../fixtures/accountTestSupport";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
@@ -50,11 +50,10 @@ export function render(
     state: {
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
       agentAvailability: new Map(
-        (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
+        AGENTS.map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
       ),
     },
     request,
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   lastStore = daemon.store;

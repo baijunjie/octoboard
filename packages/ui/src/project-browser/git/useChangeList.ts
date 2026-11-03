@@ -58,7 +58,7 @@ export function useChangeList(
       pending: (list) =>
         list.state === "loading" || (list.state === "error" && !background) ? { state: "loading" } : list.refreshing ? list : { ...list, refreshing: true },
       accept: (reply) => {
-        if (reply.type !== "project_changes" || reply.project !== project || (reply.worktree ?? undefined) !== worktree) return undefined;
+        if (reply.project !== project || (reply.worktree ?? undefined) !== worktree) return undefined;
         const items = changeItems(reply.changes);
         return (held) => {
           const kept = held.state === "loaded" && sameValue(held.items, items) ? held.items : items;

@@ -57,7 +57,7 @@ export const ProjectNode = memo(function ProjectNode({
   const rowRef = useRef<HTMLDivElement>(null);
   const rows = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return liveSessionRows(sessionsOf(index.byProject, project.id), index.delegatingIds, s.settings.sidebar_order_by_status);
+    return liveSessionRows(sessionsOf(index.byProject, project.id), index.delegatingIds, s.queuedAccountSwitches, s.settings.sidebar_order_by_status);
   });
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);

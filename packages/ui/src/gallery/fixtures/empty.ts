@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import type { Agent, AgentAvailability } from "../../protocol";
+import { AGENTS, type Agent, type AgentAvailability } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
@@ -21,7 +21,7 @@ const NO_AGENTS = new Map<Agent, AgentAvailability>([
 
 /** Every agent is on the machine's PATH. */
 const ALL_INSTALLED = new Map<Agent, AgentAvailability>(
-  (["claude", "codex", "grok"] as const).map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
+  AGENTS.map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
 );
 
 /** A console with a project and a leftover console session, every agent installed and none added. */

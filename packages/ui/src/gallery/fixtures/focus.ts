@@ -1,9 +1,9 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { AGENT_LABEL } from "../../agents/agents";
-import type { Session, SessionContext } from "../../protocol";
+import { AGENTS, type Session, type SessionContext } from "../../protocol";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { accountOf, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 
 const GROUP = "Focus mode";
 
@@ -22,7 +22,7 @@ const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "
 // A named account exposed through agent icon tooltips and accessible session labels.
 const settings = {
   ...DEFAULT_SETTINGS,
-  added_agents: ALL_AGENTS,
+  added_agents: [...AGENTS],
   default_clone_dir: "/Users/dev/Projects",
   accounts: [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")],
 };

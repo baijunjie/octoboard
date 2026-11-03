@@ -1,14 +1,14 @@
 import { Tabs } from "@heroui/react";
 import React, { useLayoutEffect, useRef } from "react";
 
-import { defaultAccountName } from "../../agents/agents";
-import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../../components/scroll/scrollFade";
-import { useListMotion } from "../../components/motion/useListMotion";
-import { FadeOverflow } from "../../components/text/FadeOverflow";
-import { useT } from "../../i18n/react";
-import type { Agent } from "../../protocol";
-import type { QuotaRow } from "../../quota/quotaListing";
-import { useDaemonStore } from "../../store";
+import { defaultAccountName } from "../agents/agents";
+import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../components/scroll/scrollFade";
+import { useListMotion } from "../components/motion/useListMotion";
+import { FadeOverflow } from "../components/text/FadeOverflow";
+import { useT } from "../i18n/react";
+import type { Agent } from "../protocol";
+import type { QuotaRow } from "./quotaListing";
+import { useDaemonStore } from "../store";
 import { QuotaAccount, type ResetRequest } from "./QuotaAccount";
 
 /** An agent's tab panel: its accounts in the saved account order, in a faded scroller that is a region of

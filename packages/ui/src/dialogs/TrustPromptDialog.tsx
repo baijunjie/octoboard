@@ -4,6 +4,7 @@ import React, { useId, useState } from "react";
 
 import { AGENT_LABEL } from "../agents/agents";
 import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
+import { raiseError } from "../components/alerts/raiseError";
 import { InlineReference } from "../i18n/InlineReference";
 import { CodedError } from "../errors/codedError";
 import { Message, useT } from "../i18n/react";
@@ -121,7 +122,7 @@ export function useTrustPromptDialogProps(
   sessionTitle: string | undefined,
 ): ConfirmDialogProps | undefined {
   const t = useT();
-  const { request, raiseError, dismissTrustPrompt } = useDaemon();
+  const { request, dismissTrustPrompt } = useDaemon();
   // Written as Settings lists trusted folders, with the home directory as `~`, so the folder the
   // checkbox names reads the same as the row it adds there.
   const home = useDaemonStore((s) => s.homeDir);

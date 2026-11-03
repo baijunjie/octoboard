@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
-import { useT } from "../../i18n/react";
 import type { HistoryMessage } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
 
@@ -19,7 +18,6 @@ export type SessionHistory =
  * connection delivers a fresh snapshot, since a dropped connection is the usual cause. */
 export function useSessionHistory(sessionId: string): { history: SessionHistory; reload: () => void } {
   const { request } = useDaemon();
-  const t = useT();
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [attempt, setAttempt] = useState(0);
   const [read, setRead] = useState<{ key: string; history: SessionHistory }>();
@@ -28,19 +26,16 @@ export function useSessionHistory(sessionId: string): { history: SessionHistory;
   useEffect(() => {
     let active = true;
     void (async () => {
-      let history: SessionHistory = { state: "failed", error: t("history.failed") };
-      try {
-        const reply = await request({ type: "read_session_history", session: sessionId });
-        if (reply.type === "session_history") history = reply.unavailable ? { state: "unavailable" } : { state: "loaded", messages: reply.messages };
-      } catch (error) {
-        history = { state: "failed", error: errorPresentation(error) };
-      }
+      const history: SessionHistory = await request({ type: "read_session_history", session: sessionId }).then(
+        (reply): SessionHistory => (reply.unavailable ? { state: "unavailable" } : { state: "loaded", messages: reply.messages }),
+        (error: unknown): SessionHistory => ({ state: "failed", error: errorPresentation(error) }),
+      );
       if (!active) return;
       failed.current = history.state === "failed";
       setRead({ key, history });
     })();
     return () => { active = false; };
-  }, [key, sessionId, request, t]);
+  }, [key, sessionId, request]);
   useEffect(() => {
     if (failed.current) setAttempt((n) => n + 1);
     // Keyed on the epoch alone: a fresh snapshot is the chance to recover, not every render.

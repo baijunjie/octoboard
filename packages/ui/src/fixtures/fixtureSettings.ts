@@ -1,10 +1,10 @@
 // What the fixture daemon answers for the application's settings: the preferences the daemon stores, the agents the user
 // has added, the approval choices and the trusted folders.
 import { AGENT_LABEL } from "../agents/agents";
-import type { Agent, RequestBody } from "../protocol";
+import { AGENTS, type Agent, type RequestBody } from "../protocol";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { SAMPLE_MODELS } from "./agentModels";
-import { ALL_AGENTS, effectiveClaudeCompatibility } from "./builders";
+import { effectiveClaudeCompatibility } from "./builders";
 import { HOME, neverReplied, normalizedPath, normalizeTags, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** Keeps the window's settings in step with the user's explicit choices (`claudeCompatibilityChoices`): what the window is
@@ -13,7 +13,7 @@ export function keepClaudeCompatibilityInEffect({ store, claudeCompatibilityChoi
   const syncClaudeCompatibility = () => {
     const { settings } = store.getState();
     const effective = effectiveClaudeCompatibility(claudeCompatibilityChoices.current, settings.added_agents);
-    if (ALL_AGENTS.some((agent) => hasClaudeCompatibility(agent) && settings.claude_compatibility?.[agent] !== effective[agent])) {
+    if (AGENTS.some((agent) => hasClaudeCompatibility(agent) && settings.claude_compatibility?.[agent] !== effective[agent])) {
       store.setState({ settings: { ...settings, claude_compatibility: effective } });
     }
   };
@@ -48,7 +48,7 @@ export function createSettingsReplies({ scenario, store, fail, claudeCompatibili
         const message = `\`${unsupported}\` has no Claude compatibility setting; it applies to codex and grok`;
         return fail({ code: "internal_error", params: { detail: message }, message });
       }
-      const unknownAgent = Object.keys(body.agent_tags ?? {}).find((name) => !ALL_AGENTS.includes(name as Agent));
+      const unknownAgent = Object.keys(body.agent_tags ?? {}).find((name) => !AGENTS.includes(name as Agent));
       if (unknownAgent !== undefined) {
         const message = `\`${unknownAgent}\` is not an agent`;
         return fail({ code: "internal_error", params: { detail: message }, message });

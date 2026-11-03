@@ -1,8 +1,8 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, Settings } from "../../protocol";
+import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../../fixtures/interact";
-import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { accountOf, SAMPLE, accountSharingOf, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 
 const GROUP = "Sidebar sessions";
@@ -21,7 +21,7 @@ const accounts: Account[] = [
 
 const settings: Settings = {
   ...DEFAULT_SETTINGS,
-  added_agents: ALL_AGENTS,
+  added_agents: [...AGENTS],
   default_clone_dir: "/Users/dev/Projects",
   accounts,
 };
@@ -34,7 +34,7 @@ const longWorkNameSettings: Settings = {
 };
 
 const available = new Map<Agent, AgentAvailability>(
-  ALL_AGENTS.map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
+  AGENTS.map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
 );
 
 /** Claude Code's readings: the default account with plenty left in both windows, Work's session window spent (it resets
@@ -225,7 +225,7 @@ export const quotaGatingScenarios: Scenario[] = [
     description: "Every added agent has all its accounts turned off. Opening a new session shows a failure modal saying no agent is available to open a session, with OK as its only button, instead of offering a disabled account.",
     state: {
       ...launchState([website], []),
-      settings: { ...settings, disabled_default_accounts: ALL_AGENTS, accounts: accounts.map((account) => ({ ...account, disabled: true })) },
+      settings: { ...settings, disabled_default_accounts: [...AGENTS], accounts: accounts.map((account) => ({ ...account, disabled: true })) },
     },
     steps: [openSessionDialog],
   },

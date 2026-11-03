@@ -3,7 +3,7 @@ import { act } from "react";
 import { expect, it } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
-import type { Agent, AgentAvailability } from "../protocol";
+import { AGENTS, type AgentAvailability } from "../protocol";
 import { presence, stubListMotion } from "../components/motion/listMotionTestSupport";
 import { listing, lastStore, render, buttons, click, clickButton, choose, sent, type, openAdvanced, clickTab, nameOf, groupPicker, picker, tabNames } from "./consoleDialogTestSupport";
 
@@ -155,7 +155,7 @@ it("moves the Advanced tabs that come and go, none as the section opens, and han
   await clickTab("Grok Build");
   await act(async () => grok.focus());
   expect(selectedTab()).toBe("Grok Build");
-  const availability = (grokState: AgentAvailability["availability"]) => new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: agent === "grok" ? grokState : "available", default_account_dir: null }]));
+  const availability = (grokState: AgentAvailability["availability"]) => new Map(AGENTS.map((agent) => [agent, { agent, availability: agent === "grok" ? grokState : "available", default_account_dir: null }]));
   await act(async () => lastStore.setState({ agentAvailability: availability("unavailable") }));
   expect(motion.played().map(({ frames }) => presence(frames))).toEqual(["exit"]);
   const copy = document.body.querySelector("[data-list-motion-exit]")!;

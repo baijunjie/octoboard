@@ -10,6 +10,7 @@ export type { State, TrustPrompt } from "./state";
 export { errorNotification } from "./notifications";
 export type { AlertOptions, NotificationRequest } from "./notifications";
 export {
+  useAccountSwitchHeld,
   useArchivedOwnerSessions,
   useConsoleSessions,
   useConsoleStatus,
@@ -18,6 +19,7 @@ export {
   useOwnerSessions,
   useProjectSessions,
   useProjectStatus,
+  useQueuedAccountSwitches,
   useSession,
   useSessionShownStatus,
   useSessionProjectId,

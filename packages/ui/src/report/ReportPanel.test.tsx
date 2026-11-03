@@ -7,6 +7,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { pageOf } from "../fixtures/builders";
 import { press } from "../components/alerts/detailsTestSupport";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PanelFrameProvider } from "../components/panel/PanelHeader";
 import { focusLanding, focusLandingWithoutText } from "../components/focus/regionFocus";
 import { PlatformProvider } from "../platform/react";
@@ -29,7 +30,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
   const store = createStateStore({
     pages: new Map([["console-session", [pageOf("first", "console-session", "<body data-website-preview-report>First</body>", 0)]]]),
   });
-  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ store, request: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -61,7 +62,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
 function renderReport(pageCount = 2) {
   const pages = Array.from({ length: pageCount }, (_, i) => pageOf(`page-${i}`, "console-session", `<p>Page ${i}</p>`, i));
   const store = createStateStore({ pages: new Map([["console-session", pages]]) });
-  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ store, request: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("section"));
   container.dataset.region = "panel-report";
   const root = createRoot(container);
@@ -149,9 +150,8 @@ it("lands a tap's focus on the page, and F6's or a pointer's on the header's fir
 
 it("shows a failed page listing in the panel with its reason and Try again, and opens no error alert dialog", async () => {
   const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack", id: null });
-  const raiseError = vi.fn();
   const store = createStateStore({ connectionState: "open" });
-  const daemon = testDaemon({ store, request, raiseError, showNotice: vi.fn() });
+  const daemon = testDaemon({ store, request, showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("section"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -172,7 +172,7 @@ it("shows a failed page listing in the panel with its reason and Try again, and 
   expect(panel.querySelector("h2")?.textContent).toBe("Could not load the pages of this session");
   expect(panel.textContent).toContain("Something unexpected went wrong.");
   expect(container.querySelector("[role=alert]")).not.toBeNull();
-  expect(raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   const retry = [...panel.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
   await act(async () => retry.click());
   expect(request).toHaveBeenCalledTimes(2);
@@ -188,7 +188,7 @@ async function renderListed(request: Daemon["request"]) {
 }
 
 async function renderWith(request: Daemon["request"], store: ReturnType<typeof createStateStore>) {
-  const daemon = testDaemon({ store, request, raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ store, request, showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("section"));
   container.dataset.region = "panel-report";
   const root = createRoot(container);

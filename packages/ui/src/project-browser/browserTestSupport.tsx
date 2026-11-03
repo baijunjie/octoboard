@@ -6,8 +6,6 @@ import { onTestFinished } from "vitest";
 
 import type { RequestHandler } from "../requests";
 import { forwardAlerts } from "../components/alerts/alertTestSupport";
-import { errorText } from "../errors/errorText";
-import { errorPresentation } from "../errors/errorPresentation";
 import type { PlatformAdapter } from "../platform";
 import { isolate } from "../i18n/isolate";
 import type { ChangeEntry, LineStats } from "../protocol";
@@ -107,9 +105,9 @@ export function mountRows(children: React.ReactNode, { request, clipboard, toast
     act(() => root.unmount());
     container.remove();
   });
-  // The alerts raised without a daemon (`raiseError` from `components/alerts/raiseError`) go where the daemon's do.
+  // The error alerts go where the daemon's toasts do.
   onTestFinished(forwardAlerts(toasts.error));
-  const daemon = testDaemon({ state, request, raiseError: (error) => toasts.error(errorText(errorPresentation(error))), showNotice: toasts.notice });
+  const daemon = testDaemon({ state, request, showNotice: toasts.notice });
   act(() => root.render(<TestHost daemon={daemon} platform={{ kind: "browser", clipboard }}>{children}</TestHost>));
   return container;
 }

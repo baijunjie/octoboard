@@ -55,7 +55,7 @@ export function mountDialog(
 ): Mounted {
   const closed = vi.fn();
   const request = vi.fn(reply);
-  const daemon = testDaemon({ state, request, raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ state, request, showNotice: vi.fn() });
   // Registered before the mount, so it runs after the unmount.
   onTestFinished(() => {
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();

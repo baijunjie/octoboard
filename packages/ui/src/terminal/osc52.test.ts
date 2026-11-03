@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { ActionableError } from "../errors/actionableError";
 import type { Translate } from "../i18n/catalog";
 import { osc52ClipboardText, programCopyHandler } from "./osc52";
@@ -24,19 +25,21 @@ describe("osc52ClipboardText", () => {
 
 describe("programCopyHandler", () => {
   const t = ((key: string) => key) as Translate;
+  let report: MockInstance<typeof errorAlerts.report>;
+  beforeEach(() => { report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {}); });
+  afterEach(() => { report.mockRestore(); });
   const copyWith = async (writeText: (text: string) => Promise<void>) => {
-    const raiseError = vi.fn();
-    programCopyHandler({ writeText }, () => ({ t, raiseError }))!("text");
+    programCopyHandler({ writeText }, () => ({ t }))!("text");
     await new Promise((resolve) => setTimeout(resolve));
-    return raiseError;
+    return report;
   };
 
   it("alerts when the clipboard fails, with the clipboard as the way out", async () => {
-    const raiseError = await copyWith(() => Promise.reject(new Error("denied")));
-    expect(raiseError).toHaveBeenCalledOnce();
-    const error = raiseError.mock.calls[0][0] as ActionableError;
-    expect(error.message).toBe("terminal.copyFailed");
-    expect(error.recovery).toBe("clipboard");
+    await copyWith(() => Promise.reject(new Error("denied")));
+    expect(report).toHaveBeenCalledOnce();
+    const { error, ...alert } = report.mock.lastCall![0];
+    expect(alert).toMatchObject({ message: "terminal.copyFailed", title: "common.copyFailedTitle" });
+    expect((error as ActionableError).recovery).toBe("clipboard");
   });
 
   it("stays quiet when a browser refuses a copy without a user gesture", async () => {
@@ -44,6 +47,6 @@ describe("programCopyHandler", () => {
   });
 
   it("is absent without a clipboard", () => {
-    expect(programCopyHandler(undefined, () => ({ t, raiseError: () => {} }))).toBeUndefined();
+    expect(programCopyHandler(undefined, () => ({ t }))).toBeUndefined();
   });
 });

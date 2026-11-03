@@ -4,7 +4,7 @@
 // since it forked from it) and the commits it made since.
 //
 // These are the replies that have to track the real daemon's own
-// (`apps/daemon/src/browse/changes.rs`), condition for condition, and they are kept apart from the
+// (`apps/daemon/src/browse/`), condition for condition, and they are kept apart from the
 // rest of the fixture daemon for that reason. Where the daemon would fill a field and the fixture
 // carries nothing to fill it from, the reply is refused rather than sent unfilled; where a
 // signature could have settled it instead, the factory that builds the change does.

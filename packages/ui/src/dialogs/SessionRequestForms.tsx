@@ -13,7 +13,7 @@ import type { Account, Agent, Console, Project, Session } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import type { SessionRequest } from "../store";
-import { useDaemonStore } from "../store";
+import { useAccountSwitchHeld, useDaemonStore } from "../store";
 import { useNow } from "../format/useNow";
 import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
@@ -108,6 +108,7 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
   const sharing = useDaemonStore((s) => s.accountSharing);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const accountOrder = useDaemonStore((s) => s.settings.account_order);
+  const switching = useAccountSwitchHeld(session);
   const now = useNow();
   const [account, setAccount] = useState<string | null>(request.account);
   const [changed, setChanged] = useState<{ model?: string | null; effort?: string | null }>({});
@@ -116,7 +117,7 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
   const turnedOff = (entry: (typeof entries)[number]) => entry.disabled && !entry.current;
   const blockOf = (entry: (typeof entries)[number]) =>
-    switchEntryBlock(t, entry, { switching: session?.switching_account === true, ownChanging }) ?? (turnedOff(entry) ? accountDisabledUnavailable(t) : undefined);
+    switchEntryBlock(t, entry, { switching, ownChanging }) ?? (turnedOff(entry) ? accountDisabledUnavailable(t) : undefined);
   const chosen = entries.find((entry) => entry.account === account);
   const incomplete = incompleteAccount(accounts, sharing, account);
   const missing = session !== undefined && chosen === undefined;
@@ -132,7 +133,7 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
 
   // What is wrong with the account chosen is that field's error. A hold on the session itself (an account switch
   // running, its own account's sharing changing) is not about the field: it stays an Alert.
-  const sharingBlock = chosenBlock && chosen?.changingSharing && session.switching_account !== true ? chosenBlock.detail : undefined;
+  const sharingBlock = chosenBlock && chosen?.changingSharing && !switching ? chosenBlock.detail : undefined;
   const accountError = missing
     ? t("dialog.sessionRequest.switch.accountGone")
     : chosen?.current
@@ -222,8 +223,9 @@ export function HandoffRequestForm({ request, onReport, isDisabled }: { request:
   const project = useDaemonStore((s) => (request.project ? s.projects.get(request.project) : undefined));
   const original = useDaemonStore((s) => s.sessions.get(request.target));
   const ownChanging = useDaemonStore((s) => sharingChangeRuns(s.accountSharing, original?.account_id ?? null));
+  const switching = useAccountSwitchHeld(original);
   if (!parentConsole) return <NoEdits request={request} onReport={onReport} />;
-  return <HandoffFields request={request} onReport={onReport} console={parentConsole} project={project} original={original} ownChanging={ownChanging} isDisabled={isDisabled} />;
+  return <HandoffFields request={request} onReport={onReport} console={parentConsole} project={project} original={original} switching={switching} ownChanging={ownChanging} isDisabled={isDisabled} />;
 }
 
 /** The form of a handoff whose console the window does not know, which has nothing to change: the
@@ -233,12 +235,14 @@ function NoEdits({ request, onReport }: { request: HandoffRequest; onReport: OnR
   return null;
 }
 
-function HandoffFields({ request, onReport, console: parentConsole, project, original, ownChanging, isDisabled }: {
+function HandoffFields({ request, onReport, console: parentConsole, project, original, switching, ownChanging, isDisabled }: {
   request: HandoffRequest;
   onReport: OnReport;
   console: Console;
   project: Project | undefined;
-  original: Pick<Session, "status" | "locked" | "switching_account" | "agent"> | undefined;
+  original: Pick<Session, "status" | "locked" | "agent"> | undefined;
+  /** Whether an account switch holds the session (`holdsAccountSwitch`). */
+  switching: boolean;
   ownChanging: boolean;
   isDisabled: boolean;
 }): React.ReactElement {
@@ -248,7 +252,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
     model: request.model,
     effort: request.effort,
   });
-  const sessionBlock = original && handoffBlock(t, original, ownChanging);
+  const sessionBlock = original && handoffBlock(t, original, { switching, ownChanging });
   const accounts = useDaemonStore((state) => state.settings.accounts);
   const sharing = useDaemonStore((state) => state.accountSharing);
   const incomplete = presetGone ? undefined : incompleteAccount(accounts, sharing, choice.account);

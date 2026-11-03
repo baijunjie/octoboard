@@ -13,8 +13,8 @@ export function trackAccountLogin(store: StoreApi<State>, agent: Agent, account:
 
 /** Adds `ids` to the sessions account-switch batches have not finished with, or takes them out
  * (`queued` false): only these ids change, so batches that overlap in time never undo each other.
- * Such a session shows as switching its account (`Session.switching_account`) alongside the ones
- * the daemon says are. */
+ * Such a session shows as switching its account alongside the ones the daemon says are
+ * (`holdsAccountSwitch`). */
 export function setAccountSwitchesQueued(store: StoreApi<State>, ids: readonly string[], queued: boolean): void {
   store.setState((state) => reducer(state, { kind: "queue_account_switches", ids, queued }));
 }

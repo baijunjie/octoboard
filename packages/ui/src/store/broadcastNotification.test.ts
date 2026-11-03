@@ -6,7 +6,7 @@ import { sessionOf } from "../fixtures/builders";
 import type { Event } from "../protocol";
 import { createDaemon } from ".";
 import { currentLanguage } from "../i18n/language";
-import { broadcastNotification, errorNotification, type NotifiedBroadcast, type NotificationRequest } from "./notifications";
+import { broadcastNotification, type NotifiedBroadcast, type NotificationRequest } from "./notifications";
 
 const client = vi.hoisted(() => ({ onEvent: undefined as ((event: Event) => void) | undefined }));
 vi.mock("../daemon-client", async (importOriginal) => ({
@@ -67,15 +67,6 @@ it("words the message with the names of the records the store holds", () => {
   daemon.store.setState({ sessions: new Map([["s", sessionOf("s", "c", "p", "Named session", "idle")]]) });
   client.onEvent!({ type: "session_notice", session: "s", code: "session_did_not_stop", params: { session: "s" }, message: "raw" });
   expect(notifications[0].message).toContain("Named session");
-});
-
-it("raises an error through the notification route as the error request of its call site", () => {
-  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  const notifications: NotificationRequest[] = [];
-  daemon.onNotification((notification) => notifications.push(notification));
-  const error = new CodedError("raw", "internal_error", {});
-  daemon.raiseError(error, { title: "Could not save", session: "s", recovery: "refresh" });
-  expect(notifications).toEqual([errorNotification(error, { title: "Could not save", session: "s", recovery: "refresh" })]);
 });
 
 // A wiring check: the gallery's daemon calls `broadcastNotification` itself, so the store has to be doing the same.

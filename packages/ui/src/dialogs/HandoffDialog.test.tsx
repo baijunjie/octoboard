@@ -47,7 +47,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     if (body.type === "handoff_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
     return { type: "ack", id: null };
   });
-  const daemon = testDaemon({ state: initial, request: request as unknown as Daemon["request"], raiseError: vi.fn() });
+  const daemon = testDaemon({ state: initial, request: request as unknown as Daemon["request"] });
   const onClose = vi.fn();
   const onHandedOff = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -57,7 +57,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     act(() => root.unmount());
     container.remove();
   });
-  return { request, onClose, onHandedOff, raiseError: daemon.raiseError };
+  return { request, onClose, onHandedOff };
 }
 
 const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
@@ -177,7 +177,7 @@ it("keeps focus inside the dialog when a retry of the check succeeds and takes t
 });
 
 it("turns into an acknowledgement-only failure modal when no other agent can be picked", async () => {
-  const { request, onClose, raiseError } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
+  const { request, onClose } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
   await settle();
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("No other agent is available to take this session over.");
@@ -186,18 +186,18 @@ it("turns into an acknowledgement-only failure modal when no other agent can be 
   // Only the acknowledgement is offered, and it is the one thing that closes the dialog.
   expect(Array.from(dialog?.querySelectorAll("button") ?? []).map((button) => button.textContent)).toEqual(["OK"]);
   expect(onClose).not.toHaveBeenCalled();
-  expect(raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   expect(request.mock.calls.some(([body]) => body.type === "handoff_session")).toBe(false);
   await act(async () => buttons().find((b) => b.textContent === "OK")?.click());
   expect(onClose).toHaveBeenCalledOnce();
 });
 
 it("also turns into the failure modal when the only other agents are not added", async () => {
-  const { onClose, raiseError } = mount(hub, [], [], { claude: "available", codex: "available", grok: "available" }, ["claude"]);
+  const { onClose } = mount(hub, [], [], { claude: "available", codex: "available", grok: "available" }, ["claude"]);
   await settle();
   expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No other agent is available");
   expect(onClose).not.toHaveBeenCalled();
-  expect(raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("shows the receiving agent's only account in an account picker, its usage drawn in the option", async () => {
@@ -243,6 +243,8 @@ it.each([
   const raised = errorAlerts.getSnapshot();
   expect(raised).toHaveLength(1);
   expect(raised[0].title).toBe("Could not finish the handoff");
+  // The message names the receiving session; the original, which may share its name, is not named again.
+  expect(raised[0].session).toBeUndefined();
   act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });
 

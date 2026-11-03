@@ -90,9 +90,10 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
         sessionOf("checks", workspace.id, "server", copy.orderChecks, "waiting_user", { agent: "grok" }),
       ];
       const delegating = delegatingSessionIds(all);
-      const sessions = liveSessions(all, delegating);
+      const noSwitches = new Set<string>();
+      const sessions = liveSessions(all, delegating, noSwitches);
       content = <section className="feature-surface status-view">{sessions.map((session) => {
-        const status = sessionShownStatusKind(session, delegating);
+        const status = sessionShownStatusKind(session, delegating, noSwitches);
         return <div className="session-item" key={session.id}><SessionAgentIcon session={session} accounts={[]} defaultNames={{}} touchPopover={false} /><div className="session-copy"><div className="session-title">{session.title}</div><div className="session-state"><StatusIcon status={status} decorative /><span>{statusLabel(t, status)}</span></div></div></div>;
       })}</section>;
       break;

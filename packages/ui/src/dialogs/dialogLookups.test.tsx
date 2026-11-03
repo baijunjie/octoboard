@@ -5,6 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
 import type { Event, RequestBody } from "../protocol";
+import type { RequestSender } from "../requests";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { useDetectedAgent, type Detection, type DetectionQuery } from "./useDetectedAgent";
@@ -17,7 +18,7 @@ const detected = (agent: "claude" | "codex"): Event => ({ type: "agent_detected"
 const connectionClosed = () => new CodedError("connection_closed", "connection_closed", {});
 
 /** Renders `use` under a daemon whose requests the test answers itself, one pending request per call. */
-function mount<T>(use: (request: (body: RequestBody) => Promise<Event>) => T) {
+function mount<T>(use: (request: RequestSender) => T) {
   const out: { body: RequestBody; resolve: (event: Event) => void; reject: (err: unknown) => void }[] = [];
   const request = vi.fn((body: RequestBody) => new Promise<Event>((resolve, reject) => void out.push({ body, resolve, reject })));
   const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1 }, request: request as never });

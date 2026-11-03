@@ -8,7 +8,7 @@ import { isRailPeekArea, PHONE_SLIDE_AWAY } from "../layout/paneOverlay";
 import type { Console } from "../protocol";
 import { statusLabel } from "../sessions/sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
-import type { SettingsSectionId } from "../settings/SettingsDialog";
+import type { OpenSettings } from "../settings/settingsLauncher";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { RailProcessesEntry } from "./RailProcessesEntry";
 import { CountedGlyph } from "./CountedGlyph";
@@ -147,7 +147,7 @@ interface RailProps extends ConsoleMenuHandlers {
   onOpenProcesses: (target: ProcessJump) => boolean;
   onOpenSettings: () => void;
   /** Opens Settings on a section, as the quota panel's way into the accounts one. */
-  onOpenSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;
+  onOpenSettingsAt: OpenSettings;
   /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
   /** Below the `phone` breakpoint the rail is not in the row but comes in with the sidebar's

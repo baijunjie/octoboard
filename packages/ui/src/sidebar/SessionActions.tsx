@@ -9,7 +9,7 @@ import { useT } from "../i18n/react";
 import type { Account, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useDaemon, useDaemonStore } from "../store";
+import { useAccountSwitchHeld, useDaemon, useDaemonStore } from "../store";
 import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";
 import { archiveNeedsConfirmation, isUnusedSession } from "../sessions/order";
 import { RowIconButton } from "../components/rows/RowIconButton";
@@ -48,6 +48,8 @@ export function SessionActions({
     return !archiveNeedsConfirmation(related, session);
   });
   const canHandOff = useDaemonStore((s) => pickableAgents(s.agentAvailability, s.settings.added_agents).some((agent) => agent !== session.agent));
+  // The menu's switch-account holds follow it while open, so it is read here rather than when the menu opens.
+  const switching = useAccountSwitchHeld(session);
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
   const title = sessionDisplayTitle(t, session);
   const deletable = isUnusedSession(session, hasBoundSessions);
@@ -67,7 +69,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandOff, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandOff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
     </>
   );
 }

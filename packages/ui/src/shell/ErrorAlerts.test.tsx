@@ -3,7 +3,7 @@ import { act, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { raiseError } from "../components/alerts/raiseError";
+import { errorAlertOf, raiseError } from "../components/alerts/raiseError";
 import { appConfig } from "../appConfig";
 import { CodedError } from "../errors/codedError";
 import { ActionableError } from "../errors/actionableError";
@@ -18,7 +18,7 @@ import { OpensAnotherDialog } from "../components/dialog/nestedDialogTestSupport
 import { ErrorAlerts } from "./ErrorAlerts";
 import { issueUrl } from "../components/alerts/useIssueReport";
 import { TextInput } from "../components/form/TextInput";
-import type { Daemon } from "../store";
+import { errorNotification, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { reportDaemonExit } from "../lifecycle/exitFailure";
 import { issueReportUrl, recordNames } from "../errors/issueReport";
@@ -275,6 +275,67 @@ it("offers no Change model button for an alert that is about no session", () => 
   mount();
   act(() => errorAlerts.report({ message: "Action failed", recovery: "modelChange" }));
   expect(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).map((b) => b.textContent)).toEqual(["OK"]);
+});
+
+describe("the session an alert is about", () => {
+  const alertText = () => document.querySelector('[role="alertdialog"]')?.textContent ?? "";
+
+  it("is named with its project as the store has them while the alert shows, so a rename after the alert was raised shows", async () => {
+    const { consoleOf, projectOf, sessionOf } = await import("../fixtures/builders");
+    const daemon = testDaemon({
+      state: {
+        consoles: new Map([["c", consoleOf("c", "Main")]]),
+        projects: new Map([["p", projectOf("p", "c", "Octoboard")]]),
+        sessions: new Map([["s", sessionOf("s", "c", "p", "Fix login", "idle")]]),
+      },
+    });
+    raiseError(new Error("boom"), { title: "Could not archive the session", session: "s" });
+    mount(undefined, undefined, daemon);
+    expect(alertText()).toContain("Session: Fix login");
+    expect(alertText()).toContain("Project: Octoboard");
+    act(() => daemon.store.setState((state) => ({ sessions: new Map([["s", { ...state.sessions.get("s")!, title: "Fix signup" }]]) })));
+    expect(alertText()).toContain("Session: Fix signup");
+    expect(alertText()).not.toContain("Fix login");
+  });
+
+  it("keeps the name and place it showed when the session leaves the store while the alert is on screen", async () => {
+    const { consoleOf, projectOf, sessionOf } = await import("../fixtures/builders");
+    const daemon = testDaemon({
+      state: {
+        consoles: new Map([["c", consoleOf("c", "Main")]]),
+        projects: new Map([["p", projectOf("p", "c", "Octoboard")]]),
+        sessions: new Map([["s", sessionOf("s", "c", "p", "Fix login", "idle")]]),
+      },
+    });
+    raiseError(new Error("boom"), { title: "Could not archive the session", session: "s" });
+    mount(undefined, undefined, daemon);
+    expect(alertText()).toContain("Session: Fix login");
+    act(() => daemon.store.setState({ sessions: new Map() }));
+    expect(alertText()).toContain("Session: Fix login");
+    expect(alertText()).toContain("Project: Octoboard");
+  });
+
+  it("is named by its console for a console session, and its place is unknown when the store lacks it", async () => {
+    const { consoleOf, sessionOf } = await import("../fixtures/builders");
+    const daemon = testDaemon({ state: { consoles: new Map([["c", consoleOf("c", "Main")]]), sessions: new Map([["s", sessionOf("s", "c", undefined, "Notes", "idle")], ["t", sessionOf("t", "c", "p-gone", "Draft", "idle")]]) } });
+    mount(undefined, undefined, daemon);
+    act(() => raiseError(new Error("boom"), { title: "Could not lock the session", session: "s" }));
+    expect(alertText()).toContain("Console: Main");
+    act(() => errorAlerts.acknowledge());
+    act(() => raiseError(new Error("boom"), { title: "Could not lock the session", session: "t" }));
+    expect(alertText()).toContain("Project: Unknown");
+  });
+
+  it("is named by the name its notice carried once the store no longer holds it, with no place, and not at all with neither", () => {
+    mount(undefined, undefined, testDaemon());
+    act(() => errorAlerts.report({ ...errorAlertOf(errorNotification(new Error("boom"), { title: "Could not start the session", session: "s9" })), sessionName: "Fix login" }));
+    expect(alertText()).toContain("Session: Fix login");
+    expect(alertText()).not.toContain("Project: ");
+    act(() => errorAlerts.acknowledge());
+    act(() => raiseError(new Error("boom"), { title: "Could not start the session", session: "s9" }));
+    expect(alertText()).toContain("Could not start the session");
+    expect(alertText()).not.toContain("Session: ");
+  });
 });
 
 it("offers the footer action for a batch only when every failure shares that recovery", () => {

@@ -3,8 +3,8 @@ import { useEffect } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import { useT } from "../i18n/react";
-import type { ConversationLocation, Event, RequestBody } from "../protocol";
+import type { ConversationLocation } from "../protocol";
+import type { RequestSender } from "../requests";
 import { shownError } from "./shownError";
 
 /** `idle`: nothing to ask about. `pending`: the answer for the ID entered now is not in yet, which
@@ -25,18 +25,17 @@ const PENDING: ConversationLookup = { status: "pending" };
  * use of the answer depends on something the answer cannot see.
  */
 export function useLocatedConversation(
-  request: (body: RequestBody) => Promise<Event>,
+  request: RequestSender,
   project: string,
   id: string | undefined,
   delayMs: number,
   refreshKey?: string,
 ): ConversationLookup {
-  const t = useT();
   const key = id === undefined ? undefined : JSON.stringify([project, id, refreshKey]);
   const { value, send, reset, hold, asked, reconnects } = useLatestRequest<ConversationLookup>({
     scope: key, initial: PENDING,
   });
-  const latest = useLatest({ request, project, id, send, t });
+  const latest = useLatest({ request, project, id, send });
 
   useEffect(() => {
     // With nothing to ask, what was answered before is dropped, so coming back to the same entry starts pending.
@@ -52,13 +51,7 @@ export function useLocatedConversation(
       const { request, project, id, send } = latest.current;
       void send({
         request: () => request({ type: "locate_conversation_to_resume", project, agent_session_id: id! }),
-        accept: (event) => {
-          const lookup: ConversationLookup =
-            event.type === "conversation_located"
-              ? { status: "ready", location: event.location }
-              : { status: "failed", error: latest.current.t("dialog.session.resumeLookupFailed") };
-          return () => lookup;
-        },
+        accept: (event) => () => ({ status: "ready", location: event.location }),
         failed: (failure, _held, t) => ({ status: "failed", error: shownError(failure, t) }),
       });
     }, delayMs);

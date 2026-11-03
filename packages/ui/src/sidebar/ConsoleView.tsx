@@ -240,7 +240,7 @@ function ConsoleSessionsSection({
   // Only the rows themselves, so a status event that leaves this list as it was renders nothing here.
   const live = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return liveSessions(sessionsOf(index.byConsole, thisConsole.id).filter((x) => x.role === "console"), index.delegatingIds, s.settings.sidebar_order_by_status);
+    return liveSessions(sessionsOf(index.byConsole, thisConsole.id).filter((x) => x.role === "console"), index.delegatingIds, s.queuedAccountSwitches, s.settings.sidebar_order_by_status);
   });
   // With no agent added and installed, starting a console session would only be refused by the
   // daemon the moment it tried — so the action is disabled here instead, and `agents.noneAdded` (an
@@ -288,7 +288,7 @@ function useProjectRanks(projects: Project[]): number[] {
   return useDaemonStore(
     useShallow((s) => {
       const { byProject, delegatingIds } = indexSessions(s.sessions);
-      return projects.map((p) => projectRank(sessionsOf(byProject, p.id), delegatingIds));
+      return projects.map((p) => projectRank(sessionsOf(byProject, p.id), delegatingIds, s.queuedAccountSwitches));
     }),
   );
 }

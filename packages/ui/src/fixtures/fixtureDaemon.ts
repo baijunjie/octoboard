@@ -63,7 +63,8 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
       case "notice":
         return { kind: "notice", message: worded(fixture.message) };
       case "raised": {
-        // As `request()` rejects a failure: its message is worded already, which the alert's body and its dedup read.
+        // The request `raiseError` builds, which `Toasts` turns into the same alert. The failure is as `request()` rejects
+        // it: its message is worded already, which the alert's body and its dedup read.
         const fallback = worded(fixture.message);
         const { code, params = {} } = fixture;
         const error = code
@@ -115,8 +116,6 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
       const reply = replies[body.type] as ((body: RequestBody) => Event | Promise<Event>) | undefined;
       return reply ? reply(body) : { type: "ack", id: null };
     }),
-    // The request the real daemon raises, so the title and the raw text an action gives it reach the alert as they do there.
-    raiseError: (error, alert) => emitToast(errorNotification(error, alert)),
     showNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onNotification: (listener) => {
       toastListeners.add(listener);

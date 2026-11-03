@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 
 import type { Event, RequestBody } from "../../protocol";
+import { looseRequestSender } from "../../requests";
 import { readDocumentImage } from "./documentImageReads";
 
 function daemon() {
@@ -12,7 +13,7 @@ function daemon() {
         sent.push({ path, slot, answer: resolve });
       }),
   );
-  return { sent, request };
+  return { sent, request: looseRequestSender(request) };
 }
 
 const file = (path: string) => ({ type: "project_file", id: null, path }) as unknown as Event;

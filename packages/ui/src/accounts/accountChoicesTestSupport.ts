@@ -6,11 +6,11 @@ import { settledInitialChoice } from "./openingChoice";
 import { accountOf } from "../fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, QuotaWindow } from "../protocol";
+import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type QuotaWindow } from "../protocol";
 
 export const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(
-    (["claude", "codex", "grok"] as Agent[]).map((agent) => [
+    AGENTS.map((agent) => [
       agent,
       { agent, availability: entries[agent] ?? "not_determined", default_account_dir: null },
     ]),

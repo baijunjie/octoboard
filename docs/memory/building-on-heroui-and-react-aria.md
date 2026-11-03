@@ -153,7 +153,7 @@ grant it had watched arrive, and died on the first click to another section.
 
 `shouldForceMount` keeps the unselected panels mounted, but it is not the way to keep a panel's state. Pass it only
 where the hidden panels must go on taking up layout, as the rail's quota panel
-(`packages/ui/src/shell/rail-quota/AgentPanel.tsx`) is the one place that does: it stacks every agent's panel in one grid cell
+(`packages/ui/src/quota/AgentPanel.tsx`) is the one place that does: it stacks every agent's panel in one grid cell
 so that, anchored by its bottom edge, it keeps the tallest tab's height and its tab strip does not move out from under
 the pointer. A force-mounted unselected panel is rendered `inert` with `data-inert="true"` and without its `role`, `id`
 or `tabIndex`, but it is still shown, so hide it yourself (`data-[inert=true]:invisible`). HeroUI's `.tabs__panel` gives

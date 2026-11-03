@@ -2,7 +2,7 @@ import type { ConnectionState } from "../daemon-client";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountKey, loginIsActive } from "../accounts/accountRecords";
 import { sameValue } from "../values/sameValue";
-import { TRUST_ANSWER_FAILED, type AccountLogin, type AccountQuota, type AccountSharing, type Event, type Project, type Session, type ShellTerminal } from "../protocol";
+import { TRUST_ANSWER_FAILED, type AccountLogin, type AccountQuota, type AccountSharing, type Event, type Project, type ShellTerminal } from "../protocol";
 import type { State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
 
@@ -52,26 +52,6 @@ function hasSharingState(sharing: AccountSharing): boolean {
   return sharing.in_use !== undefined || sharing.progress !== undefined || sharing.idle_sessions !== undefined || sharing.failure !== undefined;
 }
 
-/** `session` as the window shows it, with `Session.switching_account` set or absent as `switching`
- * says. */
-function withSwitching(session: Session, switching: boolean): Session {
-  if ((session.switching_account === true) === switching) return session;
-  if (switching) return { ...session, switching_account: true };
-  const { switching_account: _, ...rest } = session;
-  return rest;
-}
-
-/** `session` as the window shows it: switching its account when the daemon says so or a batch of
- * this window still holds it. */
-function shownSwitching(session: Session, queued: ReadonlySet<string>): Session {
-  return withSwitching(session, session.switching_account === true || queued.has(session.id));
-}
-
-/** The sessions among `sessions` the daemon says are switching their account. */
-function daemonSwitchingOf(sessions: Session[]): Set<string> {
-  return new Set(sessions.filter((session) => session.switching_account).map((session) => session.id));
-}
-
 /** `held` with `id` in it or not, as `member` says; `held` itself when that changes nothing. */
 function withMember(held: ReadonlySet<string>, id: string, member: boolean): ReadonlySet<string> {
   if (held.has(id) === member) return held;
@@ -103,7 +83,6 @@ function withoutSessions(state: State, ids: ReadonlySet<string>): State {
     deletedPages: new Map(Array.from(state.deletedPages).filter(kept)),
     trustPrompts: state.trustPrompts.filter((p) => !ids.has(p.session)),
     sessionRequests: state.sessionRequests.filter((r) => !ids.has(r.session)),
-    daemonSwitching: new Set(Array.from(state.daemonSwitching).filter((id) => !ids.has(id))),
   };
 }
 
@@ -121,18 +100,10 @@ export function reducer(state: State, action: Action): State {
     case "dismiss_account_login":
       return state.accountLogins.includes(action.login) ? { ...state, accountLogins: state.accountLogins.filter((held) => held !== action.login) } : state;
     case "queue_account_switches": {
+      // Held apart from `sessions`, which stay as the daemon sent them; what a session shows applies it
+      // (`holdsAccountSwitch`).
       const queuedAccountSwitches = action.ids.reduce((held, id) => withMember(held, id, action.queued), state.queuedAccountSwitches);
-      if (queuedAccountSwitches === state.queuedAccountSwitches) return state;
-      let sessions = state.sessions;
-      for (const id of action.ids) {
-        const held = sessions.get(id);
-        if (!held) continue;
-        const shown = withSwitching(held, state.daemonSwitching.has(id) || queuedAccountSwitches.has(id));
-        if (shown === held) continue;
-        if (sessions === state.sessions) sessions = new Map(sessions);
-        sessions.set(id, shown);
-      }
-      return { ...state, queuedAccountSwitches, sessions };
+      return queuedAccountSwitches === state.queuedAccountSwitches ? state : { ...state, queuedAccountSwitches };
     }
     case "event": {
       const event = action.event;
@@ -140,11 +111,10 @@ export function reducer(state: State, action: Action): State {
         case "snapshot":
           return {
             ...state,
-            daemonSwitching: daemonSwitchingOf(event.sessions),
             hosts: new Map(event.hosts.map((h) => [h.id, h])),
             consoles: keepSame(state.consoles, event.consoles, (c) => c.id),
             projects: keepSame(state.projects, event.projects, (p) => p.id),
-            sessions: keepSame(state.sessions, event.sessions.map((s) => shownSwitching(s, state.queuedAccountSwitches)), (s) => s.id),
+            sessions: keepSame(state.sessions, event.sessions, (s) => s.id),
             // A snapshot means either first connect or a lag recovery, and carries no pages either
             // way (see `Page` in protocol.ts). Cleared rather than kept, because a console session
             // that was deleted while this client was behind would otherwise go on holding its
@@ -201,8 +171,8 @@ export function reducer(state: State, action: Action): State {
           // authoritative record if one already exists; otherwise seed the newly opened session.
           if (state.sessions.has(event.session.id)) return state;
           const sessions = new Map(state.sessions);
-          sessions.set(event.session.id, shownSwitching(event.session, state.queuedAccountSwitches));
-          return { ...state, sessions, daemonSwitching: withMember(state.daemonSwitching, event.session.id, event.session.switching_account === true) };
+          sessions.set(event.session.id, event.session);
+          return { ...state, sessions };
         }
         case "project_upserted": {
           if (sameValue(state.projects.get(event.project.id), event.project)) return state;
@@ -229,14 +199,9 @@ export function reducer(state: State, action: Action): State {
         }
         case "session_upserted": {
           // A session's status broadcasts repeat what the store holds as often as they change it.
-          const shown = shownSwitching(event.session, state.queuedAccountSwitches);
-          const daemonSwitching = withMember(state.daemonSwitching, event.session.id, event.session.switching_account === true);
-          // The queue can hide a daemon switch starting or ending without changing the shown session.
-          if (sameValue(state.sessions.get(event.session.id), shown)) {
-            return daemonSwitching === state.daemonSwitching ? state : { ...state, daemonSwitching };
-          }
+          if (sameValue(state.sessions.get(event.session.id), event.session)) return state;
           const sessions = new Map(state.sessions);
-          sessions.set(event.session.id, shown);
+          sessions.set(event.session.id, event.session);
           // The daemon shows a session at its trust confirmation as `waiting_user`, and publishes
           // that before it broadcasts the prompt, so a status that is anything else, which a session
           // that no longer runs has too, means the confirmation is no longer waiting for an answer
@@ -245,7 +210,7 @@ export function reducer(state: State, action: Action): State {
           const trustPrompts = event.session.status === "waiting_user"
             ? state.trustPrompts
             : state.trustPrompts.filter((p) => p.session !== event.session.id);
-          return { ...state, sessions, trustPrompts, daemonSwitching };
+          return { ...state, sessions, trustPrompts };
         }
         case "session_deleted":
           return withoutSessions(state, new Set([event.session]));

@@ -13,7 +13,7 @@ import { windowAttention } from "../../components/announce/windowTestSupport";
 import { SettingsDialog } from "../SettingsDialog";
 import { TestHost } from "../../test/TestHost";
 import { registerSettingsLauncher } from "../settingsLauncher";
-import { accountLogins, request, sessions, settings, raiseError, startDaemon } from "./agentAccountsSectionTestState";
+import { accountLogins, request, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
 import { buttonNamed, chooseItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -403,7 +403,7 @@ describe("an account's actions menu", () => {
     expect(dialog.textContent).not.toContain("is being removed.It");
     expect(dialog.querySelectorAll("p")).toHaveLength(1);
     expect(buttonNamed(dialog, "Log in again")).toBeDefined();
-    expect(raiseError).not.toHaveBeenCalled();
+    expect(errorAlerts.getSnapshot()).toEqual([]);
   });
 
   it("notes that this window started the login it asked for, and shows a refusal in the modal", async () => {
@@ -416,7 +416,7 @@ describe("an account's actions menu", () => {
     const dialog = document.querySelector('[role="alertdialog"]')!;
     expect(dialog.textContent).toContain("Another Codex account is logging in");
     expect(buttonNamed(dialog, "Log in again")).toBeDefined();
-    expect(raiseError).not.toHaveBeenCalled();
+    expect(errorAlerts.getSnapshot()).toEqual([]);
   });
 
   it("keeps the login status region out of display:none while it is empty, so its first text is announced", () => {
@@ -727,7 +727,6 @@ describe("an account's actions menu", () => {
     const shown = [...document.querySelectorAll('[role="alertdialog"]')].map((alert) => alert.textContent ?? "").join("\n");
     expect(shown).toContain("claude-work");
     expect(shown).toContain(code === "account_still_sharing" ? "cannot be turned off while" : "Nothing was rolled back");
-    expect(raiseError).not.toHaveBeenCalled();
   });
 
   it("reports a refusal to point a sharing account at another directory", async () => {

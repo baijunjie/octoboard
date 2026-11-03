@@ -14,7 +14,7 @@ import { type HostPath, useHostPathActions } from "./useHostPathActions";
 /** Runs a host action that the daemon refuses with `error`, and returns the title and remedy of the error alert it
  * raises. */
 async function refused(type: "open_project_path" | "reveal_project_path", error: Error): Promise<[string | undefined, string | undefined]> {
-  const daemon = testDaemon({ request: vi.fn().mockRejectedValue(error), raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ request: vi.fn().mockRejectedValue(error), showNotice: vi.fn() });
   let hostAction!: (type: "open_project_path" | "reveal_project_path", host: HostPath) => void;
   function Subject() {
     hostAction = useHostPathActions();

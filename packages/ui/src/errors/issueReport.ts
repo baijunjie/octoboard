@@ -233,7 +233,7 @@ function diagnosticOf(error: unknown): string | undefined {
  * the first line of the raw text the body shows; else the first line of a thrown error's message. */
 function summaryOf(error: unknown, context: SanitizeContext): string | undefined {
   const coded = error instanceof CodedError ? error : undefined;
-  const generic = coded?.code === CODE.internal_error || coded?.code === "unexpected_error";
+  const generic = coded?.code === CODE.internal_error || coded?.code === CODE.unexpected_error;
   if (coded && !generic) return coded.code;
   const text = coded ? rawFailureText(coded) : error instanceof Error ? error.message || error.name : diagnosticText(error);
   const line = text ? firstLine(sanitizeReportText(text, context)) : "";

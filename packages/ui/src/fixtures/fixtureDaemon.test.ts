@@ -749,22 +749,18 @@ describe("the fixture daemon's account switches", () => {
     const pending = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: "pending" } });
     void pending.request({ type: "switch_session_account", session: "s", account: "work" });
     expect(pending.store.getState().sessions.get("s")).toEqual({ ...session, switching_account: true });
-    expect(pending.store.getState().daemonSwitching).toEqual(new Set(["s"]));
     const failing = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: { code: "internal_error", params: { detail: "x" }, message: "x" } } });
     await expect(failing.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "internal_error" });
     expect(failing.store.getState().sessions.get("s")).toEqual(session);
-    expect(failing.store.getState().daemonSwitching).toEqual(new Set());
     const done = createFixtureDaemon(scenario);
     await done.request({ type: "switch_session_account", session: "s", account: "work" });
     expect(done.store.getState().sessions.get("s")?.switching_account).toBeUndefined();
-    expect(done.store.getState().daemonSwitching).toEqual(new Set());
   });
 
   it("leaves a session whose relaunch under the new account ended at once interrupted on the account it had", async () => {
     const daemon = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: { code: "switch_did_not_come_up", params: { session: "s" }, message: "x" } } });
     await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "switch_did_not_come_up" });
     expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, status: "interrupted" });
-    expect(daemon.store.getState().daemonSwitching).toEqual(new Set());
   });
 
   it("refuses invalid targets and configured failures without changing the session", async () => {
@@ -1131,16 +1127,6 @@ describe("the fixture daemon's file search", () => {
 describe("the fixture daemon's error titles", () => {
   const scenario = { };
 
-  it("passes the title an action names, and the raw error, as the real daemon's toast does", () => {
-    const daemon = createFixtureDaemon(scenario);
-    const toasts: NotificationRequest[] = [];
-    const unsubscribe = daemon.onNotification((toast) => toasts.push(toast));
-    const error = new Error("disk full");
-    daemon.raiseError(error, { title: "Could not save the setting", session: "s-1" });
-    expect(toasts).toEqual([expect.objectContaining({ kind: "error", title: "Could not save the setting", session: "s-1", error })]);
-    unsubscribe();
-  });
-
   it("gives a scenario's toast the title it names, worded in the viewing language when it is a function", async () => {
     vi.useFakeTimers();
     try {
@@ -1438,22 +1424,38 @@ describe("the fixture daemon's path link probe", () => {
     const project = projectOf("p", owner.id, "Website");
     const daemon = createFixtureDaemon({
       state: snapshotState({ consoles: [owner], projects: [project] }),
-      pathLinks: { [`${project.path}/src/a.ts`]: "file", "/Users/dev/notes": "directory" },
+      pathLinks: { [`${project.path}/src/a.ts`]: { view: { path: "src/a.ts" } }, [`${project.path}/docs`]: "directory", "/tmp/out.log": "file" },
     });
+    const viewed = { kind: "file", view: { path: "src/a.ts" }, viewer_only: true };
     await expect(
-      daemon.request({ type: "probe_path_links", project: project.id, paths: ["src/a.ts", "~/notes", "./src/../src/a.ts", "src/b.ts", `${project.path}/src/a.ts`] }),
+      daemon.request({ type: "probe_path_links", project: project.id, paths: ["src/a.ts", "~/code/website/docs", "./src/../src/a.ts", "src/b.ts", `${project.path}/src/a.ts`, "/tmp/out.log"] }),
     ).resolves.toEqual({
       type: "path_links",
       id: null,
       links: [
-        { path: "src/a.ts", kind: "file" },
-        { path: "~/notes", kind: "directory" },
-        { path: "./src/../src/a.ts", kind: "file" },
+        { path: "src/a.ts", ...viewed },
+        { path: "~/code/website/docs", kind: "directory" },
+        { path: "./src/../src/a.ts", ...viewed },
         { path: "src/b.ts", kind: "none" },
-        { path: `${project.path}/src/a.ts`, kind: "file" },
+        { path: `${project.path}/src/a.ts`, ...viewed },
+        { path: "/tmp/out.log", kind: "file" },
       ],
     });
-    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/tmp/out.log" })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "~/code/website/docs" })).resolves.toEqual({ type: "ack", id: null });
+  });
+
+  it("refuses opening a file the viewer shows from a link with path_link_refused and cause launchable, as the probe answers it viewer-only", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: { [`${project.path}/src/a.ts`]: { view: { path: "src/a.ts" } } },
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).rejects.toMatchObject({
+      code: "path_link_refused",
+      params: { path: "src/a.ts", cause: "launchable" },
+    });
   });
 
   it("opens what the probe found, but refuses one gone since with file_not_found, the path as given and the kind of root it was in", async () => {
@@ -1497,7 +1499,7 @@ describe("the fixture daemon's path link probe", () => {
       id: null,
       links: [
         { path: "docs", kind: "directory" },
-        { path: "bin/helper", kind: "file", view: { path: "bin/helper" } },
+        { path: "bin/helper", kind: "file", view: { path: "bin/helper" }, viewer_only: true },
         { path: "/private/tmp/sheet.png", kind: "file" },
       ],
     });
@@ -1532,7 +1534,7 @@ describe("the fixture daemon's path link probe", () => {
     });
   });
 
-  it("sends where a file the viewer shows (or a folder's README) is read from, and reads a worktree's files from the worktree", async () => {
+  it("sends where a file the viewer shows (or a folder's README) is read from, and every file of a project as viewer-only, and reads a worktree's files from the worktree", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");
     const daemon = createFixtureDaemon({
@@ -1543,7 +1545,7 @@ describe("the fixture daemon's path link probe", () => {
         [`${project.path}/a.ts`]: { view: { path: "a.ts" } },
         "/Users/dev/side/a.ts": { view: { worktree: "wt-side", path: "a.ts" } },
         "/tmp/b.png": "file",
-        [`${project.path}/bin/tool`]: { view: { path: "bin/tool" }, viewerOnly: true },
+        [`${project.path}/bin/tool`]: { view: { path: "bin/tool" } },
         [`${project.path}/docs/plan`]: { kind: "directory", view: { path: "docs/plan/README.md" } },
       },
     });
@@ -1551,8 +1553,8 @@ describe("the fixture daemon's path link probe", () => {
       type: "path_links",
       id: null,
       links: [
-        { path: "a.ts", kind: "file", view: { path: "a.ts" } },
-        { path: "/Users/dev/side/a.ts", kind: "file", view: { worktree: "wt-side", path: "a.ts" } },
+        { path: "a.ts", kind: "file", view: { path: "a.ts" }, viewer_only: true },
+        { path: "/Users/dev/side/a.ts", kind: "file", view: { worktree: "wt-side", path: "a.ts" }, viewer_only: true },
         { path: "/tmp/b.png", kind: "file" },
         { path: "c.ts", kind: "none" },
         { path: "bin/tool", kind: "file", view: { path: "bin/tool" }, viewer_only: true },

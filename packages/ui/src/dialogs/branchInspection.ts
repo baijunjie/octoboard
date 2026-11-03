@@ -15,7 +15,7 @@ export type SessionInspection = { sessions: string[]; items: SessionBranchItem[]
 export async function inspectSessionBranches(request: Daemon["request"], sessionIds: string[], withProcesses = false): Promise<SessionInspection> {
   try {
     const result = await request({ type: "inspect_session_branches", sessions: sessionIds, ...(withProcesses ? { processes: true } : {}) });
-    return result.type === "session_branches_inspected" ? { sessions: sessionIds, items: result.items, processes: result.processes ?? [] } : { sessions: sessionIds, items: [], processes: [], failed: true };
+    return { sessions: sessionIds, items: result.items, processes: result.processes ?? [] };
   } catch {
     return { sessions: sessionIds, items: [], processes: [], failed: true };
   }

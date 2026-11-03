@@ -41,7 +41,6 @@ function render(accounts: Account[], ui: (daemon: Daemon) => React.ReactElement,
       sessions: new Map(sessions.map((session) => [session.id, session])),
     },
     request: request as Daemon["request"],
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts } });

@@ -2,6 +2,7 @@ import { useStableHandler } from "../components/hooks/useLatest";
 import { ownerForSession, type AsideOwner } from "../layout/asideOwner";
 import type { Console, Project, Session } from "../protocol";
 import { indexSessions } from "../sessions/sessionIndex";
+import { holdsAccountSwitch } from "../sessions/sessionStatus";
 import { focusAfterSelect } from "../sidebar/focus";
 import type { ArchiveScope, FocusTarget } from "../sidebar/types";
 import { useDaemon } from "../store";
@@ -76,7 +77,7 @@ export function useSessionActions({
     // An interrupted session is resumed by selecting it, unless `resume` is off; an archived one only
     // shows its history, and is reopened by the Reopen button or an explicit Reopen (`reopenSession`).
     // One an account switch holds reads interrupted while its process is down, and the switch relaunches it.
-    const switching = (store.getState().sessions.get(session.id) ?? session).switching_account === true;
+    const switching = holdsAccountSwitch(store.getState().sessions.get(session.id) ?? session, store.getState().queuedAccountSwitches);
     if (resume && session.status === "interrupted" && !switching) void resumeSession(session.id);
   };
 
@@ -89,8 +90,9 @@ export function useSessionActions({
   const switchConsoleSession = (session: Session) => selectSession(session, { enterFocus: true });
 
   const selectNextWaiting = () => {
-    const sessions = Array.from(store.getState().sessions.values());
-    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, sessions, indexSessions(store.getState().sessions).delegatingIds, store.getState().settings.sidebar_order_by_status), selectedSessionId);
+    const state = store.getState();
+    const sessions = Array.from(state.sessions.values());
+    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, sessions, indexSessions(state.sessions).delegatingIds, state.queuedAccountSwitches, state.settings.sidebar_order_by_status), selectedSessionId);
     if (!next) return;
     selectSession(next);
     // Picked from the rail inside the open drawer, it closes it as a pick in the sidebar does.

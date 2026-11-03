@@ -55,7 +55,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
         return request({ type: "list_project_branches", project, slot });
       },
       accept: (reply) => {
-        if (reply.type !== "project_branches" || reply.project !== project) return undefined;
+        if (reply.project !== project) return undefined;
         return (held) => {
           const kept = held.state === "loaded" && sameValue(held.branches, reply.branches) ? held.branches : reply.branches;
           return { state: "loaded", branches: kept, complete: reply.complete, upstreamsComplete: reply.upstreams_complete, defaultBranch: reply.default_branch, sentAt };

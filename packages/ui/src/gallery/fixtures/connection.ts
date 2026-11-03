@@ -26,7 +26,7 @@ const PATH_LINK_SCENARIO = {
     "/Users/dev/code/website/src/summary/Summary.css": { view: { path: "src/summary/Summary.css" } },
     "/Users/dev/code/website/src/summary/Summary.tsx": { view: { path: "src/summary/Summary.tsx" } },
     "/Users/dev/code/website/docs/summary-notes.md": { view: { path: "docs/summary-notes.md" } },
-    "/Users/dev/code/website/bin/helper": { view: { path: "bin/helper" }, viewerOnly: true },
+    "/Users/dev/code/website/bin/helper": { view: { path: "bin/helper" } },
     "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", view: { path: "docs/plans/summary-layout/README.md" } },
     "/Users/dev/code/search-api-experiments/src/ui.ts": { view: { worktree: "wt-side", path: "src/ui.ts" } },
     "/private/tmp/octoboard/scratchpad/icon/sheet3.png": "file",
@@ -280,13 +280,13 @@ export const connectionScenarios: Scenario[] = [
     id: "terminal-path-link-removed",
     group: TERMINAL,
     category: "exceptional",
-    title: "A path to a file removed since the link was drawn",
+    title: "A project folder removed since the link was drawn",
     description:
-      "Clicking src/summary/Draft.ts, which the daemon found when the output was drawn but which is gone now, opened the error alert instead of the viewer, titled \"Could not open the path\" and saying src/summary/Draft.ts does not exist any more. " +
-      "Its remedy says the file may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse. A folder that is gone, or one that is in more than one worktree, a program, or a file others can change, being refused uses the same alert with its own sentence and remedy.",
+      "Clicking docs/plans/summary-layout, a folder the daemon found when the output was drawn but which is gone now, opened the error alert instead of the file manager, titled \"Could not open the path\" and saying docs/plans/summary-layout does not exist any more. " +
+      "Its remedy says it may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse. A folder refused for being in more than one worktree, or one others can change, uses the same alert with its own sentence and remedy. A file of the project that is gone opens in the viewer, which says so in its own pane.",
     ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/src/summary/Draft.ts": { view: { path: "src/summary/Draft.ts" } } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Draft.ts")],
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", gone: true } },
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
   },
   {
     id: "terminal-path-link-removed-outside",
@@ -295,7 +295,7 @@ export const connectionScenarios: Scenario[] = [
     title: "A path outside the project removed since the link was drawn",
     description:
       "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file the daemon found when the output was drawn but which is gone now, opened the error alert instead of launching anything, titled \"Could not open the path\" and saying the path does not exist any more. " +
-      "It has no remedy line: unlike a project file, there are no project files to find it in. A path that is neither a file nor a folder, or that leads outside the project and the temporary folders, reads alike.",
+      "It has no remedy line: unlike a project path, there are no project files to find it in. A path that is neither a file nor a folder, or that leads outside the project and the temporary folders, reads alike.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", gone: true } },
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],

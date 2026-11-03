@@ -46,7 +46,7 @@ export function DocumentImage({
     const reading = new AbortController();
     void readDocumentImage(request, project, path, reading.signal)
       .then((reply) => {
-        if (!live || reply.type !== "project_file" || reply.path !== path) return;
+        if (!live || reply.path !== path) return;
         if (reply.file.size > RENDER_BUDGETS.documentImageBytes) {
           setRead({ path, tooLarge: true });
           return;

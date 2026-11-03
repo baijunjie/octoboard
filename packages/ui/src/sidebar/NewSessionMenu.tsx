@@ -76,7 +76,7 @@ export function NewSessionMenu({
       triggerRef={triggerRef}
       onClosed={() => setShortcutMode(undefined)}
       trigger={quick ? <Zap aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
-      items={sortProjects(projects, () => [], new Set()).map((project) => {
+      items={sortProjects(projects, () => [], new Set(), new Set()).map((project) => {
         const reason = unavailable.has(project.id) ? { state: t("sidebar.project.openSessionQuickUnavailable") } : undefined;
         return {
           label: project.name,

@@ -22,6 +22,13 @@ const FORMULA_OPTIONS = {
   maxSize: 500,
 };
 
+/** Loads the library, and its stylesheet, the first time a formula is drawn. */
+async function renderFormula(source: string, display: boolean): Promise<string> {
+  const katex = await import("katex");
+  await import("katex/dist/katex.min.css");
+  return katex.default.renderToString(source, { ...FORMULA_OPTIONS, displayMode: display });
+}
+
 /**
  * One formula. The library loads the first time a formula is drawn. An inline formula is a
  * left-to-right isolate in its paragraph. It stays a `span`, since a `div` there would sit inside
@@ -48,19 +55,14 @@ export function FormulaView({
   useEffect(() => {
     if (overBudget) return;
     let live = true;
-    void import("katex")
-      .then(async (katex) => {
-        await import("katex/dist/katex.min.css");
-        return katex.default.renderToString(source, { ...FORMULA_OPTIONS, displayMode: display });
-      })
-      .then(
-        (html) => {
-          if (live) setDrawn({ source, html });
-        },
-        () => {
-          if (live) setDrawn({ source, failed: true });
-        },
-      );
+    void renderFormula(source, display).then(
+      (html) => {
+        if (live) setDrawn({ source, html });
+      },
+      () => {
+        if (live) setDrawn({ source, failed: true });
+      },
+    );
     return () => {
       live = false;
     };

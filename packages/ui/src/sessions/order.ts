@@ -27,25 +27,27 @@ function outcomeKind(session: Pick<Session, "has_conversation" | "prompt_on_laun
   return session.has_conversation ? "done" : "idle";
 }
 
-function rankOf(session: Session, delegating: ReadonlySet<string>): number {
+/** A session's place in the status order (`STATUS_RANK`); one an account switch holds (`showsSwitching`, with
+ * `queuedSwitches` the store's `queuedAccountSwitches`) sorts where it will land, as one starting up does. */
+function rankOf(session: Session, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): number {
   const kind = sessionStatusKind(session, delegating);
-  if (kind === "starting" || showsSwitching(session)) return STATUS_RANK[outcomeKind(session)];
+  if (kind === "starting" || showsSwitching(session, queuedSwitches)) return STATUS_RANK[outcomeKind(session)];
   return STATUS_RANK[kind];
 }
 
 /** Pinned first; then by status (`STATUS_RANK`) unless `byStatus` is off (the user's
  * `Settings.sidebar_order_by_status`); then newest first. */
-export function compareSessions(a: Session, b: Session, delegating: ReadonlySet<string>, byStatus = true): number {
+export function compareSessions(a: Session, b: Session, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): number {
   return (
     Number(b.pinned) - Number(a.pinned) ||
-    (byStatus ? rankOf(a, delegating) - rankOf(b, delegating) : 0) ||
+    (byStatus ? rankOf(a, delegating, queuedSwitches) - rankOf(b, delegating, queuedSwitches) : 0) ||
     b.started_at - a.started_at
   );
 }
 
 /** `compareSessions` with `byStatus` bound, for `Array.prototype.sort`. */
-function sessionOrder(delegating: ReadonlySet<string>, byStatus: boolean): (a: Session, b: Session) => number {
-  return (a, b) => compareSessions(a, b, delegating, byStatus);
+function sessionOrder(delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus: boolean): (a: Session, b: Session) => number {
+  return (a, b) => compareSessions(a, b, delegating, queuedSwitches, byStatus);
 }
 
 /** The rank of a project with no unarchived session, which ends the list. */
@@ -53,16 +55,16 @@ export const INACTIVE_PROJECT_RANK = STATUS_RANK.archived;
 
 /** A project's most urgent unarchived session sets its position, using the same status priority
  * as the sessions within it. Projects with no unarchived session end the list. */
-export function projectRank(sessions: Session[], delegating: ReadonlySet<string>): number {
-  return sessions.reduce((rank, session) => Math.min(rank, rankOf(session, delegating)), INACTIVE_PROJECT_RANK);
+export function projectRank(sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): number {
+  return sessions.reduce((rank, session) => Math.min(rank, rankOf(session, delegating, queuedSwitches)), INACTIVE_PROJECT_RANK);
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /** Projects with unarchived sessions first; within each group, pinned, then rank (unless
  * `byStatus` is off), then name. */
-export function sortProjects(projects: Project[], sessionsOf: (project: Project) => Session[], delegating: ReadonlySet<string>, byStatus = true): Project[] {
-  return sortProjectsByRank(projects, new Map(projects.map((p) => [p.id, projectRank(sessionsOf(p), delegating)])), byStatus);
+export function sortProjects(projects: Project[], sessionsOf: (project: Project) => Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): Project[] {
+  return sortProjectsByRank(projects, new Map(projects.map((p) => [p.id, projectRank(sessionsOf(p), delegating, queuedSwitches)])), byStatus);
 }
 
 /** `sortProjects` for a caller that already holds each project's `projectRank`, by project id.
@@ -78,8 +80,8 @@ export function sortProjectsByRank(projects: Project[], rank: ReadonlyMap<string
 }
 
 /** A project's sessions in sidebar order: the ones not archived, ranked by `compareSessions`. */
-export function liveSessions(sessions: Session[], delegating: ReadonlySet<string>, byStatus = true): Session[] {
-  return sessions.filter((s) => s.status !== "archived").sort(sessionOrder(delegating, byStatus));
+export function liveSessions(sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): Session[] {
+  return sessions.filter((s) => s.status !== "archived").sort(sessionOrder(delegating, queuedSwitches, byStatus));
 }
 
 /** Archived sessions, most recently ended first. */
@@ -130,8 +132,8 @@ function nest(ordered: Session[]): NestedSession[] {
 
 /** The sessions that are not archived, in the sidebar's order (`liveSessions`), with the sessions
  * bound to a project session nested under it. */
-export function liveSessionRows(sessions: Session[], delegating: ReadonlySet<string>, byStatus = true): NestedSession[] {
-  return nest(liveSessions(sessions, delegating, byStatus));
+export function liveSessionRows(sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): NestedSession[] {
+  return nest(liveSessions(sessions, delegating, queuedSwitches, byStatus));
 }
 
 /** The archived sessions, most recently ended first (`archivedSessions`), with the ones bound to an
@@ -153,8 +155,8 @@ export function liveConsoleSessions(sessions: Session[], consoleId: string): Ses
 
 /** The sessions bound to the session `ownerId` (a console session, or a project session that started
  * some), in any status: pinned first, then most pressing (`compareSessions`, by status). */
-export function boundSessions(sessions: Session[], ownerId: string, delegating: ReadonlySet<string>): Session[] {
-  return sessions.filter((s) => s.bound_to === ownerId).sort((a, b) => compareSessions(a, b, delegating));
+export function boundSessions(sessions: Session[], ownerId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): Session[] {
+  return sessions.filter((s) => s.bound_to === ownerId).sort((a, b) => compareSessions(a, b, delegating, queuedSwitches));
 }
 
 /** `root` and every session under it, however deep: the sessions bound to it, those bound to them, and so
@@ -228,11 +230,11 @@ export function archiveNeedsConfirmation(sessions: Iterable<Session>, session: S
 /** The unarchived sessions bound to `ownerId` or to one bound to it. Every process in
  * this group ends on confirmation, regardless of how the session was opened or bound. An
  * archived lead still links its descendants to the owner. */
-export function boundSessionsArchivedWith(sessions: Session[], ownerId: string, delegating: ReadonlySet<string>): Session[] {
-  const direct = boundSessions(sessions, ownerId, delegating);
+export function boundSessionsArchivedWith(sessions: Session[], ownerId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): Session[] {
+  const direct = boundSessions(sessions, ownerId, delegating, queuedSwitches);
   const ids = new Set(direct.map((s) => s.id));
   const nested = sessions.filter((s) => s.bound_to && ids.has(s.bound_to));
-  return [...direct, ...nested.sort((a, b) => compareSessions(a, b, delegating))].filter((s) => s.status !== "archived");
+  return [...direct, ...nested.sort((a, b) => compareSessions(a, b, delegating, queuedSwitches))].filter((s) => s.status !== "archived");
 }
 
 /** The console session above `session`, which it reports to directly or through the lead session
@@ -278,6 +280,7 @@ export function boundElsewhere(
   sessions: Session[],
   owners: Map<string, Session>,
   delegating: ReadonlySet<string>,
+  queuedSwitches: ReadonlySet<string>,
   byStatus = true,
 ): { count: number; owners: { owner: Session; count: number }[] } | undefined {
   const byId = new Map(sessions.map((s) => [s.id, s]));
@@ -293,7 +296,7 @@ export function boundElsewhere(
     else counts.set(owner.id, { owner, count: 1 });
   }
   if (count === 0) return undefined;
-  return { count, owners: [...counts.values()].sort((a, b) => compareSessions(a.owner, b.owner, delegating, byStatus)) };
+  return { count, owners: [...counts.values()].sort((a, b) => compareSessions(a.owner, b.owner, delegating, queuedSwitches, byStatus)) };
 }
 
 /** The sessions a console session's focus mode lists, in whatever project and status: those bound
@@ -316,6 +319,7 @@ export function focusGroups(
   sessions: Session[],
   consoleSessionId: string,
   delegating: ReadonlySet<string>,
+  queuedSwitches: ReadonlySet<string>,
   byStatus = true,
 ): { project: Project; sessions: NestedSession[] }[] {
   const listed = focusListed(sessions, consoleSessionId);
@@ -324,13 +328,14 @@ export function focusGroups(
     projects.filter((p) => sessionsOf(p).length > 0),
     sessionsOf,
     delegating,
+    queuedSwitches,
     byStatus,
-  ).map((project) => ({ project, sessions: liveSessionRows(sessionsOf(project), delegating, byStatus) }));
+  ).map((project) => ({ project, sessions: liveSessionRows(sessionsOf(project), delegating, queuedSwitches, byStatus) }));
 }
 
 /** One group of `focusGroups`: the rows of `project` alone, out of every session of the console. */
-export function focusGroupRows(sessions: Session[], project: Project, consoleSessionId: string, delegating: ReadonlySet<string>, byStatus = true): NestedSession[] {
-  return liveSessionRows(liveInProject(focusListed(sessions, consoleSessionId), project), delegating, byStatus);
+export function focusGroupRows(sessions: Session[], project: Project, consoleSessionId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): NestedSession[] {
+  return liveSessionRows(liveInProject(focusListed(sessions, consoleSessionId), project), delegating, queuedSwitches, byStatus);
 }
 
 /** The status of the most urgent session of `sessions` by the sidebar's status rank, independent of
@@ -338,18 +343,18 @@ export function focusGroupRows(sessions: Session[], project: Project, consoleSes
  * project's row and a focus-mode switch chip each mark their sessions with. A session starting up or
  * switching account counts where it will land (`rankOf`) but is drawn as it is. Archived sessions are
  * left out, so `undefined` when none is left. Ties take the newest session, as rows do. */
-export function topStatus(sessions: Iterable<Session>, delegating: ReadonlySet<string>): ShownStatusKind | undefined {
+export function topStatus(sessions: Iterable<Session>, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): ShownStatusKind | undefined {
   let selected: Session | undefined;
   let selectedRank = Infinity;
   for (const session of sessions) {
     if (session.status === "archived") continue;
-    const rank = rankOf(session, delegating);
+    const rank = rankOf(session, delegating, queuedSwitches);
     if (!selected || rank < selectedRank || (rank === selectedRank && session.started_at > selected.started_at)) {
       selected = session;
       selectedRank = rank;
     }
   }
-  return selected ? sessionShownStatusKind(selected, delegating) : undefined;
+  return selected ? sessionShownStatusKind(selected, delegating, queuedSwitches) : undefined;
 }
 
 /** One chip of a console session's focus mode's switch strip: a console session and the top status
@@ -363,14 +368,14 @@ export interface SwitchStripEntry {
  * top status among itself and its bound sessions. The order is fixed, pinned first and
  * then by when they started (ties by id), not ranked by status like the sidebar's list: a chip stays
  * where it is while statuses change, so cycling through them never skips or repeats one. */
-export function switchStrip(sessions: Session[], consoleId: string, delegating: ReadonlySet<string>): SwitchStripEntry[] {
+export function switchStrip(sessions: Session[], consoleId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): SwitchStripEntry[] {
   const consoleSessions = sessions
     .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived")
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.started_at - b.started_at || (a.id < b.id ? -1 : 1));
   return consoleSessions.map((consoleSession) => ({
     consoleSession,
     // The fallback is never taken: the chip's own console session is not archived.
-    status: topStatus([consoleSession, ...sessions.filter((s) => s.bound_to === consoleSession.id)], delegating) ?? sessionShownStatusKind(consoleSession, delegating),
+    status: topStatus([consoleSession, ...sessions.filter((s) => s.bound_to === consoleSession.id)], delegating, queuedSwitches) ?? sessionShownStatusKind(consoleSession, delegating, queuedSwitches),
   }));
 }
 
@@ -383,9 +388,10 @@ export function sessionsInTreeOrder(
   sessions: Session[],
   include: (session: Session) => boolean,
   delegating: ReadonlySet<string>,
+  queuedSwitches: ReadonlySet<string>,
   byStatus = true,
 ): Session[] {
-  const order = sessionOrder(delegating, byStatus);
+  const order = sessionOrder(delegating, queuedSwitches, byStatus);
   const picked = sessions.filter(include);
   return consoles.flatMap((console) => {
     const mine = picked.filter((s) => s.console_id === console.id);
@@ -395,6 +401,7 @@ export function sessionsInTreeOrder(
         projects.filter((p) => p.console_id === console.id),
         (project) => sessions.filter((s) => s.project_id === project.id),
         delegating,
+        queuedSwitches,
         byStatus,
       ).flatMap((project) =>
         // Nested as the project's list nests them, so a session bound to a project session follows
@@ -403,4 +410,31 @@ export function sessionsInTreeOrder(
       ),
     ];
   });
+}
+
+/** The archive a deletion empties: a console's own archive, or the archive of one of its projects or
+ * console sessions. */
+export type ArchivedDeletionRequest = {
+  console: Pick<Console, "id">;
+  project?: Pick<Project, "id">;
+  consoleSession?: Pick<Session, "id">;
+};
+
+/** What deleting the archived sessions of `request`'s scope takes, from `sessions`: `count` is how many
+ * the archive view lists for that scope, `withThem` how many archived sessions go along with those, and
+ * `targetIds` every session the deletion removes. All of a console's archived console sessions take
+ * their archived bound sessions with them; a project's archive, and a console session's own, do not
+ * reach any console session. */
+export function archivedDeletionScope(sessions: Session[], request: ArchivedDeletionRequest): { count: number; withThem: number; targetIds: string[] } {
+  const consoleSessions = request.project || request.consoleSession
+    ? []
+    : sessions.filter((s) => s.console_id === request.console.id && s.role === "console" && s.status === "archived");
+  const withThem = consoleSessions.flatMap((owner) => boundArchivedSessions(sessions, owner.id)).length;
+  const roots = request.project
+    ? sessions.filter((s) => s.project_id === request.project!.id && s.status === "archived")
+    : request.consoleSession
+      ? boundArchivedSessions(sessions, request.consoleSession.id)
+      : consoleSessions;
+  const targets = new Map(roots.flatMap((s) => [s, ...boundArchivedSessions(sessions, s.id)]).map((s) => [s.id, s]));
+  return { count: roots.length, withThem, targetIds: Array.from(targets.keys()) };
 }

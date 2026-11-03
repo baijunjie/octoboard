@@ -1,5 +1,6 @@
 import type React from "react";
 
+import { AlertSessionLines } from "../alerts/AlertSessionLines";
 import { DiagnosticBlock } from "../alerts/DiagnosticBlock";
 import { DetailsDisclosure } from "../alerts/ErrorDetailsDisclosure";
 import { RecoveryGuidance } from "../alerts/ErrorGuidance";
@@ -25,8 +26,11 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
   return (
     <>
       {/* Hidden when empty, as for a code with no opening sentence (`noSummary` in `codes.ts`), so it adds no gap above
-        the remedy. */}
-      <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] empty:hidden">{alert.content ?? alert.message}</div>
+        the remedy. An alert about a session names it first. */}
+      <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] empty:hidden">
+        <AlertSessionLines session={alert.session} fallbackName={alert.sessionName} />
+        {alert.content ?? alert.message}
+      </div>
       {alert.classification.kind === "unexpected"
         ? <>
           {issueGuidance && <p>{issueGuidance}</p>}

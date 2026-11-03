@@ -27,7 +27,6 @@ function render(
       agentAvailability: new Map(Object.entries(availability).map(([agent, state]) => [agent as Agent, { agent: agent as Agent, availability: state, default_account_dir: null }])),
     },
     request: handler as never,
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   mountHost(<AddAgentDialog onClose={onClose} />, { daemon });

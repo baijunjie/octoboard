@@ -16,7 +16,7 @@ import { useStickyScrollFade } from "../scroll/scrollFade";
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { joinPhrases } from "../../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import type { DirEntry, Event } from "../../protocol";
+import type { DirEntry } from "../../protocol";
 import { abbreviateHome, isAbsoluteOrHomePath } from "../../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../../store";
 import { Dialog } from "./Dialog";
@@ -94,7 +94,7 @@ export function DirectoryPicker({
       return true;
     };
     try {
-      const event = (await request({ type: "list_dir", path: targetPath })) as Extract<Event, { type: "dir_listing" }>;
+      const event = await request({ type: "list_dir", path: targetPath });
       if (!take()) return;
       setFailure(undefined);
       setResolvedPath(event.path);

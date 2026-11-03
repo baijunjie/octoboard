@@ -11,7 +11,7 @@ import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemonStoreEqual } from "../store";
 import { CountedGlyph } from "./CountedGlyph";
 import { nestedPopovers } from "./nestedPopover";
-import { PANEL_ATTRIBUTE, ProcessCounts, type ProcessRow } from "./ProcessCounts";
+import { PANEL_ATTRIBUTE, ProcessCounts, type ProcessRow } from "../process/ProcessCounts";
 import { RailPanelEntry } from "./RailPanelEntry";
 
 const TRIGGER_ID = "rail-processes";

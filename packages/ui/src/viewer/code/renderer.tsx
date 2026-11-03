@@ -19,9 +19,10 @@ import {
 import { File, FileDiff, WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker";
 import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useRenderLatest } from "../../components/hooks/useLatest";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { RENDER_BUDGETS } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
@@ -239,16 +240,13 @@ function useDrawnCallback<Instance = unknown>(
   /** Also told of every drawing, with the library's instance. */
   onRender?: (node: HTMLElement, instance: Instance, phase: PostRenderPhase) => void,
 ): (node: HTMLElement, instance: Instance, phase: PostRenderPhase) => void {
-  const latest = useRef({ onDrawn, onRender });
-  // Written during render, which leaves this hook out of the React Compiler: the library can call
-  // back from its own effects within the same commit, which must already see these.
-  // eslint-disable-next-line react-hooks/refs
-  latest.current = { onDrawn, onRender };
+  // The library can call back from its own effects within the same commit, which must already see these.
+  const latest = useRenderLatest({ onDrawn, onRender });
   return useCallback((node, instance, phase) => {
-    latest.current.onRender?.(node, instance, phase);
+    latest().onRender?.(node, instance, phase);
     // `[data-code]` is the library's markup for drawn code; a library upgrade is checked against it.
-    if (phase !== "unmount" && (node.shadowRoot ?? node).querySelector("[data-code]")) latest.current.onDrawn?.();
-  }, []);
+    if (phase !== "unmount" && (node.shadowRoot ?? node).querySelector("[data-code]")) latest().onDrawn?.();
+  }, [latest]);
 }
 
 export interface FileRenderProps {
@@ -295,7 +293,7 @@ export const HighlightedFile = memo(function HighlightedFile({
   // The library numbers the empty line after a final newline as a line of its own.
   const file = useMemo<FileContents | undefined>(
     () => (language ? { name, contents: text.endsWith("\n") ? text.slice(0, -1) : text, lang: language.lang } : undefined),
-    [name, text, language?.lang],
+    [name, text, language],
   );
   // Left uncontrolled without a line, so what the user selects themselves is theirs.
   const selection = useMemo(() => (line === undefined ? undefined : { start: line, end: line }), [line]);
@@ -359,11 +357,8 @@ export const RenderedDiff = memo(function RenderedDiff({
   const [ended, setEnded] = useState<{ diff: FileDiffMetadata; how: "all" | "stopped" }>();
   const how = ended && ended.diff === fileDiff ? ended.how : undefined;
   // Called back with the latest props, so a new callback each render does not reset the expansion.
-  const latest = useRef({ loadBodies, labels, trailing, onExpansion });
-  // Written during render, which leaves this component out of the React Compiler: the library can
-  // ask for the labels while it draws within the same commit, which must already see these.
-  // eslint-disable-next-line react-hooks/refs
-  latest.current = { loadBodies, labels, trailing, onExpansion };
+  // The library can ask for the labels while it draws within the same commit, which must already see these.
+  const latest = useRenderLatest({ loadBodies, labels, trailing, onExpansion });
   const [drawnLabels, setDrawnLabels] = useState<ReturnType<typeof separatorLabels>>([]);
   const onLabels = useCallback((root: ShadowRoot) => {
     const next = separatorLabels(root);
@@ -377,21 +372,20 @@ export const RenderedDiff = memo(function RenderedDiff({
   const expansion = useMemo(
     () =>
       fileDiff
-        // eslint-disable-next-line react-hooks/refs -- read when the library calls back, never while rendering
         ? new Expansion({
-          load: () => latest.current.loadBodies!(),
-          labels: () => latest.current.labels,
+          load: () => latest().loadBodies!(),
+          labels: () => latest().labels,
           trailing: () => {
-            const lines = latest.current.trailing;
+            const lines = latest().trailing;
             return lines === undefined ? undefined : { gap: fileDiff.hunks.length, lines };
           },
-          report: (status) => latest.current.onExpansion?.(status),
+          report: (status) => latest().onExpansion?.(status),
           showAll: () => setEnded({ diff: fileDiff, how: "all" }),
           stop: () => setEnded({ diff: fileDiff, how: "stopped" }),
           onLabels,
         })
         : undefined,
-    [fileDiff],
+    [fileDiff, latest, onLabels],
   );
   const expandable = loadBodies !== undefined;
   useEffect(() => () => expansion?.detach(), [expansion]);

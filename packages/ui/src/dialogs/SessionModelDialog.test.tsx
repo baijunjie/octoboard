@@ -37,7 +37,6 @@ async function mount(session: Session, models: "pending" | "unavailable" | "empt
       sessions: new Map([[session.id, session]]),
     },
     request: request as Daemon["request"],
-    raiseError: vi.fn(),
     showNotice: vi.fn(),
   });
   const { store } = daemon;

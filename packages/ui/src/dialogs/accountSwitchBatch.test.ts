@@ -7,6 +7,7 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
 import { sessionWithDescendants } from "../sessions/order";
+import { holdsAccountSwitch, sessionShownStatusKind } from "../sessions/sessionStatus";
 import { applyDaemonEvent, createStateStore, setAccountSwitchesQueued } from "../store";
 
 const console_ = consoleOf("c-1", "Main");
@@ -15,6 +16,12 @@ const session = (id: string, extra: Partial<Session> = {}): Session => ({ ...ses
 
 function storeOf(sessions: Session[]) {
   return createStateStore({ sessions: new Map(sessions.map((s) => [s.id, s])) });
+}
+
+/** Whether the session `id` shows as switching its account, as the window derives it from the store. */
+function switching(store: ReturnType<typeof storeOf>, id: string): boolean {
+  const state = store.getState();
+  return holdsAccountSwitch(state.sessions.get(id)!, state.queuedAccountSwitches);
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void; reject: (error: Error) => void } {
@@ -67,17 +74,17 @@ it("runs at most four switches at once, starts the next as one finishes, and cle
   expect(ACCOUNT_SWITCH_CONCURRENCY).toBe(4);
   expect(started).toEqual(["s0", "s1", "s2", "s3"]);
   // Queued sessions show as switching, running or not.
-  expect(ids.every((id) => store.getState().sessions.get(id)!.switching_account === true)).toBe(true);
+  expect(ids.every((id) => switching(store, id))).toBe(true);
   gates.get("s1")!.resolve();
   await flush();
   expect(started).toEqual(["s0", "s1", "s2", "s3", "s4"]);
-  expect(store.getState().sessions.get("s1")!.switching_account).toBeUndefined();
+  expect(switching(store, "s1")).toBe(false);
   for (const id of ids) gates.get(id)!.resolve();
   await done;
   expect(peak).toBe(4);
   expect(started).toEqual(ids);
   expect(store.getState().queuedAccountSwitches.size).toBe(0);
-  expect(ids.some((id) => store.getState().sessions.get(id)!.switching_account)).toBe(false);
+  expect(ids.some((id) => switching(store, id))).toBe(false);
 });
 
 it("skips a session that was archived, deleted or already moved before its turn, and reports no failure for it", async () => {
@@ -133,7 +140,7 @@ it("does not add a session another batch of the window already holds", async () 
   const second = vi.fn(async (_id: string) => {});
   await batch(store, ["a", "b"], "a-1", second);
   expect(second.mock.calls.map(([id]) => id)).toEqual(["b"]);
-  expect(store.getState().sessions.get("a")!.switching_account).toBe(true);
+  expect(switching(store, "a")).toBe(true);
   gate.resolve();
   await firstDone;
 });
@@ -145,22 +152,37 @@ it("lets an earlier batch finish first without touching what a later, overlappin
   const secondDone = batch(store, ["a", "b"], "a-1", () => gates.b.promise);
   gates.a.resolve();
   expect(await firstDone).toEqual({ switched: 1, failed: 0 });
-  const shown = (id: string) => store.getState().sessions.get(id)!.switching_account;
-  expect(shown("a")).toBeUndefined();
-  expect(shown("b")).toBe(true);
+  expect(switching(store, "a")).toBe(false);
+  expect(switching(store, "b")).toBe(true);
   gates.b.resolve();
   expect(await secondDone).toEqual({ switched: 1, failed: 0 });
-  expect(shown("b")).toBeUndefined();
+  expect(switching(store, "b")).toBe(false);
   expect(store.getState().queuedAccountSwitches.size).toBe(0);
 });
 
-it("leaves the sessions map alone when queueing changes nothing it shows", () => {
-  const store = storeOf([session("a")]);
+it("keeps the stored session the daemon's record while it is queued, and shows it as switching all the same", () => {
+  const wire = session("a", { status: "interrupted", has_conversation: true });
+  const store = storeOf([wire]);
   const before = store.getState().sessions;
-  setAccountSwitchesQueued(store, ["gone"], true);
-  setAccountSwitchesQueued(store, ["gone"], false);
-  setAccountSwitchesQueued(store, ["a"], false);
+  setAccountSwitchesQueued(store, ["a", "gone"], true);
   expect(store.getState().sessions).toBe(before);
+  expect(store.getState().sessions.get("a")).toBe(wire);
+  expect(store.getState().sessions.get("a")!.switching_account).toBeUndefined();
+  expect(sessionShownStatusKind(wire, new Set(), store.getState().queuedAccountSwitches)).toBe("switching");
+  // The daemon's own updates are stored as sent while the queue holds the session.
+  const update = session("a", { status: "interrupted", has_conversation: true, account_id: "a-1" });
+  applyDaemonEvent(store, { type: "session_upserted", session: update });
+  expect(store.getState().sessions.get("a")).toBe(update);
+  expect(switching(store, "a")).toBe(true);
+  setAccountSwitchesQueued(store, ["a", "gone"], false);
+  expect(sessionShownStatusKind(update, new Set(), store.getState().queuedAccountSwitches)).toBe("interrupted");
+});
+
+it("leaves the state alone when queueing changes nothing", () => {
+  const store = storeOf([session("a")]);
+  const before = store.getState();
+  setAccountSwitchesQueued(store, ["a"], false);
+  expect(store.getState()).toBe(before);
 });
 
 it("keeps a queued session shown as switching through the daemon's own updates, and drops the mark when the batch lets it go", async () => {
@@ -169,34 +191,30 @@ it("keeps a queued session shown as switching through the daemon's own updates, 
   const done = batch(store, ["a"], "a-1", () => gate.promise);
   applyDaemonEvent(store, { type: "session_upserted", session: session("a", { switching_account: true }) });
   applyDaemonEvent(store, { type: "session_upserted", session: session("a", { switching_account: true, account_id: "a-1" }) });
-  const switching = store.getState().sessions;
   applyDaemonEvent(store, { type: "session_upserted", session: session("a", { account_id: "a-1" }) });
-  expect(store.getState().sessions).toBe(switching);
-  expect(store.getState().sessions.get("a")!.switching_account).toBe(true);
+  expect(switching(store, "a")).toBe(true);
   gate.resolve();
   await done;
-  expect(store.getState().sessions.get("a")!.switching_account).toBeUndefined();
+  expect(switching(store, "a")).toBe(false);
 });
 
-it("remembers a daemon switch starting under the queue overlay after the batch lets go", async () => {
+it("still shows a daemon switch that started while the session was queued once the batch lets go", async () => {
   const store = storeOf([session("a")]);
   const gate = deferred();
   const done = batch(store, ["a"], "a-1", () => gate.promise);
-  const switching = store.getState().sessions;
   applyDaemonEvent(store, { type: "session_upserted", session: session("a", { switching_account: true }) });
-  expect(store.getState().sessions).toBe(switching);
   gate.resolve();
   await done;
-  expect(store.getState().sessions.get("a")!.switching_account).toBe(true);
+  expect(switching(store, "a")).toBe(true);
   applyDaemonEvent(store, { type: "session_upserted", session: session("a") });
-  expect(store.getState().sessions.get("a")!.switching_account).toBeUndefined();
+  expect(switching(store, "a")).toBe(false);
 });
 
 it("keeps a session the daemon says is switching shown as such after a batch lets it go", async () => {
   const store = storeOf([session("a")]);
   applyDaemonEvent(store, { type: "session_upserted", session: session("a", { switching_account: true }) });
   await batch(store, ["a"], "a-1", async () => {});
-  expect(store.getState().sessions.get("a")!.switching_account).toBe(true);
+  expect(switching(store, "a")).toBe(true);
 });
 
 it("reports the failures in one alert with the details of a failure that keeps a diagnostic apart", async () => {

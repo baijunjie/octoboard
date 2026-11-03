@@ -36,7 +36,7 @@ export interface NotificationRequest {
   recovery?: ErrorRecovery;
 }
 
-/** What a call site says about the error alert it raises (see `Daemon.raiseError`). */
+/** What a call site says about the error alert it raises (see `raiseError`). */
 export interface AlertOptions {
   /** The plain name of what failed, with no name in it. `undefined` only where the alert is titled for its kind, for an
    * error nothing caught (`main.tsx`), or where the request is built only for its body and details and the caller
@@ -55,8 +55,8 @@ export interface AlertOptions {
   keepTitle?: boolean;
 }
 
-/** The error notification every raising route builds for `error` (`Daemon.raiseError` and `raiseError`), with the daemon's
- * code and params kept when it is an error that has them. */
+/** The error notification `raiseError` builds for `error`, with the daemon's code and params kept when it is an error that
+ * has them. */
 export function errorNotification(error: unknown, { title, session, recovery, content, keepTitle }: AlertOptions): NotificationRequest {
   const presentation = errorPresentation(error);
   return { kind: "error", message: errorText(presentation), session, title, content, keepTitle, error, daemonError: presentation, recovery };

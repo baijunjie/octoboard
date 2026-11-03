@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import { CodedError } from "../errors/codedError";
-import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
-import { useT } from "../i18n/react";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { ProcessTree, SessionBranchItem } from "../protocol";
 import { useDaemon } from "../store";
 import { shownError } from "./shownError";
@@ -97,7 +96,6 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
       },
       accept: (reply) => () => {
         if (reply instanceof CodedError) return { round, items: [], failed: false, inspection: reply.params.inspection || undefined };
-        if (reply.type !== "project_removal_inspected") return inspectionFailed;
         return { round, items: reply.items, failed: false, inspection: reply.inspection || undefined };
       },
       failed: () => inspectionFailed,
@@ -124,20 +122,16 @@ type ResponsibleAnswer = { attempt: number; items: SessionBranchItem[]; error?: 
  * last failure stays in `error` while a retry is out (`pending`), so what shows it, and the control
  * that retried, are not taken away under focus. */
 export function useResponsibleBranches(sessionId: string, enabled: boolean): { items: SessionBranchItem[]; pending: boolean; error: ErrorPresentation | undefined; retry: () => void } {
-  const t = useT();
   const { request } = useDaemon();
   const [attempt, setAttempt] = useState(0);
   const { value, send, reconnects } = useLatestRequest<ResponsibleAnswer | undefined>({ scope: undefined, initial: undefined });
-  const latest = useLatest({ request, send, enabled, t });
+  const latest = useLatest({ request, send, enabled });
   useEffect(() => {
     if (!enabled) return;
     const { request, send } = latest.current;
     void send({
       request: () => request({ type: "inspect_session_branches", sessions: [sessionId] }),
-      accept: (result) => () =>
-        result.type === "session_branches_inspected"
-          ? { attempt, items: result.items }
-          : { attempt, items: [], error: errorPresentation(new Error(latest.current.t("error.unexpectedReply"))) },
+      accept: (result) => () => ({ attempt, items: result.items }),
       failed: (failure, _held, t) => ({ attempt, items: [], error: shownError(failure, t) }),
       wanted: () => latest.current.enabled,
     });

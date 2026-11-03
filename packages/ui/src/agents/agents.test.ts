@@ -4,7 +4,7 @@ import { accountOf } from "../fixtures/builders";
 import { accountsByAgent, agentChoiceBadge, agentPickerOptions, defaultAccountName, listedPickerAgents, noAgentState, projectSessionAgent, selectableAgent } from "./agents";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
-import type { Account, Agent, AgentAvailability } from "../protocol";
+import { AGENTS, type Account, type Agent, type AgentAvailability } from "../protocol";
 
 // Real English messages rather than a stub, so a wording change that breaks a placeholder is
 // caught here too.
@@ -14,7 +14,7 @@ const acct = (id: string, agent: Agent, name: string): Account => accountOf(id, 
 
 const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(
-    (["claude", "codex", "grok"] as Agent[]).map((agent) => [
+    AGENTS.map((agent) => [
       agent,
       { agent, availability: entries[agent] ?? "not_determined", default_account_dir: null },
     ]),

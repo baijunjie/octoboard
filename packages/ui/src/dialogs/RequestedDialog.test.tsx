@@ -12,7 +12,7 @@ import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";
 import { CodedError } from "../errors/codedError";
 import { DaemonProvider, type Daemon } from "../store";
-import { testDaemon } from "../test/testDaemon";
+import { testDaemon, withEmptyReplies } from "../test/testDaemon";
 import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
@@ -24,15 +24,6 @@ const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Search API");
 const owner = sessionOf("s-owner", console_.id, project.id, "Owner", "idle");
 const account: Account = accountOf("a-1", "claude", "Work", "/home/dev/.claude-work");
-
-/** `request` answering a process list it gives no list for (a stand-in that answers every other request with `ack`)
- * as a list of no processes: the daemon answers `list_processes` with nothing else. */
-function withProcessList(request: RequestHandler): RequestHandler {
-  return async (body) => {
-    const reply = await request(body);
-    return body.type === "list_processes" && reply.type !== "processes_listed" ? { type: "processes_listed", id: null, trees: [] } : reply;
-  };
-}
 
 /** Mounts the dialog for `dialog` over a store holding `sessions` and `accounts`. */
 function mount(
@@ -47,8 +38,7 @@ function mount(
       projects: new Map((callbacks.projects ?? []).map((p) => [p.id, p])),
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     },
-    request: vi.fn(withProcessList(callbacks.request ?? (async () => ({ type: "ack", id: null })))) as never,
-    raiseError: vi.fn(),
+    request: vi.fn(withEmptyReplies(callbacks.request ?? (async () => ({ type: "ack", id: null })))) as never,
     showNotice: vi.fn(),
   });
   const content = <DaemonProvider value={daemon}>
@@ -432,8 +422,10 @@ it("reports a refused unused deletion without offering an unguarded confirmation
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
   expect(daemon.request).toHaveBeenCalledTimes(1);
-  expect(daemon.raiseError).toHaveBeenCalledOnce();
+  // The alert names the session it could not delete.
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ session: unused.id })]);
   expect(onClose).toHaveBeenCalledOnce();
+  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });
 
 it("checks the native records of archived children as well as their owner", async () => {
@@ -656,7 +648,7 @@ it("preserves process choices through another inspection and selects newly found
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id, keep_process_ids: [TREE.id] });
 });
 
-it.each(["rejection", "unexpected reply", "empty success"] as const)("preserves only in-scope keep choices after a reinspection %s, while a successful empty result clears them", async (outcome) => {
+it.each(["rejection", "empty success"] as const)("preserves only in-scope keep choices after a reinspection %s, while a successful empty result clears them", async (outcome) => {
   const child = sessionOf("s-child", console_.id, project.id, "Child", "idle", { bound_to: owner.id });
   const childTree = { ...TREE, id: "4300:2", session_id: child.id, command: "node child.js" };
   const joined = sessionOf("s-joined", console_.id, project.id, "Joined", "idle", { bound_to: owner.id });
@@ -666,7 +658,6 @@ it.each(["rejection", "unexpected reply", "empty success"] as const)("preserves 
       if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
       await answer.promise;
       if (outcome === "rejection") throw new Error("Inspection unavailable");
-      if (outcome === "unexpected reply") return { type: "ack", id: null };
       return { type: "session_branches_inspected", id: null, items: [], processes: [] };
     },
   });
@@ -1278,7 +1269,7 @@ it("names the session and its owner in the unbind confirmation and releases only
   await submitDialog();
   expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "release_session", session: unbindable.id });
   expect(onClose).toHaveBeenCalledOnce();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("is a warning confirmation when unbinding: the warning icon leads, the action is primary, the consequence is shown and each name appears once", () => {
@@ -1320,13 +1311,13 @@ it("keeps the unbind confirmation open when the release fails unexpectedly", asy
 
 it("closes the unbind confirmation silently when the daemon refuses with session_not_bound", async () => {
   const onClose = vi.fn();
-  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
+  mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
     onClose,
     request: async () => { throw new CodedError("`s-unbindable` is not bound to any owner, so there is nothing to release", "session_not_bound", { session: unbindable.id }); },
   });
   await submitDialog();
   expect(onClose).toHaveBeenCalledOnce();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
@@ -1404,7 +1395,7 @@ it.each([
     daemon.store.setState({ sessions: new Map(rest.map((s) => [s.id, s])) });
   });
   expect(onClose).toHaveBeenCalledOnce();
-  expect(daemon.raiseError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 

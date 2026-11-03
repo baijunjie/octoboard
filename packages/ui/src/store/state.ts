@@ -104,12 +104,10 @@ export interface State {
    * names them all again, and one goes only on `shell_terminal_deleted` or with its project. */
   shellTerminals: Map<string, ShellTerminal>;
   /** The sessions an account-switch batch of this window has not finished with, queued or running
-   * (see `setAccountSwitchesQueued`). Client state, which the daemon knows nothing of. */
+   * (see `setAccountSwitchesQueued`). Client state, which the daemon knows nothing of: `sessions` hold
+   * the daemon's records as sent, and what a session shows or allows adds this set to their
+   * `Session.switching_account` (`holdsAccountSwitch`). */
   queuedAccountSwitches: ReadonlySet<string>;
-  /** The sessions the daemon last said were switching their account, kept apart from what
-   * `sessions` shows (`Session.switching_account`, which a queued session also has set), so that
-   * leaving the queue puts back what the daemon said. */
-  daemonSwitching: ReadonlySet<string>;
 }
 
 /** The three entries every run begins with, before the daemon's one-time determination lands. */
@@ -140,7 +138,6 @@ const initialState: State = {
   homeDir: null,
   shellTerminals: new Map(),
   queuedAccountSwitches: new Set(),
-  daemonSwitching: new Set(),
 };
 
 /** A store holding the empty state with `initial` laid over it. */

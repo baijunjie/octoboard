@@ -7,6 +7,7 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { setGitModeWorktree } from "../../project-browser/gitModeWorktree";
 import { CodedError } from "../../errors/codedError";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { presence, stubListMotion } from "../../components/motion/listMotionTestSupport";
 import { isolate } from "../../i18n/isolate";
 import { PanelFrameProvider, type PanelFrame } from "../../components/panel/PanelHeader";
@@ -62,7 +63,7 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, fram
     }
     return { type: "ack", id: null } as Event;
   });
-  const daemon = testDaemon({ store, request, raiseError: vi.fn(), showNotice: vi.fn() });
+  const daemon = testDaemon({ store, request, showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -224,12 +225,13 @@ it("starts a terminal in the project's own directory for an empty place, not in 
 });
 
 it("words a refused start in a folder as that folder being gone, and a refused start elsewhere by its own code", async () => {
-  const raiseError = vi.fn();
   const gone = new CodedError("not a folder", "path_not_a_directory", { path: "/w/src" });
-  const daemon = testDaemon({ request: vi.fn(async () => { throw gone; }), raiseError });
+  const daemon = testDaemon({ request: vi.fn(async () => { throw gone; }) });
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   await startShellTerminal(daemon, "p", { place: { path: "src" } });
+  // The same failure without the folder's remedy is a second alert rather than a copy of the first.
   await startShellTerminal(daemon, "p", { place: {} });
-  expect(raiseError.mock.calls.map((call) => call[1].recovery)).toEqual(["hostPathGone", undefined]);
+  expect(errorAlerts.getSnapshot().map((alert) => alert.recovery)).toEqual(["hostPathGone", undefined]);
 });
 
 it("starts no second terminal from the header while the first, with none yet, is being started", async () => {
@@ -281,7 +283,7 @@ it("joins the earlier start still pending when the later one has already settled
   const request = vi.fn((body: RequestBody) => new Promise<Event>((resolve) => {
     if (body.type === "create_shell_terminal") holds.push(resolve);
   }));
-  const daemon = testDaemon({ store, request, raiseError: vi.fn() });
+  const daemon = testDaemon({ store, request });
   const created = (id: string) => ({ type: "shell_terminal_created", id: null, shell_terminal: shell(id, 1) }) as Event;
   const first = startShellTerminal(daemon, "p");
   const second = startShellTerminal(daemon, "p");

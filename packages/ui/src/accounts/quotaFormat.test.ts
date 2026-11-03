@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { isolate } from "../i18n/isolate";
-import { format, type Translate } from "../i18n/catalog";
+import { translatorFor, type Translate } from "../i18n/catalog";
 import type { QuotaWindow } from "../protocol";
 import type { AccountQuota } from "../protocol";
 import { nextResetCredit, expiryLine, exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, resetCreditsSummary, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
 
-const t: Translate = (key, ...args) => format("en", key, args[0]);
+const t: Translate = translatorFor("en");
 const MINUTE = 60_000;
 const NOW = 1_000_000_000;
 const claude = { agent: "claude", windows: [] } as const;

@@ -49,7 +49,7 @@ const quotaOf = (reset_credits: AccountQuota["reset_credits"]): AccountQuota => 
 function fakeDaemon(quota: AccountQuota, reply: (body: RequestBody) => Promise<Event>) {
   const request = vi.fn(reply);
   const showNotice = vi.fn();
-  const daemon = testDaemon({ state: { accountQuotas: [quota] }, request, showNotice, raiseError: vi.fn() });
+  const daemon = testDaemon({ state: { accountQuotas: [quota] }, request, showNotice });
   const { store } = daemon;
   return { daemon, request, showNotice, store };
 }

@@ -5,7 +5,7 @@ import { accountOf, pageOf, sessionOf } from "../fixtures/builders";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
 import type { Event, Project, ShellTerminal } from "../protocol";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
-import { createDaemon, dismissAccountLogin, trackAccountLogin } from ".";
+import { createDaemon, dismissAccountLogin, setAccountSwitchesQueued, trackAccountLogin } from ".";
 
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
@@ -103,6 +103,25 @@ it("remembers the logins this window started until they end, and forgets those a
   } as unknown as Event;
   client.onEvents!([snapshot]);
   expect(daemon.store.getState().loginsStartedHere).toEqual([]);
+});
+
+it("stores every session as the daemon sent it while this window has it queued for an account switch", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  setAccountSwitchesQueued(daemon.store, ["s"], true);
+  const sent = sessionOf("s", "c", "p", "Queued", "idle");
+  const snapshot = {
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [sent], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+  } as unknown as Event;
+  client.onEvents!([snapshot]);
+  expect(daemon.store.getState().sessions.get("s")).toBe(sent);
+  const switching = { ...sent, switching_account: true as const };
+  client.onEvents!([{ type: "session_upserted", session: switching }]);
+  expect(daemon.store.getState().sessions.get("s")).toBe(switching);
+  const done = { ...sent, account_id: "a-1" };
+  client.onEvents!([{ type: "session_upserted", session: done }]);
+  expect(daemon.store.getState().sessions.get("s")).toBe(done);
+  expect(daemon.store.getState().queuedAccountSwitches).toEqual(new Set(["s"]));
 });
 
 it("replaces the account quotas with each update and keeps the entry of an account whose reading did not change", () => {
@@ -316,7 +335,7 @@ it.each([
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const request = { type: "session_request" as const, role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, action: "start" as const, target: null, owner: null, reopened_owners: [], account: null, conversation: null };
   client.onEvents!(["a", "b"].flatMap((id): Event[] => [
-    { type: "session_upserted", session: sessionOf(id, id === "a" ? "c" : "d", id === "a" ? "p" : "q", id, "waiting_user", { switching_account: true }) },
+    { type: "session_upserted", session: sessionOf(id, id === "a" ? "c" : "d", id === "a" ? "p" : "q", id, "waiting_user") },
     { type: "page_created", page: pageOf(`${id}-1`, id, "<p>1</p>", 2) },
     { type: "page_created", page: pageOf(`${id}-2`, id, "<p>2</p>", 1) },
     { type: "pages_deleted", session_id: id, pages: [`${id}-2`] },
@@ -330,7 +349,6 @@ it.each([
   expect([...state.deletedPages.keys()]).toEqual(["b"]);
   expect(state.trustPrompts.map((p) => p.session)).toEqual(["b"]);
   expect(state.sessionRequests.map((r) => r.session)).toEqual(["b"]);
-  expect([...state.daemonSwitching]).toEqual(["b"]);
 });
 
 it("keeps each setting an update leaves as it was, so what reads only that setting does not render again", () => {

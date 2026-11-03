@@ -26,7 +26,9 @@ parent render as before, and for most causes the lint reports nothing. In this c
 - A ref written or read during render (the one cause the lint does flag, as `react-hooks/refs`). Keep the latest value
   with `useLatest`, or a handler with `useStableHandler`, both in `packages/ui/src/components/hooks/useLatest.ts`; the value
   is set in a layout effect, so a reader during render or in a descendant's layout effect in the same commit still
-  sees the previous one.
+  sees the previous one. Where a child reads it while it renders or from its own effects in the same commit (a
+  callback a link calls in its render, a library calling back from its effects), use `useRenderLatest` from the same
+  file, a stable getter set during render; anywhere else keep `useLatest`.
 - A `try` anywhere in the function, nested callbacks included, that has a `finally`, has no `catch`, or holds a
   conditional, logical or optional-chaining expression (`?:`, `&&`, `||`, `??`, `?.`) inside the `try`/`catch`. For
   "run this, report a rejection, then always do that", call `settle` (`packages/ui/src/components/hooks/settle.ts`);
@@ -52,7 +54,10 @@ So after changing a component or hook, run `pnpm compiler:bailouts <files>` from
 changed, and leave none of your functions in its list; it prints each skipped function's line and the compiler's
 reason. Nothing else runs it — `pnpm verify` does not — and with no files it checks all of `src/`, where functions
 outside your change may already be listed, so its exit status over the whole tree says nothing about your change. A
-function left uncompiled on purpose carries `"use no memo"` with a comment saying why, and is not listed.
+function left uncompiled on purpose carries `"use no memo"` with a comment saying why, and is then not listed, but
+only where the compiler finds no error in it, as with a read of state outside React. The directive silences neither
+the lint (`react-hooks/refs`, `react-hooks/immutability`) nor this list for a ref accessed, or a hook's value mutated,
+during render: such a function stays listed and failing lint however it is marked, so remove the cause instead.
 
 ## Whatever every row of a list takes must keep its identity across daemon events
 

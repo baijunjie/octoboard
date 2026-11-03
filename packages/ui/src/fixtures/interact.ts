@@ -1,6 +1,6 @@
 import { AGENT_OPTIONS } from "../agents/agents";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitStatusLabel";
-import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
+import { translatorFor, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import { minWidthQuery } from "../components/hooks/breakpoint";
 import { panelId } from "../panels/stackState";
@@ -762,7 +762,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       (item) => item.lastElementChild?.textContent?.trim() === title,
     );
 
-  const t: Ui["t"] = (key, ...args) => format(language, key, (args as [Record<string, string | number>?])[0]);
+  const t: Ui["t"] = translatorFor(language);
 
   return {
     t,

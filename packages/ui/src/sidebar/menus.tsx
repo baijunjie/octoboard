@@ -179,12 +179,12 @@ function switchAccountSubmenu(
   sharing: Map<string, AccountSharing> | undefined,
   disabledDefaults: Agent[] | undefined,
   accountOrder: Settings["account_order"] | undefined,
+  switching: boolean,
 ): ActionMenuSubmenu | undefined {
   const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing, disabledDefaults, accountOrder)
     .filter((entry) => entry.current || !entry.disabled);
   if (entries.length < 2) return undefined;
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
-  const switching = session.switching_account === true;
   return {
     label: t("sidebar.session.switchAccount"),
     icon: ArrowLeftRight,
@@ -221,11 +221,11 @@ function switchAccountSubmenu(
 /** "Hand off": offered for a session that is not archived. Disabled while the session is in the middle of a turn
  * or still starting, which the daemon refuses (`session_working`), while it is locked, as Archive is, while the
  * session's own account is changing its sharing (`ownChanging`), which the daemon refuses, and while an account
- * switch holds the session (see `handoffBlock`); and while no other agent could take it over (`hasTarget`). A
+ * switch holds the session (`switching`, see `handoffBlock`); and while no other agent could take it over (`hasTarget`). A
  * lasting hold (locked, in a turn, no other agent) shows its reason and wins over one that ends on its own (a
  * switch, a sharing change, starting), which shows none. */
-function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, ownChanging: boolean): ActionMenuItem {
-  const block = handoffBlock(t, session, ownChanging);
+function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, holds: { switching: boolean; ownChanging: boolean }): ActionMenuItem {
+  const block = handoffBlock(t, session, holds);
   const lasting = block?.reason ? block : hasTarget ? undefined : { detail: t("sidebar.session.handOffNoTarget"), reason: { state: t("sidebar.session.handOffNoTarget.reason") } };
   return {
     ...(lasting ? { description: lasting.detail, reason: lasting.reason } : {}),
@@ -279,27 +279,30 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
  * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over.
  * `quota` is what the Switch account entries are judged against, for the accounts used up, and `sharing` for the
- * accounts whose sharing change runs, and `disabledDefaults` the agents whose default account is turned off. */
+ * accounts whose sharing change runs, and `disabledDefaults` the agents whose default account is turned off.
+ * `switching` is whether an account switch holds the session (`holdsAccountSwitch`), the daemon's or one this window
+ * has queued, which the session's own record does not say. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandOff = true, quota, sharing, disabledDefaults, accountOrder }: {
+  { placement = "list", hasBoundSessions = false, canHandOff = true, switching, quota, sharing, disabledDefaults, accountOrder }: {
     placement?: MenuPlacement;
     hasBoundSessions?: boolean;
     canHandOff?: boolean;
+    switching: boolean;
     quota?: QuotaReadings;
     sharing?: Map<string, AccountSharing>;
     disabledDefaults?: Agent[];
     accountOrder?: Settings["account_order"];
-  } = {},
+  },
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults, accountOrder);
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults, accountOrder, switching);
   const focusable = session.role === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <ShortcutKbd command="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
@@ -329,10 +332,10 @@ export function sessionMenu(
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(!archived ? ["separator" as const] : []),
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
-    ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), icon: Cpu, disabled: session.status === "starting" || session.switching_account === true, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
+    ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
     ...(switchAccount ? [switchAccount] : []),
-    ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff, sharing?.get(session.account_id ?? "")?.progress !== undefined)]),
-    ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || session.switching_account === true, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
+    ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined })]),
+    ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, ...lockedItemState(t, session, "sidebar.session.deleteLocked") }

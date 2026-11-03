@@ -3,8 +3,8 @@ import { useEffect } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import { useT } from "../i18n/react";
-import type { Agent, Event, RequestBody } from "../protocol";
+import type { Agent, RequestBody } from "../protocol";
+import type { RequestSender } from "../requests";
 import { shownError } from "./shownError";
 
 /** `idle`: nothing to ask about yet. `checking`: the answer for what is entered now is not in yet,
@@ -28,17 +28,16 @@ const CHECKING: Detection = { status: "checking" };
  * `query` is `undefined` while there is nothing to ask.
  */
 export function useDetectedAgent(
-  request: (body: RequestBody) => Promise<Event>,
+  request: RequestSender,
   query: DetectionQuery | undefined,
   delayMs: number,
   onDetected: (agent: Agent | "") => void,
 ): Detection {
-  const t = useT();
   const key = query ? JSON.stringify(query) : undefined;
   const { value, send, reset, hold, asked, reconnects } = useLatestRequest<Detection>({
     scope: key, initial: CHECKING,
   });
-  const latest = useLatest({ request, query, onDetected, send, t });
+  const latest = useLatest({ request, query, onDetected, send });
 
   useEffect(() => {
     // With nothing to ask, what was answered before is dropped, so coming back to the same entry starts checking again.
@@ -55,7 +54,6 @@ export function useDetectedAgent(
       void send({
         request: () => request(query!),
         accept: (event) => {
-          if (event.type !== "agent_detected") return () => ({ status: "failed", error: latest.current.t("dialog.project.detectFailed") });
           onDetected(event.agent ?? "");
           return () => ({ status: "ready" });
         },

@@ -12,7 +12,7 @@ import { FadeOverflow } from "../components/text/FadeOverflow";
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import type { ProcessJump } from "../process/processJump";
+import type { ProcessJump } from "./processJump";
 
 /** The attribute that marks the panel's root, for finding what holds focus. */
 export const PANEL_ATTRIBUTE = "data-rail-processes-panel";

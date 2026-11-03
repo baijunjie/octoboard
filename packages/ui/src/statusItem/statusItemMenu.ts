@@ -31,6 +31,8 @@ export interface StatusItemMenuSource {
   projectMap: Map<string, Project>;
   /** The ids of the sessions with delegated work in progress (`delegatingSessionIds`). */
   delegating: ReadonlySet<string>;
+  /** The sessions an account-switch batch of this window has not finished with (`State.queuedAccountSwitches`). */
+  queuedSwitches: ReadonlySet<string>;
   /** Whether the sidebar ranks by status (`Settings.sidebar_order_by_status`), which this menu's order follows. */
   byStatus: boolean;
   quota: StatusItemQuotaSource;
@@ -43,9 +45,9 @@ export interface StatusItemMenuSource {
  * attention dot (`attention`) while any session waits for the user or is dormant. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
-  const statuses = new Map(sessions.map((session) => [session, sessionShownStatusKind(session, source.delegating)]));
+  const statuses = new Map(sessions.map((session) => [session, sessionShownStatusKind(session, source.delegating, source.queuedSwitches)]));
   const inOrder = (listed: (status: ShownStatusKind) => boolean) =>
-    sessionsInTreeOrder(consoles, projects, sessions, (session) => listed(statuses.get(session)!), source.delegating, source.byStatus);
+    sessionsInTreeOrder(consoles, projects, sessions, (session) => listed(statuses.get(session)!), source.delegating, source.queuedSwitches, source.byStatus);
   // Each section is ordered with only its own status present, as the sidebar orders a list of them alone.
   const perStatus = SUMMARY_STATUSES.map((status) => ({ status, listed: inOrder((shown) => shown === status) }));
   const sections = perStatus.flatMap(({ status, listed }): StatusItemSection[] => {

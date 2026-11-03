@@ -53,7 +53,8 @@ const LINE_SUFFIX = /:\d+(?::\d+)?$/;
 export interface PathAnswer {
   kind: PathLinkKind;
   view?: PathLinkView;
-  /** The file could be launched by the system: it is for the viewer, never for the host to open. */
+  /** The file is for the viewer alone and never opened on the host: every file of the project or its worktrees, and any
+   * file the system could launch. */
   viewerOnly?: boolean;
 }
 

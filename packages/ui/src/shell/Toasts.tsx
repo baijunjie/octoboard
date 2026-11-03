@@ -41,7 +41,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
     () =>
       onNotification((request) => {
         if (request.kind === "error") {
-          errorAlerts.report(errorAlertOf(request, store.getState()));
+          errorAlerts.report(errorAlertOf(request));
           return;
         }
         const { sessions, consoles, projects } = store.getState();

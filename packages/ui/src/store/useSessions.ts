@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { Session } from "../protocol";
 import { useDaemonStore } from "./react";
 import { topStatus } from "../sessions/order";
-import { isSummaryStatus, sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
+import { holdsAccountSwitch, isSummaryStatus, sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
 import { countWaitingInTree } from "../sessions/waiting";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 
@@ -38,7 +38,8 @@ export function useArchivedOwnerSessions(consoleId: string): Session[] {
 export function useConsoleStatus(consoleId: string): ShownStatusKind | undefined {
   return useDaemonStore((s) => {
     const index = indexSessions(s.sessions);
-    return topStatus(sessionsOf(index.byConsole, consoleId).filter((session) => isSummaryStatus(sessionShownStatusKind(session, index.delegatingIds))), index.delegatingIds);
+    const listed = sessionsOf(index.byConsole, consoleId).filter((session) => isSummaryStatus(sessionShownStatusKind(session, index.delegatingIds, s.queuedAccountSwitches)));
+    return topStatus(listed, index.delegatingIds, s.queuedAccountSwitches);
   });
 }
 
@@ -47,7 +48,7 @@ export function useConsoleStatus(consoleId: string): ShownStatusKind | undefined
 export function useProjectStatus(projectId: string): ShownStatusKind | undefined {
   return useDaemonStore((s) => {
     const index = indexSessions(s.sessions);
-    return topStatus(sessionsOf(index.byProject, projectId), index.delegatingIds);
+    return topStatus(sessionsOf(index.byProject, projectId), index.delegatingIds, s.queuedAccountSwitches);
   });
 }
 
@@ -57,9 +58,21 @@ export function useDelegatingIds(): ReadonlySet<string> {
   return useDaemonStore((s) => indexSessions(s.sessions).delegatingIds);
 }
 
+/** The sessions an account-switch batch of this window has not finished with (`State.queuedAccountSwitches`): the
+ * same set until a session joins or leaves one, for what ranks or shows sessions by their status. */
+export function useQueuedAccountSwitches(): ReadonlySet<string> {
+  return useDaemonStore((s) => s.queuedAccountSwitches);
+}
+
 /** What `session` shows as its status: a kind, so a row renders again only when its kind changes. */
 export function useSessionShownStatus(session: Session): ShownStatusKind {
-  return useDaemonStore((s) => sessionShownStatusKind(session, indexSessions(s.sessions).delegatingIds));
+  return useDaemonStore((s) => sessionShownStatusKind(session, indexSessions(s.sessions).delegatingIds, s.queuedAccountSwitches));
+}
+
+/** Whether an account switch holds `session` (`holdsAccountSwitch`), the daemon's or one queued in this window; false
+ * for no session. */
+export function useAccountSwitchHeld(session: Pick<Session, "id" | "switching_account"> | undefined): boolean {
+  return useDaemonStore((s) => session !== undefined && holdsAccountSwitch(session, s.queuedAccountSwitches));
 }
 
 /** Whether any session, in any status, is bound to the session `ownerId`. */

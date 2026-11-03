@@ -11,7 +11,7 @@ import type { Event, RequestBody } from "../protocol";
 import { createOwnTrustNotices } from "./ownTrustNotices";
 import { reducer, type Action } from "./reducer";
 import { createStateStore, type State } from "./state";
-import { broadcastNotification, errorNotification, type AlertOptions, type NotifiedBroadcast, type NotificationRequest } from "./notifications";
+import { broadcastNotification, type NotifiedBroadcast, type NotificationRequest } from "./notifications";
 
 /** The daemon connection and the state it feeds: one per window, created at startup (see
  * `main.tsx`) and alive until the window closes. The store is a vanilla one, so code outside React
@@ -22,15 +22,11 @@ export interface Daemon {
    * rejects with a `CodedError` worded in the current language. Callers present failures, allowing field validation to
    * remain local and execution errors to require acknowledgement. */
   request: RequestSender;
-  /** Raises an error alert for `error`, which may be anything a request rejected with. The alert is queued through
-   * `onNotification`, so `Toasts` words it with the session's names as the store has them when it shows it; see `AlertOptions`
-   * for what the call site says about it. */
-  raiseError: (error: unknown, alert: AlertOptions) => void;
   /** Confirms something the user just did, which has no inline place to say so (a path copied);
    * about no session, so the toast is the message alone. */
   showNotice: (message: string, content?: ReactNode) => void;
   /** Calls `listener` for every notification to show from now on: the daemon's errors and notices that
-   * belong to no request, and what `raiseError` and `showNotice` are given. Returns the unsubscribe. */
+   * belong to no request, and what `showNotice` is given. Returns the unsubscribe. */
   onNotification: (listener: (notification: NotificationRequest) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * confirmation for the user in the terminal, and the daemon asks again for it only after a
@@ -102,7 +98,6 @@ export function createDaemon(address: DaemonAddress): Daemon {
   return {
     store,
     request,
-    raiseError: (error, alert) => notify(errorNotification(error, alert)),
     showNotice: (message, content) => notify({ kind: "notice", message, content }),
     onNotification: (listener) => {
       notificationListeners.add(listener);

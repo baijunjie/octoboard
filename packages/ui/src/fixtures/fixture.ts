@@ -25,7 +25,7 @@ export interface BroadcastToastFixture {
   event: NotifiedBroadcast;
 }
 
-/** An error alert an action of the app raises for a failure of its own request (`Daemon.raiseError`). `title` is the
+/** An error alert an action of the app raises for a failure of its own request (`raiseError`). `title` is the
  * plain name of what failed that the action gives it, worded in the viewing language when a function; a code's own
  * `alertTitle` still wins over it, as it does there. `message` is the fallback for a `code` the catalog lacks; without
  * a `code` the failure is an unexpected one, shown as the unexpected-failure sentence with `message` under its error
@@ -129,28 +129,28 @@ export interface Fixture {
   /** A refusal of `create_shell_terminal`, for a start the window could not have seen coming (a folder that is gone
    * or no longer a folder, a place the system denies); left out, a start succeeds, in the folder it asked for. */
   shellTerminalStartError?: FixtureError;
-  /** The files and folders that exist for `probe_path_links`, by absolute path: a path the terminal
-   * shows, in whatever form, is resolved against the home directory `/Users/dev` or the asking
-   * project's folder first. A file in the project or a worktree carries its `view`, where
-   * `read_project_file` reads it (a worktree's files are `worktreeFiles`), and `viewerOnly` when the
-   * system could launch it. A folder in the project is a bare `"directory"`, or `{ kind:
-   * "directory", view }` when it has a README or index file, which `view` names; every other path
-   * is answered as `none`. `{ kind, gone: true }` is a path the probe found but that is gone when
-   * `open_path_link` opens it, which the daemon refuses with `file_not_found`. `{ kind, refused: cause }` is one the
-   * probe found but `open_path_link` will not open, which the daemon refuses with `path_link_refused` and that
-   * `cause`. `{ kind, outside: true }` is one the probe found but that lies outside every root when `open_path_link`
-   * opens it (a link that was redirected since), which the daemon refuses with `outside_scope` and `action: "open"`. A
-   * click reaches `open_path_link` only for a path with no `view` (a folder with no entry file, a path in a temp
-   * root), a folder opened on the host, or a file the viewer cannot show, so a refused file in the project carries
-   * the `view` of a binary one. Cause `unreadable` carries the system's text as `detail`, which the daemon sends only
-   * for it. */
+  /** The files and folders that exist for `probe_path_links`, by absolute path: a path the terminal shows, in
+   * whatever form, is resolved against the home directory `/Users/dev` or the asking project's folder first. A file
+   * in the project or a worktree carries its `view`, where `read_project_file` reads it (a worktree's files are
+   * `worktreeFiles`), and is answered `viewer_only`, as the daemon answers every such file: a click on it goes to the
+   * viewer and never to `open_path_link`, which refuses it with `path_link_refused` and cause `launchable`. A bare
+   * `"file"` is one outside the projects, in a temp root. A folder in the project is a bare `"directory"`, or
+   * `{ kind: "directory", view }` when it has a README or index file, which `view` names; every other path is
+   * answered as `none`. `{ kind, gone: true }` is a path the probe found but that is gone when `open_path_link` opens it,
+   * which the daemon refuses with `file_not_found`. `{ kind, refused: cause }` is one the probe found but
+   * `open_path_link` will not open, which the daemon refuses with `path_link_refused` and that `cause`.
+   * `{ kind, outside: true }` is one the probe found but that lies outside every root when `open_path_link` opens it (a link
+   * that was redirected since), which the daemon refuses with `outside_scope` and `action: "open"`. A click reaches
+   * `open_path_link` only for a path that is no file of a project (a folder with no entry file or one whose entry
+   * file cannot be read, a path in a temp root) or a folder opened on the host. Cause `unreadable` carries the
+   * system's text as `detail`, which the daemon sends only for it. */
   pathLinks?: Record<
     string,
     | Exclude<PathLinkKind, "none">
-    | { view: PathLinkView; viewerOnly?: true }
+    | { view: PathLinkView }
     | { kind: "directory"; view: PathLinkView }
     | { kind: Exclude<PathLinkKind, "none">; gone: true }
-    | { kind: Exclude<PathLinkKind, "none">; outside: true; view?: PathLinkView }
+    | { kind: Exclude<PathLinkKind, "none">; outside: true }
     | { kind: Exclude<PathLinkKind, "none">; refused: Exclude<PathLinkRefusedCause, "unreadable">; view?: PathLinkView }
     | { kind: Exclude<PathLinkKind, "none">; refused: "unreadable"; detail: string; view?: PathLinkView }
   >;

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from ".";
-import { CATALOGS, format, messageText, splitPlaceholders, type Message, type MessageKey } from "../../i18n/catalog";
+import { CATALOGS, format, messageText, translatorFor, splitPlaceholders, type Message, type MessageKey } from "../../i18n/catalog";
 import type { Language } from "../../i18n/languages";
 import { en } from "../../i18n/messages/en";
 import { createUi, type Matcher, type Ui } from "../../fixtures/interact";
@@ -265,7 +265,7 @@ describe("gallery scenarios", () => {
   });
 
   it("Git steps match Chinese session and change labels, including rename detail and selection", async () => {
-    const t: import("../../i18n/catalog").Translate = (key, ...args) => format("zh-Hans", key, ...args);
+    const t = translatorFor("zh-Hans");
     const recorded = (await matchersOf("zh-Hans")).filter(({ id }) => id.startsWith("git-"));
     const sessionMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("session("));
     expect(sessionMatchers.length).toBeGreaterThan(0);

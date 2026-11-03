@@ -36,8 +36,9 @@ export interface MessageFacets {
 export interface CodeRecord extends MessageFacets {
   origin: CodeOrigin;
   /** The remedy the alert gives (`classifyError`). A code with none, nor `causeOnly` or `unexpected`, is not classified
-   * by its code: a failure shown where it is read (a quota reading, a models list, a login), or one the client raises
-   * itself and the alert words from its message (`unexpected_reply`). */
+   * by its code: a failure shown where it is read (a quota reading, a models list, a login), one the client raises
+   * itself and the alert words from its message (`unexpected_reply`), or a JavaScript error that is no `CodedError`,
+   * which `errorPresentation` wraps as `unexpected_error` and the alert shows as unexpected. */
   recovery?: ErrorRecovery;
   /** Actionable with no remedy: the alert says why it was refused or failed, never what to do, and names the system's
    * own cause after the sentence. */
@@ -324,6 +325,7 @@ export const CODES = {
   typing_blocked: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   typing_held: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   typing_lost: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true },
+  unexpected_error: { origin: "ui" },
   unexpected_reply: { origin: "client" },
   unknown_account: { origin: "daemon", recovery: "account", recordIds: ["account"], nameParams: ["account"] },
   unknown_branch: { origin: "daemon", recovery: "branch", codeParams: ["branch"] },

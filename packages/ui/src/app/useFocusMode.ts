@@ -54,7 +54,7 @@ export function useFocusMode({
     useShallow((s) => {
       if (stripConsoleId === undefined) return NO_SESSIONS;
       const index = indexSessions(s.sessions);
-      return switchStrip(sessionsOf(index.byConsole, stripConsoleId), stripConsoleId, index.delegatingIds).map((e) => e.consoleSession);
+      return switchStrip(sessionsOf(index.byConsole, stripConsoleId), stripConsoleId, index.delegatingIds, s.queuedAccountSwitches).map((e) => e.consoleSession);
     }),
   );
   // ⌃Tab only shows the console session, without resuming an interrupted one (`KEY_SWITCH_SELECTION`),

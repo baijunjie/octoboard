@@ -44,7 +44,7 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
         return request({ type: "get_project_source", project, slot });
       },
       accept: (reply) =>
-        reply.type === "project_source" && reply.source.project === project ? () => ({ state: "loaded", source: reply.source, sentAt }) : undefined,
+        reply.source.project === project ? () => ({ state: "loaded", source: reply.source, sentAt }) : undefined,
       failed: (failure, _held, t) => ({ state: "error", message: failure.kind === "failed" ? failure.message : t("browser.error.folderChanged") }),
     });
   };

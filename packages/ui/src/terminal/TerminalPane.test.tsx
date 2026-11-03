@@ -7,6 +7,10 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { PlatformAdapter } from "../platform";
+import type { Event, RequestBody } from "../protocol";
+import { setAccountSwitchesQueued, type Daemon, type State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { sessionOf } from "../fixtures/builders";
 import { CATALOGS, format } from "../i18n/catalog";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -67,26 +71,22 @@ const { FakeController } = vi.hoisted(() => {
   return { FakeController };
 });
 vi.mock("./TerminalController", () => ({ TerminalController: FakeController }));
-// One object for every render: the pane re-attaches when `terminalUrl` changes identity.
-const daemon = vi.hoisted(() => ({ terminalUrl: () => "", request: vi.fn(async (_body: unknown) => ({ type: "ack", id: null })), raiseError: vi.fn() }));
-const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open", sessions: new Map<string, unknown>() }));
-vi.mock("../store", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../store")>()),
-  useDaemon: () => daemon,
-  useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
-  useSession: (id: string | null | undefined) => (id ? store.sessions.get(id) : undefined),
-}));
-const platform = vi.hoisted(() => ({ links: undefined as PlatformAdapter["links"] }));
-vi.mock("../platform/react", () => ({ usePlatform: () => platform }));
+const request = vi.fn(async (body: RequestBody): Promise<Event> => (body.type === "read_session_history" ? { type: "session_history", id: null, session: "", messages: [] } : { type: "ack", id: null }));
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
+
+// One daemon for every render of a test: the pane re-attaches when `terminalUrl` changes identity.
+let daemon: Daemon;
+const platform: { -readonly [K in keyof PlatformAdapter]: PlatformAdapter[K] } = { kind: "browser" };
+const host = (ui: React.ReactNode) => <TestHost daemon={daemon} platform={platform}>{ui}</TestHost>;
+/** Updates the daemon's state the way a broadcast would. */
+const setState = (state: Partial<State>) => act(() => daemon.store.setState(state));
 
 const roots: Root[] = [];
 beforeEach(() => {
   vi.useFakeTimers();
   platform.links = undefined;
-  store.snapshotEpoch = 0;
-  store.connectionState = "open";
-  store.sessions = new Map();
+  request.mockClear();
+  daemon = testDaemon({ state: { connectionState: "open" }, request, terminalUrl: () => "" });
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -98,7 +98,7 @@ afterEach(() => {
 const session = sessionOf("s-1", "c-1", undefined, "Work", "working");
 
 function render(root: Root, current = session) {
-  act(() => root.render(<TerminalPane session={current} onResume={async () => true} onAddAgent={() => {}} />));
+  act(() => root.render(host(<TerminalPane session={current} onResume={async () => true} onAddAgent={() => {}} />)));
 }
 
 function mount() {
@@ -166,7 +166,7 @@ it("reconnects, with the attempts reset, when Reconnect is pressed", () => {
 });
 
 it("offers no Reconnect button while the daemon connection is not open", () => {
-  store.connectionState = "closed";
+  setState({ connectionState: "closed" });
   const { container } = mount();
   for (let i = 0; i < 5; i++) failAttempt();
   FakeController.last.settle("closed");
@@ -179,7 +179,7 @@ it("focuses the Reconnect button, not the terminal, through the handle while it 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(<TerminalPane ref={handle} session={session} onResume={async () => true} onAddAgent={() => {}} />));
+  act(() => root.render(host(<TerminalPane ref={handle} session={session} onResume={async () => true} onAddAgent={() => {}} />)));
   act(() => handle.current?.focus());
   expect(FakeController.last.focuses).toBe(1);
   for (let i = 0; i < 5; i++) failAttempt();
@@ -203,7 +203,7 @@ it("recovers a terminal that gave up when a fresh snapshot arrives", () => {
   for (let i = 0; i < 5; i++) failAttempt();
   FakeController.last.settle("closed");
   const attaches = FakeController.last.attaches;
-  store.snapshotEpoch = 1;
+  setState({ snapshotEpoch: 1 });
   render(root);
   expect(FakeController.last.attaches).toBe(attaches + 1);
 });
@@ -223,7 +223,7 @@ it("holds its size while a docked pane eases, then fits once", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  const show = (resizing: boolean) => act(() => root.render(<TerminalPane session={session} resizing={resizing} onResume={async () => true} onAddAgent={() => {}} />));
+  const show = (resizing: boolean) => act(() => root.render(host(<TerminalPane session={session} resizing={resizing} onResume={async () => true} onAddAgent={() => {}} />)));
   show(true);
   const fits = FakeController.last.fits;
   observers.forEach((notify) => notify());
@@ -260,7 +260,7 @@ function mountEmpty(props: Partial<React.ComponentProps<typeof TerminalPane>> = 
   const root = createRoot(container);
   roots.push(root);
   const show = (next: Partial<React.ComponentProps<typeof TerminalPane>> = props) =>
-    act(() => root.render(<TerminalPane ref={handle} onResume={async () => true} onAddAgent={() => {}} {...next} />));
+    act(() => root.render(host(<TerminalPane ref={handle} onResume={async () => true} onAddAgent={() => {}} {...next} />)));
   show();
   return { container, handle, topBarButton, elsewhere, show };
 }
@@ -424,15 +424,15 @@ it("hands a path with a view to the file viewer once it has read it, and opens a
   roots.push(root);
   const onViewFile = vi.fn();
   const inProject = { ...session, project_id: "p-1" };
-  daemon.request.mockClear();
-  daemon.request.mockResolvedValueOnce({ type: "project_file", id: null, project: "p-1", worktree: "w", path: "src/a.ts", source: { kind: "live", version: "1" }, file: { size: 1, kind: "text", media_type: null, text: "x", data: null } } as never);
-  act(() => root.render(<TerminalPane session={inProject} onResume={async () => true} onAddAgent={() => {}} onViewFile={onViewFile} />));
+  request.mockClear();
+  request.mockResolvedValueOnce({ type: "project_file", id: null, project: "p-1", worktree: "w", path: "src/a.ts", source: { kind: "live", version: "1" }, file: { size: 1, kind: "text", media_type: null, text: "x", data: null } } as never);
+  act(() => root.render(host(<TerminalPane session={inProject} onResume={async () => true} onAddAgent={() => {}} onViewFile={onViewFile} />)));
   await act(async () => FakeController.last.openPath({ path: "/r/src/a.ts", line: 3, view: { worktree: "w", path: "src/a.ts" } }));
   expect(onViewFile).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ project: "p-1", worktree: "w", path: "src/a.ts", line: 3 }));
-  expect(daemon.request.mock.calls.map(([body]) => (body as { type: string }).type)).toEqual(["read_project_file"]);
+  expect(request.mock.calls.map(([body]) => (body as { type: string }).type)).toEqual(["read_project_file"]);
   await act(async () => FakeController.last.openPath({ path: "/tmp/b.png" }));
   expect(onViewFile).toHaveBeenCalledOnce();
-  expect(daemon.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p-1", path: "/tmp/b.png" });
+  expect(request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p-1", path: "/tmp/b.png" });
 });
 
 const archived = sessionOf("s-old", "c-1", undefined, "Old work", "archived");
@@ -443,7 +443,7 @@ function mountArchived(props: Partial<React.ComponentProps<typeof TerminalPane>>
   const root = createRoot(container);
   roots.push(root);
   const show = (next: Partial<React.ComponentProps<typeof TerminalPane>> = props) =>
-    act(() => root.render(<TerminalPane ref={handle} session={archived} onResume={async () => true} onAddAgent={() => {}} {...next} />));
+    act(() => root.render(host(<TerminalPane ref={handle} session={archived} onResume={async () => true} onAddAgent={() => {}} {...next} />)));
   show();
   return { container, handle, show };
 }
@@ -451,7 +451,7 @@ function mountArchived(props: Partial<React.ComponentProps<typeof TerminalPane>>
 it("shows an archived session's history over an inert terminal", async () => {
   const { container } = mountArchived();
   await act(async () => {});
-  expect(daemon.request).toHaveBeenCalledWith({ type: "read_session_history", session: "s-old" });
+  expect(request).toHaveBeenCalledWith({ type: "read_session_history", session: "s-old" });
   expect(container.querySelector("section h2")?.textContent).toBe("Session history");
   expect(container.querySelector("[inert]")?.contains(container.querySelector("[dir=ltr]"))).toBe(true);
   expect(FakeController.last.attaches).toBe(0);
@@ -483,7 +483,7 @@ it("keeps an interrupted session's saved screen and shows no history for it", ()
 });
 
 it("puts focus asked for the terminal on the history's scrolling region when it is archived", async () => {
-  daemon.request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
+  request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
   const { container, handle } = mountArchived();
   await act(async () => {});
   act(() => handle.current?.focus());
@@ -528,7 +528,7 @@ it.each([
 });
 
 it("reaches the history itself through the handle while it is still loading", () => {
-  daemon.request.mockImplementationOnce(() => new Promise(() => {}));
+  request.mockImplementationOnce(() => new Promise(() => {}));
   const { container, handle } = mountArchived();
   act(() => handle.current?.focus());
   expect(document.activeElement).toBe(container.querySelector("section"));
@@ -536,8 +536,8 @@ it("reaches the history itself through the handle while it is still loading", ()
 
 it("keeps focus asked for the terminal off the header's owner link while the history loads", () => {
   const owner = sessionOf("s-owner", "c-1", undefined, "Release captain", "idle");
-  store.sessions = new Map([[owner.id, owner]]);
-  daemon.request.mockImplementationOnce(() => new Promise(() => {}));
+  setState({ sessions: new Map([[owner.id, owner]]) });
+  request.mockImplementationOnce(() => new Promise(() => {}));
   const { container, handle } = mountArchived({ session: { ...archived, bound_to: owner.id }, onSelectSession: () => {} });
   expect(container.querySelector("header button")?.textContent).toContain("Release captain");
   act(() => handle.current?.focus());
@@ -546,7 +546,7 @@ it("keeps focus asked for the terminal off the header's owner link while the his
 
 it("hands focus lost with the control that held it to the window's restore, not the inert terminal", async () => {
   const owner = sessionOf("s-owner", "c-1", undefined, "Release captain", "idle");
-  store.sessions = new Map([[owner.id, owner]]);
+  setState({ sessions: new Map([[owner.id, owner]]) });
   const restoreFocus = vi.fn();
   const { container, show } = mountArchived({ session: { ...archived, bound_to: owner.id }, onSelectSession: () => {}, restoreFocus });
   await act(async () => {});
@@ -557,7 +557,7 @@ it("hands focus lost with the control that held it to the window's restore, not 
 });
 
 it("falls back to the Reopen button when the history has no control to focus", () => {
-  daemon.request.mockImplementationOnce(() => new Promise(() => {}));
+  request.mockImplementationOnce(() => new Promise(() => {}));
   const { container, handle } = mountArchived();
   container.querySelector("section")!.replaceChildren();
   container.querySelector("section")!.removeAttribute("tabindex");
@@ -606,6 +606,17 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
   expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toContain("Resuming session…");
 });
 
+it("covers the terminal for a session this window queued an account switch for, until it leaves the queue", () => {
+  const { container } = mount();
+  expect(status(container)).not.toBe("Switching account…");
+  act(() => setAccountSwitchesQueued(daemon.store, [session.id], true));
+  speak();
+  expect(status(container)).toBe("Switching account…");
+  act(() => setAccountSwitchesQueued(daemon.store, [session.id], false));
+  speak();
+  expect(status(container)).not.toBe("Switching account…");
+});
+
 it("speaks a no-process bar's sentence once, from a region mounted empty, and leaves the button reachable", () => {
   const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
   const container = document.body.appendChild(document.createElement("div"));
@@ -625,7 +636,7 @@ it("speaks a no-process bar's sentence once, from a region mounted empty, and le
 });
 
 it("speaks an archived bar's sentence and leaves the history's own announcer to its own states", async () => {
-  daemon.request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
+  request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
   const { container } = mountArchived();
   await act(async () => {});
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
@@ -638,7 +649,7 @@ it("holds the no-process sentence while a modal is open and writes it after the 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  const show = (modalOpen: boolean) => act(() => root.render(<TerminalPane session={interrupted} modalOpen={modalOpen} onResume={async () => true} onAddAgent={() => {}} />));
+  const show = (modalOpen: boolean) => act(() => root.render(host(<TerminalPane session={interrupted} modalOpen={modalOpen} onResume={async () => true} onAddAgent={() => {}} />)));
   const spoken = () => statusRegions(container).map((region) => region.textContent).filter(Boolean);
   show(true);
   speak();
@@ -655,7 +666,7 @@ it("keeps a sentence already spoken in the region while a modal opens and closes
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  const show = (modalOpen: boolean) => act(() => root.render(<TerminalPane session={interrupted} modalOpen={modalOpen} onResume={async () => true} onAddAgent={() => {}} />));
+  const show = (modalOpen: boolean) => act(() => root.render(host(<TerminalPane session={interrupted} modalOpen={modalOpen} onResume={async () => true} onAddAgent={() => {}} />)));
   show(false);
   speak();
   const region = () => statusRegions(container).find((node) => node.textContent === "Not running");

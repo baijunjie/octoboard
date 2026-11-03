@@ -1,10 +1,10 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../../git/gitWorkflow";
-import type { Agent, AgentAvailability, Console, RelocationCause, Settings } from "../../protocol";
+import { AGENTS, type Agent, type AgentAvailability, type Console, type RelocationCause, type Settings } from "../../protocol";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeToast } from "../../fixtures/builders";
+import { accountOf, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeToast } from "../../fixtures/builders";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "../../fixtures/agentModels";
 import { IMAGES } from "../../fixtures/viewerImages";
@@ -56,7 +56,7 @@ const accountsState = snapshotState({
   sessions,
   settings: {
     ...DEFAULT_SETTINGS,
-    added_agents: ALL_AGENTS,
+    added_agents: [...AGENTS],
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       accountOf("a-work", "claude", "Work account for release coordination across all production services مرحبا 发布", "/Users/dev/.claude-work"),
@@ -187,7 +187,7 @@ const inPlaceState = snapshotState({
 // Detection has settled: the listed agents are not on the machine, the rest are.
 const detected = (missing: Agent[]) =>
   new Map<Agent, AgentAvailability>(
-    (["claude", "codex", "grok"] as const).map((agent) => [
+    AGENTS.map((agent) => [
       agent,
       { agent, availability: missing.includes(agent) ? "unavailable" : "available", default_account_dir: `/Users/dev/.${agent}` },
     ]),
@@ -1063,7 +1063,7 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: withAddedAgents(sessionLaunchState, ["claude", "codex", "grok"]),
+    state: withAddedAgents(sessionLaunchState, [...AGENTS]),
     id: "dialog-new-session-no-agent-added",
     group: "Sidebar sessions",
     category: "exceptional",

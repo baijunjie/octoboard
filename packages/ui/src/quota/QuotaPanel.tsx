@@ -2,16 +2,16 @@ import { Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { noAgentState, pickableAgents } from "../../agents/agents";
-import { Button } from "../../components/controls/Button";
-import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
-import { EmptyPanel } from "../../components/panel/EmptyPanel";
-import { AgentTabList } from "../../components/tabs/AgentTabList";
-import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
-import { Message, useT } from "../../i18n/react";
-import type { Agent } from "../../protocol";
-import { listedQuotaAccounts } from "../../quota/quotaListing";
-import { useDaemonStore } from "../../store";
+import { noAgentState, pickableAgents } from "../agents/agents";
+import { Button } from "../components/controls/Button";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { AgentTabList } from "../components/tabs/AgentTabList";
+import { PATH_VAR_PARAMS } from "../components/text/literalParams";
+import { Message, useT } from "../i18n/react";
+import type { Agent } from "../protocol";
+import { listedQuotaAccounts } from "./quotaListing";
+import { useDaemonStore } from "../store";
 import { AgentPanel } from "./AgentPanel";
 import type { ResetRequest } from "./QuotaAccount";
 

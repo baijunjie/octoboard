@@ -6,19 +6,21 @@ Whenever code in `packages/ui` raises an error alert for something the user did,
 what failed, worded as `docs/product/error-alerts.md`, section "The error alert", sets out, with its key in every
 message catalog. The routes and where each takes the title:
 
-- `raiseError(error, { title, recovery?, content? })`, and `alertFailure({ title, ... })` as a request's catch handler
-  (`packages/ui/src/components/alerts/raiseError.tsx`): for a failure about no session. They queue the alert directly.
-- `raiseError(error, { title, session?, recovery?, content? })` from `useDaemon()` (`Daemon.raiseError`), and anything
-  handed it to call, as `openPathTarget` is: the route for a failure about a session, which only it can name from the
-  store's records, and for code whose tests inject the raiser. Its alert goes through `onNotification` and is shown
-  once `Toasts` has mounted.
+- `raiseError(error, { title, session?, recovery?, content? })`, and `alertFailure({ title, ... })` as a request's catch
+  handler (`packages/ui/src/components/alerts/raiseError.tsx`). This is the one route for an action's failure, about a
+  session or not. For a failure about a session, pass its id as `session`, even where a dialog or a row named it
+  when the action started: the alert names the session and its project or console from the store as it shows them,
+  and an action raised from a shortcut or after its dialog closed has nothing else on screen that says which session
+  failed. Leave it out where the message already names the session it is about, or names another session that may
+  share its name (a handoff's after-move failure names the receiving session): two sessions shown under one name
+  would read as one.
 - `errorAlerts.report({ ... })` called directly: its `title`.
 - `useDialogAction(resetKey, errorTitle)` (`packages/ui/src/components/dialog/dialogHooks.ts`), and the `errorTitle` prop of
   `ConfirmDialog` and `RenameDialog`.
 
-`title` is a required key of the first two routes' options, but `title: undefined` passes the type check, and
-`errorAlerts.report` takes it as optional: the alert is then titled with the generic "Error" (or "Unexpected error"),
-which says nothing about what failed. Leave it undefined only in the cases `AlertOptions`
+`title` is a required key of `raiseError`'s and `alertFailure`'s options, but `title: undefined` passes the type check,
+and `errorAlerts.report` takes it as optional: the alert is then titled with the generic "Error" (or "Unexpected
+error"), which says nothing about what failed. Leave it undefined only in the cases `AlertOptions`
 (`packages/ui/src/store/notifications.ts`) lists. Pass a title even where the failure usually carries a code with a
 `daemon.<code>.alertTitle` of its own: that title wins only where the failure carries it, and the call site's covers
 every other failure the action can return.

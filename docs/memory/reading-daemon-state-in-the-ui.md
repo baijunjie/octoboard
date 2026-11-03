@@ -44,6 +44,17 @@ running, and nothing fails. Select the value such code waits for, so that its ch
 `ResizeObserver`). Code brought in from a branch that still reads the whole `sessions` map in such a component is
 rewritten the same way when it is merged, never given the map back.
 
+## A stored record is what the daemon sent; what only this window knows is applied where it is read
+
+The store's daemon collections (`sessions`, `projects`, `consoles` and the rest in `packages/ui/src/store/state.ts`)
+hold each record exactly as the last event sent it. State that only this window has, such as the sessions its own
+account-switch batch has queued (`queuedAccountSwitches`), is a field of its own and is never written into those
+records; a new window-only state of the kind takes the same shape. Whether an account switch holds a session goes
+through the entry point `docs/structure/ui.md`, section "Shared entry points", names. The shown status, ranking and the
+menu bar's list take the queue as their `queuedSwitches` argument, next to `delegating`, so a component that sorts or
+shows sessions selects the queue itself (`useQueuedAccountSwitches`, or `s.queuedAccountSwitches` inside its
+selector): otherwise it does not render again when a session joins or leaves the queue, and nothing fails.
+
 ## Deduplicate polling answers before scheduling state
 
 For daemon polling whose hook runs in `App`, compare each answer with the latest committed state before calling

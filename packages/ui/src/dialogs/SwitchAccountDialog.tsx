@@ -15,7 +15,8 @@ import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../accounts/quotaForm
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { sessionWithDescendants } from "../sessions/order";
-import { useDaemon, useDaemonStore } from "../store";
+import { holdsAccountSwitch } from "../sessions/sessionStatus";
+import { useDaemon, useDaemonStore, type State } from "../store";
 import { useNow } from "../format/useNow";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
@@ -54,14 +55,14 @@ export function SwitchAccountDialog({
   const signedOut = quotaSignedOut(quota);
   const [scope, setScope] = useState<Scope>("session");
   // A session an account switch already holds is left out: it is on its way, and cannot be claimed twice.
-  const eligible = (candidate: Session) => candidate.console_id === session.console_id
-    && candidate.agent === session.agent && canSwitchTo(candidate, account) && candidate.switching_account !== true;
-  const targetsIn = (all: Map<string, Session>, chosen: Scope): Session[] => (
-    chosen === "console"
+  const targetsIn = ({ sessions: all, queuedAccountSwitches }: Pick<State, "sessions" | "queuedAccountSwitches">, chosen: Scope): Session[] => {
+    const eligible = (candidate: Session) => candidate.console_id === session.console_id
+      && candidate.agent === session.agent && canSwitchTo(candidate, account) && !holdsAccountSwitch(candidate, queuedAccountSwitches);
+    return chosen === "console"
       ? Array.from(all.values()).filter(eligible)
-      : sessionWithDescendants(all.values(), all.get(session.id) ?? session).filter(eligible)
-  );
-  const counts = useDaemonStore(useShallow((s) => ({ session: targetsIn(s.sessions, "session").length, console: targetsIn(s.sessions, "console").length })));
+      : sessionWithDescendants(all.values(), all.get(session.id) ?? session).filter(eligible);
+  };
+  const counts = useDaemonStore(useShallow((s) => ({ session: targetsIn(s, "session").length, console: targetsIn(s, "console").length })));
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
   const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineReference>;
   const several = scope === "console" || counts.session > 1;
@@ -95,7 +96,7 @@ export function SwitchAccountDialog({
           return Promise.resolve();
         }
         return confirmLaunch(account, () => {
-          onSwitchAccounts(targetsIn(store.getState().sessions, scope).map((target) => target.id), account, accountName);
+          onSwitchAccounts(targetsIn(store.getState(), scope).map((target) => target.id), account, accountName);
           onClose();
         });
       }}

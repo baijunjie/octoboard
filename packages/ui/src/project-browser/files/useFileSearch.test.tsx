@@ -3,8 +3,9 @@ import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
-import type { Event } from "../../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import type { Event, RequestBody } from "../../protocol";
+import { DaemonProvider } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
 import { useFileSearch, type FileSearch } from "./useFileSearch";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -16,7 +17,7 @@ it("searches only while the caller enables it, and does not search again on a ti
   let resolve!: (event: Event) => void;
   let result!: FileSearch;
   const request = vi.fn(() => new Promise<Event>((done) => { resolve = done; }));
-  const daemon = { store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }), request } as unknown as Daemon;
+  const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1 }, request });
   function Search({ active, includeIgnored = false }: { active: boolean; includeIgnored?: boolean }) {
     result = useFileSearch("all-files", "ts", active, includeIgnored).result;
     return null;
@@ -47,7 +48,7 @@ it("repeats the search at once when ignored files are included, and tells which 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   let result!: FileSearch;
-  const request = vi.fn(async (body: { include_ignored?: boolean }): Promise<Event> => ({
+  const request = vi.fn(async (body: RequestBody & { include_ignored?: boolean }): Promise<Event> => ({
     type: "project_file_matches",
     id: null,
     project: "all-files",
@@ -56,7 +57,7 @@ it("repeats the search at once when ignored files are included, and tells which 
     ...(body.include_ignored && { ignored: ["dist/a.ts"] }),
     complete: true,
   }));
-  const daemon = { store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }), request } as unknown as Daemon;
+  const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1 }, request });
   function Search({ includeIgnored }: { includeIgnored: boolean }) {
     result = useFileSearch("all-files", "ts", true, includeIgnored).result;
     return null;
@@ -85,7 +86,7 @@ it("repeats the search at once on a toggle under StrictMode, whose effects run t
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const request = vi.fn(async (): Promise<Event> => ({ type: "project_file_matches", id: null, project: "all-files", query: "ts", paths: ["src/b.ts"], complete: true }));
-  const daemon = { store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }), request } as unknown as Daemon;
+  const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1 }, request });
   function Search({ includeIgnored }: { includeIgnored: boolean }) {
     useFileSearch("all-files", "ts", true, includeIgnored);
     return null;

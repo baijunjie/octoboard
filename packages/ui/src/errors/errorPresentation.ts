@@ -95,7 +95,7 @@ export function errorPresentation(error: unknown): CodedError {
   if (error instanceof CodedError) return error;
   const foreign = error && typeof error === "object" ? error as { message?: unknown; stack?: unknown } : undefined;
   const message = error instanceof Error ? error.message || error.name : typeof foreign?.message === "string" ? foreign.message : String(error);
-  const failure = new CodedError(message, "unexpected_error", {});
+  const failure = new CodedError(message, CODE.unexpected_error, {});
   failure.cause = error;
   // The failure's stack is the one it came with, never the stack of this wrapping, which says nothing about it.
   failure.stack = typeof foreign?.stack === "string" ? foreign.stack : undefined;

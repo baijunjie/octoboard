@@ -1,8 +1,7 @@
-import type { Account, AccountQuota, Agent, AgentAvailability, Event as DaemonEvent, Page, ShellTerminal } from "../../protocol";
+import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type ShellTerminal } from "../../protocol";
 import { accountQuotaOf } from "../../accounts/accountQuotaOf";
 import type { Step } from "../../fixtures/interact";
 import type { LiveChange } from "../scenario";
-import { ALL_AGENTS } from "../../fixtures/builders";
 
 // The changes a scenario's "Live changes" buttons make, written as the daemon's own events so the app takes them
 // the way it takes another window's or the machine's. Each is meant to be paired with a change that undoes it (the
@@ -44,7 +43,7 @@ export function agentAvailability(id: string, label: string, agent: Agent, avail
   const step: Step = (ui) =>
     ui.daemonEvents((state) => ({
       type: "agent_availability_updated",
-      agent_availability: ALL_AGENTS.map((each): AgentAvailability => {
+      agent_availability: AGENTS.map((each): AgentAvailability => {
         const held = state.agentAvailability.get(each) ?? { agent: each, availability: "not_determined", default_account_dir: null };
         return each === agent ? { ...held, availability } : held;
       }),

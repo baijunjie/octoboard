@@ -108,7 +108,7 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
     const byStatus = s.settings.sidebar_order_by_status;
     return Array.from(s.sessions.values())
       .filter((session) => session.agent === account.agent && isLive(session.status) && (session.account_id === account.id || session.config_dir === account.config_dir))
-      .sort((a, b) => compareSessions(a, b, delegatingIds, byStatus));
+      .sort((a, b) => compareSessions(a, b, delegatingIds, s.queuedAccountSwitches, byStatus));
   });
   const inspection = useAccountTrashInspection(account.id, trash);
   const afterErrorAlert = useAfterErrorAlert();

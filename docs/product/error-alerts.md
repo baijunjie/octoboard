@@ -100,8 +100,13 @@ failures (see "Recovery and unexpected errors" below). When the failure is
 about a session, the first line of its body, labelled Session, holds only the session's displayed name. A separate line
 below it identifies its location, labelled Project for a project session or Console for a console session. The session
 name and a known location's name are inline name chips. If the session's project or console record is missing, the
-location line says Unknown in the interface language, without inventing a name or exposing its ID. A session whose
-record is already gone, as after a failed launch, is named by the name the failure carried, with no location line. The
+location line says Unknown in the interface language, without inventing a name or exposing its ID. Both lines show the
+session and its project or console as they are while the alert is on screen, so a rename made after the failure shows
+in the alert; a session deleted while its alert is on screen keeps the lines the alert last showed. A session whose
+record is already gone when its alert appears, as after a failed launch, is named by the name the failure carried, with
+no location line; with no such name either, the alert has neither line. A handoff that fails once the receiving session
+is running (`handoff_move_failed`, `handoff_archive_failed`) has neither line: its message names the receiving session
+and refers to the original session by its role, the two usually sharing a name. The
 rest of the body is in Octoboard's own words — what happened, the next step, any further explanation — and holds no raw
 text: that is only under the collapsed **Error details** disclosure at the body's end (see "Names and diagnostic
 details" below). The body's opening sentence (after any session and location lines) is optional: it is there only for

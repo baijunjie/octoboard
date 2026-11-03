@@ -69,7 +69,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
     if (!statusItem || !ready) return;
     let tickTimer: ReturnType<typeof setTimeout> | undefined;
     const push = () => {
-      const { consoles, projects, sessions, settings, agentAvailability, accountQuotas } = store.getState();
+      const { consoles, projects, sessions, settings, agentAvailability, accountQuotas, queuedAccountSwitches } = store.getState();
       const now = Date.now();
       const draft = buildStatusItemMenu(t, {
         selectedSessionId,
@@ -80,6 +80,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         consoleMap: consoles,
         projectMap: projects,
         delegating: indexSessions(sessions).delegatingIds,
+        queuedSwitches: queuedAccountSwitches,
         byStatus: settings.sidebar_order_by_status,
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
         quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas },
@@ -102,6 +103,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         state.consoles !== previous.consoles ||
         state.projects !== previous.projects ||
         state.sessions !== previous.sessions ||
+        state.queuedAccountSwitches !== previous.queuedAccountSwitches ||
         state.settings.accounts !== previous.settings.accounts ||
         state.settings.account_order !== previous.settings.account_order ||
         state.settings.sidebar_order_by_status !== previous.settings.sidebar_order_by_status ||

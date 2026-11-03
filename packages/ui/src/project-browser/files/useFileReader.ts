@@ -55,7 +55,7 @@ export function useFileReader(project: string, worktree?: string): FileReader {
       wanted: () => opened.current === target,
       request: () => request({ type: "read_project_file", project, ...(worktree !== undefined && { worktree }), path: target, slot: BROWSE_SLOTS.viewer }),
       accept: (reply) => {
-        if (reply.type !== "project_file" || reply.project !== project || reply.path !== target || (reply.worktree ?? undefined) !== worktree) return undefined;
+        if (reply.project !== project || reply.path !== target || (reply.worktree ?? undefined) !== worktree) return undefined;
         const version = reply.source.kind === "live" ? reply.source.version : undefined;
         return (shown) =>
           shown.content.state === "file" && version !== undefined && shown.version === version

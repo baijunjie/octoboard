@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { sessionOf } from "../fixtures/builders";
 import type { Session, SessionStatus } from "../protocol";
-import { delegatingSessionIds, sessionShownStatusKind, sessionStatusKind, showsSwitching } from "./sessionStatus";
+import { delegatingSessionIds, holdsAccountSwitch, sessionShownStatusKind, sessionStatusKind, showsSwitching } from "./sessionStatus";
 
 const NONE: ReadonlySet<string> = new Set();
 const kindOf = (status: SessionStatus, extra: Partial<Session> = {}, delegating: ReadonlySet<string> = NONE) =>
@@ -11,14 +11,20 @@ const kindOf = (status: SessionStatus, extra: Partial<Session> = {}, delegating:
 describe("sessionShownStatusKind", () => {
   it("shows a session switching its account as such over its own status, and leaves its status kind alone", () => {
     const switching = sessionOf("s", "c", "p", "T", "interrupted", { switching_account: true });
-    expect(sessionShownStatusKind(switching, NONE)).toBe("switching");
+    expect(sessionShownStatusKind(switching, NONE, NONE)).toBe("switching");
     expect(sessionStatusKind(switching, NONE)).toBe("interrupted");
-    expect(sessionShownStatusKind(sessionOf("s", "c", "p", "T", "interrupted"), NONE)).toBe("interrupted");
+    expect(sessionShownStatusKind(sessionOf("s", "c", "p", "T", "interrupted"), NONE, NONE)).toBe("interrupted");
+  });
+
+  it("shows a session this window has queued for an account switch as switching, though its record does not say so", () => {
+    const queued = sessionOf("s", "c", "p", "T", "interrupted");
+    expect(sessionShownStatusKind(queued, NONE, new Set(["s"]))).toBe("switching");
+    expect(sessionShownStatusKind(queued, NONE, new Set(["other"]))).toBe("interrupted");
   });
 
   it("shows switching over delegated and done too", () => {
     const switching = sessionOf("s", "c", "p", "T", "idle", { switching_account: true });
-    expect(sessionShownStatusKind(switching, new Set(["s"]))).toBe("switching");
+    expect(sessionShownStatusKind(switching, new Set(["s"]), NONE)).toBe("switching");
   });
 });
 
@@ -118,9 +124,19 @@ describe("delegatingSessionIds", () => {
 
 describe("showsSwitching", () => {
   it("holds for a session an account switch holds, unless it is archived", () => {
-    expect(showsSwitching({ status: "idle", switching_account: true })).toBe(true);
-    expect(showsSwitching({ status: "archived", switching_account: true })).toBe(false);
-    expect(showsSwitching({ status: "idle", switching_account: false })).toBe(false);
-    expect(showsSwitching({ status: "idle" })).toBe(false);
+    expect(showsSwitching({ id: "s", status: "idle", switching_account: true }, NONE)).toBe(true);
+    expect(showsSwitching({ id: "s", status: "archived", switching_account: true }, NONE)).toBe(false);
+    expect(showsSwitching({ id: "s", status: "idle", switching_account: false }, NONE)).toBe(false);
+    expect(showsSwitching({ id: "s", status: "idle" }, NONE)).toBe(false);
+    expect(showsSwitching({ id: "s", status: "idle" }, new Set(["s"]))).toBe(true);
+    expect(showsSwitching({ id: "s", status: "archived" }, new Set(["s"]))).toBe(false);
+  });
+});
+
+describe("holdsAccountSwitch", () => {
+  it("holds for the daemon's switch and for one this window has queued", () => {
+    expect(holdsAccountSwitch({ id: "s", switching_account: true }, NONE)).toBe(true);
+    expect(holdsAccountSwitch({ id: "s" }, new Set(["s"]))).toBe(true);
+    expect(holdsAccountSwitch({ id: "s" }, new Set(["other"]))).toBe(false);
   });
 });

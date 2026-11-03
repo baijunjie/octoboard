@@ -25,7 +25,8 @@ import type { Account, ChangeEntry, Launch } from "../protocol";
 import { GitBadge } from "../sidebar/GitBadge";
 import { ProjectFilterSummary } from "../sidebar/ProjectFilter";
 import { RailQuotaEntry } from "../shell/RailQuotaEntry";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { accountOf, gitStatusOf, sessionOf } from "./builders";
 import { createUi } from "./interact";
 
@@ -365,8 +366,7 @@ function mountQuotaEntry(): void {
   // jsdom has no Web Animations, which the popover's exit waits for.
   HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
   onTestFinished(() => void delete (HTMLElement.prototype as Partial<HTMLElement>).animate);
-  const store = createStateStore({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available", default_account_dir: null }]]) });
-  const daemon = { store, request: () => Promise.resolve({}) } as unknown as Daemon;
+  const daemon = testDaemon({ state: { agentAvailability: new Map([["claude", { agent: "claude", availability: "available", default_account_dir: null }]]) }, request: () => Promise.resolve({ type: "ack", id: null }) });
   mountForTooltip(
     <DaemonProvider value={daemon}>
       <RailQuotaEntry onOpenSettingsAt={() => {}} />

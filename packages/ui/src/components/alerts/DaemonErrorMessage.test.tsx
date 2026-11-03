@@ -10,7 +10,7 @@ import { raiseError } from "./raiseError";
 import { CODES } from "../../errors/codes";
 import { daemonMessage } from "../../errors/daemonMessage";
 import { CodedError } from "../../errors/codedError";
-import { format, isMessageKey } from "../../i18n/catalog";
+import { format, isMessageKey, translatorFor } from "../../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation, hasCodeParams } from "../../errors/errorPresentation";
 import { ActionableError } from "../../errors/actionableError";
@@ -657,7 +657,7 @@ it.each([
       expect(!!chip.querySelector("code")).toBe(technical);
       expect(chip.textContent).not.toMatch(/[\u2066-\u2069]/);
     }
-    const plain = format(language, `error.recovery.${recovery}`, recoveryParams((key, ...args) => format(language, key, args[0])));
+    const plain = format(language, `error.recovery.${recovery}`, recoveryParams(translatorFor(language)));
     expect(container.textContent).toBe(plain);
     expect(plain).not.toMatch(/\{\w+\}|<\/?(?:span|code)/);
   }

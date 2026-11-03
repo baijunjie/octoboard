@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { onReducedMotion, prefersReducedMotion } from "./reducedMotion";
 
-const SELECTOR = "[data-list-motion], [data-flip]";
+const SELECTOR = "[data-list-motion]";
 /** How long list motion takes, in milliseconds. */
 export const DURATION = 300;
 const PRESENCE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
@@ -195,7 +195,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const ghost = virtualized ? before.element : before.element.cloneNode(true) as HTMLElement;
     for (const node of [ghost, ...ghost.querySelectorAll<HTMLElement>("*")]) {
       for (const attribute of Array.from(node.attributes)) {
-        if (attribute.name === "id" || attribute.name === "name" || attribute.name === "autofocus" || attribute.name === "data-list-motion" || attribute.name === "data-flip" || attribute.name.startsWith("on")) node.removeAttribute(attribute.name);
+        if (attribute.name === "id" || attribute.name === "name" || attribute.name === "autofocus" || attribute.name === "data-list-motion" || attribute.name.startsWith("on")) node.removeAttribute(attribute.name);
       }
     }
     ghost.dataset.listMotionGhost = "";
@@ -286,7 +286,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     // that change's, which the new layout is measured from.
     const shown = fits ? (fitting ? list.offsetHeight : fitted) : 0;
     const scrolled = scrollTop !== list.scrollTop || scrollLeft !== list.scrollLeft;
-    const newOrder = JSON.stringify(rows.map((element) => element.dataset.listMotion ?? element.dataset.flip));
+    const newOrder = JSON.stringify(rows.map((element) => element.dataset.listMotion));
     const base = virtualized ? list.getBoundingClientRect() : anchor();
     // For a fitted list, whether every row is where and as large as it was measured last, the same rows.
     let same = fits && rows.length === positions.size;
@@ -308,7 +308,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       const columns = style?.gridTemplateColumns.startsWith("subgrid") && style.gridColumn === "1 / -1" && element.parentElement
         ? getComputedStyle(element.parentElement).gridTemplateColumns : undefined;
       const position = { element, columns, parent: element.parentElement, width: virtualized ? 0 : element.offsetWidth, height: virtualized ? 0 : element.offsetHeight, x: point.x - base.x + (virtualized ? list.scrollLeft - (parent ? 0 : residual.x) : 0), y: point.y - base.y + (virtualized ? list.scrollTop - (parent ? 0 : residual.y) : 0) };
-      const key = element.dataset.listMotion ?? element.dataset.flip!;
+      const key = element.dataset.listMotion!;
       const before = positions.get(key);
       next.set(key, position);
       if (same && (before?.element !== element || before.x !== position.x || before.y !== position.y || before.width !== position.width || before.height !== position.height)) same = false;
@@ -363,10 +363,10 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       if (!before || before.element !== element) {
         cancel(element);
         clearEntrance(element);
-        if ((!virtualized && !before) || (virtualized && added.has(element.dataset.listMotion ?? element.dataset.flip!))) {
-          const animation = element.animate?.(presenceFrames(transform, true, "1", added.get(element.dataset.listMotion ?? element.dataset.flip!) ?? foldPresence), { duration: DURATION, easing: PRESENCE_EASING });
+        if ((!virtualized && !before) || (virtualized && added.has(element.dataset.listMotion!))) {
+          const animation = element.animate?.(presenceFrames(transform, true, "1", added.get(element.dataset.listMotion!) ?? foldPresence), { duration: DURATION, easing: PRESENCE_EASING });
           if (animation) {
-            added.delete(element.dataset.listMotion ?? element.dataset.flip!);
+            added.delete(element.dataset.listMotion!);
             entrances.set(element, animation);
             animation.onfinish = () => { if (entrances.get(element) === animation) entrances.delete(element); };
           }
@@ -413,7 +413,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   const unchanged = ({ target }: ResizeObserverEntry) => {
     if (target === list) return list.clientWidth === width;
     if (!(target instanceof HTMLElement)) return false;
-    const known = positions.get(target.dataset.listMotion ?? target.dataset.flip ?? "");
+    const known = positions.get(target.dataset.listMotion ?? "");
     return known?.element === target && known.width === target.offsetWidth && known.height === target.offsetHeight;
   };
   const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver((entries) => {
@@ -431,14 +431,14 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   });
   // A cached collection may commit after its owner; observe structural and layout changes there.
   // WAAPI changes no attributes, so observing style does not feed the animation back into itself.
-  const keysChanged = () => JSON.stringify(children().map((element) => element.dataset.listMotion ?? element.dataset.flip)) !== order;
+  const keysChanged = () => JSON.stringify(children().map((element) => element.dataset.listMotion)) !== order;
   const mutations = typeof MutationObserver === "undefined" ? undefined : new MutationObserver((records) => {
     // Ordinary content sizing belongs to ResizeObserver. Hover classes and changing text inside
     // rows must not turn every interaction into a synchronous layout pass.
     const layoutChanged = virtualized && records.some((record) => record.type === "attributes" && record.attributeName === "style" && record.target instanceof HTMLElement && (record.target.matches(SELECTOR) || record.target.querySelector(SELECTOR)));
     if (keysChanged() || layoutChanged) measure(true);
   });
-  mutations?.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: virtualized ? ["data-list-motion", "data-flip", "style"] : ["data-list-motion", "data-flip"] });
+  mutations?.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: virtualized ? ["data-list-motion", "style"] : ["data-list-motion"] });
   const onScroll = () => {
     if (virtualized) { added.clear(); measure(false); } else for (const key of exits.keys()) clearExit(key);
   };
@@ -457,7 +457,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       if (!prefersReducedMotion()) {
         const base = list.getBoundingClientRect();
         for (const element of children()) {
-          const key = element.dataset.listMotion ?? element.dataset.flip!;
+          const key = element.dataset.listMotion!;
           if (!logical.has(key) || nextKeys.has(key)) continue;
           // Capture logical removals and folds before React can recycle their elements or wrappers.
           // The viewport rectangle already includes every virtual wrapper's transform.
@@ -486,7 +486,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       releaseTimer = setTimeout(() => { released = undefined; }, 0);
     },
     rendered() {
-      const keys = JSON.stringify(children().map((element) => element.dataset.listMotion ?? element.dataset.flip));
+      const keys = JSON.stringify(children().map((element) => element.dataset.listMotion));
       // A fitted list's rows can resize with what its owner renders (a description changing). Measured here, that
       // change starts before it is drawn; from the observer's report it would start inside the observer, where setting
       // the list's size back is a further change the observer cannot deliver in that frame.

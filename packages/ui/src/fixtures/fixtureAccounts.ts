@@ -2,11 +2,10 @@
 // account's name and the use of a Codex reset credit, and the refusals a session gets on an account.
 import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
 import { AGENT_LABEL } from "../agents/agents";
-import { DEFAULT_ACCOUNT_NAME, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type RequestBody, type SharingCause } from "../protocol";
+import { AGENTS, DEFAULT_ACCOUNT_NAME, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type RequestBody, type SharingCause } from "../protocol";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../accounts/quotaFormat";
 import { applyDaemonEvent } from "../store";
-import { ALL_AGENTS } from "./builders";
 import type { FixtureError } from "./sampleFiles";
 import { neverReplied, normalizedPath, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
@@ -83,7 +82,7 @@ function failedSharing(error: FixtureError, share: boolean): NonNullable<Account
 
 /** One per-agent group with `map` applied to each agent's value. */
 function mappedPerAgent<T>(group: PerAgent<T>, map: (value: T) => T): PerAgent<T> {
-  return Object.fromEntries(ALL_AGENTS.map((agent) => [agent, map(group[agent])])) as PerAgent<T>;
+  return Object.fromEntries(AGENTS.map((agent) => [agent, map(group[agent])])) as PerAgent<T>;
 }
 
 /** The window's name in a quota refusal; mirrors the daemon's English `window_name`. */

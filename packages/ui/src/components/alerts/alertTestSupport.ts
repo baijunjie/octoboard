@@ -34,13 +34,12 @@ function install(): void {
   }
 }
 
-/** Hands the message of every error alert raised without a daemon (`raiseError` from `components/alerts/raiseError`) to
- * `error`, where the daemon's own toasts go, and still queues it (or does what a test's own mock of `report` does with
- * it). Install it before the tree's passive effects run (before rendering, or from a layout effect of the host), so an
- * alert raised as the tree mounts is seen. Several hosts mounted at once share one forwarder, and each install gets its
- * own sink even for the same `error`, so each receives every message once. Returns the cleanup: it stops forwarding
- * to `error`, and once no host forwards any more puts `errorAlerts.report` back as it found it and acknowledges what
- * is left queued. */
+/** Hands the message of every error alert to `error`, where the daemon's own toasts go, and still queues it (or does
+ * what a test's own mock of `report` does with it). Install it before the tree's passive effects run (before
+ * rendering, or from a layout effect of the host), so an alert raised as the tree mounts is seen. Several hosts
+ * mounted at once share one forwarder, and each install gets its own sink even for the same `error`, so each receives
+ * every message once. Returns the cleanup: it stops forwarding to `error`, and once no host forwards any more puts
+ * `errorAlerts.report` back as it found it and acknowledges what is left queued. */
 export function forwardAlerts(error: (message: string) => void): () => void {
   install();
   const sink = (message: string) => error(message);

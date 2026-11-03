@@ -68,7 +68,7 @@ export function useCommitList(
       request: () => request({ type: "list_project_commits", project, base, tip, slot }),
       pending: (list) => (list.state === "loaded" ? list : { state: "loading" }),
       accept: (reply) => {
-        if (reply.type !== "project_commits" || reply.project !== project || reply.base !== base || reply.tip !== tip) return undefined;
+        if (reply.project !== project || reply.base !== base || reply.tip !== tip) return undefined;
         return () => ({
           state: "loaded",
           base,

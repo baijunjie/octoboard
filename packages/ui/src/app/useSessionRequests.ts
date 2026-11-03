@@ -9,7 +9,8 @@ import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { ALREADY_RUNNING_CODES } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
-import { useDaemon } from "../store";
+import { raiseError } from "../components/alerts/raiseError";
+import { useDaemon, type AlertOptions } from "../store";
 import { useOctoboardTheme } from "../preferences/theme";
 
 /**
@@ -21,7 +22,7 @@ import { useOctoboardTheme } from "../preferences/theme";
 export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch: ConfirmLaunch; announce: (text: string) => void }) {
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
-  const { request, raiseError, store } = useDaemon();
+  const { request, store } = useDaemon();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
 
@@ -29,8 +30,8 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
   // same session share one in-flight guard.
   const inFlightRef = useRef<Set<string>>(new Set());
 
-  const runOnce = (key: string, title: string, action: () => Promise<void>): Promise<boolean> =>
-    runOnceGuarded(inFlightRef.current, key, action, (error) => raiseError(error, { title }));
+  const runOnce = (key: string, alert: AlertOptions, action: () => Promise<void>): Promise<boolean> =>
+    runOnceGuarded(inFlightRef.current, key, action, (error) => raiseError(error, alert));
 
   /** Resumes a session; resolves to whether the daemon accepted it. A console may now
    * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
@@ -43,7 +44,7 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
     // An archived session is reopened, an interrupted one resumed; the failure is titled for which.
     const title = t(session?.status === "archived" ? "sidebar.session.reopenFailedTitle" : "sidebar.session.resumeFailedTitle");
     await confirmLaunch(session?.account_id, async () => {
-      accepted = await runOnce(`resume:${sessionId}`, title, () => startResume(sessionId));
+      accepted = await runOnce(`resume:${sessionId}`, { title, session: sessionId }, () => startResume(sessionId));
     });
     return accepted;
   };
@@ -88,7 +89,7 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
       .then((reply) => {
         // Named as it is now: it may have been renamed while the change was out, and is gone if deleted since.
         const session = store.getState().sessions.get(sessionId);
-        if (!session || reply.type !== "session_model_set") return;
+        if (!session) return;
         const params = { session: isolate(sessionDisplayTitle(t, session)) };
         // A restart is answered only once the relaunch has settled, long past the dialog's focus move; a recorded
         // change is answered at once, and `announce` holds both back past the focus move.

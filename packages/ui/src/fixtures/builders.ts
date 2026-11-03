@@ -2,12 +2,9 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
-import type { Account, AccountQuota, MessageParams, AccountSharing, Agent, Console, FileContent, Launch, GitStatus, Host, Page, PerAgent, ProcessTree, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../protocol";
+import { AGENTS, type Account, type AccountQuota, type MessageParams, type AccountSharing, type Agent, type Console, type FileContent, type Launch, type GitStatus, type Host, type Page, type PerAgent, type ProcessTree, type Project, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { ToastFixture } from "./fixture";
-
-/** Every agent, as the list of added agents of a user who has added them all (in the default order). */
-export const ALL_AGENTS: Agent[] = ["claude", "codex", "grok"];
 
 const NOW = Date.now();
 
@@ -30,7 +27,7 @@ const NO_LAUNCH: Launch = { model: null, effort: null };
 
 /** One group per agent with the settings an extra names laid over the ones it has. */
 function layered<T extends object>(base: PerAgent<T>, over: Partial<PerAgent<Partial<T>>> = {}): PerAgent<T> {
-  return Object.fromEntries(ALL_AGENTS.map((agent) => [agent, { ...base[agent], ...over[agent] }])) as PerAgent<T>;
+  return Object.fromEntries(AGENTS.map((agent) => [agent, { ...base[agent], ...over[agent] }])) as PerAgent<T>;
 }
 
 /** What a test or scenario may set on a console: the per-agent settings may name only the agents (and launch fields) they set. */
@@ -279,8 +276,6 @@ export function snapshotState(parts: {
     consoles: new Map((parts.consoles ?? []).map((c) => [c.id, c])),
     projects: new Map((parts.projects ?? []).map((p) => [p.id, p])),
     sessions: new Map((parts.sessions ?? []).map((s) => [s.id, s])),
-    // The sessions the daemon's snapshot says are switching their account, kept apart from what the window adds for its own batch.
-    daemonSwitching: new Set((parts.sessions ?? []).filter((s) => s.switching_account).map((s) => s.id)),
     pages: new Map(Object.entries(parts.pages ?? {})),
     shellTerminals: new Map((parts.shellTerminals ?? []).map((terminal) => [terminal.id, terminal])),
     snapshotEpoch: 1,
@@ -304,7 +299,7 @@ export function switchingAccount(state: Partial<State>, ids: string[]): Partial<
     if (!session) throw new Error(`switchingAccount: no session ${id} in the state`);
     sessions.set(id, { ...session, switching_account: true });
   }
-  return { ...state, sessions, daemonSwitching: new Set([...(state.daemonSwitching ?? []), ...ids]) };
+  return { ...state, sessions };
 }
 
 /** A small, ordinary console to build a scenario on: one console, two projects, a console session
@@ -342,7 +337,7 @@ export const failureTitle = (key: PlainMessageKey) => (t: Translate) => t(key);
  * `current_claude_compatibility`: the user's explicit choice for an agent when there is one, otherwise Grok Build on and
  * Codex on only while Claude Code is among the added agents (an undecided list counts as not). The gallery's daemon keeps
  * a scenario's `settings.claude_compatibility` as the explicit choices and reports this. */
-export function effectiveClaudeCompatibility(choices: Partial<Record<Agent, boolean>>, added: Agent[] | null): Partial<Record<Agent, boolean>> {
+export function effectiveClaudeCompatibility(choices: Partial<Record<Agent, boolean>>, added: readonly Agent[] | null): Partial<Record<Agent, boolean>> {
   const defaults: Record<Exclude<Agent, "claude">, boolean> = { codex: added?.includes("claude") ?? false, grok: true };
-  return Object.fromEntries(ALL_AGENTS.filter(hasClaudeCompatibility).map((agent) => [agent, choices[agent] ?? defaults[agent]]));
+  return Object.fromEntries(AGENTS.filter(hasClaudeCompatibility).map((agent) => [agent, choices[agent] ?? defaults[agent]]));
 }

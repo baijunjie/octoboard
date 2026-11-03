@@ -4,7 +4,7 @@ import React, { useRef, useState } from "react";
 import { useFocusVisible } from "react-aria";
 
 import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
-import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 
@@ -43,21 +43,20 @@ export function RegionTabs({
   selected: Region | undefined;
   onSelect: (region: Region) => void;
 }): React.ReactElement | null {
-  const tabScrollLabels = useTabScrollLabels();
   const listRef = useListMotion<HTMLDivElement>({ contentWidth: true });
   if (regions.length === 0) return null;
   if (regions.length === 1) return <>{regions[0].content}</>;
   const current = regions.some((region) => region.id === selected) ? selected : regions[0].id;
   return (
     <Tabs selectedKey={current} onSelectionChange={(key) => onSelect(key as Region)} className="gap-4">
-      <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+      <LocalizedTabListContainer className="w-max max-w-full self-start">
         {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
         <Tabs.List ref={listRef} aria-label={label} className="relative w-max min-w-0 p-1.5">
           {regions.map((region) => (
             <RegionTab key={region.id} region={region} />
           ))}
         </Tabs.List>
-      </Tabs.ListContainer>
+      </LocalizedTabListContainer>
       {regions.map((region) => (
         <Tabs.Panel key={region.id} id={region.id} className={PANEL_CLASS}>
           {region.content}

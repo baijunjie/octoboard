@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { TitledControl } from "../components/hint/TitledControl";
 import { openingFocus } from "../components/focus/modalFocus";
 import { FadedScroller } from "../components/scroll/scrollFade";
-import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { tryEachFrame } from "../components/focus/tryEachFrame";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
@@ -52,8 +52,6 @@ const SECTIONS: Record<SettingsSectionId, Section> = {
 /** How many animation frames (about half a second) a tab waits for a modal in front of Settings to go before it
  * gives up taking focus. */
 const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
-
-export type { SettingsSectionId } from "./sections";
 
 /** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
  * still be scrolled towards, as the body of a `Dialog` does. The scroller sits inside the panel, not
@@ -102,7 +100,6 @@ export function SettingsDialog({
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
-  const tabScrollLabels = useTabScrollLabels();
   const isNarrow = useIsNarrow();
   const fullScreen = !useMediaQuery(() => minWidthQuery("phone"));
   const [sectionId, setSectionId] = useState<string>(navigation?.section ?? initialSection);
@@ -186,9 +183,8 @@ export function SettingsDialog({
                 instead, clear of the close button at its end and scrolling sideways on its own.
                 `self-start` keeps the column at its own height rather than the dialog's, which is
                 what bounds how many sections fit — see `SETTINGS_SECTION_IDS`. */}
-            <Tabs.ListContainer
+            <LocalizedTabListContainer
               className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-phone:ms-3 max-phone:mt-2 max-phone:max-w-[calc(100%-3.75rem)] max-docked:w-max max-docked:max-w-[calc(100%-4rem)] max-docked:self-start docked:my-6 docked:me-0 docked:w-48 docked:self-start"
-              render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}
             >
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
@@ -211,7 +207,7 @@ export function SettingsDialog({
                   );
                 })}
               </Tabs.List>
-            </Tabs.ListContainer>
+            </LocalizedTabListContainer>
             {SETTINGS_SECTION_IDS.map((id) => {
               const { label, Content, stickyHeadingHeight } = SECTIONS[id];
               return (

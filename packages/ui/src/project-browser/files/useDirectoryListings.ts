@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { listingLane } from "../../browse/budget";
 import { CHANGED_RETRIES, projectBrowseFailure } from "../../browse/failure";
+import { useLatest, useStableHandler } from "../../components/hooks/useLatest";
 import { usePoll } from "../../components/hooks/usePoll";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { useDaemon, useDaemonStore } from "../../store";
@@ -46,14 +47,11 @@ export function useDirectoryListings(project: string, active: boolean): Director
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [listings, setListings] = useState<ReadonlyMap<string, DirListing>>(new Map());
 
-  // The mutable side, read from callbacks that outlive the render that made them. The React Compiler
-  // leaves this hook uncompiled whatever is done about the rule findings marked below: `send` calls
-  // itself to retry, which it takes for a call during render.
+  // The mutable side, read from callbacks that outlive the render that made them.
   const state = useRef({
     alive: true,
     listings: listings as ReadonlyMap<string, DirListing>,
     wanted: [] as readonly string[],
-    connected,
     rootId: undefined as string | undefined,
     sequence: new Map<string, number>(),
     // Who waits for each directory's listing, resolved when the latest one asked for settles.
@@ -62,12 +60,11 @@ export function useDirectoryListings(project: string, active: boolean): Director
     inFlight: 0,
     // Turns asked of the window's lane and not yet given: each takes the head of the queue then.
     claimed: 0,
-    // A browser lists what it wants as it first appears, which counts as its first refresh.
-    // eslint-disable-next-line react-hooks/purity
-    lastRefresh: Date.now(),
+    // A browser lists what it wants as it first appears, which counts as its first refresh: set on mount, by the
+    // effect that comes before the poll.
+    lastRefresh: 0,
   });
-  // eslint-disable-next-line react-hooks/refs
-  state.current.connected = connected;
+  const connectedRef = useLatest(connected);
 
   const commit = (change: (current: Map<string, DirListing>) => void) => {
     const next = new Map(state.current.listings);
@@ -76,16 +73,35 @@ export function useDirectoryListings(project: string, active: boolean): Director
     setListings(next);
   };
 
-  const pump = useRef<() => void>(() => {});
+  /** Hands the lane the turns the queue is owed, within `MAX_IN_FLIGHT`, and again as each is given. */
+  function drain() {
+    const s = state.current;
+    while (s.alive && s.inFlight + s.claimed < MAX_IN_FLIGHT && s.queue.length > s.claimed) {
+      s.claimed += 1;
+      void listingLane
+        .send(() => {
+          s.claimed -= 1;
+          const dir = s.queue.shift();
+          if (!s.alive || dir === undefined) return undefined;
+          s.inFlight += 1;
+          // A retry keeps the place in the lane.
+          return send(dir, 0).finally(() => {
+            s.inFlight -= 1;
+          });
+        })
+        .then(() => drain());
+    }
+  }
+  const pump = useStableHandler(() => drain());
   /** Lists `dir`, and again when it changed while it was read; settles once that is over. */
-  const send = (dir: string, attempt: number): Promise<void> => {
+  function send(dir: string, attempt: number): Promise<void> {
     const s = state.current;
     const sequence = s.sequence.get(dir) ?? 0;
     const current = () => s.alive && s.sequence.get(dir) === sequence;
     let retried = false;
     return request({ type: "list_project_dir", project, path: dir, slot: `list:${project}:${dir}` })
       .then((reply) => {
-        if (!current() || reply.type !== "project_dir" || reply.project !== project || reply.path !== dir) return;
+        if (!current() || reply.project !== project || reply.path !== dir) return;
         // The project's directory was replaced by another: nothing listed from the old one stands.
         const replaced = s.rootId !== undefined && s.rootId !== reply.root_id;
         s.rootId = reply.root_id;
@@ -121,33 +137,13 @@ export function useDirectoryListings(project: string, active: boolean): Director
           s.waiting.delete(dir);
         }
       });
-  };
-  // eslint-disable-next-line react-hooks/refs
-  pump.current = () => {
-    const s = state.current;
-    while (s.alive && s.inFlight + s.claimed < MAX_IN_FLIGHT && s.queue.length > s.claimed) {
-      s.claimed += 1;
-      void listingLane
-        .send(() => {
-          s.claimed -= 1;
-          const dir = s.queue.shift();
-          if (!s.alive || dir === undefined) return undefined;
-          s.inFlight += 1;
-          // A retry keeps the place in the lane.
-          return send(dir, 0).finally(() => {
-            s.inFlight -= 1;
-          });
-        })
-        .then(() => pump.current());
-    }
-  };
-
+  }
   /** Asks for `dir`'s listing, keeping a loaded one on screen meanwhile. In the `background` (the
    * periodic refresh, a reconnect) a failure stays on screen too, and its Try again with it; asked
    * by the user, it gives way to `loading`. The promise settles with that listing. */
-  const enqueue = (dir: string, background = false): Promise<void> => {
+  function enqueue(dir: string, background = false): Promise<void> {
     const s = state.current;
-    if (!s.connected) return Promise.resolve();
+    if (!connectedRef.current) return Promise.resolve();
     const held = s.listings.get(dir);
     if (held?.state === "loaded") {
       if (!held.refreshing) commit((next) => next.set(dir, { ...held, refreshing: true }));
@@ -159,22 +155,22 @@ export function useDirectoryListings(project: string, active: boolean): Director
     s.sequence.set(dir, (s.sequence.get(dir) ?? 0) + 1);
     if (!s.queue.includes(dir)) s.queue.push(dir);
     const settled = new Promise<void>((resolve) => s.waiting.set(dir, [...(s.waiting.get(dir) ?? []), resolve]));
-    pump.current();
+    pump();
     return settled;
-  };
+  }
 
-  const refresh = useCallback((dirs: readonly string[]) => dirs.forEach((dir) => enqueue(dir)), []);
+  const refresh = useStableHandler((dirs: readonly string[]) => dirs.forEach((dir) => enqueue(dir)));
   const refreshWanted = async (background: boolean) => {
     state.current.lastRefresh = Date.now();
     await Promise.all(state.current.wanted.map((dir) => enqueue(dir, background)));
   };
-  const refreshAll = useCallback(() => refreshWanted(false), []);
+  const refreshAll = useStableHandler(() => refreshWanted(false));
 
   // A directory that comes on screen is listed once; after that only a refresh lists it again.
-  const want = useCallback((dirs: readonly string[]) => {
+  const want = useStableHandler((dirs: readonly string[]) => {
     state.current.wanted = dirs;
     for (const dir of dirs) if (!state.current.listings.has(dir)) enqueue(dir);
-  }, []);
+  });
   useEffect(() => {
     if (connected) want(state.current.wanted);
   }, [connected]);
@@ -189,6 +185,16 @@ export function useDirectoryListings(project: string, active: boolean): Director
     refreshWanted(true);
   }, [snapshotEpoch]);
 
+  // Declared before the poll, whose first read of `lastRefresh` must find it set.
+  useEffect(() => {
+    const s = state.current;
+    s.alive = true;
+    s.lastRefresh = Date.now();
+    return () => {
+      s.alive = false;
+    };
+  }, []);
+
   // The periodic refresh, and one on coming back to the window, or to a pane that was hidden,
   // after a while.
   usePoll({
@@ -198,14 +204,6 @@ export function useDirectoryListings(project: string, active: boolean): Director
     lastAt: () => state.current.lastRefresh,
     run: () => void refreshWanted(true),
   });
-
-  useEffect(() => {
-    const s = state.current;
-    s.alive = true;
-    return () => {
-      s.alive = false;
-    };
-  }, []);
 
   return { listings, want, refresh, refreshAll };
 }

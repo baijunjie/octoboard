@@ -13,6 +13,7 @@ import type { MessageKey, Translate } from "../i18n/catalog";
 import { SESSION_REQUEST_ANSWERED, SESSION_REQUEST_NOT_WAITING, type Account, type Agent, type SessionRequestAction, type Settings } from "../protocol";
 import { sessionAccount, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
+import { raiseError } from "../components/alerts/raiseError";
 import { displayWirePath } from "../format/wirePath";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
 import { dialogAround } from "../components/dialog/dialogElement";
@@ -228,7 +229,7 @@ const ACTION_TEXT = {
  * stays mounted between them. */
 export function useSessionRequestDialogProps(request: SessionRequest | undefined): ConfirmDialogProps | undefined {
   const t = useT();
-  const { request: send, raiseError } = useDaemon();
+  const { request: send } = useDaemon();
   // What the form of a switch or a handoff ended on, which the form reports.
   const [reported, setReported] = useState<RequestFormState>();
   // A switch of a session that has been archived cannot be carried out whatever the user changes: the dialog says

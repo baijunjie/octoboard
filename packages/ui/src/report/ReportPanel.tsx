@@ -4,6 +4,7 @@ import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useS
 
 import { Button } from "../components/controls/Button";
 import { PaneFailure } from "../components/alerts/PaneFailure";
+import { raiseError } from "../components/alerts/raiseError";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { RetryStatusMark } from "../components/status/RetryStatusMark";
 import { StatusBadge } from "../components/status/StatusBadge";
@@ -69,7 +70,7 @@ export function ReportPanel({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const { request, raiseError } = useDaemon();
+  const { request } = useDaemon();
   const sessionPages = useDaemonStore((s) => s.pages.get(sessionId));
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
@@ -145,7 +146,7 @@ export function ReportPanel({
         raiseError(err, { title: t("report.submitFailedTitle"), session: sessionId });
       });
     },
-    [request, raiseError, sessionId, t],
+    [request, sessionId, t],
   );
 
   // Pages already here stay usable, so the failure to refresh them is a warning at the title, not an

@@ -8,20 +8,20 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { isolate } from "../../i18n/isolate";
 import type { Event, HistoryMessage, Session, SessionContext } from "../../protocol";
+import type { RequestHandler } from "../../requests";
+import type { Daemon, State } from "../../store";
+import { TestHost } from "../../test/TestHost";
+import { testDaemon } from "../../test/testDaemon";
 import { SessionHistoryView } from "./SessionHistoryView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const daemon = vi.hoisted(() => ({ request: vi.fn<(body: unknown) => Promise<unknown>>() }));
-const store = vi.hoisted(() => ({ snapshotEpoch: 0, consoles: new Map(), projects: new Map(), sessions: new Map(), homeDir: "/home/dev" }));
+const request = vi.fn<RequestHandler>();
 vi.mock("../../components/alerts/errorAlerts", () => ({ errorAlerts: { report: vi.fn() } }));
-vi.mock("../../store", () => ({
-  useDaemon: () => daemon,
-  useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
-  useSession: (id: string | null | undefined) => (id ? store.sessions.get(id) : undefined),
-  useDaemonStoreOrEmpty: (select: (state: typeof store) => unknown) => select(store),
-}));
-vi.mock("../../platform/react", () => ({ usePlatform: () => ({ links: undefined }) }));
+let daemon: Daemon;
+const host = (ui: React.ReactNode) => <TestHost daemon={daemon}>{ui}</TestHost>;
+/** Updates the daemon's state the way a broadcast would. */
+const setState = (state: Partial<State>) => act(() => daemon.store.setState(state));
 vi.mock("../../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 vi.mock("../../viewer/markdown/MarkdownDocument", () => ({
   MarkdownDocument: ({ text }: { text: string }) => <div data-testid="markdown">{text}</div>,
@@ -30,9 +30,8 @@ vi.mock("../../viewer/markdown/MarkdownDocument", () => ({
 const session = { id: "s-1", started_at: 1700000000000, ended_at: 1700000600000, bound_to: null };
 const roots: Root[] = [];
 beforeEach(() => {
-  daemon.request.mockReset();
-  store.snapshotEpoch = 0;
-  store.sessions = new Map();
+  request.mockReset();
+  daemon = testDaemon({ state: { homeDir: "/home/dev" }, request });
   vi.mocked(errorAlerts.report).mockClear();
 });
 afterEach(() => {
@@ -48,14 +47,14 @@ const history: HistoryMessage[] = [
 ];
 
 async function mount(reply: Event | Promise<Event> | Error, context?: SessionContext): Promise<HTMLElement> {
-  daemon.request.mockImplementation(async () => {
+  request.mockImplementation(async () => {
     if (reply instanceof Error) throw reply;
     return reply;
   });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(<SessionHistoryView session={{ ...session, context }} />));
+  await act(async () => root.render(host(<SessionHistoryView session={{ ...session, context }} />)));
   // Settle the lazy renderer even when this is the first test to show an agent reply.
   if (!vi.isFakeTimers()) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   return container;
@@ -90,7 +89,7 @@ it("shows the session's archive and creation times even when its history is unav
 
 it("shows user messages and agent replies while omitting Octoboard messages", async () => {
   const container = await mount({ type: "session_history", id: null, session: "s-1", messages: history });
-  expect(daemon.request).toHaveBeenCalledWith({ type: "read_session_history", session: "s-1" });
+  expect(request).toHaveBeenCalledWith({ type: "read_session_history", session: "s-1" });
   expect(articles(container)).toEqual(["Agent", "You", "Agent"]);
   expect(container.textContent).toContain("Why is it slow?");
   expect(container.textContent).toContain("The query scans the table.");
@@ -145,27 +144,27 @@ it("shows a failed request as an error with Try again, and reads again when it i
   expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
   expect(errorAlerts.report).not.toHaveBeenCalled();
   expect(container.textContent).not.toContain("History unavailable");
-  daemon.request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
+  request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
   const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
   await act(async () => retry.click());
   await act(async () => {});
-  expect(daemon.request).toHaveBeenCalledTimes(2);
+  expect(request).toHaveBeenCalledTimes(2);
   expect(container.querySelector("[role=alert]")).toBeNull();
   expect(articles(container)).toEqual(["Agent", "You", "Agent"]);
 });
 
 it("reads a failed request again when a fresh snapshot arrives, but a loaded one is left alone", async () => {
   const container = await mount(new Error("gone"));
-  daemon.request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
-  store.snapshotEpoch = 1;
+  request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
+  setState({ snapshotEpoch: 1 });
   const root = roots[0]!;
-  await act(async () => root.render(<SessionHistoryView session={session} />));
+  await act(async () => root.render(host(<SessionHistoryView session={session} />)));
   await act(async () => {});
   expect(articles(container)).toEqual(["Agent", "You", "Agent"]);
-  const reads = daemon.request.mock.calls.length;
-  store.snapshotEpoch = 2;
-  await act(async () => root.render(<SessionHistoryView session={session} />));
-  expect(daemon.request.mock.calls.length).toBe(reads);
+  const reads = request.mock.calls.length;
+  setState({ snapshotEpoch: 2 });
+  await act(async () => root.render(host(<SessionHistoryView session={session} />)));
+  expect(request.mock.calls.length).toBe(reads);
 });
 
 it("treats a history containing only Octoboard messages as empty", async () => {
@@ -189,11 +188,11 @@ it("speaks an unavailable and an empty history through a status", async () => {
 });
 
 it("shows a loading state until the reply arrives", async () => {
-  daemon.request.mockImplementation(() => new Promise(() => {}));
+  request.mockImplementation(() => new Promise(() => {}));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(<SessionHistoryView session={session} />));
+  await act(async () => root.render(host(<SessionHistoryView session={session} />)));
   await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 200))));
   expect(container.querySelector("[role=status]")?.textContent).toBe("Loading history…");
   expect(container.querySelector("article")).toBeNull();
@@ -201,8 +200,8 @@ it("shows a loading state until the reply arrives", async () => {
 
 it("keeps focus in the view when Try again goes away under it, on the view while the messages are not there yet", async () => {
   const container = await mount(new Error("gone"));
-  let answer!: (reply: unknown) => void;
-  daemon.request.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+  let answer!: (reply: Event) => void;
+  request.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
   const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
   retry.focus();
   await act(async () => retry.click());
@@ -220,7 +219,7 @@ it("retains the daemon reason for rich rendering inside the Alert, which announc
   expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
   expect(container.querySelector("[role=alert]")?.querySelector("button")).toBeNull();
   expect(errorAlerts.report).not.toHaveBeenCalled();
-  await act(async () => roots[0]!.render(<SessionHistoryView session={session} />));
+  await act(async () => roots[0]!.render(host(<SessionHistoryView session={session} />)));
   expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
   expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Try again")).toBe(true);
 });
@@ -228,17 +227,17 @@ it("retains the daemon reason for rich rendering inside the Alert, which announc
 const owner = { id: "owner-1", title: "Release captain", role: "console" } as Session;
 
 async function mountChild(boundTo: string | null, onSelectSession: ((session: Session) => void) | null = vi.fn()): Promise<HTMLElement> {
-  daemon.request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
+  request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(<SessionHistoryView session={{ ...session, bound_to: boundTo }} onSelectSession={onSelectSession ?? undefined} />));
+  await act(async () => root.render(host(<SessionHistoryView session={{ ...session, bound_to: boundTo }} onSelectSession={onSelectSession ?? undefined} />)));
   await act(async () => {});
   return container;
 }
 
 it("links an owned session's history to its owner under the heading, and pressing it selects the owner", async () => {
-  store.sessions = new Map([[owner.id, owner]]);
+  setState({ sessions: new Map([[owner.id, owner]]) });
   const onSelectSession = vi.fn();
   const container = await mountChild("owner-1", onSelectSession);
   const link = [...container.querySelectorAll("header button")].find((button) => button.textContent?.includes("Release captain"))!;
@@ -248,7 +247,7 @@ it("links an owned session's history to its owner under the heading, and pressin
 });
 
 it("rings the owner link only when it has keyboard focus itself, not when the history section does", async () => {
-  store.sessions = new Map([[owner.id, owner]]);
+  setState({ sessions: new Map([[owner.id, owner]]) });
   const container = await mountChild("owner-1");
   const section = container.querySelector<HTMLElement>("section")!;
   const link = container.querySelector<HTMLElement>("header button")!;
@@ -261,12 +260,12 @@ it("rings the owner link only when it has keyboard focus itself, not when the hi
 });
 
 it("shows no owner line for an unbound session or an owner the client does not know", async () => {
-  store.sessions = new Map([[owner.id, owner]]);
+  setState({ sessions: new Map([[owner.id, owner]]) });
   expect((await mountChild(null)).querySelector("header p")).toBeNull();
   expect((await mountChild("deleted-owner")).querySelector("header p")).toBeNull();
 });
 
 it("shows no owner line when nothing can show the owner", async () => {
-  store.sessions = new Map([[owner.id, owner]]);
+  setState({ sessions: new Map([[owner.id, owner]]) });
   expect((await mountChild("owner-1", null)).querySelector("header p")).toBeNull();
 });

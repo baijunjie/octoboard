@@ -152,7 +152,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
         </IconToggle>
       )} />
       {data.projectId && <ProcessSessionSelect projectId={data.projectId} value={data.sessionId} onChange={(id) => { setFilterOpen(true); data.selectSession(id); }} landing={!failed} shown={filterShown} opened={filterOpen} onEmptyBlur={() => setFilterOpen(false)} toggleRef={filterToggle} />}
-      <div ref={bodyRef} className={`flex min-h-0 flex-1 flex-col ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
+      <div ref={bodyRef} className={`flex min-h-0 flex-1 flex-col ${scrollRegion.insetRing}`}>
         <FadedScroller ref={scrollerRef} region={scrollRegion} stickyHeadingHeight={grouped && trees?.length ? categoryHeadingHeight : undefined} className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto ${grouped && trees?.length ? "px-(--pane-inset) pb-4" : "p-(--pane-inset)"}`}>
           {failed ? (
             <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retryList} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} landing />

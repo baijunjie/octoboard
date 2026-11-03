@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 
-import { remainingPercentAt, type QuotaBar } from "../../accounts/quotaFormat";
-import type { QuotaWindow } from "../../protocol";
+import { remainingPercentAt, type QuotaBar } from "../accounts/quotaFormat";
+import type { QuotaWindow } from "../protocol";
 
 /** The rail button's compact indicator under its gauge: an outlined capsule 18 × 5 px filled by what
  * remains of the main window. With a weekly window too, the main capsule is 4 px tall and one 3 px tall

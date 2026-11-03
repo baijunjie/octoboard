@@ -5,7 +5,8 @@
 // renders them outside the app (see `viewerGallery.tsx`).
 import { createElement } from "react";
 
-import { format, type Translate } from "../../i18n/catalog";
+import { NO_RECORDS } from "../../errors/daemonMessage";
+import { translatorFor, type Translate } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
 import type { Language } from "../../i18n/languages";
 import type { FileContent, LineStats } from "../../protocol";
@@ -804,7 +805,7 @@ function compared(parts: LiveParts, t: Translate): ViewerSubject {
 
 async function allChanges(language: Language): Promise<ViewerSubject[]> {
   const parts = await loadLiveParts();
-  const t: Translate = (key, ...args) => format(language, key, ...args);
+  const t = translatorFor(language);
   return [
     change(t, "src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
     change(t, "src/describe.ts", present("src/describe.ts"), present("src/describe.ts"), LONG_LINES_PATCH),
@@ -1095,7 +1096,7 @@ function failure(id: string, title: string, description: string, slot: "file" | 
       subjects: async (language) => {
         const { CodedError } = await import("../../errors/codedError");
         const { displayWirePath } = await import("../../format/wirePath");
-        const t: Translate = (key, ...args) => format(language, key, ...args);
+        const t = translatorFor(language);
         const message = new CodedError(refusal.message, refusal.code, { path: displayWirePath(path), ...refusal.params });
         switch (slot) {
           case "file":
@@ -1136,10 +1137,10 @@ function bodiesFailure(id: string, title: string, description: string, build: (t
       subjects: async (language) => {
         const { CodedError } = await import("../../errors/codedError");
         const { changeBodiesFailure } = await import("../../viewer/viewerError");
-        const t: Translate = (key, ...args) => format(language, key, ...args);
+        const t = translatorFor(language);
         return [build(t, (header, refusal) => () => {
           const error = new CodedError(refusal.message, refusal.code, refusal.params);
-          return Promise.reject(changeBodiesFailure(t, language, error, header, { consoles: new Map(), projects: new Map(), sessions: new Map() }));
+          return Promise.reject(changeBodiesFailure(t, language, error, header, NO_RECORDS));
         })];
       },
     },
@@ -1206,7 +1207,7 @@ const bodiesFailureScenarios: Scenario[] = [
 // text it falls back to being too long to highlight.
 const OVERSIZED_BROKEN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">\n${generated(RENDER_BUDGETS.highlightLines + 100, (i) => `<!-- metadata ${i} -->`)}<rect width="10" height="10"`;
 async function marksOfEveryToneSubjects(language: Language): Promise<ViewerSubject[]> {
-  const t: Translate = (key, ...args) => format(language, key, ...args);
+  const t = translatorFor(language);
   const path = "assets/oversized.svg";
   return [
     change(t, path, { state: "out_of_scope", repositoryPath: "packages/shared/assets/oversized.svg" }, present(path, text(path, OVERSIZED_BROKEN_SVG))),
@@ -1359,7 +1360,7 @@ export const viewerScenarios: Scenario[] = [
     description: "The added image uses the same transparency checkerboard on the empty Before side and the image's After side, without an inner border or rounded corners. Both headings have space above, below and beside their text. Next shows two images with the same heading spacing; narrow the window to compare the stacked layout.",
     viewer: {
       subjects: async (language) => {
-        const t: Translate = (key, ...args) => format(language, key, ...args);
+        const t = translatorFor(language);
         return [
           change(t, "assets/new.png", { state: "absent" }, present("assets/new.png", after)),
           change(t, "assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),

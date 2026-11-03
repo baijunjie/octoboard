@@ -6,17 +6,18 @@ import { AnchoredTooltip } from "../../components/hint/AnchoredTooltip";
 import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { t } from "../../i18n/language";
+import { raiseError } from "../../components/alerts/raiseError";
 import type { Daemon } from "../../store";
 
 // The parts of a shell terminal's tab strip that stand on their own: what a tab holds and does,
 // apart from the panel's state.
 
 /** Asks the daemon to close `terminal`; a refusal is reported as an error. Settles once it has answered. */
-export async function closeShellTerminal(daemon: Pick<Daemon, "request" | "raiseError">, terminal: string): Promise<void> {
+export async function closeShellTerminal(daemon: Pick<Daemon, "request">, terminal: string): Promise<void> {
   try {
     await daemon.request({ type: "close_shell_terminal", shell_terminal: terminal });
   } catch (err) {
-    daemon.raiseError(err, { title: t("shellTerminal.closeFailedTitle") });
+    raiseError(err, { title: t("shellTerminal.closeFailedTitle") });
   }
 }
 

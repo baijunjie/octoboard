@@ -5,13 +5,13 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { App } from "./App";
 import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip, openTooltip } from "./components/hint/tooltipTestSupport";
-import { ALL_AGENTS, consoleOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
+import { consoleOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { touchEvent } from "./layout/touchTestSupport";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
-import type { Project, RequestBody } from "./protocol";
+import { AGENTS, type Project, type RequestBody } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
@@ -115,7 +115,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
   const daemon = testDaemon({
     state: {
       ...snapshotState({ consoles: [console_], projects: [project], sessions }),
-      ...(agents ? { agentAvailability: new Map(ALL_AGENTS.map((agent) => [agent, { agent, availability: "available" as const, default_account_dir: `/Users/dev/.${agent}` }])) } : {}),
+      ...(agents ? { agentAvailability: new Map(AGENTS.map((agent) => [agent, { agent, availability: "available" as const, default_account_dir: `/Users/dev/.${agent}` }])) } : {}),
     },
     request: vi.fn(async (body: RequestBody) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null }) as Daemon["request"],
   });

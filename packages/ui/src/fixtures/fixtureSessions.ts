@@ -106,7 +106,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       refuseIfQuotaExhausted(session.agent, account);
       refuseIfNotSignedIn(session.agent, account);
       // The daemon broadcasts the session as switching while the switch holds its claim, and the
-      // session as it is once the switch ends. What the window adds for its own batch is not the daemon's to send.
+      // session as it is once the switch ends.
       const { switching_account: _, ...resting } = session;
       applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, switching_account: true } });
       const reply = scenario.sessionAccountSwitches?.[body.session];

@@ -1,5 +1,6 @@
-import React, { Suspense, useCallback, useRef, useState } from "react";
+import React, { Suspense, useCallback, useState } from "react";
 
+import { useRenderLatest } from "../../components/hooks/useLatest";
 import { retryableLazy } from "../../components/hooks/retryableLazy";
 import { useFadeRegion, useScrollFade } from "../../components/scroll/scrollFade";
 import { isolate } from "../../i18n/isolate";
@@ -92,18 +93,13 @@ function DocumentSurface({
   });
   // Stable across the caller's renders. A new callback would mount every link and diagram again,
   // and take the focus of a link with it, whenever the frame gains or loses its focus ring.
-  // Written during render, which leaves this component out of the React Compiler: the document's
-  // links call `isDirectory` while they render, and have to get this render's answer.
-  const openFileRef = useRef(location?.onOpenFile);
-  // eslint-disable-next-line react-hooks/refs
-  openFileRef.current = location?.onOpenFile;
-  const isDirectoryRef = useRef(location?.isDirectory);
-  // eslint-disable-next-line react-hooks/refs
-  isDirectoryRef.current = location?.isDirectory;
+  // The document's links call `isDirectory` while they render, and have to get this render's answer.
+  const openFile = useRenderLatest(location?.onOpenFile);
+  const isDirectoryOf = useRenderLatest(location?.isDirectory);
   const onOpenFile = useCallback((file: string, fragment?: string) => {
-    openFileRef.current?.(file, fragment);
-  }, []);
-  const isDirectory = useCallback((file: string) => isDirectoryRef.current?.(file) ?? false, []);
+    openFile()?.(file, fragment);
+  }, [openFile]);
+  const isDirectory = useCallback((file: string) => isDirectoryOf()?.(file) ?? false, [isDirectoryOf]);
   // Stable, so the frame's focus ring changing does not draw the document again.
   const renderCode = useCallback(
     ({ language, text: code, highlight }: { language?: string; text: string; highlight: boolean }) => (

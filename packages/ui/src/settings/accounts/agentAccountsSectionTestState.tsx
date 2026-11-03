@@ -10,7 +10,6 @@ import { testDaemon } from "../../test/testDaemon";
 import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Event, Project, RequestBody, Session, Settings } from "../../protocol";
 
 export const request = vi.fn((_body: RequestBody): Promise<object> => Promise.resolve({}));
-export const raiseError = vi.fn();
 export const showNotice = vi.fn();
 export const settings: Settings = { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects" };
 export const accountQuotas: AccountQuota[] = [];
@@ -27,7 +26,6 @@ export const startDaemon = (): Daemon =>
   testDaemon({
     state: structuredClone({ settings, agentAvailability: availability, accountQuotas, accountLogins, accountSharing, consoles, projects, sessions }),
     request: (body) => request(body) as Promise<Event>,
-    raiseError,
     showNotice,
   });
 

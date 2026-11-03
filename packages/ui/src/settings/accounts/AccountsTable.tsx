@@ -52,7 +52,7 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
     return () => resize.disconnect();
   }, []);
   return (
-    <div className={`group/accounts rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`} data-overflowing={region.overflows ? "" : undefined}>
+    <div className={`group/accounts rounded-lg ${region.ring}`} data-overflowing={region.overflows ? "" : undefined}>
       {/* The top padding is room for the focus ring of the help tip in the header. */}
       <FadedScroller orientation="horizontal" region={region} fade={false} endInset={pinnedWidth} className="pt-1">
         <table aria-label={t("settings.accounts.table.label", { agent: AGENT_LABEL[agent] })} className="w-full min-w-[38rem] border-separate border-spacing-0 text-sm">
