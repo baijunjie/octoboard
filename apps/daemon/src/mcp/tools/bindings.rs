@@ -155,6 +155,7 @@ pub(in crate::mcp) async fn bind_to_session(
         first_report,
         ReportStatus::NeedsDecision,
         Vec::new(),
+        Vec::new(),
     )
     .await;
     let tool = |name: &str| qualified_tool_name(bound.agent, name);
@@ -287,10 +288,11 @@ mod tests {
              replaces anything your role description says about being independent and not \
              calling `mcp__octoboard__report`. `done` with no open items archives you, and is \
              refused while a session you started is not archived; `needs_decision` or open items \
-             leave you running. You keep your child sessions and go on driving them with \
-             `mcp__octoboard__open_session` and the tools that go with it. Your summary, as your \
-             first report, was delivered to your new parent session. You have a parent session \
-             now, so do not call `mcp__octoboard__bind_to_session` again."
+             leave you running. Items that are your parent session's to carry out rather than \
+             yours go in `owner_items`, not `open_items`. You keep your child sessions and go on \
+             driving them with `mcp__octoboard__open_session` and the tools that go with it. Your \
+             summary, as your first report, was delivered to your new parent session. You have a \
+             parent session now, so do not call `mcp__octoboard__bind_to_session` again."
         );
         for (caller, parent, expected, role) in [
             (
@@ -556,8 +558,9 @@ mod tests {
                  in this terminal, and report to it with `mcp__octoboard__report` once per round \
                  of work. This replaces anything your role description says about being \
                  independent and not calling `mcp__octoboard__report`. `done` with no open items \
-                 archives you; `needs_decision` or open items leave you running. You can no \
-                 longer start or drive sessions"
+                 archives you; `needs_decision` or open items leave you running. Items that are \
+                 your parent session's to carry out rather than yours go in `owner_items`, not \
+                 `open_items`. You can no longer start or drive sessions"
             ),
             "{note}"
         );

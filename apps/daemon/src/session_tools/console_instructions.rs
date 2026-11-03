@@ -162,7 +162,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            dates from: check the session with `get_session` before acting on one. The notice that \
            the user released a session from you is the exception: it is not kept.\n\
          - A session reporting `done` with nothing open has already been archived by the time you \
-           read it. Anything else leaves it running and awaiting your next instruction.\n\
+           read it; items it lists as for you to do are yours to carry out. Anything else leaves \
+           it running and awaiting your next instruction. A session of yours left idle after its \
+           last report shows `idle_after_report: true`, and you are told once when that has \
+           lasted 10 minutes: archive it if its work is over, or give it its next instruction.\n\
          - You can read every session of the console, but act only on the ones that report to \
            you (`yours: true`). A session with `yours: false` is somebody else's — the user's own, \
            or another console session's or a project session's, named in `owner` (`owner_kind` \
@@ -357,6 +360,14 @@ mod tests {
     use super::*;
     use crate::protocol::Role;
 
+    /// The file is a constant, so the delay it tells of before the notice that a session stayed
+    /// idle after its report is written out; it is the delay the notice comes after.
+    #[test]
+    fn the_instruction_file_tells_the_idle_notices_delay() {
+        let minutes = crate::messaging::idle_children::NUDGE_AFTER.as_secs() / 60;
+        assert!(CONSOLE_SESSION_INSTRUCTIONS.contains(&format!("lasted {minutes} minutes")));
+    }
+
     /// The file is one text for every agent, so it names no agent's tool prefix.
     #[test]
     fn the_instruction_file_names_no_agents_prefix() {
@@ -456,7 +467,12 @@ mod tests {
         // Every console tool's name holds an underscore, and so do the few field names and values
         // the file puts in backticks; listing them keeps those from being taken for tools missing
         // from the catalogue.
-        const NON_TOOL_NAMES: [&str; 3] = ["owner_kind", "needs_decision", "orchestration_role"];
+        const NON_TOOL_NAMES: [&str; 4] = [
+            "owner_kind",
+            "needs_decision",
+            "orchestration_role",
+            "idle_after_report: true",
+        ];
         let named: Vec<&str> = text
             .split('`')
             .skip(1)

@@ -177,6 +177,21 @@ async fn a_report_refuses_open_items_that_are_not_strings() {
     assert_eq!(err.to_string(), "`open_items` must be an array of strings");
 }
 
+/// `owner_items` is read like `open_items`: one that is not a list of strings is refused.
+#[tokio::test]
+async fn a_report_refuses_owner_items_that_are_not_strings() {
+    let (state, _dir) = shared_console_state("report-owner-items");
+    let err = call(
+        &state,
+        "of-a",
+        "report",
+        &arguments(json!({ "summary": "done", "status": "done", "owner_items": "test it" })),
+    )
+    .await
+    .expect_err("not a list");
+    assert_eq!(err.to_string(), "`owner_items` must be an array of strings");
+}
+
 /// Information reaches any running session but the caller: one of another project or console,
 /// and a console session, which can share information itself too.
 #[tokio::test]

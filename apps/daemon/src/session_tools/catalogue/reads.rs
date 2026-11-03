@@ -41,12 +41,16 @@ macro_rules! session_record_fields {
          `resume_session` resumes either when it is yours. `paused` is true for an `idle` session \
          whose last turn ended abnormally (cancelled, declined, stopped on a usage limit, failed, \
          or cut short by its process ending mid-turn, which a resume brings back): it takes \
-         messages like any idle session. `account` is the account the session runs on, an \
-         account's id or `default` for the agent's default account as `list_agents` lists them, \
-         with its `account_name`; `switch_session_account` refuses the account a session is on \
-         already. `observed_model` and `observed_effort` are what the agent's records show the \
-         session running with, null until reported; `default_effort` is the effort the agent runs \
-         that model at by itself, given when the records name the model but no effort. `pinned` is \
+         messages like any idle session. `idle_after_report` is true for a session with a parent \
+         that sits idle, with nothing running or queued for it, after its last report, its own or \
+         synthesised, reached that parent: it is not awaiting instructions but finished or \
+         stalled, so check it and archive it if its work is over. `account` is the account the \
+         session runs on, an account's id or `default` for the agent's default account as \
+         `list_agents` lists them, with its `account_name`; `switch_session_account` refuses the \
+         account a session is on already. `observed_model` and `observed_effort` are what the \
+         agent's records show the session running with, null until reported; `default_effort` is \
+         the effort the agent runs that model at by itself, given when the records name the model \
+         but no effort. `pinned` is \
          whether the session is pinned (`set_session_pinned`), and `locked` whether the user \
          locked it, which archiving refuses. `branches` names the git branches the session is \
          responsible for; `transfer_branches`, and the `branches` of `open_session` and \

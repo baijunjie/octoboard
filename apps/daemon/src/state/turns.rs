@@ -1,5 +1,9 @@
 //! The turn bookkeeping a synthesised report rests on: when a turn is open, whether the session
-//! reported during it, and what closing it amounts to.
+//! reported during it, and what closing it amounts to; and the session's last report accepted for
+//! its owner since a turn of its own last opened, which its owner is told of when it stays idle
+//! after it.
+
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::AppState;
 use crate::time::now_millis;
@@ -54,6 +58,34 @@ pub(super) struct TurnState {
     /// How many turn starts of this session carried the agent telling itself that background work
     /// finished (`hooks::is_task_notification`). Only ever moves on, like `ends`.
     completion_notices: u64,
+    /// The session's last report, its own or synthesised, accepted for its owner since a turn of
+    /// its last opened: what an owner is told of a child idle after it
+    /// (`crate::messaging::idle_children`). The next turn of its own to open clears it: one that
+    /// spends a credit is Octoboard's, which needs no report back.
+    last_report: Option<LastReport>,
+    /// The number the turn of its own that opened last was given, a turn spending a credit not
+    /// counting (see [`AppState::turn_opened`]); 0 before the first.
+    opened: u64,
+}
+
+/// Numbers the openings of turns and the reports noted, daemon-wide, so that none is ever given
+/// twice: not across sessions, and not across the bookkeeping of one session being dropped with
+/// its process and begun again.
+static NUMBERS: AtomicU64 = AtomicU64::new(1);
+
+fn next_number() -> u64 {
+    NUMBERS.fetch_add(1, Ordering::Relaxed)
+}
+
+/// A report a session's owner accepted, as [`AppState::last_report`] gives it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LastReport {
+    /// Which report of the session's this is, to tell a later one from it.
+    pub number: u64,
+    /// Octoboard synthesised it, the session having stopped without reporting.
+    pub synthesised: bool,
+    /// Its owner has been told that the session stayed idle after it.
+    pub nudged: bool,
 }
 
 /// What closing a turn amounted to.
@@ -86,7 +118,8 @@ impl AppState {
         let turn = turns.entry(id.to_string()).or_default();
         // A prompt that arrives while the turn is open joins it, as one steered into a Codex turn
         // does, carrying the same turn id; only a turn that opens here starts the count afresh.
-        if !turn.open {
+        let opening = !turn.open;
+        if opening {
             turn.written_mid_turn = 0;
             turn.waiting_told = false;
         }
@@ -102,6 +135,11 @@ impl AppState {
         turn.reported = credit.is_some();
         if let Some(credit) = credit {
             turn.credits.remove(credit);
+        } else if opening {
+            // A credited turn is Octoboard's own, which nothing reports back on, so the report
+            // before it stays the session's last.
+            turn.last_report = None;
+            turn.opened = next_number();
         }
         if prompt.is_some_and(crate::hooks::is_task_notification) {
             turn.completion_notices += 1;
@@ -286,6 +324,59 @@ impl AppState {
             .entry(id.to_string())
             .or_default()
             .reported = reported;
+    }
+
+    /// The number of the turn of the session's own that opened last, 0 before the first: read
+    /// before a report is delivered, for [`Self::note_report_accepted`] to tell whether such a
+    /// turn opened while it was.
+    pub fn turn_opened(&self, id: &str) -> u64 {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .get(id)
+            .map_or(0, |turn| turn.opened)
+    }
+
+    /// Notes that a report of the session, `synthesised` or its own, was accepted for its owner,
+    /// and returns the number it was noted under (see [`LastReport`]). Nothing is noted when a turn
+    /// of its own has opened since `opened` was read ([`Self::turn_opened`]) before the report was
+    /// delivered: the report is from before that turn, which is not over.
+    pub fn note_report_accepted(&self, id: &str, synthesised: bool, opened: u64) -> Option<u64> {
+        let mut turns = self.turns.lock().expect("turn lock poisoned");
+        let turn = turns.entry(id.to_string()).or_default();
+        if turn.opened != opened {
+            return None;
+        }
+        let number = next_number();
+        turn.last_report = Some(LastReport {
+            number,
+            synthesised,
+            nudged: false,
+        });
+        Some(number)
+    }
+
+    /// The session's last report accepted for its owner since a turn of its last opened, if any.
+    pub fn last_report(&self, id: &str) -> Option<LastReport> {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .get(id)
+            .and_then(|turn| turn.last_report)
+    }
+
+    /// Whether the owner is to be told now that the session stayed idle after its report `number`:
+    /// once for that report, and only while it is still the session's last. Taken by whoever asks
+    /// first.
+    pub fn claim_idle_nudge(&self, id: &str, number: u64) -> bool {
+        let mut turns = self.turns.lock().expect("turn lock poisoned");
+        match turns.get_mut(id).and_then(|turn| turn.last_report.as_mut()) {
+            Some(last) if last.number == number && !last.nudged => {
+                last.nudged = true;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Closes the open turn and says what that amounted to. `clock_attributed` marks a signal that

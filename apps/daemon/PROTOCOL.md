@@ -3256,6 +3256,13 @@ directory.
   stay with the session's parent. `inform_session` to an interrupted session keeps the information in the store until
   the session is resumed, and is refused for an archived one. It delivers information, marked as such and copied to the
   session's parent when it has one. See `docs/product/information-between-sessions.md`.
+- `report` takes `summary`, `status` (`done`, `failed` or `needs_decision`) and optionally `open_items` and
+  `owner_items`, each a list of strings. `owner_items`, added after the tool was frozen as an optional argument (the
+  call shape is unchanged, and a call without it behaves as before), names items handed to the parent to carry out: the
+  delivered report lists them apart from the open items, and they are not open items, so a `done` report whose only
+  items are owner items archives the reporter as one with none does. Every other rule of a `done` report, the
+  coordinator's refusal while a session bound to it is not archived included, reads only `open_items`. A synthesised
+  report has neither list.
 - `report` to a parent that is interrupted keeps the report in the same store, written into the parent once it is
   resumed, in the order it came among everything else kept for it, shared information included; its answer says it was
   kept, and a `done` report with no open items archives the reporter all the same. A report that waited for a parent
@@ -3265,12 +3272,13 @@ directory.
   branches or a change of parent) is waited for, up to 15 seconds, before the report is judged; one still without a
   process then is refused as having none, and the refusal names the parent. What the daemon sends a parent of its own
   accord — a synthesised report, and the notices that a session ended on its own, waits for the user, or had its account
-  switched automatically, or that the switch failed, and the notice of a handoff — is kept for an interrupted parent the
-  same way and waits out a claim alike. The notice that the user released a session from its parent is the exception: a
-  parent with no process is not told, and is not owed it. Each kept report and notice carries a line dating it and
-  telling the parent to check the session before acting on it. A kept notice that a session waits for the user is
-  dropped once any later report or notice about the same session is kept for that parent (shared information does not
-  drop it), and at the resume it is dropped if the session no longer waits for the user. See
+  switched automatically, or that the switch failed, the notice that a session stayed idle after its last report, and
+  the notice of a handoff — is kept for an interrupted parent the same way and waits out a claim alike. The notice that
+  the user released a session from its parent is the exception: a parent with no process is not told, and is not owed
+  it. Each kept report and notice carries a line dating it and telling the parent to check the session before acting on
+  it. A kept notice that a session waits for the user, or stayed idle after its last report, is dropped once any later
+  report or notice about the same session is kept for that parent (shared information does not drop it), and at the
+  resume it is dropped if the session no longer waits for the user, or is no longer `idle_after_report`. See
   `docs/product/reporting-to-owners.md`.
 - `list_agents` answers `{ "auto_select_account", "agents": [{ "agent", "tags", "accounts": [...] }] }`: one entry per
   agent a session could be opened on, the added agents that are installed, in the user's added-list order (every agent
@@ -3304,19 +3312,25 @@ directory.
   `switch_session_account` name it) and `account_name`, never the account's directory; `observed_model` and
   `observed_effort` (what the agent's records show, `null` until reported) and `default_effort` (the effort the agent
   runs the observed model at by itself, `null` when the records name an effort or no model, or the catalogue gives
-  none); `pinned`; `locked`; and `branches`, the plain names of the git branches the session is responsible for (empty
-  for none, and for a console session). It also carries `display_title` (the name the session list shows: the agent's
-  current task title, a fullwidth bar `｜`, then `title`; `title` alone when the agent has no task title or it equals
-  `title`), `agent_session_id` (the agent's conversation id, `null` until known; `request_resume_session` takes it as
-  its `conversation`, and only when the user asked for that conversation), `origin` (`console` for a session started
-  with the `open_session` tool; `user` for the user's own and for one opened through `request_session` or
-  `request_resume_session`; a session that replaces another in a handoff copies the original's), `has_conversation` (a
-  turn was taken; whether the agent still holds the record is not read, `resume_session` refusing as
-  `conversation_unresumable` when it does not), `model` and `effort` (the session's own launch choices as
-  `Session.model` and `Session.effort` carry them: a key absent when it follows its project's or console's setting,
-  `null` for the agent's own default), `orchestration_role` (`coordinator` or `worker`), and `owned_sessions` (its child
-  sessions in any status, archived ones included, as the rules of `transfer_session` count them). Reading them runs no
-  process: `branches` comes from the store and the reflog files, once per repository for a listing.
+  none); `pinned`; `locked`; `idle_after_report` (true while a session with a parent is shown `idle`, has no
+  `background_tasks`, nothing queued for it and, for a coordinator, no session bound to it with a process, and its last
+  report — its own or synthesised — was accepted for its parent (delivered, queued or kept, not left unsent) since a
+  turn of it last opened, a turn Octoboard started with something of its own that needs no report back (such as a
+  session request's outcome) not counting; false otherwise, and for a session with no parent; the parent is also sent
+  one notice once this has held for 10 minutes, see `docs/product/reporting-to-owners.md`); and `branches`, the plain
+  names of the git branches the session is responsible for (empty for none, and for a console session). It also carries
+  `display_title` (the name the session list shows: the agent's current task title, a fullwidth bar `｜`, then `title`;
+  `title` alone when the agent has no task title or it equals `title`), `agent_session_id` (the agent's conversation id,
+  `null` until known; `request_resume_session` takes it as its `conversation`, and only when the user asked for that
+  conversation), `origin` (`console` for a session started with the `open_session` tool; `user` for the user's own and
+  for one opened through `request_session` or `request_resume_session`; a session that replaces another in a handoff
+  copies the original's), `has_conversation` (a turn was taken; whether the agent still holds the record is not read,
+  `resume_session` refusing as `conversation_unresumable` when it does not), `model` and `effort` (the session's own
+  launch choices as `Session.model` and `Session.effort` carry them: a key absent when it follows its project's or
+  console's setting, `null` for the agent's own default), `orchestration_role` (`coordinator` or `worker`), and
+  `owned_sessions` (its child sessions in any status, archived ones included, as the rules of `transfer_session` count
+  them). Reading them runs no process: `branches` comes from the store and the reflog files, once per repository for a
+  listing.
 - Every session a tool describes also carries `queued_messages`, the number of messages queued for it and not yet
   written (the messages kept for it while it is interrupted included: shared information, and the reports and notices
   for a parent), and `writes_held`: `null`, or for a running session whose writes are held whatever its `status` reads,

@@ -333,8 +333,9 @@ async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_sessio
              This replaces anything your role description says about being independent and not \
              calling `mcp__octoboard__report`. `done` with no open items archives you, and is \
              refused while a session you started is not archived; `needs_decision` or open items \
-             leave you running. You keep your child sessions and go on driving them with \
-             `mcp__octoboard__open_session` and the tools that go with it."
+             leave you running. Items that are your parent session's to carry out rather than \
+             yours go in `owner_items`, not `open_items`. You keep your child sessions and go on \
+             driving them with `mcp__octoboard__open_session` and the tools that go with it."
         ),
         "{held}"
     );

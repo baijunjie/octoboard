@@ -29,6 +29,7 @@ use crate::messaging::delivery::{
     is_archived_refusal, is_held_fragment, rebound_owner, write_to_owner, Delivery, SentBy,
     HELD_FRAGMENT_PARAM,
 };
+use crate::messaging::idle_children;
 use crate::messaging::naming::{one_line, session_labels};
 use crate::messaging::texts::REPORT_OPENING;
 use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
@@ -40,6 +41,10 @@ pub struct Report<'a> {
     pub summary: &'a str,
     pub status: ReportStatus,
     pub open_items: &'a [String],
+    /// Items the reporter hands to its owner to carry out. They are not the reporter's unfinished
+    /// work, so they never keep a `done` report from archiving it; they are only listed for the
+    /// owner, apart from the open items.
+    pub owner_items: &'a [String],
     /// True when Octoboard built this report from the turn's last assistant message rather than the
     /// session sending one, which the owner has to know: the structured fields are then a guess
     /// and only the prose is the session's own.
@@ -78,7 +83,10 @@ impl ReportStatus {
 
 /// Delivers one project session's report to the session it is bound to — a console session, or the
 /// project session that started it — and wraps the session up when the report says there is
-/// nothing left.
+/// nothing left, returning what became of the message and the sessions it archived, for the
+/// removal of the branches bound to them once their processes have ended, which is the caller's.
+/// The answer names the bound branches and worktrees that removal will leave, judged before the
+/// archive, since it has to reach the session before its process is ended.
 ///
 /// A lead session's `done` report with no open items is refused while any session bound to it is
 /// not archived: its sessions archive themselves when they finish, so one that is not archived has
@@ -93,20 +101,15 @@ impl ReportStatus {
 /// archived owner takes nothing until it is reopened, so the report fails, and the session stays as
 /// it is. So does a report written into the owner but left unsent by its agent: the owner has not
 /// read it and nothing guarantees it will, so the session is not archived.
-fn deliver_report(state: &Arc<AppState>, session_id: &str, report: Report<'_>) -> Result<String> {
-    // What it archived is dropped, its branches with it: a synthesised report is never `done`, and
-    // a session's own `done` report goes through `deliver_own_report`, which removes them.
-    deliver_and_archive(state, session_id, report).map(|(note, ..)| note)
-}
-
-/// [`deliver_report`], also returning what became of the message and the sessions it archived,
-/// for the removal of the branches bound to them once their processes have ended, which is the
-/// caller's. The answer names the bound branches and worktrees that removal will leave, judged
-/// before the archive, since it has to reach the session before its process is ended.
+///
+/// `opened` is the number of the session's own turn that had opened last when the report was made
+/// ([`AppState::turn_opened`]): a report accepted is noted as the session's last only while no
+/// turn of its own has opened since.
 fn deliver_and_archive(
     state: &Arc<AppState>,
     session_id: &str,
     report: Report<'_>,
+    opened: u64,
 ) -> Result<(String, Vec<Session>, Delivery)> {
     let session = state.session_record(session_id)?;
     let Some(bound_to) = &session.bound_to else {
@@ -248,6 +251,11 @@ fn deliver_and_archive(
         (Vec::new(), Vec::new())
     };
 
+    // A report left unsent has not reached the owner, and one that archived the session leaves
+    // nothing to watch.
+    if delivery != Delivery::Unsent && !finished {
+        idle_children::report_accepted(state, session_id, report.synthesised, opened);
+    }
     let mut note = report_note(delivery, finished, held_back, &owner_kind, &owner.id);
     if changed_meanwhile {
         note.push_str(
@@ -371,6 +379,8 @@ pub fn close_turn_and_report(
     turn: hooks::TurnEnd,
 ) -> TurnClose {
     let close = state.close_turn(session_id, turn.backstop);
+    // Read with the turn just closed: a turn that opens while the report waits makes it stale.
+    let opened = state.turn_opened(session_id);
     // The turn stopped on an error, which may be the plan's usage limit; whether it was, and
     // whether to do anything about it, is the switch's to judge.
     let judging = if turn.failed && matches!(close, TurnClose::OwesReport | TurnClose::Reported) {
@@ -393,9 +403,10 @@ pub fn close_turn_and_report(
                 return;
             }
             // Delivery writes into the owner's PTY, which blocks, so it goes off the caller's path.
-            let _ =
-                tokio::task::spawn_blocking(move || synthesise_report(&state, &session_id, turn))
-                    .await;
+            let _ = tokio::task::spawn_blocking(move || {
+                synthesise_report(&state, &session_id, turn, opened)
+            })
+            .await;
         });
     }
     close
@@ -434,8 +445,11 @@ async fn held_for_a_completion_notice(
 /// Nothing is reported for a lead session while a session bound to it has a process: it has
 /// stopped to wait for its sessions, not stopped working.
 ///
+/// `opened` is the number of the session's turn that had opened last when the turn was closed
+/// (see [`deliver_and_archive`]).
+///
 /// **Blocks** on writing into the owner.
-fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd) {
+fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnEnd, opened: u64) {
     let session = match state.store.get_session(session_id) {
         Ok(Some(session)) if session.bound_to.is_some() => session,
         // An unbound session has nobody to report to, and a record that is gone is nothing to
@@ -468,9 +482,10 @@ fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnE
             ReportStatus::NeedsDecision
         },
         open_items: &[],
+        owner_items: &[],
         synthesised: true,
     };
-    if let Err(err) = deliver_report(state, session_id, report) {
+    if let Err(err) = deliver_and_archive(state, session_id, report, opened) {
         tracing::debug!(session = %session_id, %err, "delivering a synthesised report failed");
     }
 }
@@ -490,9 +505,11 @@ pub async fn deliver_own_report(
     summary: String,
     status: ReportStatus,
     open_items: Vec<String>,
+    owner_items: Vec<String>,
 ) -> Result<(String, Delivery)> {
     state.hook_queues.settled(session_id).await;
     state.mark_reported(session_id);
+    let opened = state.turn_opened(session_id);
     let delivered = {
         let state = state.clone();
         let session_id = session_id.to_string();
@@ -505,9 +522,11 @@ pub async fn deliver_own_report(
                     summary: &summary,
                     status,
                     open_items: &open_items,
+                    owner_items: &owner_items,
                     synthesised: false,
                     said_nothing: false,
                 },
+                opened,
             )
         })
         .await
@@ -560,6 +579,12 @@ fn render_report(
             message.push_str(&format!("\n- {item}"));
         }
     }
+    if !report.owner_items.is_empty() {
+        message.push_str("\nFor you to do:");
+        for item in report.owner_items {
+            message.push_str(&format!("\n- {item}"));
+        }
+    }
     message.push_str("\n\n");
     message.push_str(report.summary.trim());
     message
@@ -587,6 +612,7 @@ mod tests {
                 summary: "done the easy half",
                 status: ReportStatus::NeedsDecision,
                 open_items: &["pick a cache".to_string()],
+                owner_items: &[],
                 synthesised: false,
                 said_nothing: false,
             },
@@ -609,6 +635,7 @@ mod tests {
                 summary: "done",
                 status: ReportStatus::Done,
                 open_items: &[],
+                owner_items: &[],
                 synthesised: false,
                 said_nothing: false,
             },
@@ -629,6 +656,7 @@ mod tests {
                 summary: "last thing it said",
                 status: ReportStatus::NeedsDecision,
                 open_items: &[],
+                owner_items: &[],
                 synthesised: true,
                 said_nothing: false,
             },
@@ -643,6 +671,7 @@ mod tests {
                 summary: "last thing it said",
                 status: ReportStatus::NeedsDecision,
                 open_items: &[],
+                owner_items: &[],
                 synthesised: false,
                 said_nothing: false,
             },
@@ -663,11 +692,22 @@ mod tests {
         assert_eq!(ReportStatus::parse("finished"), None);
     }
 
+    /// [`deliver_and_archive`] as of the session's current turn, with only the answer kept.
+    fn deliver_report(
+        state: &Arc<AppState>,
+        session_id: &str,
+        report: Report<'_>,
+    ) -> Result<String> {
+        let opened = state.turn_opened(session_id);
+        deliver_and_archive(state, session_id, report, opened).map(|(note, ..)| note)
+    }
+
     fn done_report() -> Report<'static> {
         Report {
             summary: "all good",
             status: ReportStatus::Done,
             open_items: &[],
+            owner_items: &[],
             synthesised: false,
             said_nothing: false,
         }
@@ -834,6 +874,135 @@ mod tests {
         assert!(note.contains("not archived"), "{note}");
         let status = state.store.get_session("worker").unwrap().unwrap().status;
         assert_eq!(status, SessionStatus::Idle);
+    }
+
+    /// A report the owner accepted is the session's last report, which a turn opening clears;
+    /// one left unsent in the owner's input is not, and neither is a report that archived the
+    /// session.
+    #[test]
+    fn a_report_that_reached_the_owner_is_noted_as_the_last() {
+        let (state, _dir, _live) = team_state(
+            "reporting-notes-last-report",
+            &[
+                ("worker", "hub", false, SessionStatus::Idle),
+                ("unsent", "hub", false, SessionStatus::Idle),
+            ],
+        );
+        let open = ["more".to_string()];
+        let synthesised = Report {
+            status: ReportStatus::NeedsDecision,
+            synthesised: true,
+            ..done_report()
+        };
+        deliver_report(&state, "worker", synthesised).expect("delivered");
+        assert!(state
+            .last_report("worker")
+            .is_some_and(|last| last.synthesised));
+
+        *state.send_wait.lock().unwrap() = Some(Duration::from_millis(100));
+        deliver_report(
+            &state,
+            "unsent",
+            Report {
+                open_items: &open,
+                ..done_report()
+            },
+        )
+        .expect("written");
+        assert_eq!(state.last_report("unsent"), None);
+    }
+
+    /// A report kept for an interrupted owner counts as accepted, and is noted; a `done` one that
+    /// archived the reporter leaves nothing to note.
+    #[test]
+    fn a_kept_report_is_noted_and_an_archiving_one_is_not() {
+        let (state, _dir) = interrupted_hub_state("reporting-kept-noted");
+        let status = |id: &str| state.store.get_session(id).unwrap().unwrap().status;
+        let open = ["more".to_string()];
+        deliver_report(
+            &state,
+            "worker",
+            Report {
+                open_items: &open,
+                ..done_report()
+            },
+        )
+        .expect("kept");
+        let first = state.last_report("worker").expect("noted");
+
+        deliver_report(&state, "worker", done_report()).expect("kept");
+        assert_eq!(status("worker"), SessionStatus::Archived);
+        // The stand-in has no process whose end drops the bookkeeping, so the first is still there.
+        assert_eq!(state.last_report("worker"), Some(first));
+    }
+
+    /// Items handed to the owner are not open items: a `done` report with only those archives the
+    /// reporter, one with an open item as well leaves it running, and the owner reads the two
+    /// lists apart.
+    #[test]
+    fn owner_items_do_not_keep_a_done_report_from_archiving() {
+        let (state, _dir, hub) = team_state(
+            "reporting-owner-items",
+            &[
+                ("worker", "hub", false, SessionStatus::Idle),
+                ("other", "hub", false, SessionStatus::Idle),
+            ],
+        );
+        let status = |id: &str| state.store.get_session(id).unwrap().unwrap().status;
+        let owner = ["run the local tests".to_string()];
+        let open = ["finish the docs".to_string()];
+
+        deliver_report(
+            &state,
+            "other",
+            Report {
+                open_items: &open,
+                owner_items: &owner,
+                ..done_report()
+            },
+        )
+        .expect("delivered");
+        assert_eq!(status("other"), SessionStatus::Idle);
+
+        let note = deliver_report(
+            &state,
+            "worker",
+            Report {
+                owner_items: &owner,
+                ..done_report()
+            },
+        )
+        .expect("delivered");
+        assert!(note.contains("now archived"), "{note}");
+        assert_eq!(status("worker"), SessionStatus::Archived);
+        let heard = crate::test_support::output_containing(&hub, "- run the local tests");
+        assert!(heard.contains("For you to do:"), "{heard}");
+    }
+
+    /// The owner items are listed after the open items, under their own heading, in a report kept
+    /// for an interrupted owner too.
+    #[test]
+    fn a_kept_report_lists_the_owner_items_apart() {
+        let (state, _dir) = interrupted_hub_state("reporting-kept-owner-items");
+        let (open, owner) = (["a".to_string()], ["b".to_string()]);
+        deliver_report(
+            &state,
+            "worker",
+            Report {
+                status: ReportStatus::NeedsDecision,
+                open_items: &open,
+                owner_items: &owner,
+                ..done_report()
+            },
+        )
+        .expect("kept");
+        let kept = kept_texts(&state);
+        assert_eq!(kept.len(), 1);
+        assert!(
+            kept[0].contains("\nOpen items:\n- a\nFor you to do:\n- b\n\n"),
+            "{}",
+            kept[0]
+        );
     }
 
     /// A session bound to an unbound project session reports there, as one bound to a console
@@ -1015,8 +1184,8 @@ mod tests {
             backstop: false,
         };
 
-        synthesise_report(&state, "waiting-lead", turn());
-        synthesise_report(&state, "idle-lead", turn());
+        synthesise_report(&state, "waiting-lead", turn(), 0);
+        synthesise_report(&state, "idle-lead", turn(), 0);
 
         let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
         let output = loop {
@@ -1337,6 +1506,7 @@ mod tests {
             "worker",
             "summary".into(),
             ReportStatus::Done,
+            vec![],
             vec![],
         )
         .await

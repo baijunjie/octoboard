@@ -10,8 +10,10 @@ pub(super) const REPORT: ToolDef = ToolDef {
     description: "Report the round of work to your parent session, whether you are a worker or \
                   a coordinator. The parent is a console session or project coordinator. \
                   `summary` is natural language; `status` and `open_items` are what the parent \
-                  acts on. An interrupted parent with no process has the report kept until it \
-                  resumes; an archived parent takes none, and the report is refused. With \
+                  acts on. Items that are the parent's to carry out, not work you left \
+                  unfinished, go in `owner_items`: they are listed for the parent and do not \
+                  count as open items. An interrupted parent with no process has the report kept \
+                  until it resumes; an archived parent takes none, and the report is refused. With \
                   `done` and no open items the session is archived once the report is delivered \
                   or kept, and the git branches it created, with the linked worktrees that have \
                   them checked out, are removed once it has ended wherever git can do it \
@@ -35,7 +37,14 @@ pub(super) const REPORT: ToolDef = ToolDef {
                 "open_items": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Anything left unfinished. Empty when nothing is.",
+                    "description": "Anything you left unfinished. Empty when nothing is.",
+                },
+                "owner_items": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Items handed to your parent to carry out (local testing \
+                                    it runs, a decision only it can act on). Not open items: \
+                                    they do not keep a `done` report from archiving you.",
                 },
             }),
             &["summary", "status"],

@@ -11,6 +11,7 @@ use crate::accounts::choice;
 use crate::branch_origin::session_branches;
 use crate::coordinator;
 use crate::git_workflow;
+use crate::messaging::idle_children;
 use crate::project_git::remote_url;
 use crate::protocol::{Agent, Console, Project, ProjectAccount, Session, SessionStatus};
 use crate::state::{bindings, AppState, WriteHold};
@@ -139,6 +140,12 @@ pub(super) fn describe_session_shown(
         "orchestration_role": session.orchestration_role,
         "console": session.console_id,
         "project": session.project_id,
+        // Whether the session is idle after its last report, its own or synthesised, reached its
+        // owner: at its prompt with nothing running, nothing queued for it, and no turn of its own
+        // started since. An owner tells a child that is finished but not archived from one awaiting
+        // instructions by it. False for a session with no owner.
+        "idle_after_report": idle_children::idle_after_report_shown(state, session, shown)
+            .is_some(),
         // The session this one reports to. Null for a project session means unbound: the user
         // opened it themselves and kept it outside the orchestration. It is also null for a
         // console session, which is never bound, so `role` is what tells the two apart. Only a

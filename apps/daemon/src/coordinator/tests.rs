@@ -432,6 +432,7 @@ async fn report(
         summary.to_string(),
         status,
         Vec::new(),
+        Vec::new(),
     )
     .await
 }

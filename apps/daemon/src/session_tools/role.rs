@@ -587,10 +587,12 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
          - When you finish a round of work, call `{report}`. `summary` is prose for the \
            {owner_noun} to read; `status` and `open_items` are what it acts on. Use `done` only \
            when nothing is left open, `failed` when the task could not be carried out, and \
-           `needs_decision` when the {owner_noun} has to choose before you can go on.\n\
+           `needs_decision` when the {owner_noun} has to choose before you can go on. Items \
+           that are the {owner_noun}'s to carry out rather than yours (testing it runs, a merge \
+           it does) go in `owner_items`, not `open_items`.\n\
          - With `done` and no open items the session is wrapped up and archived once the report \
            is delivered to the {owner_noun}, or kept for it while it is interrupted, so do not \
-           report `done` while anything remains.\n\
+           report `done` while anything of yours remains.\n\
          - Permission prompts and anything you need to ask a person go to the user directly, in \
            this terminal — not through the {owner_noun} and not through `{report}`. Ask, then \
            wait.\n\
@@ -646,11 +648,14 @@ fn coordinator_project_session_description(agent: Agent) -> String {
            have something to say. Returns the new session's id.\n\
          - A session you start reports back to you: its report arrives here as a message, so do \
            not poll for one. A session reporting `done` with nothing open has already been \
-           archived by the time you read it. Reports, and Octoboard's notices about your \
-           sessions, that come while you are interrupted are kept and arrive once you are \
-           resumed, each saying when it dates from: check the session with `{get_session}` before \
-           acting on one. The notice that the user released a session from you is the exception: \
-           it is not kept.\n\
+           archived by the time you read it; items it lists as for you to do are yours to carry \
+           out. A session of yours left idle after its last report shows \
+           `idle_after_report: true`, and you are told once when that has lasted {nudge_minutes} \
+           minutes: archive it if its work is over, or give it its next instruction. Reports, \
+           and Octoboard's notices about your sessions, that come while you are interrupted are \
+           kept and arrive once you are resumed, each saying when it dates from: check the \
+           session with `{get_session}` before acting on one. The notice that the user released a \
+           session from you is the exception: it is not kept.\n\
          - `{instruct_session}`, `{get_session}`, `{archive_session}` and `{resume_session}` act \
            on the sessions you own (`yours: true`). `{get_session}` also reads any other session, \
            but one with `yours: false` is somebody else's — the user's own, or another session's, \
@@ -695,6 +700,7 @@ fn coordinator_project_session_description(agent: Agent) -> String {
         list_pages = tool("list_pages"),
         delete_pages = tool("delete_pages"),
         relationships = relationships(agent, true),
+        nudge_minutes = crate::messaging::idle_children::NUDGE_AFTER.as_secs() / 60,
     )
 }
 

@@ -9,8 +9,11 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
+use crate::messaging::idle_children::idle_after_report;
 use crate::messaging::outbox::{Drain, Ticket};
-use crate::messaging::texts::{is_waiting_notice, waiting_notice_session};
+use crate::messaging::texts::{
+    idle_notice_session, is_idle_notice, is_waiting_notice, waiting_notice_session,
+};
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::session::term;
 use crate::session_tools::catalogue;
@@ -347,9 +350,10 @@ fn wait_out_claim(state: &Arc<AppState>, id: &str) {
 ///
 /// What is kept is read only after the owner is back, when what it says of the session may no
 /// longer hold, so the line dates it and has the owner look at the session before acting on it.
-/// A notice that the session waits for the user goes out of date as soon as anything later about
-/// the session is kept — another wait, a report, a notice of its end — so that one drops it
-/// rather than the owner reading a wait that is long over; the rest are events, each kept.
+/// A notice that the session waits for the user, or that it stayed idle after its last report,
+/// goes out of date as soon as anything later about the session is kept — another wait, a report,
+/// a notice of its end — so that one drops it rather than the owner reading a state that is long
+/// over; the rest are events, each kept.
 ///
 /// **Blocks** like [`write_message`], and on the claim, so it is for a blocking thread.
 pub(crate) fn write_to_owner(
@@ -384,7 +388,8 @@ pub(crate) fn write_to_owner(
 ///
 /// `about` is the session an owner is told about, for the write into an owner: such a write waits
 /// out a claim on the owner (see [`write_to_owner`]), and what it keeps drops the notices that
-/// `about` waits for the user which were kept before it. A write with none does neither.
+/// `about` waits for the user, or stayed idle after its last report, which were kept before it. A
+/// write with none does neither.
 ///
 /// **Blocks** like [`write_message`], and on the claim when `about` is given.
 pub(crate) fn write_or_keep(
@@ -409,7 +414,7 @@ pub(crate) fn write_or_keep(
         if status == SessionStatus::Interrupted {
             if let Some(row) = state.keep_message_if_not_running(id, &kept_text())? {
                 if let Some(about) = about {
-                    drop_kept_waits(state, id, about, row);
+                    drop_kept_superseded(state, id, about, row);
                 }
                 return Ok(Delivery::Kept);
             }
@@ -424,12 +429,15 @@ pub(crate) fn write_or_keep(
     }
 }
 
-/// Drops the notices that `about` waits for the user kept for `owner_id` before the row `row`.
-fn drop_kept_waits(state: &Arc<AppState>, owner_id: &str, about: &Session, row: i64) {
+/// Drops the notices that `about` waits for the user, or stayed idle after its last report, kept
+/// for `owner_id` before the row `row`.
+fn drop_kept_superseded(state: &Arc<AppState>, owner_id: &str, about: &Session, row: i64) {
     let superseded: Vec<i64> = match state.store.kept_messages(owner_id) {
         Ok(kept) => kept
             .into_iter()
-            .filter(|(kept_row, text)| *kept_row < row && is_waiting_notice(text, about))
+            .filter(|(kept_row, text)| {
+                *kept_row < row && (is_waiting_notice(text, about) || is_idle_notice(text, about))
+            })
             .map(|(kept_row, _)| kept_row)
             .collect(),
         Err(err) => {
@@ -441,13 +449,14 @@ fn drop_kept_waits(state: &Arc<AppState>, owner_id: &str, about: &Session, row: 
         return;
     }
     if let Err(err) = state.store.delete_kept_messages(&superseded) {
-        tracing::warn!(owner = %owner_id, %err, "dropping a kept wait failed");
+        tracing::warn!(owner = %owner_id, %err, "dropping a superseded kept notice failed");
     }
 }
 
 /// What is kept for `owner_id` ([`crate::store::Store::kept_messages`]) without the notices that
-/// a session waits for the user, when it no longer does: nothing superseded them, but the owner
-/// would read a wait that is over. Those rows are deleted. For a resume to queue.
+/// a session waits for the user, or stayed idle after its last report, when it no longer does:
+/// nothing superseded them, but the owner would read a wait, or an idleness, that is over. Those
+/// rows are deleted. For a resume to queue.
 pub(crate) fn current_kept_messages(
     state: &Arc<AppState>,
     owner_id: &str,
@@ -460,6 +469,11 @@ pub(crate) fn current_kept_messages(
                 !matches!(
                     state.store.get_session(id),
                     Ok(Some(session)) if state.shown_status(&session) == SessionStatus::WaitingUser
+                )
+            }) || idle_notice_session(text).is_some_and(|id| {
+                !matches!(
+                    state.store.get_session(id),
+                    Ok(Some(session)) if idle_after_report(state, &session).is_some()
                 )
             })
         })

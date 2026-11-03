@@ -355,6 +355,26 @@ cancelled, ended by a declined prompt, stopped on a usage limit, failed, or cut 
 middle of it, which a resume brings back — and `false` for every other. It names no reason. Such a session takes a
 message like any other at its prompt (see "Paused" in `docs/product/session-statuses.md`).
 
+Each record also carries `idle_after_report`, which tells a child session that is finished or stalled from one awaiting
+instructions. It is `true` while all of these hold, and `false` otherwise:
+
+- the session has a parent;
+- its `status` is `idle` — `paused` or not — with an empty `background_tasks`, and nothing is queued for it;
+- for a coordinator, no session bound to it has a process;
+- a report of it, its own or synthesised (see "When a session does not report" in
+  `docs/product/reporting-to-owners.md`), has been accepted for its parent — delivered, queued, or kept for an
+  interrupted parent; not one left unsent in the parent's input, and not one that archived it — since a turn of it last
+  opened. A turn Octoboard started with something of its own that needs no report back, such as the outcome of a
+  session request, does not count as one. A report accepted after a new turn opened while it was being delivered does
+  not count.
+
+A session that is working, waiting for the user or dormant, or has a message on its way, therefore reads `false`, and
+one that starts a turn of its own reads `false` until a report of that turn is accepted. What it rests on is held in
+memory and goes with the session's process: once that process has ended — so after the session is resumed or brought up
+again on another account, model or effort, and after Octoboard restarts — it reads `false` until a report from the new
+process reaches the parent. Its parent is also sent a notice once it has read `true` for 10 minutes (see "Notices to an
+owner" in `docs/product/reporting-to-owners.md`). Session records sent to windows do not carry it.
+
 Each of these records also carries `context`, the session's context size as the window shows it (see "Session context
 size" in `docs/product/session-context.md`): an object with `tokens`, plus `window` and `used_percent` — the share of
 the window in use as a whole percentage, by the agent's own accounting as in "The context-size chip" there — only once

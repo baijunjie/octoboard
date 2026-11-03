@@ -1627,3 +1627,37 @@ async fn list_projects_names_one_project_and_refreshes_its_git_status() {
     .expect_err("no status to refresh");
     assert!(err.to_string().contains("`refresh`"), "{err}");
 }
+
+/// A session record says whether a session with a parent is idle after its last report reached
+/// that parent, which a turn opening ends; a session with no parent never is.
+#[tokio::test]
+async fn a_session_record_says_whether_it_is_idle_after_its_report() {
+    let fixture = RepoState::new("reads-idle-after-report");
+    let state = &fixture.state;
+    let _live = running(state, "lead-kid");
+    let get = |id: &'static str| async move {
+        call(
+            state,
+            "lead",
+            "get_session",
+            &arguments(json!({ "session": id })),
+        )
+        .await
+        .unwrap()["idle_after_report"]
+            .clone()
+    };
+    with_status(state, "lead-kid", SessionStatus::Idle);
+    assert_eq!(get("lead-kid").await, false);
+
+    state
+        .note_report_accepted("lead-kid", false, state.turn_opened("lead-kid"))
+        .unwrap();
+    assert_eq!(get("lead-kid").await, true);
+    state.turn_started("lead-kid", Some("next"));
+    assert_eq!(get("lead-kid").await, false);
+
+    state
+        .note_report_accepted("lead", false, state.turn_opened("lead"))
+        .unwrap();
+    assert_eq!(get("lead").await, false, "lead has no parent");
+}

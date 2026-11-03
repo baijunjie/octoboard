@@ -7,19 +7,25 @@ A project session with a parent reports a round of work with `report`, whether i
 |---|---|---|
 | `summary` | yes | What was done and what came of it, in natural language. |
 | `status` | yes | One of `done`, `failed`, `needs_decision`. No other value is accepted. |
-| `open_items` | no | Strings naming what is left unfinished. Empty when nothing is. |
+| `open_items` | no | Strings naming what the reporter left unfinished. Empty when nothing is. |
+| `owner_items` | no | Strings naming items handed to the owner to carry out — local testing it runs, a merge it does, a decision only it can act on. Not open items: they never keep a `done` report from archiving the reporter (see "Automatic archiving" below). |
 
-The report is written into its **parent session** — a console session or project coordinator — named by the
-reporting relationship rather than looked up, since a console may
-hold several console sessions. It arrives as a user message naming the reporting session's id, its title and project,
-the status, the open items, and then the summary. The reporting session is told that it was delivered; that it is
-queued and will reach its owner as soon as the owner can take a message; that it was kept for its owner, which is
-interrupted, and is delivered once the owner is resumed (see "Reports and notices for an interrupted owner" below); or
-that it was written into the owner's input but the owner's agent did not send it to the conversation, so the owner has
-not read it and the user has been told to check the owner (see "A message written but not sent" and "A message a dialog
-discarded or a view took" in `docs/product/message-delivery.md`). Every outcome but the first tells it not to send the
-report again. The note names the owner by its id, calling it a console session or a project session according to which
-it is.
+`report`'s name and call shape stay as they are (see "The MCP server as a contract" in `apps/daemon/PROTOCOL.md`):
+`owner_items` is optional, and a call without it behaves exactly as one with an empty list. It is read the same whatever
+the status. A reporting session is told in its role description, and in what tells it of a new parent, to put items that
+are its owner's to carry out in `owner_items` rather than `open_items`.
+
+The report is written into its **parent session** — a console session or project coordinator — named by the reporting
+relationship rather than looked up, since a console may hold several console sessions. It arrives as a user message
+naming the reporting session's id, its title and project, the status, the open items, the owner items under their own
+heading saying they are the owner's to do, and then the summary. Each list is left out when it is empty. The reporting
+session is told that it was delivered; that it is queued and will reach its owner as soon as the owner can take a
+message; that it was kept for its owner, which is interrupted, and is delivered once the owner is resumed (see "Reports
+and notices for an interrupted owner" below); or that it was written into the owner's input but the owner's agent did
+not send it to the conversation, so the owner has not read it and the user has been told to check the owner (see "A
+message written but not sent" and "A message a dialog discarded or a view took" in `docs/product/message-delivery.md`).
+Every outcome but the first tells it not to send the report again. The note names the owner by its id, calling it a
+console session or a project session according to which it is.
 
 Reporting is refused, or fails without accepting the report, when:
 
@@ -41,9 +47,9 @@ Reporting is refused, or fails without accepting the report, when:
   it (see "A message only partly written while the draft is stashed" in `docs/product/message-delivery.md`);
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time;
-- the session is a coordinator with a parent, the report has `status: done` and no open items, and a session bound to it
-  is not archived, unless a lock blocks automatic archiving (see "Automatic archiving" below). The reason names those
-  sessions. Its other reports go through, and none of them archives it.
+- the session is a coordinator with a parent, the report has `status: done` and no open items (whatever owner items it
+  has), and a session bound to it is not archived, unless a lock blocks automatic archiving (see "Automatic archiving"
+  below). The reason names those sessions. Its other reports go through, and none of them archives it.
 
 If a Codex owner's independent queue may have accepted the report but cannot confirm it, reporting returns an error
 and the reporting session is not archived. The report still counts as that session having reported for the turn:
@@ -54,13 +60,13 @@ not resend the original report automatically. The delivery hold and recovery rul
 ## When a session does not report
 
 **Reporting is not forced.** When a reporting session ends a turn without having called `report`, Octoboard delivers
-that turn's last assistant message to its owner as the report instead.
-The message says plainly that the session stopped without reporting and that the status is
-Octoboard's guess rather than its own word. The status is `needs_decision`, or `failed` when the turn
-ended in an error, and the open-items list is empty. A session whose turn produced no message at all
-is reported as such, with the suggestion that the owner check it with `get_session`.
+that turn's last assistant message to its owner as the report instead. The message says plainly that the session stopped
+without reporting and that the status is Octoboard's guess rather than its own word. The status is `needs_decision`, or
+`failed` when the turn ended in an error, and it has neither open items nor owner items. A session whose turn produced
+no message at all is reported as such, with the suggestion that the owner check it with `get_session`.
 
-A synthesised report never archives the session: only a session's own `done` report does that.
+A synthesised report never archives the session: only a session's own `done` report does that. Its owner is reminded
+of the session once if it stays idle after that report (see "Notices to an owner" below).
 
 **No report is synthesised for a Claude Code turn that ends with work still running in the background** — the session is
 then working in background (see "Working in background" in `docs/product/session-statuses.md`): its work is not over.
@@ -120,6 +126,20 @@ running for another reason once the wait there is over, is not told, then or lat
   view of its background agents, which is no wait for the user (see "Dormant" in `docs/product/session-statuses.md`).
 - **Octoboard switched a session's account by itself**, or tried to and could not bring it back up: see "When the
   switch succeeds" and "When the switch fails" in `docs/product/automatic-account-switch.md`.
+- **A session stayed idle after its last report.** When a reporting session has been idle after its last report for **10
+  minutes** without a break — `idle_after_report` true in its session record the whole time (see "Session records" in
+  `docs/product/what-every-session-reads.md`) — its owner is told once for that report. Idleness is looked at every 30
+  seconds, so the notice can come up to about 30 seconds after the 10 minutes are up, and any look that finds the
+  session no longer idle after its report starts the 10 minutes again. The notice names the session, says for how long
+  it has been idle since its last report reached the owner with nothing running, says whether that report was its own,
+  which did not archive it, or one Octoboard synthesised because it stopped without reporting, and tells the owner to
+  check it with `get_session` and archive it with `archive_session` if its work is over, otherwise to give it its next
+  instruction with `instruct_session`, adding that it is not reminded again until the session reports again. It covers a
+  session that ended a round without reporting as well as one whose own report left it running — with open items, a
+  status other than `done`, a lock, or a change while the report was delivered. Nothing is said when the session is no
+  longer idle after that report by the time the notice would be written. A session whose last report is followed by a
+  new turn of its own, a later report, the end of its process or an archive is not told about for that report. The
+  notice never archives anything: archiving stays with the owner or the user.
 
 ## Reports and notices for an interrupted owner
 
@@ -146,11 +166,12 @@ session" in `docs/product/information-between-sessions.md`).
 - **Each kept report and notice is dated.** It carries a line saying it was kept for the owner while it was
   interrupted, the minute it dates from (in UTC), that what it says of the session may no longer hold, and to check the
   session with `get_session` before acting on it. In a report the line comes among the lines that open it, before the
-  open items and the summary.
-- **A kept wait gives way to what came after it.** A kept notice that a session is waiting for the user is dropped once
-  any later report or notice about the same session is kept for that owner, another wait included; information shared
-  with the owner does not drop it. At the resume, a kept wait is also dropped when that session no longer reads as
-  waiting for the user.
+  open items, the owner items and the summary.
+- **A kept wait gives way to what came after it.** A kept notice that a session is waiting for the user, or that it
+  stayed idle after its last report, is dropped once any later report or notice about the same session is kept for
+  that owner, another of the same kind included; information shared with the owner does not drop it. At the resume, a
+  kept wait is also dropped when that session no longer reads as waiting for the user, and a kept notice that it stayed
+  idle when it is no longer idle after its report.
 - **A `done` report still archives the reporter.** A report kept this way counts as accepted (see "Automatic archiving"
   below): a `done` report with no open items, with no lock blocking it, archives the reporting session right away, and
   its answer says the report was kept and that the session is now archived. Any other report leaves the reporting
@@ -167,7 +188,10 @@ session" in `docs/product/information-between-sessions.md`).
 An owner is told this in its role description — a console session in its instruction file, a project coordinator in its
 own text: reports and Octoboard's notices about its sessions that come while it is interrupted are kept and arrive once
 it is resumed, each saying when it dates from, so it checks the session with `get_session` before acting on one, and the
-notice that the user released a session from it is not kept.
+notice that the user released a session from it is not kept. The same text tells it that the items a report lists as
+for it to do are its own to carry out, and that one of its sessions left idle after its last report shows
+`idle_after_report: true` and is told of once when that has lasted 10 minutes, to archive it if its work is over or
+give it its next instruction.
 
 ## Automatic archiving
 
@@ -182,7 +206,8 @@ session that is not archived has been bound to it, the report stays delivered bu
 answer adds that it was not archived because one of those changed while the report was delivered. A session someone
 else archived meanwhile is answered as archived.
 
-A report with `status: done` and **no** open items, with no lock blocking it, wraps the session up: once the report
+A report with `status: done` and **no** open items, with no lock blocking it, wraps the session up — owner items do not
+count as open items, so a `done` report whose only items are owner items wraps it up as well: once the report
 has been accepted for its owner — delivered, queued, or kept for an interrupted owner — the session's process is ended
 and the session is archived. The git branches it was working on, and the linked worktrees that have them checked out,
 are then removed where git can do so without force, and the report's answer names those that will stay (see "Archives

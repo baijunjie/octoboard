@@ -207,13 +207,14 @@ ending without a `report` produces no synthesised report (see "When a session do
 The call returns `owner`, `owner_kind`, `orchestration_role` (`coordinator` or `worker`) and a `note` telling the caller
 its role and that it now reports to that parent; that from now on it takes work only from the owner, or from the user
 typing in its terminal, and reports to it with `report` once per round of work, which replaces what its role description
-says about being independent and not calling `report`; that `done` with no open items archives it, subject to
-"Automatic archiving" in `docs/product/reporting-to-owners.md` — refused for a coordinator with a parent while a session
-it started is not archived and no lock blocks automatic archiving — while `needs_decision` or open items leave it
-running; that a coordinator with a parent keeps its child sessions and goes on driving them with `open_session` and the
-tools that go with it, and that any other can no longer start or drive sessions, with the list of the Octoboard tools it
-has left, and that any pages it pushed to the report panel were withdrawn with the tools for them; what became of its
-summary as its first report; and not to call `bind_to_session` again. The first report is one of:
+says about being independent and not calling `report`; that `done` with no open items archives it, subject to "Automatic
+archiving" in `docs/product/reporting-to-owners.md` — refused for a coordinator with a parent while a session it started
+is not archived and no lock blocks automatic archiving — while `needs_decision` or open items leave it running, and that
+items that are the parent's to carry out go in `owner_items`, not `open_items`; that a coordinator with a parent keeps
+its child sessions and goes on driving them with `open_session` and the tools that go with it, and that any other can no
+longer start or drive sessions, with the list of the Octoboard tools it has left, and that any pages it pushed to the
+report panel were withdrawn with the tools for them; what became of its summary as its first report; and not to call
+`bind_to_session` again. The first report is one of:
 
 - delivered to the owner;
 - queued, the owner being unable to take a message right now, and delivered as soon as it can (see "Messages held until

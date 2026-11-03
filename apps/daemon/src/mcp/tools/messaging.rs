@@ -117,10 +117,17 @@ pub(in crate::mcp) async fn report(
         anyhow!("`{status_text}` is not one of `done`, `failed` or `needs_decision`")
     })?;
     let open_items = optional_string_list(arguments, "open_items")?.unwrap_or_default();
+    let owner_items = optional_string_list(arguments, "owner_items")?.unwrap_or_default();
 
-    let (note, _) =
-        reporting::deliver_own_report(state, &session.id, summary.to_string(), status, open_items)
-            .await?;
+    let (note, _) = reporting::deliver_own_report(
+        state,
+        &session.id,
+        summary.to_string(),
+        status,
+        open_items,
+        owner_items,
+    )
+    .await?;
     Ok(json!({ "note": note }))
 }
 

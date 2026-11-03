@@ -4,7 +4,8 @@
 //! whose owner changed, or to the owner that lost it, with whose it is now and the tools that
 //! leaves it. A session that was told at launch who it reports to is not told again by anything
 //! else, so one with no process when its owner changes is left owed its notice, built at its next
-//! launch from the binding as it stands then.
+//! launch from the binding as it stands then. The notice that a session stayed idle after its last
+//! report is [`crate::messaging::idle_children`]'s, written through [`tell_owner`] here.
 
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use crate::messaging::delivery::{
     self, is_archived_refusal, rebound_owner, write_notice_to_owner, Delivery, WhenBlocked,
 };
 use crate::messaging::naming::{label, named_session, one_line, place_of, quote};
-use crate::messaging::texts::{capitalised, waiting_opening, NOTICE_PREFIX, WAITING_PHRASE};
+use crate::messaging::texts::{capitalised, session_notice_opening, NOTICE_PREFIX, WAITING_PHRASE};
 use crate::protocol::{Agent, OrchestrationRole, Role, Session, SessionStatus};
 use crate::session_tools::catalogue;
 use crate::state::AppState;
@@ -180,7 +181,7 @@ pub fn tell_owner_it_waits(state: &Arc<AppState>, id: &str) {
              user something, and only they can clear it. Do not chase it or send it anything to \
              get it going: a message to it is held until they are done. Carry on with the rest of \
              your work.",
-            opening = waiting_opening(&session),
+            opening = session_notice_opening(&session),
             title = one_line(&session.title),
         )
     });
@@ -251,25 +252,26 @@ pub(crate) fn role_after_owner_change(session: &Session, was_worker: bool) -> St
     }
 }
 
-/// What a session launched with no parent session is to do now that it has one, in the words of
-/// its `agent`'s tool names, to follow a colon after the parent session is named: take work only
-/// from it and report to it, what ending a round with `done` does, and, for a `coordinator`, that
-/// it keeps its child sessions, else the tools it lost. Its role description, recorded at launch,
-/// says it is independent, so this says it replaces that.
+/// What a session launched with no parent session is to do now that it has one, in the words of its
+/// `agent`'s tool names, to follow a colon after the parent session is named: take work only from
+/// it and report to it, what ending a round with `done` does and where items for the parent go,
+/// and, for a `coordinator`, that it keeps its child sessions, else the tools it lost. Its role
+/// description, recorded at launch, says it is independent, so this says it replaces that.
 pub(crate) fn duties_under_new_parent(agent: Agent, coordinator: bool) -> String {
     let tool = |name: &str| catalogue::qualified_tool_name(agent, name);
     let report = tool("report");
     let ending = if coordinator {
         format!(
             "`done` with no open items archives you, and is refused while a session you started \
-             is not archived; `needs_decision` or open items leave you running. You keep your \
-             child sessions and go on driving them with `{}` and the tools that go with it.",
+             is not archived; `needs_decision` or open items leave you running. {OWNER_ITEMS} You \
+             keep your child sessions and go on driving them with `{}` and the tools that go \
+             with it.",
             tool("open_session"),
         )
     } else {
         format!(
             "`done` with no open items archives you; `needs_decision` or open items leave you \
-             running. {}",
+             running. {OWNER_ITEMS} {}",
             lost_tools(agent)
         )
     };
@@ -279,6 +281,11 @@ pub(crate) fn duties_under_new_parent(agent: Agent, coordinator: bool) -> String
          about being independent and not calling `{report}`. {ending}"
     )
 }
+
+/// Where a session under a parent puts what is the parent's to carry out, said after what ending
+/// a round with `done` does.
+const OWNER_ITEMS: &str = "Items that are your parent session's to carry out rather than yours \
+                           go in `owner_items`, not `open_items`.";
 
 /// The clause that tells a coordinator that its reporting relationship is independent, for a
 /// notice to go on to say what that means for it.

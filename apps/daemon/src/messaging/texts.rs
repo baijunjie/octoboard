@@ -213,10 +213,12 @@ pub(crate) fn request_opening_prompt(
     )
 }
 
-/// How the notice of [`crate::messaging::owner_notices::tell_owner_it_waits`] about `session`
-/// begins, up to its title, which a rename between two waits changes. [`WAITING_PHRASE`] follows
-/// the title.
-pub(crate) fn waiting_opening(session: &Session) -> String {
+/// How the notices about `session` that a later one supersedes begin, up to its title, which a
+/// rename between two of them changes: the notice of
+/// [`crate::messaging::owner_notices::tell_owner_it_waits`], with [`WAITING_PHRASE`] following
+/// the title, and that of [`crate::messaging::idle_children::tell_owner_it_is_idle`], with
+/// [`IDLE_PHRASE`].
+pub(crate) fn session_notice_opening(session: &Session) -> String {
     format!(
         "{NOTICE_PREFIX}: the {} session `{}` (\"",
         session.role.kind(),
@@ -224,24 +226,47 @@ pub(crate) fn waiting_opening(session: &Session) -> String {
     )
 }
 
-/// What follows the title in the first line of that notice.
+/// What follows the title in the first line of the notice that a session waits for the user.
 pub(crate) const WAITING_PHRASE: &str = "\") is waiting for the user";
+
+/// What follows the title in the first line of the notice that a session stayed idle after its
+/// last report.
+pub(crate) const IDLE_PHRASE: &str = "\") has been idle";
 
 /// Whether `text`, kept for an owner, is the notice that `session` waits for the user, by which a
 /// kept one is found again to be dropped once it is out of date (see
 /// [`crate::messaging::delivery::write_to_owner`]).
 pub(crate) fn is_waiting_notice(text: &str, session: &Session) -> bool {
-    text.strip_prefix(&waiting_opening(session))
+    is_notice_about(text, session, WAITING_PHRASE)
+}
+
+/// [`is_waiting_notice`], for the notice that `session` stayed idle after its last report.
+pub(crate) fn is_idle_notice(text: &str, session: &Session) -> bool {
+    is_notice_about(text, session, IDLE_PHRASE)
+}
+
+fn is_notice_about(text: &str, session: &Session, phrase: &str) -> bool {
+    text.strip_prefix(&session_notice_opening(session))
         .and_then(|rest| rest.lines().next())
-        .is_some_and(|line| line.contains(WAITING_PHRASE))
+        .is_some_and(|line| line.contains(phrase))
 }
 
 /// The id of the session that a kept notice says waits for the user, if it is that notice.
 pub(crate) fn waiting_notice_session(text: &str) -> Option<&str> {
+    notice_session(text, WAITING_PHRASE)
+}
+
+/// The id of the session that a kept notice says stayed idle after its last report, if it is that
+/// notice.
+pub(crate) fn idle_notice_session(text: &str) -> Option<&str> {
+    notice_session(text, IDLE_PHRASE)
+}
+
+fn notice_session<'a>(text: &'a str, phrase: &str) -> Option<&'a str> {
     let rest = text.strip_prefix(NOTICE_PREFIX)?.strip_prefix(": the ")?;
     let (_, rest) = rest.split_once(" session `")?;
     let (id, rest) = rest.split_once("` (\"")?;
-    rest.lines().next()?.contains(WAITING_PHRASE).then_some(id)
+    rest.lines().next()?.contains(phrase).then_some(id)
 }
 
 /// What a continued session is told to do, in Claude Code's own words for its auto-resume. A macro
