@@ -185,7 +185,7 @@ mod tests {
         let start = Instant::now();
 
         for _ in 0..5 {
-            scheduler.report("a", || make());
+            scheduler.report("a", &make);
             tokio::time::advance(Duration::from_millis(100)).await;
             settle_tasks().await;
         }
@@ -211,7 +211,7 @@ mod tests {
 
         // A report every 200 ms never lets 300 ms pass quietly.
         for _ in 0..5 {
-            scheduler.report("a", || make());
+            scheduler.report("a", &make);
             tokio::time::advance(Duration::from_millis(200)).await;
             settle_tasks().await;
         }
@@ -231,7 +231,7 @@ mod tests {
         let (make, _done) = counting(&reads);
 
         for _ in 0..20 {
-            scheduler.report("a", || make());
+            scheduler.report("a", &make);
             tokio::time::advance(Duration::from_millis(200)).await;
             settle_tasks().await;
         }

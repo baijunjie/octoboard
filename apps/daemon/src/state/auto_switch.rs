@@ -6,17 +6,20 @@ use std::sync::Arc;
 use super::AppState;
 use crate::protocol::Agent;
 
+/// The hook [`AppState::after_quota_refresh`] runs.
+pub(crate) type AfterQuotaRefresh = fn(
+    &Arc<AppState>,
+    Agent,
+    Option<String>,
+    Option<String>,
+    i64,
+) -> Option<tokio::task::JoinHandle<()>>;
+
 /// The two entry points of the automatic account switch, installed once where the daemon's
 /// `AppState` is built.
 pub(crate) struct AutoSwitchHooks {
     /// See [`AppState::after_quota_refresh`].
-    pub after_quota_refresh: fn(
-        &Arc<AppState>,
-        Agent,
-        Option<String>,
-        Option<String>,
-        i64,
-    ) -> Option<tokio::task::JoinHandle<()>>,
+    pub after_quota_refresh: AfterQuotaRefresh,
     /// See [`AppState::after_failed_turn`].
     pub after_failed_turn: fn(&Arc<AppState>, &str) -> Option<tokio::task::JoinHandle<bool>>,
 }

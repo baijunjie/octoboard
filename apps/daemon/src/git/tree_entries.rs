@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn a_listing_gives_each_path_and_marks_the_gitlinks() {
-        let listing = b"100644 abc 0\ta b\0160000 def 0\tsub\0120000 123\tlink\0\0stray";
+        let listing = b"100644 abc 0\ta b\x00160000 def 0\tsub\x00120000 123\tlink\0\0stray";
         let found: Vec<_> = entries(listing).collect();
         assert_eq!(
             found,

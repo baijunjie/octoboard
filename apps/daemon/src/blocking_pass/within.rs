@@ -51,7 +51,8 @@ where
     R: Send + 'static,
 {
     let ends = Instant::now() + deadline;
-    let (queue, stuck): (Vec<(K, Vec<T>)>, Vec<(K, Vec<T>)>) = groups
+    type Groups<K, T> = Vec<(K, Vec<T>)>;
+    let (queue, stuck): (Groups<K, T>, Groups<K, T>) = groups
         .into_iter()
         .filter(|(_, items)| !items.is_empty())
         .partition(|(key, _)| !stalled.is_stuck(key));
@@ -159,7 +160,7 @@ fn work_through<K, T, R>(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
@@ -168,8 +169,8 @@ mod tests {
     use crate::blocking_pass::{StalledPasses, BLOCKING_WIDTH};
     use crate::test_support::PATIENCE;
 
-    fn one(path: &PathBuf, item: u32) -> HashMap<PathBuf, Vec<u32>> {
-        HashMap::from([(path.clone(), vec![item])])
+    fn one(path: &Path, item: u32) -> HashMap<PathBuf, Vec<u32>> {
+        HashMap::from([(path.to_path_buf(), vec![item])])
     }
 
     /// Work that does not come back within the deadline leaves its items out, and once it has

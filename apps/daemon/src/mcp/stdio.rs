@@ -396,7 +396,7 @@ mod tests {
         tokio::spawn(async move {
             let (mut daemon_side, _) = listener.accept().await.unwrap();
             let mut request = vec![0u8; 1024];
-            daemon_side.read(&mut request).await.unwrap();
+            let _ = daemon_side.read(&mut request).await.unwrap();
             daemon_side.write_all(response).await.unwrap();
             // Hang up cleanly: closing with the request's body unread would reset the connection
             // under the answer.
