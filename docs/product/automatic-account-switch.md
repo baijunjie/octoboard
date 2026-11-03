@@ -124,7 +124,8 @@ The session is relaunched on the new account and carries on with the turn the li
 message from Octoboard, tells it that its account, named with its agent, reached its usage limit, so Octoboard switched
 it to the other account, named too, and then asks it to continue its task, as any switch that continues a turn does.
 A session whose turn the switch's rules do not continue is sent that notice as a message instead, followed by telling
-it to carry on or to wait for its next instruction. No report is synthesised for the turn that message starts (see
+it to carry on or to wait for its next instruction. Either way, the processes the switch ended, if any, are named after
+the notice (see "Processes a restart ended" in `docs/product/background-processes.md`). No report is synthesised for the turn that message starts (see
 "When a session does not report" in `docs/product/reporting-to-owners.md`).
 
 - **Its owner**, when it has one that is not archived, is written a message naming the session and both accounts, saying

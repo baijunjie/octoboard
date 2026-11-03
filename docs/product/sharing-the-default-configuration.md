@@ -193,8 +193,9 @@ background (a dev server, say) are not stopped with it: they are carried over to
 the session as before, as in an account switch (see "Automatic stopping and its boundaries" in
 `docs/product/background-processes.md`). When the session is not resumed after its process was ended (its relaunch
 fails, or none is attempted), they are kept as project processes of its project; those of a console session, and of a
-session archived or deleted meanwhile, are stopped, and a session that had ended by itself has nothing carried. While
-the change runs, no process of such a session can be handed to another session or received from one.
+session archived or deleted meanwhile, are stopped, and a session that had ended by itself has nothing carried. A
+resumed session is told which of them the restart ended anyway (see "Processes a restart ended" in
+`docs/product/background-processes.md`). While the change runs, no process of such a session can be handed to another session or received from one.
 
 **Messages sent during the restart are held.** A message Octoboard is asked to send to a claimed session is held from
 the moment it is claimed and written into the resumed process. If the session is not resumed, the held messages are

@@ -54,7 +54,8 @@ of the account's sharing, it passes to the same session's relaunch (on the new a
 changed directory), and is held for it while the session has no process between the two. From then on those processes
 are the receiving launch's: they are listed under the receiving session and stopped when its process ends, under the
 rules above, and a helper found later carrying the earlier launch's identity is the receiving launch's too. Kept
-processes stay kept.
+processes stay kept. Only what is still running once the agent has exited can be carried: what the agent itself ends as
+it shuts down is gone, and a restarted session is told so (see "Processes a restart ended" below).
 
 What nothing receives is stopped as usual:
 
@@ -110,6 +111,41 @@ nowhere. There is no action to undo Keep. Octoboard follows descendants of kept 
 process's terminal session, as kept too, listed under the same project, with one limit: a helper that both double-forks
 away from its parent and detaches into a new terminal session between process-table scans, about **2 seconds** apart,
 can escape that relationship. If it still carries the launch's identity, it can be stopped with the launch.
+
+## Processes a restart ended
+
+Carrying processes over does not keep alive what an agent ends itself while it exits: Codex, for one, closes its
+background terminals as it shuts down, so a command it left running in one (a dev server, say) does not survive the
+restart. So an account switch (the user's, an owner's or Octoboard's automatic one, a resume on the session's own
+account after its quota recovered included), a change of a session's model or reasoning effort, and a change of its
+account's sharing tell the relaunched session which of the processes it had started the restart ended.
+
+- **What counts as ended.** Just before ending the session's process, Octoboard lists the process trees the session
+  has running, as its Processes panel lists them. Once the process is recorded down, each of those trees no longer
+  running among the session's processes is one the restart ended, whatever ended it; a tree whose top process exited
+  while another of its processes runs on still counts as running. A tree still exiting at that moment is not named, and
+  nothing is named when the process table cannot be read, or when the agent had already exited by itself before the
+  restart.
+- **How each is named.** By its top process's command, on one line and shortened when long, its working directory and
+  its listening ports. At most **8** trees are named, and the rest only counted. The session is asked to start again
+  any it still needs.
+- **Where it goes.**
+  - A session the restart continues (see "Continuing after a switch" in
+    `docs/product/switching-session-accounts.md`) has it in the prompt to continue, before the request to continue the
+    task: after the opening saying the session was restarted, or, where the relaunch carries a notice of its own
+    (Octoboard's automatic switch and its resume after a quota recovery), after that notice.
+  - A session Octoboard's automatic switch moved to another account without continuing it has it in the one message
+    that switch writes into it, between the switch's notice and the words telling it to carry on (see "When the switch
+    succeeds" in `docs/product/automatic-account-switch.md`).
+  - Any other relaunched session — one not continued after a switch, a model change or a resume after a quota
+    recovery, or one resumed after a change of its account's sharing — is written a message from Octoboard of its own,
+    saying the session was restarted and naming the trees, once the restart is over and the session is back up. It
+    takes the delivery every message Octoboard sends takes (see "Messages held until a session can take them" in
+    `docs/product/message-delivery.md`), so an idle session takes it at once and starts a turn on it; no report is
+    synthesised for that turn (see "When a session does not report" in `docs/product/reporting-to-owners.md`). A
+    message that cannot be written is dropped, not kept for later.
+- **Nothing is said** when no tree ended, or when the restart fails: a session left *interrupted* is told nothing, and
+  what was held for its relaunch is kept as "Automatic stopping and its boundaries" above describes.
 
 ## Moving processes between sessions
 

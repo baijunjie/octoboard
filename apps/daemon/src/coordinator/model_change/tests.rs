@@ -387,6 +387,106 @@ async fn a_model_change_carries_what_the_process_started_over_to_the_relaunch() 
     );
 }
 
+/// A model change that ended some of the trees the session had running tells it so: in the prompt
+/// that carries a cut-off turn on, else as a notice written once it is back.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_change_tells_the_session_which_trees_it_ended() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    for continued in [true, false] {
+        let (state, dir) =
+            console_with_project_and_accounts(&format!("coordinator-model-ended-{continued}"));
+        let record = dir
+            .join("default-claude")
+            .join("projects/slug/a0000000-0000-4000-8000-000000000001.jsonl");
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        let ending = if continued {
+            concat!(
+                r#"{"type":"assistant","isApiErrorMessage":true,"error":"rate_limit","#,
+                r#""apiError":"usage_limit_reached","message":{"role":"assistant","#,
+                r#""stop_reason":"stop_sequence","content":[{"type":"text","text":"limit"}]}}"#
+            )
+        } else {
+            r#"{"type":"assistant","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}"#
+        };
+        std::fs::write(
+            &record,
+            format!(
+                "{}\n{ending}\n",
+                r#"{"type":"user","message":{"role":"user","content":"hello"}}"#
+            ),
+        )
+        .unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                has_conversation: true,
+                agent_session_id: Some("a0000000-0000-4000-8000-000000000001".to_string()),
+                ..project_session("s", Agent::Claude, SessionStatus::Idle)
+            })
+            .unwrap();
+        let (_first, survivor, doomed) =
+            crate::test_support::running_leaving_two(&state, &dir, "s");
+        let _guard = crate::test_support::KillOnDrop(vec![survivor, doomed]);
+        let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+        let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+        let outcome = set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                model: Some(Some("opus".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        assert!(matches!(outcome, ModelChange::Restarted { continued: c } if c == continued));
+        let prompt = launches.lock().unwrap()[0].2.clone();
+        let relaunched = state.live_session("s").expect("relaunched");
+        let heard = crate::test_support::heard_after_marker(&state, &relaunched);
+        if continued {
+            let prompt = prompt.expect("a prompt");
+            assert!(
+                prompt.starts_with(
+                    "Message from Octoboard: your session was restarted. The restart ended these \
+                     processes you had started: `/usr/bin/perl"
+                ),
+                "{prompt}"
+            );
+            assert!(prompt.ends_with(crate::messaging::texts::CONTINUE_AFTER_NOTICE));
+            assert_eq!(heard.matches("The restart ended").count(), 0, "{heard}");
+        } else {
+            assert_eq!(prompt, None);
+            assert!(
+                heard.contains("The restart ended these processes"),
+                "{heard}"
+            );
+            // The turn the notice opens owes no report, and an unrelated one still does.
+            state.close_turn("s", false);
+            let notice = crate::messaging::texts::restart_ended_notice(
+                "The restart ended these processes you had started: `x`.",
+            );
+            state.turn_started("s", Some(&notice));
+            assert_eq!(
+                state.close_turn("s", false),
+                crate::state::TurnClose::Reported
+            );
+            state.turn_started("s", Some("unrelated work"));
+            assert_eq!(
+                state.close_turn("s", false),
+                crate::state::TurnClose::OwesReport
+            );
+        }
+        assert!(crate::test_support::is_running(survivor));
+        stop_process(&state, relaunched).await.unwrap();
+    }
+}
+
 /// A model change that fails once it has ended the session's process leaves the session
 /// interrupted, and what its process had started running and kept among its project's
 /// processes.

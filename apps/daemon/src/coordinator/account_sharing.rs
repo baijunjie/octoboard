@@ -16,9 +16,10 @@ use crate::accounts::shared_config::{
 };
 use crate::hostfs::dir_key;
 use crate::hostfs::is_same_path;
+use crate::messaging::texts;
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{
-    error_code, notice_code, Account, CodedError, Notice, SessionStatus, SharingCause,
+    error_code, notice_code, Account, CodedError, Notice, ProcessTree, SessionStatus, SharingCause,
     SharingFailure, SharingPhase, SharingProgress,
 };
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
@@ -206,11 +207,14 @@ async fn change(
 }
 
 /// A session the change ended: what its process started is held for the relaunch (`held`, none
-/// when ending the process failed), and `ended` is whether a running process was stopped.
+/// when ending the process failed), `ended` is whether a running process was stopped, and
+/// `ended_trees` the trees it had running that the change ended (see
+/// [`super::restart::trees_ended`]).
 struct Stopped {
     id: String,
     held: Option<HeldForLaunch>,
     ended: bool,
+    ended_trees: Vec<ProcessTree>,
 }
 
 /// Ends the processes of the sessions `ids`, which the change has claimed, as a switch does, with
@@ -243,10 +247,12 @@ async fn stop(
             ))
         });
         stopped.push(match ended {
-            Ok((held, ended)) => Stopped {
+            Ok((held, ended, running)) => Stopped {
                 id,
                 held: Some(held),
                 ended,
+                // Compared below, once the process is recorded down.
+                ended_trees: if ended { running } else { Vec::new() },
             },
             Err(err) => {
                 tracing::warn!(session = %id, %err, "ending a session's process for a sharing change failed");
@@ -254,19 +260,23 @@ async fn stop(
                     id,
                     held: None,
                     ended: false,
+                    ended_trees: Vec::new(),
                 }
             }
         });
     }
     let mut first = None;
-    for session in &stopped {
+    for session in &mut stopped {
         if super::restart::wait_until_stopped(state, &session.id)
             .await
             .is_err()
-            && first.is_none()
         {
-            first = Some(session_did_not_stop(account, &session.id));
+            first.get_or_insert_with(|| session_did_not_stop(account, &session.id));
+            session.ended_trees.clear();
+            continue;
         }
+        let running = std::mem::take(&mut session.ended_trees);
+        session.ended_trees = super::restart::trees_ended(state, &session.id, running).await;
     }
     (stopped, first)
 }
@@ -300,7 +310,12 @@ async fn resume(
     account: &Account,
     stopped: Stopped,
 ) {
-    let Stopped { id, held, ended } = stopped;
+    let Stopped {
+        id,
+        held,
+        ended,
+        ended_trees,
+    } = stopped;
     let id = id.as_str();
     let mut relaunched = false;
     let record = state.store.get_session(id).ok().flatten();
@@ -322,6 +337,13 @@ async fn resume(
         // Archived or deleted meanwhile: let go as it is.
         _ => Ok(()),
     };
+    // Told to the session once it is relaunched; the change never continues a turn, as the
+    // session was idle.
+    if relaunched {
+        if let Some(ended) = texts::processes_ended_by_restart(&ended_trees) {
+            super::restart::tell_what_a_restart_ended(state, id, ended).await;
+        }
+    }
     if let Some(held) = held {
         // A process not seen to end keeps what it started, as when a switch's wait fails: nothing
         // is kept for the user then, and its trees stay its own, stopped when it ends. A session

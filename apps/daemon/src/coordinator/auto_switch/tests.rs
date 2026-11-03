@@ -32,6 +32,20 @@ struct Fixture {
 
 impl Fixture {
     fn new(label: &str, status: SessionStatus) -> Self {
+        Self::with_worker_process(label, status, |state, _| {
+            let worker = running(state, "w");
+            crate::coordinator::exit_watch::watch_exit(state, worker.clone());
+            worker
+        })
+    }
+
+    /// [`Self::new`] with the worker's process made by `worker_process`, given the state and the
+    /// scratch directory.
+    fn with_worker_process(
+        label: &str,
+        status: SessionStatus,
+        worker_process: impl FnOnce(&Arc<AppState>, &std::path::Path) -> StandIn,
+    ) -> Self {
         let (state, dir) = app_state(label);
         state
             .store
@@ -89,11 +103,7 @@ impl Fixture {
             .unwrap();
         let fixture = Self {
             owner: running(&state, "owner"),
-            worker_process: {
-                let worker = running(&state, "w");
-                crate::coordinator::exit_watch::watch_exit(&state, worker.clone());
-                worker
-            },
+            worker_process: worker_process(&state, &dir),
             state,
             dir,
             launches: Default::default(),
@@ -805,6 +815,76 @@ async fn a_session_whose_turn_stopped_on_the_usage_limit_is_switched_and_everyon
         assert_eq!(told[0].1["session"], "w");
         assert!(!told[0].1.contains_key("from_id"));
     }
+}
+
+/// A restart that continues the turn the usage limit cut off tells the session, in the prompt that
+/// carries it on, after the notice of the switch and before the words to carry on, which trees of
+/// those it had running the restart ended, and nothing of those that kept running.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_prompt_that_carries_a_switched_session_on_lists_the_trees_the_restart_ended() {
+    let mut children = Vec::new();
+    let fixture = Fixture::with_worker_process(
+        "auto-switch-ended-trees",
+        SessionStatus::Idle,
+        |state, dir| {
+            let (worker, survivor, doomed) =
+                crate::test_support::running_leaving_two(state, dir, "w");
+            children = vec![survivor, doomed];
+            worker
+        },
+    );
+    let _guard = crate::test_support::KillOnDrop(children.clone());
+
+    assert!(fixture.failed_turn().await, "moved");
+
+    let prompt = fixture.prompt_of(0).expect("a prompt to carry on");
+    let (notice, rest) = prompt.split_once("\n\n").expect("the notice comes first");
+    assert!(notice.contains("switched you to `Work A`"), "{prompt}");
+    let (ended, words) = rest.split_once("\n\n").expect("the words come last");
+    assert!(
+        ended.starts_with("The restart ended these processes you had started: `/usr/bin/perl"),
+        "{prompt}"
+    );
+    assert!(
+        ended.ends_with("Start again any you still need."),
+        "{prompt}"
+    );
+    assert!(!ended.contains("/bin/sleep"), "{prompt}");
+    assert_eq!(words, crate::messaging::texts::CONTINUE_AFTER_NOTICE);
+    assert!(crate::test_support::is_running(children[0]), "kept running");
+}
+
+/// What the switch ended of what the session had started goes into the one message of the switch
+/// that does not continue, after the note and before the words to carry on.
+#[tokio::test]
+async fn a_switch_that_does_not_continue_folds_what_it_ended_into_its_one_message() {
+    let fixture = Fixture::new("auto-switch-note-ended", SessionStatus::Idle);
+    let worker = fixture.worker();
+    let (state, note) = (
+        fixture.state.clone(),
+        note_to_session(Agent::Claude, "A", "B"),
+    );
+    let ended = "The restart ended these processes you had started: `serve` in `/w`. Start again \
+                 any you still need.";
+    tokio::task::spawn_blocking(move || {
+        tell_sessions(&state, &worker, "A", "B", &note, false, Some(ended))
+    })
+    .await
+    .unwrap();
+
+    let heard = output_containing(&fixture.worker_process, "Carry on with what");
+    let one = heard
+        .split("Message from Octoboard")
+        .filter(|message| message.contains("switched you to `B`"))
+        .collect::<Vec<_>>();
+    assert_eq!(one.len(), 1, "{heard}");
+    let at = |needle: &str| {
+        one[0]
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle}: {heard}"))
+    };
+    assert!(at("switched you to `B`.") < at("The restart ended"));
+    assert!(at("The restart ended") < at("Carry on with what"));
 }
 
 /// Holds a used-up weekly window of the default account, the worker's, that resets in
@@ -1790,9 +1870,11 @@ async fn a_note_written_instead_of_the_prompt_opens_a_turn_that_owes_no_report()
         fixture.state.clone(),
         note_to_session(Agent::Claude, "A", "B"),
     );
-    tokio::task::spawn_blocking(move || tell_sessions(&state, &worker, "A", "B", &note, false))
-        .await
-        .unwrap();
+    tokio::task::spawn_blocking(move || {
+        tell_sessions(&state, &worker, "A", "B", &note, false, None)
+    })
+    .await
+    .unwrap();
 
     let heard = output_containing(&fixture.worker_process, "switched you to `B`");
     assert!(heard.contains("switched you to `B`."), "{heard}");
@@ -1818,9 +1900,11 @@ async fn another_notices_turn_does_not_spend_the_notes_credit() {
         fixture.state.clone(),
         note_to_session(Agent::Claude, "A", "B"),
     );
-    tokio::task::spawn_blocking(move || tell_sessions(&state, &worker, "A", "B", &note, false))
-        .await
-        .unwrap();
+    tokio::task::spawn_blocking(move || {
+        tell_sessions(&state, &worker, "A", "B", &note, false, None)
+    })
+    .await
+    .unwrap();
     output_containing(&fixture.worker_process, "switched you to `B`");
     fixture.state.close_turn("w", false);
 
@@ -1856,9 +1940,11 @@ async fn a_note_naming_an_account_the_write_strips_still_credits_its_turn() {
         fixture.state.clone(),
         note_to_session(Agent::Claude, from, "B"),
     );
-    tokio::task::spawn_blocking(move || tell_sessions(&state, &worker, from, "B", &note, false))
-        .await
-        .unwrap();
+    tokio::task::spawn_blocking(move || {
+        tell_sessions(&state, &worker, from, "B", &note, false, None)
+    })
+    .await
+    .unwrap();
     output_containing(&fixture.worker_process, "switched you to `B`");
     fixture.state.close_turn("w", false);
 

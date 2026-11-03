@@ -2924,6 +2924,34 @@ async fn a_change_of_sharing_carries_what_a_sessions_process_started_over_to_its
     );
 }
 
+/// A session the change relaunched is told which of its trees the change ended, once it is back,
+/// and nothing of those that kept running.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_change_of_sharing_tells_a_session_which_trees_it_ended() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    let session = Session {
+        status: SessionStatus::Idle,
+        ..fixture.session("idle", Agent::Claude)
+    };
+    fixture.state.store.update_session(&session).unwrap();
+    let (_first, survivor, doomed) =
+        test_support::running_leaving_two(&fixture.state, &fixture.dir, "idle");
+    let _guard = test_support::KillOnDrop(vec![survivor, doomed]);
+    relaunch_as_a_launch_does(&fixture, false);
+
+    fixture.share(Agent::Claude, true).await.unwrap();
+
+    let relaunched = fixture.state.live_session("idle").expect("resumed");
+    let heard = test_support::heard_after_marker(&fixture.state, &relaunched);
+    assert!(
+        heard.contains("The restart ended these processes you had started: `/usr/bin/perl"),
+        "{heard}"
+    );
+    assert!(!heard.contains("/bin/sleep"), "{heard}");
+    assert!(test_support::is_running(survivor));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_change_of_sharing_whose_resume_fails_keeps_what_the_process_started_under_its_project() {
     let fixture = Fixture::new();

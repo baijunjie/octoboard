@@ -2217,3 +2217,102 @@ fn the_file_written_at_a_launch_end_names_no_session_its_stop_emptied() {
         "{written:?}"
     );
 }
+
+/// Which of the trees a session's listing named still run: what a launch holds for the next one
+/// does, what a launch that is ending is stopping does not, a tree whose top exited while a member
+/// ran on does, a name of something that never ran does not, and a table that cannot be read says
+/// nothing.
+#[test]
+fn the_trees_still_running_are_told_apart_from_those_that_ended() {
+    let (state, dir) = app_state("ledger-still-running");
+    let (first, child) = agent_leaving_one(&state, "s1", &dir.join("child"));
+    let _guard = KillOnDrop(vec![child]);
+    let ledger = &state.process_ledger;
+    let key = identity(child).key();
+    let named = vec![key.clone()];
+    let listed = ledger.trees_of_sessions(&["s1".to_string()], Duration::ZERO);
+    assert_eq!(listed.len(), 1, "{listed:?}");
+
+    assert_eq!(
+        ledger.trees_still_running("s1", &named),
+        Some(named.clone())
+    );
+    assert_eq!(
+        ledger.trees_still_running("s2", &named),
+        Some(Vec::new()),
+        "another session's"
+    );
+    assert_eq!(
+        ledger.trees_still_running("s1", &["1:1".to_string()]),
+        Some(Vec::new()),
+        "a tree that never ran"
+    );
+
+    let held = ledger.hold_for_launch("s1");
+    assert!(ledger.mark_carry_over(&first.launch_id, "s1"));
+    ledger.end_launch(&first.launch_id);
+    assert!(ledger.book().launches[&first.launch_id].held);
+    assert_eq!(
+        ledger.trees_still_running("s1", &named),
+        Some(named.clone())
+    );
+
+    ledger
+        .book()
+        .launches
+        .get_mut(&first.launch_id)
+        .unwrap()
+        .ending = true;
+    assert_eq!(
+        ledger.trees_still_running("s1", &named),
+        Some(Vec::new()),
+        "what an ending launch is stopping"
+    );
+    ledger
+        .book()
+        .launches
+        .get_mut(&first.launch_id)
+        .unwrap()
+        .ending = false;
+
+    ledger
+        .failing_reads
+        .store(1, std::sync::atomic::Ordering::Release);
+    assert_eq!(ledger.trees_still_running("s1", &named), None);
+    drop(held);
+}
+
+/// A tree whose top exited while one of its members ran on is still the tree a listing named.
+#[test]
+fn a_tree_whose_top_exited_is_still_running_through_the_member_that_ran_on() {
+    let (state, dir) = app_state("ledger-still-running-member");
+    let (a_file, b_file, a_end) = (dir.join("a"), dir.join("b"), dir.join("a-end"));
+    let tree = in_own_session(&format!(
+        "my $b = fork(); if ($b == 0) {{ exec \"/bin/sleep\", \"300\" }} {} {} {} exit 0;",
+        perl_write(&b_file, "$b"),
+        perl_write(&a_file, "$$"),
+        perl_wait_for(&a_end),
+    ));
+    let _live = agent(&state, "s1", &format!("{tree} &"));
+    let (a, b) = (wait_for_pid(&a_file), wait_for_pid(&b_file));
+    let _guard = KillOnDrop(vec![a, b]);
+    let ledger = &state.process_ledger;
+    let key = identity(a).key();
+    let deadline = Instant::now() + PATIENCE;
+    while !ledger
+        .trees_of_sessions(&["s1".to_string()], Duration::ZERO)
+        .iter()
+        .any(|tree| tree.id == key && tree.process_count == 2)
+    {
+        assert!(Instant::now() < deadline, "the tree was never listed");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    std::fs::write(&a_end, "").unwrap();
+    assert_stops_running(a);
+    assert!(is_running(b));
+    assert_eq!(
+        ledger.trees_still_running("s1", std::slice::from_ref(&key)),
+        Some(vec![key])
+    );
+}

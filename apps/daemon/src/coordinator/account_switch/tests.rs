@@ -619,6 +619,147 @@ async fn a_switch_carries_what_the_process_started_over_to_the_relaunch() {
     );
 }
 
+/// A session whose switch ended some of the trees it had running is told which, as a notice, when
+/// the switch does not continue its turn; one that kept all of them is told nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_switch_tells_the_session_which_trees_it_ended() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    for (case, some_end) in [("ended", true), ("kept", false)] {
+        let (state, dir) =
+            console_with_project_and_accounts(&format!("coordinator-switch-told-{case}"));
+        std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .unwrap();
+        let (_first, survivor, doomed) = if some_end {
+            crate::test_support::running_leaving_two(&state, &dir, "s")
+        } else {
+            let (first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+            (first, child, child)
+        };
+        let _guard = crate::test_support::KillOnDrop(vec![survivor, doomed]);
+        let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+        let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+        switch_session_account_with(
+            &state,
+            "s",
+            Some(Some("claude-a".to_string())),
+            None,
+            None,
+            LaunchEdit::default(),
+            || Ok(HashMap::new()),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        let relaunched = state.live_session("s").expect("relaunched");
+        let heard = crate::test_support::heard_after_marker(&state, &relaunched);
+        if !some_end {
+            assert!(!heard.contains("The restart ended"), "{case}: {heard}");
+        } else {
+            assert!(
+                heard.contains("The restart ended these processes you had started"),
+                "{case}: {heard}"
+            );
+            assert!(
+                heard.contains("perl -MPOSIX -e my $agent"),
+                "{case}: {heard}"
+            );
+            assert!(!heard.contains("/bin/sleep"), "{case}: {heard}");
+        }
+        assert!(crate::test_support::is_running(survivor), "{case}");
+        stop_process(&state, relaunched).await.unwrap();
+    }
+}
+
+/// A switch that continues the turn the usage limit cut off puts what it ended in the prompt, and
+/// writes no notice of its own; one that fails after ending the process says nothing of it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_continuing_switch_lists_what_it_ended_in_the_prompt_and_a_failing_one_says_nothing() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    for fails in [false, true] {
+        let (state, dir) =
+            console_with_project_and_accounts(&format!("coordinator-switch-prompt-{fails}"));
+        std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+        let record = dir
+            .join("default-claude")
+            .join("projects/slug/a0000000-0000-4000-8000-000000000001.jsonl");
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(
+            &record,
+            concat!(
+                r#"{"type":"user","message":{"role":"user","content":"hello"}}"#,
+                "\n",
+                r#"{"type":"assistant","isApiErrorMessage":true,"error":"rate_limit","#,
+                r#""apiError":"usage_limit_reached","message":{"role":"assistant","#,
+                r#""stop_reason":"stop_sequence","content":[{"type":"text","text":"limit"}]}}"#,
+                "\n"
+            ),
+        )
+        .unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                has_conversation: true,
+                agent_session_id: Some("a0000000-0000-4000-8000-000000000001".to_string()),
+                ..project_session("s", Agent::Claude, SessionStatus::Idle)
+            })
+            .unwrap();
+        let (_first, survivor, doomed) =
+            crate::test_support::running_leaving_two(&state, &dir, "s");
+        let _guard = crate::test_support::KillOnDrop(vec![survivor, doomed]);
+        let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+        let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+        let launched = launches.clone();
+        let launch = stand_in_launch(&started, &launches, || {});
+        let launch = move |request: term::LaunchRequest| {
+            if fails {
+                anyhow::bail!("the agent could not be started");
+            }
+            launch(request)
+        };
+
+        let switched = switch_session_account_with(
+            &state,
+            "s",
+            Some(Some("claude-a".to_string())),
+            None,
+            None,
+            LaunchEdit::default(),
+            crate::coordinator::test_support::shell_env(&dir),
+            launch,
+        )
+        .await;
+
+        if fails {
+            switched.expect_err("the relaunch failed");
+            assert!(launched.lock().unwrap().is_empty());
+            assert!(state.store.kept_messages("s").unwrap().is_empty());
+            continue;
+        }
+        assert!(switched.unwrap(), "continued");
+        let prompt = launched.lock().unwrap()[0].2.clone().expect("a prompt");
+        assert!(
+            prompt.starts_with(
+                "Message from Octoboard: your session was restarted. The restart ended these \
+                 processes you had started: `/usr/bin/perl"
+            ),
+            "{prompt}"
+        );
+        assert!(
+            prompt.ends_with(crate::messaging::texts::CONTINUE_AFTER_NOTICE),
+            "{prompt}"
+        );
+        let relaunched = state.live_session("s").expect("relaunched");
+        let heard = crate::test_support::heard_after_marker(&state, &relaunched);
+        assert_eq!(heard.matches("The restart ended").count(), 0, "{heard}");
+        stop_process(&state, relaunched).await.unwrap();
+    }
+}
+
 /// A switch that fails once it has ended the session's process — its relaunch does not start,
 /// or starts and ends at once — leaves the session interrupted, and what its process had
 /// started running and kept for the user among its project's processes.

@@ -16,7 +16,7 @@ use crate::branch_origin::transfer::{
     branch_noun_and_pronoun, named_branches_with_targets, BranchTransfer,
 };
 use crate::messaging::naming;
-use crate::protocol::Session;
+use crate::protocol::{ProcessTree, Session};
 
 /// How every notice Octoboard writes into a session begins, worded after it at several places. A
 /// macro so that a constant can be built on it with `concat!`.
@@ -289,10 +289,182 @@ pub(crate) const CONTINUE_PROMPT: &str = concat!(
 /// What follows a notice the continued session is sent with, in place of [`CONTINUE_PROMPT`].
 pub(crate) const CONTINUE_AFTER_NOTICE: &str = continue_words!();
 
+/// How many trees [`processes_ended_by_restart`] names before it counts the rest.
+const ENDED_TREES_NAMED: usize = 8;
+
+/// The longest command [`processes_ended_by_restart`] quotes, in characters.
+const ENDED_COMMAND_CHARS: usize = 160;
+
+/// What a session is told of the process trees it had running that its restart ended, or `None`
+/// when `trees` is empty. A tree is its top process's command, working directory and ports, which
+/// is what the session needs to start it again.
+pub(crate) fn processes_ended_by_restart(trees: &[ProcessTree]) -> Option<String> {
+    if trees.is_empty() {
+        return None;
+    }
+    let mut named: Vec<String> = trees
+        .iter()
+        .take(ENDED_TREES_NAMED)
+        .map(ended_tree)
+        .collect();
+    if trees.len() > ENDED_TREES_NAMED {
+        named.push(format!("and {} more", trees.len() - ENDED_TREES_NAMED));
+    }
+    Some(format!(
+        "The restart ended these processes you had started: {}. Start again any you still need.",
+        named.join("; ")
+    ))
+}
+
+/// One tree as [`processes_ended_by_restart`] names it. The command and the directory are quoted
+/// on one line, with the backticks that would end the quotation replaced.
+fn ended_tree(tree: &ProcessTree) -> String {
+    let command = naming::one_line(&tree.command).replace('`', "'");
+    let mut named = if command.is_empty() {
+        "a process whose command could not be read".to_string()
+    } else if command.chars().count() > ENDED_COMMAND_CHARS {
+        let cut: String = command.chars().take(ENDED_COMMAND_CHARS).collect();
+        format!("`{cut}…`")
+    } else {
+        format!("`{command}`")
+    };
+    if let Some(cwd) = &tree.cwd {
+        named.push_str(&format!(
+            " in `{}`",
+            naming::one_line(cwd).replace('`', "'")
+        ));
+    }
+    match tree.ports.as_slice() {
+        [] => {}
+        [port] => named.push_str(&format!(" (port {port})")),
+        ports => {
+            let ports: Vec<String> = ports.iter().map(u16::to_string).collect();
+            named.push_str(&format!(" (ports {})", ports.join(", ")));
+        }
+    }
+    named
+}
+
+/// The prompt a continued session is sent: [`CONTINUE_PROMPT`], with `ended`
+/// ([`processes_ended_by_restart`]) before the words that tell it to carry on when there is any.
+pub(crate) fn continue_prompt(ended: Option<&str>) -> String {
+    match ended {
+        Some(ended) => format!("{} {CONTINUE_AFTER_NOTICE}", restart_ended_notice(ended)),
+        None => CONTINUE_PROMPT.to_string(),
+    }
+}
+
+/// The prompt a continued session is sent after `note`, a notice of its own: the note, `ended`
+/// when there is any, then [`CONTINUE_AFTER_NOTICE`].
+pub(crate) fn continue_prompt_after(note: &str, ended: Option<&str>) -> String {
+    match ended {
+        Some(ended) => format!("{note}\n\n{ended}\n\n{CONTINUE_AFTER_NOTICE}"),
+        None => format!("{note}\n\n{CONTINUE_AFTER_NOTICE}"),
+    }
+}
+
+/// How [`restart_ended_notice`] begins, specific to it so that the turn it opens can be credited
+/// as reported (see `AppState::credit_turn_opened_by`). [`continue_prompt`] with a text to tell
+/// begins the same, which is harmless: the credit is given only when the session is not continued,
+/// and an unspent credit goes with the turn bookkeeping when the process ends.
+pub(crate) const RESTART_ENDED_OPENING: &str = concat!(notice_prefix!(), restart_ended_words!());
+
+/// The words after the notice prefix that [`RESTART_ENDED_OPENING`] is made of. A macro so that
+/// the constant's declaration fits on one line, where the history's check of every `*_OPENING`
+/// looks for it being built on `notice_prefix!()`.
+macro_rules! restart_ended_words {
+    () => {
+        ": your session was restarted. The restart ended"
+    };
+}
+use restart_ended_words;
+
+/// The notice a restarted session that is not continued is sent for what its restart ended:
+/// `ended` ([`processes_ended_by_restart`]) in Octoboard's own words.
+pub(crate) fn restart_ended_notice(ended: &str) -> String {
+    debug_assert!(ended.starts_with("The restart ended"));
+    format!("{NOTICE_PREFIX}: your session was restarted. {ended}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::protocol::{Agent, SessionStatus};
+
+    fn tree(command: &str, cwd: Option<&str>, ports: &[u16]) -> ProcessTree {
+        ProcessTree {
+            id: "1:2".to_string(),
+            session_id: Some("s".to_string()),
+            kept: false,
+            command: command.to_string(),
+            cwd: cwd.map(str::to_string),
+            cwd_missing: false,
+            started_at: 0,
+            process_count: 1,
+            memory_bytes: 0,
+            ports: ports.to_vec(),
+        }
+    }
+
+    /// Nothing ended, nothing said: the prompt and the notice are what they were.
+    #[test]
+    fn nothing_is_added_when_no_tree_ended() {
+        assert_eq!(processes_ended_by_restart(&[]), None);
+        assert_eq!(continue_prompt(None), CONTINUE_PROMPT);
+        assert_eq!(
+            continue_prompt_after("a note", None),
+            format!("a note\n\n{CONTINUE_AFTER_NOTICE}")
+        );
+    }
+
+    /// Each tree is named by its command, directory and ports, compactly, on one line.
+    #[test]
+    fn ended_trees_are_named_by_command_directory_and_ports() {
+        let ended = processes_ended_by_restart(&[
+            tree("pnpm  dev\n--host", Some("/work/app"), &[5187]),
+            tree("serve", Some("/work/site"), &[3000, 3001]),
+            tree("worker", None, &[]),
+            tree("", Some("/work/x"), &[]),
+        ])
+        .unwrap();
+        assert_eq!(
+            ended,
+            "The restart ended these processes you had started: `pnpm dev --host` in \
+             `/work/app` (port 5187); `serve` in `/work/site` (ports 3000, 3001); `worker`; a \
+             process whose command could not be read in `/work/x`. Start again any you still \
+             need."
+        );
+    }
+
+    /// A long command is cut, a backtick in it cannot end the quotation, and past a few trees
+    /// the rest are counted.
+    #[test]
+    fn a_long_list_of_long_commands_stays_compact() {
+        let long = format!("run `{}`", "x".repeat(400));
+        let trees: Vec<ProcessTree> = (0..10).map(|_| tree(&long, Some("/w"), &[])).collect();
+        let ended = processes_ended_by_restart(&trees).unwrap();
+        assert!(ended.contains("`run 'xxx"), "{ended}");
+        assert!(ended.contains("…` in `/w`"), "{ended}");
+        assert!(ended.contains("; and 2 more. Start"), "{ended}");
+        assert!(ended.len() < 2000, "{}", ended.len());
+    }
+
+    /// What the restart ended goes before the words to carry on, whether the notice is
+    /// Octoboard's own opening or one the restart brought.
+    #[test]
+    fn what_a_restart_ended_goes_before_the_words_to_carry_on() {
+        let ended = processes_ended_by_restart(&[tree("serve", Some("/w"), &[80])]).unwrap();
+        let alone = continue_prompt(Some(&ended));
+        assert!(alone.starts_with(&format!(
+            "{NOTICE_PREFIX}: your session was restarted. The restart ended"
+        )));
+        assert!(alone.ends_with(&format!(" {CONTINUE_AFTER_NOTICE}")));
+        assert_eq!(
+            continue_prompt_after("a note", Some(&ended)),
+            format!("a note\n\n{ended}\n\n{CONTINUE_AFTER_NOTICE}")
+        );
+        assert!(restart_ended_notice(&ended).starts_with(NOTICE_PREFIX));
+    }
 
     /// A field the console session left out is omitted entirely: an empty heading tells the
     /// session there was something to say and then says nothing.

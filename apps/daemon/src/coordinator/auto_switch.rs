@@ -790,7 +790,7 @@ async fn switch_to_with_recovery(
         watch_launch: true,
         note: Some(&note),
     };
-    let continued = match account_switch::switch_session_account_if(
+    let switched = match account_switch::switch_session_account_if(
         state,
         id,
         Some(target.clone()),
@@ -803,7 +803,7 @@ async fn switch_to_with_recovery(
     )
     .await
     {
-        Ok(continued) => continued,
+        Ok(switched) => switched,
         Err(failed) => {
             let err = failed.error;
             if !failed.ended_process {
@@ -849,13 +849,18 @@ async fn switch_to_with_recovery(
                 .map(|()| false);
         }
     };
+    let account_switch::Switched { continued, ended } = switched;
     let moved = state.session_record(id)?;
     if same_account {
-        let (state, moved) = (state.clone(), moved.clone());
+        let (owner_state, moved) = (state.clone(), moved.clone());
         tokio::task::spawn_blocking(move || {
-            owner_notices::tell_owner_it_resumed_on_recovery(&state, &moved, continued)
+            owner_notices::tell_owner_it_resumed_on_recovery(&owner_state, &moved, continued)
         })
         .await?;
+        // The recovery has no message of its own to carry what the restart ended.
+        if let Some(ended) = ended {
+            restart::tell_what_a_restart_ended(state, id, ended).await;
+        }
         return Ok(true);
     }
     // The default account has no id, so its param is left out.
@@ -882,7 +887,15 @@ async fn switch_to_with_recovery(
     let state = state.clone();
     // Delivery writes into the sessions' PTYs, which blocks.
     tokio::task::spawn_blocking(move || {
-        tell_sessions(&state, &moved, &from, &to, &note, continued)
+        tell_sessions(
+            &state,
+            &moved,
+            &from,
+            &to,
+            &note,
+            continued,
+            ended.as_deref(),
+        )
     })
     .await?;
     Ok(true)
@@ -1056,9 +1069,11 @@ fn note_opening(agent: Agent, from: &str) -> String {
 }
 
 /// Tells the switched session, when its relaunch did not carry the note, and its owner if it has
-/// one, what became of it. A message to a session that cannot take one now is queued, and one for
-/// an owner that is interrupted is kept for its resume (see `owner_notices::tell_owner`); one that
-/// cannot be delivered at all is logged and goes no further.
+/// one, what became of it. What the switch ended of what the session had started (`ended`, for a
+/// session that was not continued) goes in the same message as the note. A message to a session
+/// that cannot take one now is queued, and one for an owner that is interrupted is kept for its
+/// resume (see `owner_notices::tell_owner`); one that cannot be delivered at all is logged and
+/// goes no further.
 fn tell_sessions(
     state: &Arc<AppState>,
     moved: &Session,
@@ -1066,6 +1081,7 @@ fn tell_sessions(
     to: &str,
     note: &str,
     continued: bool,
+    ended: Option<&str>,
 ) {
     if !continued {
         // The turn this opens is the notice's own, which needs no report back. Credited as written:
@@ -1073,9 +1089,10 @@ fn tell_sessions(
         // prompt the turn reports is the stripped text.
         let opening = crate::session::term::stripped(&note_opening(moved.agent, from));
         state.credit_turn_opened_by(&moved.id, opening.clone());
+        let ended = ended.map(|ended| format!(" {ended}")).unwrap_or_default();
         let own = format!(
-            "{note} Carry on with what you were doing, or wait for your next instruction if you \
-             had none."
+            "{note}{ended} Carry on with what you were doing, or wait for your next instruction \
+             if you had none."
         );
         if !tell(state, &moved.id, &own) {
             state.clear_turn_credit(&moved.id, &opening);

@@ -78,6 +78,39 @@ pub(crate) fn running_leaving_one(state: &Arc<AppState>, dir: &Path, id: &str) -
     (live, child)
 }
 
+/// [`running_leaving_one`] with a second process, in a terminal session of its own as well, that
+/// exits once the stand-in does, as a background terminal an agent's app server closes as it shuts
+/// down. Answers the stand-in, the process that outlives it and the one that does not.
+pub(crate) fn running_leaving_two(
+    state: &Arc<AppState>,
+    dir: &Path,
+    id: &str,
+) -> (StandIn, i32, i32) {
+    let survivor_file = dir.join(format!("{id}-survivor"));
+    let doomed_file = dir.join(format!("{id}-doomed"));
+    let live = fake_live_session(
+        id,
+        Agent::Claude,
+        80,
+        24,
+        &format!(
+            "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
+             /usr/bin/perl -MPOSIX -e 'my $agent = getppid(); POSIX::setsid(); {} \
+             select(undef, undef, undef, 0.05) while kill 0, $agent;' &\n\
+             exec sleep 300",
+            perl_write(&survivor_file, "$$"),
+            perl_write(&doomed_file, "$$")
+        ),
+    );
+    state.register_live(live.clone());
+    crate::coordinator::exit_watch::watch_exit(state, live.clone());
+    (
+        live,
+        wait_for_pid(&survivor_file),
+        wait_for_pid(&doomed_file),
+    )
+}
+
 /// Waits for `pid` to stop running, off the runtime, ticking the ledger's scanner in place of its
 /// thread, which a test's ledger does not start.
 pub(crate) async fn stops_running(state: &Arc<AppState>, pid: i32) -> bool {

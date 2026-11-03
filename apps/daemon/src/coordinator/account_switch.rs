@@ -149,8 +149,9 @@ pub async fn switch_session_account(
 /// user changed of the session's model and effort, checked with the rest and recorded just before
 /// the relaunch that reads it, and put back with the account when the switch fails. `launch` is
 /// `term::launch` outside the tests, which cannot start an agent. Answers whether the relaunched
-/// session was sent [`texts::CONTINUE_PROMPT`] to carry on with the turn the switch cut
-/// off or a usage limit stopped (see `crate::records::switch_continue`).
+/// session was sent the prompt to carry on with the turn the switch cut off or a usage limit
+/// stopped (see `crate::records::switch_continue`). A session that was not is told what the switch
+/// ended of what it started, if anything, once the switch has let go of its claim.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn switch_session_account_with(
     state: &Arc<AppState>,
@@ -162,7 +163,7 @@ pub(crate) async fn switch_session_account_with(
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<bool> {
-    switch_session_account_if(
+    let switched = switch_session_account_if(
         state,
         id,
         account,
@@ -174,7 +175,23 @@ pub(crate) async fn switch_session_account_with(
         launch,
     )
     .await
-    .map_err(|failed| failed.error)
+    .map_err(|failed| failed.error)?;
+    if let Some(ended) = switched.ended {
+        restart::tell_what_a_restart_ended(state, id, ended).await;
+    }
+    Ok(switched.continued)
+}
+
+/// What a switch did, once the session is relaunched and has come up.
+#[derive(Debug)]
+pub(crate) struct Switched {
+    /// The relaunched session was sent the prompt to carry on.
+    pub continued: bool,
+    /// What the switch ended of what the session had started (see
+    /// [`texts::processes_ended_by_restart`]), for a session that was not continued: one that was
+    /// has it in its prompt. Left to the caller to tell, as the switch holds the session's claim
+    /// and writing into the session is not done under it.
+    pub ended: Option<String>,
 }
 
 /// What a switch decided on a record read before its claim still needs to find once it holds the
@@ -205,7 +222,9 @@ pub(crate) struct SwitchOnlyIf<'a> {
     /// watcher does not tell the owner that it ended on its own (`LaunchClaim::watches_launch`).
     pub watch_launch: bool,
     /// Text put ahead of the prompt to carry on, in the same prompt, so that the session is told
-    /// of the switch without a turn of its own. Not sent when the switch does not carry on.
+    /// of the switch without a turn of its own. Not sent when the switch does not carry on: what
+    /// the switch ended is then left to the caller too ([`Switched::ended`]), to put in its own
+    /// message.
     pub note: Option<&'a str>,
 }
 
@@ -243,7 +262,7 @@ pub(crate) async fn switch_session_account_if(
     launch_edit: LaunchEdit,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
-) -> Result<bool, SwitchFailed> {
+) -> Result<Switched, SwitchFailed> {
     let account = account.ok_or_else(|| field_required("account"))?;
     // Held until this function returns, after the come-up verdict and any revert, so nothing else
     // can launch, resume, switch or delete the session while its process is down, while the
@@ -358,7 +377,7 @@ pub(crate) async fn switch_session_account_if(
         state,
         id,
         |err| err,
-        |ended_a_process| async move {
+        |ended_a_process, ended_trees| async move {
             // Archiving it meanwhile is the user's later word on the matter.
             if state.session_record(id)?.status == SessionStatus::Archived {
                 return Err(session_archived(id));
@@ -441,9 +460,10 @@ pub(crate) async fn switch_session_account_if(
                 }
             }
 
+            let ended = texts::processes_ended_by_restart(&ended_trees);
             let prompt_to_carry_on = match only_if.note {
-                Some(note) => format!("{note}\n\n{}", texts::CONTINUE_AFTER_NOTICE),
-                None => texts::CONTINUE_PROMPT.to_string(),
+                Some(note) => texts::continue_prompt_after(note, ended.as_deref()),
+                None => texts::continue_prompt(ended.as_deref()),
             };
             if let Err(err) = relaunch_session_with(
                 state,
@@ -474,7 +494,10 @@ pub(crate) async fn switch_session_account_if(
                 // account.
                 state.note_left_for_limit(id, before.account_id.as_deref());
             }
-            Ok(carry_on)
+            Ok(Switched {
+                continued: carry_on,
+                ended: ended.filter(|_| !carry_on),
+            })
         },
     )
     .await

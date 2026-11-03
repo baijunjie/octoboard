@@ -49,6 +49,19 @@ impl ProcessLedger {
         self.session_trees(&table, sessions, min_age)
     }
 
+    /// Of the trees `ids` name, those still running among the trees of `session`'s launches, as
+    /// `ids` spell them: a tree whose top has exited, leaving a member to run on as a top of its
+    /// own, is still the tree a listing named (see [`Self::resolve`]). What a launch that is
+    /// ending is stopping counts as ended. `None` when the process table could not be read.
+    /// **Blocks.**
+    pub fn trees_still_running(&self, session: &str, ids: &[String]) -> Option<Vec<String>> {
+        let table = self.scan(false)?;
+        let of_session =
+            |launch: &Launch| launch.session_id.as_deref() == Some(session) && !launch.ending;
+        let named = self.resolve(ids, &table, &Roots::default(), of_session, false);
+        Some(named.into_iter().map(|(id, _)| id).collect())
+    }
+
     /// The trees of `sessions` (see [`Self::trees_of_sessions`]) followed by the processes of the
     /// project `project`, the trees no session owns: those left behind in `leftover_dirs` and
     /// those kept under the project, oldest first, from one read of the table. **Blocks.**

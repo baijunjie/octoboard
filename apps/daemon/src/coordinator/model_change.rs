@@ -30,8 +30,8 @@ pub(crate) enum ModelChange {
     /// The session had no process: the model and effort were recorded for its next resume.
     Recorded,
     /// The session's process was ended and relaunched with them, resuming its conversation.
-    /// `continued` says whether it was sent [`texts::CONTINUE_PROMPT`] to carry on with
-    /// a turn the restart cut off or a usage limit had stopped.
+    /// `continued` says whether it was sent the prompt to carry on with a turn the restart cut
+    /// off or a usage limit had stopped.
     Restarted { continued: bool },
 }
 
@@ -80,7 +80,7 @@ pub(crate) enum ModelAsker<'a> {
 /// does. What the process started (a dev server, say) is carried over to the relaunch as for a
 /// switch, and kept among the processes of the session's project when the restart fails after it
 /// ended the process (see [`keep_what_a_failed_restart_carried`]). A turn the restart cut off, or
-/// one a usage limit had stopped, is sent [`texts::CONTINUE_PROMPT`] as the relaunch's
+/// one a usage limit had stopped, is sent the prompt to continue as the relaunch's
 /// instruction, as after a switch; otherwise the session comes back awaiting instructions. A
 /// session waiting on a prompt of its agent's has that prompt ended with the process, unless an
 /// owner asks (see [`ModelAsker::Owner`]).
@@ -205,8 +205,8 @@ pub(crate) async fn set_session_model_with(
     // only be cut off by it.
     state.quota_recovery.cancel(id);
     state.mark_model_change(id);
-    // Borrowed by the restart below, so that it stays held until this function returns.
-    let claim = &claim;
+    // Borrowed by the restart below, so that it stays held until the restart is over.
+    let claim_held = &claim;
     // From the process being down, a failure that follows is the restart's, whatever it was.
     let restarted = restart::run(
         state,
@@ -225,7 +225,7 @@ pub(crate) async fn set_session_model_with(
                 err
             }
         },
-        |ended_a_process| async move {
+        |ended_a_process, ended_trees| async move {
             // Archiving it meanwhile is the user's later word on the matter. Hooks may also have
             // learned the conversation's identity while validation or the shell snapshot was
             // pending.
@@ -247,6 +247,7 @@ pub(crate) async fn set_session_model_with(
             })
             .await?;
 
+            let ended = texts::processes_ended_by_restart(&ended_trees);
             let boundary = serde_json::to_string(&boundary)?;
             if !state.store.set_session_launch_overrides_unless_archived(
                 id,
@@ -259,9 +260,11 @@ pub(crate) async fn set_session_model_with(
             state.publish_session_by_id(id);
             if let Err(err) = relaunch_session_with(
                 state,
-                claim,
+                claim_held,
                 id,
-                carry_on.then_some(texts::CONTINUE_PROMPT),
+                carry_on
+                    .then(|| texts::continue_prompt(ended.as_deref()))
+                    .as_deref(),
                 false,
                 shell_env,
                 terminal_appearance,
@@ -290,14 +293,19 @@ pub(crate) async fn set_session_model_with(
                     &[("session", id)],
                 ));
             }
-            Ok(carry_on)
+            Ok((carry_on, ended.filter(|_| !carry_on)))
         },
     )
     .await
     .map_err(|failed| failed.error)?;
-    Ok(ModelChange::Restarted {
-        continued: restarted,
-    })
+    // Written once the claim is let go: the write can block for seconds (an idle Claude Code
+    // session's send wait), which would keep the claim held and delay the request's answer.
+    drop(claim);
+    let (continued, ended) = restarted;
+    if let Some(ended) = ended {
+        restart::tell_what_a_restart_ended(state, id, ended).await;
+    }
+    Ok(ModelChange::Restarted { continued })
 }
 
 /// Refuses a change of the model of `session` an owner asked for while the session waits for the

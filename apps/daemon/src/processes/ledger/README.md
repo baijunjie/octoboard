@@ -44,6 +44,8 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
 - `ProcessLedger::reconcile` — reconcile persisted attribution with the running process table.
 - `ProcessLedger::trees_of_sessions`, `ProcessLedger::trees_of_project` — produce the process-tree
   listings consumed by session and project requests.
+- `ProcessLedger::trees_still_running` — which of the trees a session's earlier listing named still run, for what a
+  restart ended.
 - `ProcessLedger::trees_counted` — count the trees of every project and console session, without
   describing them, for the request layer's global count.
 - `ProcessLedger::listed_lately`, `ProcessLedger::note_listed` — share recent listings between client requests; a

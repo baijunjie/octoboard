@@ -13,8 +13,8 @@ use crate::agents::launch_settings::{normalize_session_launch_setting, LaunchChe
 use crate::messaging::delivery;
 use crate::messaging::owner_notices;
 use crate::protocol::{
-    error_code, Agent, CodedError, Console, GitWorkflowSettings, Launch, Project, Role, Session,
-    SessionStatus, TerminalAppearance,
+    error_code, Agent, CodedError, Console, GitWorkflowSettings, Launch, ProcessTree, Project,
+    Role, Session, SessionStatus, TerminalAppearance,
 };
 use crate::session::dialogs;
 use crate::session::term;
@@ -489,6 +489,22 @@ pub(crate) fn stop_process(
     tokio::task::spawn_blocking(move || {
         ledger.scan_before_ending();
         live.end()
+    })
+}
+
+/// [`stop_process`], answering with the trees of the session's launches that were running before
+/// it was stopped as well, so a restart can tell what it ended. The listing reads the table, and
+/// the read before the end is made again right after it, to keep what the agent started meanwhile
+/// attributed while its chain through the agent still shows.
+pub(crate) fn stop_process_listing_trees(
+    state: &Arc<AppState>,
+    live: Arc<LiveSession>,
+) -> tokio::task::JoinHandle<(bool, Vec<ProcessTree>)> {
+    let ledger = Arc::clone(&state.process_ledger);
+    tokio::task::spawn_blocking(move || {
+        let running = ledger.trees_of_sessions(std::slice::from_ref(&live.id), Duration::ZERO);
+        ledger.scan_before_ending();
+        (live.end(), running)
     })
 }
 

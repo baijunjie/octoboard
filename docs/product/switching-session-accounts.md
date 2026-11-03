@@ -235,12 +235,14 @@ moment, and is answered as in "When an approval cannot be carried out" in `docs/
 
 A switch ends the session's process the way archiving does, except that the processes the session left running in the
 background are carried over to the relaunch rather than stopped (see "Automatic stopping and its boundaries" in
-`docs/product/background-processes.md`), copies the session's conversation into the target account's config directory,
+`docs/product/background-processes.md`; those the agent ends itself as it exits do not survive, and the session is told
+which, as "Processes a restart ended" there describes), copies the session's conversation into the target account's config directory,
 records the new account and directory on the session, and relaunches it as a resume does, with everything Octoboard
 injects reassembled. It archives nothing: while the process is down the session reads as *interrupted*, and it comes
 back at its prompt like any resumed session — *done* where it has a conversation, *paused* where its last turn ended
 abnormally (see "Paused" in `docs/product/session-statuses.md`) — unless it is sent the prompt to
-continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself. Ending an owner's process this way
+continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself; it is told
+only which of its processes the switch ended, when it ended any, in its prompt to continue or in a message of its own. Ending an owner's process this way
 does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of them
 separately.
 
@@ -334,7 +336,8 @@ continue the task it was working on when it was interrupted without repeating wo
 history counts it as Octoboard's rather than the user's (see "What the history lists" in
 `docs/product/session-history.md`). Where the relaunch carries a notice of its own (Octoboard's automatic switch, see
 "When the switch succeeds" in `docs/product/automatic-account-switch.md`), only the request to continue follows that
-notice. The prompt is sent **only where the switch itself ended a live process** and that process was:
+notice. Processes the switch ended are named in the prompt, before the request to continue (see "Processes a restart
+ended" in `docs/product/background-processes.md`). The prompt is sent **only where the switch itself ended a live process** and that process was:
 
 - **in the middle of a turn**, or
 - **stopped on the plan's usage limit**.
