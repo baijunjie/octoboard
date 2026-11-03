@@ -255,7 +255,7 @@ impl Store {
             return Ok(false);
         }
         conn.execute(
-            "UPDATE settings SET development = ?2, rebase_before_merge = ?3, delivery = ?4,
+            "UPDATE settings SET development = ?2, rebase_before_delivery = ?3, delivery = ?4,
                                  revert_gate = ?5, squash_before_delivery = ?6
              WHERE id = ?1",
             params![
@@ -369,7 +369,7 @@ impl Store {
 
 fn read_git_workflow_settings(conn: &Connection) -> Result<GitWorkflowSettings> {
     Ok(conn.query_row(
-        "SELECT development, rebase_before_merge, delivery, revert_gate, squash_before_delivery
+        "SELECT development, rebase_before_delivery, delivery, revert_gate, squash_before_delivery
          FROM settings WHERE id = ?1",
         params![SETTINGS_ID],
         |row| {

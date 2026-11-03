@@ -302,15 +302,16 @@ Stored entities: console, host, project, session, account, report-panel page, tr
 interrupted session, branch origin (the session responsible for a branch) and application-wide settings. The shapes
 are in `apps/daemon/src/store/`; what is worth knowing is the reasoning behind a few fields.
 
-The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store/schema.rs`), and a new database gets the
-whole current schema at once, stamped with Octoboard's `PRAGMA application_id`. A file at the current version is used
-as is, and a file with no tables is initialized in place. An older file is copied aside as `<name>.pre-v<N>` and
-brought up to date by the steps in `MIGRATIONS`, one per version, all in one transaction, so a failure leaves it as it
-was. A file with tables and no version (from before versions were recorded) is moved aside as
-`<name>.superseded-<unix seconds>` (never deleted, with a warning logged) while a fresh database starts. A file of a
-newer version, one marked as another application's, or one that is not SQLite, is refused and left untouched. Every
-schema change raises the version and adds the step from the previous one, whose schema is kept for the migration
-tests.
+The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store/schema.rs`), and a new database
+gets the whole current schema at once, stamped with Octoboard's `PRAGMA application_id`. A file at the current version
+is used as is, and a file with no tables is initialized in place. A file with tables and no application id (from a build
+before the first release) is moved aside as `<name>.superseded-<unix seconds>` (a counter added when taken; its
+write-ahead log checkpointed into it first and any sidecar files moved with it; never deleted, with a warning logged)
+while a fresh database starts. An older file is copied aside as `<name>.pre-v<N>` and brought up to date by the steps in
+`MIGRATIONS`, one per version, all in one transaction, so a failure leaves it as it was; version 1 is the baseline, so
+the list is empty until the first schema change after release. A file of a newer version or one below 1, one marked as
+another application's, or one that is not SQLite, is refused and left untouched. Every schema change raises the version
+and adds the step from the previous one, whose schema is kept for the migration tests.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.

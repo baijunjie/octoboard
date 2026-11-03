@@ -548,66 +548,6 @@ async fn the_git_workflow_settings_and_a_projects_override_round_trip_in_an_expo
     assert!(broadcast);
 }
 
-/// A document exported before `rebase_before_merge` was renamed `rebase_before_delivery` still
-/// imports: the old key sets the item, both in the global settings and in a project's override.
-#[tokio::test]
-async fn a_document_with_the_old_rebase_key_still_imports() {
-    use crate::protocol::{GitWorkflowOverride, GitWorkflowSettings};
-    let area = ScratchDir::new("import-old-rebase-key-area");
-    let repo = directory(&area, "repo");
-    let (source, source_dir) = app_state("import-old-rebase-key-source");
-    source
-        .store
-        .insert_console(&crate::test_support::console(&source_dir))
-        .unwrap();
-    let own = GitWorkflowOverride {
-        rebase_before_delivery: Some(false),
-        ..GitWorkflowOverride::default()
-    };
-    let mut stored = crate::test_support::insert_project(&source, &repo);
-    stored.git_workflow = own;
-    source.store.update_project(&stored).unwrap();
-    source
-        .store
-        .change_git_workflow_settings(&crate::protocol::GitWorkflowSettingsChanges {
-            rebase_before_delivery: Some(false),
-            ..Default::default()
-        })
-        .unwrap();
-    let mut full = serde_json::to_value(
-        crate::config_document::export::build(&source.store, &export::Selection::full(true))
-            .unwrap(),
-    )
-    .unwrap();
-    let rename = |git_workflow: &mut serde_json::Value| {
-        let object = git_workflow.as_object_mut().unwrap();
-        let value = object.remove("rebase_before_delivery").unwrap();
-        object.insert("rebase_before_merge".into(), value);
-    };
-    rename(&mut full["settings"]["git_workflow"]);
-    rename(&mut full["consoles"][0]["projects"][0]["git_workflow"]);
-
-    let (target, _target_dir) = app_state("import-old-rebase-key-target");
-    apply(
-        &target,
-        &full,
-        vec![at(0, 0, DirectoryChoice::ExportedPath)],
-        true,
-        None,
-        true,
-    )
-    .await
-    .unwrap();
-    assert_eq!(stored_projects(&target)[0].git_workflow, own);
-    assert_eq!(
-        target.store.git_workflow_settings().unwrap(),
-        GitWorkflowSettings {
-            rebase_before_delivery: false,
-            ..GitWorkflowSettings::default()
-        }
-    );
-}
-
 /// The keyboard shortcuts a client adds to a full export belong to the client: an import
 /// inspects and applies a document that carries them, and hands them back as they came, and
 /// one without them is still read.

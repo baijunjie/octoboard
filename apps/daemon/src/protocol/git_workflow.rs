@@ -52,9 +52,6 @@ pub struct GitWorkflowSettings {
     pub squash_before_delivery: bool,
     /// Whether a branch is rebased onto its target branch before delivery (merge, push or pull
     /// request). Moot while `development` is `InPlace`.
-    // TODO: remove at the first document `VERSION` bump: reads configuration documents that
-    // carry this item as `rebase_before_merge`.
-    #[serde(alias = "rebase_before_merge")]
     pub rebase_before_delivery: bool,
     /// Moot while `development` is `InPlace`.
     pub delivery: GitDelivery,
@@ -82,9 +79,6 @@ impl Default for GitWorkflowSettings {
 pub struct GitWorkflowOverride {
     pub development: Option<GitDevelopment>,
     pub squash_before_delivery: Option<bool>,
-    // TODO: remove at the first document `VERSION` bump: reads configuration documents that
-    // carry this item as `rebase_before_merge`.
-    #[serde(alias = "rebase_before_merge")]
     pub rebase_before_delivery: Option<bool>,
     pub delivery: Option<GitDelivery>,
     pub revert_gate: Option<bool>,

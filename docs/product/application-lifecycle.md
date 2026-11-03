@@ -420,38 +420,44 @@ in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
 
 ### The database's schema version
 
-The database records the version of its schema — this build's is **2** — and, from version 2 on, a mark in the file's
-header (its SQLite application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On every start, before
-using an existing `~/.octoboard/octoboard.db`, the daemon decides what to do with it:
+The database records the version of its schema — this build's is **1** — and a mark in the file's header (its SQLite
+application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On every start, before using an existing
+`~/.octoboard/octoboard.db`, the daemon decides what to do with it:
 
 - **A file with no tables in it** and no version is given the current schema in place.
-- **A file that is not Octoboard's** — a SQLite database carrying another program's mark, or carrying none at version 2
-  or later — is refused and left as it is, whatever version it records: the daemon fails to start, with a reason that
-  names the file and says it is not an Octoboard database. A file that is not a SQLite database at all is refused and
-  left as it is too, with a reason that names the file.
+- **A database without the mark** — one written by a build from before the first release, whatever version it records
+  — is moved aside, and the daemon starts a fresh database at the usual path:
+  - It is renamed, beside itself, to `octoboard.db.superseded-<Unix time in seconds>`; when that name, or the name of
+    one of its sidecar files below, is already taken, a counter is added, `octoboard.db.superseded-<time>-2` (then `-3`
+    and so on), so an earlier moved-aside copy is never overwritten. The daemon logs a warning naming both files.
+  - The moved-aside file is a complete copy on its own: before renaming it, the daemon writes whatever its write-ahead
+    log still holds back into it. Any of SQLite's sidecar files still beside it (`-wal`, `-shm`, `-journal`) move
+    with it, under the new name with the same suffix, so none is left for the fresh database. While another process
+    is in the middle of reading or writing the database, so that its log cannot be written back, nothing is moved:
+    the daemon fails to start, with a reason that names the file and says another process is using it.
+  - The file is only renamed, never deleted, nothing in it changes beyond its log being written back, and nothing in it
+    is read back into the new one. To carry settings across, export the configuration with the build that wrote it
+    and import it into the new one (see `docs/product/configuration-export-and-import.md`); anything else the user
+    takes from the moved-aside file by hand.
+- **A file carrying another program's mark** is refused and left as it is, whatever version it records: the daemon
+  fails to start, with a reason that names the file and says it is not an Octoboard database. A file that is not a
+  SQLite database at all is refused and left as it is too, with a reason that names the file.
 - **A database at the version this build reads** is used as it is.
-- **A database written before versions were recorded** (version 0) is moved aside: the daemon renames it, beside
-  itself, to `octoboard.db.superseded-<Unix time in seconds>`, logs a warning naming both files, and starts a fresh
-  database at the usual path. Nothing in a database moved aside is read back into the new one: the user re-enters their
-  consoles, projects and accounts by hand, and the old file stays on disk, never deleted.
-- **A database at an older version** (version 1) is backed up, then upgraded in place:
-  - The backup is a copy beside it, `octoboard.db.pre-v<its version>`. No earlier backup is overwritten: when that name
-    is taken, the copy's name has the Unix time in seconds added, `octoboard.db.pre-v<its version>-<time>` (and a
-    counter after it, should that be taken too). When an earlier backup of that version already holds exactly the
-    file's current content, it serves as the backup and no new copy is made, so starting again after a failed upgrade
-    does not pile up copies. A backup is either complete or absent: it is written as `<its name>.partial` and renamed
-    once it is on disk, and a `.partial` file is never taken for a backup. Backups stay on disk, never deleted. A
-    backup that cannot be made stops the start, with the database untouched.
+- **A database at an older version** is backed up, then upgraded in place. No release has needed this yet: version 1 is
+  the first, so there is nothing older to upgrade from.
+  - The backup is a copy beside it, `octoboard.db.pre-v<its version>`, taken after its write-ahead log is written back
+    into it. No earlier backup is overwritten: when that name is taken, the copy's name has the Unix time in seconds
+    added, `octoboard.db.pre-v<its version>-<time>` (and a counter after it, should that be taken too). When an earlier
+    backup of that version already holds exactly the file's current content, it serves as the backup and no new copy is
+    made, so starting again after a failed upgrade does not pile up copies. A backup is either complete or absent: it
+    is written as `<its name>.partial` and renamed once it is on disk, and a `.partial` file is never taken for a
+    backup. Backups stay on disk, never deleted. A backup that cannot be made stops the start, with the database
+    untouched.
   - The upgrade is all or nothing: if any part of it fails, the database is left exactly as it was, and the daemon fails
     to start, with a reason that names the database, the versions it was being taken from and to, and the backup.
-- **A database at a newer version than this build reads, or at a negative one**, and **a file with no tables that
+- **A database at a newer version than this build reads, or at a version below 1**, and **a file with no tables that
   records a version** are refused and left untouched: the daemon fails to start, with a reason that names the file, its
   version, and that renaming the named file moves it aside, which deletes nothing and has this build start a fresh
   database.
 
 A start that fails over the database is shown as described in "Starting up" above.
-
-**What the upgrade from version 1 changes.** From version 2 a console has at most one project recorded at a given path.
-Where a version-1 database holds several projects of one console recorded at exactly the same path, they become one:
-the one added first is kept as it is, the sessions of the others move to it, and the others are removed; what was set on
-them — their name, pin, tags, trust permission and every other project setting — is not carried over.

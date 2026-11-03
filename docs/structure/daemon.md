@@ -97,8 +97,9 @@ and records tests replay.
 ### Storage and state
 
 - `src/store/` — the coordinator's SQLite `Store`: `schema.rs` (the current schema, the `MIGRATIONS` that bring an older
-  database up to it, and the checks on a file before it is opened; `schema/v{N}.sql` keeps each past version's schema
-  for the migration tests), `rows.rs`, one file per table family, and `failure.rs`,
+  database up to it — none yet, version 1 being the baseline — and the checks on a file before it is opened;
+  `schema/v{N}.sql` keeps each past version's schema for the migration tests once there is one), `rows.rs`, one file
+  per table family, and `failure.rs`,
   the store's own `Result` and `StoreError`, which codes the SQLite failures to read or write Octoboard's database the
   user can fix (read-only data folder, full disk, a file that cannot be opened or read) as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,

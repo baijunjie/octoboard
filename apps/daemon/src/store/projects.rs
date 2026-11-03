@@ -16,7 +16,8 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                claude_session_model, claude_session_effort, codex_session_model,
                                codex_session_effort, grok_session_model, grok_session_effort,
                                trust_consent, pinned, tags, description, development,
-                               rebase_before_merge, delivery, revert_gate, squash_before_delivery";
+                               rebase_before_delivery, delivery, revert_gate,
+                               squash_before_delivery";
 
 impl Store {
     /// Inserts the project. A second project at a path its console already has trips the unique
@@ -33,7 +34,7 @@ impl Store {
                                    claude_session_model, claude_session_effort,
                                    codex_session_model, codex_session_effort, grok_session_model,
                                    grok_session_effort, trust_consent, pinned, tags,
-                                   description, development, rebase_before_merge, delivery,
+                                   description, development, rebase_before_delivery, delivery,
                                    revert_gate, squash_before_delivery)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                      ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
@@ -120,7 +121,7 @@ impl Store {
                                  codex_session_model = ?12, codex_session_effort = ?13,
                                  grok_session_model = ?14, grok_session_effort = ?15,
                                  pinned = ?16, tags = ?17, description = ?18,
-                                 development = ?19, rebase_before_merge = ?20, delivery = ?21,
+                                 development = ?19, rebase_before_delivery = ?20, delivery = ?21,
                                  revert_gate = ?22, squash_before_delivery = ?23
              WHERE id = ?1",
             params![
