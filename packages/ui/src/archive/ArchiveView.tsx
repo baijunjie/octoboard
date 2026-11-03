@@ -191,7 +191,7 @@ export function ArchiveView({
       }}
     >
       {/* Where the archive is lives in the top bar's breadcrumb, so the heading names only what it lists; only a clipped heading's tooltip names the place too. */}
-      <header className={`${PANE_HEADER_FRAME_CLASS} gap-1 ps-(--row-fill-inset) pe-(--pane-inset)`}>
+      <header className={`${PANE_HEADER_FRAME_CLASS} gap-1 px-(--pane-inset)`}>
         <PaneTitle
           heading={t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
           headingTitle={<Message id={project ? "archive.title.project" : boundTo ? "archive.title.boundSessions" : "archive.title.consoleSessions"} params={{ name: <InlineReference dir="auto" wrap>{project ? project.name : boundTo ? sessionDisplayTitle(t, boundTo) : owner.name}</InlineReference> }} />}
