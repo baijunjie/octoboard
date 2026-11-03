@@ -63,7 +63,7 @@ pub(super) async fn archive_requested(
     // the record is known so an unknown session keeps nothing.
     if !keep_process_ids.is_empty() {
         state.session_record(&session)?;
-        let kept = crate::processes::requests::keep(state, keep_process_ids.clone()).await?;
+        let kept = super::processes::keep(state, keep_process_ids.clone()).await?;
         let missed: Vec<&String> = keep_process_ids
             .iter()
             .filter(|id| !kept.contains(id))
@@ -212,12 +212,7 @@ pub(super) async fn inspect_session_branches(
     .await??;
     let processes = match ids {
         Some(ids) => {
-            crate::processes::requests::long_running(
-                state,
-                ids,
-                crate::processes::requests::ask_after(),
-            )
-            .await?
+            super::processes::long_running(state, ids, super::processes::ask_after()).await?
         }
         None => Vec::new(),
     };

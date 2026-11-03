@@ -340,13 +340,13 @@ pub mod error_code {
     /// `share_default_config_incomplete`. `params` names the `account`, its `name`, the `detail`,
     /// `items`: a JSON array of `{item, left, cause, detail, sessions?}`, each item of the
     /// account's directory that was not brought in line, what it was left as (`unchanged`,
-    /// `backed_up`, `partly_moved`, `linked`, `absent`) and why, as a
-    /// `crate::accounts::shared_config::FailureCause` and in the system's own words; and `cause`,
-    /// the cause the items share (`other` when they differ), or why the change could not start when
-    /// there are none. A `cause` of `default_moved` means the agent's default directory is no
-    /// longer the one the links lead into or sharing was started into: turning sharing off, then on
-    /// again, shares the new one. An entry about a conversation turning sharing off could not take
-    /// back names the agent's id of it as `item` and the sessions recording it as `sessions`.
+    /// `backed_up`, `partly_moved`, `linked`, `absent`) and why, as a `SharingCause` and in the
+    /// system's own words; and `cause`, the cause the items share (`other` when they differ), or
+    /// why the change could not start when there are none. A `cause` of `default_moved` means the
+    /// agent's default directory is no longer the one the links lead into or sharing was started
+    /// into: turning sharing off, then on again, shares the new one. An entry about a conversation
+    /// turning sharing off could not take back names the agent's id of it as `item` and the
+    /// sessions recording it as `sessions`.
     pub const ACCOUNT_SHARING_FAILED: Code = Code("account_sharing_failed");
     /// A `delete_account`, or an `update_account` pointing it at another directory, for an account
     /// that shares the default configuration, or whose last change of sharing is incomplete,

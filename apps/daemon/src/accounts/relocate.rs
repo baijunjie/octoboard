@@ -13,16 +13,16 @@
 //!
 //! The record alone is sufficient for Claude Code and Grok Build to resume — no index, registry or
 //! per-project entry is copied with it — but it is not the whole conversation, so what the agent
-//! keeps beside it travels too ([`companions`]): Claude Code's directory of the same name (subagent
-//! transcripts, tool results) and its rewind checkpoints. For Codex the record alone is not
-//! sufficient: a thread that had a turn reverted is a chain of rollouts, the record is the chain's
-//! head, and the first rollout and the segments between are its companions. Nothing else is
-//! touched in either directory: the copy only ever adds (or replaces) those items of the one
-//! session, besides a transient staging directory at the target's root that it creates and
-//! removes again, and, for Codex, the one `rollout_path` its database keeps of the thread
-//! ([`repoint_thread_row`]). It copies rather than moves, so a switch that fails afterwards leaves
-//! the original where it was and switching back needs no second copy. The measurements are in
-//! `docs/agent-cli-reference.md`.
+//! keeps beside it travels too (its companions, [`crate::records::carried`]): Claude Code's
+//! directory of the same name (subagent transcripts, tool results) and its rewind checkpoints. For
+//! Codex the record alone is not sufficient: a thread that had a turn reverted is a chain of
+//! rollouts, the record is the chain's head, and the first rollout and the segments between are its
+//! companions. Nothing else is touched in either directory: the copy only ever adds (or replaces)
+//! those items of the one session, besides a transient staging directory at the target's root that
+//! it creates and removes again, and, for Codex, the one `rollout_path` its database keeps of the
+//! thread ([`repoint_thread_row`]). It copies rather than moves, so a switch that fails afterwards
+//! leaves the original where it was and switching back needs no second copy. The measurements are
+//! in `docs/agent-cli-reference.md`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::io;
@@ -31,16 +31,14 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::accounts::codex_threads::{self, RowError};
-use crate::accounts::files::{is_same_path, modified, remove_any};
-use crate::accounts::shared_config::FailureCause as Cause;
-use crate::agents::layout::layout;
-use crate::protocol::{error_code, Agent, CodedError};
-use crate::records::{conversation_files_in, plausible_id, rollout_head, Locator};
+use crate::hostfs::{is_same_path, remove_any};
+use crate::protocol::{error_code, Agent, CodedError, SharingCause};
+use crate::records::carried::locate_record;
+use crate::records::{plausible_id, Locator};
 
 /// The path, relative to `source`, of the session's record in the account whose directory is
-/// `source`: for Codex the head of the thread's chain of rollouts, otherwise the copy written to
-/// last when the agent keeps more than one. Refused with `conversation_not_found` when there is
-/// none, which the caller meets before it has ended anything.
+/// `source` ([`locate_record`]). Refused with `conversation_not_found` when there is none, which
+/// the caller meets before it has ended anything.
 pub fn locate(agent: Agent, source: &Path, agent_session_id: &str) -> Result<PathBuf> {
     locate_with(&mut Locator::default(), agent, source, agent_session_id)
 }
@@ -53,32 +51,7 @@ pub fn locate_with(
     source: &Path,
     agent_session_id: &str,
 ) -> Result<PathBuf> {
-    let records = records_of(locator, agent, source, agent_session_id);
-    let record = if agent == Agent::Codex {
-        let absolute: Vec<PathBuf> = records
-            .iter()
-            .map(|relative| source.join(relative))
-            .collect();
-        rollout_head(&absolute)
-            .and_then(|head| head.strip_prefix(source).ok().map(Path::to_path_buf))
-    } else {
-        // The record is a file for Claude Code (its sidecar directory sits beside it) and a
-        // directory for Grok Build. More than one is not expected; if it happens the one written
-        // to last is the live one.
-        records
-            .into_iter()
-            .filter(|relative| {
-                std::fs::symlink_metadata(source.join(relative)).is_ok_and(|metadata| {
-                    if agent == Agent::Claude {
-                        metadata.is_file()
-                    } else {
-                        metadata.is_dir()
-                    }
-                })
-            })
-            .max_by_key(|relative| modified(&source.join(relative)))
-    };
-    record.ok_or_else(|| {
+    locate_record(locator, agent, source, agent_session_id).ok_or_else(|| {
         CodedError::raised(
             error_code::CONVERSATION_NOT_FOUND,
             format!(
@@ -91,69 +64,6 @@ pub fn locate_with(
             ],
         )
     })
-}
-
-/// What the agent keeps for the session besides its record, as paths relative to `source` that
-/// exist there, for a switch to carry with it. Claude Code: the directory of the record's own
-/// name beside it (subagent transcripts, tool results, the custom title) and `file-history/<id>`
-/// (rewind checkpoints). Codex: the other rollouts of the thread's chain, which with `record` (the
-/// head) are the whole conversation: a target given the head alone is refused, and one given the
-/// first rollout alone resumes a stale branch. A subagent's rollout is named by its own thread id
-/// and stays behind; Grok keeps everything inside the session directory.
-pub fn companions(
-    agent: Agent,
-    source: &Path,
-    record: &Path,
-    agent_session_id: &str,
-) -> Vec<PathBuf> {
-    let files = conversation_of(&mut Locator::default(), agent, source, agent_session_id);
-    let records_dir = Path::new(layout(agent).records_dir);
-    match agent {
-        Agent::Claude => {
-            let sidecar = record.with_extension("");
-            files
-                .into_iter()
-                .filter(|relative| *relative == sidecar || !relative.starts_with(records_dir))
-                .collect()
-        }
-        Agent::Codex => files
-            .into_iter()
-            .filter(|relative| relative.starts_with(records_dir) && relative != record)
-            .collect(),
-        Agent::Grok => Vec::new(),
-    }
-}
-
-/// Every file the agent keeps of the conversation in `source` that a switch may carry, relative to
-/// `source`: what `crate::records` finds of it, less the rollouts `codex archive` moved aside,
-/// which a resume does not read. An id that is not a canonical UUID has none.
-fn conversation_of(
-    locator: &mut Locator,
-    agent: Agent,
-    source: &Path,
-    agent_session_id: &str,
-) -> Vec<PathBuf> {
-    let archived = layout(agent).archived_records_dir.map(Path::new);
-    conversation_files_in(locator, agent, source, agent_session_id)
-        .into_iter()
-        .filter_map(|path| path.strip_prefix(source).ok().map(Path::to_path_buf))
-        .filter(|relative| !archived.is_some_and(|archived| relative.starts_with(archived)))
-        .collect()
-}
-
-/// The records of the session in `source` and what sits beside them in the records directory, as
-/// paths relative to `source`.
-fn records_of(
-    locator: &mut Locator,
-    agent: Agent,
-    source: &Path,
-    agent_session_id: &str,
-) -> Vec<PathBuf> {
-    let records_dir = Path::new(layout(agent).records_dir);
-    conversation_of(locator, agent, source, agent_session_id)
-        .into_iter()
-        .filter(|relative| relative.starts_with(records_dir))
-        .collect()
 }
 
 /// Points a Codex home's own record of `thread` at the rollout the switch just carried in
@@ -184,19 +94,21 @@ pub fn repoint_thread_row(
 }
 
 /// Why a conversation could not be moved, in the words of the wire's `cause` param on
-/// `relocation_failed`: the file system's own causes ([`Cause`]), which a user can act on, and the
-/// ones of this move alone — `config_unreadable` (the target's `config.toml` cannot be read or
-/// parsed), `sqlite_home` (where its thread database is cannot be told), `symlink` (a record holds
-/// a symbolic link, which is not copied) and `not_restored` (an older item could not be put back).
-/// `other` is everything else. Not found and conflicts are told only as `other`.
+/// `relocation_failed`: the file system's own causes ([`SharingCause`]), which a user can act on,
+/// and the ones of this move alone — `config_unreadable` (the target's `config.toml` cannot be read
+/// or parsed), `sqlite_home` (where its thread database is cannot be told), `symlink` (a record
+/// holds a symbolic link, which is not copied) and `not_restored` (an older item could not be put
+/// back). `other` is everything else. Not found and conflicts are told only as `other`.
 fn cause_of_io(err: &io::Error) -> &'static str {
-    narrowed(Cause::of(err))
+    narrowed(SharingCause::of(err))
 }
 
 /// The wire word for `cause` where this move tells it apart, else `other`.
-fn narrowed(cause: Cause) -> &'static str {
+fn narrowed(cause: SharingCause) -> &'static str {
     match cause {
-        Cause::PermissionDenied | Cause::Busy | Cause::NoSpace => cause.as_str(),
+        SharingCause::PermissionDenied | SharingCause::Busy | SharingCause::NoSpace => {
+            cause.as_str()
+        }
         _ => "other",
     }
 }
@@ -211,7 +123,7 @@ fn cause_of_row(err: &RowError) -> &'static str {
         RowError::ConfigInvalid(_) => "config_unreadable",
         RowError::Unresolvable(_) => "sqlite_home",
         RowError::Listing(_, err) | RowError::Inspecting(_, err) => cause_of_io(err),
-        RowError::Database(_, err) => narrowed(Cause::of_database(err)),
+        RowError::Database(_, err) => narrowed(SharingCause::of_database(err)),
     }
 }
 

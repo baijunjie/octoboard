@@ -54,7 +54,7 @@ async fn an_exported_configuration_is_imported_as_it_is() {
     let consoles = inspect(&target, &exported).await.unwrap().consoles;
     assert_eq!(
         consoles[0].projects[0].default,
-        Some(ChoiceKind::ExportedPath)
+        Some(DirectoryChoiceKind::ExportedPath)
     );
     import(
         &target,
@@ -451,16 +451,16 @@ async fn the_interface_language_is_not_carried_and_an_unknown_setting_is_ignored
 /// carries the override of its projects but no global settings.
 #[tokio::test]
 async fn the_git_workflow_settings_and_a_projects_override_round_trip_in_an_export() {
-    use crate::git_workflow::{Delivery, Development, GitWorkflowOverride, GitWorkflowSettings};
+    use crate::protocol::{GitDelivery, GitDevelopment, GitWorkflowOverride, GitWorkflowSettings};
     let area = ScratchDir::new("import-git-workflow-area");
     let repo = directory(&area, "repo");
     let (source, source_dir) = app_state("import-git-workflow-source");
     let hub = crate::test_support::console(&source_dir);
     source.store.insert_console(&hub).unwrap();
     let own = GitWorkflowOverride {
-        development: Some(Development::InPlace),
+        development: Some(GitDevelopment::InPlace),
         squash_before_delivery: Some(false),
-        delivery: Some(Delivery::PullRequest),
+        delivery: Some(GitDelivery::PullRequest),
         ..GitWorkflowOverride::default()
     };
     let mut stored = crate::test_support::insert_project(&source, &repo);
@@ -468,10 +468,10 @@ async fn the_git_workflow_settings_and_a_projects_override_round_trip_in_an_expo
     source.store.update_project(&stored).unwrap();
     source
         .store
-        .change_git_workflow_settings(&crate::git_workflow::GitWorkflowSettingsChanges {
+        .change_git_workflow_settings(&crate::protocol::GitWorkflowSettingsChanges {
             squash_before_delivery: Some(true),
             rebase_before_merge: Some(false),
-            delivery: Some(Delivery::Merge),
+            delivery: Some(GitDelivery::Merge),
             ..Default::default()
         })
         .unwrap();

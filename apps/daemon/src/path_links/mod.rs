@@ -166,11 +166,9 @@ fn project_roots(state: &crate::state::AppState, project: &str, fresh: bool) -> 
             return roots;
         }
     }
-    let live = crate::browse::scope::project_live_roots(
-        state,
-        project,
-        &crate::git::isolated::IsolatedGit::from_shell,
-    )
+    let live = crate::browse::scope::project_live_roots(state, project, &|| {
+        state.host_tools.isolated_git()
+    })
     .unwrap_or_default();
     let canonical: Vec<PathBuf> = live.iter().map(|live| live.root.clone()).collect();
     let worktrees = live.into_iter().map(|live| live.worktree).collect();

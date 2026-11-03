@@ -21,6 +21,8 @@
 //! - [`auto_switch`]: moving a session to another account, or resuming it on its own, when a turn
 //!   stops on the usage limit.
 //! - [`accounts`], [`settings`]: the accounts and the agent list, and the settings.
+//! - [`processes`]: the process trees a client lists, stops or keeps, and an archive's
+//!   confirmation lists.
 //! - [`messages`], [`pages`]: the user's own message into a session; the report panel's page list
 //!   and form submission, withdrawing a new worker's pages and the sweep of stray ones at start-up.
 //! - [`validate`]: the checks of the text fields requests carry.
@@ -52,6 +54,7 @@ mod messages;
 pub mod model_change;
 pub mod open;
 pub mod pages;
+pub mod processes;
 pub mod projects;
 pub mod restart;
 pub mod resume;
@@ -66,6 +69,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 
 use crate::accounts::quotas;
+use crate::agents::detect::detect_agent_from_names;
 use crate::agents::launch_settings;
 use crate::config_document::export;
 use crate::config_document::import;
@@ -343,12 +347,13 @@ async fn handle_inner(
             let probed = tokio::task::spawn_blocking(move || {
                 let shell_env = crate::env_shell::cached_snapshot()
                     .context("snapshotting the shell environment")?;
-                project_git::clone::probe_remote_agent(&remote_url, &shell_env)
+                project_git::clone::probe_remote_names(&remote_url, &shell_env)
             })
             .await??;
+            let detected = detect_agent_from_names(probed.iter().map(String::as_str));
             Ok(Some(Event::AgentDetected {
                 id: request_id,
-                agent: probed.filter(|agent| agent_is_available(state, *agent)),
+                agent: detected.filter(|agent| agent_is_available(state, *agent)),
             }))
         }
 
@@ -616,7 +621,7 @@ async fn handle_inner(
         } => inspect_session_branches(state, request_id, sessions, processes).await,
 
         RequestBody::ListProcesses { target } => {
-            let trees = crate::processes::requests::list(state, target).await?;
+            let trees = processes::list(state, target).await?;
             Ok(Some(Event::ProcessesListed {
                 id: request_id,
                 trees,
@@ -624,7 +629,7 @@ async fn handle_inner(
         }
 
         RequestBody::ListAllProcesses => {
-            let counts = crate::processes::requests::list_all(state).await?;
+            let counts = processes::list_all(state).await?;
             Ok(Some(Event::AllProcessesListed {
                 id: request_id,
                 counts,
@@ -632,7 +637,7 @@ async fn handle_inner(
         }
 
         RequestBody::StopProcesses { ids } => {
-            let ids = crate::processes::requests::stop(state, ids).await?;
+            let ids = processes::stop(state, ids).await?;
             Ok(Some(Event::ProcessesStopped {
                 id: request_id,
                 ids,
@@ -640,7 +645,7 @@ async fn handle_inner(
         }
 
         RequestBody::KeepProcesses { ids } => {
-            let ids = crate::processes::requests::keep(state, ids).await?;
+            let ids = processes::keep(state, ids).await?;
             Ok(Some(Event::ProcessesKept {
                 id: request_id,
                 ids,
@@ -845,14 +850,8 @@ async fn handle_inner(
             worktree,
             path,
         } => {
-            let shell_terminal = crate::terminal::shell::create(
-                state,
-                project,
-                worktree,
-                path,
-                crate::git::isolated::IsolatedGit::from_shell,
-            )
-            .await?;
+            let shell_terminal =
+                crate::terminal::shell::create(state, project, worktree, path).await?;
             Ok(Some(Event::ShellTerminalCreated {
                 id: request_id,
                 shell_terminal,
@@ -910,7 +909,7 @@ async fn handle_inner(
                     &project,
                     worktree.as_deref(),
                     &path,
-                    &crate::git::isolated::IsolatedGit::from_shell,
+                    &|| state.host_tools.isolated_git(),
                 )?;
                 host_open::paths::open_path(&path, reveal)
             })

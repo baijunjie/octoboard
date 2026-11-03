@@ -26,7 +26,8 @@ Internals, by file: `link.rs` and `moves.rs` turn sharing on and off item by ite
 own conversations back out of the default directory when sharing is turned off; `registries.rs` keeps the plugin
 registries' recorded paths consistent with shared or unshared items, and Codex's thread state database is kept
 consistent through `apps/daemon/src/accounts/codex_threads.rs`, which the account switch's copy uses too; `cli_reads.rs`
-is the admission of agent CLI runs outside a session against a running change.
+is the admission of agent CLI runs outside a session against a running change. `link.rs` also holds the
+constructors of `SharingCause` and `SharingItemFailure` (defined in `protocol/accounts.rs`).
 
 ## External interfaces
 
@@ -39,7 +40,6 @@ Exported from `mod.rs` (defined there unless a file is named):
   the state layer need.
 - `entries` (`link.rs`) — how many entries a change goes through.
 - `own_conversations` (`take_back.rs`) — the conversations turning sharing off takes back.
-- `FailureCause` and `FailedItem` (`link.rs`) — why an item failed, and which item.
 - `before_launch` (`launch.rs`) — before a session launches or resumes: refuses while its account's change runs, and
   repairs links.
 - `refuse_if_changing`, `before_switch_copy` — refuse opening a session, a handoff or an account switch while a change

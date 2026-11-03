@@ -31,7 +31,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::diagnostics::{redact, stderr_tail, truncate, ProbeTrace, LINE_LIMIT, MAX_NOTES};
-use crate::accounts::cli_run::{self, NotRun};
+use crate::adapter::account_cli::{self, NotRun};
 use crate::agents::{codex_app_server, json_rpc};
 use crate::processes::subprocess::{
     run_exchange_traced, AfterReply, Bounds, ExchangeFailure, ExchangeTrace, AGENT_REPLY_GRACE,
@@ -191,7 +191,7 @@ pub(super) fn probe(
     trace: &mut ProbeTrace,
 ) -> Result<Reading, QuotaUnavailable> {
     let conversation = conversation(agent);
-    let mut run = cli_run::admitted_command(agent, shell_env, config_dir, conversation.args)
+    let mut run = account_cli::admitted_command(agent, shell_env, config_dir, conversation.args)
         .map_err(|refused| match refused {
             NotRun::DirMissing(dir) => config_dir_missing(agent, &dir.to_string_lossy()),
             NotRun::BinaryNotFound(binary) => QuotaUnavailable::new(
@@ -444,11 +444,7 @@ fn reading(
         });
     }
     Ok(Reading {
-        plan: plan
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|plan| !plan.is_empty())
-            .map(str::to_string),
+        plan: crate::text::trimmed_or_none(plan.and_then(Value::as_str)),
         windows,
         reset_credits: None,
     })
@@ -683,14 +679,8 @@ fn codex_reset_credit(credit: &Value) -> Option<ResetCredit> {
     if credit.get("status").and_then(Value::as_str) != Some("available") {
         return None;
     }
-    let text = |field: &str| {
-        credit
-            .get(field)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|text| !text.is_empty())
-            .map(str::to_string)
-    };
+    let text =
+        |field: &str| crate::text::trimmed_or_none(credit.get(field).and_then(Value::as_str));
     let millis = |field: &str| {
         credit
             .get(field)

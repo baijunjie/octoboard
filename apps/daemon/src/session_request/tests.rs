@@ -10,9 +10,10 @@ use crate::protocol::{
     SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
+use crate::test_support::bare_session;
 use crate::test_support::{
-    app_state, branch_made_by, idle_stand_in, output_containing, repo_with, running, ScratchDir,
-    PATIENCE, TEST_KEY,
+    app_state, branch_made_by, code_of, idle_stand_in, output_containing, repo_with, running,
+    ScratchDir, PATIENCE, TEST_KEY,
 };
 use serde_json::json;
 
@@ -21,39 +22,12 @@ const OTHER_CONSOLE: &str = "console-2";
 
 fn project_session(id: &str) -> Session {
     Session {
-        id: id.to_string(),
-        agent: Agent::Claude,
-        agent_session_id: None,
         console_id: CONSOLE.to_string(),
         project_id: Some("project-1".to_string()),
         host_id: LOCAL_HOST_ID.to_string(),
-        role: Role::Project,
-        origin: Origin::User,
         title: format!("Work {id}"),
-        status: SessionStatus::Idle,
-        terminal_title: None,
-        record_titles: Default::default(),
-        background_tasks: Vec::new(),
-        switching_account: false,
-        paused: false,
-        prompt_on_launch: false,
-        default_effort: None,
-        orchestration_role: OrchestrationRole::Coordinator,
-        context: None,
-        observed_model: None,
-        observed_effort: None,
-        model: None,
-        effort: None,
         has_conversation: true,
-        bound_to: None,
-        colour: None,
-        ordinal: None,
-        account_id: None,
-        config_dir: None,
-        pinned: false,
-        locked: false,
-        started_at: 0,
-        ended_at: None,
+        ..bare_session(id, Role::Project)
     }
 }
 
@@ -270,10 +244,6 @@ async fn outcome_of(call: tokio::task::JoinHandle<Result<Value>>) -> Result<Valu
         .unwrap()
 }
 
-fn code_of(err: &anyhow::Error) -> Option<crate::protocol::Code> {
-    err.downcast_ref::<CodedError>().map(|coded| coded.code)
-}
-
 /// A session may ask for one in a project of another console: the dialog is told where, and an
 /// approval starts it there with nobody as its owner, leaves the caller as it was, and writes the
 /// outcome into the caller's session as well as returning it.
@@ -443,10 +413,7 @@ async fn no_answer_within_the_limit_drops_the_request() {
     assert!(err.to_string().contains("did not respond"), "{err}");
     assert!(pending_events(&state).is_empty());
     let late = answer_by(&launcher, &request_id, true).await.unwrap_err();
-    assert_eq!(
-        code_of(&late),
-        Some(error_code::SESSION_REQUEST_NOT_WAITING)
-    );
+    assert_eq!(code_of(&late), error_code::SESSION_REQUEST_NOT_WAITING);
     assert_eq!(launcher.launched.load(Ordering::SeqCst), 0);
 }
 
@@ -628,10 +595,7 @@ async fn the_callers_process_ending_withdraws_its_request() {
     let err = outcome_of(call).await.expect_err("withdrawn");
     assert!(err.to_string().contains("withdrawn"), "{err}");
     let late = answer_by(&launcher, &request_id, true).await.unwrap_err();
-    assert_eq!(
-        code_of(&late),
-        Some(error_code::SESSION_REQUEST_NOT_WAITING)
-    );
+    assert_eq!(code_of(&late), error_code::SESSION_REQUEST_NOT_WAITING);
     assert_eq!(launcher.launched.load(Ordering::SeqCst), 0);
 }
 
@@ -651,7 +615,7 @@ async fn the_first_answer_wins() {
     );
     approval.unwrap();
     let lost = refusal.unwrap_err();
-    assert_eq!(code_of(&lost), Some(error_code::SESSION_REQUEST_ANSWERED));
+    assert_eq!(code_of(&lost), error_code::SESSION_REQUEST_ANSWERED);
     assert!(outcome_of(call).await.is_ok());
     assert_eq!(launcher.launched.load(Ordering::SeqCst), 1);
 }
@@ -693,10 +657,7 @@ async fn a_second_call_takes_the_place_of_the_first() {
     assert_eq!(waiting.len(), 1);
     assert_ne!(waiting[0], first_id);
     let late = answer_by(&launcher, &first_id, true).await.unwrap_err();
-    assert_eq!(
-        code_of(&late),
-        Some(error_code::SESSION_REQUEST_NOT_WAITING)
-    );
+    assert_eq!(code_of(&late), error_code::SESSION_REQUEST_NOT_WAITING);
 }
 
 /// The next event about the requests themselves; the caller's own status changes with them
@@ -1636,7 +1597,7 @@ async fn a_switch_holding_the_session_is_not_a_launch_of_it() {
     )
     .await
     .expect_err("not carried out");
-    assert_eq!(code_of(&err), Some(error_code::SESSION_ALREADY_STARTING));
+    assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
     let told = outcome_of(call).await.expect_err("not carried out");
     assert!(
         told.to_string().contains("could not be carried out"),

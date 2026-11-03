@@ -23,26 +23,6 @@ use serde_json::Value;
 use crate::protocol::Agent;
 use crate::records::line_file;
 
-/// What a continued session is told to do, in Claude Code's own words for its auto-resume. A macro
-/// so that [`CONTINUE_PROMPT`] can be built on it with `concat!`.
-macro_rules! continue_words {
-    () => {
-        "Continue the task you were working on when it was interrupted; do not repeat work that \
-         is already complete."
-    };
-}
-
-/// The prompt a continued session is sent: a notice from Octoboard, so that the session's history
-/// tells it from what the user typed.
-pub const CONTINUE_PROMPT: &str = concat!(
-    crate::messaging::texts::notice_prefix!(),
-    ": your session was restarted. ",
-    continue_words!()
-);
-
-/// What follows a notice the continued session is sent with, in place of [`CONTINUE_PROMPT`].
-pub const CONTINUE_AFTER_NOTICE: &str = continue_words!();
-
 /// What Claude Code writes as the user's turn when an Esc interrupts the model, or a tool.
 const INTERRUPT_MARKERS: [&str; 2] = [
     "[Request interrupted by user]",
@@ -59,10 +39,10 @@ const AUTO_CONTINUE_CANCELLED_PREFIX: &str = "Automatic continue cancelled";
 /// A single entry can run to hundreds of KB (a large tool result).
 const FIRST_WINDOW: u64 = 256 * 1024;
 
-/// Whether the session whose conversation record is `record` should be sent [`CONTINUE_PROMPT`]
-/// once relaunched: the transcript for Claude Code, the head rollout for Codex, the session
-/// directory for Grok Build. Read after its process has ended. `false` for a record that cannot be
-/// read.
+/// Whether the session whose conversation record is `record` should be sent
+/// [`crate::messaging::texts::CONTINUE_PROMPT`] once relaunched: the transcript for Claude Code,
+/// the head rollout for Codex, the session directory for Grok Build. Read after its process has
+/// ended. `false` for a record that cannot be read.
 pub fn should_continue(agent: Agent, record: &Path) -> bool {
     verdict(agent, record, false)
 }

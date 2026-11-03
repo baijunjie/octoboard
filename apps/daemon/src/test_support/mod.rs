@@ -44,6 +44,17 @@ pub(crate) fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
         .code
 }
 
+/// The value of param `name` of the coded error `err` is, such as the `stage` or `cause` of a
+/// failed relocation.
+pub(crate) fn param_of(err: &anyhow::Error, name: &str) -> String {
+    err.downcast_ref::<crate::protocol::CodedError>()
+        .unwrap_or_else(|| panic!("a coded error: {err:#}"))
+        .params
+        .get(name)
+        .cloned()
+        .unwrap_or_else(|| panic!("a `{name}` param: {err:#}"))
+}
+
 /// How long a test waits for something a spawned shell does: a snapshot it should produce, a file
 /// it should write, a process it should end. Not a measure of speed: on a machine whose
 /// endpoint-security software stalls every `exec` for seconds at a time under a parallel burst, a

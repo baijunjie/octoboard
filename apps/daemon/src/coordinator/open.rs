@@ -16,6 +16,7 @@ use crate::protocol::{
 use crate::session::term;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
+use crate::text::trimmed_or_none;
 use crate::time::now_millis;
 
 use super::accounts::refuse_unless_account_usable;
@@ -341,9 +342,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         SettingsChecked::All,
     )
     .await?;
-    let title = title
-        .map(|title| title.trim().to_string())
-        .filter(|title| !title.is_empty());
+    let title = trimmed_or_none(title.as_deref());
 
     let session = Session {
         id: session_id.unwrap_or_else(|| Uuid::new_v4().to_string()),

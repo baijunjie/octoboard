@@ -15,7 +15,6 @@ use serde_json::{json, Map, Value};
 
 use crate::branch_origin;
 use crate::browse::budget;
-use crate::git::isolated::IsolatedGit;
 use crate::mcp::lookup::{optional_bool, optional_count, optional_string, page_bounds};
 use crate::protocol::{
     BrowseBody, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, ComparedChangeRef, ContentKind,
@@ -25,7 +24,7 @@ use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 use crate::wire_path::{self, RelPath};
 
-use super::project_browse::{browse, git_source, plain, readable_project, MakeGit};
+use super::project_browse::{browse, git_source, plain, readable_project};
 
 /// How many changes `list_project_changes` returns when the caller names no `limit`.
 const DEFAULT_CHANGES_LIMIT: usize = 200;
@@ -38,22 +37,6 @@ const DEFAULT_DIFF_BYTES: usize = 32 * 1024;
 
 /// The most of a diff it returns in one answer, however much is asked for.
 const MAX_DIFF_BYTES: usize = 128 * 1024;
-
-pub(in crate::mcp) async fn list_project_changes(
-    state: &Arc<AppState>,
-    caller: &Session,
-    arguments: &Map<String, Value>,
-) -> Result<Value> {
-    list_with(state, caller, arguments, IsolatedGit::from_shell).await
-}
-
-pub(in crate::mcp) async fn read_project_diff(
-    state: &Arc<AppState>,
-    caller: &Session,
-    arguments: &Map<String, Value>,
-) -> Result<Value> {
-    read_with(state, caller, arguments, IsolatedGit::from_shell).await
-}
 
 /// The worktree `wanted` names: its path or the branch checked out in it, spelled plain or as the
 /// daemon spells it (a wire path).
@@ -97,11 +80,10 @@ async fn find_worktree<'a>(git: &'a GitSourceInfo, wanted: &str) -> Result<&'a W
     })
 }
 
-async fn list_with(
+pub(in crate::mcp) async fn list_project_changes(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
-    make_git: MakeGit,
 ) -> Result<Value> {
     let project = readable_project(state, caller, arguments)?;
     let worktree = optional_string(arguments, "worktree");
@@ -139,7 +121,7 @@ async fn list_with(
                 base_remote,
                 commit,
             };
-            list_branch(state, make_git, &project, compared, page)
+            list_branch(state, &project, compared, page)
                 .await
                 .map_err(|err| match defaulted {
                     // The recorded target may be a branch that has since been deleted or renamed.
@@ -150,7 +132,7 @@ async fn list_with(
                     None => err,
                 })
         }
-        _ => list_uncommitted(state, make_git, &project, worktree, page).await,
+        _ => list_uncommitted(state, &project, worktree, page).await,
     }
 }
 
@@ -194,12 +176,11 @@ struct Compared {
 
 async fn list_uncommitted(
     state: &Arc<AppState>,
-    make_git: MakeGit,
     project: &Project,
     worktree: Option<String>,
     page: Page,
 ) -> Result<Value> {
-    let git = git_source(state, make_git, project).await?;
+    let git = git_source(state, project).await?;
     let at = match &worktree {
         Some(wanted) => find_worktree(&git, wanted).await?,
         None => git
@@ -220,7 +201,7 @@ async fn list_uncommitted(
             ..
         },
         _admission,
-    ) = browse(state, make_git, body, budget::CHANGE_LIST_RESERVATION).await?
+    ) = browse(state, body).await?
     else {
         bail!("the daemon answered something other than the changes");
     };
@@ -239,7 +220,6 @@ async fn list_uncommitted(
 
 async fn list_branch(
     state: &Arc<AppState>,
-    make_git: MakeGit,
     project: &Project,
     compared: Compared,
     page: Page,
@@ -271,7 +251,7 @@ async fn list_branch(
                 ..
             },
             _admission,
-        ) = browse(state, make_git, body, budget::COMPARISON_RESERVATION).await?
+        ) = browse(state, body).await?
         else {
             bail!("the daemon answered something other than a comparison");
         };
@@ -293,7 +273,7 @@ async fn list_branch(
             ..
         },
         _admission,
-    ) = browse(state, make_git, body, budget::COMMITS_RESERVATION).await?
+    ) = browse(state, body).await?
     else {
         bail!("the daemon answered something other than a commit list");
     };
@@ -449,11 +429,10 @@ fn describe_change(change: &ChangeEntry, grouped: bool) -> Value {
     Value::Object(entry)
 }
 
-async fn read_with(
+pub(in crate::mcp) async fn read_project_diff(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
-    make_git: MakeGit,
 ) -> Result<Value> {
     let project = readable_project(state, caller, arguments)?;
     let path = optional_string(arguments, "path").ok_or_else(|| anyhow!("`path` is required"))?;
@@ -499,7 +478,7 @@ async fn read_with(
             }
             let worktree = match worktree {
                 Some(wanted) => {
-                    let git = git_source(state, make_git, &project).await?;
+                    let git = git_source(state, &project).await?;
                     Some(find_worktree(&git, &wanted).await?.id.clone())
                 }
                 None => None,
@@ -518,8 +497,7 @@ async fn read_with(
                 worktree,
                 change,
             };
-            let (Event::ProjectChange { patch, new, .. }, admission) =
-                browse(state, make_git, body, budget::DIFF_RESERVATION).await?
+            let (Event::ProjectChange { patch, new, .. }, admission) = browse(state, body).await?
             else {
                 bail!("the daemon answered something other than a change");
             };
@@ -539,7 +517,7 @@ async fn read_with(
                 },
             };
             let (Event::ProjectCommitChange { patch, new, .. }, admission) =
-                browse(state, make_git, body, budget::DIFF_RESERVATION).await?
+                browse(state, body).await?
             else {
                 bail!("the daemon answered something other than a change");
             };
@@ -663,17 +641,16 @@ fn window(answer: &mut Value, shown: Shown, offset: usize, max_bytes: usize) -> 
 mod tests {
     use super::*;
     use crate::mcp::test_support::{arguments, RepoState};
-    use crate::mcp::tools::project_browse::test_git;
     use crate::test_support::{git, ScratchDir};
 
     async fn list(fixture: &RepoState, caller: &str, input: Value) -> Result<Value> {
         let session = fixture.state.session_record(caller)?;
-        list_with(&fixture.state, &session, &arguments(input), test_git).await
+        list_project_changes(&fixture.state, &session, &arguments(input)).await
     }
 
     async fn read(fixture: &RepoState, caller: &str, input: Value) -> Result<Value> {
         let session = fixture.state.session_record(caller)?;
-        read_with(&fixture.state, &session, &arguments(input), test_git).await
+        read_project_diff(&fixture.state, &session, &arguments(input)).await
     }
 
     fn paths(answer: &Value) -> Vec<(String, String, String)> {

@@ -9,14 +9,14 @@ use super::{
     long_running, ASK_AFTER, ASK_AFTER_OVERRIDE, COUNT_WAIT_OVERRIDE, LIST_FLOOR_OVERRIDE,
 };
 use crate::coordinator::handle;
-use crate::processes::ledger::ProcessTree;
 use crate::protocol::{
-    error_code, Agent, CodedError, Event, ProcessTarget, RequestBody, SessionStatus,
+    error_code, Agent, Event, ProcessTarget, ProcessTree, RequestBody, SessionStatus,
 };
 use crate::state::AppState;
 use crate::test_support::{
-    assert_stops_running, console_with_project_and_accounts, detached_in, fake_live_session,
-    is_running, perl_write, project_session, wait_for_pid, KillOnDrop, StandIn, PATIENCE,
+    assert_stops_running, code_of, console_with_project_and_accounts, detached_in,
+    fake_live_session, is_running, perl_write, project_session, wait_for_pid, KillOnDrop, StandIn,
+    PATIENCE,
 };
 
 /// A stand-in agent for session `id` (with a stored record) that runs, in the background, one
@@ -79,12 +79,6 @@ fn project_1() -> ProcessTarget {
     ProcessTarget::Project {
         project_id: "project-1".to_string(),
     }
-}
-
-fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .code
 }
 
 /// A `sleep` working in `cwd`, which a test then removes, detached as an agent's leftover is.

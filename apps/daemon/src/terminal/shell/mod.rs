@@ -15,7 +15,6 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use portable_pty::CommandBuilder;
 
-use crate::git::isolated::IsolatedGit;
 use crate::protocol::{error_code, CodedError, Event, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
 use crate::terminal::pty::{self, NewPty, PtyCore, PtyOwner};
@@ -148,15 +147,14 @@ fn shown_title(shell_name: &str, latest: Option<&str>) -> String {
 }
 
 /// Starts a shell terminal for `project`: in its directory, or with `worktree` in its place in that
-/// worktree of its repository, resolved as browsing resolves it (`git` is what runs `git` for
-/// that). A non-empty wire `path` moves the start to that folder below it, and a path that is not
-/// a folder is refused. Broadcasts the new record and returns it.
+/// worktree of its repository, resolved as browsing resolves it. A non-empty wire `path` moves the
+/// start to that folder below it, and a path that is not a folder is refused. Broadcasts the new
+/// record and returns it.
 pub async fn create(
     state: &Arc<AppState>,
     project: String,
     worktree: Option<String>,
     path: String,
-    git: fn() -> Result<IsolatedGit>,
 ) -> Result<ShellTerminal> {
     let cwd = {
         let (state, project, worktree) = (state.clone(), project.clone(), worktree.clone());
@@ -166,7 +164,7 @@ pub async fn create(
                 &project,
                 worktree.as_deref(),
                 &path,
-                &git,
+                &|| state.host_tools.isolated_git(),
             )
         })
         .await??

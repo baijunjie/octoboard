@@ -1,5 +1,5 @@
-//! Browsing directories: listing the directories under a path, finding the git repositories under a
-//! parent, and detecting which agent a directory is set up for.
+//! Browsing directories: listing the directories under a path, and finding the git repositories
+//! under a parent.
 
 use std::path::{Path, PathBuf};
 
@@ -7,7 +7,7 @@ use anyhow::Result;
 
 use super::{directory_unreadable, require_directory};
 use crate::git::layout::is_git_repo;
-use crate::protocol::{Agent, DirEntry};
+use crate::protocol::DirEntry;
 
 /// Lists the directories under `path`, each flagged with whether it is a git repository.
 ///
@@ -65,46 +65,9 @@ pub fn discover_repos(parent: &Path) -> Result<Vec<PathBuf>> {
     Ok(repos)
 }
 
-/// The agent a project directory is set up for, read from marker files at its top level (see
-/// [`detect_agent_from_names`]); `None` when the directory cannot be read.
-pub fn detect_agent(dir: &Path) -> Option<Agent> {
-    let names: Vec<String> = std::fs::read_dir(dir)
-        .ok()?
-        .filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned()))
-        .collect();
-    detect_agent_from_names(names.iter().map(String::as_str))
-}
-
-/// The agent a repository is set up for, from the names at its top level, or `None` when they name
-/// no agent or more than one — a repository carrying both `CLAUDE.md` and `AGENTS.md` is common,
-/// and picking one of them would be a guess. `AGENTS.md` and `.agents` are generic, read by Grok
-/// Build as well, so they point at Codex only when `.grok` is absent.
-pub(crate) fn detect_agent_from_names<'a>(
-    names: impl IntoIterator<Item = &'a str>,
-) -> Option<Agent> {
-    let (mut claude, mut grok, mut codex, mut generic) = (false, false, false, false);
-    for name in names {
-        match name {
-            "CLAUDE.md" | ".claude" => claude = true,
-            ".grok" => grok = true,
-            ".codex" => codex = true,
-            "AGENTS.md" | ".agents" => generic = true,
-            _ => {}
-        }
-    }
-    let codex = codex || (!grok && generic);
-    match (claude, codex, grok) {
-        (true, false, false) => Some(Agent::Claude),
-        (false, true, false) => Some(Agent::Codex),
-        (false, false, true) => Some(Agent::Grok),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{detect_agent, list_dir};
-    use crate::protocol::Agent;
+    use super::list_dir;
     use crate::test_support::ScratchDir;
 
     #[test]
@@ -153,30 +116,5 @@ mod tests {
         );
         assert!(coded.message.contains("macOS"), "{}", coded.message);
         assert_eq!(coded.params["path"], locked.to_string_lossy());
-    }
-
-    fn detected_with(label: &str, markers: &[&str]) -> Option<Agent> {
-        let dir = ScratchDir::new(&format!("hostfs-detect-{label}"));
-        for marker in markers {
-            if marker.starts_with('.') {
-                std::fs::create_dir(dir.join(marker)).expect("marker dir");
-            } else {
-                std::fs::write(dir.join(marker), "").expect("marker file");
-            }
-        }
-        detect_agent(&dir)
-    }
-
-    #[test]
-    fn detect_agent_reads_the_marker_files() {
-        assert_eq!(detected_with("claude", &["CLAUDE.md"]), Some(Agent::Claude));
-        assert_eq!(detected_with("codex", &["AGENTS.md"]), Some(Agent::Codex));
-        // `AGENTS.md` is generic, so `.grok` claims it.
-        assert_eq!(
-            detected_with("grok", &[".grok", "AGENTS.md"]),
-            Some(Agent::Grok)
-        );
-        assert_eq!(detected_with("both", &["CLAUDE.md", "AGENTS.md"]), None);
-        assert_eq!(detected_with("none", &[]), None);
     }
 }

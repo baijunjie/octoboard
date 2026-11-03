@@ -26,7 +26,7 @@ use crate::state::AppState;
 
 /// Upper bound on one `git` read here. All of them read the repository's own files, so this is a
 /// guard against a wedged repository (a dead network volume, a held lock), not a network
-/// allowance; it is the browse reads' bound (`browse/budget.rs`'s `GIT_READ_TIMEOUT`) for the same
+/// allowance; it is the browse reads' bound (`GIT_READ_TIMEOUT` in `git/isolated.rs`) for the same
 /// reason, and a read that outlasts it is a read that could not be made, which leaves the recorded
 /// URL alone.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);

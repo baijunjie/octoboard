@@ -3,13 +3,14 @@
 `apps/daemon/src/processes/ledger/` owns attribution, persistence and cleanup of the processes an agent launch starts,
 including descendants that leave the agent's terminal session. It reads the system's process table through
 `apps/daemon/src/processes/native/` (the macOS and Linux readers, shared with the project shell terminals'
-busy check) and builds process trees for the request layer in `apps/daemon/src/processes/requests/mod.rs`; the wire
+busy check) and builds process trees for the request layer in `apps/daemon/src/coordinator/processes.rs`; the wire
 interface belongs to [`apps/daemon/PROTOCOL.md`](../../../PROTOCOL.md).
 
-The ledger is held on `AppState`. Launch setup and the carry-over of a restart (an account switch, a model change, a
-change of an account's sharing) enter through `apps/daemon/src/coordinator/launch.rs`,
-`apps/daemon/src/coordinator/restart.rs` and `apps/daemon/src/coordinator/account_sharing.rs`, the handoff's carry-over
-through `apps/daemon/src/handoff/operation.rs`, environment tagging through `apps/daemon/src/session/term/mod.rs`,
+The ledger is held on `AppState`. Launch setup enters through `apps/daemon/src/coordinator/launch.rs`; the carry-over of
+a restart (an account switch, a model change, a change of an account's sharing) is driven by
+`apps/daemon/src/coordinator/restart.rs`, which the account switch, model change and
+`apps/daemon/src/coordinator/account_sharing.rs` run through; the handoff's carry-over goes through
+`apps/daemon/src/coordinator/handoff.rs`, environment tagging through `apps/daemon/src/session/term/mod.rs`,
 process-end cleanup and shutdown through `apps/daemon/src/coordinator/exit_watch.rs` and
 `apps/daemon/src/state/process_exit.rs`, startup reconciliation through `apps/daemon/src/main.rs`, and the owner's moves
 of trees through `apps/daemon/src/mcp/tools/handover/processes.rs`.
@@ -41,9 +42,9 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
 - `ProcessLedger::move_trees`, `MoveRefused` — move chosen trees of one session's running launch to another's (the
   `handover_processes` tool).
 - `ProcessLedger::reconcile` — reconcile persisted attribution with the running process table.
-- `ProcessLedger::trees_of_sessions`, `ProcessLedger::trees_of_project`, `ProcessTree` — produce the process-tree
+- `ProcessLedger::trees_of_sessions`, `ProcessLedger::trees_of_project` — produce the process-tree
   listings consumed by session and project requests.
-- `ProcessLedger::trees_counted`, `ProcessCount` — count the trees of every project and console session, without
+- `ProcessLedger::trees_counted` — count the trees of every project and console session, without
   describing them, for the request layer's global count.
 - `ProcessLedger::listed_lately`, `ProcessLedger::note_listed` — share recent listings between client requests; a
   listing is noted only with the generation read before it.

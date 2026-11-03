@@ -10,9 +10,10 @@ use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 
 use crate::protocol::{error_code, CodedError, Event, TermControl, TermEvent};
-use crate::session::{is_terminal_protocol, LiveSession};
+use crate::session::LiveSession;
 use crate::state::AppState;
 use crate::terminal::fan::{Answering, Attached};
+use crate::terminal::input_class::is_terminal_protocol;
 use crate::terminal::pty::PtyCore;
 use crate::terminal::shell::ShellProcess;
 

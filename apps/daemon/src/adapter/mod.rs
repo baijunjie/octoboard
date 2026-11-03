@@ -5,7 +5,7 @@
 //! how the agents otherwise behave lives with the modules that need it, among them their screens
 //! and dialogs, hook payloads, records, sign-in and quota protocols, tool naming and role text
 //! (`crate::session_tools`), launch and account switch (`crate::coordinator`), model catalogues
-//! (`crate::agents::models`) and the detection of a project's agent (`crate::hostfs::listing`).
+//! (`crate::agents::models`) and the detection of a project's agent (`crate::agents::detect`).
 //!
 //! Three things are injected into every agent: the status hooks, the Octoboard MCP server, and a role
 //! description, plus a status line for Claude Code ("What is injected on every launch" in
@@ -37,7 +37,7 @@
 //! one constant command serves every event, and adding or removing an event never changes what an
 //! adapter has to generate beyond the event name itself.
 
-mod account_cli;
+pub(crate) mod account_cli;
 pub mod claude;
 pub mod codex;
 pub(crate) mod files;
@@ -45,7 +45,7 @@ pub mod grok;
 mod hooks;
 
 pub use account_cli::{
-    account_command, account_command_of, account_dir, default_account_dir, resolve_account_binary,
+    account_command_of, account_dir, default_account_dir, resolve_account_binary,
 };
 pub use hooks::{hook_command, hook_script_path, hook_url, write_hook_script, HOOK_TIMEOUT_SECS};
 
@@ -55,10 +55,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::git_workflow::GitWorkflowSettings;
 use crate::protocol::{
-    error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
-    TerminalAppearance,
+    error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, GitWorkflowSettings,
+    Notice, Role, TerminalAppearance,
 };
 use crate::session_tools::Owner;
 
@@ -287,19 +286,10 @@ pub struct NamedTitle {
     pub precedence: u8,
 }
 
-/// The braille spinner Codex and Grok Build start their titles with while a turn runs, a frame
-/// every 100 to 300 ms.
-const BRAILLE_SPINNER: std::ops::RangeInclusive<char> = '\u{2800}'..='\u{28FF}';
-
-/// Whether `glyph` is one of the braille spinner's.
-pub fn is_braille_spinner_glyph(glyph: char) -> bool {
-    BRAILLE_SPINNER.contains(&glyph)
-}
-
 /// Whether `text` is nothing but a spinner's glyphs, the braille patterns agents animate.
 pub fn is_spinner(text: &str) -> bool {
     let mut glyphs = text.chars().filter(|c| !c.is_whitespace()).peekable();
-    glyphs.peek().is_some() && glyphs.all(is_braille_spinner_glyph)
+    glyphs.peek().is_some() && glyphs.all(crate::terminal::title::is_braille_spinner_glyph)
 }
 
 pub trait AgentAdapter {
@@ -471,7 +461,7 @@ pub mod tests {
         pub session_id: String,
         pub role: crate::protocol::Role,
         pub owner: Option<Owner>,
-        pub git_workflow: Option<crate::git_workflow::GitWorkflowSettings>,
+        pub git_workflow: Option<crate::protocol::GitWorkflowSettings>,
         pub ask_questions_as_choices: bool,
         pub user_language: Option<String>,
         pub new_agent_session_id: String,
@@ -535,7 +525,7 @@ pub mod tests {
             session_id: "session-1".to_string(),
             role: crate::protocol::Role::Project,
             owner: Some(Owner::Console),
-            git_workflow: Some(crate::git_workflow::GitWorkflowSettings::default()),
+            git_workflow: Some(crate::protocol::GitWorkflowSettings::default()),
             ask_questions_as_choices: true,
             user_language: None,
             new_agent_session_id: format!("agent-{}", std::process::id()),

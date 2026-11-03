@@ -160,9 +160,10 @@ impl AppState {
     }
 
     /// The turn ended as cancelled by what the terminal title showed, with no hook to say so
-    /// (`crate::titles::interrupt`). Closed as [`Self::abandon_turn`] closes a cancelled one,
-    /// except that what the session reported is kept and a turn end of the agent's own that still
-    /// comes closes it as its real end ([`Self::close_turn`]): the title only infers the cancel.
+    /// (`crate::session::title_interrupt`). Closed as [`Self::abandon_turn`] closes a cancelled
+    /// one, except that what the session reported is kept and a turn end of the agent's own that
+    /// still comes closes it as its real end ([`Self::close_turn`]): the title only infers the
+    /// cancel.
     pub fn end_turn_off_title(&self, id: &str) {
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             if !turn.open {

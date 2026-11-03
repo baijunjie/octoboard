@@ -9,17 +9,17 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::accounts::dirs::account_dir_key;
-use crate::accounts::files::is_same_path;
 use crate::accounts::shared_config::{
     account_in_use, carry_out, default_dir, entries, in_use, lock_account, lock_agent,
     not_shareable, own_conversations, sharing_failed, sharing_in_progress, still_sharing,
-    try_lock_agent, Changing, FailureCause as Cause, Locked, Refused,
+    try_lock_agent, Changing, Locked, Refused,
 };
+use crate::hostfs::dir_key;
+use crate::hostfs::is_same_path;
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{
-    error_code, notice_code, Account, CodedError, Notice, SessionStatus, SharingFailure,
-    SharingPhase, SharingProgress,
+    error_code, notice_code, Account, CodedError, Notice, SessionStatus, SharingCause,
+    SharingFailure, SharingPhase, SharingProgress,
 };
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 
@@ -196,7 +196,7 @@ async fn change(
         Err(err) => {
             changing.end(Some(SharingFailure {
                 share,
-                cause: Cause::Other,
+                cause: SharingCause::Other,
                 items: Vec::new(),
                 detail: err.to_string(),
             }));
@@ -421,7 +421,7 @@ pub async fn before_repoint(
     let unchanged = state
         .store
         .get_account(id)?
-        .is_none_or(|account| account_dir_key(&account.config_dir) == account_dir_key(config_dir));
+        .is_none_or(|account| dir_key(&account.config_dir) == dir_key(config_dir));
     if unchanged {
         return Ok(None);
     }

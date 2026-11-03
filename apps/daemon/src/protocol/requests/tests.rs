@@ -573,7 +573,7 @@ fn clearing_a_projects_settings_is_distinguishable_from_leaving_them() {
 /// the application-wide value, and a `development` or `delivery` outside the three is refused.
 #[test]
 fn add_project_parses_its_own_git_workflow_values() {
-    use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
+    use crate::protocol::{GitDelivery, GitDevelopment, GitWorkflowOverride};
     let parse = |tail: &str| {
         serde_json::from_str::<Request>(&format!(
             r#"{{"type":"add_project","console_id":"c","source":"local","path":"/p"{tail}}}"#
@@ -593,8 +593,8 @@ fn add_project_parses_its_own_git_workflow_values() {
             r#","git_workflow":{"development":"in_place","delivery":"merge","revert_gate":null}"#
         ),
         GitWorkflowOverride {
-            development: Some(Development::InPlace),
-            delivery: Some(Delivery::Merge),
+            development: Some(GitDevelopment::InPlace),
+            delivery: Some(GitDelivery::Merge),
             ..GitWorkflowOverride::default()
         }
     );

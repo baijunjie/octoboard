@@ -4,27 +4,12 @@
 //! decorations are taken off it (each adapter knows its own), else a stand-in from the first
 //! prompt, except the instructions opening a handoff. The terminal title is stored as the agent
 //! sent it, so a row written before an adapter learned to read it is read correctly too.
-//!
-//! The submodules do not make the title: `activity` and `interrupt` read a turn's state, and a
-//! cancel that left no other trace, off the terminal title.
-
-pub(crate) mod activity;
-pub(crate) mod interrupt;
 
 use std::path::{Path, PathBuf};
 
 use crate::adapter::adapter_for;
 use crate::hostfs::lexically_normalise;
-use crate::protocol::Agent;
-
-/// What an agent's own records say a session is called. Stored with the session, never sent.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RecordTitles {
-    /// A title the agent itself or the user named the conversation with.
-    pub named: Option<String>,
-    /// A stand-in taken from the conversation's first prompt, for one the agent left unnamed.
-    pub prompt: Option<String>,
-}
+use crate::protocol::{Agent, RecordTitles};
 
 /// The title to show for a session, `None` when nothing says what it is about. `names` yields the
 /// project's names (`project_names`), and is asked only when the agent's terminal title has to be

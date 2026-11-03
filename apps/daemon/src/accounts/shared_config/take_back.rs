@@ -9,14 +9,14 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::Result;
 
-use super::link::{Cause, Dirs, Failure, Left};
+use super::link::Dirs;
 use super::moves::{backup_path, is_link, lstat, merge_copy, merge_move, resolve};
 use crate::accounts::codex_threads::{self, is_state_database, RowError};
-use crate::accounts::dirs::account_dir_key;
 use crate::accounts::shared_config::items::shared_items;
 use crate::adapter::files::LARGE_FILE_LIMIT;
 use crate::agents::layout::CODEX_TITLE_INDEX;
-use crate::protocol::{Account, Agent};
+use crate::hostfs::dir_key;
+use crate::protocol::{Account, Agent, SharingCause, SharingItemFailure, SharingLeft};
 use crate::state::AppState;
 
 /// A conversation of the account's own sessions, by the agent's id of it.
@@ -32,13 +32,13 @@ pub(crate) struct Conversation {
 /// The conversations of every session on record in `account`'s directory, archived ones
 /// included. A session that holds another directory resumes from that one, and is left out.
 pub(crate) fn own_conversations(state: &AppState, account: &Account) -> Result<Vec<Conversation>> {
-    let key = account_dir_key(&account.config_dir);
+    let key = dir_key(&account.config_dir);
     let sessions = state.store.list_sessions()?;
     let in_account = |session: &crate::protocol::Session| {
         session
             .config_dir
             .as_deref()
-            .is_some_and(|dir| account_dir_key(dir) == key)
+            .is_some_and(|dir| dir_key(dir) == key)
     };
     let mut conversations: Vec<Conversation> = Vec::new();
     for session in sessions
@@ -85,9 +85,9 @@ pub(super) fn take_back(
     conversation: &Conversation,
     stamp: &str,
     launch_env: Result<&HashMap<String, String>, &str>,
-) -> Result<(), Failure> {
+) -> Result<(), SharingItemFailure> {
     let id = conversation.agent_session_id.as_str();
-    let failure = |left: Left, cause: Cause, detail: String| Failure {
+    let failure = |left: SharingLeft, cause: SharingCause, detail: String| SharingItemFailure {
         item: id.to_string(),
         left,
         cause,
@@ -109,8 +109,8 @@ pub(super) fn take_back(
             Ok(present) if !is_link(&present) && present.as_ref().is_some_and(|m| m.is_dir()) => {}
             Ok(_) => {
                 return Err(failure(
-                    Left::Unchanged,
-                    Cause::Conflict,
+                    SharingLeft::Unchanged,
+                    SharingCause::Conflict,
                     format!(
                         "left in the default directory: `{}` is not a directory of the \
                          account's own",
@@ -118,7 +118,13 @@ pub(super) fn take_back(
                     ),
                 ))
             }
-            Err(err) => return Err(failure(Left::Unchanged, Cause::of(&err), err.to_string())),
+            Err(err) => {
+                return Err(failure(
+                    SharingLeft::Unchanged,
+                    SharingCause::of(&err),
+                    err.to_string(),
+                ))
+            }
         }
         if asides.iter().all(|(seen, _)| *seen != root) {
             let aside = backup_path(&root, stamp);
@@ -139,13 +145,13 @@ pub(super) fn take_back(
         };
         if let Err(err) = carried {
             let left = if taken == 0 {
-                Left::Unchanged
+                SharingLeft::Unchanged
             } else {
-                Left::PartlyMoved
+                SharingLeft::PartlyMoved
             };
             return Err(failure(
                 left,
-                Cause::of(&err),
+                SharingCause::of(&err),
                 format!("`{}` not taken back: {err}", relative.display()),
             ));
         }
@@ -174,7 +180,7 @@ pub(super) fn take_back(
             if let Ok(Some(database)) = resolve(&dirs.default.join(item.name)) {
                 if let Err(err) = codex_threads::forget_threads(&database, &[id]) {
                     problems.push((
-                        Cause::of_database(&err),
+                        SharingCause::of_database(&err),
                         format!("the default's `{}` still names it: {err}", item.name),
                     ));
                 }
@@ -183,7 +189,7 @@ pub(super) fn take_back(
     }
     if let Ok(head) = crate::accounts::relocate::locate(agent, &dirs.account, id) {
         let pointed = launch_env
-            .map_err(|err| (Cause::Other, format!("the shell environment: {err}")))
+            .map_err(|err| (SharingCause::Other, format!("the shell environment: {err}")))
             .and_then(|env| {
                 codex_threads::point_thread_at(
                     &dirs.account,
@@ -204,19 +210,19 @@ pub(super) fn take_back(
     if problems.is_empty() {
         return Ok(());
     }
-    let cause = Cause::shared(problems.iter().map(|(cause, _)| *cause));
+    let cause = SharingCause::shared(problems.iter().map(|(cause, _)| *cause));
     let detail: Vec<String> = problems.iter().map(|(_, detail)| detail.clone()).collect();
-    Err(failure(Left::PartlyMoved, cause, detail.join("; ")))
+    Err(failure(SharingLeft::PartlyMoved, cause, detail.join("; ")))
 }
 
 /// Why the account's own row of a thread was not pointed at the head taken back.
-fn cause_of_row(err: &RowError) -> Cause {
+fn cause_of_row(err: &RowError) -> SharingCause {
     match err {
         RowError::ConfigUnreadable(err)
         | RowError::Listing(_, err)
-        | RowError::Inspecting(_, err) => Cause::of(err),
-        RowError::Database(_, err) => Cause::of_database(err),
-        RowError::ConfigInvalid(_) | RowError::Unresolvable(_) => Cause::Other,
+        | RowError::Inspecting(_, err) => SharingCause::of(err),
+        RowError::Database(_, err) => SharingCause::of_database(err),
+        RowError::ConfigInvalid(_) | RowError::Unresolvable(_) => SharingCause::Other,
     }
 }
 

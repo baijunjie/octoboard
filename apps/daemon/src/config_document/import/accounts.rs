@@ -7,131 +7,19 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
-use super::{ImportFailure, Rebinder};
-use crate::accounts::dirs::{account_dir_key, normalize_account_dir};
+use super::Rebinder;
+use crate::accounts::dirs::normalize_account_dir;
 use crate::agents::availability;
-use crate::config_document::export::{self, DocumentAccount, DocumentAccounts};
+use crate::config_document::export;
 use crate::coordinator;
-use crate::protocol::{error_code, Agent, CodedError};
+use crate::hostfs::dir_key;
+use crate::protocol::{
+    error_code, AccountOutcome, AccountResolution, AccountStatus, Agent, CodedError,
+    DocumentAccount, DocumentAccounts, ImportFailure, ImportedAccount, ImportedAccounts,
+    ImportedAgentAccounts, InspectedAccount, InspectedAccounts, InspectedAgentAccounts,
+};
 use crate::state::AppState;
-
-/// The choice made for one account of the document when applying: another directory, or leaving
-/// the account out. Exactly one of the two is given.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Deserialize)]
-pub struct AccountResolution {
-    pub agent: Agent,
-    /// The account's index among the document's accounts of `agent`, in the order it lists them.
-    pub account: usize,
-    /// An absolute path or one starting with `~/`.
-    #[serde(default)]
-    #[cfg_attr(test, ts(optional))]
-    pub directory: Option<String>,
-    #[serde(default)]
-    #[cfg_attr(test, ts(optional = nullable))]
-    pub leave_out: bool,
-}
-
-/// What importing one account of the document would do.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AccountStatus {
-    /// It would be created.
-    New,
-    /// An account of the same agent has its name already; it is used as it is and never modified.
-    Existing,
-    /// The proposed directory is already used by another account of the agent, the default account
-    /// included.
-    DirectoryInUse,
-    /// The Add account form would refuse its name or directory.
-    Invalid,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct InspectedAccount {
-    pub name: String,
-    /// The directory as the document records it.
-    pub directory: String,
-    /// The directory as it resolves on this machine (`~/` expanded); absent when the document's
-    /// cannot be resolved.
-    pub proposed_directory: Option<String>,
-    pub status: AccountStatus,
-    /// The name of the account that uses the proposed directory, for `directory_in_use`.
-    pub in_use_by: Option<String>,
-    /// Why it is `invalid`.
-    pub error: Option<ImportFailure>,
-    pub share_default_config: bool,
-    pub disabled: bool,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct InspectedAgentAccounts {
-    pub agent: Agent,
-    pub accounts: Vec<InspectedAccount>,
-    /// The name the document gives the agent's default account, when it gives one.
-    pub default_name: Option<String>,
-    /// Whether importing would apply `default_name`: this machine's default account has no name of
-    /// its own and the name collides with no account of the agent, those the import creates
-    /// included.
-    pub default_name_applies: bool,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct InspectedAccounts {
-    /// The agents of the document not yet on this machine's added agents, which importing would
-    /// add, in the document's order.
-    pub agents_to_add: Vec<Agent>,
-    pub agents: Vec<InspectedAgentAccounts>,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AccountOutcome {
-    Created,
-    /// An account of the agent with the name was there; used as it is.
-    Existing,
-    /// A resolution said to leave it out.
-    LeftOut,
-    /// It could not be created; `error` says why.
-    Failed,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct ImportedAccount {
-    pub name: String,
-    pub status: AccountOutcome,
-    /// The id of the account created, or of the one that existed.
-    pub account: Option<String>,
-    pub error: Option<ImportFailure>,
-    /// Why sharing the default configuration, which the document asked for, was not turned on for
-    /// an account that was created all the same.
-    pub sharing_warning: Option<ImportFailure>,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct ImportedAgentAccounts {
-    pub agent: Agent,
-    pub accounts: Vec<ImportedAccount>,
-    /// Whether the document's name for the default account was applied.
-    pub default_name_applied: bool,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct ImportedAccounts {
-    /// The agents appended to the added agents, in the order they were.
-    pub agents_added: Vec<Agent>,
-    pub agents: Vec<ImportedAgentAccounts>,
-}
 
 /// One agent's part of a document's accounts. A hand-edited document may list an agent twice:
 /// the parts are read as one, the accounts in the order they are listed.
@@ -223,7 +111,7 @@ fn judge_account(
     let in_use_by = match coordinator::accounts::colliding_account_dir(state, agent, &dir, None)? {
         Some(existing) => Some(existing),
         None => {
-            let key = account_dir_key(&dir);
+            let key = dir_key(&dir);
             earlier
                 .iter()
                 .find(|earlier| earlier.dir_key == key)
@@ -302,7 +190,7 @@ pub(super) fn inspect_accounts(
                     earlier.push(Earlier {
                         name: account.name.trim().to_string(),
                         name_key: key.clone(),
-                        dir_key: account_dir_key(&dir),
+                        dir_key: dir_key(&dir),
                     });
                     created.insert((group.agent, key));
                 }
@@ -555,10 +443,11 @@ mod tests {
     use super::super::tests::{
         account, at, console, directory, document, project, stored_projects,
     };
-    use super::super::{apply, inspect, AccountFallback, DirectoryChoice, Inspection};
+    use super::super::{apply, inspect, Inspection};
     use super::*;
-    use crate::config_document::export::{AccountName, ProjectAccountRef};
-    use crate::protocol::ProjectAccount;
+    use crate::protocol::{
+        AccountFallback, AccountName, DirectoryChoice, ProjectAccount, ProjectAccountRef,
+    };
     use crate::test_support::code_of;
     use crate::test_support::{app_state, ScratchDir};
     use serde_json::json;

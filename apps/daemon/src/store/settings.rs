@@ -11,8 +11,10 @@ use super::accounts::read_accounts;
 use super::agents::{read_account_order, read_added_agents};
 use super::rows::{enum_from_row, enum_from_text, enum_to_text};
 use super::{Store, SETTINGS_ID};
-use crate::git_workflow::{GitWorkflowSettings, GitWorkflowSettingsChanges};
-use crate::protocol::{Agent, ApprovalReviewer, ClaudeApprovalMode, Settings};
+use crate::protocol::{
+    Agent, ApprovalReviewer, ClaudeApprovalMode, GitWorkflowSettings, GitWorkflowSettingsChanges,
+    Settings,
+};
 
 /// Where a clone goes while the user has not chosen a directory.
 const BUILT_IN_CLONE_DIR: &str = "~/Projects";
@@ -484,7 +486,7 @@ fn read_claude_compatibility(
 }
 
 /// The Claude compatibility setting in effect for `agent` given the user's `choices` and the
-/// added agents (`None` while undecided, which counts as Claude Code not being among them).
+/// added agents.
 fn effective_claude_compatibility(
     agent: Agent,
     choices: &std::collections::BTreeMap<String, bool>,
@@ -496,10 +498,7 @@ fn effective_claude_compatibility(
     choices
         .get(agent.wire_name())
         .copied()
-        .unwrap_or_else(|| match agent {
-            Agent::Codex => added.is_some_and(|added| added.contains(&Agent::Claude)),
-            _ => true,
-        })
+        .unwrap_or_else(|| agent.claude_compatibility_default(added))
 }
 
 /// The stored agents whose default account is disabled; a value that is not a JSON array of strings
@@ -511,7 +510,8 @@ fn read_disabled_default_accounts(conn: &Connection) -> Result<std::collections:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git_workflow::{self, Delivery, Development, GitWorkflowOverride};
+    use crate::git_workflow;
+    use crate::protocol::{GitDelivery, GitDevelopment, GitWorkflowOverride};
 
     use crate::store::test_support::*;
 
@@ -795,7 +795,7 @@ mod tests {
         );
 
         let changes = GitWorkflowSettingsChanges {
-            delivery: Some(Delivery::PullRequest),
+            delivery: Some(GitDelivery::PullRequest),
             revert_gate: Some(true),
             ..GitWorkflowSettingsChanges::default()
         };
@@ -807,10 +807,10 @@ mod tests {
         assert_eq!(
             store.git_workflow_settings().unwrap(),
             GitWorkflowSettings {
-                development: Development::Worktree,
+                development: GitDevelopment::Worktree,
                 squash_before_delivery: false,
                 rebase_before_merge: true,
-                delivery: Delivery::PullRequest,
+                delivery: GitDelivery::PullRequest,
                 revert_gate: true,
             }
         );
@@ -836,9 +836,9 @@ mod tests {
 
         let mut edited = stored();
         edited.git_workflow = GitWorkflowOverride {
-            development: Some(Development::InPlace),
+            development: Some(GitDevelopment::InPlace),
             squash_before_delivery: Some(false),
-            delivery: Some(Delivery::Merge),
+            delivery: Some(GitDelivery::Merge),
             ..GitWorkflowOverride::default()
         };
         store.update_project(&edited).expect("update");
@@ -850,20 +850,20 @@ mod tests {
 
         store
             .change_git_workflow_settings(&GitWorkflowSettingsChanges {
-                development: Some(Development::Branch),
+                development: Some(GitDevelopment::Branch),
                 squash_before_delivery: Some(true),
                 rebase_before_merge: Some(false),
-                delivery: Some(Delivery::PullRequest),
+                delivery: Some(GitDelivery::PullRequest),
                 revert_gate: Some(true),
             })
             .unwrap();
         assert_eq!(
             git_workflow::effective(&store, &stored()).unwrap(),
             GitWorkflowSettings {
-                development: Development::InPlace,
+                development: GitDevelopment::InPlace,
                 squash_before_delivery: false,
                 rebase_before_merge: false,
-                delivery: Delivery::Merge,
+                delivery: GitDelivery::Merge,
                 revert_gate: true,
             }
         );

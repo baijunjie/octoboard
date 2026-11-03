@@ -2,12 +2,13 @@
 
 use crate::mcp::dispatch::call;
 use crate::protocol::{
-    Account, Agent, Console, Event, OrchestrationRole, Origin, Project, ProjectSource, QuotaWindow,
+    Account, Agent, Console, Event, OrchestrationRole, Project, ProjectSource, QuotaWindow,
     QuotaWindowKind, Role, Session, SessionStatus,
 };
 use crate::session_request;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
+use crate::test_support::bare_session;
 use crate::test_support::{running, Launched, ScratchDir, StandIn};
 use anyhow::Result;
 use serde_json::{json, Map, Value};
@@ -68,39 +69,9 @@ pub(super) fn console() -> Console {
 
 pub(super) fn console_session(id: &str) -> Session {
     Session {
-        id: id.to_string(),
-        agent: Agent::Claude,
-        agent_session_id: None,
-        console_id: "console-1".to_string(),
-        project_id: None,
         host_id: LOCAL_HOST_ID.to_string(),
-        role: Role::Console,
-        origin: Origin::User,
         title: "Hub".to_string(),
-        status: SessionStatus::Idle,
-        terminal_title: None,
-        record_titles: Default::default(),
-        background_tasks: Vec::new(),
-        switching_account: false,
-        paused: false,
-        prompt_on_launch: false,
-        default_effort: None,
-        orchestration_role: OrchestrationRole::Coordinator,
-        context: None,
-        observed_model: None,
-        observed_effort: None,
-        model: None,
-        effort: None,
-        has_conversation: false,
-        bound_to: None,
-        colour: None,
-        ordinal: None,
-        account_id: None,
-        config_dir: None,
-        pinned: false,
-        locked: false,
-        started_at: 0,
-        ended_at: None,
+        ..bare_session(id, Role::Console)
     }
 }
 

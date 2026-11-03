@@ -31,10 +31,10 @@ pub fn removable_record_paths(
     let keeps_default = match session.config_dir.as_deref() {
         None => true,
         Some(dir) => {
-            let key = crate::accounts::dirs::account_dir_key(dir);
+            let key = crate::hostfs::dir_key(dir);
             accounts.iter().any(|account| {
                 account.agent == agent
-                    && crate::accounts::dirs::account_dir_key(&account.config_dir) == key
+                    && crate::hostfs::dir_key(&account.config_dir) == key
                     && account.share_default_config
                     && !account.share_default_config_incomplete
             })

@@ -13,7 +13,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::probe::{OUTPUT_LIMIT, PROBE_TIMEOUT};
-use crate::accounts::cli_run::{self, NotRun};
+use crate::adapter::account_cli::{self, NotRun};
 use crate::agents::codex_app_server::{self, CODEX_APP_SERVER_ARGS};
 use crate::agents::json_rpc;
 use crate::processes::subprocess::{run_exchange, Bounds, ExchangeFailure};
@@ -54,11 +54,12 @@ pub(super) fn consume(
             "the use was cancelled before it started".to_string(),
         ));
     }
-    let mut run = cli_run::admitted_command(agent, shell_env, config_dir, CODEX_APP_SERVER_ARGS)
-        .map_err(|refused| match refused {
-            NotRun::BinaryNotFound(binary) => Failure::BinaryNotFound(binary.to_string()),
-            NotRun::DirMissing(_) => Failure::Failed(refused.detail()),
-        })?;
+    let mut run =
+        account_cli::admitted_command(agent, shell_env, config_dir, CODEX_APP_SERVER_ARGS)
+            .map_err(|refused| match refused {
+                NotRun::BinaryNotFound(binary) => Failure::BinaryNotFound(binary.to_string()),
+                NotRun::DirMissing(_) => Failure::Failed(refused.detail()),
+            })?;
     let mut params = json!({"idempotencyKey": idempotency_key});
     if let Some(credit_id) = credit_id {
         params["creditId"] = json!(credit_id);

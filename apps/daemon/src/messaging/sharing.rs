@@ -147,43 +147,15 @@ fn render_info_copy(sender: &Session, receiver: &Session, text: &str) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, OrchestrationRole, Origin, Role, SessionStatus};
+    use crate::protocol::Role;
+    use crate::test_support::bare_session;
 
     fn session(id: &str, title: &str) -> Session {
         Session {
-            id: id.to_string(),
-            agent: Agent::Claude,
-            agent_session_id: None,
-            console_id: "console-1".to_string(),
             project_id: Some("project-1".to_string()),
             host_id: "local".to_string(),
-            role: Role::Project,
-            origin: Origin::User,
             title: title.to_string(),
-            status: SessionStatus::Idle,
-            terminal_title: None,
-            record_titles: Default::default(),
-            background_tasks: Vec::new(),
-            switching_account: false,
-            paused: false,
-            prompt_on_launch: false,
-            default_effort: None,
-            orchestration_role: OrchestrationRole::Coordinator,
-            context: None,
-            observed_model: None,
-            observed_effort: None,
-            model: None,
-            effort: None,
-            has_conversation: false,
-            bound_to: None,
-            colour: None,
-            ordinal: None,
-            account_id: None,
-            config_dir: None,
-            pinned: false,
-            locked: false,
-            started_at: 0,
-            ended_at: None,
+            ..bare_session(id, Role::Project)
         }
     }
 

@@ -28,8 +28,7 @@
 //! And for the section naming the language the user set the interface to, which a project session
 //! is given only when a language is stored and it is not English (see [`user_language_guidance`]).
 
-use crate::git_workflow::{Delivery, Development, GitWorkflowSettings};
-use crate::protocol::{Agent, Role};
+use crate::protocol::{Agent, GitDelivery, GitDevelopment, GitWorkflowSettings, Role};
 
 use super::catalogue::qualified_tool_name;
 use super::console_instructions::console_session_instruction_filename;
@@ -125,8 +124,8 @@ const PROJECT_WORK: &str = "You work on the current project's tasks, following i
 /// of every command that changes directory before running git, an allowed git command included.
 fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<String> {
     let (heading, own_branch, handed_over, cleanup) = match settings.development {
-        Development::InPlace => return None,
-        Development::Branch => (
+        GitDevelopment::InPlace => return None,
+        GitDevelopment::Branch => (
             "Developing on a branch",
             "create a new branch from the current branch, which becomes its target branch, with \
              `git switch -c <name>` in the project directory you were started in; work and \
@@ -143,7 +142,7 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
              - Ask before switching away from a branch with uncommitted changes; never discard \
                anything on the user's behalf.",
         ),
-        Development::Worktree => (
+        GitDevelopment::Worktree => (
             "Developing in a worktree",
             "create a new branch from the current branch, which becomes its target branch, with \
              its own worktree at `.worktrees/<short-name>` in the project directory you were \
@@ -171,9 +170,9 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
         "the user says"
     };
     let otherwise = match settings.delivery {
-        Delivery::Ask => "ask the user which",
-        Delivery::Merge => "merge it into its target branch locally",
-        Delivery::PullRequest => "push it and open a pull request",
+        GitDelivery::Ask => "ask the user which",
+        GitDelivery::Merge => "merge it into its target branch locally",
+        GitDelivery::PullRequest => "push it and open a pull request",
     };
     let mut preparation = vec!["When merging locally, merge the branch into its target branch."];
     if settings.squash_before_delivery {
@@ -932,9 +931,9 @@ mod tests {
         }
     }
 
-    fn settings(rebase_before_merge: bool, delivery: Delivery) -> GitWorkflowSettings {
+    fn settings(rebase_before_merge: bool, delivery: GitDelivery) -> GitWorkflowSettings {
         GitWorkflowSettings {
-            development: Development::Worktree,
+            development: GitDevelopment::Worktree,
             squash_before_delivery: false,
             rebase_before_merge,
             delivery,
@@ -965,7 +964,7 @@ mod tests {
     fn a_project_session_is_told_the_worktree_rule_only_with_a_worktree() {
         let on = GitWorkflowSettings::default();
         let off = GitWorkflowSettings {
-            development: Development::InPlace,
+            development: GitDevelopment::InPlace,
             ..on
         };
         for agent in Agent::ALL {
@@ -1022,7 +1021,7 @@ mod tests {
     #[test]
     fn a_project_session_is_told_the_branch_rule_with_a_branch_of_its_own() {
         let branch = GitWorkflowSettings {
-            development: Development::Branch,
+            development: GitDevelopment::Branch,
             ..GitWorkflowSettings::default()
         };
         let worktree = GitWorkflowSettings::default();
@@ -1088,7 +1087,11 @@ mod tests {
     fn a_console_session_is_told_no_development_rule() {
         for agent in Agent::ALL {
             let plain = role_description(Role::Console, None, agent, &RoleOptions::default());
-            for delivery in [Delivery::Ask, Delivery::Merge, Delivery::PullRequest] {
+            for delivery in [
+                GitDelivery::Ask,
+                GitDelivery::Merge,
+                GitDelivery::PullRequest,
+            ] {
                 for rebase in [true, false] {
                     let with = settings(rebase, delivery);
                     assert_eq!(
@@ -1113,9 +1116,12 @@ mod tests {
     #[test]
     fn delivery_shapes_only_what_is_done_where_nobody_has_said() {
         let expected = [
-            (Delivery::Ask, "ask the user which."),
-            (Delivery::Merge, "merge it into its target branch locally."),
-            (Delivery::PullRequest, "push it and open a pull request."),
+            (GitDelivery::Ask, "ask the user which."),
+            (
+                GitDelivery::Merge,
+                "merge it into its target branch locally.",
+            ),
+            (GitDelivery::PullRequest, "push it and open a pull request."),
         ];
         for agent in Agent::ALL {
             for owner in every_owner() {
@@ -1154,8 +1160,12 @@ mod tests {
 
     #[test]
     fn delivery_preparation_adds_only_the_enabled_fragments() {
-        for delivery in [Delivery::Ask, Delivery::Merge, Delivery::PullRequest] {
-            for development in [Development::Branch, Development::Worktree] {
+        for delivery in [
+            GitDelivery::Ask,
+            GitDelivery::Merge,
+            GitDelivery::PullRequest,
+        ] {
+            for development in [GitDevelopment::Branch, GitDevelopment::Worktree] {
                 let rule = |squash, rebase| {
                     development_rule(
                         &GitWorkflowSettings {

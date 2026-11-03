@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 
-use crate::accounts::cli_run;
+use crate::adapter::account_cli;
 use crate::agents::codex_app_server::CODEX_QUIET_FEATURES;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::Agent;
@@ -202,7 +202,7 @@ pub(super) fn kick(
 ) -> anyhow::Result<()> {
     let KickCommand { args, env } = kick_command(agent);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let mut run = cli_run::admitted_command(agent, shell_env, config_dir, &args)
+    let mut run = account_cli::admitted_command(agent, shell_env, config_dir, &args)
         .map_err(|refused| anyhow::anyhow!(refused.detail()))?;
     run.command.envs(env);
     let output = run
@@ -216,7 +216,7 @@ pub(super) fn kick(
             "{} exited with {}: {}",
             agent.label(),
             output.status,
-            cli_run::last_stderr_line(&output)
+            account_cli::last_stderr_line(&output)
         );
     }
     Ok(())

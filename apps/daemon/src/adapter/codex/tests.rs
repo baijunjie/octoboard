@@ -849,3 +849,17 @@ fn never_pre_allocates_a_session_id() {
     assert!(!CodexAdapter.preallocates_session_id());
     assert!(!plan.args.iter().any(|arg| arg.contains("session-id")));
 }
+
+#[test]
+fn codex_action_markers_are_activity_items_rather_than_task_text() {
+    assert!(action_required_title("[ ! ] Action Required | project"));
+    assert!(action_required_title("[ . ] Action Required | project"));
+    for title in [
+        "| [ ! ] Action Required | project",
+        "Fix [ ! ] Action Required | project",
+        "Task | [ ! ] Action Required | project",
+        "| project",
+    ] {
+        assert!(!action_required_title(title), "{title}");
+    }
+}

@@ -335,7 +335,7 @@ mod tests {
 
         assert_eq!(
             launches.lock().unwrap()[0].2.as_deref(),
-            Some(crate::accounts::switch_continue::CONTINUE_PROMPT)
+            Some(crate::messaging::texts::CONTINUE_PROMPT)
         );
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("do not send it one yourself"), "{note}");

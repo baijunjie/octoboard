@@ -17,17 +17,12 @@ use serde_json::{Map, Value};
 
 use crate::browse::lane::Admission;
 use crate::browse::{self, budget};
-use crate::git::isolated::IsolatedGit;
 use crate::protocol::{error_code, BrowseBody, CodedError, Event, GitSourceInfo, Project, Session};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 use crate::wire_path;
 
 use crate::mcp::lookup::{find_project, optional_string};
-
-/// How the daemon's `git` environment is made: the user's shell in production, a fixture's own in
-/// a test.
-pub(super) type MakeGit = fn() -> Result<IsolatedGit>;
 
 /// The project a call names, among the caller's own console's: its own when none is named and it
 /// has one. Another console's project is refused as its `git_status` is not listed by
@@ -57,22 +52,26 @@ pub(super) fn readable_project(
 }
 
 /// Runs one browse request to its reply on the blocking pool, after waiting for a place in the
-/// tools' share, a read slot and `reservation` retained bytes from the daemon-wide gate, as a
-/// window's request waits for its own. The admission comes back with the reply and is held until
-/// the caller has built its answer from it; if the call is dropped meanwhile, the `git` is stopped
-/// and the admission is given back when it has.
-pub(super) async fn browse(
-    state: &Arc<AppState>,
-    make_git: MakeGit,
-    body: BrowseBody,
-    reservation: usize,
-) -> Result<(Event, Admission)> {
+/// tools' share, a read slot and the retained bytes of its read (`budget::reservation_for`) from
+/// the daemon-wide gate, as a window's request waits for its own. The admission comes back with the
+/// reply and is held until the caller has built its answer from it; if the call is dropped
+/// meanwhile, the `git` is stopped and the admission is given back when it has.
+pub(super) async fn browse(state: &Arc<AppState>, body: BrowseBody) -> Result<(Event, Admission)> {
     let cancel = Arc::new(AtomicBool::new(false));
     let _stop = StopOnDrop(cancel.clone());
-    let admission = state.browse_gate.admit(reservation).await;
+    let admission = state
+        .browse_gate
+        .admit(budget::reservation_for(&body))
+        .await;
     let state = state.clone();
     let (outcome, admission) = tokio::task::spawn_blocking(move || {
-        let outcome = browse::serve(&state, None, body, &make_git, &cancel);
+        let outcome = browse::serve(
+            &state,
+            None,
+            body,
+            &|| state.host_tools.isolated_git(),
+            &cancel,
+        );
         (outcome, admission)
     })
     .await?;
@@ -106,17 +105,11 @@ fn readable_error(err: anyhow::Error) -> anyhow::Error {
 }
 
 /// What `project_source` says of the project's repository, or the reason there is none.
-pub(super) async fn git_source(
-    state: &Arc<AppState>,
-    make_git: MakeGit,
-    project: &Project,
-) -> Result<GitSourceInfo> {
+pub(super) async fn git_source(state: &Arc<AppState>, project: &Project) -> Result<GitSourceInfo> {
     let body = BrowseBody::GetProjectSource {
         project: project.id.clone(),
     };
-    let (Event::ProjectSource { source, .. }, _admission) =
-        browse(state, make_git, body, budget::READ_RESERVATION).await?
-    else {
+    let (Event::ProjectSource { source, .. }, _admission) = browse(state, body).await? else {
         bail!("the daemon answered something other than the project's source");
     };
     match source.git {
@@ -135,11 +128,4 @@ pub(super) fn plain(wire: &str) -> String {
         || wire.to_string(),
         |bytes| String::from_utf8_lossy(&bytes).into_owned(),
     )
-}
-
-/// The `git` environment of a fixture, as the tools' tests make it.
-#[cfg(test)]
-pub(super) fn test_git() -> Result<IsolatedGit> {
-    use crate::test_support::{isolated_git_env, SYSTEM_GIT};
-    Ok(IsolatedGit::new(SYSTEM_GIT.to_string(), isolated_git_env()))
 }

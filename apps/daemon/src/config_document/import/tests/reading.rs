@@ -13,21 +13,21 @@ fn a_document_is_refused_by_what_it_is_before_it_is_read_any_further() {
             error_code::CONFIGURATION_NOT_RECOGNISED,
         ),
         (
-            json!({ "format": export::FORMAT }),
+            json!({ "format": CONFIGURATION_FORMAT }),
             error_code::CONFIGURATION_UNREADABLE,
         ),
         // Another version may be shaped in ways this one cannot read; it is told apart from
         // an unreadable body by its version.
         (
-            json!({ "format": export::FORMAT, "version": export::VERSION + 1 }),
+            json!({ "format": CONFIGURATION_FORMAT, "version": CONFIGURATION_VERSION + 1 }),
             error_code::CONFIGURATION_VERSION_UNSUPPORTED,
         ),
         (
-            json!({ "format": export::FORMAT, "version": 0 }),
+            json!({ "format": CONFIGURATION_FORMAT, "version": 0 }),
             error_code::CONFIGURATION_VERSION_UNSUPPORTED,
         ),
         (
-            json!({ "format": export::FORMAT, "version": export::VERSION }),
+            json!({ "format": CONFIGURATION_FORMAT, "version": CONFIGURATION_VERSION }),
             error_code::CONFIGURATION_UNREADABLE,
         ),
     ];

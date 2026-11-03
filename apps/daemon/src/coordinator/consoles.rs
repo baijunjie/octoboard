@@ -6,12 +6,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::agents::launch_settings::{self, normalized_launches, trimmed_or_none, LaunchCheck};
+use crate::agents::launch_settings::{self, normalized_launches, LaunchCheck};
 use crate::protocol::{
     error_code, Agent, CodedError, Console, Event, Launch, LaunchChange, PerAgent, Present, Project,
 };
 use crate::state::refusals::ensure_unlocked;
 use crate::state::AppState;
+use crate::text::trimmed_or_none;
 use crate::time::now_millis;
 
 use super::console_workdir::{
@@ -273,7 +274,7 @@ pub(super) async fn delete_console(state: &Arc<AppState>, id: String) -> Result<
     }
     crate::terminal::shell::close_projects(state, &project_ids).await;
     // Their processes, which no session owns, go with the projects.
-    crate::processes::requests::stop_project_processes(state, &projects).await;
+    super::processes::stop_project_processes(state, &projects).await;
     // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
     // directory is ever touched by this.
     if let Err(err) = remove_console_workdir(&console.workdir) {

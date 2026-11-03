@@ -83,6 +83,14 @@ use private_server::private_server_supported;
 pub use private_server::PrivateServerPlan;
 pub use unarchive::unarchive;
 
+/// Both phases of Codex's blinking activity title identify a visible user interaction.
+pub(crate) fn action_required_title(title: &str) -> bool {
+    matches!(
+        title.split(" | ").next().map(str::trim),
+        Some("[ ! ] Action Required" | "[ . ] Action Required")
+    )
+}
+
 /// The events Octoboard's session states are derived from. `Interrupt` is included because it is
 /// mutually exclusive with `Stop` and is the only signal of a cancelled turn any of the three
 /// agents gives. `SubagentStart` / `SubagentStop` are deliberately not injected: they are noise
@@ -179,9 +187,7 @@ impl AgentAdapter for CodexAdapter {
             .split(" | ")
             .map(str::trim)
             .filter(|item| {
-                !item.is_empty()
-                    && !super::is_spinner(item)
-                    && !crate::terminal::title::codex_action_required(item)
+                !item.is_empty() && !super::is_spinner(item) && !action_required_title(item)
             })
             .collect();
         if items

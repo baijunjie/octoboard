@@ -21,9 +21,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::branch_origin::{is_same_branch, repo_key, reported_repository};
-use crate::browse::{budget, compare};
 use crate::git::isolated::IsolatedGit;
 use crate::git::remote_branch::split_remote_branch;
+use crate::git::remote_branches::{remote_default_branch, UPSTREAM_REMOTES_STDOUT};
 use crate::git::repo_files::{remote_default_branch_in_files, repository_of, uses_reftable};
 use crate::git_workflow;
 use crate::revert_gate::GateInputs;
@@ -98,7 +98,7 @@ fn inputs_of(
 /// The repository's default branch as a local branch name: what a remote's `HEAD` names, less the
 /// remote. A repository with none, or whose lookup fails, has no resident guarded branch.
 ///
-/// This departs from the Git mode's lookup (`compare::remote_default_branch`), which asks `git` for
+/// This departs from the Git mode's lookup (`remote_default_branch`), which asks `git` for
 /// the configured remotes: the hook waits on the answer and a `git` costs tens of milliseconds, so
 /// where the references are files the remotes' `HEAD` files are read directly, `origin` preferred
 /// and else the first in byte order, as that lookup prefers. Only a reftable repository, which has
@@ -110,7 +110,7 @@ fn default_branch(state: &AppState, repo: &Path) -> Option<String> {
     }
     let found = (state.host_tools.get().git)().and_then(|git| {
         let (isolated, cancel) = (IsolatedGit::of(git), AtomicBool::new(false));
-        let Some(upstream) = compare::remote_default_branch(&isolated, repo, &cancel)? else {
+        let Some(upstream) = remote_default_branch(&isolated, repo, &cancel)? else {
             return Ok(None);
         };
         // `<remote>/<branch>` as a wire path: decoded before it is split by the remotes the
@@ -118,13 +118,7 @@ fn default_branch(state: &AppState, repo: &Path) -> Option<String> {
         let Some(upstream) = branch_name(&upstream.name) else {
             return Ok(None);
         };
-        let listing = isolated.run(
-            repo,
-            "remote",
-            &[],
-            budget::UPSTREAM_REMOTES_STDOUT,
-            &cancel,
-        )?;
+        let listing = isolated.run(repo, "remote", &[], UPSTREAM_REMOTES_STDOUT, &cancel)?;
         let listing = String::from_utf8_lossy(&listing);
         Ok(
             split_remote_branch(&upstream, listing.lines().filter(|name| !name.is_empty()))

@@ -25,7 +25,9 @@ pub struct PathLink {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub view: Option<PathLinkView>,
-    /// A file the system could launch: it is for the viewer to show, and `open_path_link` refuses it.
+    /// Set for any file in a project, whatever its type, since the system's default application for
+    /// a file may run it, and for what the system could launch: the viewer shows it and
+    /// `open_path_link` refuses it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     #[cfg_attr(test, ts(optional = nullable))]
     pub viewer_only: bool,

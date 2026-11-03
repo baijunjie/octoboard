@@ -26,14 +26,17 @@ no reason to leave it out of the export: the settings hidden from agents because
 spend quota (approving requests automatically, starting usage windows automatically) travel all the same. So a new
 application setting that is not machine-local is added, in the same change, to:
 
-- `DocumentSettings` in `apps/daemon/src/config_document/export.rs`, filled in `build` beside the others, which are
-  written only when `Selection.settings` asks for the settings region. Until the first release it is a required field
-  (no `Option`, no `#[serde(default)]`), since every export writes it and there is no older document to read. From the
-  first release on, a setting added without raising `VERSION` is an `Option` with `#[serde(default)]`, applied by an
-  import only when present, because an export from a released build lacks it and a required field would make that export
-  unreadable; otherwise raise `VERSION` and add the step that upgrades the previous version (its doc comment there);
-- the import inspection in `apps/daemon/src/config_document/import/mod.rs` (`InspectedSettings`), with the document's
-  value and the current one, and the `coordinator::settings::update_settings` call that applies the document's settings;
+- `DocumentSettings` in `apps/daemon/src/protocol/configuration.rs`, filled in `build` in
+  `apps/daemon/src/config_document/export.rs` beside the others, which are written only when `Selection.settings` asks
+  for the settings region. Until the first release it is a required field (no `Option`, no `#[serde(default)]`), since
+  every export writes it and there is no older document to read. From the first release on, a setting added without
+  raising `CONFIGURATION_VERSION` is an `Option` with `#[serde(default)]`, applied by an import only when present,
+  because an export from a released build lacks it and a required field would make that export unreadable; otherwise
+  raise `CONFIGURATION_VERSION` and add the step that upgrades the previous version (its doc comment in
+  `protocol/configuration.rs`);
+- `InspectedSettings` in `apps/daemon/src/protocol/configuration.rs`, with the document's value and the current one,
+  filled by the import inspection in `apps/daemon/src/config_document/import/mod.rs`, and the
+  `coordinator::settings::update_settings` call there that applies the document's settings;
 - the window: for a setting that is a switch, the field and its `current_` counterpart in `DocumentSettings` and
   `InspectedSettings` in `packages/ui/src/protocol.ts`, and its entry in `COPY` in
   `packages/ui/src/configuration/booleanSettings.ts` (which the type check then demands): its settings-page label and

@@ -13,7 +13,6 @@
 //! command sets its own `TERM` instead.
 
 use std::collections::HashMap;
-use std::io::{self, Read};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -24,7 +23,7 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 
 use crate::processes::leader::{self, Unreaped};
-use crate::processes::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
+use crate::processes::subprocess::{bounded_pipe_reader, BoundedChunk, REAP_GRACE};
 use crate::protocol::{error_code, CodedError};
 
 /// Upper bound on how long the login-shell snapshot may run. An rc file waiting on a version
@@ -162,12 +161,12 @@ fn snapshot_with(shell: &str, timeout: Duration) -> Result<HashMap<String, Strin
     // thread blocked in `read()` is to close its fd out from under it, and doing that from a
     // different thread while the read is in flight is its own hazard (the closed descriptor number
     // can be reused for an unrelated file before the blocked call notices, misdirecting it).
-    let mut stdout_pipe = child.stdout.take().expect("stdout was piped");
-    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
+    let stdout_pipe = child.stdout.take().expect("stdout was piped");
+    let stderr_pipe = child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout_rx) = mpsc::channel();
     let (stderr_tx, stderr_rx) = mpsc::channel();
-    thread::spawn(move || pipe_reader(&mut stdout_pipe, &stdout_tx, PIPE_LIMIT));
-    thread::spawn(move || pipe_reader(&mut stderr_pipe, &stderr_tx, PIPE_LIMIT));
+    thread::spawn(move || bounded_pipe_reader(stdout_pipe, &stdout_tx, PIPE_LIMIT, false));
+    thread::spawn(move || bounded_pipe_reader(stderr_pipe, &stderr_tx, PIPE_LIMIT, false));
 
     let (status, stdout, stderr) = wait_with_timeout(
         &mut child, stdout_rx, stderr_rx, shell, &command, &marker, timeout,
@@ -214,44 +213,8 @@ fn settle_home(env: &mut HashMap<String, String>) {
     }
 }
 
-/// Reads `pipe` in chunks until EOF or an error, forwarding each over `tx`. Run on its own thread
-/// so the pipe keeps draining regardless of whether or how fast the consumer end catches up: the
-/// channel is unbounded, so a send never blocks the read loop the way a bounded hand-off (or a
-/// single `read_to_end` held until the whole message is assembled) would. An `Err` is forwarded
-/// like any other message rather than swallowed, so a mid-read io error reaches the consumer
-/// instead of silently truncating what came before it; either outcome ends the loop.
-///
-/// At most `limit` bytes are forwarded, so a shell whose rc files flood a pipe cannot grow memory
-/// for the whole timeout; what follows is still read, and dropped, so the writer is never blocked
-/// on a full pipe.
-fn pipe_reader(pipe: &mut impl Read, tx: &mpsc::Sender<io::Result<Vec<u8>>>, limit: usize) {
-    let mut chunk = vec![0u8; PIPE_CHUNK_SIZE];
-    let mut forwarded = 0usize;
-    loop {
-        match pipe.read(&mut chunk) {
-            Ok(0) => break,
-            Ok(n) => {
-                let kept = n.min(limit - forwarded);
-                forwarded += kept;
-                if kept > 0 && tx.send(Ok(chunk[..kept].to_vec())).is_err() {
-                    break;
-                }
-            }
-            // A read the kernel interrupted to deliver a signal has not failed and has consumed
-            // nothing; retrying is what the caller means by "read this pipe". Ending the thread
-            // here instead would refuse the launch over stdout, and on the pre-exit path would
-            // leave the shell neither killed nor reaped.
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-            Err(err) => {
-                let _ = tx.send(Err(err));
-                break;
-            }
-        }
-    }
-}
-
 /// Whether a reader channel still has a live sender on the other end. `Disconnected` means the
-/// pipe behind it has already hit EOF and `pipe_reader`'s thread has exited — the bytes already
+/// pipe behind it has already hit EOF and the pipe reader's thread has exited — the bytes already
 /// drained are final for that pipe, and nothing will ever add to them again.
 #[derive(Debug)]
 enum DrainOutcome {
@@ -265,16 +228,18 @@ enum DrainOutcome {
 /// leaves its partial buffer looking complete to the caller. `which` names the snapshot shell's
 /// stream `rx` reads, for the error.
 fn drain_available(
-    rx: &mpsc::Receiver<io::Result<Vec<u8>>>,
+    rx: &mpsc::Receiver<BoundedChunk>,
     buf: &mut Vec<u8>,
     which: &str,
 ) -> Result<DrainOutcome> {
     loop {
         match rx.try_recv() {
-            Ok(chunk) => {
-                let bytes =
-                    chunk.with_context(|| format!("reading {which} from the snapshot shell"))?;
-                buf.extend_from_slice(&bytes);
+            Ok(BoundedChunk::Data(bytes)) => buf.extend_from_slice(&bytes),
+            // The readers here never stop at their limit, so this does not arrive.
+            Ok(BoundedChunk::Exceeded) => {}
+            Ok(BoundedChunk::Failed(err)) => {
+                return Err(err)
+                    .with_context(|| format!("reading {which} from the snapshot shell"));
             }
             Err(mpsc::TryRecvError::Empty) => return Ok(DrainOutcome::Open),
             Err(mpsc::TryRecvError::Disconnected) => return Ok(DrainOutcome::Disconnected),
@@ -286,7 +251,7 @@ fn drain_available(
 /// it. Stderr is read only for its contents (the non-zero-exit error message of a bounded
 /// subprocess), never awaited for completeness, so an io error on it must not cost a good launch
 /// its result.
-fn drain_stderr_best_effort(rx: &mpsc::Receiver<io::Result<Vec<u8>>>, buf: &mut Vec<u8>) {
+fn drain_stderr_best_effort(rx: &mpsc::Receiver<BoundedChunk>, buf: &mut Vec<u8>) {
     let _ = drain_available(rx, buf, "stderr");
 }
 
@@ -317,8 +282,8 @@ fn find_marker(haystack: &[u8], marker: &[u8]) -> Option<usize> {
 /// an unrelated group, whether or not anything else is left in this one.
 fn wait_with_timeout(
     child: &mut Child,
-    stdout_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
-    stderr_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
+    stdout_rx: mpsc::Receiver<BoundedChunk>,
+    stderr_rx: mpsc::Receiver<BoundedChunk>,
     shell: &str,
     command: &str,
     marker: &str,
@@ -356,8 +321,8 @@ fn wait_with_timeout(
 /// phase running out of time is reported as a timeout. `child` is left unreaped in every outcome.
 fn wait_unreaped(
     child: &mut Child,
-    stdout_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
-    stderr_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
+    stdout_rx: mpsc::Receiver<BoundedChunk>,
+    stderr_rx: mpsc::Receiver<BoundedChunk>,
     shell: &str,
     command: &str,
     marker: &str,
@@ -485,6 +450,7 @@ fn timeout_error(shell: &str, command: &str, timeout: Duration) -> anyhow::Error
 
 #[cfg(test)]
 mod tests {
+    use std::io::{self, Read};
     use std::sync::OnceLock;
 
     use super::*;
@@ -827,8 +793,8 @@ mod tests {
         assert_gone_by(child_pid, kill_deadline);
     }
 
-    /// A `Read` impl that returns one real chunk and then an io error, standing in for a pipe
-    /// that fails mid-read — a shape a real pipe practically never produces, but `pipe_reader`
+    /// A `Read` impl that returns one real chunk and then an io error, standing in for a pipe that
+    /// fails mid-read — a shape a real pipe practically never produces, but `bounded_pipe_reader`
     /// is generic over `Read` precisely so this can be exercised without a subprocess at all.
     struct ErroringReader {
         failed: bool,
@@ -848,7 +814,7 @@ mod tests {
     #[test]
     fn a_mid_read_error_is_not_swallowed_into_a_truncated_buffer() {
         let (tx, rx) = mpsc::channel();
-        pipe_reader(&mut ErroringReader { failed: false }, &tx, PIPE_LIMIT);
+        bounded_pipe_reader(ErroringReader { failed: false }, &tx, PIPE_LIMIT, false);
 
         let mut buf = Vec::new();
         // The real chunk is still appended to `buf` — `drain_available` does not discard data
@@ -867,7 +833,7 @@ mod tests {
     fn a_flood_past_the_limit_is_read_and_dropped() {
         let (tx, rx) = mpsc::channel();
         let mut flood = io::repeat(b'x').take(100);
-        pipe_reader(&mut flood, &tx, 10);
+        bounded_pipe_reader(&mut flood, &tx, 10, false);
         drop(tx);
 
         let mut buf = Vec::new();

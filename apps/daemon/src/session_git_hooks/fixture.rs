@@ -15,12 +15,13 @@ use std::time::Duration;
 use super::{injected, interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS};
 use crate::branch_origin::{ref_created, repo_key, RefReport};
 use crate::git::repo_files::repository_of;
-use crate::git_workflow::GitWorkflowSettingsChanges;
 use crate::protocol::{
-    Agent, Console, OrchestrationRole, Origin, Project, ProjectSource, Role, Session, SessionStatus,
+    Agent, Console, GitWorkflowSettingsChanges, Project, ProjectSource, Role, Session,
+    SessionStatus,
 };
 use crate::state::AppState;
 use crate::store::{BranchOrigin, LOCAL_HOST_ID};
+use crate::test_support::bare_session;
 use crate::test_support::{
     app_state, fixture_git, git, repo_with, ScratchDir, ScratchFile, PATIENCE, SYSTEM_GIT, TEST_KEY,
 };
@@ -102,39 +103,14 @@ pub(crate) fn installed(name: &str, body: &str, mode: u32) -> PathBuf {
 /// A session of `project` that started a minute ago and is still running.
 pub(crate) fn session_record(id: &str, project: &str) -> Session {
     Session {
-        id: id.to_string(),
-        agent: Agent::Claude,
-        agent_session_id: None,
         console_id: "console".to_string(),
         project_id: Some(project.to_string()),
         host_id: LOCAL_HOST_ID.to_string(),
-        role: Role::Project,
-        origin: Origin::User,
         title: format!("Session {id}"),
         status: SessionStatus::Working,
-        terminal_title: None,
-        record_titles: Default::default(),
-        background_tasks: Vec::new(),
-        switching_account: false,
-        paused: false,
-        prompt_on_launch: false,
-        default_effort: None,
-        orchestration_role: OrchestrationRole::Coordinator,
-        context: None,
-        observed_model: None,
-        observed_effort: None,
-        model: None,
-        effort: None,
         has_conversation: true,
-        bound_to: None,
-        colour: None,
-        ordinal: None,
-        account_id: None,
-        config_dir: None,
-        pinned: false,
-        locked: false,
         started_at: now_millis() - 60_000,
-        ended_at: None,
+        ..bare_session(id, Role::Project)
     }
 }
 

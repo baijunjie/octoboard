@@ -5,7 +5,10 @@ mod reading;
 mod settings;
 
 use super::*;
-use crate::protocol::{Launch, Project, ProjectSource};
+use crate::config_document::export;
+use crate::protocol::{
+    DirectoryChoiceKind, DirectoryOffers, GitWorkflowSettings, Launch, Project, ProjectSource,
+};
 use crate::test_support::{app_state, code_of, ScratchDir, PATIENCE};
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -43,8 +46,8 @@ pub(super) fn console(name: &str, projects: Vec<DocumentProject>) -> DocumentCon
 
 pub(super) fn document(consoles: Vec<DocumentConsole>) -> serde_json::Value {
     serde_json::to_value(ConfigurationDocument {
-        format: export::FORMAT.to_string(),
-        version: export::VERSION,
+        format: CONFIGURATION_FORMAT.to_string(),
+        version: CONFIGURATION_VERSION,
         exported_by: None,
         settings: None,
         accounts: None,

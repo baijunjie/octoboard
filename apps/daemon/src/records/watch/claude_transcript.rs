@@ -45,8 +45,8 @@
 //!
 //! An interrupt before the model has shown anything — while the request waits for its response or
 //! the model is still thinking — leaves no marker at all on 2.1.310: the transcript is not written
-//! to. That one is read off the terminal title instead, by `crate::titles::interrupt`, armed beside
-//! this watch and sharing its generation.
+//! to. That one is read off the terminal title instead, by `crate::session::title_interrupt`, armed
+//! beside this watch and sharing its generation.
 //!
 //! The transcript is Claude Code's own and is rewritten on every upgrade; see
 //! `crate::records::watch` for how a line this does not recognise is treated.
@@ -221,7 +221,7 @@ pub fn watch_after_hook(
             if hooks::starts_conversation(event) || previous != Some(SessionStatus::Working) =>
         {
             if let Some(generation) = watch_for_interrupt(state, session_id, transcript_path) {
-                crate::titles::interrupt::watch(state, session_id, generation);
+                crate::session::title_interrupt::watch(state, session_id, generation);
             }
         }
         _ => {}
@@ -348,7 +348,7 @@ fn still_at(state: &AppState, session_id: &str, status: SessionStatus) -> Owed {
 
 /// Puts the session back at its prompt, from the `expected` status watch `generation` was armed
 /// for, after a watch saw `found` — a transcript rejection or interrupt, or a cancel read off the
-/// terminal title (`crate::titles::interrupt`), named for the log.
+/// terminal title (`crate::session::title_interrupt`), named for the log.
 pub(crate) fn back_at_prompt(
     state: &Arc<AppState>,
     session_id: &str,

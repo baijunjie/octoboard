@@ -180,10 +180,90 @@ pub struct SharingFailure {
     pub share: bool,
     /// Why, as a whole: the cause the entries share (`other` when they differ), or why the
     /// change could not start when there are none.
-    pub cause: crate::accounts::shared_config::FailureCause,
+    pub cause: SharingCause,
     /// Each entry not brought in line, as the error's `items`.
-    pub items: Vec<crate::accounts::shared_config::FailedItem>,
+    pub items: Vec<SharingItemFailure>,
     pub detail: String,
+}
+
+/// What an item was left as by an operation that could not finish it.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SharingLeft {
+    /// As it was before the operation.
+    Unchanged,
+    /// Renamed to its backup, with nothing linked in its place.
+    BackedUp,
+    /// Some of its conversation history moved into the default directory, the rest still in the
+    /// account's own directory.
+    PartlyMoved,
+    /// Still a link into the default directory.
+    Linked,
+    /// Not there at all.
+    Absent,
+}
+
+/// Why something could not be brought in line, for a client to explain it in plain words; the
+/// failure's `detail` keeps the system's own text.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SharingCause {
+    /// Not allowed to change a file or directory, or on a read-only volume.
+    PermissionDenied,
+    /// A file is in use: held by another process, or a database locked by one.
+    Busy,
+    /// A file or directory is gone.
+    NotFound,
+    /// The volume or a quota is full, or a file too large for it.
+    NoSpace,
+    /// Something is in the way or not what it has to be: an entry already there, a link leading
+    /// elsewhere, a directory where a file is expected or the other way round.
+    Conflict,
+    /// The agent's default directory is no longer the one the links lead into, or the one sharing
+    /// was started into: turning sharing off, then on again, shares the new one.
+    DefaultMoved,
+    Other,
+}
+
+impl SharingCause {
+    /// The one of `causes`, or `other` when they differ or there are none.
+    pub fn shared(causes: impl IntoIterator<Item = Self>) -> Self {
+        let mut causes = causes.into_iter();
+        match causes.next() {
+            Some(first) if causes.all(|cause| cause == first) => first,
+            _ => Self::Other,
+        }
+    }
+
+    /// The name the wire uses.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PermissionDenied => "permission_denied",
+            Self::Busy => "busy",
+            Self::NotFound => "not_found",
+            Self::NoSpace => "no_space",
+            Self::Conflict => "conflict",
+            Self::DefaultMoved => "default_moved",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// An item an operation could not bring in line.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SharingItemFailure {
+    /// An entry of the account's directory, or for a conversation the agent's own id of it.
+    pub item: String,
+    pub left: SharingLeft,
+    pub cause: SharingCause,
+    pub detail: String,
+    /// The Octoboard sessions a conversation belongs to, for a failure about one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub sessions: Vec<String>,
 }
 
 /// Why a login failed.
@@ -209,8 +289,8 @@ impl LoginFailure {
 mod tests {
     use crate::protocol::{
         AccountInUse, AccountLogin, AccountSharing, AccountTrashOutcome, AccountTrashSharing,
-        Agent, Event, LoginStatus, Request, RequestBody, ResetCreditOutcome, SharingFailure,
-        SharingPhase, SharingProgress,
+        Agent, Event, LoginStatus, Request, RequestBody, ResetCreditOutcome, SharingCause,
+        SharingFailure, SharingPhase, SharingProgress,
     };
 
     #[test]
@@ -358,7 +438,7 @@ mod tests {
             }),
             failure: Some(SharingFailure {
                 share: false,
-                cause: crate::accounts::shared_config::FailureCause::PermissionDenied,
+                cause: SharingCause::PermissionDenied,
                 items: Vec::new(),
                 detail: "denied".to_string(),
             }),

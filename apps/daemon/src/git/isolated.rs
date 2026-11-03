@@ -47,7 +47,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::browse::budget;
 use crate::git::run::{self, Access, GitError, Limits, Policy, UserGit, WorkDir};
 
 /// Pathspecs that match each of `paths` exactly: the path itself, literally, and nothing below
@@ -114,6 +113,17 @@ const DIFF_SAFETY: &[&str] = &["--no-ext-diff", "--no-textconv", "--no-color"];
 /// default and only guards against that changing.
 const GREP_SAFETY: &[&str] = &["--no-textconv", "--no-color"];
 
+/// The most stderr kept from any `git` command. A `git` error message is a few hundred bytes; the
+/// rest of a longer one is read and discarded. Recorded in `apps/daemon/PROTOCOL.md`'s "Browse
+/// budgets" section, and changed together with it.
+pub const GIT_STDERR: usize = 64 * 1024;
+
+/// Upper bound on one `git` read. Every browse read is local — lazy fetching of missing objects is
+/// switched off — so this is a guard against a wedged repository (a dead network volume, a held
+/// lock), not a network allowance. Recorded in `apps/daemon/PROTOCOL.md`'s "Browse budgets"
+/// section, and changed together with it.
+pub const GIT_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// The fixed part of every isolated command: the leading options and variables the module
 /// header describes. The ceiling depends on the home directory, and is set on its own.
 const ISOLATED: Policy = Policy::new(
@@ -133,12 +143,6 @@ pub struct IsolatedGit {
 }
 
 impl IsolatedGit {
-    /// The user's `git` and shell environment, from the cached login-shell snapshot every
-    /// repeating `git` caller uses.
-    pub fn from_shell() -> Result<Self> {
-        UserGit::cached_shell().map(Self::of)
-    }
-
     #[cfg(test)]
     pub fn new(git: String, env: std::collections::HashMap<String, String>) -> Self {
         Self::of(UserGit::new(git, env))
@@ -202,7 +206,7 @@ impl IsolatedGit {
             subcommand,
             args,
             stdout_limit,
-            budget::GIT_READ_TIMEOUT,
+            GIT_READ_TIMEOUT,
             cancel,
         )
     }
@@ -237,7 +241,7 @@ impl IsolatedGit {
         let limits = Limits {
             timeout,
             stdout: stdout_limit,
-            stderr: budget::GIT_STDERR,
+            stderr: GIT_STDERR,
         };
         run::run_checked(command, limits, Some(cancel))
     }
@@ -257,7 +261,7 @@ impl IsolatedGit {
         cancel: &AtomicBool,
     ) -> Result<Vec<u8>, GitError> {
         let mut command = self.exact_command(dir, subcommand, args, paths);
-        self.run_command(&mut command, stdout_limit, budget::GIT_READ_TIMEOUT, cancel)
+        self.run_command(&mut command, stdout_limit, GIT_READ_TIMEOUT, cancel)
     }
 
     /// The command [`IsolatedGit::run_exact`] runs.

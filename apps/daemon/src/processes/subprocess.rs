@@ -45,7 +45,7 @@ pub(crate) const REAP_GRACE: Duration = Duration::from_millis(500);
 /// Size of each chunk a pipe reader thread forwards over its channel. Arbitrary beyond "comfortably
 /// smaller than the pipe's own OS buffer", since the channel is unbounded and nothing here needs
 /// the chunking to line up with any particular boundary in the data.
-pub(crate) const PIPE_CHUNK_SIZE: usize = 8192;
+const PIPE_CHUNK_SIZE: usize = 8192;
 
 /// How long the stop of an agent CLI run leaves the CLI to exit after `SIGTERM` before it is
 /// killed. Just above the five seconds Claude Code's own shutdown allows itself before it forces
@@ -272,7 +272,7 @@ impl std::fmt::Display for BoundedFailure {
 
 /// What a bounded pipe reader forwards: a chunk, the news that the pipe went past its limit (after
 /// which the reader has stopped reading), or a read error.
-enum BoundedChunk {
+pub(crate) enum BoundedChunk {
     Data(Vec<u8>),
     Exceeded,
     Failed(io::Error),
@@ -283,7 +283,7 @@ enum BoundedChunk {
 /// the read end so the writer gets `EPIPE` instead of a pipe that never drains, or keeps reading
 /// and discards the rest, so a chatty writer is never blocked on a full pipe. Either way at most
 /// `limit` bytes are ever held, here or in the channel.
-fn bounded_pipe_reader(
+pub(crate) fn bounded_pipe_reader(
     mut pipe: impl Read,
     tx: &mpsc::Sender<BoundedChunk>,
     limit: usize,

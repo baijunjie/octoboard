@@ -351,7 +351,7 @@ async fn a_successful_probe_recovers_a_waiting_turn_on_another_account_once() {
     assert!(fixture
         .prompt_of(0)
         .unwrap()
-        .ends_with(crate::accounts::switch_continue::CONTINUE_AFTER_NOTICE));
+        .ends_with(crate::messaging::texts::CONTINUE_AFTER_NOTICE));
 }
 
 #[tokio::test]

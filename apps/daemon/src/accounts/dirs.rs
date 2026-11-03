@@ -1,5 +1,5 @@
-//! An account's configuration directory as text: how what the user typed is stored, and how two
-//! stored directories are compared. Nothing here touches the file system.
+//! An account's configuration directory as text: how what the user typed is stored. Nothing here
+//! touches the file system.
 
 use anyhow::Result;
 
@@ -35,16 +35,4 @@ pub(crate) fn normalize_account_dir(agent: Agent, text: &str) -> Result<String> 
     // Lexical only: a symlink stays as typed, so the stored path is what the user chose.
     let dir = hostfs::lexically_normalise(&dir);
     Ok(dir.to_string_lossy().into_owned())
-}
-
-/// The comparison key for an account directory collision. The stored text stays as typed; only
-/// the key folds case on macOS, whose default file system is case-insensitive, so `~/.Claude` and
-/// `~/.claude` read as one directory there. Other platforms compare byte for byte. Unicode
-/// normalisation is not folded: no crate for it is in the dependency tree.
-pub(crate) fn account_dir_key(dir: &str) -> String {
-    if cfg!(target_os = "macos") {
-        dir.to_lowercase()
-    } else {
-        dir.to_string()
-    }
 }

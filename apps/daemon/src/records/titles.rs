@@ -9,8 +9,8 @@ use std::ops::ControlFlow;
 use std::path::Path;
 
 use crate::adapter::AgentAdapter;
+use crate::protocol::RecordTitles;
 use crate::records::line_file::{self, Change, LineFile};
-use crate::titles::RecordTitles;
 
 /// The longest title taken from a record's name for the conversation.
 const MAX_NAMED_CHARS: usize = 200;

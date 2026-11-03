@@ -39,7 +39,7 @@ pub(super) fn is_agent_config_dir(dir: &Path, config_dir: &Path) -> bool {
             .join(name),
         _ => config_dir,
     };
-    let key = |dir: &Path| crate::accounts::dirs::account_dir_key(&dir.to_string_lossy());
+    let key = |dir: &Path| crate::hostfs::dir_key(&dir.to_string_lossy());
     key(&crate::hostfs::lexically_normalise(dir)) == key(&resolved)
 }
 

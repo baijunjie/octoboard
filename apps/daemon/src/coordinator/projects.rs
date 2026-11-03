@@ -9,20 +9,21 @@ use std::time::Duration;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::agents::launch_settings::{self, normalized_launches, trimmed_or_none, LaunchCheck};
+use crate::agents::launch_settings::{self, normalized_launches, LaunchCheck};
 use crate::blocking_pass::each_blocking;
 use crate::branch_cleanup;
-use crate::git_workflow::{GitWorkflowOverride, GitWorkflowOverrideChanges};
 use crate::hostfs;
 use crate::project_git;
 use crate::protocol::{
-    error_code, Agent, CodedError, Console, Event, Launch, LaunchChange, PerAgent, Present,
-    Project, ProjectAccount, ProjectSource, Session, SessionBranchTarget,
+    error_code, Agent, CodedError, Console, Event, GitWorkflowOverride, GitWorkflowOverrideChanges,
+    Launch, LaunchChange, PerAgent, Present, Project, ProjectAccount, ProjectSource, Session,
+    SessionBranchTarget,
 };
 use crate::removal_safety::project;
 use crate::state::refusals::ensure_unlocked;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
+use crate::text::trimmed_or_none;
 
 use super::bindings::binding_depth;
 use super::lifecycle::{archive_session, report_not_removed, session_ids_where};
@@ -118,9 +119,7 @@ pub async fn add_project(
     let console = state.store.require_console(&console_id)?;
     // Blank is no name: it is ignored for a parent directory, and a single project takes its
     // directory's own.
-    let name = name
-        .map(|name| name.trim().to_string())
-        .filter(|name| !name.is_empty());
+    let name = trimmed_or_none(name.as_deref());
     let description = trimmed_or_none(description.as_deref());
     let check_text = || -> Result<()> {
         if check_text_limits {
@@ -502,7 +501,7 @@ pub(super) async fn delete_project(
     // said (`inspect_project_removal`'s `processes`), the folder moved or not: stopped
     // here, before the move, and not after it, since removing the project stops them
     // whether or not its folder goes to the Trash.
-    crate::processes::requests::stop_project_processes(state, std::slice::from_ref(&deleted)).await;
+    super::processes::stop_project_processes(state, std::slice::from_ref(&deleted)).await;
     // The directory goes first, once nothing runs in it, so a failure leaves the project
     // in place for a retry. Without `trash_directory` only the association goes away: the
     // directory is the user's. The repository is found first, as it cannot be once the
@@ -592,7 +591,7 @@ pub(super) async fn inspect_project_removal(
         )
     })
     .await??;
-    let processes = crate::processes::requests::project_processes(state, &deleted_project).await?;
+    let processes = super::processes::project_processes(state, &deleted_project).await?;
     // The worktrees it held back, not listed as going, are kept for the removal confirmed
     // after it to hold back too.
     let inspection = if held_back.is_empty() {
@@ -757,7 +756,7 @@ fn insert_unless_associated(state: &AppState, project: &Project) -> Result<bool>
 /// association, and stored like any chosen default; while availability is still undetermined the
 /// detected agent is kept.
 pub(super) fn detect_project_agent(state: &Arc<AppState>, directory: &Path) -> Option<Agent> {
-    hostfs::listing::detect_agent(directory).filter(|agent| agent_is_available(state, *agent))
+    crate::agents::detect::detect_agent(directory).filter(|agent| agent_is_available(state, *agent))
 }
 
 /// Archives the running sessions of the project `in_project` matches, the way the user's own

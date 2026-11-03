@@ -7,10 +7,9 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use super::rows::{enum_from_row, enum_from_row_opt, enum_from_text, enum_to_text};
 use super::Store;
 use crate::protocol::{
-    Agent, CodedError, ConsoleSessionColour, OrchestrationRole, Origin, Role, Session,
-    SessionStatus,
+    Agent, CodedError, ConsoleSessionColour, OrchestrationRole, Origin, RecordTitles, Role,
+    Session, SessionStatus,
 };
-use crate::titles::RecordTitles;
 
 /// What the agent's records gave a session, to be stored if it differs from what is.
 pub struct RecordUpdate {

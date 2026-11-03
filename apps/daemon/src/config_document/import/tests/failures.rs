@@ -78,7 +78,7 @@ async fn a_refused_import_leaves_nothing_behind() {
     let mut huge_icon = console("Third", Vec::new());
     huge_icon.icon = Some(format!("data:image/png;base64,{}", "A".repeat(256 * 1024)));
     let mut newer = valid(Vec::new());
-    newer["version"] = json!(export::VERSION + 1);
+    newer["version"] = json!(CONFIGURATION_VERSION + 1);
     let resolve = || DirectoryChoice::ExportedPath;
 
     let refusals = [
@@ -151,9 +151,9 @@ async fn an_existence_check_that_does_not_come_back_offers_nothing_and_is_not_wa
         derived: None,
         clone: None,
     };
-    let offered = Offers {
+    let offered = DirectoryOffers {
         exported_path: Some("/there".to_string()),
-        ..Offers::default()
+        ..DirectoryOffers::default()
     };
     let answer = offered.clone();
 

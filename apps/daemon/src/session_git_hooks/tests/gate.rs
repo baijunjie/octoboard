@@ -14,8 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::Ordering;
 
-use crate::git_workflow::{Development, GitWorkflowSettingsChanges};
-use crate::protocol::Role;
+use crate::protocol::{GitDevelopment, GitWorkflowSettingsChanges, Role};
 use crate::session_git_hooks::fixture::{
     commit_file, gated_fixture, numbered, project, project_with_remote, rev, session_record,
     set_revert_gate, succeeds, system_exec_path, write_hook, Daemon, Fixture,
@@ -279,7 +278,7 @@ fn the_switch_is_read_at_every_request_and_a_projects_own_value_wins() {
     assert_eq!(ask(), None, "and so does it when it is off");
 }
 
-fn set_development(fixture: &Fixture, development: Development) {
+fn set_development(fixture: &Fixture, development: GitDevelopment) {
     fixture
         .state
         .store
@@ -295,15 +294,15 @@ fn the_gate_runs_whatever_the_development_setting_is() {
     let (fixture, _) = project_with_remote();
     let ask = || inputs(&fixture.state, "a", &request(&fixture.repo));
     for development in [
-        Development::InPlace,
-        Development::Branch,
-        Development::Worktree,
+        GitDevelopment::InPlace,
+        GitDevelopment::Branch,
+        GitDevelopment::Worktree,
     ] {
         set_development(&fixture, development);
         assert!(ask().is_some(), "{development:?}");
     }
 
-    set_development(&fixture, Development::InPlace);
+    set_development(&fixture, GitDevelopment::InPlace);
     set_revert_gate(&fixture, false);
     assert_eq!(ask(), None, "the gate switch alone decides");
 }
@@ -314,7 +313,7 @@ fn a_projects_own_development_does_not_decide_whether_the_gate_runs() {
     let ask = || inputs(&fixture.state, "a", &request(&fixture.repo));
     let mut project = fixture.state.store.get_project("project").unwrap().unwrap();
 
-    project.git_workflow.development = Some(Development::InPlace);
+    project.git_workflow.development = Some(GitDevelopment::InPlace);
     fixture.state.store.update_project(&project).unwrap();
     assert!(ask().is_some(), "the project works on the current branch");
 

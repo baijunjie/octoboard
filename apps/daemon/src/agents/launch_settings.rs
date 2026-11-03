@@ -20,13 +20,7 @@ use anyhow::Result;
 use crate::agents::models::Listing;
 use crate::protocol::{error_code, Agent, CodedError, Launch, LaunchChange, PerAgent};
 use crate::state::AppState;
-
-/// Free text as stored: trimmed, with blank read as unset.
-pub(crate) fn trimmed_or_none(text: Option<&str>) -> Option<String> {
-    text.map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(str::to_string)
-}
+use crate::text::trimmed_or_none;
 
 /// A model or effort as stored.
 pub(crate) fn normalize_launch_setting(text: Option<&str>) -> Option<String> {

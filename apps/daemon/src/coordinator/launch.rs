@@ -10,12 +10,11 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::agents::launch_settings::{normalize_session_launch_setting, LaunchCheck};
-use crate::git_workflow::GitWorkflowSettings;
 use crate::messaging::delivery;
 use crate::messaging::owner_notices;
 use crate::protocol::{
-    error_code, Agent, CodedError, Console, Launch, Project, Role, Session, SessionStatus,
-    TerminalAppearance,
+    error_code, Agent, CodedError, Console, GitWorkflowSettings, Launch, Project, Role, Session,
+    SessionStatus, TerminalAppearance,
 };
 use crate::session::dialogs;
 use crate::session::term;

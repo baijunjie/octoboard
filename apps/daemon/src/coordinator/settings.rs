@@ -6,9 +6,10 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::accounts::quotas;
-use crate::git_workflow::GitWorkflowSettingsChanges;
 use crate::project_git;
-use crate::protocol::{Agent, ApprovalReviewer, ClaudeApprovalMode, Event, Session};
+use crate::protocol::{
+    Agent, ApprovalReviewer, ClaudeApprovalMode, Event, GitWorkflowSettingsChanges, Session,
+};
 use crate::state::{broadcast_settings, AppState};
 use crate::store::Store;
 

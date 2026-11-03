@@ -29,8 +29,8 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, Notify};
 
 use super::Key;
-use crate::accounts::cli_run;
 use crate::adapter;
+use crate::adapter::account_cli;
 use crate::agents::codex_app_server::{self, CODEX_APP_SERVER_ARGS};
 use crate::agents::json_rpc;
 use crate::agents::layout::GROK_SIGN_IN_FILE;
@@ -307,7 +307,7 @@ impl Flow {
     async fn claude_signed_in(&self) -> bool {
         let mut command = self.command(&["auth", "status"]);
         let output = tokio::task::spawn_blocking(move || {
-            cli_run::run_query(&mut command, STATUS_TIMEOUT, STATUS_OUTPUT_LIMIT, None)
+            account_cli::run_query(&mut command, STATUS_TIMEOUT, STATUS_OUTPUT_LIMIT, None)
         })
         .await;
         let Ok(Ok(output)) = output else {

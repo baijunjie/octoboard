@@ -188,9 +188,7 @@ mod tests {
     /// The prompt a restarted session is sent to carry on is Octoboard's, not the user's.
     #[test]
     fn the_prompt_to_carry_on_after_a_restart_is_octoboards() {
-        assert!(from_octoboard(
-            crate::accounts::switch_continue::CONTINUE_PROMPT
-        ));
+        assert!(from_octoboard(crate::messaging::texts::CONTINUE_PROMPT));
     }
 
     /// Every opening a message Octoboard writes is defined with (a constant named `*_OPENING`) is

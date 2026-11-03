@@ -185,17 +185,14 @@ pub(in crate::mcp) async fn get_session(
 /// as `handover_processes` names them; none for a session with no process. Listed as a client's
 /// request for them is, so a recent listing answers again. A failed read is none, rather than an
 /// error that would take the rest of the answer down with it.
-async fn processes_of(
-    state: &Arc<AppState>,
-    id: &str,
-) -> Vec<crate::processes::ledger::ProcessTree> {
+async fn processes_of(state: &Arc<AppState>, id: &str) -> Vec<crate::protocol::ProcessTree> {
     if !state.has_process(id) {
         return Vec::new();
     }
     let target = crate::protocol::ProcessTarget::Session {
         session_id: id.to_string(),
     };
-    crate::processes::requests::list(state, target)
+    crate::coordinator::processes::list(state, target)
         .await
         .unwrap_or_default()
 }

@@ -47,7 +47,7 @@ impl Store {
     /// The coordinator turns an account's sharing off before repointing it, so a new directory
     /// starts out not sharing: the choice is recorded off and complete, and what turning sharing
     /// on recorded of the old directory is forgotten. A directory spelled differently that
-    /// compares as the same one (`account_dir_key`, folding case on macOS) is no repoint: what
+    /// compares as the same one (`dir_key`, folding case on macOS) is no repoint: what
     /// sharing recorded stays, so its backups are still restored.
     pub fn update_account(&self, account: &Account) -> Result<()> {
         let conn = self.lock();
@@ -59,8 +59,7 @@ impl Store {
             )
             .optional()?;
         let same_dir = current.is_some_and(|current| {
-            crate::accounts::dirs::account_dir_key(&current)
-                == crate::accounts::dirs::account_dir_key(&account.config_dir)
+            crate::hostfs::dir_key(&current) == crate::hostfs::dir_key(&account.config_dir)
         });
         conn.execute(
             "UPDATE accounts SET name = ?2, config_dir = ?3,
@@ -494,8 +493,8 @@ mod tests {
         let mut respelled = store.get_account("acct-1").unwrap().unwrap();
         respelled.config_dir = "/home/u/.Codex-Work".to_string();
         store.update_account(&respelled).unwrap();
-        let same = crate::accounts::dirs::account_dir_key("/home/u/.codex-work")
-            == crate::accounts::dirs::account_dir_key("/home/u/.Codex-Work");
+        let same = crate::hostfs::dir_key("/home/u/.codex-work")
+            == crate::hostfs::dir_key("/home/u/.Codex-Work");
         assert_eq!(
             store.account_sharing_start("acct-1").unwrap().is_some(),
             same

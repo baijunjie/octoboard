@@ -68,7 +68,7 @@ behave differently, among them: recognising their screens and dialogs (`session/
 payloads (`hooks/`), reading their records (`records/`), their sign-in, quota and account-switching protocols
 (`accounts/`), the Octoboard tool naming, instruction file and role text injected into them (`session_tools/`),
 launching one and switching its account (`coordinator/`), their model catalogues (`agents/models.rs`) and detecting a
-project's agent (`hostfs/listing.rs`). An agent without hook support would degrade to an ordinary terminal session
+project's agent (`agents/detect.rs`). An agent without hook support would degrade to an ordinary terminal session
 with no status and no automatic reporting.
 
 ## Layers

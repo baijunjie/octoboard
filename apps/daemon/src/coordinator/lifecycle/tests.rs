@@ -5,12 +5,13 @@ use crate::coordinator::test_support::{
 };
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
-    error_code, Agent, CodedError, Event, OrchestrationRole, Origin, Project, ProjectSource,
-    RequestBody, Role, Session, SessionStatus,
+    error_code, Agent, CodedError, Event, Origin, Project, ProjectSource, RequestBody, Role,
+    Session, SessionStatus,
 };
 use crate::records;
 use crate::state::Deletion;
 use crate::store::LOCAL_HOST_ID;
+use crate::test_support::bare_session;
 use crate::test_support::code_of;
 use crate::test_support::{
     console_session, console_with_project_and_accounts, idle_stand_in, project_session, session_ids,
@@ -54,39 +55,12 @@ fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
         state
             .store
             .insert_session(&Session {
-                id: id.to_string(),
-                agent: Agent::Claude,
-                agent_session_id: None,
                 console_id: console.to_string(),
                 project_id: project.map(str::to_string),
                 host_id: LOCAL_HOST_ID.to_string(),
-                role,
-                origin: Origin::User,
                 title: id.to_string(),
                 status,
-                terminal_title: None,
-                record_titles: Default::default(),
-                background_tasks: Vec::new(),
-                switching_account: false,
-                paused: false,
-                prompt_on_launch: false,
-                default_effort: None,
-                orchestration_role: OrchestrationRole::Coordinator,
-                context: None,
-                observed_model: None,
-                observed_effort: None,
-                model: None,
-                effort: None,
-                has_conversation: false,
-                bound_to: None,
-                colour: None,
-                ordinal: None,
-                account_id: None,
-                config_dir: None,
-                pinned: false,
-                locked: false,
-                started_at: 0,
-                ended_at: None,
+                ..bare_session(id, role)
             })
             .unwrap();
     };

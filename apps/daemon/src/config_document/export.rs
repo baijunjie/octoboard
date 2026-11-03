@@ -1,11 +1,12 @@
 //! The configuration document: what the consoles' and projects' configuration, the application's
 //! settings and the account structure look like once they have been lifted out of this machine's
 //! database, each region on its own. `apps/daemon/PROTOCOL.md`
-//! ("Configuration export") is the specification; this module is its Rust form and builds it.
+//! ("Configuration export") is the specification; the types are in `protocol` and this module
+//! builds them.
 //!
 //! The document is the input of a later import as well as a file the user keeps and shares, so its
-//! shape is an interface and not an internal detail: [`FORMAT`] and [`VERSION`] identify it, and
-//! nothing in it is a database id.
+//! shape is an interface and not an internal detail: [`CONFIGURATION_FORMAT`] and
+//! [`CONFIGURATION_VERSION`] identify it, and nothing in it is a database id.
 //!
 //! What it leaves out is deliberate. A session, a page, a transcript and a trust record are state
 //! of this machine and not configuration. A console's `workdir` is left out because the daemon
@@ -21,218 +22,16 @@ use std::collections::HashMap;
 use std::path::{Component, Path};
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
-use crate::accounts::dirs::account_dir_key;
-use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
+use crate::hostfs::dir_key;
 use crate::project_git::remote_url;
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, Console, Launch, PerAgent, Project, ProjectAccount,
-    ProjectSource,
+    error_code, Account, AccountName, Agent, CodedError, ConfigurationDocument, Console,
+    DocumentAccount, DocumentAccounts, DocumentAgentAccounts, DocumentConsole,
+    DocumentDefaultAccount, DocumentProject, DocumentSettings, ExportedConsoles, PerAgent, Project,
+    ProjectAccount, ProjectAccountRef, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
 };
 use crate::store::Store;
-
-/// Names the kind of file, so one that is not a configuration document is told apart from one
-/// whose version is unsupported.
-pub const FORMAT: &str = "octoboard-configuration";
-
-/// Raised when a change makes an older reader misread a document: a field removed or given another
-/// meaning. A field added, which a reader that does not know it ignores, does not raise it.
-///
-/// An import reads only this version and refuses any other. No build has been released yet, so
-/// there are no upgrade steps; once a version is released, raising it adds a step that upgrades a
-/// document of the previous version, so an export made before stays importable.
-pub const VERSION: u32 = 1;
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ConfigurationDocument {
-    #[cfg_attr(test, ts(type = "\"octoboard-configuration\""))]
-    pub format: String,
-    pub version: u32,
-    /// The Octoboard version that produced the document, for diagnosing one that misbehaves. An
-    /// import never reads it; `null` when the producer did not record one.
-    pub exported_by: Option<String>,
-    /// The application settings that are not console-scoped. Present exactly when the export
-    /// included them, whichever consoles it holds.
-    pub settings: Option<DocumentSettings>,
-    /// The account structure. Present exactly when the export included it; a reader that does not
-    /// know the field ignores it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub accounts: Option<DocumentAccounts>,
-    /// The consoles exported, which may be none.
-    pub consoles: Vec<DocumentConsole>,
-}
-
-/// The account structure of this machine, never a credential: which agents the user has added and
-/// each agent's accounts.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DocumentAccounts {
-    /// The agents the user has added, in their order. Absent when the exporting machine had not
-    /// yet decided the list (it was still finding out which agents are installed), which on import
-    /// adds none.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub added_agents: Option<Vec<Agent>>,
-    /// One entry for each agent that has an account of its own or a named default account, in
-    /// `Agent::ALL` order.
-    pub agents: Vec<DocumentAgentAccounts>,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DocumentAgentAccounts {
-    pub agent: Agent,
-    pub default_account: DocumentDefaultAccount,
-    /// The accounts the user owns, in the agent's display order.
-    pub accounts: Vec<DocumentAccount>,
-}
-
-/// What the document says of an agent's default account. Its directory is whatever the agent
-/// resolves on the machine, so it is not carried, and neither is its disabled flag.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentDefaultAccount {
-    /// The name the user gave it; `null` when it is unnamed.
-    pub name: Option<String>,
-    /// Its place in the display order: how many of the agent's accounts come before it.
-    pub position: usize,
-}
-
-/// An account the user owns. Its id, its login and everything the agent keeps in its directory
-/// stay behind.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentAccount {
-    pub name: String,
-    /// `~/<relative path>` for a directory under the exporting machine's home directory (also `~`
-    /// for the home directory itself); otherwise the absolute path. Whatever the export's paths
-    /// choice: an account cannot exist without its directory.
-    pub directory: String,
-    /// Whether the account shares the agent's default configuration.
-    pub share_default_config: bool,
-    pub disabled: bool,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DocumentSettings {
-    pub auto_pull_repositories: bool,
-    pub auto_delete_unresumable_archives: bool,
-    pub auto_select_account: bool,
-    pub auto_switch_on_usage_limit: bool,
-    pub sidebar_order_by_status: bool,
-    pub auto_start_quota_windows: bool,
-    pub auto_approve_session_requests: bool,
-    pub auto_approve_resume_requests: bool,
-    pub auto_approve_account_switches: bool,
-    pub auto_approve_handoffs: bool,
-    pub ask_questions_as_choices: bool,
-    /// The application-wide git workflow settings.
-    pub git_workflow: GitWorkflowSettings,
-    /// The choices the user made on whether an agent other than Claude Code (by wire name) loads
-    /// Claude Code's instructions and skills. An agent they never chose for is not listed, so the
-    /// importing machine keeps following its own default for it; an agent the document does not
-    /// list is left as it is.
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-    pub claude_compatibility: std::collections::BTreeMap<String, bool>,
-    /// The tags the user put on each agent (by wire name), for the agents that have any, removed
-    /// agents' included. An agent the document does not list is left as it is on import.
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
-    pub agent_tags: std::collections::BTreeMap<String, Vec<String>>,
-    /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
-    /// reads and writes: the client adds them to a full export it saves (an empty object when it has
-    /// none changed, which on import means every shortcut at its default) and applies them from an
-    /// import. The daemon builds none, stores them nowhere and does not read them, so they pass
-    /// through an import's reply as they came. Absent in a document a client saved without them:
-    /// importing it leaves the client's shortcuts as they are.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(type = "unknown"))]
-    pub keyboard_shortcuts: Option<serde_json::Value>,
-}
-
-/// A reference to an account: its name, which is unique within its agent. The agent is the one
-/// whose entry holds the reference (`accounts.claude` is a Claude Code account), so it is not
-/// repeated here, where a hand-edited document could contradict it. The importing machine rebinds
-/// the reference to the account of that agent and name.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AccountName {
-    pub name: String,
-}
-
-/// A project's choice of account for one agent; [`ProjectAccount`] with the account named rather
-/// than numbered.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum ProjectAccountRef {
-    /// Take the console's reference for the agent.
-    #[default]
-    Inherit,
-    /// The agent's default account, even where the console references a named one.
-    Default,
-    Account {
-        name: String,
-    },
-}
-
-/// A console's own settings and the projects associated with it.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DocumentConsole {
-    pub name: String,
-    pub icon: Option<String>,
-    pub default_agent: Agent,
-    /// The agent a project session falls back to; absent or `null` follows `default_agent`.
-    pub project_session_agent: Option<Agent>,
-    /// Each agent's account, by name; `null` is that agent's default account.
-    pub accounts: PerAgent<Option<AccountName>>,
-    /// Each agent's model and effort for a console session.
-    pub launch: PerAgent<Launch>,
-    /// The model and effort a project session falls back to.
-    pub project_session_launch: PerAgent<Launch>,
-    /// The user's own addition to the console session's instructions; absent is none.
-    pub console_session_prompt: Option<String>,
-    pub projects: Vec<DocumentProject>,
-}
-
-/// One project's configuration. `path` is an absolute path of the exporting machine, or only the
-/// directory's name when the export left paths out. `remote_url` is what was recorded for the
-/// project, absent for a directory that is not a repository or a repository with no remote, and
-/// also when the export left paths out and the remote is not one that can be cloned from (a local
-/// path would reveal one).
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DocumentProject {
-    pub name: String,
-    pub path: String,
-    pub source: ProjectSource,
-    pub remote_url: Option<String>,
-    pub default_agent: Option<Agent>,
-    pub pinned: bool,
-    pub tags: Vec<String>,
-    /// The user's own summary of the project; absent is none.
-    pub description: Option<String>,
-    /// Each agent's account choice.
-    pub accounts: PerAgent<ProjectAccountRef>,
-    /// Each agent's model and effort for the project's sessions.
-    pub launch: PerAgent<Launch>,
-    /// The project's own git workflow settings, each item `null` when it follows the
-    /// application-wide value.
-    pub git_workflow: GitWorkflowOverride,
-}
-
-/// Which consoles an export holds. On the wire it is the request's `consoles` field.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ExportedConsoles {
-    /// The console the request names.
-    One,
-    All,
-    None,
-}
 
 /// Which consoles an export holds, as `build` takes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -378,8 +177,8 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
         })
         .collect();
     Ok(ConfigurationDocument {
-        format: FORMAT.to_string(),
-        version: VERSION,
+        format: CONFIGURATION_FORMAT.to_string(),
+        version: CONFIGURATION_VERSION,
         exported_by: Some(env!("CARGO_PKG_VERSION").to_string()),
         settings,
         accounts: document_accounts,
@@ -449,7 +248,7 @@ fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts>
 }
 
 /// An account directory as the document writes it: `~/<relative>` under `home`, otherwise the
-/// path itself. Home is matched segment by segment through [`account_dir_key`], so a directory
+/// path itself. Home is matched segment by segment through [`dir_key`], so a directory
 /// spelled in another letter case than home on a case-insensitive file system still reads as under
 /// it, and the absolute path with the user name in it is not exported; the relative part keeps its
 /// own spelling.
@@ -457,7 +256,7 @@ fn document_directory(dir: &str, home: &Path) -> String {
     if home == Path::new("/") {
         return dir.to_string();
     }
-    let key = |segment: Component<'_>| account_dir_key(&segment.as_os_str().to_string_lossy());
+    let key = |segment: Component<'_>| dir_key(&segment.as_os_str().to_string_lossy());
     let mut rest = Path::new(dir).components();
     for segment in home.components() {
         if !rest.next().is_some_and(|under| key(under) == key(segment)) {
@@ -561,9 +360,10 @@ fn account_ref(
 mod tests {
     use super::*;
     use crate::protocol::{
-        error_code, OrchestrationRole, Origin, Page, RequestBody, Role, Session, SessionStatus,
+        error_code, GitWorkflowSettings, Page, ProjectSource, RequestBody, Role, Session,
     };
     use crate::store::LOCAL_HOST_ID;
+    use crate::test_support::bare_session;
 
     fn console(id: &str, name: &str) -> Console {
         Console {
@@ -731,7 +531,7 @@ mod tests {
 
         assert_eq!(
             (document.format.as_str(), document.version),
-            (FORMAT, VERSION)
+            (CONFIGURATION_FORMAT, CONFIGURATION_VERSION)
         );
         assert_eq!(
             document.exported_by.as_deref(),
@@ -972,39 +772,14 @@ mod tests {
             .add_trusted_directory("/trusted/secret-dir")
             .unwrap();
         let session_1 = || Session {
-            id: "session-1".to_string(),
-            agent: Agent::Claude,
             agent_session_id: Some("agent-session-xyz".to_string()),
-            console_id: "console-1".to_string(),
             project_id: Some("project-1".to_string()),
             host_id: LOCAL_HOST_ID.to_string(),
-            role: Role::Project,
-            origin: Origin::User,
             title: "Distinctive session title".to_string(),
-            status: SessionStatus::Idle,
-            terminal_title: None,
-            record_titles: Default::default(),
-            background_tasks: Vec::new(),
-            switching_account: false,
-            paused: false,
-            prompt_on_launch: false,
-            default_effort: None,
-            orchestration_role: OrchestrationRole::Coordinator,
-            context: None,
-            observed_model: None,
-            observed_effort: None,
-            model: None,
-            effort: None,
             has_conversation: true,
-            bound_to: None,
-            colour: None,
-            ordinal: None,
             account_id: Some("acct-1".to_string()),
             config_dir: Some("/home/u/.claude-work".to_string()),
-            pinned: false,
-            locked: false,
-            started_at: 0,
-            ended_at: None,
+            ..bare_session("session-1", Role::Project)
         };
         state.store.insert_session(&session_1()).unwrap();
         state

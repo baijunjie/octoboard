@@ -4,7 +4,8 @@
 //! session is handed, the prompt of a session that takes another's work over, the opening prompts
 //! of a session started at another session's request or handed branches by the session that
 //! started it, a report panel form submission, the title a brief earns, and how the notice that a
-//! session waits for the user begins, with how one kept for an owner is recognised.
+//! session waits for the user begins, with how one kept for an owner is recognised, and the prompt
+//! a session is sent to carry on with its turn after a restart.
 //!
 //! The texts are what the agents read, and a session's history is read back by how they begin, so
 //! a change of wording is a change of behaviour.
@@ -242,6 +243,26 @@ pub(crate) fn waiting_notice_session(text: &str) -> Option<&str> {
     let (id, rest) = rest.split_once("` (\"")?;
     rest.lines().next()?.contains(WAITING_PHRASE).then_some(id)
 }
+
+/// What a continued session is told to do, in Claude Code's own words for its auto-resume. A macro
+/// so that [`CONTINUE_PROMPT`] can be built on it with `concat!`.
+macro_rules! continue_words {
+    () => {
+        "Continue the task you were working on when it was interrupted; do not repeat work that \
+         is already complete."
+    };
+}
+
+/// The prompt a continued session is sent: a notice from Octoboard, so that the session's history
+/// tells it from what the user typed.
+pub(crate) const CONTINUE_PROMPT: &str = concat!(
+    notice_prefix!(),
+    ": your session was restarted. ",
+    continue_words!()
+);
+
+/// What follows a notice the continued session is sent with, in place of [`CONTINUE_PROMPT`].
+pub(crate) const CONTINUE_AFTER_NOTICE: &str = continue_words!();
 
 #[cfg(test)]
 mod tests {

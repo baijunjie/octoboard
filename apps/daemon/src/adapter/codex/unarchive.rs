@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use crate::accounts::cli_run::{self, NotRun, QueryFailure};
+use crate::adapter::account_cli::{self, NotRun, QueryFailure};
 use crate::protocol::{error_code, Agent, CodedError};
 
 /// How long `codex unarchive` may take; it only moves one file.
@@ -28,7 +28,7 @@ pub fn unarchive(
             &[("detail", &detail)],
         )
     };
-    let output = cli_run::query(
+    let output = account_cli::query(
         Agent::Codex,
         shell_env,
         config_dir,
@@ -49,7 +49,7 @@ pub fn unarchive(
     if output.status.success() {
         return Ok(());
     }
-    let message = cli_run::last_stderr_line(&output);
+    let message = account_cli::last_stderr_line(&output);
     Err(failed(if message.is_empty() {
         output.status.to_string()
     } else {
@@ -60,11 +60,7 @@ pub fn unarchive(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{fake_agent, ScratchDir};
-
-    fn code_of(err: &anyhow::Error) -> Option<crate::protocol::Code> {
-        err.downcast_ref::<CodedError>().map(|coded| coded.code)
-    }
+    use crate::test_support::{code_of, fake_agent, ScratchDir};
 
     #[test]
     fn an_unarchive_that_exits_zero_succeeds_and_one_that_fails_reports_its_last_line() {
@@ -78,7 +74,7 @@ mod tests {
             "echo first >&2; echo 'no such thread' >&2; exit 1",
         );
         let err = unarchive(&env, None, "t1").unwrap_err();
-        assert_eq!(code_of(&err), Some(error_code::CODEX_UNARCHIVE_FAILED));
+        assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
         assert!(err.to_string().ends_with("no such thread"), "{err}");
     }
 
@@ -109,6 +105,6 @@ mod tests {
             &format!("head -c {} /dev/zero; exit 0", OUTPUT_LIMIT + 1),
         );
         let err = unarchive(&env, None, "t1").unwrap_err();
-        assert_eq!(code_of(&err), Some(error_code::CODEX_UNARCHIVE_FAILED));
+        assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
     }
 }

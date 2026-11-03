@@ -1,7 +1,7 @@
 //! Reading a configuration document back: what `inspect_configuration` answers without changing
 //! anything, and what `import_configuration` then creates. `apps/daemon/PROTOCOL.md`
-//! ("Configuration import") is the specification; the document itself is
-//! [`crate::config_document::export`]'s.
+//! ("Configuration import") is the specification; the document and the findings are `protocol`
+//! types, and the document is built by [`crate::config_document::export`].
 //!
 //! The document is untrusted input. Its paths and URLs are data to check against this machine,
 //! never values to act on: a project's directory comes from one of four choices, each offered only
@@ -18,102 +18,26 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
-use crate::config_document::export::{
-    self, AccountName, ConfigurationDocument, DocumentConsole, DocumentProject, DocumentSettings,
-    ProjectAccountRef,
-};
 use crate::coordinator::{self, consoles::NewConsole, settings::SettingsChanges};
-use crate::git_workflow::GitWorkflowSettings;
 use crate::project_git::remote_url;
-use crate::protocol::{error_code, Account, Agent, CodedError, Params, PerAgent, ProjectAccount};
+use crate::protocol::{
+    error_code, Account, AccountFallback, AccountName, AccountResolution, Agent, CodedError,
+    ConfigurationDocument, DirectoryChoice, DocumentConsole, DocumentProject, DocumentSettings,
+    ImportFailure, ImportStatus, ImportedAccounts, ImportedConsole, ImportedProject,
+    InspectedAccounts, InspectedConsole, InspectedProject, InspectedSettings, PerAgent,
+    ProjectAccount, ProjectAccountRef, ProjectResolution, CONFIGURATION_FORMAT,
+    CONFIGURATION_VERSION,
+};
 use crate::state::AppState;
 
 use accounts::{apply_accounts, index_account_resolutions, inspect_accounts};
-pub use accounts::{AccountResolution, ImportedAccounts, InspectedAccounts};
 use projects::{
     clone_directory, derived_directory, exported_directory, place_project, probe_disk,
     probe_offers, Probe, PROBE_DEADLINE,
 };
-pub use projects::{ChoiceKind, DirectoryChoice, Offers};
 
-/// The choice for the project at `project` of the document's console at `console`, both indexes
-/// into the document as it was sent.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Deserialize)]
-pub struct ProjectResolution {
-    pub console: usize,
-    pub project: usize,
-    pub choice: DirectoryChoice,
-}
-
-/// An account reference of the document that names no account of its agent on this machine, and
-/// so is bound to that agent's default account.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct AccountFallback {
-    pub agent: Agent,
-    pub name: String,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct InspectedProject {
-    pub name: String,
-    /// The path as the document records it.
-    pub path: String,
-    pub remote_url: Option<String>,
-    pub offers: Offers,
-    #[cfg_attr(
-        test,
-        ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null")
-    )]
-    pub default: Option<ChoiceKind>,
-    pub account_fallbacks: Vec<AccountFallback>,
-}
-
-/// The application settings a document carries, beside the value this machine has now, so a client
-/// can show what applying them would change.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct InspectedSettings {
-    pub auto_pull_repositories: bool,
-    pub current_auto_pull_repositories: bool,
-    pub auto_delete_unresumable_archives: bool,
-    pub current_auto_delete_unresumable_archives: bool,
-    pub auto_select_account: bool,
-    pub current_auto_select_account: bool,
-    pub auto_switch_on_usage_limit: bool,
-    pub current_auto_switch_on_usage_limit: bool,
-    pub sidebar_order_by_status: bool,
-    pub current_sidebar_order_by_status: bool,
-    pub auto_start_quota_windows: bool,
-    pub current_auto_start_quota_windows: bool,
-    pub auto_approve_session_requests: bool,
-    pub current_auto_approve_session_requests: bool,
-    pub auto_approve_resume_requests: bool,
-    pub current_auto_approve_resume_requests: bool,
-    pub auto_approve_account_switches: bool,
-    pub current_auto_approve_account_switches: bool,
-    pub auto_approve_handoffs: bool,
-    pub current_auto_approve_handoffs: bool,
-    pub ask_questions_as_choices: bool,
-    pub current_ask_questions_as_choices: bool,
-    pub git_workflow: GitWorkflowSettings,
-    pub current_git_workflow: GitWorkflowSettings,
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-    pub claude_compatibility: BTreeMap<String, bool>,
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
-    pub current_claude_compatibility: BTreeMap<String, bool>,
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
-    pub agent_tags: BTreeMap<String, Vec<String>>,
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
-    pub current_agent_tags: BTreeMap<String, Vec<String>>,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Inspection {
     /// Absent when the document carries no settings.
     pub settings: Option<InspectedSettings>,
@@ -122,8 +46,7 @@ pub struct Inspection {
     pub consoles: Vec<InspectedConsole>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Imported {
     /// The settings applied to this machine; absent unless the caller asked for them and they
     /// were applied.
@@ -133,67 +56,6 @@ pub struct Imported {
     /// What came of the accounts; absent unless the caller asked for them.
     pub accounts: Option<ImportedAccounts>,
     pub consoles: Vec<ImportedConsole>,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct InspectedConsole {
-    pub name: String,
-    pub account_fallbacks: Vec<AccountFallback>,
-    pub projects: Vec<InspectedProject>,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ImportStatus {
-    Created,
-    /// No resolution was given for it.
-    LeftOut,
-    /// Its directory could not be obtained, or the association was refused; of a console, that it
-    /// could not be created.
-    Failed,
-    /// Its console could not be created, so it was never tried.
-    NotAttempted,
-}
-
-/// Why something was not created or applied: an `error` reply's `code`, `params` and `message`.
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct ImportFailure {
-    pub code: crate::protocol::Code,
-    pub params: Params,
-    pub message: String,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct ImportedProject {
-    pub name: String,
-    pub status: ImportStatus,
-    /// How its directory was obtained, for a created project.
-    pub via: Option<ChoiceKind>,
-    /// The id of the project created.
-    pub project: Option<String>,
-    pub error: Option<ImportFailure>,
-    /// Empty unless the project was created.
-    pub account_fallbacks: Vec<AccountFallback>,
-}
-
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, Serialize)]
-pub struct ImportedConsole {
-    /// The id of the console created; absent when it could not be created.
-    pub console: Option<String>,
-    pub name: String,
-    /// `created` or `failed`.
-    #[cfg_attr(test, ts(type = "\"created\" | \"failed\""))]
-    pub status: ImportStatus,
-    pub error: Option<ImportFailure>,
-    /// Empty unless the console was created.
-    pub account_fallbacks: Vec<AccountFallback>,
-    /// All `not_attempted` when the console could not be created.
-    pub projects: Vec<ImportedProject>,
 }
 
 /// The document `value` holds, or the refusal that applies: it is not one at all, it is of a
@@ -211,7 +73,7 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
     let object = value
         .as_object()
         .ok_or_else(|| unreadable("it is not a JSON object"))?;
-    if object.get("format").and_then(|format| format.as_str()) != Some(export::FORMAT) {
+    if object.get("format").and_then(|format| format.as_str()) != Some(CONFIGURATION_FORMAT) {
         return Err(CodedError::raised(
             error_code::CONFIGURATION_NOT_RECOGNISED,
             "this is not an Octoboard configuration document",
@@ -222,16 +84,16 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
         .get("version")
         .and_then(|version| version.as_u64())
         .ok_or_else(|| unreadable("`version` is not a whole number"))?;
-    if version != u64::from(export::VERSION) {
+    if version != u64::from(CONFIGURATION_VERSION) {
         return Err(CodedError::raised(
             error_code::CONFIGURATION_VERSION_UNSUPPORTED,
             format!(
                 "the configuration is of version {version}; this Octoboard reads only version {}",
-                export::VERSION
+                CONFIGURATION_VERSION
             ),
             &[
                 ("version", &version.to_string()),
-                ("supported", &export::VERSION.to_string()),
+                ("supported", &CONFIGURATION_VERSION.to_string()),
             ],
         ));
     }

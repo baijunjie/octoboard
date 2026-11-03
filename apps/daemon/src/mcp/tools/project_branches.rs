@@ -11,13 +11,11 @@ use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::branch_origin;
-use crate::browse::budget;
-use crate::git::isolated::IsolatedGit;
 use crate::mcp::lookup::{optional_count, page_bounds};
 use crate::protocol::{BrowseBody, Event, Session, SessionStatus};
 use crate::state::AppState;
 
-use super::project_browse::{browse, git_source, plain, readable_project, MakeGit};
+use super::project_browse::{browse, git_source, plain, readable_project};
 
 /// How many branches `list_project_branches` returns when the caller names no `limit`.
 const DEFAULT_BRANCHES_LIMIT: usize = 200;
@@ -30,21 +28,11 @@ pub(in crate::mcp) async fn list_project_branches(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    list_branches_with(state, caller, arguments, IsolatedGit::from_shell).await
-}
-
-/// [`list_project_branches`] with the `git` environment made by `make_git`.
-async fn list_branches_with(
-    state: &Arc<AppState>,
-    caller: &Session,
-    arguments: &Map<String, Value>,
-    make_git: MakeGit,
-) -> Result<Value> {
     let project = readable_project(state, caller, arguments)?;
     let limit = optional_count(arguments, "limit", 1, MAX_BRANCHES_LIMIT)?
         .unwrap_or(DEFAULT_BRANCHES_LIMIT);
     let offset = optional_count(arguments, "offset", 0, usize::MAX)?.unwrap_or(0);
-    let git = git_source(state, make_git, &project).await?;
+    let git = git_source(state, &project).await?;
     let body = BrowseBody::ListProjectBranches {
         project: project.id.clone(),
     };
@@ -57,7 +45,7 @@ async fn list_branches_with(
             ..
         },
         _admission,
-    ) = browse(state, make_git, body, budget::BRANCH_LIST_RESERVATION).await?
+    ) = browse(state, body).await?
     else {
         bail!("the daemon answered something other than the branches");
     };
@@ -156,12 +144,11 @@ fn session_state(state: &AppState, id: &str) -> Result<&'static str> {
 mod tests {
     use super::*;
     use crate::mcp::test_support::{arguments, RepoState};
-    use crate::mcp::tools::project_browse::test_git;
     use crate::test_support::{git, ScratchDir};
 
     async fn list_branches(fixture: &RepoState, caller: &str, input: Value) -> Result<Value> {
         let session = fixture.state.session_record(caller)?;
-        list_branches_with(&fixture.state, &session, &arguments(input), test_git).await
+        list_project_branches(&fixture.state, &session, &arguments(input)).await
     }
 
     fn branch_of<'a>(answer: &'a Value, name: &str) -> &'a Value {

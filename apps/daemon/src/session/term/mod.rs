@@ -49,7 +49,7 @@ pub struct LaunchRequest {
     /// Who the session reports to, if anyone; see `LaunchSpec::owner`.
     pub owner: Option<crate::session_tools::Owner>,
     /// The project's effective git workflow settings; see `LaunchSpec::git_workflow`.
-    pub git_workflow: Option<crate::git_workflow::GitWorkflowSettings>,
+    pub git_workflow: Option<crate::protocol::GitWorkflowSettings>,
     /// See `LaunchSpec::ask_questions_as_choices`.
     pub ask_questions_as_choices: bool,
     /// See `LaunchSpec::user_language`.

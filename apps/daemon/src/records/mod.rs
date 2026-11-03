@@ -22,9 +22,12 @@
 //!
 //! Where a record is found is [`locate`] (the hook's hint, the account directories walked), the
 //! rules of a Codex rollout's name and of a thread's chain of rollouts are [`codex_rollout_files`],
-//! which paths a deletion removes are [`removal`], and whether a conversation can be resumed is
-//! [`resumability`].
+//! the record a switch of accounts carries and what travels with it is [`carried`],
+//! which paths a deletion removes are [`removal`], whether a conversation can be resumed is
+//! [`resumability`], and whether a relaunched session is sent a prompt to carry on is
+//! [`switch_continue`].
 
+pub(crate) mod carried;
 pub(crate) mod codex_rollout_files;
 pub(crate) mod collector;
 pub(crate) mod context;
@@ -38,6 +41,7 @@ pub(crate) mod locate;
 pub(crate) mod observed;
 pub(crate) mod removal;
 pub(crate) mod resumability;
+pub(crate) mod switch_continue;
 pub(crate) mod titles;
 pub(crate) mod watch;
 

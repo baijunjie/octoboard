@@ -1,5 +1,6 @@
 use super::*;
-use crate::test_support::{code_of, ScratchDir};
+use crate::records::carried::companions;
+use crate::test_support::{code_of, param_of, ScratchDir};
 
 fn temp_dir(name: &str) -> ScratchDir {
     ScratchDir::new(&format!("relocate-{name}"))
@@ -9,24 +10,6 @@ fn write(root: &Path, relative: &str, content: &str) {
     let path = root.join(relative);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, content).unwrap();
-}
-
-fn stage_of(err: &anyhow::Error) -> String {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .params
-        .get("stage")
-        .cloned()
-        .expect("a stage")
-}
-
-fn cause_of(err: &anyhow::Error) -> String {
-    err.downcast_ref::<CodedError>()
-        .expect("a coded error")
-        .params
-        .get("cause")
-        .cloned()
-        .expect("a cause")
 }
 
 /// The record keeps the path it has relative to the config directory, whatever the agent put
@@ -211,8 +194,8 @@ fn a_codex_homes_row_of_the_thread_is_pointed_at_the_head_and_nothing_else() {
     held.execute_batch("BEGIN EXCLUSIVE").unwrap();
     let err = point(&target, CODEX_ID, &[]).expect_err("a busy database");
     assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
-    assert_eq!(stage_of(&err), "thread_record");
-    assert_eq!(cause_of(&err), "busy");
+    assert_eq!(param_of(&err, "stage"), "thread_record");
+    assert_eq!(param_of(&err, "cause"), "busy");
     assert!(
         err.to_string().contains("conversation was copied"),
         "{err:#}"
@@ -432,8 +415,8 @@ fn the_carried_items_complete_or_roll_back_together() {
     std::os::unix::fs::symlink("/etc/hosts", source.join(&sidecar).join("link")).unwrap();
     let err = copy(&source, &target, &record_path, &companions).expect_err("a link in the sidecar");
     assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
-    assert_eq!(stage_of(&err), "copy");
-    assert_eq!(cause_of(&err), "symlink");
+    assert_eq!(param_of(&err, "stage"), "copy");
+    assert_eq!(param_of(&err, "cause"), "symlink");
     assert!(!target.join(&record).exists());
     assert!(!target.join(STAGING).exists());
     std::fs::remove_file(source.join(&sidecar).join("link")).unwrap();
@@ -444,7 +427,7 @@ fn the_carried_items_complete_or_roll_back_together() {
     write(&blocked, "file-history", "a file where a directory must be");
     let err = copy(&source, &blocked, &record_path, &companions).expect_err("blocked");
     assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
-    assert_eq!(cause_of(&err), "other");
+    assert_eq!(param_of(&err, "cause"), "other");
     assert_eq!(
         std::fs::read_to_string(blocked.join(&record)).unwrap(),
         "older conversation"
@@ -800,23 +783,26 @@ fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
     write(&invalid, "config.toml", "sqlite_home = [unterminated");
     let err = point(&invalid, &[]).expect_err("an invalid config.toml");
     assert_eq!(
-        (stage_of(&err).as_str(), cause_of(&err).as_str()),
+        (
+            param_of(&err, "stage").as_str(),
+            param_of(&err, "cause").as_str()
+        ),
         ("thread_record", "config_unreadable")
     );
 
     let unreadable = temp_dir("cause-config-dir");
     std::fs::create_dir(unreadable.join("config.toml")).unwrap();
     let err = point(&unreadable, &[]).expect_err("a config.toml that is a directory");
-    assert_eq!(cause_of(&err), "config_unreadable");
+    assert_eq!(param_of(&err, "cause"), "config_unreadable");
 
     let relative = temp_dir("cause-relative");
     let err = point(&relative, &[("CODEX_SQLITE_HOME", "state")]).expect_err("relative");
-    assert_eq!(cause_of(&err), "sqlite_home");
+    assert_eq!(param_of(&err, "cause"), "sqlite_home");
 
     let tilde = temp_dir("cause-tilde");
     write(&tilde, "config.toml", "sqlite_home = \"~/db\"");
     let err = point(&tilde, &[]).expect_err("a ~ with no HOME");
-    assert_eq!(cause_of(&err), "sqlite_home");
+    assert_eq!(param_of(&err, "cause"), "sqlite_home");
 
     let broken = temp_dir("cause-broken");
     write(
@@ -825,7 +811,7 @@ fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
         "not a database, but long enough to be read as one",
     );
     let err = point(&broken, &[]).expect_err("not a database");
-    assert_eq!(cause_of(&err), "other");
+    assert_eq!(param_of(&err, "cause"), "other");
 }
 
 /// A copy the file system refuses names why, when it is one a user can act on.
@@ -845,7 +831,10 @@ fn a_copy_refused_for_permissions_says_so() {
         copy(&source, &target, Path::new("sessions/enc/grok-id"), &[]).expect_err("read-only");
     std::fs::set_permissions(&*target, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(
-        (stage_of(&err).as_str(), cause_of(&err).as_str()),
+        (
+            param_of(&err, "stage").as_str(),
+            param_of(&err, "cause").as_str()
+        ),
         ("copy", "permission_denied")
     );
 }

@@ -11,11 +11,16 @@ use super::browse::{
     ContentSource, FileContent, ProjectSourceInfo, SideRead, UpstreamInfo,
 };
 use super::codes::{error_code, Code};
+use super::configuration::{
+    ConfigurationDocument, DocumentSettings, ImportFailure, ImportedAccounts, ImportedConsole,
+    InspectedAccounts, InspectedConsole, InspectedSettings,
+};
 use super::errors::{error_parts, params, Params};
 use super::fields::is_true;
 use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence};
 use super::models::{AgentModel, ModelChangeOutcome, ModelsUnavailable};
 use super::path_links::PathLink;
+use super::processes::{ProcessCount, ProcessTree};
 use super::quotas::{AccountQuota, ResetCreditOutcome};
 use super::records::{
     AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, Role, Session,
@@ -65,15 +70,15 @@ pub enum Event {
         /// Only for an `inspect_session_branches` that asked for `processes`.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         #[cfg_attr(test, ts(optional = nullable))]
-        processes: Vec<crate::processes::ledger::ProcessTree>,
+        processes: Vec<ProcessTree>,
     },
     ProcessesListed {
         id: Option<String>,
-        trees: Vec<crate::processes::ledger::ProcessTree>,
+        trees: Vec<ProcessTree>,
     },
     AllProcessesListed {
         id: Option<String>,
-        counts: Vec<crate::processes::ledger::ProcessCount>,
+        counts: Vec<ProcessCount>,
     },
     ProcessesStopped {
         id: Option<String>,
@@ -92,7 +97,7 @@ pub enum Event {
         items: Vec<SessionBranchItem>,
         /// The project's processes, the trees no session owns (left behind in it, or kept under
         /// it), which its removal stops, whether or not the folder goes.
-        processes: Vec<crate::processes::ledger::ProcessTree>,
+        processes: Vec<ProcessTree>,
         /// The token the worktrees it held back are kept under, for `delete_project` to send back
         /// (`crate::branch_cleanup::project`); absent when it held none back.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -330,26 +335,26 @@ pub enum Event {
     /// the file the user keeps (see "Configuration export" in `apps/daemon/PROTOCOL.md`).
     ConfigurationExported {
         id: Option<String>,
-        document: crate::config_document::export::ConfigurationDocument,
+        document: ConfigurationDocument,
     },
     /// The reply to `inspect_configuration` (see "Configuration import" in
     /// `apps/daemon/PROTOCOL.md`): the settings and accounts the document carries,
     /// and one entry per console of the document, in its order.
     ConfigurationInspected {
         id: Option<String>,
-        settings: Option<crate::config_document::import::InspectedSettings>,
-        accounts: Option<crate::config_document::import::InspectedAccounts>,
-        consoles: Vec<crate::config_document::import::InspectedConsole>,
+        settings: Option<InspectedSettings>,
+        accounts: Option<InspectedAccounts>,
+        consoles: Vec<InspectedConsole>,
     },
     /// The reply to `import_configuration`: what came of the settings and accounts asked for, and
     /// one entry per console of the document, in its order, each naming the console created for
     /// it; no entry at all with `apply_consoles` false.
     ConfigurationImported {
         id: Option<String>,
-        settings_applied: Option<crate::config_document::export::DocumentSettings>,
-        settings_error: Option<crate::config_document::import::ImportFailure>,
-        accounts: Option<crate::config_document::import::ImportedAccounts>,
-        consoles: Vec<crate::config_document::import::ImportedConsole>,
+        settings_applied: Option<DocumentSettings>,
+        settings_error: Option<ImportFailure>,
+        accounts: Option<ImportedAccounts>,
+        consoles: Vec<ImportedConsole>,
     },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
     /// HTML document, and only the session the user is looking at needs its pages, so the

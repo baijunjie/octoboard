@@ -31,10 +31,11 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tokio::sync::MutexGuard;
 
-use crate::accounts::dirs::account_dir_key;
-use crate::protocol::{error_code, Account, Agent, CodedError, Session};
+use crate::hostfs::dir_key;
+use crate::protocol::{
+    error_code, Account, Agent, CodedError, Session, SharingCause, SharingItemFailure, SharingLeft,
+};
 use crate::state::{AppState, Running};
-use link::{Cause, Failure, Left};
 
 pub(crate) use change::{carry_out, lock_account, Changing, Locked, Refused};
 pub(crate) use cli_reads::{admitted_reading, hold, is_missing, running_long, Run};
@@ -42,7 +43,6 @@ pub(crate) use cli_reads::{admitted_reading, hold, is_missing, running_long, Run
 pub(crate) use cli_reads::{is_held, reading_account};
 pub use launch::before_launch;
 pub(crate) use link::entries;
-pub use link::{Cause as FailureCause, Failure as FailedItem};
 pub(crate) use take_back::own_conversations;
 
 /// What the daemon holds in memory of the accounts' sharing.
@@ -108,7 +108,7 @@ pub(crate) fn runs_under(account: &Account, session: &Session) -> bool {
             || session
                 .config_dir
                 .as_deref()
-                .is_some_and(|dir| account_dir_key(dir) == account_dir_key(&account.config_dir)))
+                .is_some_and(|dir| dir_key(dir) == dir_key(&account.config_dir)))
 }
 
 /// What runs under an account's directory, as a change of its sharing sees it.
@@ -175,8 +175,8 @@ pub(crate) fn not_shareable(account: Option<&Account>) -> anyhow::Error {
 pub(crate) fn sharing_failed(
     account: &Account,
     share: bool,
-    failures: &[Failure],
-    cause: Cause,
+    failures: &[SharingItemFailure],
+    cause: SharingCause,
     detail: &str,
 ) -> anyhow::Error {
     let doing = if share {
@@ -263,23 +263,23 @@ pub(crate) fn sharing_in_progress(account: &Account) -> anyhow::Error {
 }
 
 /// The failures as the JSON array a param carries: `[{item, left, cause, detail, sessions?}]`.
-fn items_param(failures: &[Failure]) -> String {
+fn items_param(failures: &[SharingItemFailure]) -> String {
     serde_json::to_string(failures).unwrap_or_else(|_| "[]".to_string())
 }
 
-fn describe(failures: &[Failure]) -> String {
+fn describe(failures: &[SharingItemFailure]) -> String {
     failures
         .iter()
         .map(|failure| {
             let conversation = !failure.sessions.is_empty();
             let left = match failure.left {
-                Left::Unchanged if conversation => "left in the default directory",
-                Left::Unchanged => "left unchanged",
-                Left::BackedUp => "left backed up, not linked",
-                Left::PartlyMoved if conversation => "left partly taken back",
-                Left::PartlyMoved => "left partly moved into the default directory",
-                Left::Linked => "left linked",
-                Left::Absent => "left absent",
+                SharingLeft::Unchanged if conversation => "left in the default directory",
+                SharingLeft::Unchanged => "left unchanged",
+                SharingLeft::BackedUp => "left backed up, not linked",
+                SharingLeft::PartlyMoved if conversation => "left partly taken back",
+                SharingLeft::PartlyMoved => "left partly moved into the default directory",
+                SharingLeft::Linked => "left linked",
+                SharingLeft::Absent => "left absent",
             };
             match failure.sessions.as_slice() {
                 [] => format!("`{}` {left} ({})", failure.item, failure.detail),

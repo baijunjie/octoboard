@@ -2,19 +2,17 @@
 //! `clears_default_account_name` for the default account's), where each keeps its configuration,
 //! signing one in, its plan quota, moving a removed one's directory to the Trash, sharing the
 //! default account's configuration, which agent and account a session opens with (`choice`), and
-//! switching a session to another account (copying its conversation over, carrying on with its
-//! turn), with what keeps Codex's thread database in step with where its rollouts are.
+//! switching a session to another account (copying its conversation over; whether it carries on
+//! with its turn is `crate::records::switch_continue`'s), with what keeps Codex's thread database
+//! in step with where its rollouts are.
 
 pub(crate) mod choice;
-pub(crate) mod cli_run;
 pub(crate) mod codex_threads;
 pub(crate) mod dirs;
-pub(crate) mod files;
 pub(crate) mod login;
 pub(crate) mod quotas;
 pub(crate) mod relocate;
 pub(crate) mod shared_config;
-pub(crate) mod switch_continue;
 pub(crate) mod trash;
 
 /// The comparison key for an account name collision: trimmed and lower-cased, so "Work" and

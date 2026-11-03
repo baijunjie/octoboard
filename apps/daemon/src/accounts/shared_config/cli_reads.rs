@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, LazyLock, Mutex};
 
-use crate::accounts::dirs::account_dir_key;
+use crate::hostfs::dir_key;
 
 #[derive(Default)]
 struct DirUse {
@@ -42,7 +42,7 @@ struct Registry {
 static REGISTRY: LazyLock<Registry> = LazyLock::new(Registry::default);
 
 fn key(dir: &Path) -> String {
-    account_dir_key(&crate::hostfs::lexically_normalise(dir).to_string_lossy())
+    dir_key(&crate::hostfs::lexically_normalise(dir).to_string_lossy())
 }
 
 /// Updates `key`'s entry, dropping it once nothing uses the directory, and wakes the waiters.

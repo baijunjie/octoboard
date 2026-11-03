@@ -16,16 +16,16 @@
 //!   an idle Grok asks to be pressed again to quit.
 //!
 //! So a key goes in only while the session reads `Working` by its hooks and its terminal title
-//! shows the turn running ([`crate::titles::activity::TitleActivity::shows_running`]), checked
-//! under the input lock right before each key: a turn that ended in the meantime gets no key at
-//! all. Each key is a write of its own, never joined to a message.
+//! shows the turn running ([`crate::session::title_activity::TitleActivity::shows_running`]),
+//! checked under the input lock right before each key: a turn that ended in the meantime gets no
+//! key at all. Each key is a write of its own, never joined to a message.
 //!
 //! Each agent's way out of `Working` afterwards is the one it takes when the person presses the
 //! key: Codex's `Interrupt` hook and Grok's `StopCancelled`, and for what fires no hook, Claude
-//! Code's transcript and title watches and Grok's title watch (`crate::titles::interrupt`). Claude
-//! Code and Grok Build put the prompt back in their input box when the key lands before the model
-//! has shown anything; that text would be sent together with the next message, so this clears it
-//! with Ctrl-U, which both take the same way: one line a press, a press at the start of a line
+//! Code's transcript and title watches and Grok's title watch (`crate::session::title_interrupt`).
+//! Claude Code and Grok Build put the prompt back in their input box when the key lands before the
+//! model has shown anything; that text would be sent together with the next message, so this clears
+//! it with Ctrl-U, which both take the same way: one line a press, a press at the start of a line
 //! removing the line break before it, and a wrapped line going in one. It does so only while the
 //! box was empty before the interrupt key and nobody else has written since, and the session's
 //! queue is paused from the first key on so no message of Octoboard's lands in the restored text.

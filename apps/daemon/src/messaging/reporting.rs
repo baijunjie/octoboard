@@ -535,7 +535,8 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::protocol::{Agent, OrchestrationRole, Origin, Role};
+    use crate::protocol::{Agent, OrchestrationRole, Role};
+    use crate::test_support::bare_session;
     use crate::test_support::owner_team::{
         console, hub_heard, hub_heard_of, interrupted_hub_state, kept_texts, project_session,
         team_state,
@@ -701,39 +702,9 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
 
         let owner = |id: &str| Session {
-            id: id.to_string(),
-            agent: Agent::Claude,
-            agent_session_id: None,
-            console_id: "console-1".to_string(),
-            project_id: None,
             host_id: "local".to_string(),
-            role: Role::Console,
-            origin: Origin::User,
             title: id.to_string(),
-            status: SessionStatus::Idle,
-            terminal_title: None,
-            record_titles: Default::default(),
-            background_tasks: Vec::new(),
-            switching_account: false,
-            paused: false,
-            prompt_on_launch: false,
-            default_effort: None,
-            orchestration_role: OrchestrationRole::Coordinator,
-            context: None,
-            observed_model: None,
-            observed_effort: None,
-            model: None,
-            effort: None,
-            has_conversation: false,
-            bound_to: None,
-            colour: None,
-            ordinal: None,
-            account_id: None,
-            config_dir: None,
-            pinned: false,
-            locked: false,
-            started_at: 0,
-            ended_at: None,
+            ..bare_session(id, Role::Console)
         };
         state.store.insert_session(&owner("owner-a")).unwrap();
         state.store.insert_session(&owner("owner-b")).unwrap();

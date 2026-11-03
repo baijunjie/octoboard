@@ -1,8 +1,10 @@
 use super::*;
 use crate::agents::launch_settings::normalize_session_launch_setting;
 use crate::coordinator::test_support::{console, project_of};
-use crate::git_workflow::{GitWorkflowSettings, GitWorkflowSettingsChanges};
-use crate::protocol::{error_code, Agent, Event, Role, Session, SessionStatus};
+use crate::protocol::{
+    error_code, Agent, Event, GitWorkflowSettings, GitWorkflowSettingsChanges, Role, Session,
+    SessionStatus,
+};
 use crate::session::term;
 use crate::test_support::code_of;
 use crate::test_support::{
@@ -159,17 +161,17 @@ fn a_project_session_launches_with_its_projects_git_workflow_settings() {
     state
         .store
         .change_git_workflow_settings(&GitWorkflowSettingsChanges {
-            delivery: Some(crate::git_workflow::Delivery::Merge),
+            delivery: Some(crate::protocol::GitDelivery::Merge),
             ..GitWorkflowSettingsChanges::default()
         })
         .unwrap();
-    project.git_workflow.development = Some(crate::git_workflow::Development::InPlace);
+    project.git_workflow.development = Some(crate::protocol::GitDevelopment::InPlace);
     state.store.update_project(&project).unwrap();
     assert_eq!(
         launch_git_workflow_settings(&state, &session).unwrap(),
         Some(GitWorkflowSettings {
-            development: crate::git_workflow::Development::InPlace,
-            delivery: crate::git_workflow::Delivery::Merge,
+            development: crate::protocol::GitDevelopment::InPlace,
+            delivery: crate::protocol::GitDelivery::Merge,
             ..GitWorkflowSettings::default()
         })
     );

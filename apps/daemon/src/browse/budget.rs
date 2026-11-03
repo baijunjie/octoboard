@@ -1,13 +1,18 @@
-//! The limits every browse read is held to, in one place so they are read together: each one
-//! bounds memory or time on its own, and the retained-bytes reservation is derived from the
-//! others. The values and the measurements behind them are recorded in `apps/daemon/PROTOCOL.md`'s
-//! "Browse budgets" section; a change here is a change there. A change listing is counted against
-//! its two limits here too (`ChangeBudget`), so the cut is made the same way wherever one is built.
+//! The limits every browse read is held to, in one place so they are read together (apart from the
+//! `git` read deadline and stderr ceiling, which `git/isolated.rs` owns, and the upstream-lookup
+//! budgets, which `git/remote_branches.rs` owns): each one bounds memory or time on its own, and
+//! the retained-bytes reservation is derived from the others. The values and the measurements
+//! behind them are recorded in `apps/daemon/PROTOCOL.md`'s "Browse budgets" section; a change here
+//! is a change there. A change listing is counted against its two limits here too
+//! (`ChangeBudget`), so the cut is made the same way wherever one is built.
 
 use std::time::Duration;
 
 use crate::browse::content::json_escaped_len;
-use crate::protocol::{ChangeEntry, ChangeSide};
+use crate::git::remote_branches::{
+    UPSTREAM_LOOKUP_STDOUT, UPSTREAM_PATTERN_BYTES, UPSTREAM_REMOTES_STDOUT,
+};
+use crate::protocol::{BrowseBody, ChangeEntry, ChangeSide};
 
 /// The largest file body a read returns. Sized from the tracked files of a set of real projects:
 /// 99.9 % are under 2.4 MB, the largest text file seen was a 2.3 MB string catalog and the largest
@@ -42,7 +47,7 @@ pub const GIT_METADATA_STDOUT: usize = 1024 * 1024;
 /// The deadline of the `git check-ignore` runs behind a listing, all of them together. Which
 /// entries are ignored is an addition to a listing already read, and a client relists a folder in
 /// view every few seconds, so a slow run is dropped quickly and the listing returns with nothing
-/// marked, rather than waiting out [`GIT_READ_TIMEOUT`].
+/// marked, rather than waiting out the `git` read deadline.
 pub const IGNORE_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The deadline of the `git ls-files` runs that tell a search which paths Git ignores, all of them
@@ -69,15 +74,6 @@ pub const IGNORE_CACHE_FOLDERS: usize = 32;
 /// How long a remembered folder is trusted at most. What the daemon cannot see change cheaply (the
 /// global excludes file, named by a configuration anywhere) is picked up at the latest by then.
 pub const IGNORE_CACHE_TTL: Duration = Duration::from_secs(30);
-
-/// The most stderr kept from any `git` command. A `git` error message is a few hundred bytes; the
-/// rest of a longer one is read and discarded.
-pub const GIT_STDERR: usize = 64 * 1024;
-
-/// Upper bound on one `git` read. Every browse read is local — lazy fetching of missing objects is
-/// switched off — so this is a guard against a wedged repository (a dead network volume, a held
-/// lock), not a network allowance.
-pub const GIT_READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The most entries one change listing carries before it is cut and marked incomplete. The largest
 /// commit measured across the same projects changed 704 files and 99 % changed under 170; a
@@ -164,7 +160,7 @@ pub const LINE_COUNT_STDOUT: usize = 2 * 1024 * 1024;
 
 /// The deadline of a line count run. The counts are an addition to a listing that is already
 /// read, so a run that is slow (a huge diff, a repository on a slow volume) is dropped quickly and
-/// the listing returns without counts, rather than waiting out [`GIT_READ_TIMEOUT`] for them.
+/// the listing returns without counts, rather than waiting out the `git` read deadline for them.
 pub const LINE_COUNT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// What one entry of the map of a line count run takes beyond its path: the key and the record
@@ -212,19 +208,6 @@ pub const BRANCH_LIST_STDOUT: usize = 3584 * 1024;
 /// What one branch listing entry takes beyond its name, counted generously as JSON writes it: a
 /// commit id (64 hex digits in a SHA-256 repository) and the JSON around the two.
 pub const BRANCH_ENTRY_BYTES: usize = 128;
-
-/// The most bytes of reference names one upstream lookup asks `git for-each-ref` for: the same
-/// branch's name and the `HEAD` on each of the repository's remotes, so room for some one thousand
-/// remotes. The output is about these names again with an object id on each line, plus what lies
-/// below a name asked for (`refs/remotes/origin/a` also names `refs/remotes/origin/a/b`), which is
-/// not bounded here.
-pub const UPSTREAM_PATTERN_BYTES: usize = 64 * 1024;
-
-/// The most stdout the `git remote` of an upstream lookup may print.
-pub const UPSTREAM_REMOTES_STDOUT: usize = 32 * 1024;
-
-/// The most stdout the `git for-each-ref` of an upstream lookup may print.
-pub const UPSTREAM_LOOKUP_STDOUT: usize = 128 * 1024;
 
 /// What an upstream lookup holds at once beyond the listing's own entries: the names asked for
 /// held as built, as arguments and as the process takes them, with their per-name overhead (twice
@@ -347,6 +330,27 @@ pub const MAX_RETAINED_PER_CONNECTION: usize = MAX_CONCURRENT_READS * READ_RESER
 /// read's buffers while it runs, and each finished reply until its frame is written to the socket.
 /// Twice one connection's share, so a second window still gets a full share beside the first.
 pub const MAX_RETAINED_BYTES: usize = 2 * MAX_RETAINED_PER_CONNECTION;
+
+/// The retained bytes a request is admitted under: the reservation of the read it runs.
+pub fn reservation_for(body: &BrowseBody) -> usize {
+    match body {
+        BrowseBody::ListProjectDir { .. } => LISTING_RESERVATION,
+        BrowseBody::SearchProjectFiles { .. } => SEARCH_RESERVATION,
+        BrowseBody::GetProjectSource { .. } | BrowseBody::ReadProjectFile { .. } => {
+            READ_RESERVATION
+        }
+        BrowseBody::ListProjectChanges { .. } => CHANGE_LIST_RESERVATION,
+        BrowseBody::ReadProjectChange { .. }
+        | BrowseBody::ReadProjectComparisonChange { .. }
+        | BrowseBody::ReadProjectChangeBodies { .. }
+        | BrowseBody::ReadProjectComparisonChangeBodies { .. }
+        | BrowseBody::ReadProjectCommitChange { .. }
+        | BrowseBody::ReadProjectCommitChangeBodies { .. } => DIFF_RESERVATION,
+        BrowseBody::ListProjectBranches { .. } => BRANCH_LIST_RESERVATION,
+        BrowseBody::CompareProjectBranches { .. } => COMPARISON_RESERVATION,
+        BrowseBody::ListProjectCommits { .. } => COMMITS_RESERVATION,
+    }
+}
 
 const _: () = assert!(MAX_SEARCH_PATH_BYTES <= MAX_LISTING_NAME_BYTES);
 const _: () = assert!(MAX_SEARCH_MATCHES <= MAX_DIR_ENTRIES);

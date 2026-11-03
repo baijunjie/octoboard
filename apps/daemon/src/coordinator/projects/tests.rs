@@ -5,11 +5,11 @@ use crate::coordinator::test_support::{
 };
 use crate::hostfs;
 use crate::protocol::{
-    error_code, Account, Agent, Availability, Change, CodedError, Event, Launch, OrchestrationRole,
-    Origin, PerAgent, Project, ProjectAccount, ProjectSource, RequestBody, Role, Session,
-    SessionStatus,
+    error_code, Account, Agent, Availability, Change, CodedError, Event, Launch, PerAgent, Project,
+    ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
+use crate::test_support::bare_session;
 use crate::test_support::{
     console_session, console_with_project_and_accounts, idle_stand_in, session_ids,
 };
@@ -50,39 +50,11 @@ async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
     state
         .store
         .insert_session(&Session {
-            id: "project".to_string(),
-            agent: Agent::Claude,
-            agent_session_id: None,
-            console_id: "console-1".to_string(),
             project_id: Some("project-1".to_string()),
             host_id: LOCAL_HOST_ID.to_string(),
-            role: Role::Project,
-            origin: Origin::User,
             title: "Project".to_string(),
             status: SessionStatus::Archived,
-            terminal_title: None,
-            record_titles: Default::default(),
-            background_tasks: Vec::new(),
-            switching_account: false,
-            paused: false,
-            prompt_on_launch: false,
-            default_effort: None,
-            orchestration_role: OrchestrationRole::Coordinator,
-            context: None,
-            observed_model: None,
-            observed_effort: None,
-            model: None,
-            effort: None,
-            has_conversation: false,
-            bound_to: None,
-            colour: None,
-            ordinal: None,
-            account_id: None,
-            config_dir: None,
-            pinned: false,
-            locked: false,
-            started_at: 0,
-            ended_at: None,
+            ..bare_session("project", Role::Project)
         })
         .unwrap();
     let delete = || RequestBody::DeleteProject {
@@ -588,7 +560,7 @@ async fn project_text_updates_preserve_legacy_values_and_reject_new_overlong_tex
 /// every project it adds.
 #[tokio::test]
 async fn add_project_stores_its_own_git_workflow_values_for_every_project_added() {
-    use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
+    use crate::protocol::{GitDelivery, GitDevelopment, GitWorkflowOverride};
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-git-workflow");
     let workdir = console_workdir_in(&dir);
     state
@@ -596,8 +568,8 @@ async fn add_project_stores_its_own_git_workflow_values_for_every_project_added(
         .insert_console(&console(Agent::Claude, &workdir))
         .unwrap();
     let own = GitWorkflowOverride {
-        development: Some(Development::InPlace),
-        delivery: Some(Delivery::PullRequest),
+        development: Some(GitDevelopment::InPlace),
+        delivery: Some(GitDelivery::PullRequest),
         ..GitWorkflowOverride::default()
     };
     let add = |source: &str, path: &Path| {
@@ -633,7 +605,7 @@ async fn add_project_stores_its_own_git_workflow_values_for_every_project_added(
 /// the project.
 #[tokio::test]
 async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
-    use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
+    use crate::protocol::{GitDelivery, GitDevelopment, GitWorkflowOverride};
     let (state, dir) = crate::test_support::app_state("coordinator-update-project-git-workflow");
     let workdir = console_workdir_in(&dir);
     state
@@ -669,10 +641,10 @@ async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
     .await
     .unwrap();
     let expected = GitWorkflowOverride {
-        development: Some(Development::InPlace),
+        development: Some(GitDevelopment::InPlace),
         squash_before_delivery: None,
         rebase_before_merge: None,
-        delivery: Some(Delivery::PullRequest),
+        delivery: Some(GitDelivery::PullRequest),
         revert_gate: None,
     };
     assert_eq!(stored(), expected);
@@ -712,7 +684,7 @@ async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
     assert_eq!(
         stored(),
         GitWorkflowOverride {
-            development: Some(Development::InPlace),
+            development: Some(GitDevelopment::InPlace),
             revert_gate: Some(true),
             ..GitWorkflowOverride::default()
         }

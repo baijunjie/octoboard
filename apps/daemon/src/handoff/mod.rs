@@ -32,6 +32,7 @@ use crate::protocol::{Agent, Role, Session, SessionStatus};
 use crate::records::conversation::{self, Conversation, Speaker, Todo};
 use crate::records::{conversation_branch, Branch, Locator};
 use crate::state::AppState;
+use crate::text::trimmed_or_none;
 use package_file::{package_path_in, remove_in};
 
 /// The original session as the receiving session is told of it.
@@ -158,10 +159,7 @@ fn build_with(
             status: status_word(session.status).to_owned(),
             owner,
         },
-        brief: brief
-            .map(str::trim)
-            .filter(|brief| !brief.is_empty())
-            .map(str::to_owned),
+        brief: trimmed_or_none(brief),
         record,
         earlier,
         conversation,

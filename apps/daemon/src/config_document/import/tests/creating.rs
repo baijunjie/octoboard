@@ -63,7 +63,10 @@ async fn an_import_creates_a_console_and_its_projects_with_their_configuration()
         Some(&*created.id)
     );
     assert_eq!(imported[0].projects[0].status, ImportStatus::Created);
-    assert_eq!(imported[0].projects[0].via, Some(ChoiceKind::ExportedPath));
+    assert_eq!(
+        imported[0].projects[0].via,
+        Some(DirectoryChoiceKind::ExportedPath)
+    );
     assert_eq!(created.console_id, stored_console.id);
     assert_eq!(created.name, "renamed");
     assert_eq!(created.path, repo.to_string_lossy());
@@ -183,9 +186,9 @@ async fn each_choice_places_the_project_in_its_own_directory() {
     assert_eq!(
         via,
         [
-            Some(ChoiceKind::ExportedPath),
-            Some(ChoiceKind::DefaultCloneDir),
-            Some(ChoiceKind::Directory)
+            Some(DirectoryChoiceKind::ExportedPath),
+            Some(DirectoryChoiceKind::DefaultCloneDir),
+            Some(DirectoryChoiceKind::Directory)
         ]
     );
 }

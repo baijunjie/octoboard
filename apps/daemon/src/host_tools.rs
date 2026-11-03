@@ -10,6 +10,7 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 
+use crate::git::isolated::IsolatedGit;
 use crate::git::run::UserGit;
 use crate::hostfs::trash::{move_to_trash, TrashFailure};
 
@@ -47,6 +48,11 @@ impl HostTools {
             .tools
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The user's `git` as browse reads run it: isolated from the user's repository settings.
+    pub fn isolated_git(&self) -> Result<IsolatedGit> {
+        (self.get().git)().map(IsolatedGit::of)
     }
 
     #[cfg(test)]

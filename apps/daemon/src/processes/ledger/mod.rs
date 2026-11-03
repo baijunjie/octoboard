@@ -58,10 +58,11 @@ use std::time::{Duration, Instant};
 use attribute::{Book, Launch, ENDED};
 use table::{EnvTag, Identity};
 
+use crate::protocol::{ProcessCount, ProcessTree};
+
 pub use carry::HeldForLaunch;
 pub use table::TAG_VARIABLE;
 pub use trees::MoveRefused;
-pub use trees::{ProcessCount, ProcessTree};
 
 /// How often the table is read while there is anything to follow.
 const SCAN_INTERVAL: Duration = Duration::from_secs(2);

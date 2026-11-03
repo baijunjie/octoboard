@@ -739,11 +739,9 @@ mod with_state {
             ],
         );
         let project = fixture.project("worktree-project", &repository);
-        let roots = crate::browse::scope::project_live_roots(
-            &fixture.state,
-            &project,
-            &crate::git::isolated::IsolatedGit::from_shell,
-        )
+        let roots = crate::browse::scope::project_live_roots(&fixture.state, &project, &|| {
+            fixture.state.host_tools.isolated_git()
+        })
         .unwrap();
         assert_eq!(roots.len(), 2, "{roots:?}");
         assert_eq!(roots[0].root, canonical(&repository));

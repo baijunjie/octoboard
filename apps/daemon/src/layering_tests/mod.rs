@@ -16,8 +16,8 @@
 //! `use super::*` that inherits such an import from its parent is not followed; a glob import is
 //! seen only as the import of its module; and nothing a macro expands to is seen beyond the tokens
 //! written at its call. Methods and fields reached through a value (`state.store.get_session(…)`)
-//! are not paths and are not seen at all, so a `Types` entry admits everything the types it covers
-//! expose. A test-only field of a tuple struct or tuple variant whose type holds a comma inside
+//! are not paths and are not seen at all, so an entry for a type admits everything the type
+//! exposes. A test-only field of a tuple struct or tuple variant whose type holds a comma inside
 //! angle brackets (`HashMap<K, V>`) is cut short at that comma, so the rest of its type is read as
 //! production code: this can only add an edge, never hide one.
 
@@ -38,6 +38,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "blocking_pass",
             "interface_language",
             "loopback",
+            "text",
             "time",
             "wire_path",
         ],
@@ -106,128 +107,57 @@ const STATE: &str = "state";
 /// The layer of the ways into the daemon, which nothing the daemon holds may name.
 const ENTRY: &str = "entry";
 
-/// What an upward edge in `UPWARD` covers of the paths into its target module.
-enum Scope {
-    /// Types only, named as a module path ending in a type (`ledger::ProcessTree`).
-    Types,
-    /// Paths starting with one of these, given after the target module.
-    Items(&'static [&'static str]),
-}
-
 /// An edge allowed to point to a higher layer.
 struct Upward {
     from: &'static str,
     to: &'static str,
-    scope: Scope,
+    /// What it covers of the paths into the target module: those starting with one of these,
+    /// given after the target module.
+    items: &'static [&'static str],
     /// Why it points upward; the table in the rule's doc carries the same reason.
     reason: &'static str,
 }
 
 const UPWARD: &[Upward] = &[
     Upward {
-        from: "protocol",
-        to: "accounts",
-        scope: Scope::Types,
-        reason: "a sharing failure goes on the wire in the types account sharing reports it in",
-    },
-    Upward {
-        from: "protocol",
-        to: "config_document",
-        scope: Scope::Types,
-        reason: "the configuration document and its import's findings go on the wire as the \
-                 types export and import build",
-    },
-    Upward {
-        from: "protocol",
-        to: "git_workflow",
-        scope: Scope::Types,
-        reason: "the Git workflow settings and overrides go on the wire as the types \
-                 git_workflow resolves",
-    },
-    Upward {
-        from: "protocol",
-        to: "processes",
-        scope: Scope::Types,
-        reason: "a process tree and a project's or console session's count go on the wire as the \
-                 ledger's own ProcessTree and ProcessCount",
-    },
-    Upward {
-        from: "protocol",
-        to: "titles",
-        scope: Scope::Types,
-        reason: "a session record carries the titles read off its agent's records as RecordTitles",
-    },
-    Upward {
-        from: "git",
-        to: "browse",
-        scope: Scope::Items(&["budget::GIT_READ_TIMEOUT", "budget::GIT_STDERR"]),
-        reason: "IsolatedGit is bounded by browse's read budgets, which keep every read limit in \
-                 one place",
-    },
-    Upward {
-        from: "processes",
-        to: "state",
-        scope: Scope::Types,
-        reason: "processes::requests answers the clients' process requests off AppState",
-    },
-    Upward {
-        from: "processes",
-        to: "store",
-        scope: Scope::Items(&["LOCAL_HOST_ID"]),
-        reason: "processes::requests names the local host the way stored records do",
-    },
-    Upward {
-        from: "store",
-        to: "accounts",
-        scope: Scope::Items(&["dirs::account_dir_key"]),
-        reason: "an account update compares directories the way accounts does (case folded on \
-                 macOS) to tell a repoint from a respelling",
-    },
-    Upward {
-        from: "store",
-        to: "titles",
-        scope: Scope::Types,
-        reason: "a session row stores RecordTitles, the titles read off the agent's records",
-    },
-    Upward {
         from: "state",
         to: "accounts",
-        scope: Scope::Items(&[
+        items: &[
             "shared_config::in_use",
             "shared_config::runs_under",
             "shared_config::sharing_in_progress",
-        ]),
+        ],
         reason: "the sharing locks and claims AppState holds decide what an account's sharing \
                  change covers by shared_config's own rules, and refuse with its error",
     },
     Upward {
         from: "state",
         to: "handoff",
-        scope: Scope::Items(&["package_file::remove_in"]),
+        items: &["package_file::remove_in"],
         reason: "forgetting a session removes its handoff package; remove_in is std-only file work",
     },
     Upward {
         from: "state",
         to: "project_git",
-        scope: Scope::Items(&["header::apply_header"]),
+        items: &["header::apply_header"],
         reason: "the git status AppState holds takes a fresh header the way project_git reads it",
     },
     Upward {
         from: "state",
         to: "titles",
-        scope: Scope::Items(&["project_names", "resolve"]),
+        items: &["project_names", "resolve"],
         reason: "a session's title is resolved where AppState publishes it",
     },
     Upward {
         from: "messaging",
         to: "coordinator",
-        scope: Scope::Items(&[
+        items: &[
             "lifecycle::archive_finished",
             "lifecycle::Finish",
             "lifecycle::Finished",
             "lifecycle::Unfinished",
             "lifecycle::unfinished",
-        ]),
+        ],
         reason: "messaging::reporting archives a session that reported it is done, and checks \
                  beforehand that it may be, through the coordinator's archive of a finished \
                  session",
@@ -322,29 +252,23 @@ fn check_edges(
         ) else {
             continue;
         };
-        if to <= from
-            || (edge.from == STATE && LAYERS[to].0 != ENTRY && names_a_type(&edge.path, true))
-        {
+        if to <= from || (edge.from == STATE && LAYERS[to].0 != ENTRY && names_a_type(&edge.path)) {
             continue;
         }
         let allowed = UPWARD.iter().enumerate().find_map(|(index, upward)| {
             if upward.from != edge.from || upward.to != edge.to {
                 return None;
             }
-            match upward.scope {
-                Scope::Types => names_a_type(&edge.path, false).then_some((index, None)),
-                Scope::Items(items) => items
-                    .iter()
-                    .find(|item| starts_with(&edge.path, item))
-                    .map(|item| (index, Some(*item))),
-            }
+            upward
+                .items
+                .iter()
+                .find(|item| starts_with(&edge.path, item))
+                .map(|item| (index, *item))
         });
         match allowed {
             Some((index, item)) => {
                 usage.entries[index] = true;
-                if let Some(item) = item {
-                    usage.items.insert((index, item));
-                }
+                usage.items.insert((index, item));
             }
             None => problems.push(format!(
                 "{here}: `{}` (layer `{}`) uses `{named}`, in the higher layer `{}`",
@@ -379,22 +303,20 @@ fn check_stale_entries(
                  and from {RULE_DOC}"
             ));
         }
-        if let Scope::Items(items) = upward.scope {
-            for item in items {
-                if !usage.items.contains(&(index, *item)) {
-                    problems.push(format!(
-                        "`UPWARD` lists {name} for `{item}`, which no production code uses any \
-                         more; remove it here and from {RULE_DOC}"
-                    ));
-                }
+        for item in upward.items {
+            if !usage.items.contains(&(index, *item)) {
+                problems.push(format!(
+                    "`UPWARD` lists {name} for `{item}`, which no production code uses any \
+                     more; remove it here and from {RULE_DOC}"
+                ));
             }
         }
     }
 }
 
-/// Whether `path` is a module path ending in a type (`lane::Gate`), and, with `associated`, also
-/// one going on to a single item of that type (`lane::Gate::with_budget`).
-fn names_a_type(path: &[String], associated: bool) -> bool {
+/// Whether `path` is a module path ending in a type (`lane::Gate`), or going on to a single item
+/// of that type (`lane::Gate::with_budget`).
+fn names_a_type(path: &[String]) -> bool {
     let is_type = |segment: &String| {
         segment.starts_with(|c: char| c.is_ascii_uppercase())
             && segment.contains(|c: char| c.is_ascii_lowercase())
@@ -406,7 +328,7 @@ fn names_a_type(path: &[String], associated: bool) -> bool {
     path[..position]
         .iter()
         .all(|s| s.starts_with(|c: char| c.is_ascii_lowercase()))
-        && (after == 0 || (associated && after == 1))
+        && after <= 1
 }
 
 fn starts_with(path: &[String], item: &str) -> bool {

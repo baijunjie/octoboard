@@ -5,9 +5,9 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-use crate::agents::launch_settings::trimmed_or_none;
 use crate::hostfs;
 use crate::protocol::{error_code, CodedError};
+use crate::text::trimmed_or_none;
 
 /// A request that lacks a field its kind needs. `field` is the wire name, passed as is.
 pub(super) fn field_required(field: &str) -> anyhow::Error {

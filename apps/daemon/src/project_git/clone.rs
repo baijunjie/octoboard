@@ -1,5 +1,5 @@
-//! Cloning a repository for a new project, and probing a remote for the agent its top level is set
-//! up for without a checkout.
+//! Cloning a repository for a new project, and probing a remote for the names at its top level
+//! without a checkout.
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -8,8 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::git::run::{Access, GitError, Limits, Policy, Runner, UserGit, WorkDir};
-use crate::hostfs::listing::detect_agent_from_names;
-use crate::protocol::{error_code, Agent, CodedError};
+use crate::protocol::{error_code, CodedError};
 
 /// How long a clone may run before it is given up on. Generous — a large repository over a slow
 /// connection legitimately takes minutes — but bounded, so a stalled transfer cannot hold a
@@ -109,20 +108,20 @@ impl Drop for ProbeDir {
     }
 }
 
-/// Checks that `remote_url` can be reached with the user's credentials and returns the agent its
-/// top level is set up for (see [`detect_agent_from_names`]), running `git` as
-/// [`remote_work_git`] does with `shell_env`. Blocking: the caller runs it off the runtime.
+/// Checks that `remote_url` can be reached with the user's credentials and returns the names at its
+/// top level, running `git` as [`remote_work_git`] does with `shell_env`. Blocking: the caller runs
+/// it off the runtime.
 ///
 /// A shallow, blobless, checkout-less clone into a scratch directory, whose top-level names are
 /// then listed: that fetches the tip commit and its trees but no file, and works for any remote
 /// (`git ls-remote` would show refs only). A remote that does not support filtering sends the
 /// whole tip commit instead, which is still no history. A repository that cannot be read, or
 /// whose fetch outlasts [`PROBE_LIMITS`], is `git_remote_unreachable`. An empty repository is
-/// reachable and names no agent.
-pub fn probe_remote_agent(
+/// reachable and has no names.
+pub fn probe_remote_names(
     remote_url: &str,
     shell_env: &HashMap<String, String>,
-) -> Result<Option<Agent>> {
+) -> Result<Vec<String>> {
     let scratch = ProbeDir(std::env::temp_dir().join(format!(
         "octoboardd-probe-{}-{}",
         std::process::id(),
@@ -140,19 +139,20 @@ pub fn probe_remote_agent(
         .map_err(|err| unreachable(&err.to_string()))?;
     let list = git.with_limits(LIST_LIMITS);
     match list.run(&mut probe_list_command(&list, &scratch.0)) {
-        Ok(stdout) => Ok(detect_agent_from_names(
-            String::from_utf8_lossy(&stdout).lines(),
-        )),
-        // Any failure to list the tip answers "no agent": the clone has just succeeded, so the
+        Ok(stdout) => Ok(String::from_utf8_lossy(&stdout)
+            .lines()
+            .map(str::to_owned)
+            .collect()),
+        // Any failure to list the tip answers "no names": the clone has just succeeded, so the
         // remote is reachable, and the usual cause is an empty repository, whose `HEAD` is unborn.
-        Err(GitError::Exited { .. }) => Ok(None),
+        Err(GitError::Exited { .. }) => Ok(Vec::new()),
         Err(GitError::Stopped(stopped)) => {
             Err(stopped.into_error().context("running `git ls-tree`"))
         }
     }
 }
 
-/// The fetch of [`probe_remote_agent`], into `scratch`.
+/// The fetch of [`probe_remote_names`], into `scratch`.
 fn probe_clone_command(git: &Runner, remote_url: &str, scratch: &Path) -> std::process::Command {
     clone_with(
         git,
@@ -169,7 +169,7 @@ fn probe_clone_command(git: &Runner, remote_url: &str, scratch: &Path) -> std::p
     )
 }
 
-/// The listing of the tip [`probe_remote_agent`] fetched into `scratch`, which reaches no remote.
+/// The listing of the tip [`probe_remote_names`] fetched into `scratch`, which reaches no remote.
 fn probe_list_command(git: &Runner, scratch: &Path) -> std::process::Command {
     git.command(
         Access::Write,
@@ -219,12 +219,12 @@ mod tests {
         // The probe reads the process's own environment, not the user's login shell.
         let env: std::collections::HashMap<String, String> = std::env::vars().collect();
         let url = format!("file://{}", dir.join("work").display());
-        assert_eq!(probe_remote_agent(&url, &env).unwrap(), Some(Agent::Claude));
+        assert_eq!(probe_remote_names(&url, &env).unwrap(), ["CLAUDE.md"]);
         let empty = format!("file://{}", dir.join("empty.git").display());
-        assert_eq!(probe_remote_agent(&empty, &env).unwrap(), None);
+        assert!(probe_remote_names(&empty, &env).unwrap().is_empty());
 
         let missing = format!("file://{}", dir.join("missing").display());
-        let err = probe_remote_agent(&missing, &env).unwrap_err();
+        let err = probe_remote_names(&missing, &env).unwrap_err();
         let coded = err
             .downcast_ref::<crate::protocol::CodedError>()
             .expect("coded");
@@ -247,7 +247,7 @@ mod tests {
                 .map(|(key, value)| (key.to_string(), value)),
         );
         let url = format!("file://{}", ours.display());
-        assert_eq!(probe_remote_agent(&url, &env).unwrap(), Some(Agent::Claude));
+        assert_eq!(probe_remote_names(&url, &env).unwrap(), ["CLAUDE.md"]);
     }
 
     /// The command lines of a clone and of a probe's two steps, pinned whole: none gets an index

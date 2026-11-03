@@ -8,11 +8,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use super::link::{self, Cause, DirsError, Failure};
+use super::link::{self, DirsError};
 use super::{
     cli_reads, default_dir, describe, in_use, moves, not_shareable, sharing_in_progress, take_back,
 };
-use crate::protocol::{Account, Agent, SharingFailure};
+use crate::protocol::{Account, Agent, SharingCause, SharingFailure, SharingItemFailure};
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 use crate::store::SharingStart;
 
@@ -88,7 +88,7 @@ impl Drop for Changing<'_> {
 
 /// What a change left undone: each entry not brought in line, why as a whole (the entries' one
 /// cause, or why the change could not start), and the whole of it in words.
-pub(crate) type Undone = (Vec<Failure>, Cause, String);
+pub(crate) type Undone = (Vec<SharingItemFailure>, SharingCause, String);
 
 /// Carries out `account`'s change to its recorded choice; the caller holds the account's lock and
 /// the agent's. `start` is what turning sharing on recorded, and `conversations` those of the
@@ -115,7 +115,7 @@ pub(crate) async fn carry_out(
     let changed_meanwhile = || {
         Ok(Err((
             Vec::new(),
-            Cause::Other,
+            SharingCause::Other,
             "the account was changed while its sharing was being changed".to_string(),
         )))
     };
@@ -195,7 +195,7 @@ pub(crate) async fn carry_out(
         }
     };
     if !failures.is_empty() {
-        let (cause, detail) = (Cause::of_all(&failures), describe(&failures));
+        let (cause, detail) = (SharingCause::of_all(&failures), describe(&failures));
         return Ok(Err((failures, cause, detail)));
     }
     if !state

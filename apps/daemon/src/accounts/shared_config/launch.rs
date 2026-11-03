@@ -6,11 +6,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use super::link::{self, Cause, DirsError, Failure};
+use super::link::{self, DirsError};
 use super::{default_dir, describe, items_param, moves, sharing_in_progress};
-use crate::accounts::dirs::account_dir_key;
 use crate::agents::layout::CLAUDE_RECORDS_DIR;
-use crate::protocol::{notice_code, Account, Notice, Session};
+use crate::hostfs::dir_key;
+use crate::protocol::{notice_code, Account, Notice, Session, SharingCause, SharingItemFailure};
 use crate::state::AppState;
 
 /// What a launch of a session takes from its account's sharing.
@@ -107,7 +107,7 @@ enum Repair {
 /// What a repair of `account`'s directory comes to for the launch: the shared directory, and a
 /// notice for each thing it could not fix or must not let pass.
 fn repair_notices(account: &Account, repair: Repair) -> (Option<PathBuf>, Vec<Notice>) {
-    let repair_failed = |message: String, cause: Cause, failures: &[Failure]| {
+    let repair_failed = |message: String, cause: SharingCause, failures: &[SharingItemFailure]| {
         Notice::new(
             notice_code::ACCOUNT_SHARING_REPAIR_FAILED,
             message,
@@ -132,7 +132,7 @@ fn repair_notices(account: &Account, repair: Repair) -> (Option<PathBuf>, Vec<No
             tracing::warn!(account = %account.id, %message, "a sharing account's default directory moved");
             return (
                 Some(recorded),
-                vec![repair_failed(message, Cause::DefaultMoved, &[])],
+                vec![repair_failed(message, SharingCause::DefaultMoved, &[])],
             );
         }
         Repair::Done(repaired) => repaired,
@@ -158,7 +158,7 @@ fn repair_notices(account: &Account, repair: Repair) -> (Option<PathBuf>, Vec<No
             account.name,
             describe(&repaired.failures)
         );
-        let cause = Cause::of_all(&repaired.failures);
+        let cause = SharingCause::of_all(&repaired.failures);
         notices.push(repair_failed(message, cause, &repaired.failures));
     }
     for database in &repaired.unshared_databases {
@@ -191,6 +191,6 @@ fn account_of(state: &AppState, session: &Session) -> Result<Option<Account>> {
     let holds_it = session
         .config_dir
         .as_deref()
-        .is_some_and(|dir| account_dir_key(dir) == account_dir_key(&account.config_dir));
+        .is_some_and(|dir| dir_key(dir) == dir_key(&account.config_dir));
     Ok((account.agent == session.agent && holds_it).then_some(account))
 }

@@ -5,9 +5,9 @@ use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
 use super::Store;
-use crate::git_workflow::GitWorkflowOverride;
 use crate::protocol::{
-    error_code, Agent, CodedError, PerAgent, Project, ProjectAccount, ProjectSource,
+    error_code, Agent, CodedError, GitWorkflowOverride, PerAgent, Project, ProjectAccount,
+    ProjectSource,
 };
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,

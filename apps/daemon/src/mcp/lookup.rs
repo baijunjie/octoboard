@@ -18,6 +18,7 @@ use crate::protocol::{
     Agent, CodedError, Console, LaunchChange, Project, ProjectAccount, Role, Session, SessionStatus,
 };
 use crate::state::AppState;
+use crate::text::trimmed_or_none;
 
 pub(super) fn required_str<'a>(arguments: &'a Map<String, Value>, key: &str) -> Result<&'a str> {
     arguments
@@ -29,12 +30,7 @@ pub(super) fn required_str<'a>(arguments: &'a Map<String, Value>, key: &str) -> 
 }
 
 pub(super) fn optional_string(arguments: &Map<String, Value>, key: &str) -> Option<String> {
-    arguments
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
+    trimmed_or_none(arguments.get(key).and_then(Value::as_str))
 }
 
 /// An optional text argument, trimmed: `None` when absent, `null` or blank, refused when anything
@@ -43,9 +39,7 @@ pub(super) fn optional_text(arguments: &Map<String, Value>, key: &str) -> Result
     if matches!(arguments.get(key), Some(Value::Null)) {
         return Ok(None);
     }
-    Ok(raw_text(arguments, key)?
-        .map(|text| text.trim().to_string())
-        .filter(|text| !text.is_empty()))
+    Ok(trimmed_or_none(raw_text(arguments, key)?.as_deref()))
 }
 
 pub(super) fn optional_agent(arguments: &Map<String, Value>, key: &str) -> Result<Option<Agent>> {
@@ -188,7 +182,7 @@ pub(super) fn git_workflow_argument<T: serde::de::DeserializeOwned + Default>(
             if let Some(unknown) = value.as_object().and_then(|items| {
                 items
                     .keys()
-                    .find(|key| !crate::git_workflow::ITEMS.contains(&key.as_str()))
+                    .find(|key| !crate::protocol::GIT_WORKFLOW_ITEMS.contains(&key.as_str()))
             }) {
                 bail!("`git_workflow.{unknown}` is not a git workflow setting");
             }

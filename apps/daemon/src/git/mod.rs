@@ -6,7 +6,8 @@
 //! worktrees and the changes they hold ([`worktrees`]), the reads isolated from the user's
 //! environment ([`isolated`]), and the small readings of `git`'s text that more than one family of
 //! callers shares: object ids ([`object_id`]), `<remote>/<branch>` ([`remote_branch`]) and the
-//! entries of a file listing ([`tree_entries`]).
+//! entries of a file listing ([`tree_entries`]); the lookup of a branch's remote-tracking branch
+//! and of the remote default branch ([`remote_branches`]).
 
 pub mod env;
 pub mod isolated;
@@ -14,6 +15,7 @@ pub mod layout;
 pub mod object_id;
 pub mod reflog;
 pub mod remote_branch;
+pub mod remote_branches;
 pub mod repo_files;
 pub mod run;
 pub mod tree_entries;

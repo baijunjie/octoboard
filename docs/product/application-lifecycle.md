@@ -80,8 +80,8 @@ pending: the installed update has already replaced the application, so a relaunc
 with the running window of the old one. There is no button to start the daemon by hand.
 
 When the daemon is not started again — those 3 relaunches in the last 10 minutes are spent, an update is installed
-and waits for its restart, or it ended with exit status 0, as on a requested shutdown or `SIGTERM` — the application
-says so in an error alert titled "The daemon exited unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
+and waits for its restart, or it ended with exit status 0, as on a requested shutdown or a termination signal (see
+"The daemon on its own" below) — the application says so in an error alert titled "The daemon exited unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
 it, and asks the user to restart Octoboard; it does not silently keep showing a stale session list. The alert treats it
 as an unexpected failure, offering **Report issue**, with the detail behind **Error details** rather than in its
 sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`): how the daemon ended (its exit
@@ -353,12 +353,12 @@ for whoever runs the server to manage. What follows is what the daemon does toda
 nothing that the form will need and does not have yet claimed to exist.
 
 - **Starting and stopping are the administrator's.** Nothing starts the daemon but the person or the service manager
-  told to, and nothing stops it but a termination signal — `SIGTERM`, or `Ctrl+C` in the terminal it was started
-  from. The daemon answers that exactly as the desktop form's quit does once confirmed: every session's process is
-  ended and every one of those sessions is left *interrupted*, never archived, every shell terminal ends, and nobody
-  is asked first. Started
-  without an application to follow, the daemon runs until it is stopped; exiting with the application is a watch the
-  desktop form asks for and the server form never does. Nothing starts it again when it dies: that is the desktop
+  told to, and nothing stops it but a termination signal — `SIGTERM`; `SIGINT`, which `Ctrl+C` in the terminal it was
+  started from sends; or `SIGHUP`, which that terminal sends as it closes. The daemon answers any of them exactly as
+  the desktop form's quit does once confirmed: every session's process is ended and every one of those sessions is
+  left *interrupted*, never archived, every shell terminal ends, and nobody is asked first; it then exits with
+  status 0. Started without an application to follow, the daemon runs until it is stopped; exiting with the
+  application is a watch the desktop form asks for and the server form never does. Nothing starts it again when it dies: that is the desktop
   application's (see "Starting up" above). A command-line surface for starting it in the background,
   stopping it and asking where it listens does not exist yet.
 - **A browser is not the application.** Closing a tab, or every tab, ends nothing: the daemon, every session and its

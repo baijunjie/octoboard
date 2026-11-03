@@ -18,6 +18,7 @@ use crate::protocol::{
 use crate::records;
 use crate::session::term;
 use crate::state::AppState;
+use crate::text::trimmed_or_none;
 
 use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit};
 use super::lifecycle::trash_agent_records_with;
@@ -36,10 +37,7 @@ pub(super) fn checked_resume_id(
     bound_to: Option<&str>,
     requested: Option<String>,
 ) -> Result<Option<String>> {
-    let Some(id) = requested
-        .map(|id| id.trim().to_string())
-        .filter(|id| !id.is_empty())
-    else {
+    let Some(id) = trimmed_or_none(requested.as_deref()) else {
         return Ok(None);
     };
     if role == Role::Console {
@@ -241,7 +239,7 @@ fn find_conversation_to_resume(
                     Err(err) => return Err(err),
                 },
             };
-            let written = crate::accounts::files::modified(&dir.join(record));
+            let written = crate::hostfs::modified(&dir.join(record));
             if newest.as_ref().is_none_or(|(latest, _)| written > *latest) {
                 newest = Some((written, ConversationLocation::Record { agent, account }));
             }

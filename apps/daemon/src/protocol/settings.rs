@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::agents::Agent;
+use super::git_workflow::GitWorkflowSettings;
 use super::records::Account;
 
 /// Who resolves Codex approval requests. An absent override follows the account configuration.
@@ -127,7 +128,7 @@ pub struct Settings {
     pub disabled_default_accounts: std::collections::BTreeSet<String>,
     /// The application-wide git workflow settings; a project may override each item (see
     /// `Project::git_workflow`).
-    pub git_workflow: crate::git_workflow::GitWorkflowSettings,
+    pub git_workflow: GitWorkflowSettings,
 }
 
 impl Default for Settings {

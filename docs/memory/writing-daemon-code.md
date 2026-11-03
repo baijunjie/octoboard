@@ -84,7 +84,7 @@ which a client shows as "nothing"): work stuck on a dead mount otherwise holds e
 The result the floor remembers must not outlive what clears it. Where something the daemon does makes it wrong (a stop
 forgets the remembered listings), a result computed from a read made before the clearing but noted after it brings the
 old state back for the rest of the floor. Read a generation counter before the work reads anything, move it on in the
-clearing, and drop the note when it has changed; `processes::requests::list_all` with
+clearing, and drop the note when it has changed; `coordinator::processes::list_all` with
 `ProcessLedger::lists_generation` is the shape.
 
 ## Count a long period of the daemon's own on the wall clock, not on a timer of that length
@@ -132,7 +132,7 @@ stopped, when the daemon goes down. Agent CLIs move some helpers (a REPL or code
 task) into process groups of their own, so the process-group stop other subprocesses get leaves them running; they
 keep the CLI's session. Do not write a sweep of your own: run the CLI through `apps/daemon/src/processes/subprocess.rs`
 with `Reach::Session` (`Bounds::agent_query` for a short query through `run_bounded` — an account's query through
-`accounts::cli_run`, never by hand, see `docs/structure/daemon.md`, "Shared entry points" — or
+`adapter::account_cli`, never by hand, see `docs/structure/daemon.md`, "Shared entry points" — or
 `Bounds { reach: Reach::Session, .. }` for `run_exchange`), and where it
 cannot go through there (it runs on a PTY, or a flow reads it while it runs), build on
 `apps/daemon/src/processes/leader.rs`. Anything that is not an agent CLI, such as `git`, keeps `Reach::ProcessGroup`

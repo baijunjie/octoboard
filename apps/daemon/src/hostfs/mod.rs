@@ -1,10 +1,10 @@
 //! The host role's filesystem work that has no better home: expanding what the user typed into a
 //! path, telling "nothing is there" from other errors, normalising a path's text, reading a source
-//! within a bound, reading a regular file without blocking (as bytes or as text), and refusing a
-//! path that is not a directory. The rest lives beside it: `identity` and `place` tell directories
-//! apart whatever their paths look like, `listing` browses directories, finds the git repositories
-//! under a parent and detects which agent a directory is set up for, `replace` replaces a file
-//! whole, and `trash` moves a file or directory to the Trash.
+//! within a bound, reading a regular file without blocking (as bytes or as text), appending to one,
+//! comparing and removing entries, and refusing a path that is not a directory. The rest lives
+//! beside it: `identity` and `place` tell directories apart whatever their paths look like,
+//! `listing` browses directories and finds the git repositories under a parent, `replace` replaces
+//! a file whole, and `trash` moves a file or directory to the Trash.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -71,6 +71,63 @@ pub fn open_regular(path: &Path) -> std::io::Result<std::fs::File> {
         ));
     }
     Ok(file)
+}
+
+/// Opens `path` to read and append to, without blocking, refusing anything but a regular file.
+pub fn open_regular_to_append(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .append(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("`{}` is not a regular file", path.display()),
+        ));
+    }
+    Ok(file)
+}
+
+/// When the file or directory `path` leads to was last modified, links followed: the epoch when
+/// that cannot be read, so that it sorts before anything whose time can.
+pub fn modified(path: &Path) -> std::time::SystemTime {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+}
+
+/// Removes the entry at `path` itself, a directory with everything in it, never following a link:
+/// a link is removed as a link. Nothing there is no error.
+pub fn remove_any(path: &Path) -> std::io::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => std::fs::remove_dir_all(path),
+        Ok(_) => std::fs::remove_file(path),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
+/// Whether the two spellings resolve, links followed, to one file or directory. A path that cannot
+/// be resolved (nothing there, unreadable) matches nothing. Blocking.
+pub fn is_same_path(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// The comparison key for a directory collision. The stored text stays as typed; only the key
+/// folds case on macOS, whose default file system is case-insensitive, so `~/.Claude` and
+/// `~/.claude` read as one directory there. Other platforms compare byte for byte. Unicode
+/// normalisation is not folded: no crate for it is in the dependency tree.
+pub fn dir_key(dir: &str) -> String {
+    if cfg!(target_os = "macos") {
+        dir.to_lowercase()
+    } else {
+        dir.to_string()
+    }
 }
 
 /// The bytes of the regular file at `path` (see [`open_regular`]), refused when it holds more than

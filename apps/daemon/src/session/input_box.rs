@@ -92,7 +92,7 @@ fn codex_footer(row: &str) -> bool {
                 if !spinner.is_empty()
                     && spinner
                         .chars()
-                        .all(|c| ('\u{2800}'..='\u{28ff}').contains(&c)) =>
+                        .all(crate::terminal::title::is_braille_spinner_glyph) =>
             {
                 body
             }

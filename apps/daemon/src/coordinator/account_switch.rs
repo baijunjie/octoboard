@@ -9,9 +9,10 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 
 use crate::accounts::relocate;
-use crate::accounts::switch_continue;
 use crate::adapter;
+use crate::messaging::texts;
 use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus, TerminalAppearance};
+use crate::records::switch_continue;
 use crate::session::term;
 use crate::state::refusals::refuse_if_archived;
 use crate::state::{session_archived, AppState};
@@ -92,7 +93,7 @@ fn prepare_switch(
 /// copies its conversation into the target account's directory, records the account and the
 /// directory on the session, and relaunches it as a resume does — with a prompt to carry on where
 /// the switch cut a turn off or a usage limit had stopped one (see
-/// `crate::accounts::switch_continue`). The user or an owner asks for it, and so does Octoboard
+/// `crate::records::switch_continue`). The user or an owner asks for it, and so does Octoboard
 /// itself for a session whose turn stopped on its account's usage limit, while
 /// `auto_switch_on_usage_limit` is on (see `crate::coordinator::auto_switch`).
 ///
@@ -148,8 +149,8 @@ pub async fn switch_session_account(
 /// user changed of the session's model and effort, checked with the rest and recorded just before
 /// the relaunch that reads it, and put back with the account when the switch fails. `launch` is
 /// `term::launch` outside the tests, which cannot start an agent. Answers whether the relaunched
-/// session was sent [`switch_continue::CONTINUE_PROMPT`] to carry on with the turn the switch cut
-/// off or a usage limit stopped (see `crate::accounts::switch_continue`).
+/// session was sent [`texts::CONTINUE_PROMPT`] to carry on with the turn the switch cut
+/// off or a usage limit stopped (see `crate::records::switch_continue`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn switch_session_account_with(
     state: &Arc<AppState>,
@@ -414,7 +415,12 @@ pub(crate) async fn switch_session_account_if(
                         record,
                         agent_session_id,
                     } = relocation;
-                    let companions = relocate::companions(agent, &from, &record, &agent_session_id);
+                    let companions = crate::records::carried::companions(
+                        agent,
+                        &from,
+                        &record,
+                        &agent_session_id,
+                    );
                     relocate::copy(&from, &to, &record, &companions)?;
                     relocate::repoint_thread_row(
                         agent,
@@ -436,8 +442,8 @@ pub(crate) async fn switch_session_account_if(
             }
 
             let prompt_to_carry_on = match only_if.note {
-                Some(note) => format!("{note}\n\n{}", switch_continue::CONTINUE_AFTER_NOTICE),
-                None => switch_continue::CONTINUE_PROMPT.to_string(),
+                Some(note) => format!("{note}\n\n{}", texts::CONTINUE_AFTER_NOTICE),
+                None => texts::CONTINUE_PROMPT.to_string(),
             };
             if let Err(err) = relaunch_session_with(
                 state,

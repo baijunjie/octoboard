@@ -6,7 +6,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::accounts::files::{modified, remove_any};
+use crate::hostfs::{modified, remove_any};
 
 /// The entry at `path` itself, a link not followed; `None` when there is none.
 pub(super) fn lstat(path: &Path) -> io::Result<Option<std::fs::Metadata>> {
@@ -254,7 +254,7 @@ pub(super) fn append_lines(from: &Path, into: &Path) -> io::Result<()> {
     // The lines are ended by a line break of their own when `from` does not end with one.
     let closed = last_byte(&mut source, size)? == b'\n';
     let added = size + u64::from(!closed);
-    let mut file = open_regular_to_append(into)?;
+    let mut file = crate::hostfs::open_regular_to_append(into)?;
     let length = file.metadata()?.len();
     if length >= added && ends_with(&mut file, length - added, &mut source, size, closed)? {
         return Ok(());
@@ -274,23 +274,6 @@ pub(super) fn append_lines(from: &Path, into: &Path) -> io::Result<()> {
         file.write_all(b"\n")?;
     }
     Ok(())
-}
-
-/// Opens `path` to read and append to, without blocking, refusing anything but a regular file.
-fn open_regular_to_append(path: &Path) -> io::Result<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .append(true)
-        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
-        .open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("`{}` is not a regular file", path.display()),
-        ));
-    }
-    Ok(file)
 }
 
 /// The last of the `length` bytes of `file`.

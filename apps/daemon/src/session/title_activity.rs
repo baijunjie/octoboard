@@ -3,8 +3,8 @@
 //! runs and drops or changes it when the turn is over; the forms are in
 //! `docs/agent-cli-reference.md`, section "## Across the three agents" ("Terminal titles and the
 //! titles in an agent's own records"). The title observer in `crate::session` notes every completed
-//! title here; `crate::titles::interrupt` reads a cancel no hook reports off it, and
-//! `crate::session::interrupt` checks that a turn is running before it sends a key.
+//! title here; `title_interrupt` reads a cancel no hook reports off it, and
+//! `interrupt` checks that a turn is running before it sends a key.
 
 use std::time::{Duration, Instant};
 
@@ -43,7 +43,7 @@ pub fn shown(agent: Agent, glyph: Option<char>, empty: bool) -> Option<Shown> {
         (Agent::Claude, Some(CLAUDE_AT_PROMPT)) => Some(Shown::AtPrompt),
         (Agent::Claude, _) => None,
         (Agent::Codex | Agent::Grok, Some(glyph))
-            if crate::adapter::is_braille_spinner_glyph(glyph) =>
+            if crate::terminal::title::is_braille_spinner_glyph(glyph) =>
         {
             Some(Shown::Running)
         }

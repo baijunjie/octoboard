@@ -222,7 +222,7 @@ async fn the_git_workflow_settings_are_read_and_changed_through_the_tools() {
     }
     assert_eq!(
         state.store.git_workflow_settings().unwrap().delivery,
-        crate::git_workflow::Delivery::Merge
+        crate::protocol::GitDelivery::Merge
     );
 
     let project = call(

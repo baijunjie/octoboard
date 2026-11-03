@@ -2,12 +2,10 @@
 
 const MAX_TITLE_BYTES: usize = 4096;
 
-/// Both phases of Codex's blinking activity title identify a visible user interaction.
-pub(crate) fn codex_action_required(title: &str) -> bool {
-    matches!(
-        title.split(" | ").next().map(str::trim),
-        Some("[ ! ] Action Required" | "[ . ] Action Required")
-    )
+/// Whether `c` is a braille pattern, the frames of the spinner Codex and Grok Build start their
+/// titles with while a turn runs (a frame every 100 to 300 ms) and show in their footers.
+pub(crate) fn is_braille_spinner_glyph(c: char) -> bool {
+    ('\u{2800}'..='\u{28FF}').contains(&c)
 }
 
 /// Whether `c` is one of the glyphs an agent puts at the start of its title to show what it is
@@ -15,14 +13,22 @@ pub(crate) fn codex_action_required(title: &str) -> bool {
 /// terminal tools use, and the star and diamond markers other agent CLIs use. The set is
 /// specified in `docs/product/session-titles.md`'s "Leading activity glyphs" section.
 fn is_spinner_glyph(c: char) -> bool {
-    matches!(c,
-        '\u{2800}'..='\u{28FF}'
-        | '\u{25D0}'..='\u{25D3}'
-        | '\u{25F0}'..='\u{25F7}'
-        | '\u{2722}'..='\u{2727}'
-        | '\u{2729}'..='\u{273D}'
-        | '\u{00B7}' | '\u{2022}' | '\u{25CF}' | '\u{25CB}' | '\u{25C9}' | '\u{25CE}'
-        | '\u{25C6}' | '\u{25C7}')
+    is_braille_spinner_glyph(c)
+        || matches!(
+            c,
+            '\u{25D0}'..='\u{25D3}'
+                | '\u{25F0}'..='\u{25F7}'
+                | '\u{2722}'..='\u{2727}'
+                | '\u{2729}'..='\u{273D}'
+                | '\u{00B7}'
+                | '\u{2022}'
+                | '\u{25CF}'
+                | '\u{25CB}'
+                | '\u{25C9}'
+                | '\u{25CE}'
+                | '\u{25C6}'
+                | '\u{25C7}'
+        )
 }
 
 /// The title without the animated glyphs it starts with, so a title that only spins compares equal
@@ -155,20 +161,6 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn codex_action_markers_are_activity_items_rather_than_task_text() {
-        assert!(codex_action_required("[ ! ] Action Required | project"));
-        assert!(codex_action_required("[ . ] Action Required | project"));
-        for title in [
-            "| [ ! ] Action Required | project",
-            "Fix [ ! ] Action Required | project",
-            "Task | [ ! ] Action Required | project",
-            "| project",
-        ] {
-            assert!(!codex_action_required(title), "{title}");
-        }
-    }
 
     #[test]
     fn titles_survive_every_byte_boundary_and_both_terminators() {

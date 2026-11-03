@@ -85,14 +85,14 @@ A refusal from these readers does not mean the agent cannot read the file. Where
 the unsafe answer (an allowlist it may hold would be skipped), a regular file that is there but refused takes the safe
 side.
 
-## Decide whether two account directories are one by `account_dir_key`, never by comparing their text
+## Decide whether two account directories are one by `dir_key`, never by comparing their text
 
 Applies to daemon code that asks whether two agent configuration directories are the same one — an account's
 `config_dir`, a session's, the default account's — to find a session's account, catch a collision, tell a repoint
 from a respelling, or key state per directory. The stored text stays as the user typed it
 (`accounts::dirs::normalize_account_dir` only normalises it lexically), and macOS's default file system is
 case-insensitive, so `~/.Claude` and `~/.claude` are one directory there under two spellings. Compare
-`accounts::dirs::account_dir_key` of both sides in Rust, and key a map or registry by it. A `WHERE config_dir = ?` in
+`hostfs::dir_key` of both sides in Rust, and key a map or registry by it. A `WHERE config_dir = ?` in
 SQL or a `==` on the strings compares bytes, and one such comparison among folded ones makes a case-only respelling read
 as another directory in one place and the same one everywhere else, so state kept for the directory is dropped or
 applied to the wrong one. An exact-text match is right only for asking whether a stored row changed since it was read (a

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::agents::{Agent, Launch, PerAgent};
 use super::fields::present_option;
+use super::git_workflow::GitWorkflowOverride;
 
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -362,7 +363,7 @@ pub struct Project {
     /// The project's own git workflow settings; an item left `null` follows the application-wide
     /// value in `Settings::git_workflow`.
     #[serde(default)]
-    pub git_workflow: crate::git_workflow::GitWorkflowOverride,
+    pub git_workflow: GitWorkflowOverride,
 }
 
 /// How much the main conversation's latest request carried, as the agent's own session record
@@ -403,6 +404,17 @@ pub enum OrchestrationRole {
     Worker,
 }
 
+/// What an agent's own records say a session is called. Stored with the session, never sent: it
+/// is here because `Session` holds it and `Session` is both the stored record and the one a client
+/// receives.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RecordTitles {
+    /// A title the agent itself or the user named the conversation with.
+    pub named: Option<String>,
+    /// A stand-in taken from the conversation's first prompt, for one the agent left unnamed.
+    pub prompt: Option<String>,
+}
+
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -430,7 +442,7 @@ pub struct Session {
     pub terminal_title: Option<String>,
     /// The titles the agent's own records give the session. Stored, never sent.
     #[serde(skip)]
-    pub record_titles: crate::titles::RecordTitles,
+    pub record_titles: RecordTitles,
     /// The session's last known context size, retained after archiving. Absent until reported,
     /// and again after a compaction until the next request.
     #[serde(default, skip_serializing_if = "Option::is_none")]

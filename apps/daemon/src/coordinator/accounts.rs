@@ -7,13 +7,14 @@ use std::sync::Arc;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::accounts::dirs::{account_dir_key, normalize_account_dir};
+use crate::accounts::dirs::normalize_account_dir;
 use crate::accounts::login;
 use crate::accounts::quotas;
 use crate::accounts::{account_name_key, clears_default_account_name};
 use crate::adapter;
 use crate::agents::availability;
 use crate::hostfs;
+use crate::hostfs::dir_key;
 use crate::protocol::{
     error_code, Account, Agent, Availability, CodedError, Console, Event, Project,
 };
@@ -239,11 +240,11 @@ pub(crate) fn colliding_account_dir(
     dir: &str,
     exclude_id: Option<&str>,
 ) -> Result<Option<String>> {
-    let key = account_dir_key(dir);
+    let key = dir_key(dir);
     for existing in state.store.list_accounts()? {
         if existing.agent == agent
             && Some(existing.id.as_str()) != exclude_id
-            && account_dir_key(&existing.config_dir) == key
+            && dir_key(&existing.config_dir) == key
         {
             return Ok(Some(existing.name));
         }
@@ -253,7 +254,7 @@ pub(crate) fn colliding_account_dir(
         None => adapter::default_account_dir(agent, &HashMap::new()),
     };
     let default_dir = hostfs::lexically_normalise(&default_dir);
-    if account_dir_key(&default_dir.to_string_lossy()) != key {
+    if dir_key(&default_dir.to_string_lossy()) != key {
         return Ok(None);
     }
     Ok(Some(state.store.default_account_name(agent)?))

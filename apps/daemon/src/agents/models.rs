@@ -37,8 +37,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::accounts::cli_run::{self, NotRun, QueryFailure};
 use crate::adapter;
+use crate::adapter::account_cli::{self, NotRun, QueryFailure};
 use crate::agents::layout::GROK_MODELS_CACHE;
 use crate::env_shell;
 use crate::processes::subprocess::BoundedFailure;
@@ -226,7 +226,7 @@ fn run(
     args: &[&str],
     timeout: Duration,
 ) -> Result<String, ModelsUnavailable> {
-    let output = cli_run::query(
+    let output = account_cli::query(
         agent,
         shell_env,
         config_dir,
@@ -252,7 +252,7 @@ fn run(
         QueryFailure::Bounded(other) => failed(agent, &other.to_string()),
     })?;
     if !output.status.success() {
-        let detail = cli_run::last_stderr_line(&output);
+        let detail = account_cli::last_stderr_line(&output);
         let detail = if detail.is_empty() {
             output.status.to_string()
         } else {

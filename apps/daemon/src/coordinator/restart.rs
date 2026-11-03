@@ -13,9 +13,10 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::accounts::choice::account_dir;
-use crate::accounts::{relocate, switch_continue};
+use crate::accounts::relocate;
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{Agent, Session, SessionStatus};
+use crate::records::switch_continue;
 use crate::state::AppState;
 
 use super::launch::{came_up, stop_process, wait_until_down_within, SWITCH_STOP_TIMEOUT};

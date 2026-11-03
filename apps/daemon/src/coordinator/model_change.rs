@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::accounts::switch_continue;
 use crate::agents::launch_settings::normalize_session_launch_setting;
 use crate::env_shell;
+use crate::messaging::texts;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus, TerminalAppearance};
 use crate::session::term;
 use crate::state::refusals::refuse_if_archived;
@@ -30,7 +30,7 @@ pub(crate) enum ModelChange {
     /// The session had no process: the model and effort were recorded for its next resume.
     Recorded,
     /// The session's process was ended and relaunched with them, resuming its conversation.
-    /// `continued` says whether it was sent [`switch_continue::CONTINUE_PROMPT`] to carry on with
+    /// `continued` says whether it was sent [`texts::CONTINUE_PROMPT`] to carry on with
     /// a turn the restart cut off or a usage limit had stopped.
     Restarted { continued: bool },
 }
@@ -80,7 +80,7 @@ pub(crate) enum ModelAsker<'a> {
 /// does. What the process started (a dev server, say) is carried over to the relaunch as for a
 /// switch, and kept among the processes of the session's project when the restart fails after it
 /// ended the process (see [`keep_what_a_failed_restart_carried`]). A turn the restart cut off, or
-/// one a usage limit had stopped, is sent [`switch_continue::CONTINUE_PROMPT`] as the relaunch's
+/// one a usage limit had stopped, is sent [`texts::CONTINUE_PROMPT`] as the relaunch's
 /// instruction, as after a switch; otherwise the session comes back awaiting instructions. A
 /// session waiting on a prompt of its agent's has that prompt ended with the process, unless an
 /// owner asks (see [`ModelAsker::Owner`]).
@@ -261,7 +261,7 @@ pub(crate) async fn set_session_model_with(
                 state,
                 claim,
                 id,
-                carry_on.then_some(switch_continue::CONTINUE_PROMPT),
+                carry_on.then_some(texts::CONTINUE_PROMPT),
                 false,
                 shell_env,
                 terminal_appearance,

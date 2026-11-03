@@ -65,12 +65,16 @@ impl<K: Eq + std::hash::Hash> StalledPasses<K> {
 
     /// [`StalledPasses::record`], where the work counts as stuck only from `from` on: until then
     /// its thread is running on and later work for the key starts as if nothing were recorded. An
-    /// earlier thread of the key that is still running keeps its own entry and time.
+    /// earlier thread of the key that is still running keeps its own entry and time. The entries
+    /// of threads that have ended are dropped at the next record of any key, so a key that is
+    /// never asked about again stays until then.
     pub fn record_from(&self, key: K, pass: std::sync::Weak<()>, from: std::time::Instant) {
         let mut passes = self.0.lock().expect("stalled pass lock poisoned");
-        let threads = passes.entry(key).or_default();
-        threads.retain(|(earlier, _)| earlier.strong_count() > 0);
-        threads.push((pass, from));
+        passes.retain(|_, threads| {
+            threads.retain(|(earlier, _)| earlier.strong_count() > 0);
+            !threads.is_empty()
+        });
+        passes.entry(key).or_default().push((pass, from));
     }
 }
 
@@ -113,5 +117,23 @@ mod tests {
         let third = Arc::new(());
         passes.record_from(key.clone(), Arc::downgrade(&third), begun);
         assert!(passes.is_stuck(&key), "a record after the end is taken");
+    }
+
+    /// The entries of ended threads do not stay under keys that are never asked about again.
+    #[test]
+    fn the_entries_of_ended_threads_are_dropped_by_a_later_record() {
+        let passes = StalledPasses::<u32>::default();
+        let ended = Arc::new(());
+        passes.record(1, Arc::downgrade(&ended));
+        let running = Arc::new(());
+        passes.record(2, Arc::downgrade(&running));
+        drop(ended);
+
+        let latest = Arc::new(());
+        passes.record(3, Arc::downgrade(&latest));
+
+        let mut keys: Vec<u32> = passes.0.lock().unwrap().keys().copied().collect();
+        keys.sort();
+        assert_eq!(keys, [2, 3]);
     }
 }

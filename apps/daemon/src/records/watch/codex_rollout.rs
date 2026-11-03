@@ -34,6 +34,7 @@ use crate::hooks::TurnEnd;
 use crate::protocol::SessionStatus;
 use crate::records::watch::{self, Owed, Start, Watch};
 use crate::state::{AppState, TurnClose};
+use crate::text::trimmed_or_none;
 
 /// How often the watch checks the rollout for new lines. A failed turn is over within about a
 /// second of the prompt, and the session should come back to its prompt close to when Codex does.
@@ -68,14 +69,9 @@ fn ending_in_line(line: &str, turn_id: &str) -> Option<Ending> {
     Some(
         match payload.get("error").filter(|error| !error.is_null()) {
             None => Ending::Completed,
-            Some(error) => Ending::Failed(
-                error
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|text| !text.is_empty())
-                    .map(str::to_string),
-            ),
+            Some(error) => Ending::Failed(trimmed_or_none(
+                error.get("message").and_then(Value::as_str),
+            )),
         },
     )
 }

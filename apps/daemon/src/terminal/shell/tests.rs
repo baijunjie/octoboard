@@ -5,28 +5,27 @@ use std::time::Instant;
 use tokio::sync::broadcast;
 
 use super::{close, close_all, create, rename, shell_environment, ShellProcess};
-use crate::git::isolated::IsolatedGit;
 use crate::protocol::{error_code, Event, Request, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
 use crate::terminal::pty::PtyCore;
 use crate::test_support::code_of;
 use crate::test_support::{
-    app_state, assert_gone_by, console, git, insert_project, is_running, isolated_git_env,
-    repo_with, within, ScratchDir, PATIENCE, SYSTEM_GIT,
+    app_state, assert_gone_by, console, git, insert_project, is_running, repo_with, within,
+    ScratchDir, PATIENCE,
 };
 
-/// No test here reads a worktree but the one that names one, which passes a `git` of its own.
-fn no_git() -> anyhow::Result<IsolatedGit> {
-    anyhow::bail!("this test runs no git")
-}
-
-fn test_git() -> anyhow::Result<IsolatedGit> {
-    Ok(IsolatedGit::new(SYSTEM_GIT.to_string(), isolated_git_env()))
+/// Makes `state` run no `git`: no test here reads a worktree but the one that names one.
+fn without_git(state: &AppState) {
+    state.host_tools.replace(crate::host_tools::Tools {
+        git: || anyhow::bail!("this test runs no git"),
+        ..state.host_tools.get()
+    });
 }
 
 /// A state holding project `p1` of console `console-1`, at a directory of its own.
 fn with_project(label: &str) -> (Arc<AppState>, ScratchDir, ScratchDir) {
     let (state, dir) = app_state(label);
+    without_git(&state);
     state.store.insert_console(&console(&dir)).unwrap();
     let project = ScratchDir::new(&format!("{label}-project"));
     insert_project(&state, &project);
@@ -119,7 +118,7 @@ async fn a_terminal_runs_a_shell_in_its_project_that_takes_input_and_ends_when_c
     let (state, _dir, project) = with_project("shell-lifecycle");
     let mut events = state.subscribe();
 
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let canonical = project.canonicalize().unwrap();
@@ -166,7 +165,7 @@ async fn a_terminal_runs_a_shell_in_its_project_that_takes_input_and_ends_when_c
 #[tokio::test(flavor = "multi_thread")]
 async fn the_title_follows_the_shell_until_the_terminal_is_renamed() {
     let (state, _dir, _project) = with_project("shell-title");
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let shell = process(&state, &created);
@@ -216,7 +215,7 @@ async fn the_title_follows_the_shell_until_the_terminal_is_renamed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_shell_is_busy_while_it_runs_something_in_the_foreground() {
     let (state, _dir, _project) = with_project("shell-busy");
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let shell = process(&state, &created);
@@ -232,7 +231,7 @@ async fn a_shell_is_busy_while_it_runs_something_in_the_foreground() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_background_child_off_the_terminal_does_not_make_a_shell_busy() {
     let (state, _dir, _project) = with_project("shell-detached-child");
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let shell = process(&state, &created);
@@ -255,7 +254,7 @@ async fn a_background_child_off_the_terminal_does_not_make_a_shell_busy() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_closed() {
     let (state, _dir, _project) = with_project("shell-exit");
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let shell = process(&state, &created);
@@ -293,10 +292,10 @@ async fn removing_a_project_or_its_console_ends_its_terminals_and_no_other() {
     let other = ScratchDir::new("shell-removal-other");
     add_project(&state, "p2", "console-2", &other);
 
-    let removed = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let removed = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
-    let kept = create(&state, "p2".to_string(), None, String::new(), no_git)
+    let kept = create(&state, "p2".to_string(), None, String::new())
         .await
         .unwrap();
     let (removed_pid, kept_pid) = (process(&state, &removed).pid, process(&state, &kept).pid);
@@ -325,7 +324,7 @@ async fn the_daemons_exit_ends_every_terminal() {
     let (state, _dir, _project) = with_project("shell-exit-all");
     let mut pids = Vec::new();
     for _ in 0..2 {
-        let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+        let created = create(&state, "p1".to_string(), None, String::new())
             .await
             .unwrap();
         pids.push(process(&state, &created).pid);
@@ -376,9 +375,9 @@ async fn a_shell_starts_when_its_environment_cannot_be_read() {
     let (state, _dir, _project) = with_project("shell-no-env");
     state.host_tools.replace(crate::host_tools::Tools {
         shell_env: || anyhow::bail!("the login shell timed out"),
-        ..crate::test_support::host_tools()
+        ..state.host_tools.get()
     });
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let shell = process(&state, &created);
@@ -406,7 +405,9 @@ async fn a_terminal_starts_only_in_a_worktree_of_its_own_project() {
         ],
     );
     insert_project(&state, &repo);
-    let roots = crate::browse::scope::project_live_roots(&state, "p1", &test_git).unwrap();
+    let roots =
+        crate::browse::scope::project_live_roots(&state, "p1", &|| state.host_tools.isolated_git())
+            .unwrap();
     let worktree = roots
         .iter()
         .find_map(|root| root.worktree.clone())
@@ -417,7 +418,6 @@ async fn a_terminal_starts_only_in_a_worktree_of_its_own_project() {
         "p1".to_string(),
         Some(worktree.clone()),
         String::new(),
-        test_git,
     )
     .await
     .unwrap();
@@ -433,12 +433,11 @@ async fn a_terminal_starts_only_in_a_worktree_of_its_own_project() {
         "p1".to_string(),
         Some("not-a-worktree".to_string()),
         String::new(),
-        test_git,
     )
     .await
     .unwrap_err();
     assert_eq!(code_of(&foreign), error_code::WORKTREE_UNAVAILABLE);
-    let unknown = create(&state, "p9".to_string(), None, String::new(), test_git)
+    let unknown = create(&state, "p9".to_string(), None, String::new())
         .await
         .unwrap_err();
     assert_eq!(code_of(&unknown), error_code::UNKNOWN_PROJECT);
@@ -451,15 +450,9 @@ async fn a_terminal_starts_in_a_folder_below_the_project_and_refuses_what_is_not
     std::fs::create_dir_all(project.join("src/a b")).unwrap();
     std::fs::write(project.join("file.txt"), "a").unwrap();
 
-    let created = create(
-        &state,
-        "p1".to_string(),
-        None,
-        "src/a b".to_string(),
-        no_git,
-    )
-    .await
-    .unwrap();
+    let created = create(&state, "p1".to_string(), None, "src/a b".to_string())
+        .await
+        .unwrap();
     assert_eq!(
         created.cwd,
         project
@@ -474,7 +467,7 @@ async fn a_terminal_starts_in_a_folder_below_the_project_and_refuses_what_is_not
         ("file.txt", error_code::PATH_NOT_A_DIRECTORY),
         ("missing", error_code::FILE_NOT_FOUND),
     ] {
-        let refused = create(&state, "p1".to_string(), None, path.to_string(), no_git)
+        let refused = create(&state, "p1".to_string(), None, path.to_string())
             .await
             .unwrap_err();
         assert_eq!(code_of(&refused), code, "{path}");
@@ -482,7 +475,7 @@ async fn a_terminal_starts_in_a_folder_below_the_project_and_refuses_what_is_not
     assert!(state.shell_terminals.list().is_empty());
 
     std::os::unix::fs::symlink(project.join("src/a b"), project.join("link")).unwrap();
-    let linked = create(&state, "p1".to_string(), None, "link".to_string(), no_git)
+    let linked = create(&state, "p1".to_string(), None, "link".to_string())
         .await
         .unwrap();
     assert_eq!(
@@ -522,7 +515,7 @@ async fn printed_pid(shell: &Arc<ShellProcess>, marker: &'static str) -> i32 {
 #[tokio::test(flavor = "multi_thread")]
 async fn closing_a_terminal_lets_it_go_whatever_still_holds_it_open() {
     let (state, _dir, _project) = with_project("shell-hang-up");
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let shell = process(&state, &created);
@@ -563,7 +556,7 @@ async fn closing_a_terminal_lets_it_go_whatever_still_holds_it_open() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_shell_is_busy_while_another_group_holds_its_terminals_foreground() {
     let (state, _dir, _project) = with_project("shell-foreground");
-    let created = create(&state, "p1".to_string(), None, String::new(), no_git)
+    let created = create(&state, "p1".to_string(), None, String::new())
         .await
         .unwrap();
     let shell = process(&state, &created);

@@ -12,8 +12,7 @@ use tokio::sync::{broadcast, mpsc};
 use crate::browse::budget;
 use crate::browse::lane::{Frame, Lane};
 use crate::coordinator::Followup;
-use crate::git::isolated::IsolatedGit;
-use crate::protocol::{BrowseBody, BrowseRequest, Event, Request, BROWSE_REQUEST_TYPES};
+use crate::protocol::{BrowseRequest, Event, Request, BROWSE_REQUEST_TYPES};
 use crate::state::AppState;
 
 /// Events queued for one control client before its writer is considered the bottleneck. Small:
@@ -228,25 +227,15 @@ fn browse_request(text: &str) -> Option<Result<BrowseRequest, String>> {
 async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseRequest) {
     let state = state.clone();
     let id = request.id.clone();
-    let reservation = match request.body {
-        BrowseBody::ListProjectDir { .. } => budget::LISTING_RESERVATION,
-        BrowseBody::SearchProjectFiles { .. } => budget::SEARCH_RESERVATION,
-        BrowseBody::GetProjectSource { .. } | BrowseBody::ReadProjectFile { .. } => {
-            budget::READ_RESERVATION
-        }
-        BrowseBody::ListProjectChanges { .. } => budget::CHANGE_LIST_RESERVATION,
-        BrowseBody::ReadProjectChange { .. }
-        | BrowseBody::ReadProjectComparisonChange { .. }
-        | BrowseBody::ReadProjectChangeBodies { .. }
-        | BrowseBody::ReadProjectComparisonChangeBodies { .. }
-        | BrowseBody::ReadProjectCommitChange { .. }
-        | BrowseBody::ReadProjectCommitChangeBodies { .. } => budget::DIFF_RESERVATION,
-        BrowseBody::ListProjectBranches { .. } => budget::BRANCH_LIST_RESERVATION,
-        BrowseBody::CompareProjectBranches { .. } => budget::COMPARISON_RESERVATION,
-        BrowseBody::ListProjectCommits { .. } => budget::COMMITS_RESERVATION,
-    };
+    let reservation = budget::reservation_for(&request.body);
     lane.submit(request.id, request.slot, reservation, move |cancel| {
-        crate::browse::serve(&state, id, request.body, &IsolatedGit::from_shell, cancel)
+        crate::browse::serve(
+            &state,
+            id,
+            request.body,
+            &|| state.host_tools.isolated_git(),
+            cancel,
+        )
     })
     .await;
 }

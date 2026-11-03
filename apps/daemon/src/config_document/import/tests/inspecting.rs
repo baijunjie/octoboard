@@ -31,13 +31,16 @@ async fn a_project_recorded_by_its_directory_name_alone_is_offered_the_derived_d
         projects[0].offers.default_clone_dir.as_deref(),
         Some(&*clone_dir.join("present").to_string_lossy())
     );
-    assert_eq!(projects[0].default, Some(ChoiceKind::DefaultCloneDir));
+    assert_eq!(
+        projects[0].default,
+        Some(DirectoryChoiceKind::DefaultCloneDir)
+    );
     assert_eq!(projects[1].offers.default_clone_dir, None);
     assert_eq!(
         projects[1].offers.clone.as_deref(),
         Some(&*clone_dir.join("cloneable").to_string_lossy())
     );
-    assert_eq!(projects[1].default, Some(ChoiceKind::Clone));
+    assert_eq!(projects[1].default, Some(DirectoryChoiceKind::Clone));
     assert_eq!(projects[2].default, None);
 }
 
@@ -92,9 +95,14 @@ async fn each_project_is_offered_the_choices_its_state_allows_and_the_first_is_t
         [
             // The recorded path and the derived directory both exist; the recorded wins. A
             // clone would land on the derived directory, so it is not offered.
-            (true, true, false, Some(ChoiceKind::ExportedPath)),
-            (false, true, true, Some(ChoiceKind::DefaultCloneDir)),
-            (false, false, true, Some(ChoiceKind::Clone)),
+            (true, true, false, Some(DirectoryChoiceKind::ExportedPath)),
+            (
+                false,
+                true,
+                true,
+                Some(DirectoryChoiceKind::DefaultCloneDir)
+            ),
+            (false, false, true, Some(DirectoryChoiceKind::Clone)),
             (false, false, false, None),
             // The derived directory ("unclonable-x/.." resolves to "gone") does not exist.
             (false, false, false, None),

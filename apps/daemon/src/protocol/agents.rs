@@ -40,6 +40,18 @@ impl Agent {
         self != Agent::Claude
     }
 
+    /// The Claude compatibility setting while the user has made no choice for the agent: Grok Build
+    /// follows its own default, which is on, and Codex is on while Claude Code is among the
+    /// `added` agents (`None` while undecided, which counts as Claude Code not being among them).
+    /// Claude Code itself has no such setting and reads as off.
+    pub fn claude_compatibility_default(self, added: Option<&[Agent]>) -> bool {
+        match self {
+            Agent::Claude => false,
+            Agent::Codex => added.is_some_and(|added| added.contains(&Agent::Claude)),
+            Agent::Grok => true,
+        }
+    }
+
     /// How the agent is named in a message shown to the user.
     pub fn label(self) -> &'static str {
         match self {

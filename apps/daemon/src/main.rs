@@ -47,6 +47,7 @@ mod store;
 mod terminal;
 #[cfg(test)]
 mod test_support;
+mod text;
 mod time;
 mod titles;
 mod wire_path;
@@ -261,18 +262,33 @@ fn spawn_parent_watch(state: Arc<AppState>, parent_pid: u32) {
     });
 }
 
+/// Resolves when the daemon is asked to end: Ctrl-C, SIGTERM, or SIGHUP, which a closing terminal
+/// sends it.
 async fn shutdown_signal() {
-    let mut sigterm = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-    {
-        Ok(signal) => signal,
+    use tokio::signal::unix::{signal, SignalKind};
+
+    // A signal whose handler cannot be installed never arrives, so the others still end the daemon.
+    let install = |kind: SignalKind, name: &str| match signal(kind) {
+        Ok(stream) => Some(stream),
         Err(err) => {
-            tracing::warn!(%err, "installing the SIGTERM handler failed");
-            return std::future::pending().await;
+            tracing::warn!(%err, "installing the {name} handler failed");
+            None
         }
     };
+    let mut sigterm = install(SignalKind::terminate(), "SIGTERM");
+    let mut sighup = install(SignalKind::hangup(), "SIGHUP");
+    async fn arrival(stream: &mut Option<tokio::signal::unix::Signal>) {
+        match stream {
+            Some(stream) => {
+                stream.recv().await;
+            }
+            None => std::future::pending().await,
+        }
+    }
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
-        _ = sigterm.recv() => {}
+        _ = arrival(&mut sigterm) => {}
+        _ = arrival(&mut sighup) => {}
     }
 }
 

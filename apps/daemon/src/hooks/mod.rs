@@ -526,12 +526,7 @@ fn claude_has_background_work(payload: &Value) -> bool {
 }
 
 fn text_field(payload: &Value, key: &str) -> Option<String> {
-    payload
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(str::to_string)
+    crate::text::trimmed_or_none(payload.get(key).and_then(Value::as_str))
 }
 
 #[cfg(test)]

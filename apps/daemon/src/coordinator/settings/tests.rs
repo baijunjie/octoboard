@@ -419,7 +419,7 @@ async fn the_update_settings_request_sets_agent_tags() {
 /// delivery at parsing.
 #[tokio::test]
 async fn update_settings_changes_the_git_workflow_settings_and_broadcasts_only_a_change() {
-    use crate::git_workflow::{Delivery, GitWorkflowSettings};
+    use crate::protocol::{GitDelivery, GitWorkflowSettings};
     let (state, _dir) = crate::test_support::app_state("coordinator-git-workflow-settings");
     let request = |json: &str| {
         serde_json::from_str::<crate::protocol::Request>(json)
@@ -440,7 +440,7 @@ async fn update_settings_changes_the_git_workflow_settings_and_broadcasts_only_a
     assert_eq!(
         state.store.git_workflow_settings().unwrap(),
         GitWorkflowSettings {
-            delivery: Delivery::Merge,
+            delivery: GitDelivery::Merge,
             revert_gate: true,
             ..GitWorkflowSettings::default()
         }
@@ -448,7 +448,8 @@ async fn update_settings_changes_the_git_workflow_settings_and_broadcasts_only_a
     assert!(matches!(
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings })
-            if settings.git_workflow.delivery == Delivery::Merge && settings.git_workflow.revert_gate
+            if settings.git_workflow.delivery == GitDelivery::Merge
+                && settings.git_workflow.revert_gate
     ));
 
     for unchanged in [

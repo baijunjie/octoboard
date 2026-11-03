@@ -1,5 +1,5 @@
-//! Reading a cancelled turn off the agent's terminal title (`crate::titles::activity`), for the
-//! cancels that leave no other trace.
+//! Reading a cancelled turn off the agent's terminal title (`title_activity`), for the cancels that
+//! leave no other trace.
 //!
 //! **Claude Code.** Esc pressed before the model has shown anything — while the request waits for
 //! its response, or the model is still thinking — fires no hook, and on 2.1.310 writes nothing to
@@ -45,10 +45,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::title_activity::TitleActivity;
 use crate::protocol::{Agent, SessionStatus};
 use crate::records::watch::claude_transcript;
 use crate::state::AppState;
-use crate::titles::activity::TitleActivity;
 
 /// How long the title must have read as back at the prompt before the turn counts as ended without
 /// a hook. Far longer than the hooks that come with the same title take to arrive, short enough
@@ -177,13 +177,13 @@ fn cancelled_before_output(state: &Arc<AppState>, session_id: &str, generation: 
 mod tests {
     use super::*;
     use crate::protocol::Session;
+    use crate::session::title_activity::Shown;
     use crate::session::LiveSession;
     use crate::state::TurnClose;
     use crate::test_support::{
         app_state, console, console_session, fake_live_session, idle_stand_in, output_containing,
         within, ScratchDir, StandIn,
     };
-    use crate::titles::activity::Shown;
 
     const WORKING: Option<Shown> = Some(Shown::Running);
     const TURNING: Option<Shown> = Some(Shown::Running);

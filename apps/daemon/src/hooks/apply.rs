@@ -266,8 +266,8 @@ fn apply_status(
 /// ends in an error fires nothing after its `UserPromptSubmit`, so its rollout is; a Grok turn
 /// cancelled before its first token fires nothing at all, so its terminal title is watched from its
 /// `UserPromptSubmit`, and again from each event that brings it back from waiting on the user
-/// (`crate::titles::interrupt`). Each watch is spawned, not awaited: it is expected to far outlive
-/// this response, which the adapters' few-second hook timeout would not allow.
+/// (`crate::session::title_interrupt`). Each watch is spawned, not awaited: it is expected to far
+/// outlive this response, which the adapters' few-second hook timeout would not allow.
 fn arm_record_watches(
     state: &Arc<AppState>,
     session_id: &str,
@@ -303,7 +303,7 @@ fn arm_record_watches(
                     || previous == Some(SessionStatus::WaitingUser)) =>
         {
             let generation = state.begin_record_watch(session_id);
-            crate::titles::interrupt::watch(state, session_id, generation);
+            crate::session::title_interrupt::watch(state, session_id, generation);
         }
         _ => {}
     }

@@ -253,7 +253,7 @@ async fn a_backup_that_cannot_be_looked_up_keeps_the_link() {
         .iter()
         .find(|failure| failure.item == "settings.json")
         .expect("settings.json is reported");
-    assert_eq!(failure.left, link::Left::Linked);
+    assert_eq!(failure.left, crate::protocol::SharingLeft::Linked);
     assert!(is_link(&account.join("settings.json")));
 }
 
@@ -444,9 +444,13 @@ async fn a_change_that_fails_part_way_says_what_it_left_where_and_stays_incomple
         .failure
         .expect("the failure kept");
     assert!(failure.share);
-    assert_eq!(failure.cause, link::Cause::PermissionDenied);
+    assert_eq!(
+        failure.cause,
+        crate::protocol::SharingCause::PermissionDenied
+    );
     assert!(failure.items.iter().any(|item| {
-        item.item == "settings.json" && item.cause == link::Cause::PermissionDenied
+        item.item == "settings.json"
+            && item.cause == crate::protocol::SharingCause::PermissionDenied
     }));
     assert!(sharing_state(&fixture, Agent::Claude).progress.is_none());
     // Nothing retries it by itself: a launch leaves the directory as it is.
@@ -1913,41 +1917,50 @@ async fn turning_sharing_off_an_account_never_shared_touches_nothing() {
 
 #[test]
 fn a_failures_cause_is_told_from_the_error_kind() {
-    use link::Cause;
+    use crate::protocol::SharingCause;
     use std::io::{Error, ErrorKind};
     for (kind, cause) in [
-        (ErrorKind::PermissionDenied, Cause::PermissionDenied),
-        (ErrorKind::ReadOnlyFilesystem, Cause::PermissionDenied),
-        (ErrorKind::ResourceBusy, Cause::Busy),
-        (ErrorKind::ExecutableFileBusy, Cause::Busy),
-        (ErrorKind::WouldBlock, Cause::Busy),
-        (ErrorKind::NotFound, Cause::NotFound),
-        (ErrorKind::StorageFull, Cause::NoSpace),
-        (ErrorKind::QuotaExceeded, Cause::NoSpace),
-        (ErrorKind::FileTooLarge, Cause::NoSpace),
-        (ErrorKind::AlreadyExists, Cause::Conflict),
-        (ErrorKind::DirectoryNotEmpty, Cause::Conflict),
-        (ErrorKind::NotADirectory, Cause::Conflict),
-        (ErrorKind::IsADirectory, Cause::Conflict),
-        (ErrorKind::InvalidData, Cause::Other),
+        (ErrorKind::PermissionDenied, SharingCause::PermissionDenied),
+        (
+            ErrorKind::ReadOnlyFilesystem,
+            SharingCause::PermissionDenied,
+        ),
+        (ErrorKind::ResourceBusy, SharingCause::Busy),
+        (ErrorKind::ExecutableFileBusy, SharingCause::Busy),
+        (ErrorKind::WouldBlock, SharingCause::Busy),
+        (ErrorKind::NotFound, SharingCause::NotFound),
+        (ErrorKind::StorageFull, SharingCause::NoSpace),
+        (ErrorKind::QuotaExceeded, SharingCause::NoSpace),
+        (ErrorKind::FileTooLarge, SharingCause::NoSpace),
+        (ErrorKind::AlreadyExists, SharingCause::Conflict),
+        (ErrorKind::DirectoryNotEmpty, SharingCause::Conflict),
+        (ErrorKind::NotADirectory, SharingCause::Conflict),
+        (ErrorKind::IsADirectory, SharingCause::Conflict),
+        (ErrorKind::InvalidData, SharingCause::Other),
     ] {
-        assert_eq!(Cause::of(&Error::from(kind)), cause, "{kind:?}");
+        assert_eq!(SharingCause::of(&Error::from(kind)), cause, "{kind:?}");
     }
     // As the system reports them, not only as constructed.
     let missing = std::fs::metadata("/nonexistent-octoboard-path").unwrap_err();
-    assert_eq!(Cause::of(&missing), Cause::NotFound);
+    assert_eq!(SharingCause::of(&missing), SharingCause::NotFound);
     let busy =
         rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY), None);
-    assert_eq!(Cause::of_database(&busy), Cause::Busy);
+    assert_eq!(SharingCause::of_database(&busy), SharingCause::Busy);
     for code in [rusqlite::ffi::SQLITE_NOTFOUND, rusqlite::ffi::SQLITE_TOOBIG] {
         let other = rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(code), None);
-        assert_eq!(Cause::of_database(&other), Cause::Other);
+        assert_eq!(SharingCause::of_database(&other), SharingCause::Other);
     }
-    assert_eq!(Cause::shared([Cause::Busy, Cause::Busy]), Cause::Busy);
-    assert_eq!(Cause::shared([Cause::Busy, Cause::NoSpace]), Cause::Other);
     assert_eq!(
-        serde_json::to_value(Cause::PermissionDenied).unwrap(),
-        Cause::PermissionDenied.as_str()
+        SharingCause::shared([SharingCause::Busy, SharingCause::Busy]),
+        SharingCause::Busy
+    );
+    assert_eq!(
+        SharingCause::shared([SharingCause::Busy, SharingCause::NoSpace]),
+        SharingCause::Other
+    );
+    assert_eq!(
+        serde_json::to_value(SharingCause::PermissionDenied).unwrap(),
+        SharingCause::PermissionDenied.as_str()
     );
 }
 
@@ -1961,7 +1974,7 @@ async fn a_default_directory_that_is_gone_is_told_as_not_found() {
     let coded = err.downcast_ref::<CodedError>().unwrap();
     assert_eq!(coded.params["cause"], "not_found");
     let failure = sharing_state(&fixture, Agent::Claude).failure.unwrap();
-    assert_eq!(failure.cause, link::Cause::NotFound);
+    assert_eq!(failure.cause, crate::protocol::SharingCause::NotFound);
     assert!(failure.items.is_empty());
 }
 
@@ -1993,7 +2006,7 @@ async fn a_conversation_with_nowhere_of_the_accounts_to_go_is_told_as_a_conflict
         Ok(&std::collections::HashMap::new()),
     )
     .unwrap_err();
-    assert_eq!(failure.cause, link::Cause::Conflict);
+    assert_eq!(failure.cause, crate::protocol::SharingCause::Conflict);
     assert_eq!(serde_json::to_value(&failure).unwrap()["cause"], "conflict");
 }
 
