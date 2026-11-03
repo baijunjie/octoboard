@@ -56,7 +56,7 @@ interface PeekControl extends PanePeek {
   hide: (handFocus?: boolean) => void;
 }
 
-/** The state, timer and focus hand-off of one pane's hover reveal; `peekable` is whether the pane
+/** The state, timer and focus handoff of one pane's hover reveal; `peekable` is whether the pane
  * may float right now: the pane exists and is not docked, outside mobile interaction. */
 function usePanePeek(panel: Pane, peekable: boolean, focusTerminal: () => void, keyboardInput?: () => boolean): PeekControl {
   const [active, setActive] = useState(false);

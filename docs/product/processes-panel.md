@@ -112,7 +112,7 @@ is confirmed closes the confirmation. What the two actions do is in "Process inf
 `docs/product/background-processes.md`.
 
 - **Once confirmed**, the tree leaves the list at once, the list is read again, and a toast says the process was
-  stopped or kept (see `docs/product/toasts.md`); a tree that had already gone by then leaves no toast.
+  stopped or kept (see `docs/product/toasts.md`); a tree that had already gone by then raises no notice.
 - **A failure** is shown in an error alert over the confirmation, titled that the process could not be stopped or kept,
   and the confirmation stays open (see "The error alert" in `docs/product/error-alerts.md`).
 - **Keyboard focus**: where the confirmation was opened from the keyboard, so the card's button held focus, and the

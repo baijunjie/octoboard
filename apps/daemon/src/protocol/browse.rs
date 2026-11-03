@@ -333,7 +333,7 @@ pub struct BranchOriginInfo {
     /// That session's title when it became responsible.
     pub responsible_title: String,
     /// When that session became responsible (milliseconds since the epoch): the branch's creation,
-    /// or the handover.
+    /// or the transfer.
     pub responsible_since: i64,
 }
 

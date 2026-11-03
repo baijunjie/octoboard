@@ -9,7 +9,7 @@ import type { ShellTerminalViewHandle } from "./ShellTerminalView";
  * Where the shell terminal panel puts focus once what held it has gone (a closed tab, its context
  * menu, its view): onto the shown terminal's view, the shown tab, or New terminal when no tab is
  * left. Each keeps its identity across renders (`useStableHandler`) and reads the shown tab from `latest`
- * when it runs, as they are handed to hand-offs that outlive a render.
+ * when it runs, as they are handed to handoffs that outlive a render.
  */
 export function useShellTabFocus({
   latest,

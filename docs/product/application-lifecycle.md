@@ -279,7 +279,7 @@ which the close gestures have no part in. Nothing below asks while the window sh
   `docs/product/shell-terminals.md`).
 - **Once the daemon has begun to shut down, nothing new starts.** From then on — a confirmed quit or restart, or a
   termination signal (see "The daemon on its own" below) — no session is launched, resumed, reopened, switched to
-  another account or handed off, and nothing else that needs a session to itself (a handover of its branches, a change
+  another account or handed off, and nothing else that needs a session to itself (a transfer of its branches, a change
   of its owner) is begun: each is refused with `daemon_shutting_down`. A launch that was already past that check when
   the shutdown began is ended as soon as its process comes up, leaving the session *interrupted* like the rest. Where a
   window still shows such a refusal, it is an error alert saying that the daemon is shutting down, so nothing can be

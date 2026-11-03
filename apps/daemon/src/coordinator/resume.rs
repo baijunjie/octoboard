@@ -276,12 +276,12 @@ pub(crate) fn resumable_agent_session_id(session: &Session) -> Option<String> {
 /// to an archived lead session brings back the lead session's archived console session, then the
 /// lead session — so what it reports reaches a process. The walk stops at the first owner that is
 /// not archived; one that is only interrupted is not relaunched. If an owner cannot be relaunched
-/// the whole reopen fails with its reason: the owners already brought back stay reopened, and the
+/// the whole resume fails with its reason: the owners already brought back stay reopened, and the
 /// rest, the session included, stay as they were. Reopening an owner reopens nothing bound to it,
-/// and no other session bound to the same owners is reopened: the group comes back one session at
+/// and no other session bound to the same owners is resumed: the group comes back one session at
 /// a time, from the one the user asked for.
 ///
-/// Before anything is reopened, the session and each owner about to be launched are checked for a
+/// Before anything is relaunched, the session and each owner about to be launched are checked for a
 /// conversation the agent can still resume ([`check_resumable`]). The session itself is refused
 /// with `conversation_unresumable` when its conversation is proven gone, with nothing changed; an
 /// owner whose conversation is proven gone is relaunched into a fresh conversation instead. A
@@ -327,11 +327,11 @@ pub(super) async fn resume_session_with(
     .await
 }
 
-/// [`resume_session_with`] with the model and reasoning effort the session is reopened with, as an
-/// owner reopening it over MCP asks, and the process start `launch`, called once for each session
-/// reopened. They are checked against what the session's agent offers under its own account before
-/// anything is launched, recorded as the session's own just before its relaunch, and put back when
-/// the relaunch fails. Any archived owner reopened with it keeps its settings.
+/// [`resume_session_with`] with the model and reasoning effort the session is resumed with, as an
+/// owner resuming it over MCP asks, and the process start `launch`, called once for each session
+/// relaunched. They are checked against what the session's agent offers under its own account
+/// before anything is launched, recorded as the session's own just before its relaunch, and put
+/// back when the relaunch fails. Any archived owner reopened with it keeps its settings.
 ///
 /// The login-shell snapshot and `launch` are supplied by the caller: `env_shell::launch_snapshot`
 /// and `term::launch` outside the tests, which cannot start an agent.
@@ -347,11 +347,11 @@ pub(crate) async fn resume_session_with_launch(
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
     // before the record is read, so a delete cannot slip in between reading and launching.
     let claim = state.begin_launch(id)?;
-    // Taken once: the checks, the unarchive and every launch of this reopen see the one
+    // Taken once: the checks, the unarchive and every launch of this resume see the one
     // environment, and a default account is resolved from the same shell the agent will run in.
     let shell = tokio::task::spawn_blocking(shell_snapshot).await??;
     let owners = archived_owners(state, id)?;
-    // Every session this reopen would launch is checked before the first is, so a target whose
+    // Every session this resume would launch is checked before the first is, so a target whose
     // record is gone leaves the whole group as it was instead of reopening the owners above it.
     let mut checked_owners = Vec::new();
     for owner in &owners {
@@ -373,9 +373,9 @@ pub(crate) async fn resume_session_with_launch(
     unarchive_rollout(&target, &shell).await?;
     for checked in checked_owners {
         let owner = checked.session.id.clone();
-        // The owners were listed before the awaits of the earlier relaunches, so a reopen of a
+        // The owners were listed before the awaits of the earlier relaunches, so a resume of a
         // sibling bound session may have brought this one back since: skip it unless it still
-        // needs reopening. Two reopens can both read an owner as archived; the launch claim lets
+        // needs reopening. Two resumes can both read an owner as archived; the launch claim lets
         // one through and refuses the other, and the user's next click goes through.
         if !needs_reopening(state, &owner)? {
             continue;
@@ -423,7 +423,7 @@ pub(crate) async fn resume_session_with_launch(
     )
     .await;
     if relaunched.is_err() && overrides.is_some() {
-        // A reopen that fails leaves the session as it was, the model and effort included.
+        // A resume that fails leaves the session as it was, the model and effort included.
         let before = &target.session;
         if let Err(revert) = state.set_session_launch_overrides(id, &before.model, &before.effort) {
             tracing::warn!(
@@ -510,7 +510,7 @@ async fn forget_gone_conversation(
     state.forget_conversation(&session.id)
 }
 
-/// The refusal of a reopen whose session the agent can no longer resume: launching it would only
+/// The refusal of a resume whose session the agent can no longer resume: launching it would only
 /// make the agent exit, and a reopen would move an archived session out of the archive for it.
 fn conversation_unresumable(session: &Session) -> anyhow::Error {
     CodedError::raised(

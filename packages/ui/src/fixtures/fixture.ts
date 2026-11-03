@@ -14,15 +14,15 @@ import type { FixtureError, FixtureFiles } from "./sampleFiles";
 /** Feedback the scenario raises once the app is mounted, by the route the real feedback takes to the stack: a
  * broadcast of the daemon, a failure an action raised itself, or a notice the UI words itself. Errors enter the
  * required-acknowledgement alert queue, while notices remain toasts. */
-export type ToastFixture =
-  | BroadcastToastFixture
-  | RaisedToastFixture
-  | NoticeToastFixture;
+export type NotificationFixture =
+  | BroadcastNotificationFixture
+  | RaisedNotificationFixture
+  | NoticeNotificationFixture;
 
 /** An event the daemon sends unasked, shown as the app shows it (`broadcastNotification`): a failure or a notice carrying raw
  * text becomes an error alert and any other notice a toast. `event.message` is the daemon's English fallback for a code
  * the catalog lacks, as in the real event; the text shown is worded from the catalog. */
-export interface BroadcastToastFixture {
+export interface BroadcastNotificationFixture {
   kind: "broadcast";
   event: NotifiedBroadcast;
 }
@@ -32,7 +32,7 @@ export interface BroadcastToastFixture {
  * `alertTitle` still wins over it, as it does there. `message` is the fallback for a `code` the catalog lacks; without
  * a `code` the failure is an unexpected one, shown as the unexpected-failure sentence with `message` under its error
  * details. A function words it from the catalog in the viewing language, for a failure the client words itself. */
-export interface RaisedToastFixture {
+export interface RaisedNotificationFixture {
   kind: "raised";
   title: string | ((t: Translate) => string);
   message: string | ((t: Translate) => string);
@@ -45,7 +45,7 @@ export interface RaisedToastFixture {
 }
 
 /** A timed notice the UI words itself (`Daemon.showNotice`), worded in the viewing language when a function. */
-export interface NoticeToastFixture {
+export interface NoticeNotificationFixture {
   kind: "notice";
   message: string | ((t: Translate) => string);
 }
@@ -112,7 +112,7 @@ export interface ConfigurationFixture {
  * refusals it is given. `createFixtureDaemon` reads exactly these fields. */
 export interface Fixture {
   state?: Partial<State>;
-  toasts?: ToastFixture[];
+  notifications?: NotificationFixture[];
   /** How a session's terminal behaves: `output` draws scrolling sample output (default), `mouse`
    * draws it from a program with mouse reporting on, `fullscreen` draws a response in the
    * alternate screen, `paths` draws output naming files and folders (see `pathLinks`), and
@@ -198,8 +198,8 @@ export interface Fixture {
   sessionHistory?: Record<string, HistoryMessage[] | "unavailable" | "pending" | FixtureError>;
   /** Console sessions whose `list_pages` the daemon refuses, by id, with that error; every other one is listed. */
   pageListErrors?: Record<string, FixtureError>;
-  /** Sessions whose `resume_session` is never answered, so a Reopen stays in flight and the terminal
-   * keeps its "Resuming session…" cover. Other sessions reopen at once. */
+  /** Sessions whose `resume_session` is never answered, so a resume stays in flight and the terminal
+   * keeps its "Resuming session…" cover. Other sessions resume at once. */
   sessionResumes?: Record<string, "pending">;
   /** The branches and worktrees bound to sessions, as `inspect_session_branches` finds them: those
    * whose `session` is among the sessions asked about and still exists. Without it none are bound,

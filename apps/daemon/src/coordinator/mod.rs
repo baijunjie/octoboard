@@ -571,7 +571,7 @@ async fn handle_inner(
             effort,
             terminal_appearance,
         } => {
-            let moved = handoff::hand_off(
+            let moved = handoff::handoff_session(
                 state,
                 handoff::Handoff {
                     session,

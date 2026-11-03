@@ -767,7 +767,7 @@ async fn what_a_switch_held_for_a_session_archived_meanwhile_is_stopped() {
     let _guard = crate::test_support::KillOnDrop(vec![child]);
     let ledger = &state.process_ledger;
     let held = ledger.hold_for_launch("s");
-    ledger.hand_over(&first.launch_id, "s");
+    ledger.mark_carry_over(&first.launch_id, "s");
     ledger.end_launch(&first.launch_id);
     assert!(crate::test_support::is_running(child));
 

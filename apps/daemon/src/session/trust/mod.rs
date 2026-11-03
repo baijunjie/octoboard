@@ -552,7 +552,7 @@ pub fn on_hook(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let live = live.clone();
     tokio::task::spawn_blocking(move || {
         let outcome = carry(&carried);
-        let Some(Err(failure)) = live.trust.hand_over_carry(outcome) else {
+        let Some(Err(failure)) = live.trust.deliver_carry(outcome) else {
             return;
         };
         if failure.reason_code == trust_reason::NOT_RECORDED {

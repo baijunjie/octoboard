@@ -100,7 +100,7 @@ in "When quotas are read" in `docs/product/account-quota-readings.md`; waiting a
 - **The original account can recover too.** Octoboard restarts the session on that account without copying its
   conversation. The session is sent a message from Octoboard saying its account's usage quota has recovered, followed by
   the request to continue its task (see "Continuing after a switch" in `docs/product/switching-session-accounts.md`).
-  Its owner is told it resumed and whether it was sent a continuation prompt; the user gets no account-switched toast.
+  Its owner is told it resumed and whether it was sent a continuation prompt; the user gets no account-switched notice.
   Moving to a different account has the success notices in "When the switch succeeds" below.
 - **The wait belongs to this failed turn and its running process.** New input or a queued message, a new turn, a
   manual resume, restart, account switch, model or effort change, an interruption, archiving, deleting, or the process
@@ -145,7 +145,7 @@ it to carry on or to wait for its next instruction. No report is synthesised for
 - **After the process was ended** — a change of the target's sharing began meanwhile, the conversation could not be
   copied, the relaunch was refused or its process did not come up — Octoboard brings the session back up on the
   account it had, without a prompt, and tells nobody. When another operation holds the session at that moment (a
-  handover of its branches, a change of its owner), it waits up to **15 seconds** for it to finish before giving up.
+  transfer of its branches, a change of its owner), it waits up to **15 seconds** for it to finish before giving up.
   The restore brings the session back only while it is on the account it had or on the one the failed switch was
   moving it to; one somebody else moved to a third account meanwhile is left as they left it, neither moved back nor
   relaunched, and nobody is told.

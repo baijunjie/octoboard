@@ -20,10 +20,10 @@
 //! (`auto_approve_session_requests` for `request_session`, `auto_approve_resume_requests` for
 //! `request_resume_session`, independent of each other), a request that passed every pre-check
 //! is approved at once, through the same [`fn@carry_out`] an approval from the dialog takes: nothing
-//! is broadcast, no hand goes up, and the session is started or brought back, the branches handed
-//! over and the outcome told exactly as for an approval. That runs in a task of its own, so a call
-//! cancelled meanwhile does not interrupt it. The setting is read when the call is made, so a
-//! request already waiting stays in its dialog. The settings of the switches
+//! is broadcast, no hand goes up, and the session is started or brought back, the branches
+//! transferred and the outcome told exactly as for an approval. That runs in a task of its own, so
+//! a call cancelled meanwhile does not interrupt it. The setting is read when the call is made, so
+//! a request already waiting stays in its dialog. The settings of the switches
 //! (`auto_approve_account_switches`) and of the handoffs (`auto_approve_handoffs`) are read by the
 //! tools themselves, which run the operation outright rather than ask (`change::run_unasked`).
 //!
@@ -64,7 +64,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::Value;
 use tokio::sync::oneshot;
 
-use crate::branch_origin::handover::Handover;
+use crate::branch_origin::transfer::BranchTransfer;
 use crate::coordinator::{self, open::OpenRequest};
 use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::texts;
@@ -172,7 +172,7 @@ impl Drop for WithdrawOnDrop<'_> {
 /// returns. `open` must be unbound: a session with no owner is the point of the request, and the
 /// caller binding it is for the `open_session` tool, or for the caller binding itself afterwards.
 /// What the session could never be started for is refused before the user is asked. The `Err` case
-/// is what the model is shown as the reason, so it is written for it. `handover` is moved to the
+/// is what the model is shown as the reason, so it is written for it. `transfer` is moved to the
 /// session on approval and only then. `automatic` is whether the user's setting to approve requests
 /// without asking was on when the call was made, which the caller also words the session's opening
 /// prompt by: the request is then approved at once, without asking.
@@ -183,7 +183,7 @@ pub async fn ask_for_session(
     state: &Arc<AppState>,
     caller: &Session,
     open: OpenRequest,
-    handover: Option<Handover>,
+    transfer: Option<BranchTransfer>,
     automatic: bool,
     limit: Duration,
 ) -> Result<Value> {
@@ -192,7 +192,7 @@ pub async fn ask_for_session(
         caller,
         Action::Start {
             open,
-            handover: handover.map(Box::new),
+            transfer: transfer.map(Box::new),
         },
         automatic,
         limit,
@@ -279,7 +279,7 @@ where
 /// the place of one its session has waiting, and blocks a further one until it is carried out.
 ///
 /// The carrying out is a task of its own: the call is cancelled by dropping it (see
-/// `mcp::stdio`), and a launch or a handover interrupted halfway would leave a session unsettled
+/// `mcp::stdio`), and a launch or a transfer interrupted halfway would leave a session unsettled
 /// and the caller never told. The call only waits for the task, and dropping it cancels nothing.
 async fn approve_automatically<F, Fut, R, RFut>(
     state: &Arc<AppState>,

@@ -20,7 +20,7 @@ Hiding a region with CSS (`hidden`, a `docked:hidden` variant) while focus is in
 same way, with no event, and `preventFocusOnPress` does not help there: focus reaches a pane by Tab or by a click into
 an iframe. So every code path that hides a region able to hold focus — a toggle, a scrim, Escape, a breakpoint change
 — first hands focus to the terminal if the region contains `document.activeElement`. The sidebar does this through
-`releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`, and a right-pane card through the `HandOffOnUnmount`
+`releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`, and a right-pane card through the `HandoffOnUnmount`
 that `packages/ui/src/panels/PanelStack.tsx` renders with it; hide a new pane or card the same way rather than beside
 them. Making a region `inert` drops focus the same way. Run the "is focus inside it" check in the close path itself
 or in a `useLayoutEffect`, never in a passive `useEffect`: when the state change comes from a native listener of a
@@ -50,10 +50,10 @@ hand-rolled "forget the element on blur" has already forgotten it by then. Its c
 nothing for that check to run in, rather than unmount with the element. The check runs only in its caller's own
 renders, so the caller must render on the change that takes the element away: select that value in the caller
 itself, never count on a parent rendering it again. A change that makes a component render less can stop its
-hand-off with nothing failing; `packages/ui/src/App.focusHandoff.test.tsx` drives the removals only for the terminal
+handoff with nothing failing; `packages/ui/src/App.focusHandoff.test.tsx` drives the removals only for the terminal
 pane (its history's owner line included), the update notice and the connection banner.
 
-## A hand-off moved inside React's commit draws no ring, and one put off to a microtask comes too late
+## A handoff moved inside React's commit draws no ring, and one put off to a microtask comes too late
 
 Applies to `packages/ui`, to code of your own that moves focus on because what held it is going away. Two timings
 that look right both fail, and a test that checks only `document.activeElement` passes against either:
@@ -61,16 +61,16 @@ that look right both fail, and a test that checks only `document.activeElement` 
 - `focus()` from a layout-effect cleanup of the subtree being removed runs in React's mutation phase, where React
   drops the focus events it would pass on: DOM focus and the modality move, but react-aria never hears of the focus,
   so the destination shows no `data-focus-visible` ring and no focus-within state. Move focus there only through
-  `HandOffOnUnmount` (`packages/ui/src/components/focus/HandOffOnUnmount.tsx`), which replays a `focusin` once the
+  `HandoffOnUnmount` (`packages/ui/src/components/focus/HandoffOnUnmount.tsx`), which replays a `focusin` once the
   commit is over.
 - Putting the move off to a `queueMicrotask` so that it runs after the commit: on a synchronous commit, which is what
   a `useSyncExternalStore` update (the daemon store's included) renders as, React runs the passive effects before any
   queued microtask, so an enclosing `useFocusHandoff` or `useSectionRefocus` has already found focus on `<body>` and
   sent it elsewhere. Decide in a layout effect of a component that renders in that commit, as
-  `useHandOffAfterRemoval` in the same file does; which of the two a source uses is set out in
+  `useHandoffAfterRemoval` in the same file does; which of the two a source uses is set out in
   `docs/ui-accessibility.md`, "Focus moved by a change the user did not make".
 
-So a test of such a hand-off asserts `data-focus-visible` on the element react-aria marks (a switch's `label`) after
+So a test of such a handoff asserts `data-focus-visible` on the element react-aria marks (a switch's `label`) after
 `await act(async () => {})`, not only where focus is, and makes the change the way the store sends it — a new array,
 not an element replaced inside the fixture's array — or effects keyed on that array, `useSectionRefocus` among them,
 never run and the ordering stays untested.
@@ -185,7 +185,7 @@ section's account settings, login and Add agent dialogs over Settings. React Ari
 target from `document.activeElement` in the inner dialog's first render, before the outer one has focused anything of
 its own (Settings' tabs are not in place yet). On close the restore then lands on `<body>` after a press without a
 pointer, and on the outer dialog's own element after a key or mouse press. The second is not `<body>`, so a repair that
-waits out the restore and acts only on focus left on `<body>` (how the other close hand-offs here work) misses it.
+waits out the restore and acts only on focus left on `<body>` (how the other close handoffs here work) misses it.
 
 So such a dialog's close handler names the destination itself — the control that opens the dialog, else a control of
 the outer dialog that is always there, such as its section's tab — and focuses it as `handFocusOnceClosed` in
@@ -351,7 +351,7 @@ go away while keyboard focus is inside the list: a section folded away, a filter
 change. Focus does not simply fall to `<body>` there. `useListState`'s focused-key reset (react-stately 3.50.0)
 notices in an effect that the focused key has gone and re-points it at the nearest surviving row — it walks items
 alone, so a section header is never a candidate — and `useSelectableItem`'s own effect then pulls DOM focus onto that
-row. A hand-off written into the handler that takes the rows away is therefore undone a moment later: focus ends up on
+row. A handoff written into the handler that takes the rows away is therefore undone a moment later: focus ends up on
 a row of some other section, and the list scrolls to it.
 
 So a control that has to keep focus across such a change takes it back only once both of those renders have gone by —

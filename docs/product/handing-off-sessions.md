@@ -183,8 +183,8 @@ Refused before the user is asked, with the reason in prose (as a tool error) and
 Refused when the handoff is made — on approval, or at once when the handoff is made without asking — with nothing
 changed:
 
-- a session that stopped being the caller's after the call was checked and before the handoff took hold of it, handed
-  to another owner meanwhile;
+- a session that stopped being the caller's after the call was checked and before the handoff took hold of it,
+  transferred to another owner meanwhile;
 - everything a handoff refuses (see "What can be handed off" above), an account whose quota is used up or that is
   not logged in included.
 

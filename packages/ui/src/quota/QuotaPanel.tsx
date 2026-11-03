@@ -45,7 +45,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
     if (focusSelectedTab && selected === undefined) root.current?.querySelector("button")?.focus();
   }, []);
   // A tab that exists only for the selected running session's turned-off account goes when the session stops, taking
-  // focus with it: the hand-off puts it on the tab now selected, or on the panel's first button when there is none.
+  // focus with it: the handoff puts it on the tab now selected, or on the panel's first button when there is none.
   const handoff = useFocusHandoff(() => {
     (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? root.current?.querySelector<HTMLElement>("button"))?.focus();
   });

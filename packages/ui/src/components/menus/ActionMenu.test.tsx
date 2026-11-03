@@ -135,7 +135,7 @@ it("loads a submenu on open and retries its failed load without closing", async 
   onTestFinished(() => void vi.useRealTimers());
   await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
   expect(load).not.toHaveBeenCalled();
-  // The last input was a pointer, so the ring is shown only if the hand-off sets the modality.
+  // The last input was a pointer, so the ring is shown only if the handoff sets the modality.
   act(() => setInteractionModality("pointer"));
   await act(async () => {
     const item = document.querySelector<HTMLElement>("[role=menuitem]")!;

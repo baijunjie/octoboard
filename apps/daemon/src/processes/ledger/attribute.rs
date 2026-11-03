@@ -258,7 +258,7 @@ impl Book {
     /// which stops being followed and reads as `to` from then on ([`Self::aliases`]). A terminal
     /// session recorded for `from` goes with `members` when one of them sits in it and, in
     /// `table`, no process `from` keeps does. The one reassignment of processes between launches:
-    /// a carry-over moves all of a launch, a handover of process trees some of it.
+    /// a carry-over moves all of a launch, a transfer of process trees some of it.
     pub fn transfer(
         &mut self,
         from: &str,

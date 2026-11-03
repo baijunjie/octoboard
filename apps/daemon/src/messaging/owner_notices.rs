@@ -333,9 +333,9 @@ pub(crate) fn new_owner_notice(owner_agent: Agent, lead: &str, rest: &str) -> St
     )
 }
 
-/// The notice to `moved`, a session its owner `from` handed over to `to`, which is no longer
+/// The notice to `moved`, a session its owner `from` transferred to `to`, which is no longer
 /// `from`'s. `was_worker` is whether it was a worker before (see [`role_after_owner_change`]).
-pub(crate) fn handed_over_to_you(
+pub(crate) fn transferred_to_you(
     from: &Session,
     to: &Session,
     moved: &Session,
@@ -343,7 +343,7 @@ pub(crate) fn handed_over_to_you(
 ) -> String {
     parent_changed_notice(
         &format!(
-            ". {from} handed you over to {to}.",
+            ". {from} transferred you to {to}.",
             from = capitalised(&named_session(from)),
             to = named_session(to),
         ),
@@ -357,8 +357,8 @@ pub(crate) fn handed_over_to_you(
     )
 }
 
-/// The notice to `owner`, the session `from` handed `moved` over to, with `from`'s `note`, quoted.
-pub(crate) fn handed_over_to_owner(
+/// The notice to `owner`, the session `from` transferred `moved` to, with `from`'s `note`, quoted.
+pub(crate) fn transferred_to_owner(
     state: &Arc<AppState>,
     from: &Session,
     owner: &Session,
@@ -373,14 +373,14 @@ pub(crate) fn handed_over_to_owner(
     new_owner_notice(
         owner.agent,
         &format!(
-            "{from} handed its session {moved}{place} over to you. It is yours from now on: it \
+            "{from} transferred its session {moved}{place} to you. It is yours from now on: it \
              reports to you, and",
             from = named_session(from),
             moved = label(moved),
             place = place_of(state, moved),
         ),
         &format!(
-            "{role_note} The handover note:\n\n{}\n— end of the handover note —",
+            "{role_note} The transfer note:\n\n{}\n— end of the transfer note —",
             quote(note)
         ),
     )
@@ -670,7 +670,7 @@ mod tests {
     }
 
     /// A claim on the session says nothing of how its process ended: one that exits by itself
-    /// while an operation holds the claim, including one that stops no process (a handover of
+    /// while an operation holds the claim, including one that stops no process (a transfer of
     /// branches, a binding change), is told to the owner as an end nobody asked for, and so is a
     /// process the account switch found already gone when it stopped it.
     #[tokio::test]
@@ -985,7 +985,7 @@ mod tests {
         );
         assert_eq!(
             parent_changed_notice(
-                ". the console session `a` (\"A\") handed you over to the console session `b` \
+                ". the console session `a` (\"A\") transferred you to the console session `b` \
                  (\"B\").",
                 moved.agent,
                 "It",
@@ -993,7 +993,7 @@ mod tests {
                  manage child sessions.",
             ),
             "Message from Octoboard: your parent session has changed. the console session `a` \
-             (\"A\") handed you over to the console session `b` (\"B\"). It is your parent session \
+             (\"A\") transferred you to the console session `b` (\"B\"). It is your parent session \
              from now on: take work only from it, or from the user typing in this terminal, and \
              report to it with `mcp__octoboard__report`. This replaces what you were told of your \
              parent session when you were started; `a` no longer drives you. Your role remains \
@@ -1008,11 +1008,11 @@ mod tests {
         assert_eq!(
             new_owner_notice(
                 Agent::Grok,
-                "`a` handed its session `s` (\"S\") over to you. It is yours from now on: it \
+                "`a` transferred its session `s` (\"S\") to you. It is yours from now on: it \
                  reports to you, and",
                 " Its role is worker and it cannot manage child sessions.",
             ),
-            "Message from Octoboard: `a` handed its session `s` (\"S\") over to you. It is yours \
+            "Message from Octoboard: `a` transferred its session `s` (\"S\") to you. It is yours \
              from now on: it reports to you, and you drive it like any session of yours, with \
              `octoboard__instruct_session`, `octoboard__archive_session` and \
              `octoboard__resume_session`. Its role is worker and it cannot manage child sessions."
@@ -1050,30 +1050,30 @@ mod tests {
             ..project_session("S")
         };
         assert_eq!(
-            handed_over_to_you(&from, &owner, &moved, true),
+            transferred_to_you(&from, &owner, &moved, true),
             "Message from Octoboard: your parent session has changed. The console session `a` \
-             (\"A\") handed you over to the console session `b` (\"B\"). It is your parent \
+             (\"A\") transferred you to the console session `b` (\"B\"). It is your parent \
              session from now on: take work only from it, or from the user typing in this \
              terminal, and report to it with `mcp__octoboard__report`. This replaces what you \
              were told of your parent session when you were started; `a` no longer drives you. \
              Your role remains coordinator: you can create and manage child sessions."
         );
         assert_eq!(
-            handed_over_to_owner(&state, &from, &owner, &moved, "Half done.\nNext: tests."),
-            "Message from Octoboard: the console session `a` (\"A\") handed its session \
-             `session-7` (\"Fix the build\") in the console \"Console\" over to you. It is yours \
+            transferred_to_owner(&state, &from, &owner, &moved, "Half done.\nNext: tests."),
+            "Message from Octoboard: the console session `a` (\"A\") transferred its session \
+             `session-7` (\"Fix the build\") in the console \"Console\" to you. It is yours \
              from now on: it reports to you, and you drive it like any session of yours, with \
              `mcp__octoboard__instruct_session`, `mcp__octoboard__archive_session` and \
              `mcp__octoboard__resume_session`. Its role is coordinator. It keeps its child \
-             sessions, which you can read but not drive. The handover note:\n\n> Half done.\n> \
-             Next: tests.\n— end of the handover note —"
+             sessions, which you can read but not drive. The transfer note:\n\n> Half done.\n> \
+             Next: tests.\n— end of the transfer note —"
         );
         let worker = Session {
             orchestration_role: OrchestrationRole::Worker,
             ..moved
         };
-        assert!(handed_over_to_owner(&state, &from, &owner, &worker, "n")
-            .contains("Its role is worker and it cannot manage child sessions. The handover note"));
+        assert!(transferred_to_owner(&state, &from, &owner, &worker, "n")
+            .contains("Its role is worker and it cannot manage child sessions. The transfer note"));
         assert_eq!(
             first_report_on_bind(true, "Ready."),
             "This project coordinator set you as its parent session: it is yours to drive from \

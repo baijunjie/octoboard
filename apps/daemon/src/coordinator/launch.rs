@@ -1,6 +1,6 @@
 //! Starting the agent process of a recorded session, a relaunch included, and stopping it, the
 //! waits for it to go down, the launch settings a session starts with, and the checks of the
-//! model and effort a session is opened, switched, reopened or changed to.
+//! model and effort a session is opened, switched, resumed or changed to.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -321,7 +321,7 @@ pub(super) fn session_scope(
     Ok((project, console))
 }
 
-/// The model and reasoning effort a user changed for a switch or a reopen, each absent to leave the
+/// The model and reasoning effort a user changed for a switch or a resume, each absent to leave the
 /// session's own override as it is, `Some(None)` for the agent's own default.
 #[derive(Default)]
 pub(crate) struct LaunchEdit {

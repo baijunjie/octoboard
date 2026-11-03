@@ -4,7 +4,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { ButtonContext } from "react-aria-components";
 
 import { FieldClearButton } from "../components/controls/FieldClearButton";
-import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
+import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { IconToggle } from "../components/controls/IconToggle";
 import { PaneToolbar } from "../components/panel/PaneToolbar";
 import { StatusMark } from "../components/status/StatusMark";
@@ -55,14 +55,14 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
   const t = useT();
   // The field is taken away while it may still hold keyboard focus — the toggle closing it is
   // pressed without taking focus itself — and a removal fires no blur, so focus would fall to
-  // `<body>` and the terminal would stop receiving keystrokes; the hand-off puts it on the toggle.
+  // `<body>` and the terminal would stop receiving keystrokes; the handoff puts it on the toggle.
   // This component stays mounted for the hook's check to run in, and its wrapper takes no box of
   // its own (`contents`), so the field is a flex child of the view's column.
   const handoff = useFocusHandoff(() => state.filterToggleRef.current?.focus());
   const input = useRef<HTMLInputElement>(null);
-  // Scopes the hand-off to this field's own mark and its popover, not any mark in the window.
+  // Scopes the handoff to this field's own mark and its popover, not any mark in the window.
   const markId = useId();
-  const handOffFrom = useHandOffAfterRemoval(() => (interactionIsTouch() ? null : input.current));
+  const handoffFrom = useHandoffAfterRemoval(() => (interactionIsTouch() ? null : input.current));
   const previous = useRef({ open: state.filterOpen, contextKey });
   useEffect(() => {
     if (state.filterOpen && !previous.current.open && previous.current.contextKey === contextKey) input.current?.focus();
@@ -98,11 +98,11 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
                   the mark. The field gives its clear button's behaviour to every button inside it
                   through `ButtonContext`; the mark is not that button. When the search completes the mark
                   goes, and focus it held goes to the input rather than to the page, ahead of the field's own
-                  `useFocusHandoff`. After a tap it leaves focus to that hand-off, which takes it to the filter
+                  `useFocusHandoff`. After a tap it leaves focus to that handoff, which takes it to the filter
                   toggle: the input would raise the on-screen keyboard. */}
               {incomplete && (
                 <>
-                  {handOffFrom(`[data-status-mark-id="${markId}"]`)}
+                  {handoffFrom(`[data-status-mark-id="${markId}"]`)}
                   <ButtonContext.Provider value={{}}>
                     <StatusMark tone="warning" markId={markId} label={t("browser.filter.partial")}>{t("browser.filter.partial.details")}</StatusMark>
                   </ButtonContext.Provider>

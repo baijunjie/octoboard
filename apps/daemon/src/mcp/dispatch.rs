@@ -35,8 +35,8 @@ use super::tools::sessions::{
 };
 use super::tools::settings::add_project;
 use super::tools::{
-    account_switch, agents, bindings, handoff, handover, history, models, pages, project_branches,
-    project_changes, reads, resume_request, session_branches, session_model, settings,
+    account_switch, agents, bindings, handoff, history, models, pages, project_branches,
+    project_changes, reads, resume_request, session_branches, session_model, settings, transfer,
 };
 
 /// Runs one tool call. The `Err` case is what the model is shown as the reason the call failed, so
@@ -109,8 +109,8 @@ async fn dispatch(
             )
             .await
         }
-        "transfer_branches" => handover::transfer_branches(state, &session, arguments).await,
-        "transfer_processes" => handover::transfer_processes(state, &session, arguments).await,
+        "transfer_branches" => transfer::transfer_branches(state, &session, arguments).await,
+        "transfer_processes" => transfer::transfer_processes(state, &session, arguments).await,
         "handoff_session" => {
             handoff::handoff_session(state, &session, arguments, crate::session::term::launch).await
         }

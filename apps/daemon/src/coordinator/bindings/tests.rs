@@ -279,7 +279,7 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
 /// once it has no sessions of its own, and then can own none. Each refusal names its reason
 /// and changes nothing.
 #[tokio::test]
-async fn an_owner_hands_a_session_over_only_where_orchestration_stays_two_levels_deep() {
+async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_deep() {
     use SessionStatus::{Idle, Interrupted, Starting};
     let (state, _dir, _live) = binding_fixture(
         "transfer",

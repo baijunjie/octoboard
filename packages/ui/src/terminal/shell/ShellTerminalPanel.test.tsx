@@ -473,7 +473,7 @@ it("hands nothing on when the close of a busy tab is declined", async () => {
   await vi.waitFor(() => expect(document.querySelector("[role=alertdialog]")).toBeNull());
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   expect(document.activeElement).not.toBe(panel.tabs()[1]);
-  // The click's own modality: no hand-off asked for the focus ring.
+  // The click's own modality: no handoff asked for the focus ring.
   expect(getInteractionModality()).toBe("virtual");
   expect(panel.request).not.toHaveBeenCalledWith({ type: "close_shell_terminal", shell_terminal: "a" });
 });

@@ -16,7 +16,7 @@ import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restoreSample";
 import type { FixtureFile } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
 import { quotaFailure, quotaOf, quotaWindow, resetCreditOf, resetCreditsOf } from "./quotas";
-import { accountOf, accountSharingOf, branchItemOf, broadcastErrorToast, consoleOf, gitStatusOf, keptOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionNoticeToast, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
+import { accountOf, accountSharingOf, branchItemOf, broadcastErrorNotification, consoleOf, gitStatusOf, keptOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionNoticeNotification, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 
 describe("the fixture daemon's session archiving", () => {
@@ -1027,21 +1027,21 @@ describe("the fixture daemon's structured notices", () => {
     unsubscribe();
   });
 
-  it("settles the scenario's toasts as raised only once the stack has been handed them, a delay after it subscribed", async () => {
+  it("settles the scenario's notifications as raised only once the stack has been handed them, a delay after it subscribed", async () => {
     vi.useFakeTimers();
     try {
-      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "notice", message: "Could not save" }] });
-      const toasts: NotificationRequest[] = [];
+      const daemon = createFixtureDaemon({ ...scenario, notifications: [{ kind: "notice", message: "Could not save" }] });
+      const notifications: NotificationRequest[] = [];
       const raised = vi.fn();
-      void daemon.scenarioToastsRaised.then(raised);
+      void daemon.scenarioNotificationsRaised.then(raised);
       await vi.advanceTimersByTimeAsync(10_000);
       expect(raised).not.toHaveBeenCalled();
-      const unsubscribe = daemon.onNotification((toast) => toasts.push(toast));
+      const unsubscribe = daemon.onNotification((notification) => notifications.push(notification));
       await vi.advanceTimersByTimeAsync(299);
       expect(raised).not.toHaveBeenCalled();
-      expect(toasts).toEqual([]);
+      expect(notifications).toEqual([]);
       await vi.advanceTimersByTimeAsync(1);
-      expect(toasts).toHaveLength(1);
+      expect(notifications).toHaveLength(1);
       expect(raised).toHaveBeenCalledOnce();
       unsubscribe();
     } finally {
@@ -1053,15 +1053,15 @@ describe("the fixture daemon's structured notices", () => {
     vi.useFakeTimers();
     try {
       const params = { title: "Release notes", reason_code: "config_dir_unreachable", agent: "Claude Code", path: "/Users/dev/.claude-work", reason: "Permission denied" };
-      const daemon = createFixtureDaemon({ ...scenario, toasts: [sessionNoticeToast("s-gone", "launch_failed", params)] });
-      const toasts: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification((toast) => toasts.push(toast));
+      const daemon = createFixtureDaemon({ ...scenario, notifications: [sessionNoticeNotification("s-gone", "launch_failed", params)] });
+      const notifications: NotificationRequest[] = [];
+      const unsubscribe = daemon.onNotification((notification) => notifications.push(notification));
       await vi.runAllTimersAsync();
-      expect(toasts).toHaveLength(1);
-      expect(toasts[0]?.daemonTitle).toMatchObject({ code: "launch_failed.title", params });
-      expect(toasts[0]?.daemonError).toMatchObject({ code: "config_dir_unreachable", params: expect.objectContaining({ path: params.path }) });
-      expect(toasts[0]?.message).toContain(params.title);
-      expect(toasts[0]?.message).toContain(params.path);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0]?.daemonTitle).toMatchObject({ code: "launch_failed.title", params });
+      expect(notifications[0]?.daemonError).toMatchObject({ code: "config_dir_unreachable", params: expect.objectContaining({ path: params.path }) });
+      expect(notifications[0]?.message).toContain(params.title);
+      expect(notifications[0]?.message).toContain(params.path);
       unsubscribe();
     } finally {
       vi.useRealTimers();
@@ -1069,16 +1069,17 @@ describe("the fixture daemon's structured notices", () => {
   });
 });
 
-describe("the fixture daemon's scenario toasts", () => {
+describe("the fixture daemon's scenario notifications", () => {
   const state = () => snapshotState({ sessions: [sessionOf("s-1", "c", "p", "Review index", "idle")] });
 
-  /** The toasts a scenario's fixtures raise once the stack has subscribed, with the records they were worded from. */
-  async function raised(toasts: Fixture["toasts"]): Promise<{ got: NotificationRequest[]; records: State }> {
+  /** The notifications a scenario's fixtures raise once the stack has subscribed, with the records they were worded
+   * from. */
+  async function raised(notifications: Fixture["notifications"]): Promise<{ got: NotificationRequest[]; records: State }> {
     vi.useFakeTimers();
     try {
-      const daemon = createFixtureDaemon({ state: state(), toasts });
+      const daemon = createFixtureDaemon({ state: state(), notifications });
       const got: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification((toast) => got.push(toast));
+      const unsubscribe = daemon.onNotification((notification) => got.push(notification));
       await vi.runAllTimersAsync();
       unsubscribe();
       return { got, records: daemon.store.getState() };
@@ -1092,22 +1093,22 @@ describe("the fixture daemon's scenario toasts", () => {
     const failure = { type: "error", id: null, code: "a_code_from_a_newer_daemon", params: {}, message: "Its own text." } as const;
     const { got, records } = await raised([{ kind: "broadcast", event: notice }, { kind: "broadcast", event: failure }]);
     expect(got).toEqual([broadcastNotification(notice, records, currentLanguage()), broadcastNotification(failure, records, currentLanguage())]);
-    expect(got.map((toast) => toast.kind)).toEqual(["error", "error"]);
+    expect(got.map((notification) => notification.kind)).toEqual(["error", "error"]);
   });
 
   it("shows a session notice that is no failure as a timed notice, and a broadcast error as an alert naming no session", async () => {
-    const { got: [notice, failure] } = await raised([sessionNoticeToast("s-1", "claude_workspace_untrusted"), broadcastErrorToast("internal_error", { detail: "boom" }, "boom")]);
+    const { got: [notice, failure] } = await raised([sessionNoticeNotification("s-1", "claude_workspace_untrusted"), broadcastErrorNotification("internal_error", { detail: "boom" }, "boom")]);
     expect(notice).toMatchObject({ kind: "notice", session: "s-1" });
     expect(failure).toMatchObject({ kind: "error", daemonError: { code: "internal_error" } });
     expect(failure).not.toHaveProperty("session");
   });
 
   it("raises a raised fixture as the action's alert, its message worded as a rejected request carries it", async () => {
-    const { got: [toast] } = await raised([{ kind: "raised", code: "file_not_found", params: { path: "src/main.ts" }, message: "", title: "Could not reveal", session: "s-1", recovery: "hostPathGone" }]);
-    expect(toast).toMatchObject({ kind: "error", title: "Could not reveal", session: "s-1", recovery: "hostPathGone", daemonError: { code: "file_not_found", params: { path: "src/main.ts" } } });
-    expect(toast?.message).toContain("src/main.ts");
-    expect(toast?.error).toBeInstanceOf(Error);
-    expect((toast?.error as Error).message).toBe(toast?.message);
+    const { got: [notification] } = await raised([{ kind: "raised", code: "file_not_found", params: { path: "src/main.ts" }, message: "", title: "Could not reveal", session: "s-1", recovery: "hostPathGone" }]);
+    expect(notification).toMatchObject({ kind: "error", title: "Could not reveal", session: "s-1", recovery: "hostPathGone", daemonError: { code: "file_not_found", params: { path: "src/main.ts" } } });
+    expect(notification?.message).toContain("src/main.ts");
+    expect(notification?.error).toBeInstanceOf(Error);
+    expect((notification?.error as Error).message).toBe(notification?.message);
   });
 
   it("raises a notice fixture as the UI's own timed notice, worded in the viewing language when a function", async () => {
@@ -1127,20 +1128,20 @@ describe("the fixture daemon's file search", () => {
 describe("the fixture daemon's error titles", () => {
   const scenario = { };
 
-  it("gives a scenario's toast the title it names, worded in the viewing language when it is a function", async () => {
+  it("gives a scenario's notification the title it names, worded in the viewing language when it is a function", async () => {
     vi.useFakeTimers();
     try {
       const daemon = createFixtureDaemon({
         ...scenario,
-        toasts: [
+        notifications: [
           { kind: "raised", message: "one", title: "Could not open the folder" },
           { kind: "raised", message: "two", title: (t) => t("settings.saveFailedTitle") },
         ],
       });
-      const toasts: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification((toast) => toasts.push(toast));
+      const notifications: NotificationRequest[] = [];
+      const unsubscribe = daemon.onNotification((notification) => notifications.push(notification));
       await vi.runAllTimersAsync();
-      expect(toasts.map((toast) => toast.title)).toEqual(["Could not open the folder", t("settings.saveFailedTitle")]);
+      expect(notifications.map((notification) => notification.title)).toEqual(["Could not open the folder", t("settings.saveFailedTitle")]);
       unsubscribe();
     } finally {
       vi.useRealTimers();

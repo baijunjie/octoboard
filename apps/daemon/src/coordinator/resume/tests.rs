@@ -477,7 +477,7 @@ async fn a_reopen_is_refused_when_the_conversation_record_is_gone() {
     assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
 }
 
-/// The check made before a request to resume is put to the user raises what the reopen would
+/// The check made before a request to resume is put to the user raises what the resume would
 /// raise for a conversation the agent no longer has, changes nothing, and otherwise names the
 /// archived owners that would come back with the session.
 #[tokio::test]

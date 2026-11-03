@@ -13,7 +13,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{Map, Value};
 
 use crate::branch_origin;
-use crate::branch_origin::handover::{named_branches, Handover};
+use crate::branch_origin::transfer::{named_branches, BranchTransfer};
 use crate::git::repo_files::repository_of;
 use crate::mcp::lookup::{optional_string, optional_string_list, resolve_owned_session};
 use crate::messaging::delivery::{self, WhenBlocked};
@@ -60,7 +60,7 @@ pub(super) async fn held_by(
     holder: &Session,
     project: &Project,
     branches: Vec<String>,
-) -> Result<Handover> {
+) -> Result<BranchTransfer> {
     // Finding the repository reads the filesystem and the holder check reads the store.
     let (repository, not_held, targets) = {
         let state = state.clone();
@@ -94,19 +94,19 @@ pub(super) async fn held_by(
         let branch = named_branches(&[branch]);
         if holder.id == caller.id {
             bail!(
-                "{branch} is not a branch you are responsible for {place} you or handed to you, or \
-                 another session is responsible for it now. Only a branch you are responsible for \
-                 can be handed over"
+                "{branch} is not a branch you are responsible for {place} you or transferred to \
+                 you, or another session is responsible for it now. Only a branch you are \
+                 responsible for can be transferred"
             );
         }
         bail!(
-            "{branch} is not a branch {holder} is responsible for {place} that session or handed \
-             to it, or another session is responsible for it now. Only a branch that session is \
-             responsible for can be handed over",
+            "{branch} is not a branch {holder} is responsible for {place} that session or \
+             transferred to it, or another session is responsible for it now. Only a branch \
+             that session is responsible for can be transferred",
             holder = named_session(holder)
         );
     }
-    Ok(Handover {
+    Ok(BranchTransfer {
         repository,
         branches,
         targets,
@@ -127,10 +127,10 @@ fn party(
     }
 }
 
-/// The two sessions of a handover, `from` and `to` (each the caller or a session it owns), read
+/// The two sessions of a transfer, `from` and `to` (each the caller or a session it owns), read
 /// under claims that keep a relaunch, a switch or a handoff off each one that is not the caller,
 /// with the messages of a `from` other than the caller held so that none starts a turn while the
-/// handover is checked again and made. The claims last as long as this does.
+/// transfer is checked again and made. The claims last as long as this does.
 struct Parties {
     from: Session,
     to: Session,
@@ -154,7 +154,7 @@ impl Parties {
         let to_id = party(state, caller, arguments, "to")?.id;
         if from_id == to_id {
             bail!(
-                "`from` and `to` are the same session, `{from_id}`; there is nothing to hand over"
+                "`from` and `to` are the same session, `{from_id}`; there is nothing to transfer"
             );
         }
         let _from_claim = (from_id != caller.id)
@@ -175,7 +175,7 @@ impl Parties {
 
     /// Tells `from` and `to` what moved, `messages` holding what each is told in that order,
     /// unless one is the caller, which knows from the result; then lets `from`'s held messages go.
-    /// `what` names the handover in the log.
+    /// `what` names the transfer in the log.
     ///
     /// Returns the sessions that could not be told, as they are on record now, for the result to
     /// name ([`untold_note`]): one with no process, or one that took no message. The records are
@@ -210,7 +210,7 @@ impl Parties {
                 tracing::warn!(
                     session = %session.id,
                     %err,
-                    "telling a session of a {what} handover failed"
+                    "telling a session of a {what} transfer failed"
                 );
                 untold.push(current);
             }
@@ -220,14 +220,14 @@ impl Parties {
     }
 }
 
-/// What a handover's result says of each session in `untold`, which [`Parties::tell`] could not
+/// What a transfer's result says of each session in `untold`, which [`Parties::tell`] could not
 /// tell: that the caller is to.
 fn untold_note(untold: &[Session]) -> String {
     untold
         .iter()
         .map(|session| {
             format!(
-                " Octoboard could not send {} a message about the handover: tell it yourself \
+                " Octoboard could not send {} a message about the transfer: tell it yourself \
                  once it can take a message.",
                 named_session(session)
             )

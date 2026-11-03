@@ -22,7 +22,7 @@ pub(super) const LIST_SESSION_BRANCHES: ToolDef = ToolDef {
                   it into; null when it was created from something that is no local branch), \
                   `fork_point` (the commit it was created at) and `responsible_since` (when the \
                   session became responsible for it, in milliseconds since the epoch: its \
-                  creation, or a handover), and `archive`: what archiving the session would do \
+                  creation, or a transfer), and `archive`: what archiving the session would do \
                   with it, as `archive_session` or a `done` report with no open items does, \
                   which never forces anything. `archive.removed` is true when the branch and \
                   its worktree both go; `archive.branch` and `archive.worktree` (null when no \
@@ -185,7 +185,7 @@ pub(super) const LIST_PROJECT_BRANCHES: ToolDef = ToolDef {
          no longer exists), `title` (the session's title when it became responsible), \
          `session_state` (`live`, `interrupted`, `archived` or `gone`: no record of the session \
          is left), `since` (milliseconds since the epoch: the branch's creation by that session, \
-         or a handover), `target_branch` (the local branch it was created from, the one to merge \
+         or a transfer), `target_branch` (the local branch it was created from, the one to merge \
          it into; null when it was created from something that is no local branch) and \
          `fork_point` (the commit it was created at). Use it to see who holds a branch, or \
          whether the session that did is gone, instead of searching every session; a branch of a \

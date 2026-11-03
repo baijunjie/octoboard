@@ -131,7 +131,7 @@ it("announces a project filter's empty result once, clears it when matches retur
 });
 
 /** Mounts the sidebar in `first`'s focus mode with focus on the control `pick` finds, then moves it
- * to `next`'s, as pressing that control does; returns what holds focus once the hand-off has run,
+ * to `next`'s, as pressing that control does; returns what holds focus once the handoff has run,
  * and whether the control that held it is still in the document. */
 function focusAfterMove(first: FocusTarget, pick: (nav: HTMLElement) => HTMLElement | null, next: FocusTarget): { active: Element | null; pickedConnected: boolean } {
   const { container, root, render } = mountSidebar({ focus: first });

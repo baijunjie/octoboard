@@ -88,8 +88,8 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
   };
   const failed = trees === undefined && error !== undefined;
   const [selected, setSelected] = useState<{ tree: ProcessTree; action: ProcessAction; nextId?: string }>();
-  // A confirmed request that is on its way keeps its confirmation, and with it the success toast and the
-  // hand-over of focus, even when a refresh has already taken the tree out of the list.
+  // A confirmed request that is on its way keeps its confirmation, and with it the success notice and the
+  // focus handoff, even when a refresh has already taken the tree out of the list.
   const [pending, setPending] = useState(false);
   const listed = trees?.find((tree) => tree.id === selected?.tree.id);
   const vanished = selected !== undefined && !pending && trees !== undefined && listed === undefined;

@@ -43,7 +43,7 @@ responsible session" in `docs/product/branch-responsible-session.md`), the same 
   branch `HEAD` was on is taken whatever the start point was;
 - its **fork point**, the commit it was created at.
 
-Both follow the branch's record: a rename carries them to the new name, a handover leaves them as they are, and they go
+Both follow the branch's record: a rename carries them to the new name, a transfer leaves them as they are, and they go
 when the record goes. A branch no session's git reported creating has neither recorded.
 
 Where the gate needs the fork point of a branch that has none recorded, it takes instead the commit the branch's reflog

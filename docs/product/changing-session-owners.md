@@ -23,8 +23,8 @@ a console session: bound to a project session it could own none. A call that bre
 in prose, and changes nothing; so is one whose binding changed while it was being made — the session bound elsewhere
 meanwhile, it gained sessions of its own, or the owner can no longer own sessions — which says to look again before
 retrying. `transfer_session` and `bind_to_session` are also refused, changing nothing, while the session being rebound,
-or an owner involved — the owner it is to be bound to, or a handover's earlier or new owner — is being started, resumed,
-handed off, switched to another account, having its branches handed over or having its owner changed; the reason says to
+or an owner involved — the owner it is to be bound to, or a transfer's earlier or new owner — is being started, resumed,
+handed off, switched to another account, having its branches transferred or having its owner changed; the reason says to
 look again once that is done.
 
 ## Handing a session to another owner
@@ -33,16 +33,16 @@ look again once that is done.
 
 | Argument | Required | Contents |
 |---|---|---|
-| `session` | yes | The session to hand over: one of the caller's (`yours: true`). |
+| `session` | yes | The session to transfer: one of the caller's (`yours: true`). |
 | `to` | yes | The new owner's session id. |
-| `note` | yes | The handover, for the new owner: what the session is doing, where it stands and what is left. |
+| `note` | yes | The transfer note, for the new owner: what the session is doing, where it stands and what is left. |
 
-Besides the rules above, it is refused for a session that is not the caller's (as for `instruct_session`) and for handing
-a session to the caller itself. The session itself may be running or not; only the new owner must be running. One with
-no process running is told of its new owner when it next starts (see "A change of owner told at the next launch"
-below).
+Besides the rules above, it is refused for a session that is not the caller's (as for `instruct_session`) and for
+transferring a session to the caller itself. The session itself may be running or not; only the new owner must be
+running. One with no process running is told of its new owner when it next starts (see "A change of owner told at the
+next launch" below).
 
-Once handed over, the session is bound to the new owner and reports to it, and the caller no longer drives it. Nothing
+Once transferred, the session is bound to the new owner and reports to it, and the caller no longer drives it. Nothing
 else is moved: the sessions bound to it stay bound to it. A coordinator transferred to a console session keeps its role;
 handed to a project session it is a worker, and every report panel page it pushed is withdrawn (see "When a session
 becomes a worker" in `docs/product/report-panel.md`). A worker keeps that role wherever it goes.
@@ -50,13 +50,13 @@ becomes a worker" in `docs/product/report-panel.md`). A worker keeps that role w
 Both sessions concerned are told, by messages written through the delivery every message takes (queued while one cannot
 take a message; see "Messages held until a session can take them" in `docs/product/message-delivery.md`):
 
-- **The session**, when it is running, is told its owner has changed — which session handed it over to which, by kind,
+- **The session**, when it is running, is told its owner has changed — which session transferred it to which, by kind,
   id and title — that it takes work only from the new owner, or from the user typing in its terminal, and reports to it
   with `report`, that this replaces what it was told of its owner when it was started, and that the earlier owner no
   longer drives it. A session that has lost the tools for owning sessions is also told it can no longer start or drive
   sessions, with the list of the Octoboard tools it has left, and that any pages it pushed to the report panel were
   withdrawn with the tools for them.
-- **The new owner** is told which session handed which session over to it, by id, title and project, that the session is
+- **The new owner** is told which session transferred which session to it, by id, title and project, that the session is
   its own from now on and is driven with `instruct_session`, `archive_session` and `resume_session`, and, for a
   coordinator with a parent, that it keeps its own sessions, which the new owner can read but not drive; then the
   caller's `note`, every line quoted, followed by a closing line.
@@ -75,7 +75,7 @@ with the reason, or was not told because the message was written
 into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of the
 agent's background agents — the user having been told to check the session (see "A message written but not
 sent" in `docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the
-handover with `inform_session`. Once the binding has changed the handover stands, whatever became of the messages.
+transfer with `inform_session`. Once the binding has changed the transfer stands, whatever became of the messages.
 
 ## Releasing a session from its owner
 
@@ -111,7 +111,7 @@ nothing:
 | A console session, which is never bound | `console_session_never_bound` |
 | A session that is not bound | `session_not_bound` |
 | A session that is not the caller's, or a `note` longer than 4000 characters (the tool only) | — |
-| The session is being started, resumed, handed off, switched to another account, having its branches handed over or having its owner changed; the reason says to look again once that is done | `session_changing` |
+| The session is being started, resumed, handed off, switched to another account, having its branches transferred or having its owner changed; the reason says to look again once that is done | `session_changing` |
 | The owner it is bound to is being started, resumed, handed off, switched to another account or having its owner changed; the reason says to look again once that is done | `session_owner_changing` (names the `owner`) |
 | Its binding changed while it was being released — it was bound elsewhere meanwhile; the reason says to look again before retrying | `session_binding_changed` |
 
@@ -170,8 +170,8 @@ The confirmation reads the session and its owner as they stand while it is open:
   owner changed while it was being released, with a line saying the confirmation now names its current owner and to
   unbind again if the user still wants to; the confirmation stays open.
 - **The session or its owner is busy.** A confirmed release refused as `session_changing` opens an error alert saying
-  the session is being started, resumed, handed off or switched to another account, is having its branches handed
-  over or is being given another owner, so its owner cannot change now, with a line saying to wait for that to finish
+  the session is being started, resumed, handed off or switched to another account, is having its branches transferred
+  or is being given another owner, so its owner cannot change now, with a line saying to wait for that to finish
   before trying again. One refused as `session_owner_changing` says the owner, named, is being started, resumed, handed
   off, switched to another account or given another owner, so sessions cannot be bound to or moved from it now, with a
   line saying to wait for that to finish, then try again. The
@@ -233,7 +233,7 @@ summary that could not be delivered is reported in the note, with the reason, an
 A session's role description is written when it launches, from who it reports to then, and two of the agents keep what
 a conversation was first given on every resume (see "What is injected on every launch" in
 `docs/product/launching-agents.md`). So a change of owner is told to the session in prose instead — in the message a
-handover, a release or a handoff writes into it, or in the result of its own `bind_to_session` call, or, for a session
+transfer, a release or a handoff writes into it, or in the result of its own `bind_to_session` call, or, for a session
 that was not running, at its next launch (see "A change of owner told at the next launch" below) — and its role
 description says that what Octoboard tells it of a later change replaces what it says of its owner.
 

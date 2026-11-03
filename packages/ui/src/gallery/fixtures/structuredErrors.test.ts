@@ -46,8 +46,8 @@ describe("structured error fixture contracts", () => {
   it.each(["en", "zh-Hans", "ar"] as const)("fills every catalog placeholder in %s", (language) => {
     for (const scenario of structuredErrorScenarios) {
       const state = scenario.state!;
-      for (const toast of scenario.toasts ?? []) {
-        const error = toast.kind === "broadcast" ? toast.event : toast.kind === "raised" ? toast : undefined;
+      for (const notification of scenario.notifications ?? []) {
+        const error = notification.kind === "broadcast" ? notification.event : notification.kind === "raised" ? notification : undefined;
         if (!error?.code) continue;
         const text = daemonMessage(language, error.code, error.params ?? {}, typeof error.message === "string" ? error.message : "", {
           consoles: state.consoles!, projects: state.projects!, sessions: state.sessions!,

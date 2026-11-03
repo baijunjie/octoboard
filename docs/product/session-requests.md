@@ -34,20 +34,20 @@ instruction file describe it.
 
 The console session's instructions and every project session's role description give the agent these rules:
 
-- A request to hand its current work to the next session, open another session to continue it, or request a peer
+- A request to pass its current work on to the next session, open another session to continue it, or request a peer
   defaults to `request_session`. The peer reports directly to the user. The brief carries progress, remaining work
   and necessary context; `branches` names the branches the caller is responsible for that the peer should take over.
-- A request to leave handover notes and finish, or permission to end without asking for a successor, means leaving
-  the notes and ending work, without creating or transferring sessions or continuing work in the background.
+- A request to leave notes for the next session and finish, or permission to end without asking for a successor, means
+  leaving the notes and ending work, without creating or transferring sessions or continuing work in the background.
 - `open_session` is for a recipient the caller should keep directing and receiving reports from. `handoff_session`
-  replaces an existing session the caller owns; it does not hand the caller's own work to a peer. Only a session
+  replaces an existing session the caller owns; it does not pass the caller's own work on to a peer. Only a session
   launched with those tools — a console session, or a project session launched unbound, as every launch of a lead
   session is — is given this rule; a project session launched bound to an owner is not, and its text names neither
   tool.
 - Instructions to persist until completion, permission to act without approval and earlier permission to delegate
-  do not override the user's handover intent or request to end. If the agent cannot distinguish a peer request,
-  notes followed by ending, and — for a session given the rule above — a child session it should direct, it must ask
-  the user before acting.
+  do not override the user's intent to continue in another session, or to end. If the agent cannot distinguish a peer
+  request, notes followed by ending, and — for a session given the rule above — a child session it should direct, it
+  must ask the user before acting.
 
 These are instructions for the agent, not intent detection enforced by Octoboard. The confirmation described above
 still controls whether a `request_session` call starts anything.
@@ -62,7 +62,7 @@ still controls whether a `request_session` call starts anything.
 | `brief` | yes | The task, as `open_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
 | `title` | no | The new session's name, as `open_session` takes it: left out or blank, it is titled from its goal (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `agent`, `account`, `model`, `effort` | no | The new session's agent, account, model and reasoning effort, exactly as `open_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. Left out, `agent` and `account` are settled as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes, including automatic selection of a usable account and, when neither choice is explicit, fallback to another added agent while that setting is on, in the caller's own console and in another. |
-| `branches` | no | For `project`: local branches, by name, to hand over to the new session (see "Handing branches over" below). Left out, or an empty list, the request hands nothing over and behaves as one without it. |
+| `branches` | no | For `project`: local branches, by name, to transfer to the new session (see "Transferring branches" below). Left out, or an empty list, the request transfers nothing and behaves as one without it. |
 
 **A request that could never be carried out is refused before the user is asked**, with the reason in prose and no
 dialog shown: whatever `open_session` would refuse for the same brief and overrides — a missing brief or a blank goal,
@@ -71,8 +71,8 @@ that determination is still pending), an agent that is not added, an account tha
 or that is not logged in (see "When the agent or the account cannot open a session" in
 `docs/product/opening-sessions.md`), a model or effort the agent does not offer — and a `kind` that is neither value, a
 `project` or `console` given for the other kind, a project or console that does not exist, a name that names more than
-one, a console session asking for a project session without naming the project, and `branches` the request cannot hand
-over (see "Handing branches over" below).
+one, a console session asking for a project session without naming the project, and `branches` the request cannot
+transfer (see "Transferring branches" below).
 
 ## Approving requests automatically
 
@@ -88,7 +88,7 @@ made before the user is asked, is **approved at once**, without asking:
   and raises no hand, and no notification is fired. The call does not wait for an answer, so nothing in "Waiting for
   the answer" below applies to it: it returns once the approval has been carried out.
 - **The approval is carried out exactly as an approval from the dialog** (see "On approval" below): the session is
-  started as `open_session` would start it, with no owner, the branches the request named are handed over, the call
+  started as `open_session` would start it, with no owner, the branches the request named are transferred, the call
   returns the same result and the same outcome message is written into the caller's session. The only difference in
   what is said is who approved: the paragraph opening the new session's prompt, and the result's note, say the request
   was approved automatically under the user's setting to approve session requests without asking, rather than by the
@@ -104,7 +104,7 @@ made before the user is asked, is **approved at once**, without asking:
   and a call made while an approval of the same session's earlier request is being carried out is refused.
 - **Carrying the approval out does not depend on the call.** Once the call is approved, cancelling it — the user
   pressing Escape in the agent mid-call, the agent cancelling the call over MCP, or the call's connection to the
-  daemon dropping — does not stop it: the session is still started or brought back, the branches still handed over,
+  daemon dropping — does not stop it: the session is still started or brought back, the branches still transferred,
   and the outcome message still reaches the caller's session.
 
 **A switch or a handoff under its setting is not a request at all.** While **Automatically approve account switches**
@@ -189,7 +189,7 @@ connected window.
 | Ending | What the call returns | What changes |
 |---|---|---|
 | The user approves | The result described under "On approval" below; for `request_resume_session`, under "On approval" in `docs/product/requests-to-resume-a-conversation.md`; for a switch or a handoff, the tool's own result (see "Switching from an owner's tool" in `docs/product/switching-session-accounts.md` and "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`). | The session is started, brought back, switched or handed off, as described there. |
-| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started (for `request_resume_session`, nothing was resumed); it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. For a switch or a handoff it says that nothing was changed, and ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal why it wanted the change, and to follow their direction on what to do instead. | Nothing. |
+| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started (for `request_resume_session`, nothing was resumed); it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving notes for the next session and ending. For a switch or a handoff it says that nothing was changed, and ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal why it wanted the change, and to follow their direction on what to do instead. | Nothing. |
 | Nobody answers within the time limit | A tool error of the same shape, saying the user did not respond within the limit. | Nothing. |
 | The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started (nothing resumed, or nothing changed, for the other tools), where the call is still there to receive it. | Nothing. |
 
@@ -203,7 +203,7 @@ A request is **withdrawn** on the signals Octoboard sees for every agent alike:
   `request_session`, `request_resume_session`, `switch_session_account` and `handoff_session` only. A switch or a
   handoff made without asking is left to finish (see "Approving requests automatically" above), and so is a call of any
   other Octoboard tool, cancelled or not, even when its connection to the daemon goes part-way, as when the agent's
-  process exits mid-call: an `open_session` that opened its session still hands over its branches, a `report` already
+  process exits mid-call: an `open_session` that opened its session still transfers its branches, a `report` already
   delivered still goes on to archive its session where it would (`set_session_model` sees to its own end, see "Changing
   a session's model and effort" in `docs/product/model-and-reasoning-effort.md`);
 - the same session makes another request that takes its place (see below).
@@ -247,10 +247,10 @@ dialog (see "Approving requests automatically" above):
    `docs/product/revert-gate.md`), with the same approval, that it is now the session responsible for them and is to
    carry on the work on them. The paragraph is written when the request is made, so it names every branch the request
    named, whatever the move then finds.
-4. **The branches the request named are handed to it** once it has started (see "Handing branches over" below).
+4. **The branches the request named are transferred to it** once it has started (see "Transferring branches" below).
 5. **The approval does not archive the caller.** It keeps running, and the approval does not count as a report.
-   The result tells the caller to follow the user's direction on continuing its own work or ending after the
-   handover. It does not own the new session, so `instruct_session`, `archive_session`, `resume_session` and the other
+   The result tells the caller to follow the user's direction on continuing its own work or ending after passing the
+   work on. It does not own the new session, so `instruct_session`, `archive_session`, `resume_session` and the other
    tools that act on a session of the caller's own refuse it; `inform_session` reaches it (see
    `docs/product/information-between-sessions.md`), and `get_session` reads it, as it reads any session.
 
@@ -264,19 +264,19 @@ The call returns:
 | `title` | Its title. |
 | `console` | The console it is in. |
 | `project` | The project it is in, or null for a console session. |
-| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `inform_session` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is independent, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). |
+| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the transfer; where the request named branches, what became of them (see "Transferring branches" below); that `inform_session` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is independent, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). |
 
 **No window follows the new session.** Approving selects nothing and changes no window's view or focus mode.
 
-## Handing branches over
+## Transferring branches
 
 A request for a project session can hand the new session branches the requester is the **responsible session** of
 (see "The responsible session" in `docs/product/branch-responsible-session.md`), so that the new session carries on
-the work on them. Only the branches named in `branches` are handed over; nothing is inferred, so a request without
-them hands over none, whichever branch the requester has checked out. The tool's description tells the agent to pass
-`branches` when it is handing over the work on a branch it is responsible for, and to leave it out when it is only
+the work on them. Only the branches named in `branches` are transferred; nothing is inferred, so a request without
+them transfers none, whichever branch the requester has checked out. The tool's description tells the agent to pass
+`branches` when it is transferring the work on a branch it is responsible for, and to leave it out when it is only
 working on whatever branch is checked out. A project session's `open_session` takes the same `branches`, for a session
-the caller owns, without the user's approval (see "Handing branches to a session the caller starts" in
+the caller owns, without the user's approval (see "Transferring branches to a session the caller starts" in
 `docs/product/branch-responsible-session.md`).
 
 **What is refused before the user is asked**, with the reason in prose and no dialog shown, as any other refusal:
@@ -284,10 +284,10 @@ the caller owns, without the user's approval (see "Handing branches to a session
 - `branches` that is not a list of strings, or that holds a blank name;
 - any branch named for `kind: console`;
 - branches named for a project that is not in a git repository;
-- a branch that is not the requester's to hand over in the repository of the project the new session would be in —
+- a branch that is not the requester's to transfer in the repository of the project the new session would be in —
   it does not exist there, the requester's own git did not report creating it and it was not handed to it, or another
   session is responsible for it now. These are one refusal, which names the first such branch and says that only a
-  branch the requester is responsible for can be handed over. A branch deleted and created again under the same name
+  branch the requester is responsible for can be transferred. A branch deleted and created again under the same name
   is another branch, which the requester was never responsible for.
 
 Each name is taken with surrounding blanks trimmed, and a name given more than once is one branch. The records belong
@@ -296,7 +296,7 @@ repository whose references are kept in reftable format, a record cannot be held
 "Where a branch has no responsible session" in `docs/product/branch-responsible-session.md`), so there a branch
 deleted since the Git mode last listed the branches still passes the check, and so does one deleted and created again
 under the same name while the first one's record stands. Elsewhere, a branch renamed since the Git mode last listed
-the branches still has its record under its old name, so handing it over is refused, by either name, until the Git
+the branches still has its record under its old name, so transferring it is refused, by either name, until the Git
 mode lists the branches again and the record moves to the new name.
 
 **Nothing moves until the request is approved.** A request refused, timed out or withdrawn leaves every branch with the
@@ -305,7 +305,7 @@ requester, and so does an approval that cannot be carried out.
 **On approval, the session is started first, and only then do the branches move** to it: each moves only where the
 requester is still its responsible session at that moment. The new session is then responsible for the branches that
 moved, from the moment of the move, and the requester no longer is. A branch whose responsible session changed in the
-meantime, or whose record has gone, is not handed over and stays as it was. A branch that moved carries the new
+meantime, or whose record has gone, is not transferred and stays as it was. A branch that moved carries the new
 session's responsible-session badge in the Git mode from then on (see "The responsible-session badge" in
 `docs/product/branch-responsible-session.md`).
 
@@ -313,9 +313,9 @@ session's responsible-session badge in the Git mode from then on (see "The respo
 approval's result as usual, and the requester stays responsible for every branch it named.
 
 The call's note, and the outcome message that repeats it (see "The outcome message" below), say what became of the
-branches: those handed over, each named, now the new session's responsibility and no longer the caller's; those not
-handed over, each named, because by then the caller was no longer responsible for them or they were gone, staying as
-they were; or, where the move could not be recorded, that the handover of the branches named could not be recorded and
+branches: those transferred, each named, now the new session's responsibility and no longer the caller's; those not
+transferred, each named, because by then the caller was no longer responsible for them or they were gone, staying as
+they were; or, where the move could not be recorded, that the transfer of the branches named could not be recorded and
 the caller is still responsible for them.
 
 ## The outcome message
@@ -333,11 +333,12 @@ No report is synthesised for the turn this message starts (see "When a session d
 when a turn starts without its prompt reaching Octoboard is the next turn to start the one spared a report instead.
 
 The turn in which Claude Code delivers the call's result after moving the call to the background, as described above,
-is not spared: that turn is reported on as any other, whether the caller continues work or ends after the handover.
+is not spared: that turn is reported on as any other, whether the caller continues work or ends after passing the work
+on.
 
 ## When an approval cannot be carried out
 
-When an approval cannot be carried out, nothing is started and no branch is handed over, the call returns a tool
+When an approval cannot be carried out, nothing is started and no branch is transferred, the call returns a tool
 error saying the user approved but it could not be carried out, with the reason, and the window that approved shows
 the reason in an error alert about the requesting session. For an automatic approval the error says instead that the
 request was approved automatically but could not be carried out, and no window shows an alert. A switch or a handoff
@@ -369,7 +370,7 @@ of an owner's handoff" in `docs/product/handing-off-sessions.md`.
   the agent the new session would run and where it would be — a project and that project's console, or, for a console
   session, the console alone; and it ends saying the new session would report to the user. The console is so named
   once where both sessions share it. A project or console the window does not know is named by its id.
-- **Where the request hands branches over, a second sentence names them**, saying they would be handed over to the new
+- **Where the request transfers branches, a second sentence names them**, saying they would be transferred to the new
   session. Each branch is shown as code, and they are joined as the window's language joins a list. With none, the
   dialog says only the first sentence.
 - **Nothing the agent wrote is shown**, its brief included: the dialog is the one place the user's approval is

@@ -44,7 +44,7 @@ pub(crate) fn end_process_for_test(state: &Arc<AppState>, id: &str) {
 /// restoring launched and is still watching come up (`LiveSession::watch_under_claim`), which
 /// reports the outcome itself; a switch someone asked for does not watch, so it is told. A
 /// claim held on the session says nothing else of it: a process that exits by itself under one
-/// is told, and so is one a claim that stops nothing (a handover of branches, a binding
+/// is told, and so is one a claim that stops nothing (a transfer of branches, a binding
 /// change) left running.
 pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
     let state = state.clone();

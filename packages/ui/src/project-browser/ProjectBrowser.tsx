@@ -5,7 +5,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../components/controls/Button";
 import { StatusMark } from "../components/status/StatusMark";
 import { handFocusOff } from "../components/focus/handFocusOff";
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
 import { TEXT_TAB_COMPACT_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
@@ -81,7 +81,7 @@ export function ProjectBrowser({
   useEffect(() => setGitModeWorktree(project.id, mode === "git" ? git.worktree : undefined), [project.id, mode, git.worktree]);
   const refreshRef = useRef<HTMLButtonElement>(null);
   const partialMarkId = useId();
-  // The hand-off covers the header's controls too: Collapse all disables itself as it is pressed,
+  // The handoff covers the header's controls too: Collapse all disables itself as it is pressed,
   // which blurs it to `<body>`, and it hands focus to Refresh beside it.
   const filesFocus = useFocusHandoff(() => refreshRef.current?.focus());
   useEffect(() => browser.touch(), []);
@@ -130,7 +130,7 @@ export function ProjectBrowser({
             titleMark={mode === "files" && !files.searching && files.root?.state === "loaded" && !files.root.complete ? (
               <>
                 {/* The mark goes when the root lists completely; focus it or its popover held goes to the header's first control. */}
-                <HandOffOnUnmount from={`[data-status-mark-id="${partialMarkId}"]`} to={() => handFocusToRegionStart("panel-files")} />
+                <HandoffOnUnmount from={`[data-status-mark-id="${partialMarkId}"]`} to={() => handFocusToRegionStart("panel-files")} />
                 <StatusMark tone="warning" markId={partialMarkId} label={t("browser.partial")} />
               </>
             ) : undefined}

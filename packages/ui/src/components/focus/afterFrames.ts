@@ -1,4 +1,4 @@
-/** Runs `then` after `count` animation frames, and returns what cancels it. A focus hand-off waits like this for the
+/** Runs `then` after `count` animation frames, and returns what cancels it. A focus handoff waits like this for the
  * frame React Aria's own restore runs in (the one after a dialog unmounts) to pass before it acts. */
 export function afterFrames(count: number, then: () => void): () => void {
   let frame = 0;

@@ -316,10 +316,10 @@ pub(super) struct HookNoted {
     pub(super) carry: bool,
 }
 
-/// The hand-over of a carry's outcome between the hook that carries and Octoboard's press, which
+/// The rendezvous of a carry's outcome between the hook that carries and Octoboard's press, which
 /// waits for it to know whether the press succeeded.
 #[derive(Default)]
-pub(super) struct CarryHandover {
+pub(super) struct CarryRendezvous {
     /// A press has sent its key and is waiting for the outcome.
     pub(super) awaited: bool,
     pub(super) outcome: Option<std::result::Result<(), CarryFailure>>,
@@ -367,7 +367,7 @@ pub struct TrustState {
     pub(super) dismissed: AtomicBool,
     /// Where a hook leaves the outcome of carrying the agent's trust record for a press waiting on
     /// it.
-    pub(super) carry: Mutex<CarryHandover>,
+    pub(super) carry: Mutex<CarryRendezvous>,
     pub(super) carried_over: std::sync::Condvar,
     pub(super) sightings: UnboundedSender<()>,
     pub(super) sighting_receiver: Mutex<Option<UnboundedReceiver<()>>>,
@@ -392,7 +392,7 @@ impl TrustState {
             answered: AtomicBool::new(false),
             pressed: AtomicBool::new(false),
             dismissed: AtomicBool::new(false),
-            carry: Mutex::new(CarryHandover::default()),
+            carry: Mutex::new(CarryRendezvous::default()),
             carried_over: std::sync::Condvar::new(),
             sightings,
             sighting_receiver: Mutex::new(Some(receiver)),
@@ -570,9 +570,9 @@ impl TrustState {
     /// For a press that has sent its key: says that it waits for the hook's carry. Taken back by
     /// [`Self::stop_awaiting_carry`].
     pub(super) fn await_carry(&self) {
-        let mut handover = self.carry.lock().expect("trust carry mutex poisoned");
-        handover.awaited = true;
-        handover.outcome = None;
+        let mut slot = self.carry.lock().expect("trust carry mutex poisoned");
+        slot.awaited = true;
+        slot.outcome = None;
     }
 
     /// Waits up to `timeout` for the hook's carry outcome; `None` when none came. The press still
@@ -581,31 +581,31 @@ impl TrustState {
         &self,
         timeout: Duration,
     ) -> Option<std::result::Result<(), CarryFailure>> {
-        let handover = self.carry.lock().expect("trust carry mutex poisoned");
-        let (mut handover, _) = self
+        let slot = self.carry.lock().expect("trust carry mutex poisoned");
+        let (mut slot, _) = self
             .carried_over
-            .wait_timeout_while(handover, timeout, |handover| handover.outcome.is_none())
+            .wait_timeout_while(slot, timeout, |slot| slot.outcome.is_none())
             .expect("trust carry mutex poisoned");
-        handover.outcome.take()
+        slot.outcome.take()
     }
 
     /// For a press that stops waiting without its key having led anywhere: whatever outcome a
     /// hook left meanwhile is the caller's, and a later one is the hook's own to report.
     pub(super) fn stop_awaiting_carry(&self) -> Option<std::result::Result<(), CarryFailure>> {
-        let mut handover = self.carry.lock().expect("trust carry mutex poisoned");
-        handover.awaited = false;
-        handover.outcome.take()
+        let mut slot = self.carry.lock().expect("trust carry mutex poisoned");
+        slot.awaited = false;
+        slot.outcome.take()
     }
 
     /// For the hook that carried: hands `outcome` to a press waiting for it, or back to the hook,
     /// to report itself, when none is.
-    pub(super) fn hand_over_carry(
+    pub(super) fn deliver_carry(
         &self,
         outcome: std::result::Result<(), CarryFailure>,
     ) -> Option<std::result::Result<(), CarryFailure>> {
-        let mut handover = self.carry.lock().expect("trust carry mutex poisoned");
-        if handover.awaited {
-            handover.outcome = Some(outcome);
+        let mut slot = self.carry.lock().expect("trust carry mutex poisoned");
+        if slot.awaited {
+            slot.outcome = Some(outcome);
             self.carried_over.notify_all();
             None
         } else {

@@ -279,7 +279,7 @@ pub enum Event {
         conversation: Option<String>,
         /// The branches an approval would hand to the new session, as wire paths below
         /// `refs/heads/`: ones the requesting session is responsible for, checked when it asked.
-        /// Empty when the request hands none over.
+        /// Empty when the request transfers none.
         branches: Vec<String>,
         /// For `handoff`: the model and effort the call asked for, as `Session::model` states an
         /// override: absent when the call left it out, null for the agent's own default.

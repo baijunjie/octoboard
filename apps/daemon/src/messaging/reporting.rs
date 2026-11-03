@@ -1255,7 +1255,7 @@ mod tests {
             let state = state.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(300));
-                state.store.hand_over_binding("hub", "heir", None).unwrap();
+                state.store.transfer_binding("hub", "heir", None).unwrap();
                 let mut hub = state.session_record("hub").unwrap();
                 hub.status = SessionStatus::Archived;
                 state.store.update_session(&hub).unwrap();

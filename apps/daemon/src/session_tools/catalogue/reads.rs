@@ -38,9 +38,9 @@ macro_rules! session_record_fields {
          `waiting_user` (needs the user's answer), `dormant` (the user is in its background-agents \
          view: it holds its messages and takes none until they leave, so leave it alone), `idle` \
          (awaiting instructions), `interrupted` (its process ended) or `archived`; \
-         `resume_session` reopens either when it is yours. `paused` is true for an `idle` session \
+         `resume_session` resumes either when it is yours. `paused` is true for an `idle` session \
          whose last turn ended abnormally (cancelled, declined, stopped on a usage limit, failed, \
-         or cut short by its process ending mid-turn, which a reopen brings back): it takes \
+         or cut short by its process ending mid-turn, which a resume brings back): it takes \
          messages like any idle session. `account` is the account the session runs on, an \
          account's id or `default` for the agent's default account as `list_agents` lists them, \
          with its `account_name`; `switch_session_account` refuses the account a session is on \
@@ -222,7 +222,7 @@ pub(super) const LIST_ARCHIVED_SESSIONS: ToolDef = ToolDef {
          of them; `total` is how many match, and `older` how many of them come after the page: \
          when there are some, `next` is a cursor, to pass as `before` to read the next page (it \
          is null on the last). Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
-         one of yours can be reopened instead of starting over (`yours: true` lists just those; \
+         one of yours can be resumed instead of starting over (`yours: true` lists just those; \
          `owner` with another session's id lists that one's). A session with `yours: false` is \
          somebody else's: leave it alone. ",
         session_record_fields!(),
@@ -268,7 +268,7 @@ pub(super) const LIST_ARCHIVED_SESSIONS: ToolDef = ToolDef {
                                     agent still holds its conversation (or it has none), \
                                     `false` when that is proven gone, `null` when it cannot be \
                                     told. Looks through the agents' record directories for \
-                                    each session, so ask only when you mean to reopen one. \
+                                    each session, so ask only when you mean to resume one. \
                                     Defaults to false.",
                 },
                 "limit": {

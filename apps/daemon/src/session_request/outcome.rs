@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use crate::branch_origin::handover::{branch_noun_and_pronoun, named_branches, Handed};
+use crate::branch_origin::transfer::{branch_noun_and_pronoun, named_branches, TransferOutcome};
 use crate::coordinator;
 use crate::messaging::naming::{label, one_line, place_of, reports_to, ReportsTo};
 use crate::protocol::Session;
@@ -75,20 +75,20 @@ fn describe(state: &Arc<AppState>, session: &Session) -> String {
 
 /// What a session is told of the session it asked for, in the call's result and in the message
 /// alike: where it was started, that it reports to the user, what became of the branches it asked
-/// to hand over, and what that leaves the caller able to do with the session.
+/// to transfer, and what that leaves the caller able to do with the session.
 pub(super) fn outcome_note(
     state: &Arc<AppState>,
     caller: &Session,
     started: &Session,
-    handed: Option<&Handed>,
+    transferred: Option<&TransferOutcome>,
     approval: &str,
 ) -> String {
-    let branches = handed.map(branch_outcome).unwrap_or_default();
+    let branches = transferred.map(branch_outcome).unwrap_or_default();
     format!(
         "{approval}: Octoboard started {described}, with your brief as its opening prompt. It has \
          no owner: it reports to the user, not to you. {NOT_YOURS_TO_DRIVE} Follow the user's \
-         direction on whether to continue your own work or end after the handover.{branches} \
-         {reach}",
+         direction on whether to continue your own work or end after passing the work on.\
+         {branches} {reach}",
         described = describe(state, started),
         reach = reach_note(state, caller, started),
     )
@@ -238,36 +238,36 @@ fn can_own(state: &Arc<AppState>, session: &Session, owner: &Session) -> bool {
     )
 }
 
-/// What became of the branches a request handed over, as a sentence or two for the outcome note,
+/// What became of the branches a request transferred, as a sentence or two for the outcome note,
 /// each opening with a space.
-pub(crate) fn branch_outcome(handed: &Handed) -> String {
+pub(crate) fn branch_outcome(outcome: &TransferOutcome) -> String {
     let mut text = String::new();
-    match handed {
-        Handed::Moved(handed) => {
-            if !handed.moved.is_empty() {
-                let (_, them) = branch_noun_and_pronoun(&handed.moved);
+    match outcome {
+        TransferOutcome::Moved(moved) => {
+            if !moved.moved.is_empty() {
+                let (_, them) = branch_noun_and_pronoun(&moved.moved);
                 text.push_str(&format!(
-                    " Handed over to it: {}. It is now the session responsible for {them} and you \
+                    " Transferred to it: {}. It is now the session responsible for {them} and you \
                      no longer are.",
-                    named_branches(&handed.moved)
+                    named_branches(&moved.moved)
                 ));
             }
-            if !handed.unmoved.is_empty() {
-                let (them, they, were, stay) = match handed.unmoved.as_slice() {
+            if !moved.unmoved.is_empty() {
+                let (them, they, were, stay) = match moved.unmoved.as_slice() {
                     [_] => ("it", "It", "it was", "stays as it was"),
                     _ => ("them", "They", "they were", "stay as they were"),
                 };
                 text.push_str(&format!(
-                    " Not handed over, because by then you were no longer responsible for {them} \
+                    " Not transferred, because by then you were no longer responsible for {them} \
                      or {were} gone: {}. {they} {stay}.",
-                    named_branches(&handed.unmoved)
+                    named_branches(&moved.unmoved)
                 ));
             }
         }
-        Handed::Failed(branches) => {
+        TransferOutcome::Failed(branches) => {
             let (_, them) = branch_noun_and_pronoun(branches);
             text.push_str(&format!(
-                " Octoboard could not record the handover of {}, so you are still responsible for \
+                " Octoboard could not record the transfer of {}, so you are still responsible for \
                  {them}.",
                 named_branches(branches)
             ));

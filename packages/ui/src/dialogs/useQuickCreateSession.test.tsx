@@ -81,7 +81,7 @@ it("opens a console session with no project", async () => {
   expect(daemon.request).toHaveBeenCalledWith(expect.not.objectContaining({ project_id: expect.anything() }));
 });
 
-it("reports a refusal as a toast and selects nothing", async () => {
+it("reports a refusal as a notification and selects nothing", async () => {
   const { daemon, onOpened, run } = mount();
   const refusal = new CodedError("No such agent", "agent_unavailable", {});
   vi.mocked(daemon.request).mockRejectedValue(refusal);

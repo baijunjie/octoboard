@@ -134,11 +134,11 @@ pub(super) fn open_session_schema(with_project: bool) -> Value {
         properties["branches"] = json!({
             "type": "array",
             "items": { "type": "string" },
-            "description": "Local branches of this project's repository to hand over to the new \
+            "description": "Local branches of this project's repository to transfer to the new \
                             session, by name. Each must be a branch you are responsible for: one \
                             you created or were handed. They move to it right after it starts, \
                             and it becomes responsible for them in your place. Leave this out \
-                            when there is nothing to hand over.",
+                            when there is nothing to transfer.",
         });
         return object_schema(properties, &["brief"]);
     }

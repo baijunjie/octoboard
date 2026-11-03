@@ -25,7 +25,7 @@ pub(in crate::mcp) async fn instruct_session(
     let text = required_str(arguments, "text")?.to_string();
     let outcome = delivery::write_message_off_runtime(state, &target.id, text, WhenBlocked::Queue)
         .await
-        .map_err(|err| point_to_reopen(err, caller.agent, &target))?;
+        .map_err(|err| point_to_resume(err, caller.agent, &target))?;
     Ok(json!({
         "delivered": outcome == Delivery::Written,
         "note": delivery_note(outcome),
@@ -35,7 +35,7 @@ pub(in crate::mcp) async fn instruct_session(
 /// A refusal for a session with no process, said with what the caller can do about it: the
 /// session is the caller's, so `resume_session` relaunches it with the message. The code and the
 /// params stay the refusal's own. `caller` is the agent of the session asking.
-fn point_to_reopen(err: anyhow::Error, caller: Agent, target: &Session) -> anyhow::Error {
+fn point_to_resume(err: anyhow::Error, caller: Agent, target: &Session) -> anyhow::Error {
     match err.downcast_ref::<CodedError>() {
         Some(coded)
             if coded.code == error_code::SESSION_NOT_RUNNING && target.status.has_no_process() =>

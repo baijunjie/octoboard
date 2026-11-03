@@ -1,4 +1,4 @@
-//! The tools that move a session or what it holds: handoff, handover of branches and
+//! The tools that move a session or what it holds: handoff, transfer of branches and
 //! processes, account and model changes, and changes of owner.
 
 use serde_json::json;
@@ -42,7 +42,7 @@ pub(super) const TRANSFER_BRANCHES: ToolDef = ToolDef {
                 },
                 "from": {
                     "type": "string",
-                    "description": "The session handing the branches over: this session (the \
+                    "description": "The session transferring the branches: this session (the \
                                     default) or a session of yours, archived or not.",
                 },
                 "to": {
@@ -88,7 +88,7 @@ pub(super) const TRANSFER_PROCESSES: ToolDef = ToolDef {
                 },
                 "from": {
                     "type": "string",
-                    "description": "The session handing the processes over: this session (the \
+                    "description": "The session transferring the processes: this session (the \
                                     default) or a session of yours with a process running.",
                 },
                 "to": {
@@ -300,13 +300,14 @@ pub(super) const TRANSFER_SESSION: ToolDef = ToolDef {
             json!({
                 "session": {
                     "type": "string",
-                    "description": "The id of the session of yours to hand over.",
+                    "description": "The id of the session of yours to transfer.",
                 },
                 "to": { "type": "string", "description": "The new parent session's session id." },
                 "note": {
                     "type": "string",
-                    "description": "The handover, in natural language, for the new parent session: \
-                                    what the session is doing, where it stands and what is left.",
+                    "description": "The transfer note, in natural language, for the new parent \
+                                    session: what the session is doing, where it stands and what \
+                                    is left.",
                 },
             }),
             &["session", "to", "note"],

@@ -54,7 +54,7 @@ export function interactionIsTouch(): boolean {
   return lastInput === undefined ? (window.matchMedia?.(CANNOT_HOVER).matches ?? false) : lastInput === "touch";
 }
 
-/** Called before a focus move the user did not ask for (a hand-off as something goes away, a
+/** Called before a focus move the user did not ask for (a handoff as something goes away, a
  * return after a press elsewhere): its destination shows a focus ring, as for the keyboard. Not
  * after a tap, where a ring shows nothing a finger can use and the tooltip it opens would stay up
  * with nothing to send it away. Call it right before the `focus()` that actually happens, after every

@@ -54,7 +54,7 @@ interface SidebarFrameProps {
   children: React.ReactNode;
 }
 
-/** The sidebar's frame: the docked column and its clip, the drawer and the hover card, the hand-off of
+/** The sidebar's frame: the docked column and its clip, the drawer and the hover card, the handoff of
  * keyboard focus when the view changes, and the animation of the view arriving. It knows nothing of
  * what the view holds. */
 export function SidebarFrame({

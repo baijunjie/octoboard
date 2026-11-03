@@ -3,7 +3,7 @@
 
 use uuid::Uuid;
 
-use crate::branch_origin::handover::Handover;
+use crate::branch_origin::transfer::BranchTransfer;
 use crate::coordinator::open::OpenRequest;
 use crate::protocol::{Agent, Event, Role, Session, SessionRequestAction};
 use crate::time::now_millis;
@@ -15,8 +15,8 @@ use super::Change;
 /// outcome, and asking again would put the same question in front of the user straight away.
 const DO_NOT_ASK_AGAIN: &str = "Do not ask again unless the user tells you to. Tell the user in \
                                 this terminal what you wanted the session for, and follow their \
-                                direction on whether to continue your own work or leave handover \
-                                notes and end";
+                                direction on whether to continue your own work or leave notes for \
+                                the next session and end";
 
 /// [`DO_NOT_ASK_AGAIN`] for a switch or a handoff, which has no new session to want.
 const DO_NOT_ASK_AGAIN_TO_CHANGE: &str = "Do not ask again unless the user tells you to. Tell the \
@@ -25,11 +25,11 @@ const DO_NOT_ASK_AGAIN_TO_CHANGE: &str = "Do not ask again unless the user tells
 
 /// What an approval does, as the request was made.
 pub(crate) enum Action {
-    /// Starts a session, unbound, from `open`, and moves `handover`'s branches to it. The handover
+    /// Starts a session, unbound, from `open`, and moves `transfer`'s branches to it. The transfer
     /// is boxed so that this variant stays near the size of the others.
     Start {
         open: OpenRequest,
-        handover: Option<Box<Handover>>,
+        transfer: Option<Box<BranchTransfer>>,
     },
     /// Brings back the archived or interrupted session `target`, which holds the conversation;
     /// `archived` is which it was when the request was made, which is what the dialog words the
@@ -190,10 +190,10 @@ impl Request {
                 effort = described.effort;
                 described.action
             }
-            Ask::Session(Action::Start { handover, .. }) => {
-                branches = handover
+            Ask::Session(Action::Start { transfer, .. }) => {
+                branches = transfer
                     .as_ref()
-                    .map(|handover| handover.branches.clone())
+                    .map(|transfer| transfer.branches.clone())
                     .unwrap_or_default();
                 SessionRequestAction::Start
             }

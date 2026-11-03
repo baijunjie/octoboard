@@ -306,7 +306,7 @@ pub(crate) fn write_notice_to_owner(
 }
 
 /// [`write_notice_to_owner`] for a caller on the runtime, whose notice is not one of the
-/// `tell_owner_*` ones: a handoff's or a handover's, about the session `about` that moved.
+/// `tell_owner_*` ones: a handoff's or a transfer's, about the session `about` that moved.
 pub(crate) async fn write_notice_to_owner_off_runtime(
     state: &Arc<AppState>,
     owner: &Session,
@@ -340,7 +340,7 @@ fn wait_out_claim(state: &Arc<AppState>, id: &str) {
 /// rest of what was kept for it, shared information included. An owner that is archived is
 /// refused.
 ///
-/// An owner under a claim (a resume, an account switch, a handoff, a handover of branches or a
+/// An owner under a claim (a resume, an account switch, a handoff, a transfer of branches or a
 /// change of owner) has no process to write into and takes nothing kept either, and what is sent
 /// to it is an event that will not come again, so the write waits out the claim, with a bound
 /// ([`OWNER_CLAIM_WAIT`]), and reads the owner again.

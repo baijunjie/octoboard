@@ -337,19 +337,19 @@ mod tests {
     /// message that only begins like the branches prompt is not.
     #[test]
     fn the_daemons_opening_prompts_are_labelled_octoboard() {
-        use crate::branch_origin::handover::Handover;
+        use crate::branch_origin::transfer::BranchTransfer;
         use crate::protocol::SessionStatus;
         let caller =
             crate::test_support::project_session("s-1", Agent::Claude, SessionStatus::Idle);
-        let handover = Handover {
+        let transfer = BranchTransfer {
             repository: "/repo/.git".into(),
             branches: vec!["feat/a".to_owned()],
             targets: Default::default(),
         };
         let prompts = [
             texts::request_opening_prompt(&caller, None, false, "the brief"),
-            texts::request_opening_prompt(&caller, Some(&handover), true, "the brief"),
-            texts::branches_opening_prompt(&caller, &handover, "the brief"),
+            texts::request_opening_prompt(&caller, Some(&transfer), true, "the brief"),
+            texts::branches_opening_prompt(&caller, &transfer, "the brief"),
             texts::takeover_prompt(&caller, Path::new("/tmp/package.md"), Some("a note")),
         ];
         for prompt in prompts {

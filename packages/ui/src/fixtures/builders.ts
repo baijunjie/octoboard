@@ -6,7 +6,7 @@ import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountShari
 import { type MessageParams } from "../errors/codedError";
 import { AGENTS } from "../agents/agents";
 import type { SessionRequest, State, TrustPrompt } from "../store";
-import type { ToastFixture } from "./fixture";
+import type { NotificationFixture } from "./fixture";
 
 const NOW = Date.now();
 
@@ -329,15 +329,15 @@ export const SAMPLE = (() => {
 /** A notice the daemon sends about a session (`session_notice`), shown as the app shows the real one: a failure, or a
  * notice carrying raw text, is an error alert and any other a toast. `message` is the daemon's English fallback for a
  * code the catalog lacks. */
-export const sessionNoticeToast = (session: string, code: string, params: MessageParams = {}, message = ""): ToastFixture =>
+export const sessionNoticeNotification = (session: string, code: string, params: MessageParams = {}, message = ""): NotificationFixture =>
   ({ kind: "broadcast", event: { type: "session_notice", session, code, params, message } });
 
 /** An error the daemon sends that answers no request and names no session, shown as the app shows the real one. */
-export const broadcastErrorToast = (code: string, params: MessageParams = {}, message = ""): ToastFixture =>
+export const broadcastErrorNotification = (code: string, params: MessageParams = {}, message = ""): NotificationFixture =>
   ({ kind: "broadcast", event: { type: "error", id: null, code, params, message } });
 
-/** The title the action that raises an error gives its alert (`ToastFixture.title`), for a scenario that raises the
- * error itself rather than through the action: the message at `key`, worded in the viewing language, so a title the
+/** The title the action that raises an error gives its alert (`NotificationFixture.title`), for a scenario that raises
+ * the error itself rather than through the action: the message at `key`, worded in the viewing language, so a title the
  * app renames or drops breaks the scenario at type checking. */
 export const failureTitle = (key: PlainMessageKey) => (t: Translate) => t(key);
 

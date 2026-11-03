@@ -91,21 +91,21 @@ impl Fixture {
         stand_in_launch(&self.started, &self.launches, during)
     }
 
-    async fn hand_off(&self, session: &str) -> Result<Session> {
-        self.hand_off_to(session, Agent::Codex).await
+    async fn handoff(&self, session: &str) -> Result<Session> {
+        self.handoff_to(session, Agent::Codex).await
     }
 
-    async fn hand_off_to(&self, session: &str, agent: Agent) -> Result<Session> {
-        self.hand_off_launching(session, agent, self.launch()).await
+    async fn handoff_to(&self, session: &str, agent: Agent) -> Result<Session> {
+        self.handoff_launching(session, agent, self.launch()).await
     }
 
-    async fn hand_off_launching(
+    async fn handoff_launching(
         &self,
         session: &str,
         agent: Agent,
         launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
     ) -> Result<Session> {
-        hand_off_with(
+        handoff_session_with(
             &self.state,
             Handoff {
                 session: session.to_string(),
@@ -214,7 +214,7 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     branch_made_by(&fixture.state, &fixture.repo, "two", "original");
     branch_made_by(&fixture.state, &fixture.repo, "theirs", "someone-else");
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(stored.agent, Agent::Codex);
@@ -306,7 +306,7 @@ async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_sessio
     fixture.run(session("worker", true, "idle", Some("original"), false));
     branch_made_by(&fixture.state, &fixture.repo, "one", "original");
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(stored.bound_to.as_deref(), Some("hub"));
@@ -357,7 +357,7 @@ async fn a_bound_session_is_replaced_by_a_session_bound_to_the_same_owner() {
     fixture.run(session("original", true, "idle", Some("boss"), false));
     branch_made_by(&fixture.state, &fixture.repo, "one", "original");
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(
@@ -392,7 +392,7 @@ async fn the_notice_of_a_handoff_is_kept_for_an_interrupted_owner() {
         .unwrap();
     fixture.run(session("original", true, "idle", Some("boss"), false));
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
 
     let kept = fixture.state.store.kept_messages("boss").unwrap();
     assert_eq!(kept.len(), 1, "{kept:?}");
@@ -412,7 +412,7 @@ async fn a_console_session_hands_the_sessions_it_owns_to_the_receiving_console_s
     let lead = fixture.run(session("lead", true, "idle", Some("original"), true));
     fixture.run(session("bound", true, "idle", Some("original"), false));
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(
@@ -475,26 +475,26 @@ async fn a_handoff_that_is_refused_changes_nothing() {
             .map_or_else(|| format!("{err:#}"), |coded| coded.code.to_string())
     };
     assert_eq!(
-        refusal(fixture.hand_off("missing").await),
+        refusal(fixture.handoff("missing").await),
         error_code::UNKNOWN_SESSION
     );
     assert_eq!(
-        refusal(fixture.hand_off("archived").await),
+        refusal(fixture.handoff("archived").await),
         error_code::SESSION_ARCHIVED
     );
     assert_eq!(
-        refusal(fixture.hand_off("working").await),
+        refusal(fixture.handoff("working").await),
         error_code::SESSION_WORKING
     );
     assert_eq!(
-        refusal(fixture.hand_off("starting").await),
+        refusal(fixture.handoff("starting").await),
         error_code::SESSION_WORKING
     );
     assert_eq!(
-        refusal(fixture.hand_off("locked").await),
+        refusal(fixture.handoff("locked").await),
         error_code::SESSION_LOCKED
     );
-    let same = fixture.hand_off_to("idle", Agent::Claude).await;
+    let same = fixture.handoff_to("idle", Agent::Claude).await;
     let same_text = format!("{:#}", same.as_ref().unwrap_err());
     assert_eq!(refusal(same), error_code::HANDOFF_TO_SAME_AGENT);
     assert!(same_text.contains("switch its account"), "{same_text}");
@@ -507,7 +507,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
             default_account_dir: None,
         }]);
     assert_eq!(
-        refusal(fixture.hand_off("with-branch").await),
+        refusal(fixture.handoff("with-branch").await),
         error_code::AGENT_NOT_AVAILABLE
     );
     fixture
@@ -519,7 +519,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
         }]);
 
     // An account of another agent than the receiving one.
-    let err = hand_off_with(
+    let err = handoff_session_with(
         &fixture.state,
         Handoff {
             session: "with-branch".to_string(),
@@ -543,7 +543,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
     // A model the receiving agent does not offer.
     crate::test_support::offer_models(&fixture.state, Agent::Codex, &[("gpt-a", &["low"])]);
     for (model, effort) in [("gpt-z", None), ("gpt-a", Some("extreme"))] {
-        let err = hand_off_with(
+        let err = handoff_session_with(
             &fixture.state,
             Handoff {
                 session: "with-branch".to_string(),
@@ -584,7 +584,7 @@ async fn a_handoff_to_an_agent_that_is_not_added_is_refused() {
     let before = fixture.snapshot();
 
     let err = fixture
-        .hand_off_to("original", Agent::Codex)
+        .handoff_to("original", Agent::Codex)
         .await
         .expect_err("refused");
     let coded = err.downcast_ref::<CodedError>().expect("a coded error");
@@ -604,7 +604,7 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
     branch_made_by(&fixture.state, &fixture.repo, "one", "original");
     let before = fixture.snapshot();
 
-    let err = hand_off_with(
+    let err = handoff_session_with(
         &fixture.state,
         Handoff {
             session: "original".to_string(),
@@ -651,7 +651,7 @@ fn the_opening_prompt_tells_the_receiving_session_to_follow_earlier_packages() {
 async fn deleting_the_receiving_session_removes_its_package() {
     let fixture = Fixture::new("package-removed");
     fixture.run(session("original", true, "idle", None, false));
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
     let package = fixture
         .state
         .handoff_dir()
@@ -687,7 +687,7 @@ async fn messages_for_the_original_during_a_handoff_are_forwarded_to_the_receivi
     });
 
     let receiving = fixture
-        .hand_off_launching("original", Agent::Codex, during)
+        .handoff_launching("original", Agent::Codex, during)
         .await
         .unwrap();
 
@@ -721,7 +721,7 @@ async fn information_kept_for_an_interrupted_original_goes_to_the_receiving_sess
         .add_kept_message("original", "kept before the handoff")
         .unwrap();
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
 
     fixture.output_of(&receiving.id, "kept before the handoff");
     assert!(fixture
@@ -753,7 +753,7 @@ async fn kept_information_that_is_also_queued_is_forwarded_once() {
         .add_kept_message("original", "kept only")
         .unwrap();
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
 
     let output = fixture.output_of(&receiving.id, "kept only");
     assert_eq!(output.matches("kept and queued").count(), 1, "{output}");
@@ -777,7 +777,7 @@ async fn messages_for_the_original_during_a_failed_handoff_reach_the_original() 
     let original = fixture.run(session("original", true, "idle", None, false));
     let state = fixture.state.clone();
 
-    let err = hand_off_with(
+    let err = handoff_session_with(
         &fixture.state,
         Handoff {
             session: "original".to_string(),
@@ -832,7 +832,7 @@ async fn messages_held_for_the_original_go_to_the_receiving_session_when_the_han
     });
 
     let err = fixture
-        .hand_off_launching("original", Agent::Codex, during)
+        .handoff_launching("original", Agent::Codex, during)
         .await
         .expect_err("archiving the original failed");
 
@@ -861,7 +861,7 @@ async fn a_session_that_is_no_longer_the_askers_is_refused() {
     fixture.run(session("owned", true, "idle", Some("other-boss"), false));
     let before = fixture.snapshot();
 
-    let err = hand_off_with(
+    let err = handoff_session_with(
         &fixture.state,
         Handoff {
             session: "owned".to_string(),
@@ -927,7 +927,7 @@ async fn what_the_original_started_is_carried_over_to_the_receiving_session() {
     let (_original, child) = run_leaving_one(&fixture, "original");
     let _guard = crate::test_support::KillOnDrop(vec![child]);
 
-    let receiving = fixture.hand_off("original").await.unwrap();
+    let receiving = fixture.handoff("original").await.unwrap();
     let state = fixture.state.clone();
     assert!(
         crate::test_support::within(crate::test_support::PATIENCE, move || state
@@ -974,7 +974,7 @@ async fn a_receiving_session_that_does_not_start_leaves_what_the_original_starte
     let _guard = crate::test_support::KillOnDrop(vec![child]);
 
     fixture
-        .hand_off_launching("original", Agent::Codex, |_| {
+        .handoff_launching("original", Agent::Codex, |_| {
             Err(anyhow!("the agent could not be started"))
         })
         .await
@@ -1006,7 +1006,7 @@ async fn a_failed_archive_takes_back_the_carry_over_of_what_the_original_started
     });
 
     let err = fixture
-        .hand_off_launching("original", Agent::Codex, during)
+        .handoff_launching("original", Agent::Codex, during)
         .await
         .expect_err("archiving the original failed");
     assert!(
@@ -1041,7 +1041,7 @@ async fn a_failed_archive_carries_the_failure_it_failed_with() {
     });
 
     let err = fixture
-        .hand_off_launching("original", Agent::Codex, during)
+        .handoff_launching("original", Agent::Codex, during)
         .await
         .expect_err("archiving the original failed");
     let (code, params, message) = crate::protocol::error_parts(&err);

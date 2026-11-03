@@ -35,7 +35,7 @@ function SectionHeadingText({ section, count }: { section: ChangeSection; count:
 
 /**
  * Keeps a heading's own control focused across a fold, which it holds after one from the keyboard,
- * and after the hand-off in `ChangeSectionHeading` below has sent a row's focus there. react-aria answers
+ * and after the handoff in `ChangeSectionHeading` below has sent a row's focus there. react-aria answers
  * the row that held its focused key going away by moving focus to the nearest row the list has left,
  * and the user's place is the heading they just pressed rather than a row of another section. It
  * does that from an effect of the collection's, above this component's own, so the two renders it

@@ -101,7 +101,7 @@ impl ProcessLedger {
     /// for the relaunch of a restart (an account switch, a model change, a change of an account's
     /// sharing). Answers whether the launch was marked: one that is not followed, has not started
     /// or is ending already is not.
-    pub fn hand_over(&self, launch_id: &str, heir: &str) -> bool {
+    pub fn mark_carry_over(&self, launch_id: &str, heir: &str) -> bool {
         let mut book = self.book();
         match book.launches.get_mut(launch_id) {
             Some(launch) if launch.started && !launch.ending && !launch.held => {
@@ -112,9 +112,9 @@ impl ProcessLedger {
         }
     }
 
-    /// Takes back [`Self::hand_over`] for the launch `launch_id` while it has not ended yet: its
-    /// processes are stopped when it ends, as any launch's.
-    pub fn withdraw_hand_over(&self, launch_id: &str) {
+    /// Takes back [`Self::mark_carry_over`] for the launch `launch_id` while it has not ended yet:
+    /// its processes are stopped when it ends, as any launch's.
+    pub fn withdraw_carry_over(&self, launch_id: &str) {
         let mut book = self.book();
         if let Some(launch) = book.launches.get_mut(launch_id) {
             if !launch.ending {
@@ -123,10 +123,11 @@ impl ProcessLedger {
         }
     }
 
-    /// Holds what a launch carries over to the session `session_id` (see [`Self::hand_over`])
-    /// while the session has no launch running, for its next launch to take in when it starts
-    /// ([`Self::launch_started`]), for as long as the answer is kept: a restart keeps it across
-    /// the gap between the end of the process it stops and the start of its relaunch.
+    /// Holds what a launch carries over to the session `session_id` (see
+    /// [`Self::mark_carry_over`]) while the session has no launch running, for its next launch to
+    /// take in when it starts ([`Self::launch_started`]), for as long as the answer is kept: a
+    /// restart keeps it across the gap between the end of the process it stops and the start of
+    /// its relaunch.
     pub fn hold_for_launch(self: &Arc<Self>, session_id: &str) -> HeldForLaunch {
         *self
             .book()

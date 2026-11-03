@@ -199,7 +199,7 @@ async fn perform(
     };
     let chose_otherwise = !as_asked || account != asked.account;
     let (set_model, set_effort) = (model.clone(), effort.clone());
-    let moved = handoff::hand_off_with(
+    let moved = handoff::handoff_session_with(
         state,
         handoff::Handoff {
             session: target.id.clone(),

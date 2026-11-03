@@ -110,7 +110,7 @@ fn a_created_branch_is_its_creating_sessions_to_work_on_from_the_time_of_its_cre
 }
 
 #[test]
-fn a_handover_moves_the_responsible_session_only_from_the_expected_one() {
+fn a_transfer_moves_the_responsible_session_only_from_the_expected_one() {
     let fixture = Fixture::new();
     fixture.as_session("a", &["branch", "mine"]);
     fixture.as_session("b", &["branch", "theirs"]);
@@ -118,7 +118,7 @@ fn a_handover_moves_the_responsible_session_only_from_the_expected_one() {
     let before = fixture.rows();
     let names = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
 
-    let moved = hand_over(
+    let moved = move_branch_records(
         &fixture.state,
         &fixture.common_dir,
         &names(&["mine", "theirs", "absent"]),
@@ -142,8 +142,8 @@ fn a_handover_moves_the_responsible_session_only_from_the_expected_one() {
             assert_eq!(row.responsible_since, old.responsible_since);
         }
     }
-    // The branch is no longer `a`'s to give: a second handover from it moves nothing.
-    let again = hand_over(
+    // The branch is no longer `a`'s to give: a second transfer from it moves nothing.
+    let again = move_branch_records(
         &fixture.state,
         &fixture.common_dir,
         &names(&["mine"]),
@@ -156,13 +156,13 @@ fn a_handover_moves_the_responsible_session_only_from_the_expected_one() {
 }
 
 #[test]
-fn a_handover_keeps_the_first_characters_of_a_long_title() {
+fn a_transfer_keeps_the_first_characters_of_a_long_title() {
     let fixture = Fixture::new();
     fixture.as_session("a", &["branch", "mine"]);
     fixture.deliver(1);
     let title = format!("é{}", "x".repeat(100));
 
-    hand_over(
+    move_branch_records(
         &fixture.state,
         &fixture.common_dir,
         &["mine".to_string()],
@@ -185,7 +185,7 @@ fn a_renamed_branch_keeps_its_responsible_session_and_a_copy_gets_none() {
     let fixture = Fixture::new();
     fixture.as_session("a", &["branch", "old"]);
     fixture.deliver(1);
-    hand_over(
+    move_branch_records(
         &fixture.state,
         &fixture.common_dir,
         &["old".to_string()],

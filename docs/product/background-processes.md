@@ -114,8 +114,8 @@ can escape that relationship. If it still carries the launch's identity, it can 
 ## Moving processes between sessions
 
 An owner moves process trees between itself and its sessions, or from one of its sessions to another, with the
-`transfer_processes` agent tool, as `transfer_branches` moves branches (see "Handing branches between sessions of an
-owner" in `docs/product/branch-responsible-session.md`): `from` and `to` are each the caller or a session it owns,
+`transfer_processes` agent tool, as `transfer_branches` moves branches (see "Transferring branches between sessions of
+an owner" in `docs/product/branch-responsible-session.md`): `from` and `to` are each the caller or a session it owns,
 either left out meaning the caller, and they must differ. No approval is asked. The trees keep running; only the session
 whose process end stops them changes, and they are listed under it from then on. Each tree named, by the id the
 session's process list gives it, must be one `from` holds now. Both sessions must have a process running and neither may
@@ -126,7 +126,7 @@ change or a change of its account's sharing, or handed off; none of that can beg
 move, and messages for a `from` other than the caller are queued meanwhile and delivered once they have moved. A refusal
 moves nothing. The sessions concerned other than the caller are told. `get_session` lists a running session's trees in
 `processes`, by those ids. A project process, which no session holds, cannot be handed to a session, as a branch no
-session is responsible for cannot be handed over.
+session is responsible for cannot be transferred.
 
 ## Process information and actions
 

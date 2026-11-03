@@ -531,7 +531,7 @@ it("hands focus to the panel's landing, the session filter toggle of a project, 
   expect(document.activeElement).toBe(panel().querySelector('button[aria-label="Filter by session"]'));
 });
 
-it("keeps the confirmation, the toast and the focus hand-over when a refresh takes the tree out while the stop is in flight", async () => {
+it("keeps the confirmation, the notice and the focus handoff when a refresh takes the tree out while the stop is in flight", async () => {
   let gone = false;
   let answer!: (event: Event) => void;
   const { daemon } = await mount({ project }, async (body) => {

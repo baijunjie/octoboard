@@ -68,11 +68,11 @@ pub struct Handoff {
 /// available or not added, an account of another agent, a disabled account, an account whose plan
 /// quota is used up, an account the last quota reading found not logged in, a model or effort the
 /// agent does not offer, an owner that can no longer be reported to).
-pub async fn hand_off(state: &Arc<AppState>, request: Handoff) -> Result<Moved> {
-    hand_off_with(state, request, term::launch).await
+pub async fn handoff_session(state: &Arc<AppState>, request: Handoff) -> Result<Moved> {
+    handoff_session_with(state, request, term::launch).await
 }
 
-pub(crate) async fn hand_off_with(
+pub(crate) async fn handoff_session_with(
     state: &Arc<AppState>,
     request: Handoff,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
@@ -123,7 +123,7 @@ pub(crate) async fn hand_off_with(
     let carried = state.live_session(&original.id).map(|live| {
         state
             .process_ledger
-            .hand_over(&live.launch_id, &moved.receiving.id);
+            .mark_carry_over(&live.launch_id, &moved.receiving.id);
         live.launch_id.clone()
     });
     // No branch cleanup follows the archive: the branches the original was responsible for have
@@ -131,7 +131,7 @@ pub(crate) async fn hand_off_with(
     super::lifecycle::archive_session(state, &original.id).map_err(|err| {
         // The original stays as it is, and what it started stays its own.
         if let Some(launch) = &carried {
-            state.process_ledger.withdraw_hand_over(launch);
+            state.process_ledger.withdraw_carry_over(launch);
         }
         archive_failed(&receiving.id, &err)
     })?;
@@ -299,7 +299,7 @@ async fn move_place_inner(
         .flatten();
     let ids = state
         .store
-        .hand_over_binding(&original.id, &receiving.id, coordinator_of.as_deref())?
+        .transfer_binding(&original.id, &receiving.id, coordinator_of.as_deref())?
         .ok_or_else(|| {
             anyhow!(
                 "`{}` could not take the original's place as a coordinator: it was bound meanwhile",
@@ -326,7 +326,7 @@ async fn move_place_inner(
     let branches = if receiving.project_id.is_some() {
         let (state, original, receiving) = (state.clone(), original.clone(), receiving.clone());
         tokio::task::spawn_blocking(move || {
-            crate::branch_origin::hand_over_all(&state, &original, &receiving)
+            crate::branch_origin::move_all_branch_records(&state, &original, &receiving)
         })
         .await
         .map_err(anyhow::Error::from)
@@ -448,12 +448,12 @@ pub(super) async fn tell(
     match &moved.branches {
         Ok(branches) if branches.is_empty() => {}
         Ok(branches) => {
-            let (noun, them) = crate::branch_origin::handover::branch_noun_and_pronoun(branches);
+            let (noun, them) = crate::branch_origin::transfer::branch_noun_and_pronoun(branches);
             let targets = targets_of(state, receiving, branches).await;
             held.push_str(&format!(
                 "\n- You are now the session responsible for the {noun} {}; the original no \
                  longer is, so carry on the work on {them}.",
-                crate::branch_origin::handover::named_branches_with_targets(branches, &targets)
+                crate::branch_origin::transfer::named_branches_with_targets(branches, &targets)
             ));
         }
         Err(reason) => held.push_str(&format!(

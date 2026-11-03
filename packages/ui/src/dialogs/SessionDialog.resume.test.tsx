@@ -489,7 +489,7 @@ it("does not rename the reopened session to an empty name", async () => {
   expect(requestsOf(daemon, "rename_session")).toEqual([]);
 });
 
-it("toasts a rename that fails after the reopen, and still selects the session and closes", async () => {
+it("raises a notification for a rename that fails after the reopen, and still selects the session and closes", async () => {
   const { daemon, onOpened, onClose, onResume } = renderForResume({}, heldBy("archived_session", archived.id), { sessions: new Map([[archived.id, archived]]) });
   answerRequests(daemon, heldBy("archived_session", archived.id), (body) =>
     body.type === "rename_session" ? Promise.reject(new CodedError("plain", "unknown_session", { session: "s-old" })) : Promise.resolve({ type: "ack", id: null }));

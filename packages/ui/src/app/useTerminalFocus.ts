@@ -17,10 +17,10 @@ export function useTerminalFocus() {
   const agentAreaRef = useRef<HTMLDivElement>(null);
   // Only one of the two is mounted: the welcome screen stands in for the terminal while there is no
   // console. While a maximized panel covers the agent terminal, focus meant for it goes where F6
-  // lands in that panel instead. Read off the DOM rather than the state, so a hand-off that runs in
+  // lands in that panel instead. Read off the DOM rather than the state, so a handoff that runs in
   // the commit restoring the layout (the maximized or floating panel closing) already finds the terminal
   // uncovered: it comes before the pane in the tree, so its `inert` is gone by the time the panel's
-  // own hand-off runs.
+  // own handoff runs.
   //
   // After a tap it lands on nothing that takes text (`interactionIsTouch`): the terminal, or a
   // shell terminal covering it, would raise the on-screen keyboard over what was just shown. It

@@ -156,8 +156,8 @@ Refused before the user is asked, with the reason in prose (as a tool error) and
 Refused when the switch is made — on approval, or at once when the switch is made without asking — with nothing
 changed:
 
-- a session that stopped being the caller's after the call was checked and before the switch took hold of it, handed
-  to another owner meanwhile;
+- a session that stopped being the caller's after the call was checked and before the switch took hold of it,
+  transferred to another owner meanwhile;
 - everything a switch refuses (see "When a switch fails" below), such as a target account whose quota is used up or
   that is not logged in, which is not refused before the user is asked since the user can choose another account.
 

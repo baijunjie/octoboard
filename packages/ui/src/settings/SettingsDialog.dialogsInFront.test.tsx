@@ -73,7 +73,7 @@ const escape = () => act(async () => void document.activeElement!.dispatchEvent(
 const pressButton = (name: string) => act(async () => [...inFront().querySelectorAll<HTMLElement>("button")].find((button) => button.textContent === name || button.getAttribute("aria-label") === name)!.click());
 
 const presses = [["a press without a pointer", "virtual"], ["a key press", "keyboard"], ["a pointer press", "pointer"]] as const;
-/** Whether the control focus was handed to shows its ring: the hand-off is not one the user aimed. */
+/** Whether the control focus was handed to shows its ring: the handoff is not one the user aimed. */
 const ringShown = () => getInteractionModality() === "keyboard";
 
 describe("closing the account settings dialog View in Settings opened", () => {

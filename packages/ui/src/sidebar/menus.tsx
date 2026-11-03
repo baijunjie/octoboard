@@ -224,15 +224,15 @@ function switchAccountSubmenu(
  * switch holds the session (`switching`, see `handoffBlock`); and while no other agent could take it over (`hasTarget`). A
  * lasting hold (locked, in a turn, no other agent) shows its reason and wins over one that ends on its own (a
  * switch, a sharing change, starting), which shows none. */
-function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, holds: { switching: boolean; ownChanging: boolean }): ActionMenuItem {
+function handoffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, holds: { switching: boolean; ownChanging: boolean }): ActionMenuItem {
   const block = handoffBlock(t, session, holds);
-  const lasting = block?.reason ? block : hasTarget ? undefined : { detail: t("sidebar.session.handOffNoTarget"), reason: { state: t("sidebar.session.handOffNoTarget.reason") } };
+  const lasting = block?.reason ? block : hasTarget ? undefined : { detail: t("sidebar.session.handoffNoTarget"), reason: { state: t("sidebar.session.handoffNoTarget.reason") } };
   return {
     ...(lasting ? { description: lasting.detail, reason: lasting.reason } : {}),
-    label: t("sidebar.session.handOff"),
+    label: t("sidebar.session.handoff"),
     icon: Forward,
     iconClassName: "rtl:-scale-x-100",
-    onClick: () => handlers.onOpenDialog({ kind: "hand-off", session }),
+    onClick: () => handlers.onOpenDialog({ kind: "handoff", session }),
     disabled: block !== undefined || lasting !== undefined,
   };
 }
@@ -277,7 +277,7 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * project session's row and a console session's row (`ConsoleSessionsSection` in `ConsoleView.tsx`) —
  * this is also where the user switches a console session's account. Focus mode is
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
- * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over.
+ * leaves out Focus mode and Pin / Unpin. `canHandoff` is whether another agent could take a session over.
  * `quota` is what the Switch account entries are judged against, for the accounts used up, and `sharing` for the
  * accounts whose sharing change runs, and `disabledDefaults` the agents whose default account is turned off.
  * `switching` is whether an account switch holds the session (`holdsAccountSwitch`), the daemon's or one this window
@@ -288,10 +288,10 @@ export function sessionMenu(
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandOff = true, switching, quota, sharing, disabledDefaults, accountOrder }: {
+  { placement = "list", hasBoundSessions = false, canHandoff = true, switching, quota, sharing, disabledDefaults, accountOrder }: {
     placement?: MenuPlacement;
     hasBoundSessions?: boolean;
-    canHandOff?: boolean;
+    canHandoff?: boolean;
     switching: boolean;
     quota?: QuotaReadings;
     sharing?: Map<string, AccountSharing>;
@@ -334,7 +334,7 @@ export function sessionMenu(
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
     ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
     ...(switchAccount ? [switchAccount] : []),
-    ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined })]),
+    ...(archived ? [] : [handoffItem(t, handlers, session, canHandoff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined })]),
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
     offersDelete(session, hasBoundSessions)

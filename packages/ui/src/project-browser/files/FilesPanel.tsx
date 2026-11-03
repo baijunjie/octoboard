@@ -35,7 +35,7 @@ export function FilesPanel({
   project: string;
   files: FilesMode;
   refreshRef: React.RefObject<HTMLElement | null>;
-  /** The focus hand-off of the header's controls, which covers this panel as well. */
+  /** The focus handoff of the header's controls, which covers this panel as well. */
   focusHandoff: ReturnType<typeof useFocusHandoff>;
 }): React.ReactElement {
   const t = useT();

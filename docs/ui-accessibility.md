@@ -572,26 +572,26 @@ into that root (`[data-expand-button][data-focus-visible]` and `[data-separator-
 
 ### Focus moved by a change the user did not make
 
-A hand-off that runs because what held focus went away — a pane hidden, a panel closed, a region unmounted by a daemon
+A handoff that runs because what held focus went away — a pane hidden, a panel closed, a region unmounted by a daemon
 event — also calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the
 move, so they have to be able to see where focus went, and the previous input was often a pointer press, which leaves
-the destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where
-the ring follows how the press came; `HandOffOnUnmount` sets it by default, its trigger being a render, and so does
-`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one hand-off through
+the destination without a ring. `handFocusOff` takes a `showRing` flag for the handoff whose trigger is a press, where
+the ring follows how the press came; `HandoffOnUnmount` sets it by default, its trigger being a render, and so does
+`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one handoff through
 `useFocusHandoff` whose trigger is really a press — the change filter field closed from the header's toggle, which takes
 no focus itself — knowingly: focus lands on a control the user did not aim it at either way.
 
 A mark or link whose focus goes to a control of its own surface (a field's trigger, a row's action, its dialog) hands
-focus on through `useHandOffAfterRemoval`, which sets the ring only when it actually moves focus. It decides in the
+focus on through `useHandoffAfterRemoval`, which sets the ring only when it actually moves focus. It decides in the
 layout effect of the component that renders the source, later in the commit that removes it: a target the same render
 disabled is left alone, the effects of an enclosing `useFocusHandoff` or `useSectionRefocus`, which would take focus
 from `<body>` elsewhere, have not run yet, and when a dialog closes with focus in the source the component has gone with
 it, so nothing is moved and the modality is left alone; the dialog's restore, a frame later, then places focus, its ring
 following the input that closed the dialog. A source whose component goes with it (the sharing switch's mark, in its
-warning) moves focus inside React's commit instead, from `HandOffOnUnmount`. React passes no focus event on to
-react-aria there, so `HandOffOnUnmount` sends the destination a `focusin` of its own once the commit is over; without it
+warning) moves focus inside React's commit instead, from `HandoffOnUnmount`. React passes no focus event on to
+react-aria there, so `HandoffOnUnmount` sends the destination a `focusin` of its own once the commit is over; without it
 the destination would hold focus with no ring. A mark whose focus goes to the start of its panel (the Files and Report
-panels' marks) and the hand-offs of panes and panels taken away keep `HandOffOnUnmount` with its ring: no dialog's
+panels' marks) and the handoffs of panes and panels taken away keep `HandoffOnUnmount` with its ring: no dialog's
 restore follows them.
 
 Selecting another archived session while focus is in the history on screen is not such a move: a sidebar row's press
@@ -615,7 +615,7 @@ mark, as the search completes, hands focus to the field's input, but after a tap
 a text field still focuses it, and form dialogs still focus their first field, since the user opened them to fill in.
 
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
-once the daemon's reply says that hunk reaches the end of the file, and the hand-off to the code frame sets the
+once the daemon's reply says that hunk reaches the end of the file, and the handoff to the code frame sets the
 modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
 shadow root. The redraw after an expansion that takes the pressed control away, with no separator control left to take
 focus, hands focus to the code frame the same way (`handFocusToCode` in `packages/ui/src/viewer/code/rendererDom.ts`), so
@@ -631,7 +631,7 @@ A dialog opened from a control that never took focus, is disabled, or is gone by
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
 accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
 or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on.
-Four hand-offs repair it. The login hand-off (`useLoginFocusReturn` in
+Four handoffs repair it. The login handoff (`useLoginFocusReturn` in
 `packages/ui/src/settings/accounts/AccountLoginButton.tsx`): the row's own Log in button is shown only while the account
 reads as signed out and is not turned off, and is disabled while a login runs, so after a success focus goes to the
 row's actions, and after a cancel to the Log in button once it is enabled again, else to the actions. The console
@@ -645,7 +645,7 @@ focus where the dialog put it back, ringed or not as the press was. The archive 
 (`packages/ui/src/archive/ArchiveView.tsx`) sends focus to its header's Close, with the ring turned on, once a deletion
 has taken the control focus would go back to (a row's Delete, or Delete all), or after a deletion confirmed from a Delete
 all whose `preventFocusOnPress` press had its dialog hand focus back to the ring-less view itself. All four wait at least a frame past React Aria's restore and leave
-a restore that landed right alone; they act where focus is on `<body>`, the login hand-off also where it is on its going
+a restore that landed right alone; they act where focus is on `<body>`, the login handoff also where it is on its going
 button, and the archive view also where it is on the view itself after a dialog that deleted rows.
 
 A dialog that the Agent accounts section opens by itself as Settings opens (the account settings dialog for View in
@@ -660,7 +660,7 @@ there, even one that never took focus (the press it ended on is recorded by `use
 `packages/ui/src/components/`), else to the window's fallback (`focusAfterModalCloses` in
 `packages/ui/src/components/focus/modalFocus.ts`). Closing over another dialog, focus the restore left on `<body>` goes
 to the control in that dialog that opened Settings, else the control that dialog opens on. A return to the control that
-opened a dialog is a restore, not a hand-off: its ring follows the input that closed the dialog.
+opened a dialog is a restore, not a handoff: its ring follows the input that closed the dialog.
 
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
@@ -2084,7 +2084,7 @@ screen, and expanded for the same reason (`expanded` on `IconToggle`), and so is
 find bar is. The region it shows has no id of its own and so
 no `aria-controls`; "Expanded and selected" above asks only for `aria-expanded`. A region taken away this way hands
 keyboard focus back to the toggle when it was holding it, the toggle being pressed without taking focus itself; the
-hand-off turns the ring on whether the press came from a key or a mouse (not after a tap, as for any automatic move),
+handoff turns the ring on whether the press came from a key or a mouse (not after a tap, as for any automatic move),
 as "Focus moved by a change the user did not make" above has it.
 
 The right pane's panel kind toggles are the exception: each keeps one icon, and its open state is a filled chip behind

@@ -13,7 +13,7 @@ const LANDING_MS = 3000;
  * it does from the agent terminal the panel has just made inert, was moved by no one. Gives up after `LANDING_MS`
  * whatever is still missing, and returns what ends the wait sooner. A docked card mounted by the same commit is landed
  * in once that commit's effects are over, not from one of them: in development StrictMode's re-run of the card's
- * `HandOffOnUnmount` would hand focus straight back out. */
+ * `HandoffOnUnmount` would hand focus straight back out. */
 export function landInPanel(kind: PanelKind): () => void {
   const land = interactionIsTouch() ? focusLandingWithoutText : focusLanding;
   const from = document.activeElement;

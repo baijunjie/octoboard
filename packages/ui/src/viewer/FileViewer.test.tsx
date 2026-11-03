@@ -880,11 +880,11 @@ it("copies the project-relative path from the view-control group's button after 
 });
 
 it("says when the path could not be copied", async () => {
-  const toasts = { notice: vi.fn(), error: vi.fn() };
-  show(modified(), undefined, { clipboard: { writeText: async () => Promise.reject(new Error("no")) }, toasts });
+  const notifications = { notice: vi.fn(), error: vi.fn() };
+  show(modified(), undefined, { clipboard: { writeText: async () => Promise.reject(new Error("no")) }, notifications });
   await act(async () => button("Copy path").click());
-  expect(toasts.error).toHaveBeenCalledWith("Could not copy the path");
-  expect(toasts.notice).not.toHaveBeenCalled();
+  expect(notifications.error).toHaveBeenCalledWith("Could not copy the path");
+  expect(notifications.notice).not.toHaveBeenCalled();
 });
 
 it("keeps the copy button where the platform has no clipboard, copying through the selection", async () => {
@@ -927,7 +927,7 @@ it("reports a user-triggered external Markdown link failure", async () => {
   const error = vi.fn();
   const cause = new Error("Browser launch failed");
   const links = { open: vi.fn(async () => { throw cause; }) };
-  show({ key: "document-link", path: "README.md", content: { state: "file", body: { kind: "text", text: "[Documentation](https://example.com/docs)", size: 48 } } }, undefined, { links, toasts: { error, notice: vi.fn() } });
+  show({ key: "document-link", path: "README.md", content: { state: "file", body: { kind: "text", text: "[Documentation](https://example.com/docs)", size: 48 } } }, undefined, { links, notifications: { error, notice: vi.fn() } });
   // A cold document renderer can take longer to load than a fixed polling budget allows.
   await act(async () => { await import("./markdown/MarkdownDocument"); });
   await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());

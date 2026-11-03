@@ -128,7 +128,7 @@ async fn plan(
     }
     if holder.bound_to.as_deref() == Some(&caller.id) {
         bail!(
-            "{named} holds this conversation and is yours, so it needs no approval: reopen it with \
+            "{named} holds this conversation and is yours, so it needs no approval: resume it with \
              `{}` while it is archived or interrupted, and instruct it with `{}` while it runs",
             qualified_tool_name(caller.agent, "resume_session"),
             qualified_tool_name(caller.agent, "instruct_session")
@@ -145,7 +145,7 @@ async fn plan(
     match state.claim_kind(&holder.id) {
         Some(ClaimKind::Switch) => bail!(
             "{named} is being switched to another account, handed off, rebound or having its \
-             branches handed over right now: ask again in a moment"
+             branches transferred right now: ask again in a moment"
         ),
         Some(ClaimKind::Launch) => {
             bail!("{named} is being launched right now: ask again in a moment")
@@ -380,8 +380,8 @@ mod tests {
         assert!(reason.contains("nothing to resume"), "{reason}");
     }
 
-    /// A holder whose claim is held for a switch, a handoff, a handover of branches or a binding
-    /// change is refused as being switched, naming the handover too; one held for a launch is
+    /// A holder whose claim is held for a switch, a handoff, a transfer of branches or a binding
+    /// change is refused as being switched, naming the transfer too; one held for a launch is
     /// refused as being launched.
     #[tokio::test]
     async fn a_holder_whose_claim_is_held_is_refused_by_the_kind_of_claim() {
@@ -401,7 +401,7 @@ mod tests {
         assert!(
             reason.contains("being switched")
                 && reason.contains("handed off")
-                && reason.contains("branches handed over"),
+                && reason.contains("branches transferred"),
             "{reason}"
         );
         drop(claim);

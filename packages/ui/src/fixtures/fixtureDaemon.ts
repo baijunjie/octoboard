@@ -6,7 +6,7 @@ import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
 import type { Daemon, NotificationRequest } from "../store";
 import { broadcastNotification, errorNotification } from "../store/notifications";
-import type { Fixture, ToastFixture } from "./fixture";
+import type { Fixture, NotificationFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies, GIT_REQUESTS } from "./fixtureGit";
@@ -19,14 +19,14 @@ import { createProjectReplies } from "./fixtureProjects";
 import { createSessionReplies } from "./fixtureSessions";
 import { createSettingsReplies, keepClaudeCompatibilityInEffect } from "./fixtureSettings";
 
-/** How long after the app subscribes to toasts the scenario's own are raised, for the stack to be
+/** How long after the app subscribes to notifications the scenario's own are raised, for the stack to be
  * on screen to receive them. */
-const TOAST_DELAY_MS = 300;
+const NOTIFICATION_DELAY_MS = 300;
 
-/** The daemon the gallery runs a scenario over: `scenarioToastsRaised` settles once the scenario's own toasts have
- * been handed to the stack, which the page waits for before it calls itself ready. It never settles if nothing
- * subscribes to toasts. */
-export type FixtureDaemon = Daemon & { readonly scenarioToastsRaised: Promise<void> };
+/** The daemon the gallery runs a scenario over: `scenarioNotificationsRaised` settles once the scenario's own
+ * notifications have been handed to the stack, which the page waits for before it calls itself ready. It never settles
+ * if nothing subscribes to notifications. */
+export type FixtureDaemon = Daemon & { readonly scenarioNotificationsRaised: Promise<void> };
 
 /** The requests that read what a project's folder holds, which a page showing several repositories behind one daemon
  * has to send to the repository the project belongs to: the Git ones (`fixtureGit.ts`) and the file ones
@@ -37,8 +37,8 @@ export const BROWSE_REQUESTS: ReadonlySet<string> = new Set<string>([...GIT_REQU
  * A `Daemon` with no connection behind it, for the gallery: the store holds the scenario's state as
  * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or
  * accepted and ignored (settings and trusted folders are updated, a console is added or saved, and
- * session-file inspections are answered explicitly and deleting sessions removes them), and the scenario's toasts are raised once the app is
- * listening.
+ * session-file inspections are answered explicitly and deleting sessions removes them), and the scenario's
+ * notifications are raised once the app is listening.
  *
  * A project pane's Git-mode requests are answered by `fixtureGit.ts` instead, and the export and import
  * of configuration by `fixtureConfiguration.ts`; each is asked before anything here and says with
@@ -48,14 +48,14 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   const context = createFixtureContext(scenario);
   const { store, git, restored, fail, claudeCompatibilityChoices } = context;
   keepClaudeCompatibilityInEffect(context);
-  const toastListeners = new Set<(toast: NotificationRequest) => void>();
-  const emitToast = (toast: NotificationRequest) => toastListeners.forEach((listener) => listener(toast));
-  let toastsRaised = false;
-  let markToastsRaised!: () => void;
-  const scenarioToastsRaised = new Promise<void>((resolve) => (markToastsRaised = resolve));
+  const notificationListeners = new Set<(notification: NotificationRequest) => void>();
+  const emitNotification = (notification: NotificationRequest) => notificationListeners.forEach((listener) => listener(notification));
+  let notificationsRaised = false;
+  let markNotificationsRaised!: () => void;
+  const scenarioNotificationsRaised = new Promise<void>((resolve) => (markNotificationsRaised = resolve));
 
-  /** The toast a fixture stands for, made by the code the real route uses. */
-  const scenarioToast = (fixture: ToastFixture): NotificationRequest => {
+  /** The notification a fixture stands for, made by the code the real route uses. */
+  const scenarioNotification = (fixture: NotificationFixture): NotificationRequest => {
     const worded = (message: string | ((t: Translate) => string)) => (typeof message === "function" ? message(t) : message);
     switch (fixture.kind) {
       case "broadcast":
@@ -75,14 +75,14 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     }
   };
 
-  const raiseScenarioToasts = () => {
-    if (toastsRaised) return;
-    toastsRaised = true;
+  const raiseScenarioNotifications = () => {
+    if (notificationsRaised) return;
+    notificationsRaised = true;
     // Settled even when a fixture throws, so the page reports that error and not a missing subscriber.
     try {
-      for (const fixture of scenario.toasts ?? []) emitToast(scenarioToast(fixture));
+      for (const fixture of scenario.notifications ?? []) emitNotification(scenarioNotification(fixture));
     } finally {
-      markToastsRaised();
+      markNotificationsRaised();
     }
   };
 
@@ -102,7 +102,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
 
   return {
     store,
-    scenarioToastsRaised,
+    scenarioNotificationsRaised,
     request: looseRequestSender(async (body: ClientRequestBody): Promise<Event> => {
       if (body.type === "list_project_branches") {
         const result = scenario.projectBranches?.[body.project];
@@ -116,13 +116,13 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
       const reply = replies[body.type] as ((body: ClientRequestBody) => Event | Promise<Event>) | undefined;
       return reply ? reply(body) : { type: "ack", id: null };
     }),
-    showNotice: (message, content) => emitToast({ kind: "notice", message, content }),
+    showNotice: (message, content) => emitNotification({ kind: "notice", message, content }),
     onNotification: (listener) => {
-      toastListeners.add(listener);
+      notificationListeners.add(listener);
       // StrictMode subscribes, unsubscribes and subscribes again; by the time this fires only the
       // last subscription is left.
-      setTimeout(raiseScenarioToasts, TOAST_DELAY_MS);
-      return () => void toastListeners.delete(listener);
+      setTimeout(raiseScenarioNotifications, NOTIFICATION_DELAY_MS);
+      return () => void notificationListeners.delete(listener);
     },
     dismissTrustPrompt: (session) =>
       store.setState((state) => ({ trustPrompts: state.trustPrompts.filter((p) => p.session !== session) })),

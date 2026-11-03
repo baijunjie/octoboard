@@ -337,7 +337,7 @@ fn busy(id: &str) -> anyhow::Error {
     CodedError::raised(
         error_code::SESSION_BUSY,
         "this session is being switched to another account, handed off, having its branches \
-         handed over, given another owner or restarted; interrupt it once that has finished",
+         transferred, given another owner or restarted; interrupt it once that has finished",
         &[("session", id)],
     )
 }

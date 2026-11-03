@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { incompleteAccount } from "../accounts/choiceEntries";
 import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
 import { CodedError } from "../errors/codedError";
-import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
+import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
@@ -21,7 +21,7 @@ import { dialogAround } from "../components/dialog/dialogElement";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 import { HandoffRequestForm, IncompleteSharingAnnouncer, IncompleteSharingMark, isChangeRequest, SwitchRequestForm, type RequestFormState } from "./SessionRequestForms";
 
-/** The branches an approval would hand over, each as code, joined as the language joins a list.
+/** The branches an approval would transfer, each as code, joined as the language joins a list.
  * They are not text the agent wrote: the daemon checked each is a branch the requester is
  * responsible for. */
 function branchList(language: Language, branches: string[]): React.ReactNode[] {
@@ -40,9 +40,9 @@ function recordAccount(t: Translate, accounts: Account[], defaultNames: Settings
   return recordReference(name, account ?? "");
 }
 
-/** The session a failed approval's toast is about: for a reopen or resume, the one the error names,
- * else the target, since the error comes from the target's resume; the requesting session for
- * everything else, including the request no longer waiting. */
+/** The session a failed approval's notification is about: for a reopen or resume, the one the error
+ * names, else the target, since the error comes from the target's resume; the requesting session
+ * for everything else, including the request no longer waiting. */
 function failureSubject(request: SessionRequest, err: unknown): string {
   if ((request.action !== "reopen" && request.action !== "resume") || (err instanceof CodedError && err.code === CODE.session_request_not_waiting)) {
     return request.session;
@@ -117,12 +117,12 @@ function SessionRequestSentence({ request, incomplete }: { request: SessionReque
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const markId = useId();
   const sentence = useRef<HTMLParagraphElement>(null);
-  const handOffFrom = useHandOffAfterRemoval(() => dialogAround(sentence));
+  const handoffFrom = useHandoffAfterRemoval(() => dialogAround(sentence));
   // The mark after the account the session would run on. When it goes while it or its popover holds
   // focus, focus moves to the dialog.
   const incompleteMark = incomplete && (
     <span className="ms-1">
-      {handOffFrom(`[data-status-mark-id="${markId}"]`)}
+      {handoffFrom(`[data-status-mark-id="${markId}"]`)}
       <IncompleteSharingMark inline account={incomplete} markId={markId} />
     </span>
   );
@@ -241,10 +241,10 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
   const form = reported?.requestId === request.requestId ? reported : undefined;
 
   // Never rejects: the dialog has usually moved on by the time an approval has been carried out,
-  // so what the user has to know goes to a toast instead of into the dialog. The toast's subject is
-  // `failureSubject`'s. The window does not follow the session an approval starts or brings back:
-  // the user's attention stays with the requesting session, which carries on, and the session is
-  // not one the user asked to open.
+  // so what the user has to know goes to a notification instead of into the dialog. The
+  // notification's subject is `failureSubject`'s. The window does not follow the session an
+  // approval starts or brings back: the user's attention stays with the requesting session, which
+  // carries on, and the session is not one the user asked to open.
   const answer = async (approve: boolean): Promise<void> => {
     const edits = approve && isChangeRequest(request) ? form?.edits : undefined;
     try {

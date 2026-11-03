@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import React, { useRef, useState } from "react";
 
-import { HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "../../components/focus/HandoffOnUnmount";
 import { AnchoredTooltip } from "../../components/hint/AnchoredTooltip";
 import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
@@ -27,7 +27,7 @@ export async function closeShellTerminal(daemon: Pick<Daemon, "request">, termin
  * tab goes while the menu is up. */
 export function TabContextMenu({ label, items, tab, onGone }: { label: string; items: ActionMenuEntry[]; tab: HTMLElement; onGone: () => void }): React.ReactElement {
   const [target] = useState<React.RefObject<HTMLElement | null>>(() => ({ current: tab }));
-  // Kept past the wrapper's unmount, whose ref is cleared before the hand-off looks for the menu.
+  // Kept past the wrapper's unmount, whose ref is cleared before the handoff looks for the menu.
   const scope = useRef<HTMLDivElement | null>(null);
   // Only this menu: another one open (the tab row's) keeps its focus when a tab goes. The menu is
   // labelled by its hidden trigger, in the wrapper.
@@ -37,7 +37,7 @@ export function TabContextMenu({ label, items, tab, onGone }: { label: string; i
   };
   return (
     <div ref={(element) => { if (element) scope.current = element; }} className="contents">
-      <HandOffOnUnmount from={ownMenu} to={onGone} />
+      <HandoffOnUnmount from={ownMenu} to={onGone} />
       <ActionMenu label={label} items={items} contextTargetRef={target} contextOnly />
     </div>
   );

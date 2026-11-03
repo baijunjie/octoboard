@@ -65,7 +65,7 @@ Where to start, by question:
 - [Settings tools for agents](product/agent-settings-tools.md) — the MCP tools that read and change projects, consoles
   and application settings.
 - [Which session is working on a branch](product/branch-responsible-session.md) — the responsible-session record for a
-  branch and its handover.
+  branch and its transfer.
 
 ### Agents, accounts and quotas
 

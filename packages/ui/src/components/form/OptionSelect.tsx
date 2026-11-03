@@ -5,7 +5,7 @@ import { ButtonContext } from "react-aria-components";
 import { FieldErrorMessage } from "./FieldErrorMessage";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { FieldClearButton } from "../controls/FieldClearButton";
-import { useHandOffAfterRemoval } from "../focus/HandOffOnUnmount";
+import { useHandoffAfterRemoval } from "../focus/HandoffOnUnmount";
 import { MarkLineBox } from "../status/MarkLineBox";
 import { MotionListBox } from "../motion/MotionListBox";
 import { ReasonText } from "../text/ReasonText";
@@ -109,7 +109,7 @@ function FadeLabel({ label, badge, lang, className, as }: {
  * `labelMark`, built likewise, one about the whole field (its list of options) stands right after the
  * label, beside it rather than inside it, so that the field's accessible name stays the label's text.
  * When either mark goes while it or its popover holds focus, focus moves to the trigger in the commit
- * that removes the mark, ahead of a caller's own hand-off, unless that commit disables the trigger: a
+ * that removes the mark, ahead of a caller's own handoff, unless that commit disables the trigger: a
  * caller that disables the select with the mark's going hands focus on itself (`useFocusHandoff`), from
  * `<body>`, where focus falls from the removed mark.
  *
@@ -162,7 +162,7 @@ export function OptionSelect<T extends string>({
    * It completes the placeholder, so it is drawn as an option's `badgeInLabel` badge is. */
   placeholderBadge?: string;
   /** A `StatusMark` about the field's current value, drawn inside it, built with the `markId` it is given,
-   * which scopes the focus hand-off to it. */
+   * which scopes the focus handoff to it. */
   mark?: (markId: string) => React.ReactElement;
   /** A `StatusMark` about the whole field, drawn after its visible label (so not with `inline`, `joined` or
    * `hideLabel`), built with the `markId` it is given as `mark` is. */
@@ -182,9 +182,9 @@ export function OptionSelect<T extends string>({
   const badgeInLabel = current ? current.badgeInLabel : true;
   const invalid = isInvalid === true || (errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "");
   const hasReason = options.some((option) => option.reason);
-  // Decided once the commit has set the trigger's `disabled`, and before the effects of a caller's own hand-off.
-  const handOffFrom = useHandOffAfterRemoval(() => trigger.current);
-  const handOffToTrigger = (id: string) => handOffFrom(`[data-status-mark-id="${id}"]`);
+  // Decided once the commit has set the trigger's `disabled`, and before the effects of a caller's own handoff.
+  const handoffFrom = useHandoffAfterRemoval(() => trigger.current);
+  const handoffToTrigger = (id: string) => handoffFrom(`[data-status-mark-id="${id}"]`);
   return (
     // HeroUI's variant for a field on a surface: in a dialog, or in the Processes panel's toolbar.
     <Select
@@ -225,7 +225,7 @@ export function OptionSelect<T extends string>({
       {!inline && !joined && !hideLabel && (labelMark ? (
         <div className="flex items-start gap-1">
           <Label>{label}</Label>
-          {handOffToTrigger(labelMarkId)}
+          {handoffToTrigger(labelMarkId)}
           {/* The select's `ButtonContext` is for its trigger; reset around the mark as for `mark` below. */}
           <MarkLineBox size="text-sm">
             <ButtonContext.Provider value={{}}>{labelMark(labelMarkId)}</ButtonContext.Provider>
@@ -283,7 +283,7 @@ export function OptionSelect<T extends string>({
         )}
         {mark && (
           <>
-            {handOffToTrigger(markId)}
+            {handoffToTrigger(markId)}
             {/* The select gives its trigger's behaviour to every button inside it through `ButtonContext`;
                 the mark is not that button, so it is reset around the mark. The select's other contexts (text,
                 label, list state) are not reset and still reach the popover's body, which holds no such parts. */}

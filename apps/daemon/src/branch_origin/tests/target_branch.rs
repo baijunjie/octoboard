@@ -1,4 +1,4 @@
-//! The target branch and fork point recorded for a created branch, and how a rename and a handover
+//! The target branch and fork point recorded for a created branch, and how a rename and a transfer
 //! treat them.
 
 use super::*;
@@ -67,13 +67,13 @@ fn a_rename_keeps_the_target_branch() {
 }
 
 #[test]
-fn a_handover_leaves_the_target_branch_alone() {
+fn a_transfer_leaves_the_target_branch_alone() {
     let (fixture, _) = project_with_remote();
     fixture.as_session("a", &["branch", "topic", "main"]);
     fixture.deliver(1);
     let before = fixture.rows();
 
-    hand_over(
+    move_branch_records(
         &fixture.state,
         &fixture.common_dir,
         &["topic".to_string()],

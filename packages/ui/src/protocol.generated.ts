@@ -358,7 +358,7 @@ export type BranchOriginInfo = {
   responsible_title: string,
   /**
    * When that session became responsible (milliseconds since the epoch): the branch's creation,
-   * or the handover.
+   * or the transfer.
    */
   responsible_since: number,
 };
@@ -1224,7 +1224,7 @@ export type Event = {
   /**
    * The branches an approval would hand to the new session, as wire paths below
    * `refs/heads/`: ones the requesting session is responsible for, checked when it asked.
-   * Empty when the request hands none over.
+   * Empty when the request transfers none.
    */
   branches: Array<string>,
   /**

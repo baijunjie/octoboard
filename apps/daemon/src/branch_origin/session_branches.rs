@@ -2,7 +2,7 @@
 //! worktree each is checked out in, its head, what it has committed against the branch it was cut
 //! from, and whether its worktree holds uncommitted changes. Reading only; nothing is checked out,
 //! fetched or written. The worktree of named branches can also be read alone ([`worktrees_of`]), as
-//! a branch handover reports it, and the branches a session is responsible for can be read with
+//! a branch transfer reports it, and the branches a session is responsible for can be read with
 //! their worktrees alone ([`responsible_for`]) or by name only ([`names_by_session`], which runs no
 //! process), as the MCP tools report them.
 //!
@@ -22,7 +22,7 @@ use std::sync::atomic::AtomicBool;
 use anyhow::Result;
 
 use super::bound::bound_in;
-use super::handover::branch_name;
+use super::transfer::branch_name;
 use crate::browse::compare;
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::{GitError, Policy, Runner};

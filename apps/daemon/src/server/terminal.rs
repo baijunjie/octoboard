@@ -251,7 +251,7 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
     let mut failure = None;
     loop {
         if writing.is_none() {
-            // While the session's messages are held (`OutboxHold`: a handoff, an agent's handover
+            // While the session's messages are held (`OutboxHold`: a handoff, an agent's transfer
             // of a session it owns, a sharing change), what is typed waits here too: a turn it
             // started now would run against work that is being moved. Released, it goes in as
             // usual; never written, it is reported as lost when the socket ends.

@@ -157,7 +157,7 @@ function Crash({ stack }: { stack?: string }): never {
   throw error;
 }
 
-// A viewer scenario has one too: the viewer's header copies a path through the daemon's toasts.
+// A viewer scenario has one too: the viewer's header copies a path through the daemon's notifications.
 const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
 if (daemon && scenario) installReportPageFixture(document, daemon, scenario.id);
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
@@ -281,13 +281,13 @@ try {
 } finally {
   live.release();
 }
-// The scenario's own toasts are raised a fixed time after the app subscribes to them, which can be after the steps
-// have ended; ready comes after they have been handed to the stack. A page whose app never subscribes would wait for
-// ever, so the wait is capped, and the cap is a failure: the scenario then shows less than it says.
-if (daemon && scenario?.toasts?.length) {
-  const TOASTS_LIMIT_MS = 5000;
-  const raised = await Promise.race([daemon.scenarioToastsRaised.then(() => true), ui.wait(TOASTS_LIMIT_MS).then(() => false)]);
-  if (!raised) galleryFailure(`The scenario's toasts were not raised within ${TOASTS_LIMIT_MS / 1000}s: nothing on the page subscribed to them`);
+// The scenario's own notifications are raised a fixed time after the app subscribes to them, which can be after the
+// steps have ended; ready comes after they have been handed to the stack. A page whose app never subscribes would wait
+// for ever, so the wait is capped, and the cap is a failure: the scenario then shows less than it says.
+if (daemon && scenario?.notifications?.length) {
+  const NOTIFICATIONS_LIMIT_MS = 5000;
+  const raised = await Promise.race([daemon.scenarioNotificationsRaised.then(() => true), ui.wait(NOTIFICATIONS_LIMIT_MS).then(() => false)]);
+  if (!raised) galleryFailure(`The scenario's notifications were not raised within ${NOTIFICATIONS_LIMIT_MS / 1000}s: nothing on the page subscribed to them`);
 }
 // The first wait: two frames after the last step, not at its end, since what the last step set going has usually
 // been drawn by then, which is what a capture or a read of the overlay needs. The cap is short, so that a page too

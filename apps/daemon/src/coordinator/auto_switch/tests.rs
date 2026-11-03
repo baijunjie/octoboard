@@ -2234,7 +2234,7 @@ async fn a_restore_waits_for_another_claim_on_the_session() {
         })
         .await
     );
-    // A handover of branches holds the session for a moment.
+    // A transfer of branches holds the session for a moment.
     let claim = fixture.state.begin_switch("w").unwrap();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(600));

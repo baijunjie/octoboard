@@ -31,7 +31,7 @@ function mount() {
   return { list, entry, tab, order: () => [...container.querySelectorAll("button")].map((el) => el.textContent) };
 }
 
-it("gives the moved tab its focus back once the strip follows the new order, ahead of the section's own hand-off", () => {
+it("gives the moved tab its focus back once the strip follows the new order, ahead of the section's own handoff", () => {
   const { list, entry, tab, order } = mount();
   // The menu that asked for the move has closed with its focus: nothing holds it.
   act(() => (document.activeElement as HTMLElement).blur());

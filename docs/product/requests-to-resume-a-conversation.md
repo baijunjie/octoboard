@@ -63,10 +63,10 @@ dialog shown and nothing changed:
 - a conversation held by a session that is starting or whose process is running, since there is nothing to resume:
   the refusal names who the session reports to and says `inform_session` tells it something;
 - a holder that is being launched or resumed right now, or that is being switched to another account, handed off,
-  rebound or having its branches handed over right now; each refusal says which, and to ask again in a moment;
+  rebound or having its branches transferred right now; each refusal says which, and to ask again in a moment;
 - a `model` or `effort` that is not blank for a conversation a session holds;
 - a `title` for an interrupted session;
-- a held conversation its agent no longer has (`conversation_unresumable`), judged as a reopen judges it before
+- a held conversation its agent no longer has (`conversation_unresumable`), judged as a resume judges it before
   relaunching anything (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`);
 - for a conversation only an agent's record holds, whatever opening the session would meet in the session dialog: an
@@ -100,8 +100,8 @@ where the conversation is held, judged again at that moment:
   conversation.
 - **The session that holds it is already running by then** (`already_running`): nothing is done. This holds only where
   the session has a process again, or is being launched or resumed itself; one that is held instead for an account
-  switch, a handoff, a handover of branches or a binding change while still without a process fails the approval (see "When an
-  approval cannot be carried out" below).
+  switch, a handoff, a transfer of branches or a binding change while still without a process fails the approval (see
+  "When an approval cannot be carried out" below).
 
 **The caller gains nothing over what it resumed.** It is never made an owner and keeps running unchanged; what was
 reopened or resumed reports to whom it reported before, and a session opened on a record reports to the user. As with
@@ -130,9 +130,9 @@ but could not be carried out, with the reason (see "When an approval cannot be c
 `docs/product/session-requests.md`). For this request it is for one of these reasons:
 
 - the caller's process ended before the approval was carried out;
-- the reopen or resume was refused at that moment — the conversation found gone, an archived owner that could not be
-  reopened, the session held for an account switch, a handoff, a handover of branches or a binding change, or any other
-  refusal the user's own reopen would meet; what a reopen that fails partway leaves behind is as for any reopen (see
+- the resume was refused at that moment — the conversation found gone, an archived owner that could not be
+  reopened, the session held for an account switch, a handoff, a transfer of branches or a binding change, or any other
+  refusal the user's own resume would meet; what a resume that fails partway leaves behind is as for any resume (see
   "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`);
 - the session could not be opened on the record — such as a conversation a session came to hold meanwhile, or any
   refusal opening it meets at that moment.

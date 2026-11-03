@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { focusLanding } from "../components/focus/regionFocus";
 import { ResizeSeparator } from "../components/panel/ResizeSeparator";
 import { useT } from "../i18n/react";
@@ -170,7 +170,7 @@ export function PanelStack({
   if (floatingKind !== undefined && (floatingKind !== leaving?.kind || ownerId !== leaving?.owner)) setLeaving({ owner: ownerId, kind: floatingKind });
   // A session's kind with no session to show (the Report panel, once the last page is deleted) has no
   // content left to show, floating in or fading away: its card goes at once, and hands its focus on
-  // (`HandOffOnUnmount` below).
+  // (`HandoffOnUnmount` below).
   const sessionGone = (kind: string) => unavailableKinds(owner.kind, reportSessionId).includes(kind);
   // Another owner's card is never shown for this one (Back or Forward while the pane fades away).
   const keep = floating && floatingKind === undefined && leaving !== undefined && leaving.owner === ownerId && !peek?.active && !sessionGone(leaving.kind) ? leaving.kind : undefined;
@@ -275,7 +275,7 @@ export function PanelStack({
         return (
           <React.Fragment key={kind}>
             {/* First among what goes away with the card, so focus inside it is still found. */}
-            <HandOffOnUnmount from={`#${panelId(kind as PanelKind)}`} to={focusTerminal} />
+            <HandoffOnUnmount from={`#${panelId(kind as PanelKind)}`} to={focusTerminal} />
             {/* Only while no card is maximized: the column's shares are then all its own. */}
             {index > 0 && maximized === undefined && (
               <div className="relative self-start h-(--panel-stack-gap)" style={{ ...placement, top: split }}>
@@ -337,7 +337,7 @@ export function PanelStack({
       })}
       {columns.length === 2 && (
         <>
-          <HandOffOnUnmount from="#panel-column-resize" to={focusTerminal} />
+          <HandoffOnUnmount from="#panel-column-resize" to={focusTerminal} />
           <ResizeSeparator
             id="panel-column-resize"
             orientation="vertical"

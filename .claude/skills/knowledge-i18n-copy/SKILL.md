@@ -498,7 +498,8 @@ are now wrong or it leaves out one thing, the meaning has changed.
   element leaves the separator a node of its own. (`packages/ui/src/i18n/react.tsx`;
   `packages/ui/src/i18n/catalog.ts`; `packages/ui/src/i18n/messages/en.ts`; `docs/voiceover-cases.md`)
 - **Glossary**: zh-Hans follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session,
-  控制台会话 console session, 项目会话 project session, 智能体 agent, one half-width space between Chinese and Latin text,
+  控制台会话 console session, 项目会话 project session, 智能体 agent, 移交 handoff, 转移 transfer (of branches, process
+  trees or a parent), one half-width space between Chinese and Latin text,
   numbers or placeholders, and full-width punctuation in Chinese sentences, parentheses included (`（{detail}）`).
   (`packages/ui/src/i18n/messages/zh-Hans.ts`, the catalog's doc comment)
 - **App name and other app-level facts**: the single source is `config/app.json`. Copy writes the product name as the

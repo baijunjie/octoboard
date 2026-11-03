@@ -40,7 +40,7 @@ their normal character input.
 
 **Typing waits while the session's messages are held.** While Octoboard holds the messages for a session — while it is
 being handed off (see "Messages for the original during a handoff" in `docs/product/handing-off-sessions.md`), while
-its owner's agent hands its branches over to another session (see "Handing branches between sessions of an owner" in
+its owner's agent transfers its branches to another session (see "Transferring branches between sessions of an owner" in
 `docs/product/branch-responsible-session.md`), and while a change of its account's sharing has claimed it (see "When a
 change is carried out" in `docs/product/sharing-the-default-configuration.md`) — what the user types or pastes into its
 terminal is not written into the agent, so it is not echoed and starts no turn. Answers to the program's queries still

@@ -18,7 +18,7 @@ it("hands focus from the account's mark to the account picker, with its ring, wh
     container.remove();
     act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
   });
-  // A synchronous update, as the daemon's store makes: the field's own hand-off runs in the same commit's effects.
+  // A synchronous update, as the daemon's store makes: the field's own handoff runs in the same commit's effects.
   const render = (marked: boolean) => act(() => root.render(
     <AgentAccountField
       label="Agent"

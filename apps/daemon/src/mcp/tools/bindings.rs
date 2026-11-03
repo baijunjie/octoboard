@@ -14,8 +14,8 @@ use crate::coordinator::{self, bindings::Released};
 use crate::messaging::delivery::{self, Delivery, SentBy};
 use crate::messaging::naming::named_session;
 use crate::messaging::owner_notices::{
-    duties_under_new_parent, first_report_on_bind, handed_over_to_owner, handed_over_to_you,
-    tell_now_or_leave, tell_released,
+    duties_under_new_parent, first_report_on_bind, tell_now_or_leave, tell_released,
+    transferred_to_owner, transferred_to_you,
 };
 use crate::messaging::reporting::{self, ReportStatus};
 use crate::messaging::texts::capitalised;
@@ -55,8 +55,8 @@ pub(in crate::mcp) async fn transfer_session(
     let (moved, owner, running) =
         coordinator::bindings::transfer_session(state, &session.id, &caller.id, to)?;
 
-    let to_session = handed_over_to_you(caller, &owner, &moved, session.is_worker());
-    let to_owner = handed_over_to_owner(state, caller, &owner, &moved, &note);
+    let to_session = transferred_to_you(caller, &owner, &moved, session.is_worker());
+    let to_owner = transferred_to_owner(state, caller, &owner, &moved, &note);
     // Neither message credits the turn it starts: if the moved session or its new owner carries on
     // and stops without reporting, the report Octoboard synthesises is the safety net, and it is
     // wanted there.
@@ -65,19 +65,19 @@ pub(in crate::mcp) async fn transfer_session(
         .await
         .map(Some);
     let mut result_note = format!(
-        "Handed over: `{id}` now reports to {to} and is no longer yours. {child} {owner}",
+        "Transferred: `{id}` now reports to {to} and is no longer yours. {child} {owner}",
         id = moved.id,
         to = named_session(&owner),
-        child = told(&child, "The notice of the handover", "the session"),
+        child = told(&child, "The notice of the transfer", "the session"),
         owner = told(
             &told_owner,
-            "The notice of the handover",
+            "The notice of the transfer",
             "its new parent session"
         ),
     );
     if told_owner.is_err() {
         result_note.push_str(&format!(
-            " Tell the new parent session of the handover yourself with `{}`.",
+            " Tell the new parent session of the transfer yourself with `{}`.",
             qualified_tool_name(caller.agent, "inform_session")
         ));
     }
@@ -201,11 +201,11 @@ mod tests {
     use crate::protocol::Agent;
     use crate::test_support::{fake_live_session, heard_after_marker, output_containing, running};
 
-    /// A handover moves the session to its new owner, tells it whose it now is, and sends the new
+    /// A transfer moves the session to its new owner, tells it whose it now is, and sends the new
     /// owner the note, quoted; the session is the new owner's to drive from then on, not the old
     /// one's.
     #[tokio::test]
-    async fn a_handover_tells_the_session_and_its_new_owner() {
+    async fn a_transfer_tells_the_session_and_its_new_owner() {
         let (state, _dir) = peer_state("transfer");
         let of_a = running(&state, "of-a");
         let _a = running(&state, "a");
@@ -320,7 +320,7 @@ mod tests {
             let told = output_containing(
                 &loose,
                 &format!(
-                    "handed you over to the {}",
+                    "transferred you to the {}",
                     if parent == "starter" {
                         "project session `starter`"
                     } else {
@@ -591,24 +591,24 @@ mod tests {
     /// sent as its first report, word for word.
     #[test]
     fn the_caller_is_told_what_became_of_each_notice_word_for_word() {
-        let notice = |delivery| told(&delivery, "The notice of the handover", "the session");
+        let notice = |delivery| told(&delivery, "The notice of the transfer", "the session");
         assert_eq!(
             notice(Ok(Some(Delivery::Written))),
-            "The notice of the handover was delivered to the session."
+            "The notice of the transfer was delivered to the session."
         );
         assert_eq!(
             notice(Ok(Some(Delivery::Queued))),
-            "The notice of the handover is queued: the session cannot take a message right now. \
+            "The notice of the transfer is queued: the session cannot take a message right now. \
              It will be delivered as soon as the session can take one."
         );
         assert_eq!(
             notice(Ok(Some(Delivery::Kept))),
-            "The notice of the handover is kept for the session, which is interrupted with no \
+            "The notice of the transfer is kept for the session, which is interrupted with no \
              process running: it will be delivered once the session is resumed."
         );
         assert_eq!(
             notice(Ok(Some(Delivery::Unsent))),
-            "The notice of the handover was written into the input of the session, but the \
+            "The notice of the transfer was written into the input of the session, but the \
              session's agent did not send it to the conversation (it is in the input box, or went \
              to a view of its background agents), so the session has not read it. The user has \
              been told to check the session."

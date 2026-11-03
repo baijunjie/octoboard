@@ -159,7 +159,7 @@ the operation that takes the claim, such as an MCP tool checking that the sessio
 repeated inside the operation under the claim, with whatever it needs passed in. When the judging ran before the claim
 was taken, re-read everything that decided it under the claim — each member of a group and its standing, not only the
 one row — and back out if any of it changed. A claim is not free to hold: `AppState::begin_switch` and its kin
-refuse every other holder (a handoff, a handover, a binding change, a resume) for as long as the guard lives, and an
+refuse every other holder (a handoff, a transfer, a binding change, a resume) for as long as the guard lives, and an
 account switch's claim shows the session as switching to every client. That refusal suits a request the user can
 repeat; work the daemon starts from an event that will not come again — a turn that failed, a hook — and that finds
 the session under a claim waits for the claim to end, with a bound, and then re-reads what it decided on, instead of

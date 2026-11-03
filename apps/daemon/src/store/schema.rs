@@ -255,7 +255,7 @@ CREATE TABLE kept_messages (
 CREATE INDEX kept_messages_session_id ON kept_messages (session_id);
 -- The session working on a branch, keyed on the branch because one session works on
 -- many and a branch has one responsible session. It starts as the session whose own git
--- reported creating the branch and moves only by a handover. No `REFERENCES` on
+-- reported creating the branch and moves only by a transfer. No `REFERENCES` on
 -- `responsible_session_id`: a project's deletion cascades its sessions away and the
 -- record outlives them, which is what `responsible_title`, the title the session had
 -- when it became responsible, is for. `responsible_since` is when that was, in

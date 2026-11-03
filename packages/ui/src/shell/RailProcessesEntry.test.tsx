@@ -245,7 +245,7 @@ it("hands focus to the rail button when a hover-opened popover closes with focus
   await mounted.advance(HOVER_CLOSE_DELAY_MS * 2);
   expect(railPanel()).toBeNull();
   expect(document.activeElement).toBe(button(mounted.container));
-  // The hand-off sets the keyboard's modality; the ring shows only because focus moves after React's commit.
+  // The handoff sets the keyboard's modality; the ring shows only because focus moves after React's commit.
   expect(getInteractionModality()).toBe("keyboard");
   expect(button(mounted.container).hasAttribute("data-focus-visible")).toBe(true);
 });
@@ -258,7 +258,7 @@ it("leaves focus alone when it was claimed elsewhere by the time a closing popov
   await mounted.advance(1000);
   act(() => detailsButton(railPanel()!).focus());
   leave(button(mounted.container));
-  // Closing the popover queues the hand-off; the next control takes the focus before it runs.
+  // Closing the popover queues the handoff; the next control takes the focus before it runs.
   const next = mounted.container.querySelector<HTMLButtonElement>("#next")!;
   const queue = queueMicrotask;
   vi.stubGlobal("queueMicrotask", (callback: () => void) => queue(() => { if (!railPanel()) next.focus(); callback(); }));

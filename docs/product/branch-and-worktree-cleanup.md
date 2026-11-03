@@ -13,7 +13,7 @@ Sessions store no branch or worktree of their own.
 
 - **A local branch is bound to a session** when its record names that session as the branch's responsible session
   (see "The responsible session" in `docs/product/branch-responsible-session.md`) and it is still the branch that
-  record was made for. A branch handed over is bound to the session it was handed to. A branch no session's git
+  record was made for. A branch transferred is bound to the session it was handed to. A branch no session's git
   reported creating has no responsible session, so it is never bound and never touched by this cleanup.
 - **A linked worktree is bound** when it has such a branch checked out.
 - Only the repository of the session's project is looked in. A console session has no project, so nothing is bound to
@@ -263,7 +263,7 @@ Archiving a coordinator with a parent archives the sessions under it too, and th
 keeps, by session id. It also says how to have the branches now: those of the archived session itself move to a session
 of the caller's with `transfer_branches` with `from` set to it; those of the sessions archived with it are not the
 caller's to name as `from`, so the caller reopens the archived session with `resume_session` and a `text` asking it to
-hand them over to itself, then hands them on from it once it is idle. The tool's description tells the agent to use
+transfer them to itself, then hands them on from it once it is idle. The tool's description tells the agent to use
 `keep` when the work on the branches is not done with or someone may want it. Nothing an agent sends forces a removal:
 there is no `force_remove`, forcing being left to the user's confirmation (see "The confirmation" above).
 

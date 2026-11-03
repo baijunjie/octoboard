@@ -80,8 +80,8 @@ console appears, the panes come back exactly as the user had left them — a sid
   which hands focus to the top bar (see "With no session selected" in `docs/product/session-terminal.md`); here the top
   bar has no enabled control to take it.
 - **When the first console is created** from the welcome screen's New console, focus moves to the first control in the
-  top bar a keyboard can reach. The hand-off is New console's alone: consoles arriving through Import configuration
-  appear while its dialog is still open on the import's result, and get no such hand-off.
+  top bar a keyboard can reach. The handoff is New console's alone: consoles arriving through Import configuration
+  appear while its dialog is still open on the import's result, and get no such handoff.
 - **When the last console goes away** while keyboard focus is inside the sidebar, the archive view, the terminal or
   the right pane — all of which go with it — focus is handed to the rail's New console button. Focus that was already
   on nothing stays on nothing.

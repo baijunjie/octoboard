@@ -63,7 +63,7 @@ export function ProjectFilterButton({
   const keywordField = useTrimmedField(filter.keyword, (keyword) => onChange((f) => ({ ...f, keyword })));
 
   const onOpenChange = (isOpen: boolean) => {
-    // A new gesture supersedes the previous close's delayed focus hand-off.
+    // A new gesture supersedes the previous close's delayed focus handoff.
     focusReturnListeners.current?.abort();
     focusReturnListeners.current = null;
     if (isOpen && clearAction) {

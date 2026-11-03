@@ -326,8 +326,8 @@ modifies" in `docs/product/launching-agents.md`.
 A project's action menu offers **Pull current branch** under **Git** while the project's status says its directory is a
 git repository — so not before its first status has arrived (see "What one check does" above, and "Project rows" in
 `docs/product/sidebar-project-rows.md` for where the menu is). It does not push. Choosing it closes the menu and starts
-the check without waiting; a success is not toasted. It runs that project's check right away and then fast-forwards the
-branch under exactly the rules above, whether or not **Automatically pull repositories** is on; choosing it is the
+the check without waiting; a success raises no notice. It runs that project's check right away and then fast-forwards
+the branch under exactly the rules above, whether or not **Automatically pull repositories** is on; choosing it is the
 consent the switch would otherwise give. The one-minute floor does not apply.
 
 Pull current branch does not wait its turn behind the four at once (see "When a project is checked" above). If a

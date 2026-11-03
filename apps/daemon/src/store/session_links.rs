@@ -97,7 +97,7 @@ impl Store {
     /// Returns the ids of the sessions moved, or `None` when that binding did not apply (`to` was
     /// bound meanwhile, or `coordinator_of` is not a console session) and nothing changed. What may
     /// own what is the caller's to check.
-    pub fn hand_over_binding(
+    pub fn transfer_binding(
         &self,
         from: &str,
         to: &str,
@@ -344,10 +344,10 @@ mod tests {
             .expect("bound as a coordinator");
         check("binding a coordinator");
         store
-            .hand_over_binding("a", "b", Some("session-1"))
+            .transfer_binding("a", "b", Some("session-1"))
             .unwrap()
-            .expect("handed over");
-        check("a handover");
+            .expect("transferred");
+        check("a transfer");
         store
             .clear_binding("b", "session-1", false, None)
             .unwrap()

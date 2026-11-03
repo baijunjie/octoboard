@@ -56,7 +56,7 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
  * place and back out of it, sliding in from the end edge and back to it (`useFadeUp`, replayed when
  * another panel takes its place, at once under reduced motion), staying inert while it goes, with no hover's card taking its place until it
  * has gone; the terminal under it keeps its size, and `data-floating-panel` marks it for the
- * terminal's focus hand-off. With `peek`, the group floats at `--aside-width`, capped to leave
+ * terminal's focus handoff. With `peek`, the group floats at `--aside-width`, capped to leave
  * the rail clear. The gaps pass pointer events through except for the width grip; only the cards
  * cover the terminal. With no open card it previews the hovered kind instead. The
  * cards look the same docked and floating (`PANEL_CARD_CLASS`, the sidebar's floating card). It

@@ -11,7 +11,7 @@ import { changeItems } from "./git/changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const toasts = { notice: vi.fn(), error: vi.fn() };
+const notifications = { notice: vi.fn(), error: vi.fn() };
 beforeEach(() => vi.clearAllMocks());
 
 const items = changeItems([change("unstaged", "src/alpha.ts"), change("unstaged", "beta.ts")]);
@@ -26,7 +26,7 @@ function render(layout: "flat" | "tree", clipboard: PlatformAdapter["clipboard"]
       listRef={() => {}}
       changeView={changeViewFixture({ layout })}
     />,
-    { clipboard, toasts },
+    { clipboard, notifications },
   );
   return { container, onOpen };
 }
@@ -60,7 +60,7 @@ it("still opens the change on a flat row's Enter", () => {
   expect(onOpen).toHaveBeenCalledTimes(1);
 });
 
-it("copies the change's path from the menu and confirms with a toast, without opening the change", async () => {
+it("copies the change's path from the menu and confirms with a notification, without opening the change", async () => {
   const writeText = vi.fn(async () => {});
   const { container, onOpen } = render("flat", { writeText });
   act(() => actionsOf(rowOf(container, "alpha.ts")).click());
@@ -69,7 +69,7 @@ it("copies the change's path from the menu and confirms with a toast, without op
   act(() => item.click());
   await flush();
   expect(writeText).toHaveBeenCalledWith("src/alpha.ts");
-  expect(toasts.notice).toHaveBeenCalledWith("Path copied");
+  expect(notifications.notice).toHaveBeenCalledWith("Path copied");
   expect(onOpen).not.toHaveBeenCalled();
 });
 
@@ -90,8 +90,8 @@ it("says so when the clipboard refuses", async () => {
   act(() => actionsOf(rowOf(container, "beta.ts")).click());
   act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
   await flush();
-  expect(toasts.notice).not.toHaveBeenCalled();
-  expect(toasts.error).toHaveBeenCalledWith("Could not copy the path");
+  expect(notifications.notice).not.toHaveBeenCalled();
+  expect(notifications.error).toHaveBeenCalledWith("Could not copy the path");
 });
 
 it("offers Copy path where the platform has no clipboard, copying through the selection", async () => {
@@ -107,7 +107,7 @@ it("offers Copy path where the platform has no clipboard, copying through the se
   await flush();
   expect(execCommand).toHaveBeenCalledWith("copy");
   expect(copied).toEqual(["src/alpha.ts"]);
-  expect(toasts.notice).toHaveBeenCalledWith("Path copied");
+  expect(notifications.notice).toHaveBeenCalledWith("Path copied");
 });
 
 
@@ -132,7 +132,7 @@ it.each([
         changeView={changeViewFixture({ layout })}
       />
     </RowPathScope.Provider>,
-    { request, toasts },
+    { request, notifications },
   );
   for (const [label, type] of [["File manager", "reveal_project_path"], ["Default application", "open_project_path"]] as const) {
     act(() => actionsOf(rowOf(container, "alpha.ts")).click());
@@ -151,7 +151,7 @@ it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with th
     <RowPathScope.Provider value={{ project: "p", worktree: "w" }}>
       <RowActions path="src/caf%C3%A9.ts" name="café.ts" />
     </RowPathScope.Provider>,
-    { request, toasts },
+    { request, notifications },
   );
   act(() => actionsOf(container).click());
   expect([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Copy path", "Open in"]);
@@ -173,7 +173,7 @@ it.each([undefined, "w"])("offers a folder File manager and Terminal in worktree
     <OpenShellTerminal.Provider value={openTerminal}>
       <RowPathScope.Provider value={{ project: "p", worktree }}><RowActions path="src/ui" name="ui" directory /></RowPathScope.Provider>
     </OpenShellTerminal.Provider>,
-    { request, toasts },
+    { request, notifications },
   );
   act(() => actionsOf(container).click());
   act(() => openIn().click());
@@ -188,7 +188,7 @@ it("sends reveal_project_path for a folder's File manager", async () => {
   const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/ui" name="ui" directory /></RowPathScope.Provider>,
-    { request, toasts },
+    { request, notifications },
   );
   act(() => actionsOf(container).click());
   act(() => openIn().click());
@@ -203,7 +203,7 @@ it("leaves Terminal out of a file's Open in", () => {
     <OpenShellTerminal.Provider value={vi.fn()}>
       <RowPathScope.Provider value={{ project: "p" }}><RowActions path="a.ts" name="a.ts" /></RowPathScope.Provider>
     </OpenShellTerminal.Provider>,
-    { toasts },
+    { notifications },
   );
   act(() => actionsOf(container).click());
   act(() => openIn().click());
@@ -219,7 +219,7 @@ it("gives the tree layout's folder row the actions button, reserved and reached 
         <ChangeList items={items} selected={undefined} label="Changes" onOpen={vi.fn()} listRef={() => {}} changeView={changeViewFixture({ layout: "tree" })} />
       </RowPathScope.Provider>
     </OpenShellTerminal.Provider>,
-    { clipboard: { writeText }, toasts },
+    { clipboard: { writeText }, notifications },
   );
   const folder = [...container.querySelectorAll<HTMLElement>("[role=row]")].find((row) => row.textContent?.startsWith("src"))!;
   expect(actionsOf(folder).getAttribute("aria-label")).toBe(`Actions for folder ${isolate("src")}`);
@@ -236,16 +236,16 @@ it("gives the tree layout's folder row the actions button, reserved and reached 
   expect(openTerminal).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "src" });
 });
 
-it("reports a system-open failure through the existing error toast", async () => {
+it("reports a system-open failure through the existing error notification", async () => {
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p" }}><RowActions path="gone.ts" name="gone.ts" /></RowPathScope.Provider>,
-    { request: async () => { throw new Error("File not found"); }, toasts },
+    { request: async () => { throw new Error("File not found"); }, notifications },
   );
   act(() => actionsOf(container).click());
   act(() => openIn().click());
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Default application")!.click());
   await flush();
-  expect(toasts.error).toHaveBeenCalledWith("File not found");
+  expect(notifications.error).toHaveBeenCalledWith("File not found");
 });
 
 it.each(["flat", "tree"] as const)("%s: opens a change row's menu on right-click without opening the change", (layout) => {

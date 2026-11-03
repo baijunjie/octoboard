@@ -398,7 +398,7 @@ async function sweepOne(context, origin, scenario, language, theme, width) {
     await page.goto(`${origin}/gallery-frame.html?${query}`, { waitUntil: "commit" });
     try {
       // The page sets this on <html> once the app has mounted, the scenario's steps have run, failed or not,
-      // and its own toasts have been raised, and then after two frames or 200ms, whichever is first; the
+      // and its own notifications have been raised, and then after two frames or 200ms, whichever is first; the
       // sweep reads text, not pixels, so it does not depend on the frames having been drawn.
       await page.waitForSelector("html[data-gallery-ready]", { state: "attached", timeout: READY_TIMEOUT_MS });
     } catch (error) {

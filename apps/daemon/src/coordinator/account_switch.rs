@@ -544,7 +544,7 @@ pub(crate) async fn restore_after_failed_switch(
 ) -> Result<()> {
     let id = before.id.as_str();
     // Under an account switch's claim, so that the process it starts is watched as the switch's
-    // was. Another claim on the session (a handover of branches, a binding change) is waited for
+    // was. Another claim on the session (a transfer of branches, a binding change) is waited for
     // rather than given up on: the session is down and nobody else will bring it back.
     let deadline = Instant::now() + RESTORE_CLAIM_WAIT;
     let claim = loop {

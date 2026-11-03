@@ -218,15 +218,15 @@ Each branch is:
   - `session_state`: `live` (it has a process), `interrupted`, `archived`, or `gone` when no record of the session is
     left;
   - `since`, when it became responsible, in milliseconds since the epoch — the branch's creation by its git, or a
-    handover;
+    transfer;
   - `target_branch` and `fork_point`, the branch it was created from (`null` when it was created from something that is
     no local branch) and the commit it was created at (see "Target branches and fork points" in
     `docs/product/revert-gate.md`).
 
 Listing the branches brings the repository's records up to date first, as the Git mode's listing does (see "What the
 record is" in `docs/product/branch-responsible-session.md`), so `origin` is as the records stand after that. A branch
-whose responsible session is `gone` cannot be handed over: `transfer_branches` takes branches only from the caller or
-a session it owns (see "Handing branches between sessions of an owner" in
+whose responsible session is `gone` cannot be transferred: `transfer_branches` takes branches only from the caller or
+a session it owns (see "Transferring branches between sessions of an owner" in
 `docs/product/branch-responsible-session.md`), and no session can be named for one that no longer exists.
 
 ## Listing archived sessions
@@ -352,8 +352,8 @@ Such a session's `status` is `idle`: it takes a message like any other session a
 
 Each record also carries `paused`: `true` for a session whose `status` is `idle` and whose last turn ended abnormally —
 cancelled, ended by a declined prompt, stopped on a usage limit, failed, or cut short by its process ending in the
-middle of it, which a reopen brings back — and `false` for every other. It names no reason. Such a session takes a message like any other at its prompt (see "Paused" in
-`docs/product/session-statuses.md`).
+middle of it, which a resume brings back — and `false` for every other. It names no reason. Such a session takes a
+message like any other at its prompt (see "Paused" in `docs/product/session-statuses.md`).
 
 Each of these records also carries `context`, the session's context size as the window shows it (see "Session context
 size" in `docs/product/session-context.md`): an object with `tokens`, plus `window` and `used_percent` — the share of
@@ -415,11 +415,11 @@ And each record carries what tells sessions apart and what an owner decides on:
   (`conversation_unresumable`).
 - `resumable`, in `get_session`'s record of an interrupted or archived session only — and in
   `list_archived_sessions`'s with `check_resumable` (see "Listing archived sessions" above): whether the agent still
-  holds the conversation, looked up in its own records under the session's account as a reopen looks it up (see "When a
+  holds the conversation, looked up in its own records under the session's account as a resume looks it up (see "When a
   conversation can no longer be resumed" in `docs/product/archiving-and-resuming-sessions.md`). `true` when it does, and
-  for a session with no conversation, which a reopen starts afresh; `false` when the conversation is proven gone, so
+  for a session with no conversation, which a resume starts afresh; `false` when the conversation is proven gone, so
   that `resume_session` would refuse it; `null` when that cannot be told, which `resume_session` lets through. It is
-  read in the daemon's own environment rather than a launch's, so in rare cases a reopen can find otherwise. A running
+  read in the daemon's own environment rather than a launch's, so in rare cases a resume can find otherwise. A running
   session's record has no `resumable`.
 - `processes`, in `get_session`'s record only: for a session with a process running, the process trees its launch
   holds (a dev server, a preview, a watcher), each with its `id`, `command`, `cwd`, `ports` and `started_at`, as the

@@ -217,7 +217,7 @@ pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
 
 /// Makes `branch` in the repository at `repo` and records `session` as its responsible
 /// session, as the hook's report would have; the branch is the one the record was made for, which
-/// is what a handover asks.
+/// is what a transfer asks.
 pub(crate) fn branch_made_by(state: &AppState, repo: &Path, branch: &str, session: &str) {
     branch_made_from(state, repo, branch, session, None);
 }

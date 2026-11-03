@@ -96,7 +96,7 @@ session could no longer read the submission of. Nothing brings the pages back, a
   coordinator to another console session, keeps the report panel tools and pages.
 - **The agent is told.** The descriptions of `show_page`, `bind_to_session` and `transfer_session`, and what a project
   session's role description says of the latter two, say beforehand that such a binding withdraws the pages, and the
-  binding's own word to the session — the `bind_to_session` result, the message a handover writes into it, or the notice
+  binding's own word to the session — the `bind_to_session` result, the message a transfer writes into it, or the notice
   at its next launch (see "A change of owner told at the next launch" in `docs/product/changing-session-owners.md`) —
   says afterwards that its pages were withdrawn with the tools for them.
 - **Pages a withdrawal missed go when Octoboard starts.** Each time the daemon starts, it withdraws every page still

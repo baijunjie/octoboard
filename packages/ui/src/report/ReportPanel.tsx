@@ -8,7 +8,7 @@ import { raiseError } from "../components/alerts/raiseError";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { RetryStatusMark } from "../components/status/RetryStatusMark";
 import { StatusBadge } from "../components/status/StatusBadge";
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
@@ -152,7 +152,7 @@ export function ReportPanel({
   const listingFailureMark = listFailure !== undefined && showsPages && (
     <>
       {/* The mark goes as the listing answers; focus it or its popover held goes to the header's first control. */}
-      <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => handFocusToRegionStart("panel-report")} />
+      <HandoffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => handFocusToRegionStart("panel-report")} />
       <RetryStatusMark tone="warning" markId={markId} label={t("report.listFailed")} error={listFailure} retrying={retrying} onRetry={retryList}>
         <p>{t("report.listFailed.sentence")}</p>
       </RetryStatusMark>
@@ -277,7 +277,7 @@ function FailureGoes({ className, children }: { className: string; children: Rea
   const id = useId();
   return (
     <>
-      <HandOffOnUnmount from={`[id="${id}"]`} to={() => handFocusToRegionStart("panel-report")} />
+      <HandoffOnUnmount from={`[id="${id}"]`} to={() => handFocusToRegionStart("panel-report")} />
       <div id={id} className={className}>{children}</div>
     </>
   );
@@ -365,8 +365,8 @@ function PageFrame({
       }
       // A history page's bridge already posts nothing, and the daemon refuses a `submit_page` for
       // one regardless (it is the enforcement point), but a forged message would surface that
-      // refusal as an error toast for an action the user never took, so a history page's messages
-      // are not forwarded.
+      // refusal as an error notification for an action the user never took, so a history page's
+      // messages are not forwarded.
       if (isHistory || data.source !== SUBMIT_MESSAGE_SOURCE) return;
       const submission = submissionFromEntries((data as { entries?: unknown }).entries);
       if (submission) onSubmit(page, submission);
@@ -377,7 +377,7 @@ function PageFrame({
 
   return (
     <>
-      <HandOffOnUnmount from={`[id="${frameId}"]`} to={() => handFocusToRegionStart("panel-report")} />
+      <HandoffOnUnmount from={`[id="${frameId}"]`} to={() => handFocusToRegionStart("panel-report")} />
       {/* Where a tap's opening of the panel puts focus: on the page, its content. F6, and an
           opening from a mouse or the keyboard, land on the header's first control instead, the
           sandboxed page passing on only some of the window's shortcuts. */}

@@ -1071,7 +1071,7 @@ fn detached_sleeper_in_script(pid_file: &Path) -> String {
 /// it and that no chain or session reaches is the running launch's, not an ended one's.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_launch_is_followed_under_the_tag_it_reserved_before_its_agent_started() {
-    let (state, dir) = console_with_project_and_accounts("ledger-hand-off");
+    let (state, dir) = console_with_project_and_accounts("ledger-handoff");
     state
         .store
         .insert_session(&Session {
@@ -1813,7 +1813,7 @@ fn an_ended_launch_marked_to_be_carried_over_gives_its_processes_to_the_receivin
     let ledger = &state.process_ledger;
     let mut guard = KillOnDrop(vec![child]);
 
-    assert!(ledger.hand_over(&giver.launch_id, "s2"));
+    assert!(ledger.mark_carry_over(&giver.launch_id, "s2"));
     ledger.end_launch(&giver.launch_id);
     assert!(is_running(child), "stopped with the launch that started it");
     assert_eq!(
@@ -1853,7 +1853,7 @@ fn what_is_carried_over_while_the_session_has_no_launch_is_held_for_its_next_one
     let ledger = &state.process_ledger;
 
     let held = ledger.hold_for_launch("s1");
-    assert!(ledger.hand_over(&first.launch_id, "s1"));
+    assert!(ledger.mark_carry_over(&first.launch_id, "s1"));
     ledger.end_launch(&first.launch_id);
     assert!(ledger.book().launches[&first.launch_id].held);
     ledger.tick();
@@ -1889,7 +1889,7 @@ fn what_nothing_takes_in_is_stopped() {
     let ledger = &state.process_ledger;
 
     let held = ledger.hold_for_launch("s1");
-    ledger.hand_over(&first.launch_id, "s1");
+    ledger.mark_carry_over(&first.launch_id, "s1");
     ledger.end_launch(&first.launch_id);
     assert!(is_running(held_child));
     drop(held);
@@ -1897,13 +1897,13 @@ fn what_nothing_takes_in_is_stopped() {
     ledger.tick();
     assert_stops_running(held_child);
 
-    ledger.hand_over(&second.launch_id, "nobody");
+    ledger.mark_carry_over(&second.launch_id, "nobody");
     ledger.end_launch(&second.launch_id);
     assert_stops_running(unheld_child);
 
     let _receiving = agent(&state, "s4", "true");
-    ledger.hand_over(&third.launch_id, "s4");
-    ledger.withdraw_hand_over(&third.launch_id);
+    ledger.mark_carry_over(&third.launch_id, "s4");
+    ledger.withdraw_carry_over(&third.launch_id);
     ledger.end_launch(&third.launch_id);
     assert_stops_running(withdrawn_child);
 }
@@ -1920,7 +1920,7 @@ fn a_hold_given_up_leaves_the_mark_on_another_sessions_launch() {
     let receiving = agent(&state, "s2", "true");
 
     let switch = ledger.hold_for_launch("s2");
-    assert!(ledger.hand_over(&original.launch_id, "s2"));
+    assert!(ledger.mark_carry_over(&original.launch_id, "s2"));
     drop(switch);
     ledger.end_launch(&original.launch_id);
 
@@ -1940,7 +1940,7 @@ fn a_hold_given_up_as_kept_while_the_daemon_shuts_down_stops_what_it_holds() {
     let _guard = KillOnDrop(vec![child]);
     let ledger = &state.process_ledger;
     let held = ledger.hold_for_launch("s1");
-    ledger.hand_over(&first.launch_id, "s1");
+    ledger.mark_carry_over(&first.launch_id, "s1");
     ledger.end_launch(&first.launch_id);
     assert!(is_running(child));
 
@@ -1960,7 +1960,7 @@ fn what_is_held_when_the_daemon_restarts_is_stopped_by_the_reconcile() {
     let _guard = KillOnDrop(vec![child]);
     let ledger = &state.process_ledger;
     let _held = ledger.hold_for_launch("s1");
-    ledger.hand_over(&first.launch_id, "s1");
+    ledger.mark_carry_over(&first.launch_id, "s1");
     ledger.end_launch(&first.launch_id);
     assert!(is_running(child));
 
@@ -1981,12 +1981,12 @@ fn a_daemon_shutting_down_carries_nothing_over_and_stops_what_is_held() {
     let ledger = &state.process_ledger;
     let _held = ledger.hold_for_launch("s1");
     let _held_too = ledger.hold_for_launch("s2");
-    ledger.hand_over(&first.launch_id, "s1");
+    ledger.mark_carry_over(&first.launch_id, "s1");
     ledger.end_launch(&first.launch_id);
     assert!(is_running(held_child));
 
     ledger.close();
-    ledger.hand_over(&second.launch_id, "s2");
+    ledger.mark_carry_over(&second.launch_id, "s2");
     ledger.end_launch(&second.launch_id);
     assert_stops_running(child);
     ledger.end_held_launches();
@@ -2150,7 +2150,7 @@ fn what_a_hold_gives_up_as_kept_is_listed_under_the_project() {
     let _guard = KillOnDrop(vec![child]);
     let ledger = &state.process_ledger;
     let held = ledger.hold_for_launch("s1");
-    ledger.hand_over(&first.launch_id, "s1");
+    ledger.mark_carry_over(&first.launch_id, "s1");
     ledger.end_launch(&first.launch_id);
     let relaunch = agent(&state, "s1", "true");
     assert_eq!(

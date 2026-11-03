@@ -30,7 +30,7 @@ const snapshot = {
 const prompt = (session: string): Event => ({ type: "trust_prompt", session, agent: "claude", project: "p", path: "/work/app", trust_dir: null });
 
 let daemon: ReturnType<typeof createDaemon>;
-let toasts: NotificationRequest[];
+let notifications: NotificationRequest[];
 const receive = (event: Event) => {
   client.onEvents!([event]);
   client.onEvent!(event);
@@ -38,8 +38,8 @@ const receive = (event: Event) => {
 
 beforeEach(() => {
   daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  toasts = [];
-  daemon.onNotification((toast) => toasts.push(toast));
+  notifications = [];
+  daemon.onNotification((notification) => notifications.push(notification));
 });
 
 it("swallows the notice of this window's own failed go-ahead but still removes the session's trust prompt", async () => {
@@ -49,17 +49,17 @@ it("swallows the notice of this window's own failed go-ahead but still removes t
   receive(notice("s"));
   client.reject!(new CodedError("raw", "trust_answer_failed", {}));
   expect(await outcome).toBeInstanceOf(CodedError);
-  expect(toasts).toEqual([]);
+  expect(notifications).toEqual([]);
   expect(daemon.store.getState().trustPrompts.map((p) => p.session)).toEqual(["t"]);
 });
 
 it("shows the notice held while a go-ahead was in flight once the go-ahead succeeds", async () => {
   const outcome = daemon.request({ type: "confirm_trust", session: "s", remember: false });
   receive(notice("s", "trust_not_carried_over"));
-  expect(toasts).toEqual([]);
+  expect(notifications).toEqual([]);
   client.resolve!();
   await outcome;
-  expect(toasts).toHaveLength(1);
+  expect(notifications).toHaveLength(1);
 });
 
 it("leaves no token when a snapshot arrives between the go-ahead and its rejection", async () => {
@@ -68,5 +68,5 @@ it("leaves no token when a snapshot arrives between the go-ahead and its rejecti
   client.reject!(new CodedError("raw", "trust_answer_failed", {}));
   await outcome;
   receive(notice("s"));
-  expect(toasts).toHaveLength(1);
+  expect(notifications).toHaveLength(1);
 });

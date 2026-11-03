@@ -156,7 +156,7 @@ export function TerminalPane({
   // pointer press, unlike `held`, which turns the ring on for a control that went away by itself.
   // `held` cannot tell the two apart, so this runs first, as a layout effect, and leaves it nothing
   // to do. Only towards another archived session: a live one's terminal is where the keyboard works
-  // next, as for any other hand-off. The flag goes while no history is shown or it is inert, as
+  // next, as for any other handoff. The flag goes while no history is shown or it is inert, as
   // focus can leave it then without a blur.
   const historyFocusedRef = useRef(false);
   useLayoutEffect(() => {
@@ -395,7 +395,7 @@ export function TerminalPane({
       {!session && (
         // `held`: a creation button goes away when its list gains content, from this window
         // or another, and a focused element that is removed leaves focus on `<body>`. It is the
-        // same hand-off the cover's button uses, which can never be on screen at the same time.
+        // same handoff the cover's button uses, which can never be on screen at the same time.
         <div ref={emptyRef} {...held} className="absolute inset-0 flex items-center justify-center-safe bg-panel">
           {noAgents ? (
             noAgents === "add" ? (

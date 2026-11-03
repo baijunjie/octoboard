@@ -12,8 +12,8 @@
 
 use std::path::Path;
 
-use crate::branch_origin::handover::{
-    branch_noun_and_pronoun, named_branches_with_targets, Handover,
+use crate::branch_origin::transfer::{
+    branch_noun_and_pronoun, named_branches_with_targets, BranchTransfer,
 };
 use crate::messaging::naming;
 use crate::protocol::Session;
@@ -167,15 +167,15 @@ pub(crate) const BRANCHES_MARKER: &str = "\"), which started you, also handed th
 /// session starting it handed it the branches and it is now the one responsible for them.
 pub(crate) fn branches_opening_prompt(
     caller: &Session,
-    handover: &Handover,
+    transfer: &BranchTransfer,
     brief: &str,
 ) -> String {
-    let (noun, them) = branch_noun_and_pronoun(&handover.branches);
+    let (noun, them) = branch_noun_and_pronoun(&transfer.branches);
     format!(
         "{BRANCHES_OPENING}{id}` (\"{title}{BRANCHES_MARKER}{noun} {} over to \
          you: you are now the session responsible for {them}, so carry on the work on {them}. \
          This is the brief it wrote:\n\n{brief}",
-        named_branches_with_targets(&handover.branches, &handover.targets),
+        named_branches_with_targets(&transfer.branches, &transfer.targets),
         id = caller.id,
         title = naming::one_line(&caller.title),
     )
@@ -188,7 +188,7 @@ pub(crate) const REQUEST_OPENING: &str = "You were started at the request of the
 /// know who wrote it, how the request was approved, and that it is not that session's to drive.
 pub(crate) fn request_opening_prompt(
     caller: &Session,
-    handover: Option<&Handover>,
+    transfer: Option<&BranchTransfer>,
     automatic: bool,
     brief: &str,
 ) -> String {
@@ -197,18 +197,18 @@ pub(crate) fn request_opening_prompt(
     } else {
         "with the user's approval"
     };
-    let handed = handover.map_or_else(String::new, |handover| {
-        let (noun, them) = branch_noun_and_pronoun(&handover.branches);
+    let transferred = transfer.map_or_else(String::new, |transfer| {
+        let (noun, them) = branch_noun_and_pronoun(&transfer.branches);
         format!(
-            " It also handed the {noun} {} over to you, with the same approval: you are now the \
+            " It also transferred the {noun} {} to you, with the same approval: you are now the \
              session responsible for {them}, so carry on the work on {them}.",
-            named_branches_with_targets(&handover.branches, &handover.targets)
+            named_branches_with_targets(&transfer.branches, &transfer.targets)
         )
     });
     format!(
         "{REQUEST_OPENING}{label}, {approval}. Nobody \
          owns you but the user: that session is not your owner, and it and you can only share \
-         information with each other.{handed} This is the brief it wrote:\n\n{brief}",
+         information with each other.{transferred} This is the brief it wrote:\n\n{brief}",
         label = naming::label(caller),
     )
 }

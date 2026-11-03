@@ -9,10 +9,11 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::branch_origin::handover::{
-    branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
-};
 use crate::branch_origin::session_branches::{self, Worktree};
+use crate::branch_origin::transfer::{
+    branch_name, branch_noun_and_pronoun, move_branches, named_branches, BranchTransfer,
+    TransferOutcome,
+};
 use crate::git::repo_files::repository_of;
 use crate::mcp::tools::session_branches::branch_entry;
 use crate::messaging::naming::named_session;
@@ -49,18 +50,18 @@ pub(in crate::mcp) async fn transfer_branches(
         refuse_if_at_work(
             state,
             &from,
-            "goes on writing to the worktrees of its branches. Hand them over once it is \
+            "goes on writing to the worktrees of its branches. Transfer them once it is \
              awaiting instructions, or has been interrupted",
         )?;
     }
     let from_project = project_of(state, &from)?;
     let to_project = project_of(state, &to)?;
-    let handover = held_by(state, caller, &from, &from_project, branches).await?;
-    refuse_unless_in_the_repository(&handover, &to, &to_project).await?;
+    let transfer = held_by(state, caller, &from, &from_project, branches).await?;
+    refuse_unless_in_the_repository(&transfer, &to, &to_project).await?;
 
-    let moved = match move_branches(state, &handover, &from, &to).await {
-        Handed::Moved(moved) if !moved.moved.is_empty() => moved,
-        Handed::Moved(moved) => {
+    let moved = match move_branches(state, &transfer, &from, &to).await {
+        TransferOutcome::Moved(moved) if !moved.moved.is_empty() => moved,
+        TransferOutcome::Moved(moved) => {
             let (noun, _) = branch_noun_and_pronoun(&moved.unmoved);
             let were = if moved.unmoved.len() == 1 {
                 "it was"
@@ -68,19 +69,19 @@ pub(in crate::mcp) async fn transfer_branches(
                 "they were"
             };
             bail!(
-                "Nothing was handed over: by then {} was no longer responsible for the {noun} {}, \
+                "Nothing was transferred: by then {} was no longer responsible for the {noun} {}, \
                  or {were} gone",
                 named_session(&from),
                 named_branches(&moved.unmoved)
             )
         }
-        Handed::Failed(_) => {
-            bail!("Octoboard could not record the handover; nothing was handed over")
+        TransferOutcome::Failed(_) => {
+            bail!("Octoboard could not record the transfer; nothing was transferred")
         }
     };
 
-    let standing = standing_of(state, &handover.repository, &moved.moved).await;
-    let messages = messages(caller, &from, &to, &standing, &handover.targets);
+    let standing = standing_of(state, &transfer.repository, &moved.moved).await;
+    let messages = messages(caller, &from, &to, &standing, &transfer.targets);
     let untold = parties.tell(state, caller, messages, "branch").await;
 
     let mut answer = json!({
@@ -98,7 +99,7 @@ pub(in crate::mcp) async fn transfer_branches(
     });
     let (_, them) = branch_noun_and_pronoun(&moved.moved);
     let mut note = format!(
-        "Handed over {} from {} to {}; the new session is the one responsible for {them} from now \
+        "Transferred {} from {} to {}; the new session is the one responsible for {them} from now \
          on, and cleanup of {them} when a session is archived follows it. Nothing changed in git \
          or on disk: a branch checked out in a worktree stays checked out there, with whatever \
          uncommitted changes it holds, as `branches` lists.",
@@ -108,7 +109,7 @@ pub(in crate::mcp) async fn transfer_branches(
     );
     if !moved.unmoved.is_empty() {
         note.push_str(&format!(
-            " Not handed over, because {} was no longer responsible for {them} by then: {}.",
+            " Not transferred, because {} was no longer responsible for {them} by then: {}.",
             named_session(&from),
             named_branches(&moved.unmoved)
         ));
@@ -144,13 +145,13 @@ fn project_of(state: &Arc<AppState>, session: &Session) -> Result<Project> {
 
 /// Refuses unless `project`, the project of `to`, is in the repository the branches are in.
 async fn refuse_unless_in_the_repository(
-    handover: &Handover,
+    transfer: &BranchTransfer,
     to: &Session,
     project: &Project,
 ) -> Result<()> {
     let path = project.path.clone();
     let repository = tokio::task::spawn_blocking(move || repository_of(Path::new(&path))).await?;
-    if repository.as_deref() != Some(handover.repository.as_path()) {
+    if repository.as_deref() != Some(transfer.repository.as_path()) {
         bail!(
             "{} is in the project `{}` (\"{}\"), which is not in the repository the branches are \
              in",
@@ -176,7 +177,7 @@ async fn standing_of(
     })
     .await;
     read.unwrap_or_else(|err| {
-        tracing::warn!(%err, "reading the worktrees of the branches handed over failed");
+        tracing::warn!(%err, "reading the worktrees of the branches transferred failed");
         branches
             .iter()
             .map(|wire| {
@@ -250,7 +251,7 @@ fn messages(
     let owner = named_session(caller);
     [
         format!(
-            "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
+            "{NOTICE_PREFIX}: {owner}, your owner, transferred the {noun} {named} to \
              {to}. You are no longer responsible for {them}: do not touch {them} or the \
              worktrees {them} {is} checked out in, and leave any uncommitted changes there as \
              they are.{lines}",
@@ -258,7 +259,7 @@ fn messages(
             is = if names.len() == 1 { "is" } else { "are" },
         ),
         format!(
-            "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
+            "{NOTICE_PREFIX}: {owner}, your owner, transferred the {noun} {named} to \
              you from {from}. You are now the session responsible for {them}, and the previous \
              session no longer is. Your owner will tell you what to do with {them}.\
              {lines_with_targets}",
@@ -307,7 +308,7 @@ mod tests {
 
     fn fixture(name: &str) -> Fixture {
         let (state, dir) = shared_console_state(name);
-        let repo = repo_with(&format!("handover-{name}-repo"), &[(b"a", b"a")]);
+        let repo = repo_with(&format!("transfer-{name}-repo"), &[(b"a", b"a")]);
         state
             .store
             .insert_project(&Project {
@@ -381,8 +382,8 @@ mod tests {
     /// The owner moves a branch between two of its own sessions: the records change hands, both
     /// are told, and the owner is not, since its result says it.
     #[tokio::test]
-    async fn an_owner_hands_a_branch_from_one_session_of_its_own_to_another() {
-        let fixture = fixture("handover-child-to-child");
+    async fn an_owner_transfers_a_branch_from_one_session_of_its_own_to_another() {
+        let fixture = fixture("transfer-child-to-child");
         crate::test_support::branch_made_from(
             &fixture.state,
             &fixture.repo,
@@ -423,7 +424,7 @@ mod tests {
             "{told}"
         );
         assert!(
-            !heard_after_marker(&fixture.state, &caller).contains("handed the branch"),
+            !heard_after_marker(&fixture.state, &caller).contains("transferred the branch"),
             "the caller was told"
         );
         // Cleanup on archive follows the new responsible session.
@@ -443,7 +444,7 @@ mod tests {
     /// own to a session it owns, `from` left out.
     #[tokio::test]
     async fn a_session_takes_a_branch_from_its_child_and_gives_one_to_it() {
-        let fixture = fixture("handover-self");
+        let fixture = fixture("transfer-self");
         fixture.branch("kids", "lead-kid");
         fixture.branch("mine", "lead");
         let caller = running(&fixture.state, "lead");
@@ -469,7 +470,7 @@ mod tests {
     /// cannot be given any.
     #[tokio::test]
     async fn an_archived_session_gives_up_its_branches_but_takes_none() {
-        let fixture = fixture("handover-archived");
+        let fixture = fixture("transfer-archived");
         fixture.branch("left", "old-kid");
         fixture.branch("mine", "lead");
         fixture
@@ -496,7 +497,7 @@ mod tests {
         assert!(
             note.ends_with(
                 " Octoboard could not send the project session `old-lead-kid` (\"Work \
-                 old-lead-kid\") a message about the handover: tell it yourself once it can take \
+                 old-lead-kid\") a message about the transfer: tell it yourself once it can take \
                  a message."
             ),
             "{note}"
@@ -515,8 +516,8 @@ mod tests {
 
     /// Everything that is refused changes no record.
     #[tokio::test]
-    async fn a_refused_handover_changes_nothing() {
-        let fixture = fixture("handover-refused");
+    async fn a_refused_transfer_changes_nothing() {
+        let fixture = fixture("transfer-refused");
         fixture.branch("kids", "kid");
         fixture.branch("busy", "busy-kid");
         fixture.branch("waiting", "waiting-kid");
@@ -643,7 +644,7 @@ mod tests {
     /// branches away.
     #[tokio::test]
     async fn the_caller_may_give_a_branch_while_it_works() {
-        let fixture = fixture("handover-caller-working");
+        let fixture = fixture("transfer-caller-working");
         fixture
             .state
             .store
@@ -676,11 +677,11 @@ mod tests {
     /// says whether it holds uncommitted changes; a branch with no worktree has neither.
     #[tokio::test]
     async fn the_result_reports_each_worktree_and_whether_it_has_uncommitted_changes() {
-        let fixture = fixture("handover-worktrees");
+        let fixture = fixture("transfer-worktrees");
         for branch in ["dirty", "clean", "bare"] {
             fixture.branch(branch, "kid");
         }
-        let worktrees = ScratchDir::new("handover-worktrees-checkouts");
+        let worktrees = ScratchDir::new("transfer-worktrees-checkouts");
         let (dirty, clean) = (
             worktrees.join("dirty-checkout"),
             worktrees.join("clean-checkout"),
@@ -730,10 +731,10 @@ mod tests {
         );
     }
 
-    /// A session another switch or handoff has claimed is not handed over from or to meanwhile.
+    /// A session another switch or handoff has claimed is not transferred from or to meanwhile.
     #[tokio::test]
     async fn a_session_that_is_being_switched_is_left_alone() {
-        let fixture = fixture("handover-claimed");
+        let fixture = fixture("transfer-claimed");
         fixture.branch("feature", "kid");
         let claim = fixture.state.begin_switch("other-kid").unwrap();
 

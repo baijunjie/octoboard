@@ -1,7 +1,7 @@
 import { SquareActivity } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { useT } from "../i18n/react";
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { ProcessJump } from "../process/processJump";
@@ -84,13 +84,13 @@ function RunningProcesses({ counts, error, onOpenChange, onOpen }: {
   }, [count]);
   if (count === 0) return null;
   // The control after this one on the rail, or before it when this is the last.
-  const handOff = () => {
+  const handoff = () => {
     const button = trigger.current;
     const controls = Array.from(button?.closest("nav")?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? []);
     const at = button ? controls.indexOf(button) : -1;
     (controls[at + 1] ?? controls[at - 1])?.focus();
   };
-  // Deferred hand-offs land on the rail button only if focus is still unclaimed by then (a dialog or another control
+  // Deferred handoffs land on the rail button only if focus is still unclaimed by then (a dialog or another control
   // may have taken it since).
   const focusTriggerIfUnclaimed = () => {
     if (!trigger.current?.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
@@ -98,7 +98,7 @@ function RunningProcesses({ counts, error, onOpenChange, onOpen }: {
   };
   return (
     <>
-      <HandOffOnUnmount from={() => focusHolder(`#${TRIGGER_ID}, [${PANEL_ATTRIBUTE}]`)} to={handOff} />
+      <HandoffOnUnmount from={() => focusHolder(`#${TRIGGER_ID}, [${PANEL_ATTRIBUTE}]`)} to={handoff} />
       <RailPanelEntry
         owner={OWNER}
         label={t("panel.processes.name")}
@@ -117,7 +117,7 @@ function RunningProcesses({ counts, error, onOpenChange, onOpen }: {
             {/* A popover that closes with focus inside it (a click on Details moved it there) would let it fall to the body.
                 Not for a row's press: the jump lands focus itself. Focus moves once React's commit is over, or react-aria would
                 not see it as the keyboard's and show no ring. */}
-            <HandOffOnUnmount from={() => jumping.current ? null : focusHolder(`[${PANEL_ATTRIBUTE}]`)} to={() => queueMicrotask(focusTriggerIfUnclaimed)} />
+            <HandoffOnUnmount from={() => jumping.current ? null : focusHolder(`[${PANEL_ATTRIBUTE}]`)} to={() => queueMicrotask(focusTriggerIfUnclaimed)} />
             <ProcessCounts
               rows={rows}
               error={error}

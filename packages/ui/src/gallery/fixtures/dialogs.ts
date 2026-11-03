@@ -6,7 +6,7 @@ import { type RelocationCause } from "../../errors/causes";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeToast } from "../../fixtures/builders";
+import { accountOf, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeNotification } from "../../fixtures/builders";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "../../fixtures/agentModels";
 import { IMAGES } from "../../fixtures/viewerImages";
@@ -593,7 +593,7 @@ export const dialogScenarios: Scenario[] = [
     title: "Notice below a centered dialog",
     description: "The notice stays at the window's bottom end when there is room below the dialog, even if its horizontal span reaches the footer. Resize the window to compare genuine overlap with the clear space below a centered dialog.",
     steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
-    toasts: [sessionNoticeToast("s-web-1", "claude_workspace_untrusted")],
+    notifications: [sessionNoticeNotification("s-web-1", "claude_workspace_untrusted")],
   },
   {
     ...dialogFixture,
@@ -604,8 +604,8 @@ export const dialogScenarios: Scenario[] = [
     title: "Notice stack beside a centered dialog",
     description: "The stack clears the footer even while collapsed, since spreading its notices would otherwise cover the buttons. Hover to expand it, then move away: the stack's anchor stays steady in both states.",
     steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
-    toasts: [
-      sessionNoticeToast("s-web-1", "claude_workspace_untrusted"),
+    notifications: [
+      sessionNoticeNotification("s-web-1", "claude_workspace_untrusted"),
       { kind: "notice", message: (t) => t("common.pathCopied") },
     ],
   },
@@ -621,7 +621,7 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
-    toasts: [sessionNoticeToast("s-web-1", "claude_workspace_untrusted")],
+    notifications: [sessionNoticeNotification("s-web-1", "claude_workspace_untrusted")],
   },
   {
     id: "sidebar-session-menu-unused",

@@ -176,11 +176,11 @@ async fn a_session_request_is_for_wherever_the_call_names() {
     }
 }
 
-/// The branches a request hands over are the caller's to give in the project's own repository:
+/// The branches a request transfers are the caller's to give in the project's own repository:
 /// anything else is refused before the user is asked, and what is accepted reaches the dialog
 /// once and by name.
 #[tokio::test]
-async fn a_session_request_hands_over_only_branches_the_caller_is_responsible_for() {
+async fn a_session_request_transfers_only_branches_the_caller_is_responsible_for() {
     let (state, _dir) = shared_console_state("request-branches");
     let repo = crate::test_support::repo_with("request-branches-repo", &[(b"a", b"a")]);
     state
@@ -364,7 +364,7 @@ async fn open_session_hands_the_callers_branches_to_the_session_it_starts() {
     assert!(answer["note"]
         .as_str()
         .unwrap()
-        .contains("Handed over to it"));
+        .contains("Transferred to it"));
     assert_eq!(responsible("mine"), id);
     assert_eq!(responsible("also"), id);
     assert_eq!(responsible("theirs"), "a");
@@ -415,7 +415,7 @@ async fn open_session_hands_the_callers_branches_to_the_session_it_starts() {
 }
 
 /// An approval starts the session with a brief that says who wrote it, and, when the request
-/// handed branches over, that they are its to work on.
+/// transferred branches, that they are its to work on.
 #[tokio::test]
 async fn the_started_sessions_brief_says_which_branches_it_was_handed() {
     let (state, _dir) = shared_console_state("request-brief");
@@ -437,13 +437,13 @@ async fn the_started_sessions_brief_says_which_branches_it_was_handed() {
     for (branches, between) in [
         (
             json!(["one"]),
-            " It also handed the branch `one` over to you, with the same approval: you are now \
+            " It also transferred the branch `one` to you, with the same approval: you are now \
              the session responsible for it, so carry on the work on it. This is the brief it \
              wrote:",
         ),
         (
             json!(["two", "three"]),
-            " It also handed the branches `two` (target branch `main`), `three` over to you, \
+            " It also transferred the branches `two` (target branch `main`), `three` to you, \
              with the same approval: you are now the session responsible for them, so carry \
              on the work on them. This is the brief it wrote:",
         ),
@@ -1410,7 +1410,7 @@ async fn open_session_returns_the_account_it_opened_on() {
 
 /// A brief part that is not text is refused rather than left out of the brief.
 #[tokio::test]
-async fn a_new_session_refuses_a_brief_part_that_is_not_text() {
+async fn open_session_refuses_a_brief_part_that_is_not_text() {
     let (state, _dir) = shared_console_state("new-session-brief-context");
     let err = call(
         &state,
@@ -1423,7 +1423,7 @@ async fn a_new_session_refuses_a_brief_part_that_is_not_text() {
     assert_eq!(err.to_string(), "`context` must be a string");
 }
 
-/// A `model` or `effort` that is not text is refused before anything is reopened.
+/// A `model` or `effort` that is not text is refused before anything is relaunched.
 #[tokio::test]
 async fn a_reopen_refuses_a_model_that_is_not_text() {
     let (state, _dir) = shared_console_state("tool-surface-reopen-model");

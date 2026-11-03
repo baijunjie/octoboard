@@ -123,7 +123,7 @@ pub(crate) fn owner_refusal(
 /// if it changes meanwhile: the owner read at the start (`bound_to` in the `OpenRequest` for a
 /// worker, the owner a coordinator reports to for a coordinator, [`owner_of`] for the switch's
 /// relaunch). Taken before the session is read, so what is checked after it holds until the
-/// write; refused ([`error_code::SESSION_CHANGING`]) when a launch, a resume, a handoff, a handover
+/// write; refused ([`error_code::SESSION_CHANGING`]) when a launch, a resume, a handoff, a transfer
 /// of branches, a switch or another binding change of it is under way.
 fn claim_for_binding(state: &Arc<AppState>, session_id: &str) -> Result<crate::state::LaunchClaim> {
     state.begin_switch(session_id).map_err(|_| {
@@ -131,7 +131,7 @@ fn claim_for_binding(state: &Arc<AppState>, session_id: &str) -> Result<crate::s
             error_code::SESSION_CHANGING,
             format!(
                 "`{session_id}` is being started, resumed, handed off, switched to another \
-                 account, having its branches handed over or having its owner changed, so its \
+                 account, having its branches transferred or having its owner changed, so its \
                  owner cannot change now: look again once that is done"
             ),
             &[("session", session_id)],
@@ -144,7 +144,7 @@ fn claim_for_binding(state: &Arc<AppState>, session_id: &str) -> Result<crate::s
 /// archive it with a session bound to it meanwhile. Only looked at, not claimed: an owner is not
 /// rewritten, and claims on owners would refuse concurrent binds to the same one. So the check is
 /// not made under a claim, which is acceptable: a write that lands before the handoff's
-/// `hand_over_binding` is moved by it in its transaction. Skipped when the owner is the session
+/// `transfer_binding` is moved by it in its transaction. Skipped when the owner is the session
 /// itself, which [`owner_refusal`] refuses by its own reason.
 fn refuse_if_owner_claimed(state: &Arc<AppState>, session_id: &str, owner_id: &str) -> Result<()> {
     if owner_id != session_id && state.is_launching(owner_id) {
@@ -258,7 +258,7 @@ pub fn transfer_session(
     let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
     if session.bound_to.as_deref() != Some(from_id) {
-        anyhow::bail!("`{session_id}` is not bound to `{from_id}`, so it is not its to hand over");
+        anyhow::bail!("`{session_id}` is not bound to `{from_id}`, so it is not its to transfer");
     }
     if to_id == from_id {
         anyhow::bail!("`{session_id}` is already bound to `{to_id}`");
@@ -292,7 +292,7 @@ pub fn transfer_session(
         )?
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "the binding changed while it was being handed over — `{session_id}` was bound \
+                "the binding changed while it was being transferred — `{session_id}` was bound \
                  elsewhere, it gained sessions of its own, or `{to_id}` can no longer own \
                  sessions; look again before retrying"
             )

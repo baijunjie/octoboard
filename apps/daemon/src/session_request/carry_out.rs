@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Value};
 
-use crate::branch_origin::handover::move_branches;
+use crate::branch_origin::transfer::move_branches;
 use crate::coordinator::{self, open::OpenRequest};
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::state::AppState;
@@ -28,8 +28,8 @@ pub(super) struct Approved {
     pub(super) message: String,
 }
 
-/// Carries out an approval. A start opens the session the caller described, unbound, then hands
-/// it the branches the request names. A resume brings back the session that holds the
+/// Carries out an approval. A start opens the session the caller described, unbound, then
+/// transfers the branches the request names to it. A resume brings back the session that holds the
 /// conversation, or opens one on the record of it. A switch or a handoff runs the operation of its
 /// tool with the values the user ended the dialog on. The caller keeps running, and does not own
 /// what it asked for, except for the session a switch or a handoff leaves in its care.
@@ -52,17 +52,17 @@ where
         return Err(not_waiting(&caller.id));
     }
     let (started, result, note) = match &request.ask {
-        Ask::Session(action @ Action::Start { open, handover }) => {
+        Ask::Session(action @ Action::Start { open, transfer }) => {
             let started = launch(open.clone()).await?;
-            let handed = match handover {
-                Some(handover) => Some(move_branches(state, handover, &caller, &started).await),
+            let outcome = match transfer {
+                Some(transfer) => Some(move_branches(state, transfer, &caller, &started).await),
                 None => None,
             };
             let note = outcome_note(
                 state,
                 &caller,
                 &started,
-                handed.as_ref(),
+                outcome.as_ref(),
                 request.approval(action),
             );
             let result = json!({
@@ -193,7 +193,7 @@ where
 /// Whether a resume of `target` was refused because the session is running, or its launch is
 /// under way, which the user's own resume counts as done. A refusal for a claim that is not a
 /// launch of `target` (an archived owner's, or one held for an account switch, a handoff, a
-/// handover of branches or a binding change) counts only when `target` is found out of its
+/// transfer of branches or a binding change) counts only when `target` is found out of its
 /// no-process status by now; otherwise the approval could not be carried out.
 pub(super) fn refused_as_running(
     state: &Arc<AppState>,

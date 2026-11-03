@@ -59,7 +59,7 @@ impl Drop for ProjectAssociationClaim {
 pub enum ClaimKind {
     /// Launching or resuming its process.
     Launch,
-    /// An account switch, a handoff, a handover of branches or a binding change.
+    /// An account switch, a handoff, a transfer of branches or a binding change.
     Switch,
 }
 
@@ -173,7 +173,7 @@ impl AppState {
     /// Claims the session exclusively, as [`Self::begin_launch`] does but without needing its
     /// process down: it may be taken while the process is still running. It is the claim of
     /// every operation that must have the session to itself while it runs — an account switch,
-    /// which ends the process as its first step, a handoff, a handover of branches, and a binding
+    /// which ends the process as its first step, a handoff, a transfer of branches, and a binding
     /// change — and it is held for as long as the guard lives, so a resume, a launch, a delete and
     /// another holder are all refused for that whole window. Fails only when a launch or another
     /// holder has it.
@@ -313,9 +313,9 @@ impl AppState {
         }
     }
 
-    /// Whether the session's claim is held (a launch, resume, switch, handoff, handover of branches or
-    /// binding change is under way). Unlike [`Self::has_process`] this is false for a session whose process is up
-    /// and whose claim is already released.
+    /// Whether the session's claim is held (a launch, resume, switch, handoff, transfer of branches
+    /// or binding change is under way). Unlike [`Self::has_process`] this is false for a session
+    /// whose process is up and whose claim is already released.
     pub fn is_launching(&self, id: &str) -> bool {
         let live = self.live.read().expect("live sessions lock poisoned");
         live.launching.contains(id)

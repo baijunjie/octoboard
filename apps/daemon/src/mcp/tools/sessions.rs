@@ -1,4 +1,4 @@
-//! Starting and steering sessions: `open_session`, `request_session`, the rename, pin, reopen and
+//! Starting and steering sessions: `open_session`, `request_session`, the rename, pin, resume and
 //! interrupt tools, and the choices a session started on a caller's behalf is made from.
 
 use std::collections::HashMap;
@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::accounts::choice;
-use crate::branch_origin::handover::{branch_name, move_branches, Handed, Handover};
+use crate::branch_origin::transfer::{branch_name, move_branches, BranchTransfer, TransferOutcome};
 use crate::coordinator::{self, launch::LaunchEdit, open::OpenRequest};
 use crate::mcp::lookup::{
     find_console, find_project, optional_agent, optional_bool, optional_string,
@@ -23,7 +23,7 @@ use crate::session_request;
 use crate::state::bindings::owned_count_of;
 use crate::state::AppState;
 
-use super::handover::{branch_names, held_by};
+use super::transfer::{branch_names, held_by};
 
 /// Starts the session through `launch`: `term::launch` outside the tests, which cannot start an
 /// agent.
@@ -45,10 +45,10 @@ pub(in crate::mcp) async fn open_session(
         );
     }
     // Checked before anything is started, as `request_session` checks before it asks.
-    let handover = branches_to_hand_over(state, caller, &project, arguments).await?;
+    let transfer = branches_to_transfer(state, caller, &project, arguments).await?;
     // Written before the move, as `request_session`'s is: the session reads it as it starts.
-    let task = match (&handover, open.task) {
-        (Some(handover), Some(brief)) => Some(branches_opening_prompt(caller, handover, &brief)),
+    let task = match (&transfer, open.task) {
+        (Some(transfer), Some(brief)) => Some(branches_opening_prompt(caller, transfer, &brief)),
         (_, task) => task,
     };
     let session = coordinator::open::open_session_with(
@@ -75,13 +75,13 @@ pub(in crate::mcp) async fn open_session(
         "model": model,
         "effort": effort,
     });
-    if let Some(handover) = handover {
-        let handed = move_branches(state, &handover, caller, &session).await;
-        answer["branches"] = json!(match &handed {
-            Handed::Moved(moved) => moved.moved.iter().map(|b| branch_name(b)).collect(),
-            Handed::Failed(_) => Vec::new(),
+    if let Some(transfer) = transfer {
+        let outcome = move_branches(state, &transfer, caller, &session).await;
+        answer["branches"] = json!(match &outcome {
+            TransferOutcome::Moved(moved) => moved.moved.iter().map(|b| branch_name(b)).collect(),
+            TransferOutcome::Failed(_) => Vec::new(),
         });
-        answer["note"] = json!(session_request::branch_outcome(&handed).trim());
+        answer["note"] = json!(session_request::branch_outcome(&outcome).trim());
     }
     Ok(answer)
 }
@@ -227,7 +227,7 @@ pub(in crate::mcp) async fn set_session_pinned(
     )
 }
 
-/// Reopens through `launch` in the shell environment `snapshot` gives: `term::launch` and
+/// Resumes through `launch` in the shell environment `snapshot` gives: `term::launch` and
 /// `env_shell::launch_snapshot` outside the tests, which cannot start an agent.
 pub(in crate::mcp) async fn resume_session(
     state: &Arc<AppState>,
@@ -249,7 +249,7 @@ pub(in crate::mcp) async fn resume_session(
         optional_text(arguments, "text")?.as_deref(),
         // An owner asks over MCP, which has no window appearance to match.
         None,
-        // Checked against what the agent offers before anything is reopened.
+        // Checked against what the agent offers before anything is relaunched.
         LaunchEdit {
             model: present_text(arguments, "model")?,
             effort: present_text(arguments, "effort")?,
@@ -260,10 +260,10 @@ pub(in crate::mcp) async fn resume_session(
     .await?;
     // What the relaunch used, as the launch reads it: the session's own choice, else its project's
     // (or console's) setting. `null` is the agent's own default.
-    let reopened = state.session_record(&target.id)?;
-    let (model, effort) = coordinator::launch::launch_settings(state, &reopened)?;
+    let resumed = state.session_record(&target.id)?;
+    let (model, effort) = coordinator::launch::launch_settings(state, &resumed)?;
     let (account, account_name) =
-        account_fields(state, reopened.agent, reopened.account_id.as_deref())?;
+        account_fields(state, resumed.agent, resumed.account_id.as_deref())?;
     Ok(json!({
         "session": target.id,
         "account": account,
@@ -318,8 +318,8 @@ pub(in crate::mcp) async fn request_session(
         }
         other => bail!("`kind` is `{other}`, which is not one of `project` or `console`"),
     };
-    let handover = match &project {
-        Some(project) => branches_to_hand_over(state, caller, project, arguments).await?,
+    let transfer = match &project {
+        Some(project) => branches_to_transfer(state, caller, project, arguments).await?,
         None => None,
     };
     let open = session_in(state, caller, &console, project, arguments)?;
@@ -327,7 +327,7 @@ pub(in crate::mcp) async fn request_session(
     let automatic = state.store.auto_approve_session_requests()?;
     let task = open
         .task
-        .map(|brief| request_opening_prompt(caller, handover.as_ref(), automatic, &brief));
+        .map(|brief| request_opening_prompt(caller, transfer.as_ref(), automatic, &brief));
     let asked = OpenRequest {
         task,
         // The user's own, not the caller's: nobody owns it but them.
@@ -338,23 +338,23 @@ pub(in crate::mcp) async fn request_session(
         state,
         caller,
         asked,
-        handover,
+        transfer,
         automatic,
         session_request::ANSWER_TIME_LIMIT,
     )
     .await
 }
 
-/// The branches `request_session` and `open_session` hand over, from their `branches` argument:
+/// The branches `request_session` and `open_session` transfer, from their `branches` argument:
 /// local branches of the repository `project` is in that the caller is responsible for, each
 /// named once. `None` when the argument names none. Refused before anything is started or asked,
 /// with the first branch that is not the caller's to give.
-async fn branches_to_hand_over(
+async fn branches_to_transfer(
     state: &Arc<AppState>,
     caller: &Session,
     project: &Project,
     arguments: &Map<String, Value>,
-) -> Result<Option<Handover>> {
+) -> Result<Option<BranchTransfer>> {
     let Some(branches) = branch_names(arguments, "branches")? else {
         return Ok(None);
     };

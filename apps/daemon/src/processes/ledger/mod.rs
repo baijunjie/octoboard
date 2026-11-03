@@ -21,7 +21,7 @@
 //!
 //! A launch's processes can change hands instead ([`attribute::Book::transfer`]): all of them when
 //! its agent ends after a handoff, an account switch, a model change or a change of an account's
-//! sharing marked it to be carried over ([`ProcessLedger::hand_over`]), to the launch of the
+//! sharing marked it to be carried over ([`ProcessLedger::mark_carry_over`]), to the launch of the
 //! session that takes its place or to the restarted session's relaunch, and chosen trees of a
 //! running launch at an owner's word ([`ProcessLedger::move_trees`]). The launch that took them
 //! stops them when it ends. Carried over before the receiving session has a launch running, they
@@ -415,8 +415,8 @@ impl ProcessLedger {
     /// stops. A second call for the same launch waits for the first to finish. **Blocks**, for a
     /// few seconds when there is anything to stop.
     ///
-    /// A launch marked to be carried over ([`Self::hand_over`]) is not stopped: its processes go
-    /// to the running launch of the session it was marked for, or, while that session has none
+    /// A launch marked to be carried over ([`Self::mark_carry_over`]) is not stopped: its processes
+    /// go to the running launch of the session it was marked for, or, while that session has none
     /// and a hold for it is open ([`Self::hold_for_launch`]), are held for its next one. With
     /// neither, or once the daemon is shutting down ([`Self::close`]), they are stopped. So is a
     /// launch of a session a hold is open for: the relaunch of a restart (an account switch, a

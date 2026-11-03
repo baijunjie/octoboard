@@ -405,7 +405,7 @@ export const quotaGatingScenarios: Scenario[] = [
     steps: [...openSwitchTo("Work"), (ui) => ui.setAccountQuotas(claudeQuotas), (ui) => ui.confirm()],
   },
   {
-    id: "dialog-hand-off-quota-picker",
+    id: "dialog-handoff-quota-picker",
     group: GROUP,
     category: "normal",
     title: "Hand off, the inherited Codex account has reached its limit",
@@ -413,12 +413,12 @@ export const quotaGatingScenarios: Scenario[] = [
     state: launchState([], handoffQuotas),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
-      (ui) => ui.press(ui.t("sidebar.session.handOff")),
+      (ui) => ui.press(ui.t("sidebar.session.handoff")),
       (ui) => ui.press(accountField(ui, "Codex")),
     ],
   },
   {
-    id: "dialog-hand-off-quota-all-used-up",
+    id: "dialog-handoff-quota-all-used-up",
     group: GROUP,
     category: "exceptional",
     title: "Hand off, the only Codex account has reached its limit",
@@ -426,7 +426,7 @@ export const quotaGatingScenarios: Scenario[] = [
     state: { ...launchState([], [codexSpent[0]]), settings: { ...settings, accounts: accounts.filter((account) => account.agent === "claude") } },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
-      (ui) => ui.press(ui.t("sidebar.session.handOff")),
+      (ui) => ui.press(ui.t("sidebar.session.handoff")),
     ],
   },
   {

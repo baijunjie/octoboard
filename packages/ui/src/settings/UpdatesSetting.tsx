@@ -2,7 +2,7 @@ import React, { useId, useRef, useState } from "react";
 
 import { appConfig } from "../appConfig";
 import { Button } from "../components/controls/Button";
-import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
+import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { StatusMark } from "../components/status/StatusMark";
@@ -68,7 +68,7 @@ export function UpdatesSetting(): React.ReactElement | null {
   const notesId = useId();
   const actionButton = useRef<HTMLButtonElement>(null);
   // The mark and the notes link each hand focus they held to the row's action as they go.
-  const handOffFrom = useHandOffAfterRemoval(() => actionButton.current);
+  const handoffFrom = useHandoffAfterRemoval(() => actionButton.current);
   if (!updates) return null;
   const { store, state } = updates;
   if (state.phase !== phase) {
@@ -93,7 +93,7 @@ export function UpdatesSetting(): React.ReactElement | null {
   const warning = failed && (
     <>
       {/* The mark goes as a check starts; focus it or its popover held goes to Check for updates. */}
-      {handOffFrom(`[data-status-mark-id="${markId}"]`)}
+      {handoffFrom(`[data-status-mark-id="${markId}"]`)}
       <StatusMark tone="warning" markId={markId} label={t("settings.updates.checkFailed.mark")}>
         <p>{failedTitle}</p>
         <p>{t("settings.updates.checkFailed.description")}</p>
@@ -108,7 +108,7 @@ export function UpdatesSetting(): React.ReactElement | null {
   const notes = notesVersion && (
     <>
       {/* Closing Settings with focus here leaves the restore to the dialog. */}
-      {handOffFrom(`[data-release-notes-id="${notesId}"]`)}
+      {handoffFrom(`[data-release-notes-id="${notesId}"]`)}
       <ExternalLink data-release-notes-id={notesId} href={releaseUrl(notesVersion)} appearance="button" size="sm">{t("settings.updates.notes")}</ExternalLink>
     </>
   );

@@ -159,7 +159,7 @@ it.each([
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   const signedIn = [quotaOf("claude", "claude-work")];
   set({ ...(quotaFirst ? { accountQuotas: signedIn } : {}), accountLogins: [{ agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null }] });
-  // While the button is still there, React Aria's restore may put focus back on it before the hand-off runs.
+  // While the button is still there, React Aria's restore may put focus back on it before the handoff runs.
   if (!quotaFirst) act(() => login.focus());
   await frames();
   if (!quotaFirst) {

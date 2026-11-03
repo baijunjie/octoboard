@@ -119,15 +119,15 @@ async fn ask_in_background(
     asked: OpenRequest,
     limit: Duration,
 ) -> (tokio::task::JoinHandle<Result<Value>>, Event) {
-    ask_handing_over(state, caller, asked, None, limit).await
+    ask_transferring(state, caller, asked, None, limit).await
 }
 
-/// [`ask_in_background`] for a request that hands `handover` over.
-async fn ask_handing_over(
+/// [`ask_in_background`] for a request that transfers `transfer`.
+async fn ask_transferring(
     state: &Arc<AppState>,
     caller: &str,
     asked: OpenRequest,
-    handover: Option<Handover>,
+    transfer: Option<BranchTransfer>,
     limit: Duration,
 ) -> (tokio::task::JoinHandle<Result<Value>>, Event) {
     let caller_id = caller.to_string();
@@ -135,7 +135,7 @@ async fn ask_handing_over(
     let task = {
         let state = state.clone();
         tokio::spawn(async move {
-            ask_for_session(&state, &caller, asked, handover, false, limit).await
+            ask_for_session(&state, &caller, asked, transfer, false, limit).await
         })
     };
     let deadline = std::time::Instant::now() + PATIENCE;
@@ -752,27 +752,27 @@ async fn a_dropped_call_is_withdrawn_and_waiting_requests_follow_the_snapshot() 
     assert_eq!(requests, [first_id, second_id]);
 }
 
-/// A repository with a branch `asker` is responsible for under each of `branches`, the handover
-/// of them, and the directory the repository lives in, which the handover is only good for as long
+/// A repository with a branch `asker` is responsible for under each of `branches`, the transfer
+/// of them, and the directory the repository lives in, which the transfer is only good for as long
 /// as it is kept.
-fn handover_of(state: &Arc<AppState>, branches: &[&str]) -> (Handover, ScratchDir) {
+fn transfer_of(state: &Arc<AppState>, branches: &[&str]) -> (BranchTransfer, ScratchDir) {
     let repo = repo_with("session-request-repo", &[(b"a", b"a")]);
     for branch in branches {
         branch_made_by(state, &repo, branch, "asker");
     }
-    let handover = Handover {
+    let transfer = BranchTransfer {
         repository: repository_of(&repo).unwrap(),
         branches: branches.iter().map(|branch| branch.to_string()).collect(),
         targets: Default::default(),
     };
-    (handover, repo)
+    (transfer, repo)
 }
 
 /// Who is responsible for each of the repository's branches, by branch name.
-fn responsible_for(state: &Arc<AppState>, handover: &Handover) -> Vec<(String, String)> {
+fn responsible_for(state: &Arc<AppState>, transfer: &BranchTransfer) -> Vec<(String, String)> {
     state
         .store
-        .branch_origins(&repo_key(&handover.repository))
+        .branch_origins(&repo_key(&transfer.repository))
         .unwrap()
         .into_iter()
         .map(|row| (row.branch, row.responsible_session))
@@ -783,16 +783,16 @@ fn responsible_for(state: &Arc<AppState>, handover: &Handover) -> Vec<(String, S
 /// started, which the caller is told in the result and in the message, and the records take the new
 /// session's title.
 #[tokio::test]
-async fn an_approval_hands_the_branches_over_to_the_session_it_started() {
-    let (state, _dir) = fixture("handover-approve");
+async fn an_approval_transfers_the_branches_to_the_session_it_started() {
+    let (state, _dir) = fixture("transfer-approve");
     let asker = running(&state, "asker");
     let launcher = Launcher::new(&state);
-    let (handover, _repo) = handover_of(&state, &["alpha", "beta"]);
-    let (call, event) = ask_handing_over(
+    let (transfer, _repo) = transfer_of(&state, &["alpha", "beta"]);
+    let (call, event) = ask_transferring(
         &state,
         "asker",
         asked(CONSOLE, Some("project-1")),
-        Some(handover.clone()),
+        Some(transfer.clone()),
         ANSWER_TIME_LIMIT,
     )
     .await;
@@ -800,7 +800,7 @@ async fn an_approval_hands_the_branches_over_to_the_session_it_started() {
         matches!(&event, Event::SessionRequest { branches, .. } if branches == &["alpha", "beta"])
     );
     // Asking moves nothing.
-    assert!(responsible_for(&state, &handover)
+    assert!(responsible_for(&state, &transfer)
         .iter()
         .all(|(_, session)| session == "asker"));
 
@@ -812,12 +812,12 @@ async fn an_approval_hands_the_branches_over_to_the_session_it_started() {
     let result = outcome_of(call).await.unwrap();
     let note = result["note"].as_str().unwrap();
     assert!(
-        note.contains("Handed over to it: `alpha`, `beta`."),
+        note.contains("Transferred to it: `alpha`, `beta`."),
         "{note}"
     );
-    assert!(!note.contains("Not handed over"), "{note}");
+    assert!(!note.contains("Not transferred"), "{note}");
     assert_eq!(
-        responsible_for(&state, &handover),
+        responsible_for(&state, &transfer),
         [
             ("alpha".to_string(), started.id.clone()),
             ("beta".to_string(), started.id.clone())
@@ -825,34 +825,34 @@ async fn an_approval_hands_the_branches_over_to_the_session_it_started() {
     );
     let rows = state
         .store
-        .branch_origins(&repo_key(&handover.repository))
+        .branch_origins(&repo_key(&transfer.repository))
         .unwrap();
     assert!(rows
         .iter()
         .all(|row| row.responsible_title == started.title));
-    let message = output_containing(&asker, "Handed over to it");
+    let message = output_containing(&asker, "Transferred to it");
     assert!(message.contains("`alpha`, `beta`"), "{message}");
 }
 
 /// A branch whose responsible session changed while the user was deciding is reported in the
-/// outcome and left alone; the others are handed over.
+/// outcome and left alone; the others are transferred.
 #[tokio::test]
 async fn a_branch_that_changed_hands_meanwhile_is_reported_not_moved() {
-    let (state, _dir) = fixture("handover-partial");
+    let (state, _dir) = fixture("transfer-partial");
     let _asker = running(&state, "asker");
     let launcher = Launcher::new(&state);
-    let (handover, _repo) = handover_of(&state, &["kept", "taken"]);
-    let (call, event) = ask_handing_over(
+    let (transfer, _repo) = transfer_of(&state, &["kept", "taken"]);
+    let (call, event) = ask_transferring(
         &state,
         "asker",
         asked(CONSOLE, Some("project-1")),
-        Some(handover.clone()),
+        Some(transfer.clone()),
         ANSWER_TIME_LIMIT,
     )
     .await;
-    branch_origin::hand_over(
+    branch_origin::move_branch_records(
         &state,
-        &handover.repository,
+        &transfer.repository,
         &["taken".to_string()],
         "asker",
         "elsewhere",
@@ -867,11 +867,11 @@ async fn a_branch_that_changed_hands_meanwhile_is_reported_not_moved() {
 
     let result = outcome_of(call).await.unwrap();
     let note = result["note"].as_str().unwrap();
-    assert!(note.contains("Handed over to it: `kept`."), "{note}");
-    assert!(note.contains("Not handed over"), "{note}");
+    assert!(note.contains("Transferred to it: `kept`."), "{note}");
+    assert!(note.contains("Not transferred"), "{note}");
     assert!(note.contains("`taken`. It stays as it was."), "{note}");
     assert_eq!(
-        responsible_for(&state, &handover),
+        responsible_for(&state, &transfer),
         [
             ("kept".to_string(), started.id),
             ("taken".to_string(), "elsewhere".to_string())
@@ -882,16 +882,16 @@ async fn a_branch_that_changed_hands_meanwhile_is_reported_not_moved() {
 /// A move the store cannot record is not an error of the approval: the session still starts, and
 /// the caller is told it is still responsible for the branches.
 #[tokio::test]
-async fn a_handover_the_store_cannot_record_is_told_to_the_caller() {
-    let (state, _dir) = fixture("handover-failed");
+async fn a_transfer_the_store_cannot_record_is_told_to_the_caller() {
+    let (state, _dir) = fixture("transfer-failed");
     let _asker = running(&state, "asker");
     let launcher = Launcher::new(&state);
-    let (handover, _repo) = handover_of(&state, &["alpha"]);
-    let (call, event) = ask_handing_over(
+    let (transfer, _repo) = transfer_of(&state, &["alpha"]);
+    let (call, event) = ask_transferring(
         &state,
         "asker",
         asked(CONSOLE, Some("project-1")),
-        Some(handover),
+        Some(transfer),
         ANSWER_TIME_LIMIT,
     )
     .await;
@@ -905,31 +905,31 @@ async fn a_handover_the_store_cannot_record_is_told_to_the_caller() {
     let result = outcome_of(call).await.unwrap();
     let note = result["note"].as_str().unwrap();
     assert!(
-        note.contains("could not record the handover of `alpha`, so you are still responsible"),
+        note.contains("could not record the transfer of `alpha`, so you are still responsible"),
         "{note}"
     );
-    assert!(!note.contains("Handed over"), "{note}");
+    assert!(!note.contains("Transferred"), "{note}");
 }
 
 /// A request that ends any way but an approval moves nothing.
 #[tokio::test]
 async fn a_request_that_is_not_approved_moves_nothing() {
     for ending in ["refused", "timed out", "withdrawn"] {
-        let (state, _dir) = fixture(&format!("handover-{}", ending.replace(' ', "-")));
+        let (state, _dir) = fixture(&format!("transfer-{}", ending.replace(' ', "-")));
         let asker = idle_stand_in("asker");
         state.register_live(asker.clone());
         crate::coordinator::exit_watch::watch_exit(&state, asker.clone());
         let launcher = Launcher::new(&state);
-        let (handover, _repo) = handover_of(&state, &["topic"]);
+        let (transfer, _repo) = transfer_of(&state, &["topic"]);
         let limit = match ending {
             "timed out" => Duration::from_millis(50),
             _ => ANSWER_TIME_LIMIT,
         };
-        let (call, event) = ask_handing_over(
+        let (call, event) = ask_transferring(
             &state,
             "asker",
             asked(CONSOLE, Some("project-1")),
-            Some(handover.clone()),
+            Some(transfer.clone()),
             limit,
         )
         .await;
@@ -948,7 +948,7 @@ async fn a_request_that_is_not_approved_moves_nothing() {
 
         assert_eq!(launcher.launched.load(Ordering::SeqCst), 0, "{ending}");
         assert_eq!(
-            responsible_for(&state, &handover),
+            responsible_for(&state, &transfer),
             [("topic".to_string(), "asker".to_string())],
             "{ending}"
         );
@@ -969,7 +969,7 @@ async fn ask_automatically(
         &caller,
         Action::Start {
             open: asked,
-            handover: None,
+            transfer: None,
         },
         true,
         ANSWER_TIME_LIMIT,
@@ -1072,7 +1072,7 @@ async fn an_automatic_approval_replaces_a_waiting_request_and_respects_an_approv
                 &caller,
                 Action::Start {
                     open: asked(CONSOLE, None),
-                    handover: None,
+                    transfer: None,
                 },
                 true,
                 ANSWER_TIME_LIMIT,
@@ -1124,7 +1124,7 @@ async fn an_automatic_approval_carries_on_when_the_call_is_dropped() {
                 &caller,
                 Action::Start {
                     open: asked(CONSOLE, Some("project-1")),
-                    handover: None,
+                    transfer: None,
                 },
                 true,
                 ANSWER_TIME_LIMIT,

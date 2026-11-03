@@ -67,7 +67,7 @@ function inherited(t: Translate, value: string | null): { placeholder: string; p
 
 /** The warning mark of a Model field whose list of models could not be read: it concerns the whole field,
  * so it stands after the field's label. Nothing when the list is there. `markId` is the id the field's
- * focus hand-off knows it by (`OptionSelect`'s `labelMark`). */
+ * focus handoff knows it by (`OptionSelect`'s `labelMark`). */
 export function ModelsFailureMark({ launch, markId }: { launch: LaunchModels; markId?: string }): React.ReactElement | null {
   const t = useT();
   const failure = launch.modelFailure;

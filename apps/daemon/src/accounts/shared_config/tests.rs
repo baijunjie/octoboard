@@ -1670,7 +1670,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
         .map(drop),
     );
     in_progress(
-        crate::coordinator::handoff::hand_off_with(
+        crate::coordinator::handoff::handoff_session_with(
             &fixture.state,
             crate::coordinator::handoff::Handoff {
                 session: "s".to_string(),
@@ -3036,7 +3036,7 @@ async fn a_session_the_change_restarts_cannot_be_claimed_by_a_switch_meanwhile()
         .unwrap();
     lock.claim_idle(|_| Ok(vec!["idle".to_string()])).unwrap();
 
-    // What a process handover, a switch or a model change takes first.
+    // What a process transfer, a switch or a model change takes first.
     let err = fixture.state.begin_switch("idle").map(|_| ()).unwrap_err();
     assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
 }

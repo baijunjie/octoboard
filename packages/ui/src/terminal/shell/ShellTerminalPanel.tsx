@@ -12,7 +12,7 @@ import { CenteredEmptyPanel } from "../../components/panel/EmptyPanel";
 import { LoadingState } from "../../components/panel/LoadingState";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { handFocusOff } from "../../components/focus/handFocusOff";
-import { HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "../../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../../i18n/InlineReference";
 import { PanelHeader } from "../../components/panel/PanelHeader";
 import { focusFellToPage } from "../../components/focus/regionFocus";
@@ -73,7 +73,7 @@ export function ShellTerminalPanel({
   const starting = useShellTerminalStarting(project.id);
   // The tab to show in place of each one closed from here, once it has gone: the tab after it,
   // or before it. The closed one stays shown until the daemon has ended it, so focus inside it is
-  // handed on as it goes (`HandOffOnUnmount`) rather than lost to a hidden tab.
+  // handed on as it goes (`HandoffOnUnmount`) rather than lost to a hidden tab.
   const [replacements, setReplacements] = useState<ReadonlyMap<string, string>>(new Map());
   const activeId = useActiveShellTerminal(project.id, terminals, replacements);
   useEffect(() => {
@@ -282,7 +282,7 @@ export function ShellTerminalPanel({
                       className={tabClass(terminal)}
                     >
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
-                      <HandOffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
+                      <HandoffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
                       <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" title={shellTerminalTitle(terminal) !== terminal.title ? tabLabel(terminal, terminal.title) : undefined} titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
                       <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal, "terminal")} />
                     </Tabs.Tab>
@@ -309,7 +309,7 @@ export function ShellTerminalPanel({
           {terminals.map((terminal) => (
             <React.Fragment key={terminal.id}>
               {/* First among what goes away with the view, so focus inside it is still found. */}
-              <HandOffOnUnmount from={`#shell-terminal-${terminal.id}`} to={focusShown} />
+              <HandoffOnUnmount from={`#shell-terminal-${terminal.id}`} to={focusShown} />
               <ShellTerminalView
                 ref={(handle: ShellTerminalViewHandle | null) => {
                   if (handle) views.current.set(terminal.id, handle);
@@ -344,7 +344,7 @@ export function ShellTerminalPanel({
       {confirmClose !== undefined && terminals.some((terminal) => terminal.id === confirmClose.id) && (
         <>
           {/* First, so focus is still found in the dialog as it goes. */}
-          <HandOffOnUnmount
+          <HandoffOnUnmount
             from={() => (closeDeclined.current ? null : dialogAround(confirmScope) ?? null)}
             to={() => focusAfterConfirmedClose(confirmClose.from)}
             ring={false}

@@ -30,7 +30,7 @@ export type DialogRequest =
   /** Changes the model and reasoning effort `session` runs with. */
   | { kind: "session-model"; session: Session }
   /** Hands `session` off to a new session of another agent. */
-  | { kind: "hand-off"; session: Session }
+  | { kind: "handoff"; session: Session }
   /** Releases `session` from its owner. */
   | { kind: "unbind-session"; session: Session }
   | { kind: "delete-session"; session: Session }

@@ -6,7 +6,7 @@ import { focusFellToPage } from "./regionFocus";
 
 /** Renders nothing; when it unmounts while focus is inside `from` (a selector, or a function finding the
  * element when it is not one a selector can name), calls `to` to move it. It is for
- * a hand-off whose trigger is a render rather than a call site, such as the daemon taking the last
+ * a handoff whose trigger is a render rather than a call site, such as the daemon taking the last
  * console away. The user did not ask for the move, so the keyboard modality is set first and the
  * destination shows its focus ring, except on a touch screen (`ringForAutomaticFocus`). With `ring` false
  * that is left to `to`, for one that moves focus only on some of its calls. `to` runs inside React's commit,
@@ -31,9 +31,9 @@ import { focusFellToPage } from "./regionFocus";
  * that stores only non-null values).
  *
  * Under StrictMode the effect is torn down and set up again right after mount, which runs the
- * hand-off once; that does nothing only because focus cannot already be inside `from` at that
+ * handoff once; that does nothing only because focus cannot already be inside `from` at that
  * moment, so do not place this where it could be. */
-export function HandOffOnUnmount({ from, to, ring = true }: { from: string | (() => Element | null); to: () => void; ring?: boolean }): null {
+export function HandoffOnUnmount({ from, to, ring = true }: { from: string | (() => Element | null); to: () => void; ring?: boolean }): null {
   const latest = useLatest(to);
   const source = useLatest(from);
   const ringOn = useLatest(ring);
@@ -61,16 +61,16 @@ export function HandOffOnUnmount({ from, to, ring = true }: { from: string | (()
 /** Moves focus on to `target`, a move the user did not ask for, if it is in the document and enabled and focus is not
  * held elsewhere, turning the focus ring on just before (`ringForAutomaticFocus`), so a target that turns out not to be
  * there leaves the modality alone. Focus is held elsewhere unless it has fallen to `<body>` (or nowhere); with
- * `duringRemoval`, from a `HandOffOnUnmount`'s `to`, it is still on the source, which that already checked. */
-export function focusHandOffTarget(target: HTMLElement | null | undefined, { duringRemoval = false } = {}): void {
+ * `duringRemoval`, from a `HandoffOnUnmount`'s `to`, it is still on the source, which that already checked. */
+export function focusHandoffTarget(target: HTMLElement | null | undefined, { duringRemoval = false } = {}): void {
   if (!target?.isConnected || target.matches(":disabled") || (!duringRemoval && !focusFellToPage())) return;
   ringForAutomaticFocus();
   target.focus();
 }
 
-/** The hand-off of a source the calling component renders: render what the returned function gives for the source's
- * selector as `HandOffOnUnmount` is placed. The cleanup only notes that focus was inside the source; the caller's
- * layout effect, later in the commit that removes it, then moves focus with `focusHandOffTarget`.
+/** The handoff of a source the calling component renders: render what the returned function gives for the source's
+ * selector as `HandoffOnUnmount` is placed. The cleanup only notes that focus was inside the source; the caller's
+ * layout effect, later in the commit that removes it, then moves focus with `focusHandoffTarget`.
  *
  * By then the commit has applied the render's attributes, so a target the same render disabled is seen as such and
  * left alone (focused during the removal, WebKit would blur it as it is disabled); the effects of an enclosing
@@ -81,14 +81,14 @@ export function focusHandOffTarget(target: HTMLElement | null | undefined, { dur
  *
  * This is the default, wrapper or no wrapper around the source. The one exception is a source whose own component
  * goes with it, removed by its parent, as the sharing switch's mark goes with its warning: that component runs no
- * layout effect. Such a source uses a synchronous `HandOffOnUnmount` with `ring` false, whose `to` calls
- * `focusHandOffTarget` with `duringRemoval`, for a target that the same render cannot disable. */
-export function useHandOffAfterRemoval(to: () => HTMLElement | null | undefined): (from: string) => ReactElement {
+ * layout effect. Such a source uses a synchronous `HandoffOnUnmount` with `ring` false, whose `to` calls
+ * `focusHandoffTarget` with `duringRemoval`, for a target that the same render cannot disable. */
+export function useHandoffAfterRemoval(to: () => HTMLElement | null | undefined): (from: string) => ReactElement {
   const held = useRef(false);
   useLayoutEffect(() => {
     if (!held.current) return;
     held.current = false;
-    focusHandOffTarget(to());
+    focusHandoffTarget(to());
   });
-  return (from) => <HandOffOnUnmount from={from} ring={false} to={() => { held.current = true; }} />;
+  return (from) => <HandoffOnUnmount from={from} ring={false} to={() => { held.current = true; }} />;
 }

@@ -44,7 +44,7 @@ What happens depends on where the session stands when the call is made:
 | *Dormant*: showing one of Claude Code's views of its background agents | Refused with `session_waiting_for_user`, under a message saying the user is in that view and a key would go there. |
 | Showing its folder-trust confirmation | Refused with `session_trust_pending`. |
 | Archived or *interrupted*, with no process, still being launched, or not yet past its startup screens | Refused with `session_not_running`. |
-| Being switched to another account, handed off, having its branches handed over, given another owner, or restarted for a change of its account's sharing | Refused with `session_busy`. |
+| Being switched to another account, handed off, having its branches transferred, given another owner, or restarted for a change of its account's sharing | Refused with `session_busy`. |
 | An id that names no session | Refused with `unknown_session` (through the tool, in prose). |
 
 A key is written only while **both** of these hold, checked right before each key: the session reads *working* by its

@@ -13,7 +13,7 @@ branch. It is offered only while the project's status says the directory is a gi
 in flight. No separate reason is shown on the disabled item: the branch badge beside the project's name shows the push
 (see "The branch badge" in `docs/product/project-git-status.md`). Choosing it closes the menu at once. The push is
 waited on until `git push` has exited, including the repository's `pre-push` hook. When the push is accepted, the window
-that asked shows a notice toast saying the current branch was pushed. A refusal is an error alert worded from the code
+that asked shows a notice saying the current branch was pushed. A refusal is an error alert worded from the code
 below. Pushing does not fetch and does not fast-forward, and a pull never pushes (see "Automatically pulling
 repositories" in `docs/product/project-git-status.md`). A local branch that is behind its upstream stays behind; if the
 remote rejects the update, the push fails and the branch stays where it was.
@@ -119,7 +119,7 @@ branch or a Git failure is `git_switch_failed`, with the reason as `detail`. Eac
 non-interactive environment described in "The environment a check runs `git` in" in
 `docs/product/project-git-status.md` and has at most two minutes.
 
-Success raises no toast. The local branch and upstream counts are read again for the badge in every window,
+Success raises no notice. The local branch and upstream counts are read again for the badge in every window,
 without fetching; an earlier remote-check warning stays unless that read itself fails. A failed status re-read
 records its warning without turning a completed switch into a switch error. The project pane refreshes when the
 reported branch changes (see "Files and Git" in `docs/product/project-pane.md`).
@@ -130,7 +130,7 @@ reported branch changes (see "Files and Git" in `docs/product/project-pane.md`).
 after a separator (see "Project rows" in `docs/product/sidebar-project-rows.md`). It opens a destructive confirmation
 dialog explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked
 and ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits for
-the restore; success closes the dialog and raises a notice toast. A failure opens an error alert, leaving the
+the restore; success closes the dialog and raises a notice. A failure opens an error alert, leaving the
 confirmation available for retry after acknowledgement.
 
 Restoration covers the project's own worktree: tracked files and the index are restored to the current commit,

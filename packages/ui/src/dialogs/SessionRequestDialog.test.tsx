@@ -58,12 +58,12 @@ it("keeps known names as names even when they equal record IDs", () => {
   expect(document.querySelectorAll("[data-inline-reference] code")).toHaveLength(0);
 });
 
-// The branches an approval would hand over are named, each as code and joined as the language joins
-// a list, and a request that hands none over reads as it did without them.
+// The branches an approval would transfer are named, each as code and joined as the language joins
+// a list, and a request that transfers none reads as it did without them.
 it.each([
-  { branches: ["fix/refunds"], where: "The branch fix/refunds would be handed over to it." },
-  { branches: ["fix/refunds", "100%25-done"], where: "The branches fix/refunds, 100%-done would be handed over to it." },
-])("names the branches handed over: $branches", ({ branches, where }) => {
+  { branches: ["fix/refunds"], where: "The branch fix/refunds would be transferred to it." },
+  { branches: ["fix/refunds", "100%25-done"], where: "The branches fix/refunds, 100%-done would be transferred to it." },
+])("names the branches transferred: $branches", ({ branches, where }) => {
   mountPendingQuestionDialog({ sessionRequests: [{ ...request, branches }] }, ack);
   expect(dialogText()).toContain("The new session would report to you. " + where);
   const codes = [...document.querySelectorAll("[data-inline-reference] code")].map((code) => code.textContent);
@@ -74,7 +74,7 @@ it("puts no space between the question and the branches in a language with none 
   setLanguage("zh-Hans");
   onTestFinished(() => setLanguage("en"));
   mountPendingQuestionDialog({ sessionRequests: [{ ...request, branches: ["fix/refunds", "feat/pay"] }] }, ack);
-  expect(dialogText()).toContain("新会话将向你汇报。分支 fix/refunds、feat/pay 将移交给新会话。");
+  expect(dialogText()).toContain("新会话将向你汇报。分支 fix/refunds、feat/pay 将转移给新会话。");
 });
 
 it("joins the question and the branches without a whitespace-only text node", () => {
@@ -86,9 +86,9 @@ it("joins the question and the branches without a whitespace-only text node", ()
   expect(dialogText()).toContain("The new session would report to you. The branch fix/refunds");
 });
 
-it("says nothing of branches when none is handed over", () => {
+it("says nothing of branches when none is transferred", () => {
   mountPendingQuestionDialog({ sessionRequests: [request] }, ack);
-  expect(dialogText()).not.toContain("handed over");
+  expect(dialogText()).not.toContain("transferred");
   expect([...document.querySelectorAll("[data-inline-reference] code")].map((code) => code.textContent)).toEqual([request.session, request.project, request.console]);
 });
 
@@ -128,23 +128,23 @@ it("dismissing the dialog refuses the request", async () => {
 // Once the session has stopped waiting, an approval started nothing, which the user has to be told;
 // a refusal would have started nothing anyway.
 it.each([
-  { label: "Start session", toasted: 1 },
-  { label: "Refuse", toasted: 0 },
-])("an answer given after the session stopped waiting: $label", async ({ label, toasted }) => {
+  { label: "Start session", notified: 1 },
+  { label: "Refuse", notified: 0 },
+])("an answer given after the session stopped waiting: $label", async ({ label, notified }) => {
   const notWaiting = new CodedError("no longer waiting", CODE.session_request_not_waiting, { session: "s-1" });
   const dialog = mount(() => Promise.reject(notWaiting));
   await pressButton(label);
   const alerts = dialog.alerts();
-  expect(alerts).toHaveLength(toasted);
-  if (toasted) expect(alerts[0]).toEqual({ error: notWaiting, title: "Could not approve the request", session: "s-1" });
+  expect(alerts).toHaveLength(notified);
+  if (notified) expect(alerts[0]).toEqual({ error: notWaiting, title: "Could not approve the request", session: "s-1" });
 });
 
-// A reopen or resume fails with the target's own resume error, which says "this session": the toast
+// A reopen or resume fails with the target's own resume error, which says "this session": the notification
 // is about the session the error names, else the target, not the one that asked.
 it.each<{ label: string; params: Record<string, string>; subject: string }>([
   { label: "an error naming a session", params: { session: "t-9" }, subject: "t-9" },
   { label: "an error naming none", params: {}, subject: "t-1" },
-])("an approval of a reopen that fails with $label toasts about the session brought back", async ({ params, subject }) => {
+])("an approval of a reopen that fails with $label raises a notification about the session brought back", async ({ params, subject }) => {
   const reopen: SessionRequest = { ...request, action: "reopen", target: "t-1", reopenedOwners: [] };
   const failure = new CodedError("could not be resumed", "session_already_starting", params);
   const dialog = mountPendingQuestionDialog({ sessionRequests: [reopen] }, () => Promise.reject(failure));
@@ -152,7 +152,7 @@ it.each<{ label: string; params: Record<string, string>; subject: string }>([
   expect(dialog.alerts()).toEqual([{ error: failure, title: "Could not approve the request", session: subject }]);
 });
 
-it.each<"reopen" | "resume">(["reopen", "resume"])("an approval of a %s that finds the request no longer waiting toasts about the requester", async (action) => {
+it.each<"reopen" | "resume">(["reopen", "resume"])("an approval of a %s that finds the request no longer waiting raises a notification about the requester", async (action) => {
   const asked: SessionRequest = { ...request, action, target: "t-1", reopenedOwners: [] };
   const failure = new CodedError("no longer waiting", CODE.session_request_not_waiting, { session: "t-9" });
   const dialog = mountPendingQuestionDialog({ sessionRequests: [asked] }, () => Promise.reject(failure));
@@ -160,7 +160,7 @@ it.each<"reopen" | "resume">(["reopen", "resume"])("an approval of a %s that fin
   expect(dialog.alerts()).toEqual([{ error: failure, title: "Could not approve the request", session: "s-1" }]);
 });
 
-it("an approval of a start that fails toasts about the requesting session", async () => {
+it("an approval of a start that fails raises a notification about the requesting session", async () => {
   const failure = new CodedError("could not start", "launch_failed", { session: "other" });
   const dialog = mount(() => Promise.reject(failure));
   await pressButton("Start session");

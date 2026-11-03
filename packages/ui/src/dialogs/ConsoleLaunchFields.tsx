@@ -8,7 +8,7 @@ import {
   listedPickerAgents,
 } from "../agents/agents";
 import { AgentIcon } from "../components/icons/AgentIcon";
-import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
+import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
 import { TEXT_TAB_CLASS, TEXT_TAB_CONTAINER_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
@@ -165,15 +165,15 @@ export function LaunchMatrix({
   const modelMark = <ModelsFailureMark launch={launch} markId={modelMarkId} />;
   const consoleModelCell = useRef<HTMLDivElement>(null);
   // When the mark goes while it holds focus, the console's Model picker takes it, as a labelled field's trigger does. The
-  // hand-off sits before the first of the mark's places, so it runs while the others are still in the document.
-  const handOffFrom = useHandOffAfterRemoval(() => consoleModelCell.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]'));
-  const modelMarkHandOff = launch.modelFailure !== undefined && handOffFrom(`[data-status-mark-id="${modelMarkId}"]`);
+  // handoff sits before the first of the mark's places, so it runs while the others are still in the document.
+  const handoffFrom = useHandoffAfterRemoval(() => consoleModelCell.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]'));
+  const modelMarkHandoff = launch.modelFailure !== undefined && handoffFrom(`[data-status-mark-id="${modelMarkId}"]`);
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 md:grid-cols-[max-content_repeat(2,minmax(0,1fr))]">
         <div className={`${rowHeader} md:row-start-2`}>
           <span id={modelRowId} aria-hidden="true">{model}</span>
-          {modelMarkHandOff}
+          {modelMarkHandoff}
           {modelMark}
         </div>
         <div id={effortRowId} aria-hidden="true" className={`${rowHeader} md:row-start-3`}>{effort}</div>

@@ -9,10 +9,10 @@ import { focusTopBar } from "../components/focus/regionFocus";
  *
  * `welcomeShown` is whether the welcome screen is on screen, which is only so once the first
  * snapshot has arrived: before that the store holds no console either, and treating that as "no
- * console" would owe a hand-off on every launch. `creating` is whether this window has the
+ * console" would owe a handoff on every launch. `creating` is whether this window has the
  * new-console dialog open: the screen going away is only this window's doing if the dialog was open
  * while the screen was still there, and another window's console, which empties the screen here
- * too, must not pull focus. The hand-off is owed from the screen going away until focus has
+ * too, must not pull focus. The handoff is owed from the screen going away until focus has
  * actually been placed, and not sampled once: the daemon broadcasts the new console before it
  * answers the request (`coordinator/consoles.rs`), so the store can get it in an earlier render
  * than the dialog's `onClose`, while the dialog is still open and holding focus. The dialog then

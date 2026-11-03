@@ -575,7 +575,7 @@ describe("a change that did not finish", () => {
     const { container, setAccount, setSharing } = await mountSettings("Codex");
     act(() => mark(container)!.focus());
     // A new array of accounts, as the store sends one: the section's own refocus (`useSectionRefocus`) runs on the
-    // change and would take focus from `<body>`, so the hand-off must have placed it on the switch by then.
+    // change and would take focus from `<body>`, so the handoff must have placed it on the switch by then.
     act(() => {
       setSharing("codex-work", null);
       setAccount("codex-work", { share_default_config_incomplete: false });

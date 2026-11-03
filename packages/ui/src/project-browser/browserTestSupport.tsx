@@ -71,7 +71,7 @@ export function changeViewFixture(view: Partial<ChangeViewState> = {}): ChangeVi
   };
 }
 
-interface ToastSpies {
+interface NotificationSpies {
   notice: (message: string) => void;
   error: (message: string) => void;
 }
@@ -80,8 +80,8 @@ interface MountRowsOptions {
   request?: RequestHandler;
   /** The platform the rows render on. */
   clipboard?: PlatformAdapter["clipboard"];
-  /** Where the daemon's toasts go. */
-  toasts?: ToastSpies;
+  /** Where the daemon's notifications go. */
+  notifications?: NotificationSpies;
   /** What the daemon's store holds; without it, the state before the first snapshot. */
   state?: Partial<State>;
 }
@@ -98,16 +98,16 @@ interface MountRowsOptions {
  * is being torn down: the scheduler then dies on the missing `window`, as an unhandled error the
  * whole run is blamed for.
  */
-export function mountRows(children: React.ReactNode, { request, clipboard, toasts = { notice: () => {}, error: () => {} }, state }: MountRowsOptions = {}): HTMLElement {
+export function mountRows(children: React.ReactNode, { request, clipboard, notifications = { notice: () => {}, error: () => {} }, state }: MountRowsOptions = {}): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
-  // The error alerts go where the daemon's toasts do.
-  onTestFinished(forwardAlerts(toasts.error));
-  const daemon = testDaemon({ state, request, showNotice: toasts.notice });
+  // The error alerts go where the daemon's notifications do.
+  onTestFinished(forwardAlerts(notifications.error));
+  const daemon = testDaemon({ state, request, showNotice: notifications.notice });
   act(() => root.render(<TestHost daemon={daemon} platform={{ kind: "browser", clipboard }}>{children}</TestHost>));
   return container;
 }

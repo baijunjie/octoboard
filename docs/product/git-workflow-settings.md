@@ -80,7 +80,7 @@ judges what they set out better than a keyword match would, and this works alike
      in.
    - In a worktree of its own, it gives the branch its own worktree at `.worktrees/<short-name>` in the project
      directory it was started in, and adds `.worktrees/` to `.git/info/exclude` so no tracked file changes.
-2. **A handed-over branch.**
+2. **A transferred branch.**
    - On a branch of its own, if a branch handed to the session already has a worktree, it works in that worktree.
      Otherwise, it switches to the branch in the project directory.
    - In a worktree of its own, a branch handed to the session that already has a worktree is worked on there.

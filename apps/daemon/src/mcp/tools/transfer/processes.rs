@@ -52,7 +52,7 @@ pub(in crate::mcp) async fn transfer_processes(
                  stopped when its process ends",
                 named_session(session),
                 if session.id == from.id {
-                    "holds no process to hand over"
+                    "holds no process to transfer"
                 } else {
                     "cannot take processes: resume it first"
                 }
@@ -63,7 +63,7 @@ pub(in crate::mcp) async fn transfer_processes(
         refuse_if_at_work(
             state,
             &from,
-            "may be using the processes it started. Hand them over once it is awaiting \
+            "may be using the processes it started. Transfer them once it is awaiting \
              instructions",
         )?;
     }
@@ -77,19 +77,19 @@ pub(in crate::mcp) async fn transfer_processes(
         Ok(moved) => moved,
         Err(MoveRefused::NotFrom(missing)) => bail!(
             "{} {} not a process tree {} holds now: it ended, or another session holds it. Name \
-             trees by the `id` `{}` gives in `processes` for that session; nothing was handed \
-             over",
+             trees by the `id` `{}` gives in `processes` for that session; nothing was \
+             transferred",
             quoted(&missing),
             if missing.len() == 1 { "is" } else { "are" },
             named_session(&from),
             qualified_tool_name(caller.agent, "get_session")
         ),
         Err(MoveRefused::NoLaunch) => bail!(
-            "{} has no process running to take the processes; nothing was handed over",
+            "{} has no process running to take the processes; nothing was transferred",
             named_session(&to)
         ),
         Err(MoveRefused::Unreadable) => {
-            bail!("the process table could not be read; nothing was handed over")
+            bail!("the process table could not be read; nothing was transferred")
         }
     };
 
@@ -117,7 +117,7 @@ pub(in crate::mcp) async fn transfer_processes(
 
     let words = Words::for_count(moved.len());
     let mut note = format!(
-        "Handed over the process {} {} from {} to {}. {} {} running; {} now holds {}, so {} {} \
+        "Transferred the process {} {} from {} to {}. {} {} running; {} now holds {}, so {} {} \
          stopped when its process ends (its archive, an interrupt, its agent exiting), and no \
          longer when that of {} does.",
         words.noun,
@@ -224,8 +224,8 @@ fn messages(caller: &Session, from: &Session, to: &Session, moved: &[String]) ->
     let named = quoted(moved);
     [
         format!(
-            "{NOTICE_PREFIX}: {owner}, your owner, handed the {} {named} you started over to \
-             {}. {} no longer yours: do not stop {} or rely on {}; {} running for {}.",
+            "{NOTICE_PREFIX}: {owner}, your owner, transferred the {} {named} you started \
+             to {}. {} no longer yours: do not stop {} or rely on {}; {} running for {}.",
             words.noun_phrase(),
             named_session(to),
             words.they_are_capitalised,
@@ -235,7 +235,7 @@ fn messages(caller: &Session, from: &Session, to: &Session, moved: &[String]) ->
             named_session(to),
         ),
         format!(
-            "{NOTICE_PREFIX}: {owner}, your owner, handed the {} {named} over to you from {}. \
+            "{NOTICE_PREFIX}: {owner}, your owner, transferred the {} {named} to you from {}. \
              {} yours now and {} running: {} stopped when your process ends. `{}` lists {} \
              in `processes`. Your owner will tell you what to do with {}.",
             words.noun_phrase(),
@@ -340,8 +340,8 @@ mod tests {
     /// receiving one, the giving one is told, and the tree is stopped when the receiving
     /// session's launch ends, not the giving one's.
     #[tokio::test(flavor = "multi_thread")]
-    async fn an_owner_hands_a_process_tree_from_one_session_of_its_own_to_another() {
-        let (state, dir) = fixture("handover-processes");
+    async fn an_owner_transfers_a_process_tree_from_one_session_of_its_own_to_another() {
+        let (state, dir) = fixture("transfer-processes");
         let _caller = running(&state, "a");
         let (from, tree) = running_leaving_one(&state, &dir, "kid");
         let _guard = KillOnDrop(vec![pid_of(&tree)]);
@@ -378,7 +378,7 @@ mod tests {
         );
         let told = output_containing(&from, "no longer yours");
         assert!(told.contains(&tree), "{told}");
-        output_containing(&to, "handed the process tree");
+        output_containing(&to, "transferred the process tree");
 
         state.process_ledger.end_launch(&from.launch_id);
         assert!(
@@ -393,7 +393,7 @@ mod tests {
     /// it, as it is on record, for the caller to tell.
     #[tokio::test(flavor = "multi_thread")]
     async fn a_party_recorded_as_interrupted_is_left_for_the_caller_to_tell() {
-        let (state, dir) = fixture("handover-processes-untold");
+        let (state, dir) = fixture("transfer-processes-untold");
         let _caller = running(&state, "a");
         let (_from, tree) = running_leaving_one(&state, &dir, "kid");
         let _guard = KillOnDrop(vec![pid_of(&tree)]);
@@ -415,7 +415,7 @@ mod tests {
         assert!(
             note.ends_with(
                 " Octoboard could not send the project session `other-kid` (\"Renamed\") a \
-                 message about the handover: tell it yourself once it can take a message."
+                 message about the transfer: tell it yourself once it can take a message."
             ),
             "{note}"
         );
@@ -424,8 +424,8 @@ mod tests {
 
     /// Everything that is refused moves nothing.
     #[tokio::test(flavor = "multi_thread")]
-    async fn a_refused_process_handover_moves_nothing() {
-        let (state, dir) = fixture("handover-processes-refused");
+    async fn a_refused_process_transfer_moves_nothing() {
+        let (state, dir) = fixture("transfer-processes-refused");
         let _caller = running(&state, "a");
         let (_from, tree) = running_leaving_one(&state, &dir, "kid");
         let (_busy, busy_tree) = running_leaving_one(&state, &dir, "busy-kid");
@@ -452,7 +452,7 @@ mod tests {
             ),
             (
                 json!({ "processes": [tree], "from": "asleep-kid", "to": "other-kid" }),
-                "has no process running, so it holds no process to hand over",
+                "has no process running, so it holds no process to transfer",
             ),
             (
                 json!({ "processes": [tree], "from": "kid", "to": "archived-of-a" }),
@@ -497,8 +497,8 @@ mod tests {
     /// A session whose model is being changed is restarted in place, holding what its process
     /// started for the relaunch: trees are moved neither from it nor to it meanwhile.
     #[tokio::test(flavor = "multi_thread")]
-    async fn a_session_under_a_model_change_is_neither_given_nor_handed_processes() {
-        let (state, dir) = fixture("handover-processes-model-change");
+    async fn a_session_under_a_model_change_is_neither_given_nor_transferred_processes() {
+        let (state, dir) = fixture("transfer-processes-model-change");
         let _caller = running(&state, "a");
         let (_from, tree) = running_leaving_one(&state, &dir, "kid");
         let _guard = KillOnDrop(vec![pid_of(&tree)]);

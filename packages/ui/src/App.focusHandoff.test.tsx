@@ -2,7 +2,7 @@
 // Where focus goes when a control that held it goes away from under it, in the three children of `App` whose check
 // for that runs after each of their own renders (`useFocusHandoff`): the terminal pane (with its history's owner
 // line), the update notice and the connection banner. Each case drives the removal by what removes the control in
-// the app, so the hand-off is shown to run, not only to land in the right place once it does.
+// the app, so the handoff is shown to run, not only to land in the right place once it does.
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 

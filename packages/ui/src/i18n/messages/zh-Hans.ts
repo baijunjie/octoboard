@@ -3,8 +3,9 @@ import type { Translation } from "../catalog";
 /** The Simplified Chinese catalog, following Apple's zh-Hans macOS terminology: one half-width
  * space between Chinese and Latin text, numbers or placeholders, full-width punctuation in Chinese
  * sentences, and fixed terms — 控制台 console, 会话 session, 控制台会话 console session, 项目会话 project
- * session, 智能体 agent. Chinese has only the `other` plural category. Ellipses follow the rule in the
- * English catalog's header. */
+ * session, 智能体 agent, 移交 handoff, 转移 transfer (of branches, process trees or a parent).
+ * Chinese has only the `other` plural category. Ellipses follow the rule in the English catalog's
+ * header. */
 export const zhHans: Translation<"other"> = {
   "common.openIn": "打开方式",
   "common.opensExternally": "在浏览器中打开",
@@ -476,8 +477,8 @@ export const zhHans: Translation<"other"> = {
   "daemon.session_not_bound_to_owner": "{owner} 无权解除此会话的绑定，因为此会话并未绑定到它。",
   "daemon.session_binding_changed": "此会话的所有者在解除绑定期间发生了变化。",
   "daemon.session_working": "此会话正在进行一个回合，暂时无法移交。",
-  "daemon.session_busy": "此会话正在切换账户、移交、移交分支、更换所有者或重启，暂时无法中断它的回合。",
-  "daemon.session_changing": "此会话正在启动、恢复、移交、切换账户、移交分支或更换所有者，暂时无法更改它的所有者。",
+  "daemon.session_busy": "此会话正在切换账户、移交、转移分支、更换所有者或重启，暂时无法中断它的回合。",
+  "daemon.session_changing": "此会话正在启动、恢复、移交、切换账户、转移分支或更换所有者，暂时无法更改它的所有者。",
   "daemon.session_owner_changing": "{owner} 正在启动、恢复、移交、切换账户或更换所有者，暂时无法将会话绑定到它或从它名下移出。",
   "daemon.handoff_to_same_agent": "移交会把会话交给另一个智能体，而此会话已在使用 {agent}。",
   "daemon.handoff_move_failed": "新会话 {receiving_session} 已启动，但未能将工作移交给它：{reason}",
@@ -922,9 +923,9 @@ export const zhHans: Translation<"other"> = {
   "sidebar.session.delete": "删除",
   "sidebar.session.switchAccount": "切换账户",
   "sidebar.session.changeModel": "更改模型",
-  "sidebar.session.handOff": "移交",
-  "sidebar.session.handOffNoTarget": "没有其他智能体可以接手此会话。",
-  "sidebar.session.handOffNoTarget.reason": "没有其他智能体",
+  "sidebar.session.handoff": "移交",
+  "sidebar.session.handoffNoTarget": "没有其他智能体可以接手此会话。",
+  "sidebar.session.handoffNoTarget.reason": "没有其他智能体",
   "sidebar.session.unbind": "解除绑定",
   "sidebar.session.archiveLocked": "会话已锁定，无法归档。",
   "sidebar.session.deleteLocked": "会话已锁定，无法删除。",
@@ -1573,28 +1574,28 @@ export const zhHans: Translation<"other"> = {
   "dialog.sessionModel.failedTitle": "无法更改模型",
   "dialog.sessionModel.done": "会话 {session} 已重新启动并使用新的模型设置",
   "dialog.sessionModel.doneRecorded": "会话 {session} 将在恢复时使用新的模型设置",
-  "dialog.handOff.title": "移交会话",
-  "dialog.handOff.subject": "会话 {title} 将被移交。",
-  "dialog.handOff.message": "另一个智能体的新会话将接手此会话的位置，此会话会被归档。对话不会随之转移：新会话会先阅读一份对话记录。",
-  "dialog.handOff.moves": "将转移给新会话",
-  "dialog.handOff.movesChecking": "正在检查它负责的分支…",
-  "dialog.handOff.movesBranches": {
+  "dialog.handoff.title": "移交会话",
+  "dialog.handoff.subject": "会话 {title} 将被移交。",
+  "dialog.handoff.message": "另一个智能体的新会话将接手此会话的位置，此会话会被归档。对话不会随之转移：新会话会先阅读一份对话记录。",
+  "dialog.handoff.moves": "将转移给新会话",
+  "dialog.handoff.movesChecking": "正在检查它负责的分支…",
+  "dialog.handoff.movesBranches": {
     other: "它负责的 {count} 个分支",
   },
-  "dialog.handOff.movesSessions": {
+  "dialog.handoff.movesSessions": {
     other: "它拥有的 {count} 个会话（包括已归档的）",
   },
-  "dialog.handOff.movesBranchesFailed": "无法检查它负责哪些分支。",
-  "dialog.handOff.movesBranchesFailed.mark": "待移交的分支未知",
-  "dialog.handOff.movesOwner": "它在 {owner} 之下的位置（它向该会话汇报）",
-  "dialog.handOff.movesNothing": "无：它没有负责的分支，没有拥有的会话，也不向任何会话汇报。",
-  "dialog.handOff.agent": "移交给",
-  "dialog.handOff.noOtherAgent": "没有其他可接手此会话的智能体。",
-  "dialog.handOff.blockedTitle": "无法移交会话",
-  "dialog.handOff.failedTitle": "无法移交会话",
-  "dialog.handOff.launchInheritanceNote": "未修改的选项沿用项目设置。",
-  "dialog.handOff.consoleLaunchInheritanceNote": "未修改的选项沿用控制台设置。",
-  "dialog.handOff.confirm": "移交",
+  "dialog.handoff.movesBranchesFailed": "无法检查它负责哪些分支。",
+  "dialog.handoff.movesBranchesFailed.mark": "待转移的分支未知",
+  "dialog.handoff.movesOwner": "它在 {owner} 之下的位置（它向该会话汇报）",
+  "dialog.handoff.movesNothing": "无：它没有负责的分支，没有拥有的会话，也不向任何会话汇报。",
+  "dialog.handoff.agent": "移交给",
+  "dialog.handoff.noOtherAgent": "没有其他可接手此会话的智能体。",
+  "dialog.handoff.blockedTitle": "无法移交会话",
+  "dialog.handoff.failedTitle": "无法移交会话",
+  "dialog.handoff.launchInheritanceNote": "未修改的选项沿用项目设置。",
+  "dialog.handoff.consoleLaunchInheritanceNote": "未修改的选项沿用控制台设置。",
+  "dialog.handoff.confirm": "移交",
   "dialog.deleteSession.title": "删除会话",
   "dialog.deleteSession.failedTitle": "无法删除会话",
   "dialog.deleteSession.subject": "会话 {title} 将被永久删除。",
@@ -1729,7 +1730,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.sessionRequest.question.console": "{requester} 请求在控制台 {console} 中启动一个 {agent} 控制台会话。新会话将向你汇报。",
   "dialog.sessionRequest.withBranches": "{question}{branches}",
   "dialog.sessionRequest.branches": {
-    other: "分支 {branches} 将移交给新会话。",
+    other: "分支 {branches} 将转移给新会话。",
   },
   "dialog.sessionRequest.confirm": "启动会话",
   "dialog.sessionRequest.refuse": "拒绝",

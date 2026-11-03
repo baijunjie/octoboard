@@ -54,7 +54,7 @@ export function isChangeRequest(request: SessionRequest): request is SwitchReque
  * launched on it may find its configuration and conversations incomplete. Where the dialog is the
  * confirmation, as here, this is all it says; the user's own resume asks first instead
  * (`useConfirmIncompleteLaunch`). `inline` is the form for a mark in a sentence; `markId` scopes a focus
- * hand-off to this mark. */
+ * handoff to this mark. */
 export function IncompleteSharingMark({ account, inline, markId }: { account: Account; inline?: boolean; markId?: string }): React.ReactElement {
   const t = useT();
   return (
@@ -268,7 +268,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
       <IncompleteSharingAnnouncer account={incomplete} />
       {sessionBlock && <ErrorAlert title={sessionBlock.detail} announce />}
       <AgentAccountField
-        label={t("dialog.handOff.agent")}
+        label={t("dialog.handoff.agent")}
         options={agentOptions}
         value={choice.agent}
         onChange={setPickedAgent}
@@ -279,7 +279,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
       />
       <LaunchSettingsFields
         {...launch}
-        note={t(project ? "dialog.handOff.launchInheritanceNote" : "dialog.handOff.consoleLaunchInheritanceNote")}
+        note={t(project ? "dialog.handoff.launchInheritanceNote" : "dialog.handoff.consoleLaunchInheritanceNote")}
         isDisabled={locked || presetGone}
       />
     </>

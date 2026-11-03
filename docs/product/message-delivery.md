@@ -336,7 +336,7 @@ status it shows there, not mid-turn — it waits up to about three seconds for t
 a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
 shared information, a report panel form submission, the instruction `resume_session` hands over or the prompt to
 continue after an account switch when it is written rather than given as the launch prompt, the messages of a
-handover or a handoff, and a client's own `send_message` request. A message that was queued is checked the same way
+transfer or a handoff, and a client's own `send_message` request. A message that was queued is checked the same way
 when it is finally written. When several queued messages are written in one go, each is checked on its own, against the
 agent's status at the moment it is written: once the first is sent the agent reads as working, so the rest are written
 unchecked, as mid-turn messages; if the agent is at its prompt again by then — after a very short turn, say — the next

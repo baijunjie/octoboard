@@ -30,7 +30,7 @@ Reporting is refused, or fails without accepting the report, when:
   outlives the archive, so once the owner is reopened the session's reports reach it again. A session archived along
   with its owner is told instead that there is nothing further to report;
 - its owner still has no process running at the end of the wait in "Reports and notices for an interrupted owner"
-  below — it is being started, resumed, switched to another account or handed off, or having its branches handed over
+  below — it is being started, resumed, switched to another account or handed off, or having its branches transferred
   or its owner changed. The reason names the owner and tells the session to report again once its owner is running.
   An owner that is simply interrupted does not fail a report: it has the report kept;
 - a message queued for its owner could not be written in full, so it and everything queued behind it, the report
@@ -156,7 +156,7 @@ session" in `docs/product/information-between-sessions.md`).
   its answer says the report was kept and that the session is now archived. Any other report leaves the reporting
   session as it is.
 - **An owner in the middle of an operation is waited for.** An owner with no process running that is being started,
-  resumed, switched to another account or handed off, or having its branches handed over or its owner changed, can
+  resumed, switched to another account or handed off, or having its branches transferred or its owner changed, can
   neither take a message nor have one kept, so a report or notice for it waits up to **15 seconds** for that to finish
   and then goes by how the owner stands: written into it once it is running, kept while it is interrupted. One still
   without a process after the wait is refused, for a report (see the refusals at the top of this document), and not

@@ -63,19 +63,19 @@ in** and **Git** submenus; managing the project itself (**Rename**, **Copy proje
   available. File manager opens the project's directory on the daemon's host (see "Opening the system file manager"
   below). System terminal opens the operating system's terminal application at that directory (see "Opening a project
   terminal" in `docs/product/project-terminal.md`). Both are offered for every project, including one that is not a
-  git repository and one whose git status has not arrived. Neither raises a success toast; a failure is an error alert.
+  git repository and one whose git status has not arrived. Neither raises a success notice; a failure is an error alert.
   The repository entry opens the recorded remote's web address in the client's browser and carries a trailing external-link icon.
   Public GitHub, GitLab and Bitbucket hosts carry their brand names and icons; other hosts carry their hostname and a
   globe icon, including self-hosted installations. A missing, invalid, local or unsupported remote, or a client unable
   to open web links, leaves out the repository entry. HTTP and HTTPS remotes retain their web scheme; SSH, SCP-style,
   `git://`, `git+ssh://` and `ssh+git://` remotes use HTTPS. Credentials, query strings, fragments and a trailing `.git`
-  are omitted from the opened address, as are transport ports on non-web remotes. Opening raises no success toast; a
+  are omitted from the opened address, as are transport ports on non-web remotes. Opening raises no success notice; a
   failure is an error alert.
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the first
   status and not when the directory is not one (see "What one check does" in `docs/product/project-git-status.md`). It
   holds **Pull current branch**, then **Push current branch**, then **Switch branch**, then, after a separator, the
   destructive **Restore file changes** action. Pull current branch checks the project against its remote and
-  fast-forwards it right now, is not waited on, and toasts nothing when it succeeds (see "Pulling one project by hand"
+  fast-forwards it right now, is not waited on, and raises no notice when it succeeds (see "Pulling one project by hand"
   in `docs/product/project-git-status.md`). Push current branch pushes that branch and is waited on until the push
   finishes; the window then shows a notice that the current branch was pushed, or an error alert if the push was refused
   (see "Pushing the current branch" in `docs/product/project-git-actions.md`). Switch branch opens the third-level local
@@ -86,7 +86,7 @@ in** and **Git** submenus; managing the project itself (**Rename**, **Copy proje
 - **Copy project name** — copies the project's name exactly to the clipboard. Available in all the project-menu
   placements above, including right-click menus. Where the platform has no clipboard, or it refuses, the name is copied
   through the browser's selection copy instead (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). Success
-  raises a notice toast; a copy neither way allows raises an error alert.
+  raises a notice; a copy neither way allows raises an error alert.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/projects.md`.
 - **Remove project** — see `docs/product/removing-projects.md`; it asks for confirmation first.
 
@@ -108,7 +108,7 @@ like every other session row.
 **File manager** under **Open in** is available for every project in all the project-menu placements above,
 independently of whether its project pane is visible, which mode it shows, and whether the directory is a Git
 repository. It opens the project's directory on the machine running the daemon, including when the client is a browser
-on another machine. It changes no session selection or pane ownership. Success raises no toast; a refusal raises an
+on another machine. It changes no session selection or pane ownership. Success raises no notice; a refusal raises an
 error alert with the reason.
 
 On macOS this asks Finder to open the directory through the system directory opener. The request waits for that launcher

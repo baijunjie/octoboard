@@ -1,5 +1,5 @@
 //! The tools that start a session and drive one through its life: instruct, interrupt, rename,
-//! pin, archive and reopen.
+//! pin, archive and resume.
 
 use serde_json::json;
 
@@ -26,9 +26,9 @@ pub(super) const CONSOLE_OPEN_SESSION: ToolDef = ToolDef {
                   the session could not start. Name another account only when the user asked \
                   for it. Name another agent only when the user asked for it or when its tags \
                   (`list_agents`) fit the work. Use this when you should keep directing the \
-                  session and receiving its reports. To hand your own work to a peer in the \
-                  next session, use `request_session`; if the user only wants handover notes \
-                  and an end, leave the notes and end. Ask the user if their intent is \
+                  session and receiving its reports. To pass your own work on to a peer in the \
+                  next session, use `request_session`; if the user only wants notes for the next \
+                  session and an end, leave the notes and end. Ask the user if their intent is \
                   unclear.",
     schema: || open_session_schema(true),
 };
@@ -53,17 +53,17 @@ pub(super) const PROJECT_OPEN_SESSION: ToolDef = ToolDef {
                   session. Returns the new session's id, its agent, the account it opened on \
                   (`account`, `account_name`) and the `model` and `effort` it was launched \
                   with (`null` is the agent's own default), and with `branches` the ones that \
-                  moved and a `note` on how the handover went. The brief is rendered into the \
+                  moved and a `note` on how the transfer went. The brief is rendered into the \
                   session's opening prompt; `title` names the session in the user's language. \
                   A session started this way cannot start sessions of its own, and only this \
                   project is available; a session elsewhere, or one that should not report to \
                   you, is one `request_session` asks the user for. To give the new session a \
                   branch you are responsible for, pass it in `branches`; `transfer_branches` \
                   moves the branches of any session of yours later. Use this only when you \
-                  should keep directing the session and receiving its reports. To hand your \
-                  own work to a peer in the next session, use `request_session`; if the user \
-                  only wants handover notes and an end, leave the notes and end. Ask the user \
-                  if their intent is unclear.",
+                  should keep directing the session and receiving its reports. To pass your \
+                  own work on to a peer in the next session, use `request_session`; if the user \
+                  only wants notes for the next session and an end, leave the notes and end. \
+                  Ask the user if their intent is unclear.",
     schema: || open_session_schema(false),
 };
 
@@ -208,10 +208,10 @@ pub(super) const SET_SESSION_PINNED: ToolDef = ToolDef {
 pub(super) const RESUME_SESSION: ToolDef = ToolDef {
     name: "resume_session",
     description: "Relaunch an archived or interrupted session of yours, continuing its \
-                  conversation, and optionally hand it the next instruction or reopen it with \
+                  conversation, and optionally hand it the next instruction or relaunch it with \
                   another model or reasoning effort (it stays on its agent and its account; to \
                   move it to another account, use `switch_session_account`). A `model` or \
-                  `effort` the agent does not offer is refused, with nothing reopened. Returns \
+                  `effort` the agent does not offer is refused, with nothing relaunched. Returns \
                   the session's id, its account (`account`, `account_name`) and the `model` \
                   and `effort` it was launched with (`null` is the agent's own default). \
                   Refused for a session that is not yours (`yours: false`): it is somebody \
@@ -226,14 +226,14 @@ pub(super) const RESUME_SESSION: ToolDef = ToolDef {
                 },
                 "model": {
                     "type": "string",
-                    "description": "Reopen it with this model, which then becomes the \
+                    "description": "Resume it with this model, which then becomes the \
                                     session's own; blank is the agent's own default. \
                                     `list_agent_models` lists the ones its agent offers \
                                     under its account. Left out, it keeps the model it had.",
                 },
                 "effort": {
                     "type": "string",
-                    "description": "Reopen it with this reasoning effort, which then becomes \
+                    "description": "Resume it with this reasoning effort, which then becomes \
                                     the session's own; blank is the agent's own default. \
                                     `list_agent_models` lists the levels each model offers. \
                                     Left out, it keeps the effort it had.",

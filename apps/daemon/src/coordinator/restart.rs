@@ -160,7 +160,7 @@ pub(crate) async fn stop_carrying_processes(
     let held = state.process_ledger.hold_for_launch(id);
     let ended_a_process = match state.live_session(id) {
         Some(live) => {
-            state.process_ledger.hand_over(&live.launch_id, id);
+            state.process_ledger.mark_carry_over(&live.launch_id, id);
             stop_process(state, live).await?
         }
         None => false,

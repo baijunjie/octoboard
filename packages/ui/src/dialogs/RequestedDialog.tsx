@@ -144,7 +144,7 @@ export function RequestedDialog({
           {(session) => <SessionModelDialog session={session} onClose={onClose} onChangeModel={onChangeSessionModel} />}
         </LiveSession>
       );
-    case "hand-off":
+    case "handoff":
       return (
         <LiveSession requested={dialog.session}>
           {(session) => <HandoffDialog session={session} onClose={onClose} onHandedOff={onSessionOpened} />}

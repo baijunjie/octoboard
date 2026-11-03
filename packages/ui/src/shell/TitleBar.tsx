@@ -9,7 +9,7 @@ import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemonStore, useSessionShownStatus } from "../store";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { StatusIcon } from "../components/status/StatusIcon";
 
 /** The bar's frame: full window width, above everything, painting nothing of its own (the window's
@@ -241,7 +241,7 @@ export function TitleBar({
           <div className="flex items-center gap-1 px-2">
             {onToggleAsideDocked && (
               <>
-                <HandOffOnUnmount from="#aside-float-toggle" to={focusTerminal} />
+                <HandoffOnUnmount from="#aside-float-toggle" to={focusTerminal} />
                 <ChromeButton
                   id="aside-float-toggle"
                   label={asideAutomatic ? t("titleBar.aside.show") : asidePinned ? t("titleBar.aside.float") : t("titleBar.aside.dock")}
@@ -258,7 +258,7 @@ export function TitleBar({
             {panelToggles.map(({ kind, label, Icon, open, regionId, onPress, onHoverChange }) => (
               <React.Fragment key={kind}>
                 {/* First among what goes away with the toggle, so focus on it is still found. */}
-                <HandOffOnUnmount from={`#${toggleId(kind)}`} to={focusTerminal} />
+                <HandoffOnUnmount from={`#${toggleId(kind)}`} to={focusTerminal} />
                 <ChromeButton
                   id={toggleId(kind)}
                   label={label}

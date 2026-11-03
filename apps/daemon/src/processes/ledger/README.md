@@ -13,7 +13,7 @@ a restart (an account switch, a model change, a change of an account's sharing) 
 `apps/daemon/src/coordinator/handoff.rs`, environment tagging through `apps/daemon/src/session/term/mod.rs`,
 process-end cleanup and shutdown through `apps/daemon/src/coordinator/exit_watch.rs` and
 `apps/daemon/src/state/process_exit.rs`, startup reconciliation through `apps/daemon/src/main.rs`, and the owner's moves
-of trees through `apps/daemon/src/mcp/tools/handover/processes.rs`.
+of trees through `apps/daemon/src/mcp/tools/transfer/processes.rs`.
 
 Where things are: `mod.rs` the types, the launch lifecycle, reconciliation and `ForgetLaunch`, `attribute.rs` the rules
 that attribute processes to launches, `scan.rs` the scan of the table, the scanner thread and the stop of what ended
@@ -33,7 +33,7 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
 - `ProcessLedger::launch_started` — associate a reserved launch with its running agent process.
 - `ProcessLedger::scan_before_ending`, `ProcessLedger::end_launch` — observe and clean up the processes of a launch
   being ended.
-- `carry.rs`: `ProcessLedger::hand_over`, `ProcessLedger::withdraw_hand_over`, `ProcessLedger::hold_for_launch`,
+- `carry.rs`: `ProcessLedger::mark_carry_over`, `ProcessLedger::withdraw_carry_over`, `ProcessLedger::hold_for_launch`,
   `HeldForLaunch` — carry a launch's processes over to another session's launch when it ends, instead of stopping them
   (a handoff, an account switch, a change of a session's model, a change of an account's sharing), holding them while
   the receiving session has no launch running.

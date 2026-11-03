@@ -1,7 +1,7 @@
 //! Which session is responsible for a git branch, the one working on it now, kept so the Git mode
 //! can mark the relation: the record of branch origins and targets ([`record`], [`target`]), the
 //! reconcile that holds the rows against the repository's branches ([`reconcile`]), the forks
-//! listing ([`forks`]), the handover of a branch to another session ([`handover`]), the listing
+//! listing ([`forks`]), the transfer of a branch to another session ([`transfer`]), the listing
 //! of a session's branches, and what is bound to a session ([`bound`]). The reflog files they lean
 //! on are read by [`crate::git::reflog`].
 //!
@@ -13,7 +13,7 @@
 //! the session it was started for, to [`ref_created`]. A forced update of an existing branch names
 //! no old value either, which is why existence is asked before the transaction writes anything.
 //! Nothing else names a session: no timing, no working directory, no guess. A branch the hook never
-//! reported has no responsible session, which is no failure, and cannot be handed over.
+//! reported has no responsible session, which is no failure, and cannot be transferred.
 //!
 //! A report is taken only for a repository the session's own project is in, and only while the
 //! branch is still the one it reports: in a repository whose references are files, the branch's
@@ -24,12 +24,12 @@
 //! A row also keeps the branch the new one was created from, its target branch ([`target`]); the
 //! commit it was created at, its `birth_commit`, is the fork point. The revert gate holds the
 //! branch's later work against both ([`crate::session_git_hooks::gate_inputs`]). A rename carries
-//! the target along and a handover leaves it alone.
+//! the target along and a transfer leaves it alone.
 //!
 //! A row's responsible session is the reporting session when the row is written, and another only
-//! through an explicit handover ([`handover::hand_over`]) — never inferred. The row keeps the title
-//! the session had then, to name it once it is gone; who reported the branch is not kept apart from
-//! it.
+//! through an explicit transfer ([`transfer::move_branch_records`]) — never inferred. The row keeps
+//! the title the session had then, to name it once it is gone; who reported the branch is not kept
+//! apart from it.
 //!
 //! A row lives and dies with its branch. It is validated against the branch's first reflog entry on
 //! every listing, so a branch deleted and made again under the same name does not inherit the old
@@ -52,13 +52,13 @@
 pub(crate) mod bound;
 mod forks;
 mod gate;
-pub mod handover;
 mod reconcile;
 mod record;
 pub mod session_branches;
 mod target;
 #[cfg(test)]
 mod tests;
+pub mod transfer;
 
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -73,11 +73,11 @@ use crate::store::BranchOrigin;
 use crate::wire_path;
 pub use forks::{forks_in_project, recorded_in_project, targets_in, targets_in_project};
 pub use gate::{Gates, KeyedGates};
-#[cfg(test)]
-pub use handover::hand_over;
-pub use handover::{first_not_held_by, hand_over_all};
 pub use reconcile::annotate;
 pub use record::ref_created;
+#[cfg(test)]
+pub use transfer::move_branch_records;
+pub use transfer::{first_not_held_by, move_all_branch_records};
 
 /// What a session's `reference-transaction` hook reports of a committed transaction: the branches
 /// it created, whether it moved any of the refs a branch header reads, and where git ran the hook.

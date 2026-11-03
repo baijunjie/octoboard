@@ -123,7 +123,7 @@ const PROJECT_WORK: &str = "You work on the current project's tasks, following i
 /// how work is delivered. Git in a worktree is run with `-C` because Claude Code asks for approval
 /// of every command that changes directory before running git, an allowed git command included.
 fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<String> {
-    let (heading, own_branch, handed_over, cleanup) = match settings.development {
+    let (heading, own_branch, given_branch, cleanup) = match settings.development {
         GitDevelopment::InPlace => return None,
         GitDevelopment::Branch => (
             "Developing on a branch",
@@ -131,7 +131,7 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
              `git switch -c <name>` in the project directory you were started in; work and \
              commit there. Read-only work, such as investigating or answering questions, needs \
              none.",
-            "If a branch handed to you already has a worktree, work in that worktree. \
+            "If a branch transferred to you already has a worktree, work in that worktree. \
                      Otherwise, switch to it in the project directory. Run git in a worktree as \
                      `git -C <worktree>` rather than after a `cd`.",
             "Clean up yourself as soon as a branch is no longer needed:\n   \
@@ -149,7 +149,7 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
              started in, adding `.worktrees/` to `.git/info/exclude` so no tracked file changes; \
              work and commit there, running git in it as `git -C <worktree>` rather than after a \
              `cd`. Read-only work, such as investigating or answering questions, needs none.",
-            "If a branch handed to you already has a worktree, work in that worktree.",
+            "If a branch transferred to you already has a worktree, work in that worktree.",
             "Clean up yourself as soon as a worktree is no longer needed, rather than leaving it \
              to the cleanup archiving runs:\n   \
              - After a local merge, remove the worktree and the local branch from the original \
@@ -216,7 +216,7 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
          them instead of this section. Otherwise:\n\
          \n\
          1. Before changing files in a git repository, {own_branch}\n\
-         2. {handed_over}\n\
+         2. {given_branch}\n\
          3. When done, report the branch and its changes. Merge, push or open a pull request as \
             {who}; where nobody has said, {otherwise}.\n\
          4. {preparation}\n\
@@ -294,7 +294,7 @@ pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
 /// Shared intent rules use qualified tool names in project prompts and bare names in the
 /// console instruction file, which serves every agent. A session that cannot start sessions of
 /// its own (`directs_sessions` false) is not told of the tools that do, which it does not have.
-pub(super) fn handover_guidance(agent: Option<Agent>, directs_sessions: bool) -> String {
+pub(super) fn continuation_guidance(agent: Option<Agent>, directs_sessions: bool) -> String {
     let tool = |name: &str| match agent {
         Some(agent) => qualified_tool_name(agent, name),
         None => name.to_string(),
@@ -304,33 +304,34 @@ pub(super) fn handover_guidance(agent: Option<Agent>, directs_sessions: bool) ->
             format!(
                 "- Use `{open_session}` only when the user wants you to keep directing the \
                    recipient and receiving its reports. `{handoff_session}` replaces an existing \
-                   session you own; it does not hand your own work to a peer.\n",
+                   session you own; it does not pass your own work on to a peer.\n",
                 open_session = tool("open_session"),
                 handoff_session = tool("handoff_session"),
             ),
-            "a peer session, handover notes followed by ending, or a child session you direct",
+            "a peer session, notes for the next session followed by ending, or a child session \
+             you direct",
         )
     } else {
         (
             String::new(),
-            "a peer session or handover notes followed by ending",
+            "a peer session or notes for the next session followed by ending",
         )
     };
     format!(
         "## Continuing work in another session\n\n\
-         - When the user asks to hand your current work to the next session, open another \
+         - When the user asks to pass your current work on to the next session, open another \
            session to continue it, or request a peer session, default to `{request_session}`. \
            The peer reports directly to the user. Put progress, remaining work and necessary \
            context in the brief, and pass any branches you are responsible for that it should \
            take over.\n\
-         - When the user asks you to leave handover notes and finish, or says you can end, \
-           without asking to start a successor, leave the notes and end your work. Do not \
+         - When the user asks you to leave notes for the next session and finish, or says you can \
+           end, without asking to start a successor, leave the notes and end your work. Do not \
            create or transfer sessions or continue work in the background.\n\
          {directing}\
          - Instructions to persist until completion, permission to act without approval and \
-           earlier permission to delegate do not override the user's intent for this handover \
-           or a request to end. If you cannot tell whether the user wants {unsure}, ask the user \
-           before acting.",
+           earlier permission to delegate do not override the user's intent to continue in \
+           another session, or to end. If you cannot tell whether the user wants {unsure}, ask \
+           the user before acting.",
         request_session = tool("request_session"),
     )
 }
@@ -464,7 +465,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
          user's answer, and nothing is started without it.",
         request_session = tool("request_session"),
     ));
-    let beyond_reopen = if owns {
+    let beyond_resume = if owns {
         format!(
             " Unlike `{}`, which needs no approval, it can resume any session, and",
             tool("resume_session")
@@ -476,7 +477,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
         "- `{request_resume_session}` asks the user to resume a conversation by its agent \
          conversation id, as they can in the new-session dialog: the session that holds it \
          comes back, or an independent session is opened on the agent's own record of it. Use \
-         it only when the user asked for that conversation to be resumed.{beyond_reopen} what \
+         it only when the user asked for that conversation to be resumed.{beyond_resume} what \
          it resumes is not yours to drive; the call waits for the user's answer, and nothing is \
          resumed without it.",
         request_resume_session = tool("request_resume_session"),
@@ -554,7 +555,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
     format!(
         "{}\n\n{}",
         lines.join("\n"),
-        handover_guidance(Some(agent), owns)
+        continuation_guidance(Some(agent), owns)
     )
 }
 
@@ -562,7 +563,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
 /// it answers through `report`, and anything needing a person goes to the person. It is told by
 /// session id which session dispatched it when that is a project session, since a title can
 /// change after this text is recorded for good, and that it takes work from its owner (or from the
-/// user) alone — the owner it has now, which a handover can change.
+/// user) alone — the owner it has now, which a transfer can change.
 fn project_session_description(agent: Agent, owner: &Owner) -> String {
     let report = qualified_tool_name(agent, "report");
     let inform_session = qualified_tool_name(agent, "inform_session");
@@ -1053,7 +1054,7 @@ mod tests {
                 ));
                 assert!(rule.contains("`git switch -c <name>` in the project directory"));
                 assert!(rule.contains(
-                    "If a branch handed to you already has a worktree, work in that worktree. \
+                    "If a branch transferred to you already has a worktree, work in that worktree. \
                      Otherwise, switch to it in the project directory. Run git in a worktree as \
                      `git -C <worktree>` rather than after a `cd`."
                 ));

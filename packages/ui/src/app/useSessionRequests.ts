@@ -55,7 +55,7 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
   /** Resumes an archived or interrupted session for the session dialog: the same request as
    * `resumeSession`, with the terminal's resuming state and in-flight guard, but rejecting with the
    * daemon's reason (an unresumable conversation, a failed unarchive) for the dialog to show, rather
-   * than toasting it. */
+   * than raising a notification. */
   const resumeFromDialog = (sessionId: string): Promise<void> =>
     runOnceRejecting(inFlightRef.current, `resume:${sessionId}`, () => startResume(sessionId));
 
@@ -122,8 +122,8 @@ async function runOnceGuarded(
   }
 }
 
-/** `runOnceGuarded` without the toast: a failure is rethrown for the caller to show. The same
- * calls count as having gone through: one while another is in flight, and an "already running"
+/** `runOnceGuarded` without the notification: a failure is rethrown for the caller to show. The
+ * same calls count as having gone through: one while another is in flight, and an "already running"
  * refusal. */
 async function runOnceRejecting(inFlight: Set<string>, key: string, action: () => Promise<void>): Promise<void> {
   if (inFlight.has(key)) return;

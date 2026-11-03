@@ -44,7 +44,7 @@ function Part({ title, aside, children }: { title: React.ReactNode; aside?: Reac
  *
  * Closing the confirmation hands focus back when it fell to the page (the confirmation was opened by a press that took
  * no focus, or the button went with the last credit): to the Redeem reset button while it is there, else to this
- * dialog's opening focus (the same hand-off as `useLoginFocusReturn`).
+ * dialog's opening focus (the same handoff as `useLoginFocusReturn`).
  */
 export function AccountDetailsDialog({ agent, account, onClose }: {
   agent: Agent;

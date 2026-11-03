@@ -1,8 +1,8 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Scenario } from "../scenario";
 import type { PlainMessageKey } from "../../i18n/catalog";
-import { accountOf, broadcastErrorToast, consoleOf, failureTitle, projectOf, sessionNoticeToast, sessionOf, snapshotState } from "../../fixtures/builders";
-import type { ToastFixture } from "../../fixtures/fixture";
+import { accountOf, broadcastErrorNotification, consoleOf, failureTitle, projectOf, sessionNoticeNotification, sessionOf, snapshotState } from "../../fixtures/builders";
+import type { NotificationFixture } from "../../fixtures/fixture";
 
 const console_ = consoleOf("c-errors", "الإصدار Release coordination");
 const project = projectOf("p-errors", console_.id, "البحث Search API");
@@ -32,8 +32,8 @@ const ACTION_TITLE: Record<string, PlainMessageKey> = {
   shell_environment_timeout: "dialog.session.failedTitle",
 };
 
-const alert = (id: string, title: string, description: string, toast: ToastFixture): Scenario => ({
-  id, title, description, group: "Trust prompts and toasts", category: "exceptional", state, toasts: [toast],
+const alert = (id: string, title: string, description: string, notification: NotificationFixture): Scenario => ({
+  id, title, description, group: "Trust prompts and toasts", category: "exceptional", state, notifications: [notification],
 });
 
 /** A failure as the app shows it: one an action raised, under the title that action gives it, where the code has one
@@ -41,7 +41,7 @@ const alert = (id: string, title: string, description: string, toast: ToastFixtu
 const error = (id: string, title: string, code: string, params: Record<string, string>, description: string, message = ""): Scenario =>
   alert(id, title, description, ACTION_TITLE[code]
     ? { kind: "raised", code, params, message, title: failureTitle(ACTION_TITLE[code]) }
-    : broadcastErrorToast(code, params, message));
+    : broadcastErrorNotification(code, params, message));
 
 /** A session the daemon reports a failed launch of while the store holds no record of it, as when the record is gone:
  * the alert takes the session's name from the failure itself and has no location to give. */
@@ -49,7 +49,7 @@ const GONE_SESSION = "s-launch-gone";
 
 /** A failed launch, which the daemon reports as a notice about its session. */
 const launchError = (id: string, title: string, params: Record<string, string>, description: string): Scenario =>
-  alert(id, title, description, sessionNoticeToast(GONE_SESSION, "launch_failed", params));
+  alert(id, title, description, sessionNoticeNotification(GONE_SESSION, "launch_failed", params));
 
 /** An acknowledgement whose raw text is the target: the Error details disclosure it sits behind is open. */
 const withDiagnostics = (scenario: Scenario): Scenario => ({ ...scenario, steps: [(ui) => ui.press(ui.t("error.diagnostics"))] });

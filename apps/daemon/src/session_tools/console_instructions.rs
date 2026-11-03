@@ -299,8 +299,8 @@ fn escape_close_tag(text: &str) -> String {
     escaped
 }
 
-/// The console session's whole instruction file: built-in instructions and handover guidance, then
-/// the guidance on asking the user when `options.ask_as_choices` (the application setting
+/// The console session's whole instruction file: built-in instructions and continuation guidance,
+/// then the guidance on asking the user when `options.ask_as_choices` (the application setting
 /// `ask_questions_as_choices`) is on, then the user's language when `options.user_language` names
 /// a non-English one, then only when the user has text of their own for this
 /// console, that text under [`USER_SECTION`], inside the user tags. The text is kept as written,
@@ -309,7 +309,7 @@ fn escape_close_tag(text: &str) -> String {
 pub fn console_session_instructions(user_prompt: Option<&str>, options: &RoleOptions) -> String {
     let mut builtin = format!(
         "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{}",
-        super::role::handover_guidance(None, true)
+        super::role::continuation_guidance(None, true)
     );
     if options.ask_as_choices {
         builtin.push_str("\n\n");

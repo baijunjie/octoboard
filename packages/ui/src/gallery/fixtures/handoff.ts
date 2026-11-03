@@ -94,7 +94,7 @@ const GROUP = "Sidebar sessions";
 const openMenu = (title: string) => (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title }));
 const openHandoff = (title: string) => [
   openMenu(title),
-  (ui: Ui) => ui.press(ui.t("sidebar.session.handOff")),
+  (ui: Ui) => ui.press(ui.t("sidebar.session.handoff")),
 ];
 const openUnbind = (title: string) => [
   openMenu(title),
@@ -110,7 +110,7 @@ const leadBranches = [
 
 export const handoffScenarios: Scenario[] = [
   {
-    id: "sidebar-session-menu-hand-off",
+    id: "sidebar-session-menu-handoff",
     group: GROUP,
     category: "normal",
     title: "Menu of an idle project session, Hand off offered",
@@ -128,7 +128,7 @@ export const handoffScenarios: Scenario[] = [
     steps: [openMenu(bare.title)],
   },
   {
-    id: "sidebar-console-session-menu-hand-off",
+    id: "sidebar-console-session-menu-handoff",
     group: GROUP,
     category: "normal",
     title: "Menu of an idle console session, Hand off offered",
@@ -146,7 +146,7 @@ export const handoffScenarios: Scenario[] = [
     steps: [openMenu(starting.title)],
   },
   {
-    id: "sidebar-session-menu-hand-off-locked",
+    id: "sidebar-session-menu-handoff-locked",
     group: GROUP,
     category: "normal",
     title: "Menu of a locked session, Hand off disabled",
@@ -155,7 +155,7 @@ export const handoffScenarios: Scenario[] = [
     steps: [openMenu(locked.title)],
   },
   {
-    id: "dialog-hand-off",
+    id: "dialog-handoff",
     group: GROUP,
     category: "normal",
     title: "Hand off a project session with everything that moves",
@@ -165,7 +165,7 @@ export const handoffScenarios: Scenario[] = [
     steps: openHandoff(lead.title),
   },
   {
-    id: "dialog-hand-off-console-session",
+    id: "dialog-handoff-console-session",
     group: GROUP,
     category: "normal",
     title: "Hand off a console session",
@@ -174,7 +174,7 @@ export const handoffScenarios: Scenario[] = [
     steps: openHandoff(hub.title),
   },
   {
-    id: "dialog-hand-off-checking",
+    id: "dialog-handoff-checking",
     group: GROUP,
     category: "normal",
     title: "Hand off while the branches are being checked",
@@ -184,7 +184,7 @@ export const handoffScenarios: Scenario[] = [
     steps: openHandoff(lead.title),
   },
   {
-    id: "dialog-hand-off-branches-failed",
+    id: "dialog-handoff-branches-failed",
     group: GROUP,
     category: "exceptional",
     title: "Hand off when the branches could not be checked",
@@ -194,17 +194,17 @@ export const handoffScenarios: Scenario[] = [
     steps: openHandoff(lead.title),
   },
   {
-    id: "dialog-hand-off-branches-failed-details",
+    id: "dialog-handoff-branches-failed-details",
     group: GROUP,
     category: "exceptional",
     title: "Hand off when the branches could not be checked, mark opened",
     description: "The danger mark after the heading is hovered, and its popover says \"Could not check which branches it is responsible for.\", then the application's generic sentence about it, the daemon's raw message under that, and Try again.",
     state,
     sessionBranches: { code: "internal_error", params: { detail: "git could not be run" }, message: "git could not be run" },
-    steps: [...openHandoff(lead.title), (ui) => ui.hoverStatusMark(ui.t("dialog.handOff.movesBranchesFailed.mark"))],
+    steps: [...openHandoff(lead.title), (ui) => ui.hoverStatusMark(ui.t("dialog.handoff.movesBranchesFailed.mark"))],
   },
   {
-    id: "dialog-hand-off-no-agent",
+    id: "dialog-handoff-no-agent",
     group: GROUP,
     category: "exceptional",
     title: "Hand off dialog open as the other agents go missing",
@@ -231,12 +231,12 @@ export const handoffScenarios: Scenario[] = [
     sessionReleaseError: {
       code: "session_changing",
       params: { session: lead.id },
-      message: `\`${lead.id}\` is being started, resumed, handed off, switched to another account, having its branches handed over or having its owner changed, so its owner cannot change now: look again once that is done`,
+      message: `\`${lead.id}\` is being started, resumed, handed off, switched to another account, having its branches transferred or having its owner changed, so its owner cannot change now: look again once that is done`,
     },
     steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
   },
   {
-    id: "dialog-hand-off-pending",
+    id: "dialog-handoff-pending",
     group: GROUP,
     category: "normal",
     title: "Hand off request running",
@@ -246,7 +246,7 @@ export const handoffScenarios: Scenario[] = [
     steps: confirmHandoff(hub.title),
   },
   {
-    id: "dialog-hand-off-session-working",
+    id: "dialog-handoff-session-working",
     group: GROUP,
     category: "exceptional",
     title: "Hand off refused, the session is mid-turn",
@@ -258,7 +258,7 @@ export const handoffScenarios: Scenario[] = [
     steps: confirmHandoff(bare.title),
   },
   {
-    id: "dialog-hand-off-archive-failed",
+    id: "dialog-handoff-archive-failed",
     group: GROUP,
     category: "exceptional",
     title: "Hand off done, archiving the original failed on the application's data",

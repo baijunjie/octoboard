@@ -132,8 +132,8 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | Label | Build | Notes |
 |---|---|---|
 | E1 | An unmerged comparison build, not on main | First round. Login in its first form: a plain `role="status"` region, no `StatusAnnouncer`. |
-| E2 | An unmerged local build: an earlier main + the Settings opener fix + an earlier login fix | The login success text is written by a caller timer 1500 ms after success, with no window-attention gate and no focus hand-off. |
-| E3 | An unmerged local build: an earlier main + the Settings opener fix + an intermediate login fix | Adds a focus hand-off after a successful close only (not after a cancel); no window-attention gate. |
+| E2 | An unmerged local build: an earlier main + the Settings opener fix + an earlier login fix | The login success text is written by a caller timer 1500 ms after success, with no window-attention gate and no focus handoff. |
+| E3 | An unmerged local build: an earlier main + the Settings opener fix + an intermediate login fix | Adds a focus handoff after a successful close only (not after a cancel); no window-attention gate. |
 | E4 | An unmerged local build whose `packages/` and `apps/` tree equals main `429be4556` (fixes `39c1ec3f3` and `429be4556`) | The final product state of the login mechanisms; the same installed build was used for the later recordings of the other status callers (SA-G to SA-K, PLAIN-2, KNW-6 to KNW-8). |
 | E5 | Branch `fix/voiceover-recheck-defects` as merged, last fix `42d775745`: main `29d9d1505` + `42b9984f8` (diff-expansion focus) + `e1191fc7c` (Permissions announcer) + `42d775745` (Advanced per-opening announcer) | Heard on the branch build itself, for the cases SA-L, SA-M and FOCUS-2 and for the status in SA-K. |
 | E6 | Local main `cd10ab4e7020142bbabec5b052c447f5bf27c368` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo20261025h7gwl`; real daemon and throwaway files/Git repository. NAME-5, SA-N, FOCUS-3 and ALERT-1; no real agent or quota. |
@@ -250,9 +250,9 @@ mapping.
 | [SA-K Loading written, then the pressed control is removed](#sa-k-loading-written-then-the-pressed-control-is-removed) | `StatusAnnouncer` in a diff view | Pass for the status; focus relation recorded per build (E4 fell, E5 restored) |
 | [SA-L Section status written after an attended wait, tab focus retained](#sa-l-section-status-written-after-an-attended-wait-tab-focus-retained) | section `StatusAnnouncer` fed by a caller wait | Pass; direct opening untested |
 | [SA-M Region mounted with each opening of a disclosure](#sa-m-region-mounted-with-each-opening-of-a-disclosure) | `StatusAnnouncer` mounted per opening | Pass |
-| [SA-N Viewer notice after paint, then an empty status](#sa-n-viewer-notice-after-paint-then-an-empty-status) | `FileNotice` through `StatusAnnouncer`, then clear; first-paint large-file notice without an announcement region | Pass for the recorded branches and focus hand-off; native live attributes not sampled |
-| [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus hand-off | Pass: current table and account details; transient web-area phrase still observed (E10) |
-| [FOCUS-2 Focus after an expansion takes the pressed control away](#focus-2-focus-after-an-expansion-takes-the-pressed-control-away) | caller-told focus restore and code-frame hand-off | Pass |
+| [SA-N Viewer notice after paint, then an empty status](#sa-n-viewer-notice-after-paint-then-an-empty-status) | `FileNotice` through `StatusAnnouncer`, then clear; first-paint large-file notice without an announcement region | Pass for the recorded branches and focus handoff; native live attributes not sampled |
+| [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus handoff | Pass: current table and account details; transient web-area phrase still observed (E10) |
+| [FOCUS-2 Focus after an expansion takes the pressed control away](#focus-2-focus-after-an-expansion-takes-the-pressed-control-away) | caller-told focus restore and code-frame handoff | Pass |
 | [FOCUS-3 Status mark and quota popover focus and reading paths](#focus-3-status-mark-and-quota-popover-focus-and-reading-paths) | shared hover/press popover, focus and item chooser | Pass for quota Enter/Escape focus paths, the mark's focus return on Escape and item-chooser reachability; the bare-mark Enter naming failed, see KNW-9 and FOCUS-4 |
 | [FOCUS-4 Bare mark dialog named by its tone](#focus-4-bare-mark-dialog-named-by-its-tone) | tone-named bare mark dialog; sentence remains the trigger name | Pass for Enter speech without the repeated sentence and Escape focus return, Error and Note |
 | [PLAIN-1 Text change in a mounted plain status](#plain-1-text-change-in-a-mounted-plain-status) | `role="status"` replaced in place inside a modal | Pass (first build) |
@@ -765,7 +765,7 @@ mapping.
   "Evidence and its limits".
 - **Environment.** E6, packaged app with real daemon and throwaway files.
 - **Date.** 2026-10-25.
-- **Reuse scope.** Covers the later `FileNotice` SVG fallback with this focus hand-off relation, its clear and
+- **Reuse scope.** Covers the later `FileNotice` SVG fallback with this focus handoff relation, its clear and
   subsequent reading path. The first-paint large-file notice, which has no announcement region (`CodeSurface` passes no
   `speak`), stayed silent; that is context, not a covered write. SA-J remains the retained-focus case; it does not by
   itself establish this clear. Other image failures, patch fallbacks and notice replacements were not heard.
@@ -785,7 +785,7 @@ mapping.
   the daemon has answered and the button is available again, otherwise to the configured fallback. The move waits one
   animation frame past React Aria's restore (two after the unmount), acts only when focus is on `<body>` or inside the
   original button, sets the keyboard modality, and leaves a restore that landed correctly alone. The current menu path
-  supplies an explicit hand-off to the row's Actions button once the dialog has gone (`AgentAccountsSection.tsx`,
+  supplies an explicit handoff to the row's Actions button once the dialog has gone (`AgentAccountsSection.tsx`,
   `handFocusOnceClosed` with `rowActionsTrigger`).
 - **Earlier ARIA wiring as rendered (E4).** The row's Actions control is a pop-up button named `Actions for ⁨VoiceOver
   fixture⁩ (Grok Build)` with has-popup set; the direct button is a button named "Log in". Final screenshots show the
@@ -1408,10 +1408,10 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
   and animation frames is source-derived.
 - **Replaced by.** SA-D, which waits for attention (E4).
 
-#### KNW-5 Cancel with a hand-off that only handles success
+#### KNW-5 Cancel with a handoff that only handles success
 
 - **What and where.** E3: the dialog opened from the direct Log in button was cancelled while starting. The focus
-  hand-off of that build covered a successful close only.
+  handoff of that build covered a successful close only.
 - **Result.** Focus fell to the web area and stayed there for 7.5 s or more in two runs, one with each of two fixture
   variants, although the original Log in button was present and enabled in the sample taken afterwards. Only `Octoboard
   网页内容` was spoken; the button's phrase never was. The suspected cause, a button disabled while the login runs that

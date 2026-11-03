@@ -115,7 +115,7 @@ impl Store {
     /// responsible session is `from`, as of `since` (milliseconds), and says which moved and which
     /// did not: a branch that has no row, or whose responsible session is another by now, stays as
     /// it is. One transaction for the lot, each branch compared and set in one statement, so of two
-    /// handovers racing for a branch only one lands.
+    /// transfers racing for a branch only one lands.
     pub fn move_branch_responsibility(
         &self,
         repository: &str,
@@ -220,11 +220,11 @@ mod tests {
         assert_eq!(store.branch_origins("/r/.git").unwrap(), [origin]);
     }
 
-    /// Each branch of a handover is compared and set on its own: the ones the expected session
+    /// Each branch of a transfer is compared and set on its own: the ones the expected session
     /// holds move, the rest are reported and stay.
     #[test]
-    fn a_handover_moves_only_the_branches_the_expected_session_holds() {
-        let path = temp_db("branch-handover");
+    fn a_transfer_moves_only_the_branches_the_expected_session_holds() {
+        let path = temp_db("branch-transfer");
         let store = Store::open(&path).expect("store");
         let origin = |branch: &str, session: &str| BranchOrigin {
             repository: "/r/.git".to_string(),

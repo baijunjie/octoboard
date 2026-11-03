@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use super::{handover, is_same_branch, repo_key};
+use super::{is_same_branch, repo_key, transfer};
 use crate::git::repo_files::repository_of;
 use crate::state::AppState;
 use crate::store::BranchOrigin;
@@ -22,7 +22,7 @@ pub struct Fork {
 
 fn fork_of(row: BranchOrigin) -> (String, Fork) {
     let fork = Fork {
-        target_branch: row.target_branch.as_deref().map(handover::branch_name),
+        target_branch: row.target_branch.as_deref().map(transfer::branch_name),
         fork_point: row.birth_commit,
     };
     (row.branch, fork)
@@ -94,7 +94,7 @@ pub fn targets_in(state: &AppState, repo: &Path, branches: &[String]) -> HashMap
             .filter_map(|(branch, fork)| Some((branch, fork.target_branch?)))
             .collect(),
         Err(err) => {
-            tracing::warn!(%err, "reading the target branches of branches handed over failed");
+            tracing::warn!(%err, "reading the target branches of branches transferred failed");
             HashMap::new()
         }
     }

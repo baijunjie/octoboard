@@ -10,7 +10,7 @@ import { focusTopBar } from "./regionFocus";
  * `:disabled` (WebKit can leave such a control the active element, and its blur is not the user's
  * leaving, so it stays remembered). A blur of the whole window (the browser's own prompt taking
  * focus) leaves the element the active element and keeps it remembered. Focus moved by script
- * while the window is unfocused fires nothing either, so the hand-off also needs focus to have
+ * while the window is unfocused fires nothing either, so the handoff also needs focus to have
  * actually fallen to `<body>` (or to be on the disabled element). It then goes where `restore`
  * puts it — the terminal, say, or a control beside the one that went — or to the top bar's first
  * control when that leaves it on `<body>`. The user did not ask for the move, so the modality is

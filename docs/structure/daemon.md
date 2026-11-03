@@ -82,7 +82,7 @@ and records tests replay.
 - `src/handoff/` — the handoff package built for a session another takes over: build, render and file. The
   `handoff_session` operation is `coordinator/handoff.rs`.
 - `src/branch_origin/` — which session is responsible for a git branch: the record (`record.rs`, `target.rs`), the
-  reconcile against the repository's branches (`reconcile.rs`), forks (`forks.rs`), handover (`handover.rs`), the
+  reconcile against the repository's branches (`reconcile.rs`), forks (`forks.rs`), transfer (`transfer.rs`), the
   listing, and `gate.rs` with `KeyedGates`, the keyed mutex branch cleanup shares.
 - `src/branch_cleanup/` — cleaning up branches and worktrees bound to archived or deleted sessions.
 - `src/removal_safety/` — which folder may be moved to the Trash or which linked worktree removed without taking away
@@ -194,7 +194,7 @@ and records tests replay.
 - `src/mcp/` — the Octoboard MCP server a session drives Octoboard with, over the catalogue in `src/session_tools/`:
   - `dispatch.rs` checks and runs one call through the same coordinator and reporting functions the control socket uses.
   - `tools/` has one file per tool or small group of related tools, named for it — for example `sessions.rs`,
-    `messaging.rs`, `archive.rs`, `bindings.rs`, `handoff.rs`, `handover/` (branches and process trees), `settings.rs`,
+    `messaging.rs`, `archive.rs`, `bindings.rs`, `handoff.rs`, `transfer/` (branches and process trees), `settings.rs`,
     `pages.rs`, `account_switch.rs`, `session_model.rs`, `history.rs`, `agents.rs` and `models.rs`, and the reads
     (`reads.rs`, `project_changes.rs`, `project_branches.rs`, `session_branches.rs`). Two files are shared wording and
     helpers rather than tools: `relaunch.rs` (what the tools that relaunch a session tell the caller) and
@@ -306,7 +306,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`) |
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |
 | Word what became of a delivery | `Delivery::note` (`src/messaging/delivery.rs`) |
-| Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `parent_changed_notice`, `new_owner_notice`, `handed_over_to_you`, `handed_over_to_owner`, `first_report_on_bind`, `role_after_owner_change`, `duties_under_new_parent`) |
+| Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `parent_changed_notice`, `new_owner_notice`, `transferred_to_you`, `transferred_to_owner`, `first_report_on_bind`, `role_after_owner_change`, `duties_under_new_parent`) |
 | Name a session or put a title on one line in a model-facing message | `src/messaging/naming.rs` (`label`, `named_session`, `one_line`, `quote`) |
 | Which agent and account a session started for another opens with; the accounts of an agent as a listing shows them; why one cannot open a session | `src/accounts/choice/` (`started.rs`: `choice_for_started_session`; `automatic.rs`: `candidate_accounts`; `standing.rs`: `cannot_open`) |
 | Refuse an operation on a locked or an archived session | `state::refusals::ensure_unlocked`, `refuse_if_archived` (`src/state/refusals.rs`) |
@@ -315,7 +315,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Word what a session taking over another's work is told | `TAKEOVER_OPENING` and `takeover_prompt` (`src/messaging/texts.rs`); the handoff package itself is `src/handoff/` |
 | Archive a session whose work is finished (an owner archiving itself, a `done` report) | `coordinator::lifecycle::archive_finished` with its `Finished` rule (`src/coordinator/lifecycle/finished.rs`) |
 | Strip escape sequences from terminal output | `terminal::plain_text::strip_escapes` |
-| Share the steps of the two handover tools | `Parties` and friends in `src/mcp/tools/handover/mod.rs` |
+| Share the steps of the two transfer tools | `Parties` and friends in `src/mcp/tools/transfer/mod.rs` |
 | Change a session's model and effort; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |

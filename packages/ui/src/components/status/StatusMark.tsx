@@ -39,7 +39,7 @@ interface StatusMarkProps {
   /** The mark stands in a collection's section header, which the collection's own walk does not reach. */
   inHeader?: boolean;
   /** Tells this mark and its popover (which floats outside the mark's own element) from every other mark: both
-   * carry it as `data-status-mark-id`, for whatever must act on this mark alone (a focus hand-off). */
+   * carry it as `data-status-mark-id`, for whatever must act on this mark alone (a focus handoff). */
   markId?: string;
   /** The popover's last line, the recovery button (Try again), given a function that closes the popover. */
   actions?: (close: () => void) => React.ReactNode;

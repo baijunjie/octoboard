@@ -74,9 +74,9 @@ fn a_session_may_choose_another_agent_by_its_tags_but_an_account_only_when_asked
 }
 
 /// What a session is offered follows from its role and whether it is bound: only a session that
-/// can own sessions starts, hands over or drives them, only an unbound one binds itself, only a
-/// project session can report, every session shares information and asks for a session with no
-/// owner, and every read-only tool but `get_project` is offered to all three alike.
+/// can own sessions starts, transfers, hands off or drives them, only an unbound one binds itself,
+/// only a project session can report, every session shares information and asks for a session with
+/// no owner, and every read-only tool but `get_project` is offered to all three alike.
 #[test]
 fn the_tools_offered_follow_from_role_and_binding() {
     let names = |role, worker| -> Vec<&'static str> {

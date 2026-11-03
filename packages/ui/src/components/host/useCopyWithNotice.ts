@@ -7,7 +7,7 @@ import { copyText } from "./copyText";
 
 /** What a copy says of its outcome. */
 export interface CopyNotice {
-  /** The toast that says the text was copied; none when the caller shows that itself (`onCopied`). */
+  /** The notice that says the text was copied; none when the caller shows that itself (`onCopied`). */
   copied?: string;
   /** What the error alert says when the copy fails. */
   failed: string;
@@ -17,7 +17,7 @@ export interface CopyNotice {
   anchor?: Element | null;
 }
 
-/** Puts text on the clipboard and says how it went: a toast when it is copied (`copied`), or the error alert saying
+/** Puts text on the clipboard and says how it went: a notice when it is copied (`copied`), or the error alert saying
  * `failed` when it could not be. The one place a copy raises that alert. */
 export function useCopyWithNotice(): (text: string, notice: CopyNotice) => void {
   const t = useT();

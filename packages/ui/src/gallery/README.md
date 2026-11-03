@@ -27,8 +27,8 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   clipboard, a terminal behaviour, and so on, each documented where it is declared), `steps` that reach component-local
   state the way a user does, and `liveChanges`.
 - The frame page (`gallery-frame.html`, run by `frame.tsx`) sets `data-gallery-ready` on its `<html>` once its steps have
-  run, its own toasts have been raised and finite animations have ended; the shell (`gallery.html`, `shell.tsx`) only
-  reads it from its iframe and never sets it, so automation waits on it by opening the frame URL directly, and
+  run, its own notifications have been raised and finite animations have ended; the shell (`gallery.html`, `shell.tsx`)
+  only reads it from its iframe and never sets it, so automation waits on it by opening the frame URL directly, and
   captures only after it. A failure of the gallery's own machinery (a step that threw, a fixture that cannot be answered
   as the real daemon would, an exit transition that never ends) is painted over the page as a `[data-gallery-failure]` overlay
   (`packages/ui/src/fixtures/banner.ts`); check a capture for it.

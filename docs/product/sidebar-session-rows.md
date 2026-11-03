@@ -58,7 +58,7 @@ A session row's action menu offers:
   full ID exactly to the clipboard. Available for project and console sessions wherever their action menus are offered,
   including right-click menus, focus mode and nested sessions. An archived session's menu offers it after Reopen. Where
   the platform has no clipboard, or it refuses, the ID is copied through the browser's selection copy instead. Success
-  raises a notice toast; a copy neither way allows raises an error alert.
+  raises a notice; a copy neither way allows raises an error alert.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.

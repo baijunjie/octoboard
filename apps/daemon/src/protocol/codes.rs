@@ -232,9 +232,9 @@ pub mod error_code {
     /// A `release_session` found the session's binding changed between checking it and writing the
     /// release, so nothing was released. `params` names the `session`.
     pub const SESSION_BINDING_CHANGED: Code = Code("session_binding_changed");
-    /// A change of a session's owner (a bind, a handover to another owner, a release) is refused
+    /// A change of a session's owner (a bind, a transfer to another owner, a release) is refused
     /// because the session itself is being started, resumed, handed off, switched to another
-    /// account, having its branches handed over or having its owner changed. Nothing was
+    /// account, having its branches transferred or having its owner changed. Nothing was
     /// changed. `params` names the `session`.
     pub const SESSION_CHANGING: Code = Code("session_changing");
     /// A change of a session's owner is refused because the owner it gains or loses the session
@@ -255,7 +255,7 @@ pub mod error_code {
     pub const SESSION_HAS_RUNNING_SESSIONS: Code = Code("session_has_running_sessions");
     pub const SESSION_WAITING_FOR_USER: Code = Code("session_waiting_for_user");
     /// An `interrupt_session` for a session that is being switched to another account, handed
-    /// off, having its branches handed over, given another owner, or restarted for a change of its
+    /// off, having its branches transferred, given another owner, or restarted for a change of its
     /// account's sharing. Nothing was sent. `params` names the `session`.
     pub const SESSION_BUSY: Code = Code("session_busy");
     /// A message the user sent is refused because the session's agent is showing, or may still be
@@ -382,7 +382,7 @@ pub mod error_code {
     /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
     /// must not do it as a side effect.
     pub const SESSION_ARCHIVED: Code = Code("session_archived");
-    /// A handoff, or a handover of a session's branches, was asked for a session in the middle of a
+    /// A handoff, or a transfer of a session's branches, was asked for a session in the middle of a
     /// turn, or still starting. `params` names the `session`.
     pub const SESSION_WORKING: Code = Code("session_working");
     /// A handoff was asked to the agent the session already runs on. `params` names the `session`

@@ -18,12 +18,13 @@ pub(super) const REQUEST_SESSION: ToolDef = ToolDef {
                   answer, for several minutes at most — unless the user has chosen to have such \
                   requests approved automatically, in which case the result says so and the call \
                   does not wait. On approval Octoboard starts it with your brief as its opening \
-                  prompt; follow the user's direction on whether your own work ends after the \
-                  handover. Use this for a peer to continue your current work in the next session. \
-                  If the user only wants handover notes and an end, leave the notes and end \
-                  without starting a session. If their intent is unclear, ask before acting. A \
-                  refusal, or no answer in time, comes back as an error and changes nothing. When \
-                  handing over work on a branch you are responsible for, pass it in `branches`: \
+                  prompt; follow the user's direction on whether your own work ends once the \
+                  work is passed on. Use this for a peer to continue your current work in the \
+                  next session. If the user only wants notes for the next session and an end, \
+                  leave the notes and end without starting a session. If their intent is \
+                  unclear, ask before acting. A refusal, or no answer in time, comes back as an \
+                  error and changes nothing. When \
+                  transferring work on a branch you are responsible for, pass it in `branches`: \
                   the user is shown them, and on approval the new session becomes responsible for \
                   them in your place. Leave `branches` out when you are only working on whatever \
                   branch is checked out. `title` names the session in the user's language. In your \
@@ -57,7 +58,7 @@ pub(super) const REQUEST_RESUME_SESSION: ToolDef = ToolDef {
                   agent's own record of it is on this machine, a new session that is nobody's is \
                   opened on it, on the agent and account that hold the record, and it reports to \
                   the user. A conversation held by a session of another project, or by a console \
-                  session, is refused. Where you have `resume_session`, it reopens only sessions \
+                  session, is refused. Where you have `resume_session`, it resumes only sessions \
                   that are yours and needs no approval; this can resume any session. No text can \
                   be passed along, so afterwards `inform_session` tells the session what you need. \
                   The user is asked first, and the call waits for their answer, for several \
@@ -117,11 +118,11 @@ pub(super) fn request_session_schema() -> Value {
     schema["properties"]["branches"] = json!({
         "type": "array",
         "items": { "type": "string" },
-        "description": "For `project`: local branches of the project's repository to hand over \
+        "description": "For `project`: local branches of the project's repository to transfer \
                         to the new session, by name. Each must be a branch you are responsible \
-                        for: one you created or were handed. Pass them when you are handing over \
+                        for: one you created or were handed. Pass them when you are transferring \
                         the work on those branches; leave this out when you are only working on \
-                        the checked-out branch, or when there is nothing to hand over.",
+                        the checked-out branch, or when there is nothing to transfer.",
     });
     schema["required"] = json!(["kind", "brief"]);
     schema

@@ -8,30 +8,30 @@ import type { Daemon } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 
-const NO_TOASTS = { notice: () => {}, error: () => {} };
+const NO_NOTIFICATIONS = { notice: () => {}, error: () => {} };
 
-/** The platform and daemon a `FileViewer` renders inside. `toasts` is where the daemon's toasts go, and the error
- * alerts too. */
+/** The platform and daemon a `FileViewer` renders inside. `notifications` is where the daemon's notifications go, and
+ * the error alerts too. */
 export function ViewerHost({
   clipboard,
   links,
-  toasts = NO_TOASTS,
+  notifications = NO_NOTIFICATIONS,
   request,
   children,
 }: {
   clipboard?: PlatformAdapter["clipboard"];
   links?: PlatformAdapter["links"];
-  toasts?: { notice: (message: string) => void; error: (message: string) => void };
+  notifications?: { notice: (message: string) => void; error: (message: string) => void };
   request?: RequestHandler;
   children: React.ReactNode;
 }): React.ReactElement {
   const daemon = React.useMemo<Daemon>(
-    () => testDaemon({ request, showNotice: toasts.notice }),
-    [toasts.notice, request],
+    () => testDaemon({ request, showNotice: notifications.notice }),
+    [notifications.notice, request],
   );
   // A layout effect, so it is installed before the children's passive effects (where an alert raised as they mount
-  // would be missed otherwise) and is replaced when `toasts.error` changes.
-  React.useLayoutEffect(() => forwardAlerts(toasts.error), [toasts.error]);
+  // would be missed otherwise) and is replaced when `notifications.error` changes.
+  React.useLayoutEffect(() => forwardAlerts(notifications.error), [notifications.error]);
   return <TestHost daemon={daemon} platform={{ kind: "browser", clipboard, links }}>{children}</TestHost>;
 }
 

@@ -3,7 +3,7 @@ import React, { useId, useRef, useState } from "react";
 
 import { defaultAccountName } from "../../agents/agents";
 import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../../components/alerts/SharingFailure";
-import { focusHandOffTarget, HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
+import { focusHandoffTarget, HandoffOnUnmount } from "../../components/focus/HandoffOnUnmount";
 import { HelpTip } from "../../components/hint/HelpTip";
 import { InlineReference } from "../../i18n/InlineReference";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
@@ -253,10 +253,10 @@ function SharingIncomplete({ id, failure, title, guidance, idle, switchElement }
       {/* The mark goes with the warning; focus it or its popover held goes to the switch. Moved during the removal, as
           this component goes with the mark and has no layout effect left to run, and the accounts section's own
           refocus (`useSectionRefocus`) would take focus from `<body>` in the same commit's effects. */}
-      <HandOffOnUnmount
+      <HandoffOnUnmount
         from={`[data-status-mark-id="${markId}"]`}
         ring={false}
-        to={() => focusHandOffTarget(switchElement(), { duringRemoval: true })}
+        to={() => focusHandoffTarget(switchElement(), { duringRemoval: true })}
       />
       <StatusMark tone="warning" markId={markId} label={t("settings.accounts.sharing.unfinishedMark")}>
         <p>{title}</p>

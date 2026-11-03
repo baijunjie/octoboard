@@ -9,7 +9,7 @@ import { OpenShellTerminal } from "./project-browser/RowActions";
 import { ConnectionBanner } from "./shell/ConnectionBanner";
 import { IncompatibleDaemonScreen } from "./shell/IncompatibleDaemonScreen";
 import { ContentPanel } from "./shell/ContentPanel";
-import { HandOffOnUnmount } from "./components/focus/HandOffOnUnmount";
+import { HandoffOnUnmount } from "./components/focus/HandoffOnUnmount";
 import { PaneResizeHandle } from "./layout/PaneResizeHandle";
 import { refocusIfLost } from "./components/focus/refocusIfLost";
 import { focusNewConsole, Rail } from "./shell/Rail";
@@ -482,7 +482,7 @@ export function App(): React.ReactElement {
           </div>
         </ContentPanel>
         {/* Mounted only while closed, unlike the main screen's always-mounted banner, so its focus
-            hand-off does not run as it goes; nothing is lost, as this screen has no terminal and an
+            handoff does not run as it goes; nothing is lost, as this screen has no terminal and an
             empty bar to hand focus to. */}
         {connectionState === "closed" && (
           <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
@@ -569,7 +569,7 @@ export function App(): React.ReactElement {
               {/* Before anything else here, so focus is handed to the rail while the sidebar, the
                   terminal and the aside it may be in are still in the document: the last console
                   going (here or in another window) removes all of them at once. */}
-              <HandOffOnUnmount
+              <HandoffOnUnmount
                 from="[data-region=sidebar], [data-region=archive], [data-region=terminal], [data-region=aside], [data-region^=panel-]"
                 to={focusNewConsole}
               />
@@ -722,7 +722,7 @@ export function App(): React.ReactElement {
               {asideOwner && asideDocked && (
                 <>
                   {/* First among what goes away with the pane, so focus on its handle is still found. */}
-                  <HandOffOnUnmount from="[role=separator][data-pane=aside]" to={focusTerminal} />
+                  <HandoffOnUnmount from="[role=separator][data-pane=aside]" to={focusTerminal} />
                   <PaneResizeHandle side="aside" paneWidth={asideWidth} region={panelRegion(stackedPanels[0] as PanelKind)} />
                 </>
               )}

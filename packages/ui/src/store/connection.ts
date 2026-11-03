@@ -23,7 +23,7 @@ export interface Daemon {
    * remain local and execution errors to require acknowledgement. */
   request: RequestSender;
   /** Confirms something the user just did, which has no inline place to say so (a path copied);
-   * about no session, so the toast is the message alone. */
+   * about no session, so the notice is the message alone. */
   showNotice: (message: string, content?: ReactNode) => void;
   /** Calls `listener` for every notification to show from now on: the daemon's errors and notices that
    * belong to no request, and what `showNotice` is given. Returns the unsubscribe. */
