@@ -87,7 +87,8 @@ For a git association:
   reach the clone, nor the form's check of a git URL. Capturing that environment is bounded the same way a session
   launch's is, and a capture that does not complete refuses the clone (see "The launch environment" in
   `docs/product/launching-agents.md`).
-- A clone can take minutes; other state updates keep flowing while it runs.
+- A clone can take minutes; other state updates keep flowing while it runs. A clone still running after **30
+  minutes** is stopped and fails, and the directory it had begun is removed, so the same clone can be requested again.
 
 The form's collapsed **Advanced** section (see "The project's account, model and reasoning effort" below) also holds,
 under its **Git workflow** tab, the new project's own git workflow settings, each following the application-wide value

@@ -87,7 +87,13 @@ pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
             format!("`git clone` failed: {stderr}"),
             &[("detail", &stderr)],
         )),
-        Err(GitError::Stopped(stopped)) => Err(stopped.into_error().context("running `git clone`")),
+        Err(GitError::Stopped(stopped)) => {
+            // A clone stopped at its deadline is killed and cannot clean up after itself; the
+            // half-written directory would then refuse every retry as already existing. `target`
+            // did not exist before this clone, so what is there is only what the clone wrote.
+            std::fs::remove_dir_all(&target).ok();
+            Err(stopped.into_error().context("running `git clone`"))
+        }
     }
 }
 

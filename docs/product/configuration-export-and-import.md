@@ -455,6 +455,7 @@ what appeared in the window.
 ### How long an import takes
 
 An import that clones can run long. The clones are made one at a time, in the document's order, and each is cut off
-after **30 minutes**. There is no way to cancel an import while it runs, and it answers only once the last clone has
+after **30 minutes**, failing its project and leaving no directory behind (see "Associating a project" in
+`docs/product/projects.md`). There is no way to cancel an import while it runs, and it answers only once the last clone has
 finished — which can be as long as all of them together. Everything created before that point is already in the
 window.
