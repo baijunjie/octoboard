@@ -195,7 +195,8 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
     } else if ("items" in entry || "panel" in entry) {
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>
-          <Dropdown.Item id={itemId(index)} textValue={entry.label} data-marquee-scope>
+          {/* HeroUI gives submenu triggers ps-2, while Dropdown items use px-2.5. Keep their leading edges aligned. */}
+          <Dropdown.Item id={itemId(index)} textValue={entry.label} data-marquee-scope className="ps-2.5!">
             <ItemIcon icon={entry.icon} className={entry.iconClassName} />
             <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
               <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>

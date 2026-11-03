@@ -72,10 +72,11 @@ export function consoleMenu(
 ): ActionMenuEntry[] {
   return [
     { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
-    { label: t("sidebar.console.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
     archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: console.id }),
     ),
+    "separator",
+    { label: t("sidebar.console.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
     "separator",
     { label: t("sidebar.console.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-console", console }), destructive: true },
   ];

@@ -211,12 +211,11 @@ export const archiveScenarios: Scenario[] = [
     id: "archive-console-menu",
     group: GROUP,
     category: "normal",
-    title: "Console menu, archived console sessions",
-    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Console settings, View archive and Delete console below a separator, with no Export configuration. The submenu lists all eight archived console sessions (it shows ten at most), newest first, with their last active task titles and a localized relative archive time at the end of each row, then View all.",
+    title: "Console menu, grouped actions",
+    description: "The console's menu (the same one opens from its avatar in the rail) groups Add project and View archive first, then Console settings, then Delete console, with separators between the groups. Open View archive to see eight archived console sessions, newest first, with their last active task titles and a localized relative archive time at the end of each row, then View all.",
     state: archiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
-      (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
     ],
   },
   {

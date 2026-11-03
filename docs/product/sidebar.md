@@ -24,8 +24,8 @@ own menu and the archive view.
 The top of the sidebar names the console being shown, followed by a **+** button, **New console session**, then its
 action menu. The **+** opens the session dialog before launching anything (see "The session dialog" in
 `docs/product/opening-sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
-"Opening a session with defaults" in `docs/product/opening-sessions.md`). The menu offers **Add project**, **Console
-settings**, **View archive** and, after a separator, **Delete console** (see "Associating a project" in
+"Opening a session with defaults" in `docs/product/opening-sessions.md`). The menu offers **Add project** and **View
+archive**, then a separator, **Console settings**, another separator and **Delete console** (see "Associating a project" in
 `docs/product/projects.md`, and "Editing a console" and "Deleting a console" in `docs/product/consoles.md`; deleting
 asks for a typed confirmation first). **View archive** is a submenu of the console's archive preview (see "The archive
 view" in `docs/product/archive-view.md` for what it lists and how each item looks); choosing one selects it (see
