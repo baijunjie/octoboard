@@ -322,7 +322,7 @@ export function PanelStack({
               <PanelFrameProvider
                 value={{
                   // Not while only floating in: that card is a hover's preview, not part of the layout.
-                  compact: columns.length > 1 && !covering,
+                  compact: (columns.length > 1 || containerSize.width < 320) && !covering,
                   canMaximize: entry.maximizable === true && peek === undefined && !floating,
                   maximized: kind === maximized,
                   onToggleMaximized: () => toggleMaximize(kind as PanelKind),

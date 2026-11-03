@@ -383,19 +383,21 @@ Nothing enforces a minimum when the UI is opened in a browser, so it can also re
 | Pane | Default | Range the user can choose |
 |---|---|---|
 | Sidebar | 280 px | 280–480 px |
-| Docked right pane | 420 px | 320–720 px; at least 546 px with three or four cards |
+| Docked right pane | 420 px | 276–720 px; at least 546 px with three or four cards |
 | Terminal | everything left over | never below 520 px (about 53 columns) |
 
 The right pane's width includes the gaps around its cards (see "The panel cards" in
 `docs/product/right-pane-panels.md`). The sidebar and the right pane are drawn at the width the user chose (see
-"Resizing the sidebar and the right pane" below), subject to the effective minimums below. Extra width a wider window
-frees goes to the terminal. The right pane has one width, whoever owns it.
+"Resizing the sidebar and the right pane" below), subject to the effective minimums below and automatic adjustments when
+opening or closing panels changes the number of columns (see "Opening and closing panels" in
+`docs/product/right-pane-panels.md`). Extra width a wider window frees goes to the terminal. The right pane has one
+width, whoever owns it.
 
 **The terminal always keeps its 520 px.** Where the window cannot afford every pane its chosen width, the right pane
 gives up width first, down to its effective minimum, and only then the sidebar, down to 280 px. Three or four cards
-require a 546 px right pane: two 260 px columns, their 10 px gap and 8 px at each outer edge. Opening a third card
-raises the rendered width to at least that minimum; returning to one or two cards restores the chosen width. Neither
-adjustment rewrites the width preference. When the window widens again, each pane gets its chosen width back.
+require a 546 px right pane: two 260 px columns, their 10 px gap and 8 px at each outer edge. These bounds do not
+rewrite the width preference. When the window widens again, each pane gets its chosen width back, including any
+current automatic column-width adjustment in the right pane.
 
 A sidebar the user has hidden takes no width at all once it is hidden, and neither does one only floating in: its
 width goes to the terminal. While the sidebar's docked column is easing closed, it still takes the width it has
@@ -556,10 +558,11 @@ above).
 ## Pane widths below 1394 px
 
 From **594–1393 px**, neither side takes width from the terminal. Both float, one revealed side at a time,
-without changing the terminal's size. The right group uses the remembered total width within the floating bounds in
-"Resizing the sidebar and the right pane" above. Its minimum is **546 px with three or four cards**,
-**336 px with one or two cards including Terminal**, and **320 px otherwise**. These bounds do not rewrite the
-remembered width. The group retains its column-width and panel-height handles as well as its total-width handle.
+without changing the terminal's size. The right group uses the remembered total width and the automatic adjustments
+in "Opening and closing panels" in `docs/product/right-pane-panels.md`, within the floating bounds in "Resizing the
+sidebar and the right pane" above. Its minimum is **546 px with three or four cards**, and **276 px with one or two
+cards**: a 260 px column and two 8 px outer gaps. These bounds do not rewrite the remembered width. The group retains
+its column-width and panel-height handles as well as its total-width handle.
 
 **Below 594 px**, only one right-pane panel floats at a time, or the sidebar with its rail. The terminal has no
 minimum width and keeps the content panel's whole width, so the row never scrolls sideways. See "Below 594 px: one

@@ -7,8 +7,8 @@ session has no Terminal panel and no Terminal toggle, since a shell needs a proj
 the user opens it; its place among other panels follows "Opening and closing panels" in
 `docs/product/right-pane-panels.md`.
 
-Its header's title is "Terminal", visible at every width (see "A panel's header" in
-`docs/product/right-pane-panels.md`); for assistive technology the panel is a region named for the project's terminals.
+Its header's title is "Terminal" (see "A panel's header" in `docs/product/right-pane-panels.md`); for assistive
+technology the panel is a region named for the project's terminals.
 
 ## Starting a terminal
 

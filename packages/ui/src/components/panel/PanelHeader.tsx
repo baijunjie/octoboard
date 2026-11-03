@@ -12,7 +12,7 @@ import { useT } from "../../i18n/react";
 export interface PanelFrame {
   /** Whether the header offers maximize / restore: a maximizable kind, docked. */
   canMaximize: boolean;
-  /** Multiple docked columns share the pane width: header content gives way to frame controls. */
+  /** The card is narrow: header content gives way to frame controls. */
   compact?: boolean;
   maximized: boolean;
   onToggleMaximized: () => void;

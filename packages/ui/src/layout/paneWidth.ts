@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
 
+import { MIN_SINGLE_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
 import { createPersistedPreference } from "../preferences/persistedPreference";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
@@ -11,17 +12,13 @@ export type PaneSide = "sidebar" | "aside";
  * replacing the user's choices. Floating groups use the same chosen width as docked groups. */
 const PANES = {
   sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 280, default: 280, max: 480 },
-  aside: { key: PREFERENCE_KEYS.asideWidth, min: 320, default: 420, max: 720 },
+  aside: { key: PREFERENCE_KEYS.asideWidth, min: MIN_SINGLE_COLUMN_ASIDE_WIDTH, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
 /** The agent terminal's floor beside docked panes. Below the docked breakpoint both sides
  * float over it; a narrower floor still protects the agent view until mobile mode removes it. */
 const TERMINAL_FLOOR = 520;
 export const NARROW_TERMINAL_FLOOR = 398;
-
-/** The aside's floor below the `docked` breakpoint while the Terminal panel is in its column: a
- * narrow Shell header reserves room for a normal tab, its focus ring and every action. */
-export const NARROW_TERMINAL_PANEL_ASIDE_MIN = 336;
 
 /** The terminal's floor in a window narrower than the `docked` breakpoint or not. */
 function terminalFloor(narrow: boolean): number {
@@ -114,6 +111,8 @@ export interface PaneWidth {
    * while the pane is docked. This is the number anything aligned with the pane's edge (such as a
    * top-bar segment) should follow. */
   width: number;
+  /** The remembered width before responsive or panel-column allocation. */
+  preferredWidth: number;
   /** The pane's smallest width, for the handle's `aria-valuemin`. */
   min: number;
   /** The largest width the current viewport allows, for the handle's `aria-valuemax`. */
@@ -135,7 +134,7 @@ export interface PaneWidth {
  * allocation only, leaving the persisted choice available when the column's contents change.
  * State is shared module-wide, so every caller sees the same value.
  */
-export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolean, asideMin = PANES.aside.min): PaneWidth {
+export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolean, asideMin = PANES.aside.min, widthAdjustment = 0): PaneWidth {
   const chosen = chosenWidths[side].useValue();
   const chosenSidebar = chosenWidths.sidebar.useValue();
   // Subscribing to the answer rather than to the viewport itself is what keeps a window resize
@@ -146,7 +145,8 @@ export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolea
   const min = side === "aside" ? asideMin : PANES.sidebar.min;
   const preference = chosenWidths[side];
   return {
-    width: clamp(chosen ?? defaultWidth, min, max),
+    width: clamp((chosen ?? defaultWidth) + widthAdjustment, min, max),
+    preferredWidth: chosen ?? defaultWidth,
     min,
     max,
     setWidth: (width, options) => preference.set(Math.round(clamp(width, min, max)), options),

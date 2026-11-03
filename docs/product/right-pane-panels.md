@@ -64,17 +64,17 @@ other icon buttons lose room. Those buttons scroll horizontally within their own
 beyond them; Close panel stays outside that area. Scrolling and moving keyboard focus through the buttons reveal
 them, and the area's fades disappear while a button has keyboard focus so its focus ring stays visible.
 
-In the Terminal panel, the header keeps its title visible at every width, with only Maximize panel or Restore panel
-size when offered and Close panel on the same row. Its tabs, New terminal and the shown terminal's actions menu occupy
-a separate row below the header (see "Tabs" in `docs/product/terminal-panel.md`). In the report panel, with one
-column or while maximized, the pager gives way while the title and trailing buttons keep their width.
+In the Terminal panel, the header holds its title, with only Maximize panel or Restore panel size when offered and
+Close panel on the same row. Its tabs, New terminal and the shown terminal's actions menu occupy a separate row below
+the header (see "Tabs" in `docs/product/terminal-panel.md`). In the report panel, with one column at least 320 px wide
+or while maximized, the pager gives way while the title and trailing buttons keep their width.
 
-With two columns, the Files, Processes and Report cards' titles can shrink and fade so their headers fit the
-narrower cards. The report pager and the kind's own icon buttons scroll horizontally in separate areas when needed.
-Maximize panel / Restore panel size and Close panel keep their width outside those scrolling areas. Scrolling or
-moving keyboard focus reveals controls beyond the edges; the fades disappear while a control in that area has
-keyboard focus. The Files panel keeps the Files and Changes tabs fully visible as described above. The Terminal
-panel keeps its title visible and its tabs on their separate row.
+With two columns, or a single-column card area narrower than **320 px**, the cards' titles can shrink and fade so
+their headers fit the narrower cards. The report pager and the kind's own icon buttons scroll horizontally in
+separate areas when needed. Maximize panel / Restore panel size and Close panel keep their width outside those
+scrolling areas. Scrolling or moving keyboard focus reveals controls beyond the edges; the fades disappear while a
+control in that area has keyboard focus. The Files panel keeps the Files and Changes tabs fully visible as
+described above. The Terminal panel keeps its tabs on their separate row.
 
 Pressing a header button with the mouse leaves keyboard focus where it was.
 
@@ -110,8 +110,22 @@ The group layout depends on how many panels remain and the width available for t
   trailing column.
 
 With three or four cards the pane is at least **546 px** wide, including two 260 px columns, the 10 px column gap
-and two 8 px outer gaps. Opening a third card expands a narrower pane to this minimum. Returning to one or two cards
-restores the chosen width without replacing the width preference.
+and two 8 px outer gaps. When opening or closing panels adds or removes a column, the pane adjusts its total width to
+keep the surviving cards at their displayed column width, within the pane's current minimum and maximum (see "Resizing
+the sidebar and the right pane" in `docs/product/window-layout.md`). In particular, opening a third panel beside two
+stacked cards adds width for the new column; closing it removes that width. If two cards were already side by side,
+opening and closing the third keeps their two-column layout and the pane's total width. If cards from unequal-width
+columns combine into one column, the first surviving kind in the fixed order determines the width to keep.
+
+Closing one of two side-by-side cards keeps the surviving card's width; reopening the same card restores the pair's
+previous total width and column widths, within the current limits. Two stacked cards return stacked instead. The
+pair's width is no longer restored after manually resizing or resetting the pane, a change to the remembered width
+preference, closing all cards or changing the owner.
+
+These automatic adjustments do not replace the remembered total-width preference. Resizing the window can temporarily
+limit the adjusted width; widening it restores that width as space permits. Manually resizing or resetting the pane's
+total width replaces the automatic adjustment, and reloading uses the remembered preference. Maximizing or restoring a
+panel, or opening and closing panels while one is maximized, does not make these automatic column-width adjustments.
 
 The leading column is on the left in a left-to-right language and on the right in a right-to-left language. Panels
 alone in a column take its full height; a pair divides its column using its height weights. Resizing the pane can

@@ -128,3 +128,13 @@ it("tells a panel it appears in a pane already on screen only when the owner cha
   expect(container.querySelector("h2")!.textContent).toBe("Proj q");
   expect(flag()).toBe("true");
 });
+
+it.each([
+  { width: 260, compact: true },
+  { width: 404, compact: false },
+])("uses a compact header only for a narrow single column ($width)", ({ width, compact }) => {
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width } as DOMRect);
+  onTestFinished(() => { vi.restoreAllMocks(); });
+  const { container } = mount();
+  expect(container.querySelector("h2")!.classList.contains("overflow-hidden")).toBe(compact);
+});
