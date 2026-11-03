@@ -27,7 +27,7 @@ const MAX_QUEUED: usize = 256;
 const SETTLE_BOUND: Duration = Duration::from_secs(2);
 
 /// [`SETTLE_BOUND`], widened to `PATIENCE` under test so a test holding an event back is not
-/// raced by it, and lowered by [`SETTLE_OVERRIDE`] for the test proving it runs out.
+/// raced by it, and lowered by `SETTLE_OVERRIDE` for the test proving it runs out.
 fn settle_bound() -> Duration {
     #[cfg(test)]
     {

@@ -56,7 +56,7 @@ const SETTLE: Duration = Duration::from_secs(5);
 /// How long [`press`] waits for the turn to end: [`SETTLE`], except under test. A stand-in agent
 /// answers each key through a PTY, a `cat` and a polling thread, which under the suite's load can
 /// take longer than a real agent's hook, so tests wait up to `PATIENCE` (the wait returns as soon
-/// as the turn ends) and a test proving the window runs out lowers it with [`SETTLE_OVERRIDE`].
+/// as the turn ends) and a test proving the window runs out lowers it with `SETTLE_OVERRIDE`.
 /// Read on the caller's thread, before the press moves onto a blocking one.
 fn settle() -> Duration {
     #[cfg(test)]

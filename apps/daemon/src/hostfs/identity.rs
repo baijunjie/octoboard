@@ -63,7 +63,7 @@ impl DirectoryIdentities {
         self.contains_resolved(&Resolved::of(path))
     }
 
-    /// [`Self::contains`] for a path already looked at: reads nothing.
+    /// What `contains` answers, for a path already looked at: reads nothing.
     pub fn contains_resolved(&self, candidate: &Resolved) -> bool {
         self.lexical.contains(&lexically_normalise(&candidate.path))
             || candidate

@@ -19,7 +19,7 @@
 //! **The user can waive the dialog.** While the application setting for the kind of request is on
 //! (`auto_approve_session_requests` for `request_session`, `auto_approve_resume_requests` for
 //! `request_resume_session`, independent of each other), a request that passed every pre-check
-//! is approved at once, through the same [`carry_out`] an approval from the dialog takes: nothing
+//! is approved at once, through the same [`fn@carry_out`] an approval from the dialog takes: nothing
 //! is broadcast, no hand goes up, and the session is started or brought back, the branches handed
 //! over and the outcome told exactly as for an approval. That runs in a task of its own, so a call
 //! cancelled meanwhile does not interrupt it. The setting is read when the call is made, so a

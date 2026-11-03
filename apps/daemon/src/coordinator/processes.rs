@@ -67,7 +67,7 @@ thread_local! {
         const { std::cell::Cell::new(None) };
 }
 
-/// [`COUNT_WAIT`]; under test at least [`PATIENCE`](crate::test_support::PATIENCE), unless a
+/// [`COUNT_WAIT`]; under test at least `PATIENCE`, unless a
 /// test overrides it, so a computation slowed by the suite's load is still waited for.
 fn count_wait() -> Duration {
     #[cfg(test)]

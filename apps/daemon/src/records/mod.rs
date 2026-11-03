@@ -24,7 +24,7 @@
 //! rules of a Codex rollout's name and of a thread's chain of rollouts are [`codex_rollout_files`],
 //! the record a switch of accounts carries and what travels with it is [`carried`],
 //! which paths a deletion removes are [`removal`], whether a conversation can be resumed is
-//! [`resumability`], and whether a relaunched session is sent a prompt to carry on is
+//! [`mod@resumability`], and whether a relaunched session is sent a prompt to carry on is
 //! [`switch_continue`].
 
 pub(crate) mod carried;

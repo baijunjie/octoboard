@@ -191,7 +191,7 @@ pub fn sweep_staging<'a>(config_dirs: impl IntoIterator<Item = &'a Path>) {
     }
 }
 
-/// Copies the `record` and its `companions` (see [`companions`]) from `source` to the same
+/// Copies the `record` and its `companions` (see [`crate::records::carried`]) from `source` to the same
 /// places in `target`, creating the directories in between, replacing what is already there.
 /// Done only once every copy is complete and matches its original, so the target never holds a
 /// half-written item: they are all built in [`STAGING`], checked, and only then moved into place,

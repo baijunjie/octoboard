@@ -15,7 +15,7 @@ const OWN_MESSAGE_SETTLE: Duration = Duration::from_millis(500);
 /// How long the composer is waited on after a message went into it: [`OWN_MESSAGE_SETTLE`], except
 /// under test, where a stand-in's screen is fed by a test thread that a loaded machine can hold up
 /// past half a second, so tests wait up to `PATIENCE` (the wait ends as soon as the box empties) and
-/// a test proving the window runs out lowers it with [`OWN_MESSAGE_SETTLE_OVERRIDE`]. Read on the
+/// a test proving the window runs out lowers it with `OWN_MESSAGE_SETTLE_OVERRIDE`. Read on the
 /// writer's thread.
 fn own_message_settle() -> Duration {
     #[cfg(test)]

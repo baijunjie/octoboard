@@ -26,7 +26,7 @@ use crate::protocol::{Session, SessionStatus};
 const LATE_TURN_END_BOUND: Duration = Duration::from_secs(10);
 
 /// [`LATE_TURN_END_BOUND`], widened to `PATIENCE` under test, and lowered by
-/// [`LATE_TURN_END_OVERRIDE`] for the test proving it runs out. Read on the thread applying the
+/// `LATE_TURN_END_OVERRIDE` for the test proving it runs out. Read on the thread applying the
 /// event.
 fn late_turn_end_bound() -> Duration {
     #[cfg(test)]
