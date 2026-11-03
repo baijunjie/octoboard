@@ -215,8 +215,8 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         trash_directory: bool,
-        /// With `trash_directory`, the locked worktrees to take along as well (see
-        /// `inspect_project_removal`); absent means none.
+        /// With `trash_directory`, the locked worktrees to take along as well, and the branches
+        /// that go, each at the `tip` shown (see `inspect_project_removal`); absent means none.
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         force_remove: Vec<SessionBranchTarget>,

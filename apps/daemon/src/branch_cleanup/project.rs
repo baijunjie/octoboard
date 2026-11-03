@@ -2,30 +2,33 @@
 //! linked worktrees outside it, and, when the repository survives the folder, the bound branches.
 //!
 //! Removing a project without moving its folder to the Trash takes nothing. With the folder, the
-//! user asked for everything to go, so nothing here waits on git's judgement of what is safe: an
+//! user asked for everything to go, so no worktree waits on git's judgement of what is safe: an
 //! outside worktree is moved to the Trash whatever it holds, as recoverably as the folder itself.
-//! Only a locked worktree waits for the user's own word (`force_remove`), given for it as it was
-//! shown — one that has gained changes since stays — and a worktree that is another project's
-//! folder, or holds one, is never touched, nor one that is the home directory, the root of a disk
-//! or holds Octoboard's data. Nor is one of which that cannot be told ([`WorktreeRemovability`]):
-//! it is listed as staying, and stays with the removal, which reports it as left. An inspection
-//! that held one back keeps it under a token that the removal confirmed after it sends back
+//! Only a locked worktree, and an unmerged bound branch (below), wait for the user's own word
+//! (`force_remove`), given for each as it was shown — a worktree that has gained changes since
+//! stays — and a worktree that is another project's folder, or holds one, is never touched, nor one
+//! that is the home directory, the root of a disk or holds Octoboard's data. Nor is one of which
+//! that cannot be told ([`WorktreeRemovability`]): it is listed as staying, and stays with the
+//! removal, which reports it as left. An inspection that held one back keeps it under a token that
+//! the removal confirmed after it sends back
 //! (`crate::removal_safety::project::UnresolvedRemovals`), so that worktree stays even once it can
 //! be told: the confirmation showed it staying. As the removal runs only once the project's
 //! sessions have no process, it looks again just before it carries out: an outside worktree that
 //! has come to be or hold another project's folder by then stays too, and one of which that can no
 //! longer be told is held back.
 //!
-//! When the folder holds the repository — the common directory is inside it — every linked
-//! worktree of the repository outside the folder goes, bound to a session or not, since none of
-//! them works once the repository is gone; the branches go with the repository. Otherwise (the
-//! folder is a part of a bigger repository, or a linked worktree of one) the repository stays:
-//! only the worktrees bound to the project's sessions go, a locked one unlocked once it is in the
-//! Trash, the records the moves left behind are pruned, and the bound branches are deleted with
-//! `git branch -D`, except one still checked out in a worktree that stays, which is reported only
-//! when that worktree was to go and did not (a locked one the user chose to keep was not). Every
-//! command runs in the repository's common directory, which outlives the folder however the
-//! repository is laid out. The main worktree is never touched.
+//! When the folder holds the repository — the common directory is inside it — every linked worktree
+//! of the repository outside the folder goes, bound to a session or not, since none of them works
+//! once the repository is gone; the branches go with the repository. Otherwise (the folder is a
+//! part of a bigger repository, or a linked worktree of one) the repository stays: only the
+//! worktrees bound to the project's sessions go, a locked one unlocked once it is in the Trash, the
+//! records the moves left behind are pruned, and the bound branches are deleted: with
+//! `git branch -D` one the confirmation named and that still points at the commit it showed, with
+//! `git branch -d` any other that is merged, and an unmerged one that has moved since, or was never
+//! shown, is left and reported. One still checked out in a worktree that stays is left too, and
+//! reported only when that worktree was to go and did not (a locked one the user chose to keep was
+//! not). Every command runs in the repository's common directory, which outlives the folder however
+//! the repository is laid out. The main worktree is never touched.
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
@@ -37,7 +40,7 @@ use anyhow::Result;
 
 use super::remove::{names, wait_until_stopped};
 use super::survey::{
-    exists, failed, is_merged, item_of, BoundListing, Removability, WorktreeRemovability,
+    exists, failed, is_merged, item_of, tip, BoundListing, Removability, WorktreeRemovability,
     PROJECT_FOLDER_UNTOLD,
 };
 use crate::branch_origin::bound::bound_in;
@@ -310,15 +313,18 @@ pub(super) fn plan_with(
             } else {
                 SessionBranchState::Removable
             };
-            let item = item_of(
-                &repo,
-                SessionBranchKind::Branch,
-                Some(branch.branch.clone()),
-                None,
-                &branch.project,
-                Some(&branch.session),
-                state,
-            );
+            let item = SessionBranchItem {
+                tip: full.then(|| tip(&git, &repo, &name)).flatten(),
+                ..item_of(
+                    &repo,
+                    SessionBranchKind::Branch,
+                    Some(branch.branch.clone()),
+                    None,
+                    &branch.project,
+                    Some(&branch.session),
+                    state,
+                )
+            };
             branches.push((item, name));
         }
     }
@@ -334,9 +340,10 @@ pub(super) fn plan_with(
     Ok((!removal.is_empty()).then_some(removal))
 }
 
-/// Carries `removal` out once the project's folder has gone and its sessions `ids` have no
-/// process, a locked worktree only where `forced` names it as it stands. Returns what is left;
-/// the project's removal stands either way.
+/// Carries `removal` out once the project's folder has gone and its sessions `ids` have no process,
+/// a locked worktree only where `forced` names it as it stands, and an unmerged branch only where
+/// `forced` names it at the commit it points at. Returns what is left; the project's removal stands
+/// either way.
 pub async fn carry_out_once_stopped(
     state: Arc<AppState>,
     ids: Vec<String>,
@@ -384,7 +391,7 @@ impl Items {
 /// The outside worktrees go to the Trash first, a locked one unlocked after where the repository
 /// survives, so that the prune after can drop its record. Then, where the repository survives, the
 /// records the moves left behind are pruned and every branch no worktree still has checked out is
-/// deleted. What the removal holds back is left.
+/// deleted as the module says. What the removal holds back is left.
 pub(crate) fn carry_out(
     git: &Runner,
     removal: Removal,
@@ -473,9 +480,24 @@ pub(crate) fn carry_out(
             }
             continue;
         }
+        // Forced only as the confirmation listed it, at the commit it showed, so that commits made
+        // since are not deleted with it; otherwise only if merged, as without asking.
+        let named = forced.iter().find(|target| names(target, &item));
+        if named.is_some() {
+            item.tip = tip(git, &removal.repo, &name);
+        }
+        let flag = if named.is_some_and(|target| target.tip == item.tip) {
+            "-D"
+        } else if is_merged(git, &removal.repo, &name) {
+            "-d"
+        } else {
+            item.state = SessionBranchState::Unmerged;
+            left.push(item);
+            continue;
+        };
         let args = [
             OsStr::new("branch"),
-            OsStr::new("-D"),
+            OsStr::new(flag),
             OsStr::new("--"),
             OsStr::from_bytes(&name),
         ];

@@ -427,7 +427,7 @@ pub async fn update_project(
 /// is locked, or is running or still starting (with `stop_sessions`, only one still starting).
 /// With `trash_directory` its folder goes to the Trash first, and what goes along with the folder
 /// is removed once the project's sessions are down, the locked worktrees in `force_remove`
-/// included.
+/// included and an unmerged branch only as `force_remove` names it.
 pub(super) async fn delete_project(
     state: &Arc<AppState>,
     id: String,

@@ -2407,8 +2407,8 @@ export type Request = {
    */
   trash_directory?: boolean,
   /**
-   * With `trash_directory`, the locked worktrees to take along as well (see
-   * `inspect_project_removal`); absent means none.
+   * With `trash_directory`, the locked worktrees to take along as well, and the branches
+   * that go, each at the `tip` shown (see `inspect_project_removal`); absent means none.
    */
   force_remove?: Array<SessionBranchTarget>,
   /**
@@ -3095,8 +3095,8 @@ export type RequestBody = {
    */
   trash_directory?: boolean,
   /**
-   * With `trash_directory`, the locked worktrees to take along as well (see
-   * `inspect_project_removal`); absent means none.
+   * With `trash_directory`, the locked worktrees to take along as well, and the branches
+   * that go, each at the `tip` shown (see `inspect_project_removal`); absent means none.
    */
   force_remove?: Array<SessionBranchTarget>,
   /**
@@ -3881,8 +3881,8 @@ export type SessionBranchTarget = {
   state: SessionBranchState,
   uncommitted?: boolean,
   /**
-   * The branch's `tip` as the user was shown it: an archive's or a deletion's forced
-   * `git branch -D` goes only while the branch still points there.
+   * The branch's `tip` as the user was shown it: a forced `git branch -D`, after an archive, a
+   * deletion or a project's removal, goes only while the branch still points there.
    */
   tip?: string | null,
 };

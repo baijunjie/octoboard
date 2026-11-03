@@ -490,7 +490,7 @@ pub(super) fn survey(
 }
 
 /// The object id the branch `name` points at, `None` where it cannot be read.
-fn tip(git: &Runner, repo: &Path, name: &[u8]) -> Option<String> {
+pub(super) fn tip(git: &Runner, repo: &Path, name: &[u8]) -> Option<String> {
     let reference = [b"refs/heads/".as_slice(), name].concat();
     let stdout = git
         .read(

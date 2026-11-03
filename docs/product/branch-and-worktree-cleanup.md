@@ -292,14 +292,18 @@ otherwise be left without its folder:
   detached `HEAD` included, since none of them works once the repository is gone. The branches go with the repository.
 - **When the repository outlives the folder** — the folder is part of a bigger repository, or is itself a linked
   worktree — the linked worktrees outside the folder that are bound to the project's sessions are moved to the Trash,
-  the repository's worktree records are then pruned, and the branches bound to the project's sessions are deleted with
-  `git branch -D`, permanently. A branch still checked out in a worktree that stays is not deleted. It is reported only
-  when that worktree was to go and did not — a forced locked worktree with uncommitted changes the confirmation did not
-  show, say, or one whose move to the Trash failed; a branch checked out in a worktree the removal does not take (see
-  "Never touched" below), or in a locked one the user chose to keep, is not reported.
-- **No safety check is made**: an outside worktree is moved to the Trash whatever it holds, uncommitted changes
-  included, and a branch is deleted merged or not. What is moved can be recovered from the Trash; a deleted branch
-  cannot.
+  the repository's worktree records are then pruned, and the branches bound to the project's sessions are deleted,
+  permanently. A branch the confirmation listed as going is forced (`git branch -D`), merged or not, but only while
+  it still points at the commit it pointed at when the confirmation looked. Any other branch — one that has gained
+  commits since, or one the confirmation did not list — is deleted only when merged (`git branch -d`, merged as in
+  "Where each item stands" above); otherwise it is left and reported as not merged, so commits made after the
+  confirmation are not deleted with it. A branch still checked out in a worktree that stays is not deleted. It is
+  reported only when that worktree was to go and did not — a forced locked worktree with uncommitted changes the
+  confirmation did not show, say, or one whose move to the Trash failed; a branch checked out in a worktree the
+  removal does not take (see "Never touched" below), or in a locked one the user chose to keep, is not reported.
+- **No safety check is made on what the confirmation listed**: an outside worktree is moved to the Trash whatever it
+  holds, uncommitted changes included, and a listed branch is deleted merged or not, at the commit shown (above). What
+  is moved can be recovered from the Trash; a deleted branch cannot.
 - **A locked worktree** goes only when the user chooses so (below), and only while it has no uncommitted changes the
   confirmation did not show. Where the repository outlives the folder, its changes are read again right before it is
   moved; where the folder holds the repository, they are read when the removal starts, before the project's sessions

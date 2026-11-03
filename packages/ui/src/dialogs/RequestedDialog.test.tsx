@@ -964,19 +964,22 @@ it("holds a project's removal while what goes along is asked, and says more may 
   expect(sent(daemon, "delete_project")).toHaveLength(1);
 });
 
-it("takes a locked worktree, and the branch it has checked out, along with a project only when chosen", async () => {
+it("takes a locked worktree, and the branch it has checked out, along with a project only when chosen, naming the branches back at their tips", async () => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
     request: async () => ({ type: "project_removal_inspected", id: null, items: [UNCOMMITTED, LOCKED, PINNED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
   expect(listed()).toEqual(["/r-feature on branch feature", "/r-pinned on branch pinned"]);
+  // Kept, the locked worktree keeps the branch it has checked out, which is then not named.
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true });
   act(() => boxes()[1].click());
   expect(listed()).toContain("pinned");
   await submitDialog();
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({
     type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true,
-    force_remove: [targetOf(LOCKED)],
+    force_remove: [targetOf(LOCKED), targetOf(PINNED)],
   });
   // Without the folder nothing goes along, whatever was ticked for it.
   act(() => boxes()[0].click());

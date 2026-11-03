@@ -190,7 +190,8 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
   const deleted = found.items.filter((item) => item.kind === "branch" && !keptBranches.has(`${item.repository}:${item.branch}`));
   const along = [...trashed, ...deleted];
   return {
-    choices: { ...branchChoices(trash && removeLocked ? locked : []), ...(trash && found.inspection ? { inspection: found.inspection } : {}) },
+    // The branches go only as listed, at the commits shown, so they are named back with the locked worktrees forced.
+    choices: { ...branchChoices(trash ? [...(removeLocked ? locked : []), ...deleted] : []), ...(trash && found.inspection ? { inspection: found.inspection } : {}) },
     pending: found.pending,
     reinspect: found.reinspect,
     consequences: trash

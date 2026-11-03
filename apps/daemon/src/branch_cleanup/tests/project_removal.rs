@@ -195,16 +195,19 @@ fn a_surviving_repository_loses_the_bound_branches_and_keeps_what_it_must() {
             (false, "outside", SessionBranchState::Unmerged),
         ])
     );
+    // As the confirmation names them back: the locked worktree forced, and the branches that go.
     let forced: Vec<SessionBranchTarget> = shown
         .iter()
-        .filter(|item| {
-            item.path
+        .filter(|item| match item.kind {
+            SessionBranchKind::Worktree => item
+                .path
                 .as_deref()
-                .is_some_and(|path| path.ends_with("/locked"))
+                .is_some_and(|path| path.ends_with("/locked")),
+            SessionBranchKind::Branch => item.branch.as_deref() != Some("kept"),
         })
         .map(target)
         .collect();
-    assert_eq!(forced.len(), 1);
+    assert_eq!(forced.len(), 4);
 
     // The folder goes to the Trash after the plan and before the rest, as the removal runs.
     let removal = blocking(|| {
@@ -233,6 +236,53 @@ fn a_surviving_repository_loses_the_bound_branches_and_keeps_what_it_must() {
             && !listed.contains("/locked\n")
     );
     assert!(listed.contains("/kept\n"));
+}
+
+/// An unmerged branch that has moved since the confirmation showed it, or that it did not name,
+/// is left and reported; a merged one it did not name goes all the same.
+#[test]
+fn a_branch_goes_with_the_project_only_at_the_commit_shown() {
+    let fixture = Fixture::without_project("cleanup-project-tip");
+    let folder = fixture.worktree("folder", "s1");
+    insert_project(&fixture.state, &folder);
+    fixture.store("s1", SessionStatus::Archived);
+    let moved = fixture.worktree("moved", "s1");
+    commit_in(&moved);
+    let steady = fixture.worktree("steady", "s1");
+    commit_in(&steady);
+    let unnamed = fixture.worktree("unnamed", "s1");
+    commit_in(&unnamed);
+    let plan = |reads| {
+        blocking(|| project::plan(&fixture.state, &project_p1(&fixture.state), reads, &[]))
+            .unwrap()
+            .unwrap()
+    };
+    let forced: Vec<SessionBranchTarget> = plan(project::Reads::Inspection)
+        .items()
+        .iter()
+        .filter(|item| {
+            item.kind == SessionBranchKind::Branch
+                && !matches!(item.branch.as_deref(), Some("unnamed" | "folder"))
+        })
+        .map(target)
+        .collect();
+    assert_eq!(forced.len(), 2);
+    assert!(forced.iter().all(|target| target.tip.is_some()));
+
+    let removal = plan(project::Reads::Removal);
+    std::fs::write(moved.join("a.txt"), "three\n").unwrap();
+    git(&moved, &["commit", "-qam", "three"]);
+    std::fs::remove_dir_all(&folder).unwrap();
+    let left = carry_out_now(&fixture, removal, &forced);
+    assert_eq!(
+        summary(&left),
+        expect(&[
+            (false, "moved", SessionBranchState::Unmerged),
+            (false, "unnamed", SessionBranchState::Unmerged),
+        ])
+    );
+    assert!(fixture.has_branch("moved") && fixture.has_branch("unnamed"));
+    assert!(!fixture.has_branch("steady") && !fixture.has_branch("folder"));
 }
 
 #[test]

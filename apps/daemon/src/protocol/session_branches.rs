@@ -105,8 +105,8 @@ pub struct SessionBranchTarget {
     #[serde(default)]
     #[cfg_attr(test, ts(optional = nullable))]
     pub uncommitted: bool,
-    /// The branch's `tip` as the user was shown it: an archive's or a deletion's forced
-    /// `git branch -D` goes only while the branch still points there.
+    /// The branch's `tip` as the user was shown it: a forced `git branch -D`, after an archive, a
+    /// deletion or a project's removal, goes only while the branch still points there.
     #[serde(default)]
     #[cfg_attr(test, ts(optional = nullable))]
     pub tip: Option<String>,
