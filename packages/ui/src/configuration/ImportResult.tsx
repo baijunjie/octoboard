@@ -1,23 +1,23 @@
-import { Info } from "lucide-react";
-import React, { useId, useState } from "react";
+import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { Event, ImportChoiceKind } from "../protocol";
+import { Message, useT } from "../i18n/react";
+import type { ReplyOf } from "../requests";
+import type { ImportChoiceKind } from "../protocol";
 import type { Overrides } from "../shortcuts/store";
-import { BOOLEAN_SETTINGS } from "./booleanSettings";
 import { useFailureNode } from "./failureText";
-import { accountsOutcomeOf, hasAgentTags, hasClaudeCompatibilityChoices, outcomeOf } from "./importPlan";
-import { AgentList, CARD_CLASS, CARD_HEADER_CLASS, SettingLine } from "./importParts";
-import { agentTagsValues, claudeCompatibilityValues, gitWorkflowValues, shortcutValues } from "./importValues";
+import { accountsOutcomeOf, outcomeOf } from "./importPlan";
+import { AgentList, InfoNote, SettingLine } from "./importParts";
+import { shortcutValues } from "./importValues";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
 import { ResultCard, ResultRow, ResultRows } from "./ResultCards";
+import { SettingsCard } from "./SettingsCard";
 
-export type Imported = Extract<Event, { type: "configuration_imported" }>;
+export type Imported = ReplyOf<"import_configuration">;
 
 const VIA_LABEL: Record<ImportChoiceKind, PlainMessageKey> = {
   exported_path: "configuration.import.result.via.exportedPath",
@@ -65,13 +65,11 @@ export function ImportResult({
   shortcuts?: { applied: number; skipped: number; overrides: Overrides };
 }): React.ReactElement {
   const t = useT();
-  const language = useCurrentLanguage();
   const failureNode = useFailureNode();
   const outcome = outcomeOf(result.consoles);
   const accounts = result.accounts;
   const accountsOutcome = accounts ? accountsOutcomeOf(accounts) : undefined;
   const applied = result.settings_applied;
-  const settingsHeadingId = useId();
   const [tab, setTab] = useState<Region>();
   // One item per thing that happened, so a count and what it counts stay together; a thing that did not happen has
   // none, and "nothing failed" is said once instead of by a zero. Each region's totals depend on that region's own
@@ -155,10 +153,7 @@ export function ImportResult({
         </p>
       ))}
       {accountsOutcome && accountsOutcome.created > 0 && (
-        <p className="flex items-start gap-2 text-sm">
-          <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
-          <span className="min-w-0">{t("configuration.import.result.accounts.loginNote")}</span>
-        </p>
+        <InfoNote>{t("configuration.import.result.accounts.loginNote")}</InfoNote>
       )}
     </>
   );
@@ -175,27 +170,17 @@ export function ImportResult({
         </ErrorAlert>
       )}
       {applied && (
-        <section aria-labelledby={settingsHeadingId} className={CARD_CLASS}>
-          <h3 id={settingsHeadingId} className={`${CARD_HEADER_CLASS} text-base font-semibold text-foreground`}>{t("configuration.import.result.settings.heading")}</h3>
-          <ul className="flex flex-col px-4 py-1 [&>li]:groove-b [&>li:last-child]:border-b-0">
-            {BOOLEAN_SETTINGS.map(({ label, field }) => {
-              const on = applied[field];
-              return <SettingLine key={field} label={t(label)} badge={t(on ? "configuration.import.result.badge.on" : "configuration.import.result.badge.off")} />;
-            })}
-            <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.result.badge.matches")} values={gitWorkflowValues(t, applied.git_workflow)} />
-            {hasClaudeCompatibilityChoices(applied.claude_compatibility) && <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.result.badge.matches")} values={claudeCompatibilityValues(t, applied.claude_compatibility)} />}
-            {hasAgentTags(applied.agent_tags) && <SettingLine label={t("configuration.import.agentTags")} badge={t("configuration.import.result.badge.matches")} values={agentTagsValues(t, language, applied.agent_tags)} />}
-            {shortcuts && (
-              <SettingLine
-                label={t("settings.section.shortcuts")}
-                values={shortcutValues(t, shortcuts.overrides)}
-                badge={shortcuts.applied === 0 ? t("configuration.import.result.badge.defaults") : t("configuration.import.result.badge.shortcuts", { count: shortcuts.applied })}
-              >
-                {shortcuts.skipped > 0 && t("configuration.import.result.shortcutsSkipped", { count: shortcuts.skipped })}
-              </SettingLine>
-            )}
-          </ul>
-        </section>
+        <SettingsCard settings={applied} heading={t("configuration.import.result.settings.heading")}>
+          {shortcuts && (
+            <SettingLine
+              label={t("settings.section.shortcuts")}
+              values={shortcutValues(t, shortcuts.overrides)}
+              badge={shortcuts.applied === 0 ? t("configuration.import.result.badge.defaults") : t("configuration.import.result.badge.shortcuts", { count: shortcuts.applied })}
+            >
+              {shortcuts.skipped > 0 && t("configuration.import.result.shortcutsSkipped", { count: shortcuts.skipped })}
+            </SettingLine>
+          )}
+        </SettingsCard>
       )}
     </>
   );

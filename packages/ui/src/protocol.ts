@@ -3,6 +3,7 @@
 // Field names and enum spellings must match it exactly — in particular, no
 // request field is named `id`: what a request acts on is named for its kind (`console`, `project`,
 // `session`), because the envelope's own `id` and the request's fields share one flat object.
+// It imports nothing: apps/web type-checks it through `@octoboard/ui/agent-marks` under stricter compiler options.
 
 /** What `delete_account` with `trash_directory` would do with an account's directory: `shared` names what else holds it
  * (`kind` another account with `name` and `agent`, an agent's default directory with `agent`, or a project with `name`),
@@ -128,6 +129,10 @@ export interface SessionBranchTarget {
 }
 
 export type Agent = "claude" | "codex" | "grok";
+
+/** Every agent, in the order the window lists them by default. Written as a record's keys so the type check fails while
+ * an agent is missing. */
+export const AGENTS: readonly Agent[] = Object.keys({ claude: true, codex: true, grok: true } satisfies Record<Agent, true>) as Agent[];
 export type Role = "console" | "project";
 export type Origin = "console" | "user";
 /** What approving a `session_request` does. A client that does not know a value does not
@@ -229,6 +234,15 @@ export interface Launch {
   model: string | null;
   effort: string | null;
 }
+
+/** One agent's model and reasoning effort in a new record: a field left out, or blank, is the agent's own default. */
+export interface LaunchSetting {
+  model?: string;
+  effort?: string;
+}
+
+/** The window's resolved appearance, sent with a launch so a Grok Build launch matches the terminal. */
+export type TerminalAppearance = "light" | "dark";
 
 /** A change to one agent's `Launch` in an update: a field left out is untouched, `null` or a
  * blank string clears it back to the agent's own default. */
@@ -589,14 +603,18 @@ export interface AgentModel {
   efforts: string[];
 }
 
+/** A message the daemon words by its `code` and `params` (see "Coded messages" in `apps/daemon/PROTOCOL.md`), with its
+ * own English `message` for a code the client does not know. */
+export interface CodedMessage {
+  code: string;
+  params: MessageParams;
+  message: string;
+}
+
 /** Why `list_agent_models` has no list, as a coded message worded like an `error`. Codes:
  * `models_binary_not_found`, `models_shell_environment_failed`, `models_timed_out`,
  * `models_command_failed`, `models_unreadable_output`. */
-export interface ModelsUnavailable {
-  code: string;
-  params: Record<string, string>;
-  message: string;
-}
+export type ModelsUnavailable = CodedMessage;
 
 /** The kind of a quota window. Claude Code has `session`, `weekly` and `weekly_model`, Codex
  * `session` and `weekly`, Grok Build `credit_period`. */
@@ -621,11 +639,7 @@ export interface QuotaWindow {
  * `quota_command_failed`, `quota_unreadable_reply`, `quota_no_windows`, and the two account states
  * `quota_config_dir_missing` (params `agent`, `dir`) and `quota_not_signed_in` (param `agent`), which are
  * not failures: the account is simply not signed in yet, and logging in fixes both. */
-export interface QuotaUnavailable {
-  code: string;
-  params: Record<string, string>;
-  message: string;
-}
+export type QuotaUnavailable = CodedMessage;
 
 /** The plan quota of one account as the agent's own CLI last reported it, replayed in `snapshot`
  * and broadcast whole by `account_quotas_updated`. Runtime state of the daemon, never stored. */
@@ -682,11 +696,7 @@ export type LoginStatus = "starting" | "waiting" | "succeeded" | "failed" | "can
 
 /** Why a login failed, as a coded message worded like an `error`. Codes: `login_failed` (params `agent`,
  * `detail`), `login_not_confirmed` (param `agent`). */
-export interface LoginFailure {
-  code: string;
-  params: Record<string, string>;
-  message: string;
-}
+export type LoginFailure = CodedMessage;
 
 /** An account's login as the daemon last saw it, broadcast by `account_login_updated` and, while it has not
  * ended, replayed in `snapshot`. Runtime state of the daemon, never stored. */
@@ -1049,11 +1059,7 @@ export interface InspectedSettings {
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
-export interface ImportFailure {
-  code: string;
-  params: MessageParams;
-  message: string;
-}
+export type ImportFailure = CodedMessage;
 
 export type ImportStatus = "created" | "left_out" | "failed" | "not_attempted";
 
@@ -1374,9 +1380,9 @@ export type RequestBody =
     accounts?: Partial<PerAgent<string>>;
     /** Each agent's model and reasoning effort for the console's console sessions; an agent or a
        * field left out, or blank, means the agent's own default. */
-    launch?: Partial<PerAgent<{ model?: string; effort?: string }>>;
+    launch?: Partial<PerAgent<LaunchSetting>>;
     /** The same for project sessions whose project and session name none. */
-    project_session_launch?: Partial<PerAgent<{ model?: string; effort?: string }>>;
+    project_session_launch?: Partial<PerAgent<LaunchSetting>>;
     icon?: string;
     /** Absent or blank means no addition to the console session's instructions. */
     console_session_prompt?: string;
@@ -1416,7 +1422,7 @@ export type RequestBody =
     accounts?: Partial<PerAgent<ProjectAccount>>;
     /** Each agent's model and reasoning effort for the project's sessions; an agent or a field left
        * out, or blank, means the agent's own default. */
-    launch?: Partial<PerAgent<{ model?: string; effort?: string }>>;
+    launch?: Partial<PerAgent<LaunchSetting>>;
     /** Whether an absent `default_agent` is detected from each directory's marker files; absent
        * means true. Sent false by a client that has already shown the detection to the user. */
     detect_default_agent?: boolean;
@@ -1539,13 +1545,13 @@ export type RequestBody =
     resume_agent_session_id?: string;
     /** The window's resolved appearance, so a Grok Build launch matches the terminal. Absent leaves
        * Grok following the operating system. Not stored on the session. */
-    terminal_appearance?: "light" | "dark";
+    terminal_appearance?: TerminalAppearance;
   }
   | {
     type: "resume_session";
     session: string;
     /** See `open_session`'s `terminal_appearance`. */
-    terminal_appearance?: "light" | "dark";
+    terminal_appearance?: TerminalAppearance;
   }
   /** Bound branches and worktrees go once the archived sessions' processes have ended; those
    * `force_remove` names go although git would refuse them, and those `keep` names, which the
@@ -1561,7 +1567,7 @@ export type RequestBody =
     session: string;
     account: string | null;
     /** See `open_session`'s `terminal_appearance`. */
-    terminal_appearance?: "light" | "dark";
+    terminal_appearance?: TerminalAppearance;
   }
   /** Changes the session's model and reasoning effort, which become its own: each absent keeps what
    * the session has, `null` leaves it to the agent; at least one is sent. A running session is
@@ -1574,7 +1580,7 @@ export type RequestBody =
     model?: string | null;
     effort?: string | null;
     /** See `open_session`'s `terminal_appearance`. */
-    terminal_appearance?: "light" | "dark";
+    terminal_appearance?: TerminalAppearance;
   }
   /** Hands a session off to a new session of another agent, which takes its whole place: kind,
    * project or console, role, owner and title, the branches the session is responsible for and the
@@ -1592,7 +1598,7 @@ export type RequestBody =
     model?: string | null;
     effort?: string | null;
     /** See `open_session`'s `terminal_appearance`. Applied to the receiving session's launch. */
-    terminal_appearance?: "light" | "dark";
+    terminal_appearance?: TerminalAppearance;
   }
   /** Removes Octoboard's record of one session: an archived one, or one that has never been used
    * (no turn, bound to no owner, none bound to it), whose process is stopped; refused with

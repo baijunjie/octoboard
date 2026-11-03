@@ -48,10 +48,32 @@ export const DELIVERY_CHOICES: { value: GitDelivery; label: PlainMessageKey }[] 
   { value: "pull_request", label: "settings.gitWorkflow.delivery.pullRequest" },
 ];
 
-const ITEMS = ["development", "squash_before_delivery", "rebase_before_merge", "delivery", "revert_gate"] as const;
+/** The messages that word each git workflow item, keyed by every field of the settings (so a field added to them is a
+ * type error here until it is listed), in the order the settings page lists them: its label, and for a switch the
+ * description of each position (`on`, `off`). `development` is described by the choice made
+ * (`DEVELOPMENT_CHOICES`), `delivery` by one description whatever the choice. */
+export const GIT_WORKFLOW_ITEMS = {
+  development: { label: "settings.gitWorkflow.development.label" },
+  squash_before_delivery: {
+    label: "settings.gitWorkflow.squash.label",
+    description: { on: "settings.gitWorkflow.squash.description.on", off: "settings.gitWorkflow.squash.description.off" },
+  },
+  rebase_before_merge: {
+    label: "settings.gitWorkflow.rebaseBeforeDelivery.label",
+    description: { on: "settings.gitWorkflow.rebaseBeforeDelivery.description.on", off: "settings.gitWorkflow.rebaseBeforeDelivery.description.off" },
+  },
+  delivery: { label: "settings.gitWorkflow.delivery.label", description: "settings.gitWorkflow.delivery.description" },
+  revert_gate: {
+    label: "settings.gitWorkflow.revertGate.label",
+    description: { on: "settings.gitWorkflow.revertGate.description.on", off: "settings.gitWorkflow.revertGate.description.off" },
+  },
+} as const satisfies Record<keyof GitWorkflowSettings, { label: PlainMessageKey; description?: PlainMessageKey | { on: PlainMessageKey; off: PlainMessageKey } }>;
+
+/** The fields of the git workflow settings, in the order `GIT_WORKFLOW_ITEMS` lists them. */
+export const GIT_WORKFLOW_ITEM_KEYS = Object.keys(GIT_WORKFLOW_ITEMS) as (keyof typeof GIT_WORKFLOW_ITEMS)[];
 
 /** The items of `current` that differ from `initial`, as an `update_project` change: `null` puts an item back to
  * following the application-wide value, a value makes it the project's own, and an item that did not change is left out. */
 export function changedGitWorkflowItems(current: GitWorkflowOverride, initial: GitWorkflowOverride): GitWorkflowOverrideChanges {
-  return Object.fromEntries(ITEMS.filter((item) => current[item] !== initial[item]).map((item) => [item, current[item]]));
+  return Object.fromEntries(GIT_WORKFLOW_ITEM_KEYS.filter((item) => current[item] !== initial[item]).map((item) => [item, current[item]]));
 }

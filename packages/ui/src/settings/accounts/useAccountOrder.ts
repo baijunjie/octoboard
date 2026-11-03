@@ -6,6 +6,7 @@ import { useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
 import { alertAppDataFailure } from "../../components/alerts/raiseError";
+import { useOptimisticOrder } from "./useOptimisticOrder";
 
 /** An optimistic order survives the reply arriving before the settings broadcast. A changed account set or a newer
  * saved order supersedes it; only one write per agent may be in flight. */
@@ -14,7 +15,6 @@ export function useAccountOrder(agent: Agent, accounts: Account[]) {
   const { request } = useDaemon();
   const saved = useDaemonStore((s) => s.settings.account_order[agent]);
   const base = JSON.stringify([saved, accounts.map((account) => account.id)]);
-  const [pending, setPending] = useState<{ base: string; order: (string | null)[] }>();
   const [busy, setBusy] = useState(false);
   const writing = useRef(false);
   const cancelDrag = useRef<(() => void) | undefined>(undefined);
@@ -23,20 +23,16 @@ export function useAccountOrder(agent: Agent, accounts: Account[]) {
     cancelDrag.current = undefined;
   }, []);
   useEffect(() => stopDrag, [base, busy, stopDrag]);
-  useEffect(() => {
-    setPending((held) => held && held.base !== base ? undefined : held);
-  }, [base]);
-  const order = pending?.base === base ? pending.order : saved;
+  const { order, propose } = useOptimisticOrder(base, saved);
   const rows = orderedAccounts(agent, accounts, { [agent]: order });
   const ids = rows.map((account) => account?.id ?? null);
   const reorder = (next: (string | null)[]) => {
     if (writing.current || JSON.stringify(ids) === JSON.stringify(next)) return;
     writing.current = true;
     setBusy(true);
-    const change = { base, order: next };
-    setPending(change);
+    const revert = propose(next);
     void request({ type: "reorder_accounts", agent, accounts: next }).catch((err) => {
-      setPending((held) => held === change ? undefined : held);
+      revert();
       alertAppDataFailure(t("settings.accounts.reorderAccountsFailedTitle"))(err);
     }).finally(() => {
       writing.current = false;

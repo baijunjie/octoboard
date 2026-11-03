@@ -6,7 +6,8 @@ import { TagsInput } from "../../components/form/TagsInput";
 import { tagVocabulary } from "../../components/form/tagVocabulary";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
-import { sameValue, useDaemon, useDaemonStore } from "../../store";
+import { useDaemon, useDaemonStore } from "../../store";
+import { sameValue } from "../../values/sameValue";
 import { SettingRow } from "../SettingRow";
 
 /** An agent's Tags row, at the top of its tab: free-form labels saying what the agent is good for,

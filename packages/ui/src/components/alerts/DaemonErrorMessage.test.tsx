@@ -9,7 +9,7 @@ import { errorAlerts } from "./errorAlerts";
 import { raiseError } from "./raiseError";
 import { CODES } from "../../errors/codes";
 import { daemonMessage } from "../../errors/daemonMessage";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { format, isMessageKey } from "../../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation, hasCodeParams } from "../../errors/errorPresentation";
@@ -25,7 +25,7 @@ import { ErrorAlert } from "./ErrorAlert";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const params = { shell: "/bin/zsh", command: "env -0", timeout: "10s" };
-const failure = () => new DaemonRequestError("plain diagnostic for notifications", "shell_environment_timeout", params);
+const failure = () => new CodedError("plain diagnostic for notifications", "shell_environment_timeout", params);
 
 function mount(element: React.ReactNode): HTMLElement {
   const previousLanguage = currentLanguage();
@@ -43,7 +43,7 @@ function mount(element: React.ReactNode): HTMLElement {
 }
 
 /** The whole message and, apart from it, its raw part, as the error alert dialog and a toast lay them out. */
-function mountApart(error: DaemonRequestError, daemon: Daemon = testDaemon()): { body: Element; raw: Element } {
+function mountApart(error: CodedError, daemon: Daemon = testDaemon()): { body: Element; raw: Element } {
   const container = mount(
     <DaemonProvider value={daemon}>
       <section data-body><DaemonErrorMessage error={error} /></section>
@@ -92,8 +92,8 @@ it("keeps the complete field description registered when its command uses the co
 });
 
 it("says the generic sentence for an unfamiliar code, its own text only in the raw part, and the plain fallback for an incomplete shell timeout", () => {
-  const unknown = new DaemonRequestError("new daemon error", "future_code", params);
-  const incomplete = new DaemonRequestError("incomplete daemon error", "shell_environment_timeout", { shell: "/bin/zsh" });
+  const unknown = new CodedError("new daemon error", "future_code", params);
+  const incomplete = new CodedError("incomplete daemon error", "shell_environment_timeout", { shell: "/bin/zsh" });
   expect(errorPresentation(unknown)).toBe(unknown);
   expect(errorPresentation(incomplete)).toBe(incomplete);
   const container = mount(<><DaemonErrorMessage error={unknown} /><DaemonErrorMessage error={incomplete} /></>);
@@ -105,7 +105,7 @@ it("says the generic sentence for an unfamiliar code, its own text only in the r
 });
 
 it("sets the path of a conversation that was not found as code, not as quoted text, and does not repeat the ID", () => {
-  const error = new DaemonRequestError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: "3f2b8c1e" });
+  const error = new CodedError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: "3f2b8c1e" });
   expect(errorPresentation(error)).toBe(error);
   const daemon = testDaemon();
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
@@ -117,7 +117,7 @@ it("sets the path of a conversation that was not found as code, not as quoted te
 
 it("sets resolved project and session names in chips without changing their typeface", () => {
   const daemon = testDaemon({ state: { sessions: new Map([["s1", { id: "s1", title: "Live title" } as import("../../protocol").Session]]) } });
-  const error = new DaemonRequestError("plain", "conversation_in_session", { session: "s1" });
+  const error = new CodedError("plain", "conversation_in_session", { session: "s1" });
   expect(errorPresentation(error)).toBe(error);
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(container.querySelector("[data-inline-reference]")?.textContent).toBe("Live title");
@@ -130,7 +130,7 @@ it("sets resolved project and session names in chips without changing their type
 it("keeps a failed launch's name and its nested failure's path as distinct chips", () => {
   const daemon = testDaemon();
   const params = { title: "Draft", reason_code: "path_not_found", path: "/missing/project" };
-  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError("fallback", "launch_failed", params)} /></DaemonProvider>);
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new CodedError("fallback", "launch_failed", params)} /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual(["Draft", "/missing/project"]);
   expect(container.querySelector("code")?.textContent).toBe("/missing/project");
   expect(container.textContent).toBe("Could not start Draft: /missing/project does not exist.");
@@ -140,7 +140,7 @@ it("renders structured running-session IDs as distinct live names, preserving co
   const titles = ["Draft, review “notes”", "Second, “task”"];
   const daemon = testDaemon({ state: { sessions: new Map(titles.map((title, index) => [`s${index}`, { id: `s${index}`, title } as import("../../protocol").Session])) } });
   const params = { count: "3", sessions: "old fallback", session_ids: JSON.stringify(["s0", "s1", "gone"]) };
-  const error = new DaemonRequestError("plain fallback", "session_has_running_sessions", params);
+  const error = new CodedError("plain fallback", "session_has_running_sessions", params);
   expect(errorPresentation(error)).toBe(error);
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual([...titles, "gone"]);
@@ -153,7 +153,7 @@ it("renders structured running-session IDs as distinct live names, preserving co
 it("does not try to parse old or malformed running-session lists out of quoted title text", () => {
   const params = { count: "2", sessions: "“One, task”, “Other”" };
   for (const extra of [{}, { session_ids: "not JSON" }, { session_ids: '["s0",5]' }, { session_ids: "[]" }] as import("../../protocol").MessageParams[]) {
-    const error = new DaemonRequestError("old daemon fallback", "session_has_running_sessions", { ...params, ...extra });
+    const error = new CodedError("old daemon fallback", "session_has_running_sessions", { ...params, ...extra });
     expect(errorPresentation(error)).toBe(error);
     const container = mount(<DaemonErrorMessage error={error} />);
     expect(container.textContent).toBe("old daemon fallback");
@@ -167,7 +167,7 @@ it("names each branch or worktree still there as code with its reason, a comma i
     { kind: "branch", name: "fix/a,b", branch: "fix/a,b", state: "failed", uncommitted: false, detail: "error: refused" },
     { kind: "branch", name: "long", branch: "long", state: "failed", uncommitted: false, detail: "error: one\nhint: two" },
   ];
-  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "3", items: JSON.stringify(items) });
+  const error = new CodedError("plain fallback", "session_branches_not_removed", { count: "3", items: JSON.stringify(items) });
   const daemon = testDaemon({ state: { homeDir: "/home/dev" } });
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("p"), (lead) => lead.textContent)).toEqual(["Removing these failed:", "This worktree is locked:"]);
@@ -207,7 +207,7 @@ it("names each branch or worktree still there as code with its reason, a comma i
 it("keeps a sharing repair's own reason behind Details when it names no entry, and lists the entries there once it does", () => {
   const daemon = testDaemon({ state: { sessions: new Map([["s1", { id: "s1", title: "Hub" } as import("../../protocol").Session]]) } });
   const reason = "account `Work`'s links to the default configuration could not be checked: permission denied";
-  const empty = new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" });
+  const empty = new CodedError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" });
   const unnamed = mountApart(empty, daemon);
   // Alone on its line it is a diagnostic block on its own surface, not a chip, and only in the raw part.
   expect(unnamed.raw.querySelector("pre code")?.textContent).toBe(reason);
@@ -216,7 +216,7 @@ it("keeps a sharing repair's own reason behind Details when it names no entry, a
   expect(unnamed.body.textContent).toContain("You do not have permission to change the account’s directory.");
   expect(unnamed.body.textContent).not.toContain(reason);
   const items = JSON.stringify([{ item: "skills/", left: "unchanged", detail: "permission denied", cause: "busy" }]);
-  const listed = mountApart(new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items }), daemon);
+  const listed = mountApart(new CodedError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items }), daemon);
   expect(listed.body.textContent).toContain("skills/");
   expect(listed.body.textContent).toContain("is in use");
   expect(listed.body.textContent).not.toContain(reason);
@@ -226,7 +226,7 @@ it("keeps a sharing repair's own reason behind Details when it names no entry, a
 });
 
 it("keeps the reason what goes with a removed project's folder is unknown as a code block apart from the sentence", () => {
-  const error = new DaemonRequestError("plain fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: not a git repository" });
+  const error = new CodedError("plain fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: not a git repository" });
   const { body, raw } = mountApart(error);
   expect(raw.querySelector("pre")?.textContent).toBe("fatal: not a git repository");
   expect(body.textContent).not.toContain("fatal");
@@ -238,7 +238,7 @@ it("sets a worktree kept for a project folder that could not be checked apart, i
     { kind: "worktree", name: "/home/dev/wt", branch: "a", state: "failed", uncommitted: false, detail: "whether it is or holds another project's folder could not be told", cause: "project_folder_unknown" },
     { kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", uncommitted: false, detail: "error: refused", cause: null },
   ];
-  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "2", items: JSON.stringify(items) });
+  const error = new CodedError("plain fallback", "session_branches_not_removed", { count: "2", items: JSON.stringify(items) });
   const daemon = testDaemon({ state: { homeDir: "/home/dev" } });
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("p"), (line) => line.textContent)).toEqual([
@@ -256,13 +256,13 @@ it("offers no Error details for a worktree kept for a project folder that could 
   const items = [
     { kind: "worktree", name: "/home/dev/wt", branch: "a", state: "failed", uncommitted: false, detail: "whether it is or holds another project's folder could not be told", cause: "project_folder_unknown" },
   ];
-  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify(items) });
+  const error = new CodedError("plain fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify(items) });
   expect(hasRawDetails(error)).toBe(false);
 });
 
 it("leaves the line over the groups out when there is one group, whose lead says it all", () => {
   const items = [{ kind: "branch", name: "fix/a", branch: "fix/a", state: "unmerged", uncommitted: false, detail: null }];
-  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify(items) });
+  const error = new CodedError("plain fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify(items) });
   const container = mount(<DaemonProvider value={testDaemon()}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(container.textContent).not.toContain("still there");
   expect(container.querySelector("p")?.textContent).toBe("This branch is not merged:");
@@ -271,12 +271,12 @@ it("leaves the line over the groups out when there is one group, whose lead says
 // The split is a rendering boundary: every summary fits Alert.Description while the rest remains
 // readable exactly once outside it, including a failure nested in another failure's sentence.
 it.each([
-  { name: "a simple structured reason", error: new DaemonRequestError("fallback", "path_not_found", { path: "/missing" }), summary: "/missing does not exist.", detail: undefined },
-  { name: "multiline diagnostics", error: new DaemonRequestError("fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: one\nhint: two" }), summary: "Docs", detail: "fatal: one\nhint: two" },
-  { name: "nested diagnostics", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "project_branches_not_determined", name: "Docs", detail: "fatal: nested\nhint: two" }), summary: "Could not start Draft:", detail: "fatal: nested\nhint: two" },
+  { name: "a simple structured reason", error: new CodedError("fallback", "path_not_found", { path: "/missing" }), summary: "/missing does not exist.", detail: undefined },
+  { name: "multiline diagnostics", error: new CodedError("fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: one\nhint: two" }), summary: "Docs", detail: "fatal: one\nhint: two" },
+  { name: "nested diagnostics", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "project_branches_not_determined", name: "Docs", detail: "fatal: nested\nhint: two" }), summary: "Could not start Draft:", detail: "fatal: nested\nhint: two" },
   { name: "a shell timeout", error: failure(), summary: "A shell startup file is probably blocked", detail: "/bin/zsh -l -i -c 'env -0'" },
-  { name: "a nested shell timeout", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "shell_environment_timeout", ...params }), summary: "Could not start Draft: A shell startup file is probably blocked", detail: "/bin/zsh -l -i -c 'env -0'" },
-  { name: "a branch group", error: new DaemonRequestError("fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", detail: "error: refused" }]) }), summary: "Removing this failed:", detail: "error: refused" },
+  { name: "a nested shell timeout", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "shell_environment_timeout", ...params }), summary: "Could not start Draft: A shell startup file is probably blocked", detail: "/bin/zsh -l -i -c 'env -0'" },
+  { name: "a branch group", error: new CodedError("fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", detail: "error: refused" }]) }), summary: "Removing this failed:", detail: "error: refused" },
 ])("keeps $name in inline summary and external details without duplication", ({ error, summary, detail }) => {
   const container = mount(<DaemonProvider value={testDaemon()}>
     <ErrorAlert title="Could not finish"><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
@@ -303,7 +303,7 @@ it.each([
   const entries = [{ id: "known", [label]: title }];
   const state = collection === "accounts" ? { settings: { accounts: entries } } : { [collection]: new Map(entries.map((entry) => [entry.id, entry])) };
   const store = createStateStore(state as Parameters<typeof createStateStore>[0]);
-  const error = new DaemonRequestError("fallback", `unknown_${field}`, { [field]: "known" });
+  const error = new CodedError("fallback", `unknown_${field}`, { [field]: "known" });
   const container = mount(<DaemonProvider value={testDaemon({ store })}><DaemonErrorMessage error={error} /></DaemonProvider>);
   const chip = () => container.querySelector("[data-inline-reference]")!;
   expect(chip().textContent).toBe(title);
@@ -325,7 +325,7 @@ it.each([
   ["conflicting_fields", { first: "model", second: "effort" }, ["model", "effort"]],
   ["invalid_launch_setting", { value: "xhigh", field: "effort", agent: "Codex" }, ["xhigh", "effort", "Codex"]],
 ] as const)("marks schema literals and technical fallback in %s without contaminating plain text", (code, params, chips) => {
-  const error = new DaemonRequestError("fallback", code, params);
+  const error = new CodedError("fallback", code, params);
   const container = mount(<DaemonErrorMessage error={error} />);
   expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual(chips);
   const plain = daemonMessage("en", code, params, error.message, createStateStore({}).getState());
@@ -341,7 +341,7 @@ it.each([
 ])("keeps %s diagnostics byte-for-byte once outside rich summaries and in plain text", (code) => {
   const detail = "fatal: /tmp/مراجعة/one\n    indented diagnostic\n" + "x".repeat(400);
   const params = { detail, agent: "Codex", name: "Docs" };
-  const error = new DaemonRequestError("fallback", code, params);
+  const error = new CodedError("fallback", code, params);
   const container = mount(<><DaemonErrorMessage error={error} part="summary" /><section><DaemonErrorMessage error={error} part="details" /></section></>);
   expect(container.querySelector("pre")?.textContent).toBe(detail);
   expect(container.querySelectorAll("pre")).toHaveLength(1);
@@ -354,7 +354,7 @@ it.each([
 });
 
 it("keeps a complete nested diagnostic outside its launch sentence and translates name references", () => {
-  const error = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "quota_command_failed", agent: "Codex", detail: "raw\n    quota failure" });
+  const error = new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "quota_command_failed", agent: "Codex", detail: "raw\n    quota failure" });
   const { body, raw } = mountApart(error);
   expect(body.querySelector("span")?.textContent).toBe("Could not start Draft: Codex could not report its usage.");
   expect(body.querySelector("pre")).toBeNull();
@@ -366,7 +366,7 @@ it("keeps a complete nested diagnostic outside its launch sentence and translate
 
 it.each(["unreadable_request", "project_directory_trash_failed", "configuration_unreadable"])("says %s in its own sentence, the system's text only in the raw part", (code) => {
   const detail = "Operation not permitted (os error 1)";
-  const { body, raw } = mountApart(new DaemonRequestError("fallback", code, { detail }));
+  const { body, raw } = mountApart(new CodedError("fallback", code, { detail }));
   expect(body.textContent).toBe(format("en", `daemon.${code}.summary` as never));
   expect(body.textContent).not.toContain(detail);
   expect(raw.querySelector("pre")?.textContent).toBe(detail);
@@ -376,7 +376,7 @@ it.each([
   ["unanswered", "the home folder did not respond in time, so whether this is it could not be told"],
   ["unreadable", "it could not be read, so whether another project's files are in it could not be told"],
 ])("says a project_directory_trash_failed with cause %s in its own words, with its own remedy, the daemon's text only in the raw part", (cause, detail) => {
-  const error = new DaemonRequestError("fallback", "project_directory_trash_failed", { path: "/work/p", detail, cause });
+  const error = new CodedError("fallback", "project_directory_trash_failed", { path: "/work/p", detail, cause });
   const { body, raw } = mountApart(error);
   const words = (language: "en" | "zh-Hans") => ["summary", "recovery"].map((part) => format(language, `daemon.project_directory_trash_failed.${cause}.${part}` as never)).join("");
   expect(body.textContent).toBe(words("en"));
@@ -389,7 +389,7 @@ it.each([
 
 it.each(Object.entries(CODES).filter(([, record]) => "noSummary" in record).map(([code]) => code))("gives %s no first line, its title saying what failed, and keeps the system's text only in the raw part", (code) => {
   const detail = "Operation not permitted (os error 1)";
-  const error = new DaemonRequestError("fallback", code, { detail });
+  const error = new CodedError("fallback", code, { detail });
   const { body, raw } = mountApart(error);
   expect(isMessageKey(`daemon.${code}.summary`)).toBe(false);
   expect(mount(<DaemonErrorMessage error={error} part="summary" />).textContent).toBe("");
@@ -400,7 +400,7 @@ it.each(Object.entries(CODES).filter(([, record]) => "noSummary" in record).map(
 });
 
 it.each(["git_restore_failed", "terminal_unavailable"])("shows %s with no detail as nothing of its own: no first line, no dangling colon, no Error details", (code) => {
-  const error = new DaemonRequestError(`plain message for ${code}: `, code, { detail: "" });
+  const error = new CodedError(`plain message for ${code}: `, code, { detail: "" });
   const { body, raw } = mountApart(error);
   expect(hasCodeParams(error)).toBe(true);
   expect(body.textContent).toBe("");
@@ -411,7 +411,7 @@ it.each(["git_restore_failed", "terminal_unavailable"])("shows %s with no detail
 
 it("raises git_switch_failed as an alert titled for what failed, its body starting with the remedy and the text only under Error details", () => {
   const detail = "error: Your local changes would be overwritten by checkout";
-  raiseError(new DaemonRequestError("fallback", "git_switch_failed", { detail }), { title: "Could not switch branches" });
+  raiseError(new CodedError("fallback", "git_switch_failed", { detail }), { title: "Could not switch branches" });
   mount(<ErrorAlerts />);
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.querySelector("h2")?.textContent).toBe("Could not switch branches");
@@ -423,10 +423,10 @@ it("raises git_switch_failed as an alert titled for what failed, its body starti
 });
 
 it.each([
-  { case: "a launch whose failure is internal", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "internal_error", reason: "spawn failed: os error 2", detail: "spawn failed: os error 2" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "spawn failed: os error 2" },
-  { case: "a launch whose failure the catalog lacks", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "a newer daemon's reason" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "a newer daemon's reason" },
-  { case: "a launch whose uncatalogued failure the system's text names", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "No space left on device (os error 28)" }), sentence: "Could not start Draft: The disk is full.", rawText: "No space left on device (os error 28)" },
-  { case: "a trust answer whose reason the catalog lacks", error: new DaemonRequestError("fallback", "trust_answer_failed", { agent: "Codex", reason_code: "future_reason", reason: "the daemon's English reason" }), sentence: "Octoboard could not press Codex's trust confirmation (something unexpected went wrong).", rawText: "the daemon's English reason" },
+  { case: "a launch whose failure is internal", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "internal_error", reason: "spawn failed: os error 2", detail: "spawn failed: os error 2" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "spawn failed: os error 2" },
+  { case: "a launch whose failure the catalog lacks", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "a newer daemon's reason" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "a newer daemon's reason" },
+  { case: "a launch whose uncatalogued failure the system's text names", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "No space left on device (os error 28)" }), sentence: "Could not start Draft: The disk is full.", rawText: "No space left on device (os error 28)" },
+  { case: "a trust answer whose reason the catalog lacks", error: new CodedError("fallback", "trust_answer_failed", { agent: "Codex", reason_code: "future_reason", reason: "the daemon's English reason" }), sentence: "Octoboard could not press Codex's trust confirmation (something unexpected went wrong).", rawText: "the daemon's English reason" },
 ])("says $case with a generic reason, its own text only in the raw part", ({ error, sentence, rawText }) => {
   const { body, raw } = mountApart(error);
   expect(body.querySelector("span")?.textContent?.replace(/[\u2066-\u2069]/g, "")).toBe(sentence);
@@ -440,7 +440,7 @@ describe("a failure to write the application's own data nested in another failur
   const nested = { reason_code: "store_write_failed", reason: `Octoboard could not read or write its own data: ${detail}`, cause: "disk_full", detail };
 
   it("says a failed launch with the summary of its cause, SQLite's text only in the raw part", () => {
-    const error = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", ...nested });
+    const error = new CodedError("fallback", "launch_failed", { title: "Draft", ...nested });
     const { body, raw } = mountApart(error);
     const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
     expect(text).toContain("Could not start Draft: Octoboard could not read or write its own data.");
@@ -449,7 +449,7 @@ describe("a failure to write the application's own data nested in another failur
   });
 
   it("says a failed handoff archive by the receiving session, with the same summary", () => {
-    const error = new DaemonRequestError("fallback", "handoff_archive_failed", { receiving_session: "s2", ...nested, cause: "other" });
+    const error = new CodedError("fallback", "handoff_archive_failed", { receiving_session: "s2", ...nested, cause: "other" });
     const { body, raw } = mountApart(error);
     const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
     expect(text).toContain("The work was handed off to s2, but archiving the original session failed: Octoboard could not read or write its own data.");
@@ -459,14 +459,14 @@ describe("a failure to write the application's own data nested in another failur
 
   it.each(["handoff_archive_failed", "handoff_move_failed"])("names the receiving session of %s by its title once the store holds it", (code) => {
     const daemon = testDaemon({ state: { sessions: new Map([["s2", { id: "s2", title: "Received work" } as import("../../protocol").Session]]) } });
-    const error = new DaemonRequestError("fallback", code, { receiving_session: "s2", ...nested, cause: "other" });
+    const error = new CodedError("fallback", code, { receiving_session: "s2", ...nested, cause: "other" });
     const { body } = mountApart(error, daemon);
     expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Received work");
     expect(body.textContent).not.toContain("s2");
   });
 
   it("says a failed move of the place by the receiving session, with the same summary", () => {
-    const error = new DaemonRequestError("fallback", "handoff_move_failed", { receiving_session: "s2", ...nested, cause: "other" });
+    const error = new CodedError("fallback", "handoff_move_failed", { receiving_session: "s2", ...nested, cause: "other" });
     const { body, raw } = mountApart(error);
     const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
     expect(text).toContain("The new session s2 was started, but handing the work off to it did not complete: Octoboard could not read or write its own data.");
@@ -480,7 +480,7 @@ describe("the alert of a handoff that failed after the work moved", () => {
   const bothRunningLine = "Both the original session and the new one are running. Check which one holds the work, and archive the one you no longer need.";
 
   function alertText(code: string, reasonCode: string, reason = "raw reason"): string {
-    raiseError(new DaemonRequestError("fallback", code, { receiving_session: "s2", session: "s1", reason, reason_code: reasonCode }), { title: "Could not hand off the session" });
+    raiseError(new CodedError("fallback", code, { receiving_session: "s2", session: "s1", reason, reason_code: reasonCode }), { title: "Could not hand off the session" });
     mount(<ErrorAlerts />);
     return document.querySelector('[role="alertdialog"]')!.textContent!;
   }
@@ -511,7 +511,7 @@ describe("a failed automatic account switch", () => {
 
   it("says what happened, then why on a line of its own with the nested failure's own chips", () => {
     const daemon = testDaemon();
-    const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError("fallback", "account_switch_automatically_failed", params)} /></DaemonProvider>);
+    const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new CodedError("fallback", "account_switch_automatically_failed", params)} /></DaemonProvider>);
     expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(expect.arrayContaining(["Work", "Codex", "Spare"]));
     expect(container.querySelector("code")?.textContent).toBe("/missing/project");
     const text = container.textContent?.replace(/[\u2066-\u2069]/g, "");
@@ -522,8 +522,8 @@ describe("a failed automatic account switch", () => {
 
   it("leaves the nested failure's own remedy to the sentence's, which a failed launch's does not have", () => {
     const nested = { reason_code: "config_dir_unreachable", agent: "Codex", path: "/missing" };
-    const switched = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, ...nested });
-    const launched = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", ...nested });
+    const switched = new CodedError("fallback", "account_switch_automatically_failed", { ...params, ...nested });
+    const launched = new CodedError("fallback", "launch_failed", { title: "Draft", ...nested });
     expect(mount(<DaemonErrorMessage error={launched} />).textContent).toContain("Recreate it");
     const text = mount(<DaemonErrorMessage error={switched} />).textContent;
     expect(text).toContain("/missing");
@@ -534,7 +534,7 @@ describe("a failed automatic account switch", () => {
 
   it("says a failed write to the application's own data as its summary, SQLite's text only in the raw part", () => {
     const detail = "database or disk is full: Error code 13: Insertion failed because database is full";
-    const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "store_write_failed", reason: `Octoboard could not read or write its own data: ${detail}`, cause: "disk_full", detail });
+    const error = new CodedError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "store_write_failed", reason: `Octoboard could not read or write its own data: ${detail}`, cause: "disk_full", detail });
     const { body, raw } = mountApart(error);
     expect(body.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Octoboard could not read or write its own data.");
     expect(body.textContent).not.toContain("Error code 13");
@@ -542,7 +542,7 @@ describe("a failed automatic account switch", () => {
   });
 
   it("says a reason the catalog lacks as the generic sentence, its own text only in the raw part", () => {
-    const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "future_code", reason: "a newer daemon's reason" });
+    const error = new CodedError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "future_code", reason: "a newer daemon's reason" });
     const { body, raw } = mountApart(error);
     expect(body.textContent).toContain("Something unexpected went wrong.");
     expect(body.textContent).not.toContain("a newer daemon's reason");
@@ -552,7 +552,7 @@ describe("a failed automatic account switch", () => {
 });
 
 it("uses name chips for fixed agent and product references while leaving plain messages usable", () => {
-  const error = new DaemonRequestError("fallback", "agent_not_available", { agent: "Codex" });
+  const error = new CodedError("fallback", "agent_not_available", { agent: "Codex" });
   const container = mount(<DaemonErrorMessage error={error} />);
   expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Codex", "Octoboard", "Claude Code", "Codex", "Grok Build"]);
   const plain = daemonMessage("en", error.code, error.params, error.message, createStateStore({}).getState());
@@ -561,7 +561,7 @@ it("uses name chips for fixed agent and product references while leaving plain m
 
 it("retains a named quota window as a rich name and a plain isolated value", () => {
   const params = { agent: "Codex", account: "Work", window: "模型 / Model weekly" };
-  const container = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "account_quota_exhausted", params)} />);
+  const container = mount(<DaemonErrorMessage error={new CodedError("fallback", "account_quota_exhausted", params)} />);
   expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual(["Work", "Codex", params.window]);
   expect(daemonMessage("en", "account_quota_exhausted", params, "fallback", createStateStore({}).getState())).toContain(`\u2068${params.window}\u2069`);
 });
@@ -570,7 +570,7 @@ it.each(["path_not_absolute", "project_directory_shared", "agent_not_available",
   // `queued_messages_lost.held` is that code with `fragment: "held"`, worded as a variant with further explanation of its own.
   const [code, variant] = entry.split(".");
   const params = { path: "/tmp/مراجعة", project: "Docs", agent: "Codex", reason_code: "screen_gone", session: "missing", reason: "fallback reason", ...(variant ? { fragment: variant } : {}) };
-  const error = new DaemonRequestError("fallback", code, params);
+  const error = new CodedError("fallback", code, params);
   const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-remedy><DaemonErrorMessage error={error} part="remedy" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
   const summary = container.querySelector("[data-summary]")!;
   const remedy = container.querySelector("[data-remedy]")!;
@@ -596,7 +596,7 @@ it.each(["path_not_absolute", "project_directory_shared", "agent_not_available",
 
 it.each(["terminal_write_failed", "store_io_failed"])("keeps nested trust %s diagnostics outside the reason sentence", (reason_code) => {
   const detail = "Permission denied\n    /tmp/مراجعة";
-  const error = new DaemonRequestError("fallback", "trust_answer_failed", { agent: "Codex", reason_code, detail });
+  const error = new CodedError("fallback", "trust_answer_failed", { agent: "Codex", reason_code, detail });
   const { body, raw } = mountApart(error);
   expect(body.textContent).not.toContain(detail);
   expect(body.querySelector("pre")).toBeNull();
@@ -608,7 +608,7 @@ it.each(["terminal_write_failed", "store_io_failed"])("keeps nested trust %s dia
 it("retains the login producer's detail-only shell failure without inventing a command", () => {
   const detail = "capturing environment failed\n    permission denied";
   const fallback = `The shell environment could not be captured: ${detail}`;
-  const error = new DaemonRequestError(fallback, "shell_environment_timeout", { detail });
+  const error = new CodedError(fallback, "shell_environment_timeout", { detail });
   const { body, raw } = mountApart(error);
   expect(body.textContent).toBe("The shell environment could not be captured.");
   expect(raw.querySelector("pre")?.textContent).toBe(detail);
@@ -620,7 +620,7 @@ it.each(["project", "console"])("preserves the held %s session's task and name a
   const session = { id: "held", title: "مراجعة name", terminal_title: "  Task / 任务  " } as import("../../protocol").Session;
   const store = createStateStore({ sessions: new Map([[session.id, session]]), projects: new Map([["owner", { id: "owner", name: "Owner" } as import("../../protocol").Project]]), consoles: new Map([["owner", { id: "owner", name: "Owner" } as import("../../protocol").Console]]) });
   const params = { session: session.id, [owner]: "owner" };
-  const error = new DaemonRequestError("fallback", `conversation_held_in_${owner}`, params);
+  const error = new CodedError("fallback", `conversation_held_in_${owner}`, params);
   const container = mount(<DaemonProvider value={testDaemon({ store })}><DaemonErrorMessage error={error} /></DaemonProvider>);
   const chips = [...container.querySelectorAll("[data-inline-reference]")];
   expect(chips.map((chip) => chip.textContent)).toEqual(["Task / 任务｜" + session.title, "Owner"]);
@@ -671,16 +671,16 @@ it("keeps generic terminal nouns as prose rather than treating them as named con
 
 it("routes the operating-system reference in directory recovery through the shared rich/plain boundary", () => {
   const params = { path: "/Volumes/مراجعة", detail: "permission denied" };
-  const container = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} />);
+  const container = mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} />);
   const system = [...container.querySelectorAll("[data-inline-reference]")].find((chip) => chip.textContent === "macOS")!;
   expect(system.getAttribute("dir")).toBe("auto");
   expect(system.querySelector("code")).toBeNull();
   expect(system.closest("span.block")?.textContent).toContain("asks for permission per volume");
   // The raw text is Details' diagnostic block, and the visible sentence and remedy hold none of it.
-  const summary = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} part="summary" />);
-  const remedy = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} part="remedy" />);
+  const summary = mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} part="summary" />);
+  const remedy = mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} part="remedy" />);
   expect(summary.textContent + remedy.textContent).not.toContain("permission denied");
-  expect(mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} part="details" />).textContent).toContain("permission denied");
+  expect(mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} part="details" />).textContent).toContain("permission denied");
   const plain = daemonMessage("en", "directory_unreadable", params, "fallback", createStateStore({}).getState());
   expect(plain).toContain("\u2068macOS\u2069 asks for permission per volume");
   expect(plain).not.toMatch(/\{\w+\}/);
@@ -688,7 +688,7 @@ it("routes the operating-system reference in directory recovery through the shar
 
 it("retains a named key inside a structured trust reason as a technical chip", () => {
   const params = { agent: "Codex", reason_code: "cursor_did_not_move" };
-  const container = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "trust_answer_failed", params)} />);
+  const container = mount(<DaemonErrorMessage error={new CodedError("fallback", "trust_answer_failed", params)} />);
   expect(container.querySelector("code")?.textContent).toBe("Enter");
   expect(container.querySelector("code")?.getAttribute("dir")).toBe("ltr");
   expect(container.textContent).toContain("so Enter was not sent");
@@ -706,7 +706,7 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
     { item: "plugins/", left: "unchanged", detail: "second", cause: "permission_denied" },
     { item: "conversation-id", left: "partly_moved", detail: "busy", sessions: ["s1", "gone"], cause: "busy" },
   ]) };
-  const error = new DaemonRequestError("do not repeat the raw fallback", code, params);
+  const error = new CodedError("do not repeat the raw fallback", code, params);
   const container = mount(<DaemonProvider value={testDaemon({ store })}>
     <ErrorAlert title="Could not finish"><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
     <section><DaemonErrorMessage error={error} part="details" /></section>
@@ -740,7 +740,7 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
 });
 
 it("names the cause of a change that could not start when no entry is listed", () => {
-  const error = new DaemonRequestError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" });
+  const error = new CodedError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" });
   const { body, raw } = mountApart(error);
   expect(body.textContent).toContain("The account’s directory conflicts with what sharing needs.");
   expect(body.textContent).not.toContain("default dir moved");
@@ -750,7 +750,7 @@ it("names the cause of a change that could not start when no entry is listed", (
 
 it("joins a whole failure's reason and its guidance in the catalog, and points a cause with no line of its own at Details", () => {
   const mountWith = (cause: string, detail: string | undefined) => mount(<DaemonProvider value={testDaemon()}>
-    <DaemonErrorMessage error={new DaemonRequestError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail, cause } as never)} />
+    <DaemonErrorMessage error={new CodedError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail, cause } as never)} />
   </DaemonProvider>);
   const busy = mountWith("busy", "x");
   const other = mountWith("other", "x");
@@ -768,7 +768,7 @@ it.each([
   { code: "account_sharing_repair_failed", items: "invalid JSON", original: "raw malformed repair\n    denied", detail: "not the original repair reason" },
 ])("keeps $code with $items diagnostics raw and separate", ({ code, items, original, detail }) => {
   const diagnostic = code === "account_sharing_failed" ? detail : original;
-  const error = new DaemonRequestError(original, code, { name: "Work", account: "a1", items, detail });
+  const error = new CodedError(original, code, { name: "Work", account: "a1", items, detail });
   const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
   expect(container.querySelector("[data-summary]")?.textContent).toContain("Work");
   expect(container.querySelector("[data-summary]")?.textContent).not.toContain(diagnostic);
@@ -779,7 +779,7 @@ it.each([
 });
 
 it("shows a session left interrupted after a sharing change as a sentence with the reason as a code block", () => {
-  const error = new DaemonRequestError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "no such file" });
+  const error = new CodedError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "no such file" });
   const { body, raw } = mountApart(error);
   expect(body.textContent).toContain("could not be resumed after its sharing changed");
   expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Work");
@@ -788,7 +788,7 @@ it("shows a session left interrupted after a sharing change as a sentence with t
 });
 
 it("shows the still-running variant of the resume notice without 'left interrupted', keeping the reason as a code block", () => {
-  const error = new DaemonRequestError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "timed out", still_running: "true" });
+  const error = new CodedError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "timed out", still_running: "true" });
   const { body, raw } = mountApart(error);
   expect(body.textContent).toContain("may still be running; it was not restarted");
   expect(body.textContent).not.toContain("interrupted");
@@ -806,7 +806,7 @@ it.each([
   ["a sharing failure with a reason for the whole change", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" }],
   ["a sharing failure with no reason to give", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", cause: "other" }],
 ])("tells without rendering whether the details part of %s has anything", (_name, code, failureParams) => {
-  const error = new DaemonRequestError("raw", code, failureParams as never);
+  const error = new CodedError("raw", code, failureParams as never);
   const container = mount(<DaemonProvider value={testDaemon()}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
   expect(hasErrorDetails(error)).toBe(container.innerHTML !== "");
 });
@@ -823,7 +823,7 @@ it.each([
   ["a nested cause with none", "launch_failed", { agent: "Codex", reason: "x", reason_code: "unknown_account", account: "a" }],
   ["a sharing failure", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" }],
 ])("tells without rendering whether the remedy part of %s has anything", (_name, code, failureParams) => {
-  const error = new DaemonRequestError("raw", code, failureParams as never);
+  const error = new CodedError("raw", code, failureParams as never);
   const container = mount(<DaemonProvider value={testDaemon()}><DaemonErrorMessage error={error} part="remedy" /></DaemonProvider>);
   expect(hasErrorRemedy(error)).toBe(container.innerHTML !== "");
 });
@@ -852,7 +852,7 @@ it("keeps an ActionableError's detail as raw text of a block of its own whether 
 });
 
 describe("a failure that states only its cause", () => {
-  const trashFailed = (detail: string, extra: Record<string, string> = {}) => new DaemonRequestError("plain", "account_directory_trash_failed", { path: "/a", detail, ...extra });
+  const trashFailed = (detail: string, extra: Record<string, string> = {}) => new CodedError("plain", "account_directory_trash_failed", { path: "/a", detail, ...extra });
 
   it("says the cause the system's text names after its sentence, with no remedy", () => {
     const { body, raw } = mountApart(trashFailed("Operation not permitted (os error 1)"));

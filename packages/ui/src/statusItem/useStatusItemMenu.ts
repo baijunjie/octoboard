@@ -5,13 +5,12 @@ import type { Appearance } from "../preferences/cssColour";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
-import { ordersByStatus } from "../sessions/order";
 import { indexSessions } from "../sessions/sessionIndex";
 import { useDaemon } from "../store";
 import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";
 import { nextQuotaTick } from "./statusItemQuota";
-import { useSerialPush } from "./useSerialPush";
+import { useSerialPush } from "../components/hooks/useSerialPush";
 
 /** The longest a timer may wait: `setTimeout` runs a longer delay at once. */
 const MAX_TIMER_MS = 2 ** 31 - 1;
@@ -81,7 +80,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         consoleMap: consoles,
         projectMap: projects,
         delegating: indexSessions(sessions).delegatingIds,
-        byStatus: ordersByStatus(settings),
+        byStatus: settings.sidebar_order_by_status,
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
         quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas },
       });

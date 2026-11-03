@@ -4,10 +4,11 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
-import type { AccountQuota } from "../protocol";
+import type { AccountQuota, Event, RequestBody } from "../protocol";
 import type { PlatformAdapter, StatusItemCapability } from "../platform";
-import { PlatformProvider } from "../platform/react";
-import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import type { State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 import { useStatusItemMenu } from "./useStatusItemMenu";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
@@ -23,21 +24,19 @@ function Host({ selectedSessionId, currentConsoleId }: { selectedSessionId?: str
   return null;
 }
 
-function mount(statusItem: StatusItemCapability, request: Daemon["request"], initial: Partial<State> = {}) {
+function mount(statusItem: StatusItemCapability, request: (body: RequestBody) => Promise<Event>, initial: Partial<State> = {}) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
-  const daemon = { store: createStateStore(initial), request } as unknown as Daemon;
+  const daemon = testDaemon({ state: initial, request });
   const select = (selectedSessionId?: string, currentConsoleId?: string) => act(() =>
     root.render(
-      <PlatformProvider value={{ statusItem } as PlatformAdapter}>
-        <DaemonProvider value={daemon}>
-          <Host selectedSessionId={selectedSessionId} currentConsoleId={currentConsoleId} />
-        </DaemonProvider>
-      </PlatformProvider>,
+      <TestHost daemon={daemon} platform={{ statusItem } as PlatformAdapter}>
+        <Host selectedSessionId={selectedSessionId} currentConsoleId={currentConsoleId} />
+      </TestHost>,
     ),
   );
   select();
@@ -56,7 +55,7 @@ it("asks the daemon to refresh the quotas that are due each time the menu begins
     },
   };
   const request = vi.fn(() => Promise.reject(new Error("offline")));
-  mount(statusItem, request as unknown as Daemon["request"]);
+  mount(statusItem, request);
   expect(request).not.toHaveBeenCalled();
   opened();
   opened();

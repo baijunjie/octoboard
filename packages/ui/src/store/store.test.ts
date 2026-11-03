@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
 
-import { pageOf, sessionOf } from "../fixtures/builders";
+import { accountOf, pageOf, sessionOf } from "../fixtures/builders";
+import { DEFAULT_SETTINGS } from "./defaultSettings";
 import type { Event, Project, ShellTerminal } from "../protocol";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { createDaemon, dismissAccountLogin, trackAccountLogin } from ".";
@@ -16,7 +17,6 @@ vi.mock("../daemon-client", () => ({
     onEvents(listener: (events: Event[]) => void) { client.onEvents = listener; }
     onConnectionChange() {}
   },
-  DaemonRequestError: class extends Error {},
 }));
 
 it.each(["reply-first", "broadcast-first"] as const)("keeps the authoritative session title when opening a session: %s", (order) => {
@@ -331,4 +331,19 @@ it.each([
   expect(state.trustPrompts.map((p) => p.session)).toEqual(["b"]);
   expect(state.sessionRequests.map((r) => r.session)).toEqual(["b"]);
   expect([...state.daemonSwitching]).toEqual(["b"]);
+});
+
+it("keeps each setting an update leaves as it was, so what reads only that setting does not render again", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  const settings = { ...DEFAULT_SETTINGS, accounts: [accountOf("a1", "claude", "Work", "/home/u/.claude-work")], default_account_names: { claude: "Mine" } };
+  client.onEvents!([{ type: "settings_updated", settings }]);
+  const before = daemon.store.getState();
+  client.onEvents!([{ type: "settings_updated", settings: structuredClone({ ...settings, interface_language: "zh-Hans" }) }]);
+  const after = daemon.store.getState().settings;
+  expect(after.interface_language).toBe("zh-Hans");
+  expect(after.accounts).toBe(before.settings.accounts);
+  expect(after.default_account_names).toBe(before.settings.default_account_names);
+  // An update that changes nothing leaves the state as it was.
+  client.onEvents!([{ type: "settings_updated", settings: structuredClone(after) }]);
+  expect(daemon.store.getState().settings).toBe(after);
 });

@@ -10,7 +10,7 @@ import { openingFocus } from "../focus/modalFocus";
 import { useStickyHeadingFocus } from "../scroll/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { StatusBadge } from "../status/StatusBadge";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { useStickyScrollFade } from "../scroll/scrollFade";
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
@@ -118,7 +118,7 @@ export function DirectoryPicker({
       // leave nothing to navigate from, so the first listing walks up to the nearest ancestor that
       // lists. Only that failure does: a declined volume prompt or an unreadable directory is
       // shown as it is.
-      if (targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
+      if (targetPath !== "~" && err instanceof CodedError && err.code === "path_not_found") {
         return load(ancestorOf(targetPath), true, call);
       }
       setFailure({ target: targetPath, error: errorPresentation(err) });

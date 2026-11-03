@@ -1,5 +1,6 @@
-import React, { useEffect, useLayoutEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 
+import { useLatest } from "../components/hooks/useLatest";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { PaneToolbar } from "../components/panel/PaneToolbar";
 import { OptionSelect, type Option } from "../components/form/OptionSelect";
@@ -22,8 +23,7 @@ export function ProcessSessionSelect({ projectId, value, onChange, landing, show
 }): React.ReactElement {
   const t = useT();
   const toolbar = useRef<HTMLDivElement>(null);
-  const current = useRef({ value, onEmptyBlur });
-  useLayoutEffect(() => { current.current = { value, onEmptyBlur }; });
+  const current = useLatest({ value, onEmptyBlur });
   const handoff = useFocusHandoff(() => toggleRef.current?.focus());
   useEffect(() => {
     if (opened) toolbar.current?.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')?.focus();

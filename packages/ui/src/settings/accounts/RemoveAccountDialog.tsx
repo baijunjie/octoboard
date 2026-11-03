@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useState } from "react";
 
 import { AGENT_LABEL } from "../../agents/agents";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { ErrorAlert } from "../../components/alerts/ErrorAlert";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
 import { InlineReference } from "../../i18n/InlineReference";
@@ -14,9 +14,9 @@ import { useAfterErrorAlert } from "../../components/dialog/useAfterErrorAlert";
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { Message, useT } from "../../i18n/react";
 import { isLive, type Account, type AccountTrashOutcome } from "../../protocol";
-import { compareSessions, ordersByStatus } from "../../sessions/order";
+import { compareSessions } from "../../sessions/order";
 import { indexSessions } from "../../sessions/sessionIndex";
-import { useDaemon, useDaemonStore } from "../../store";
+import { useDaemon, useDaemonStoreEqual } from "../../store";
 
 /** What removing account `accountId` with its directory moved to the Trash would be let or refused now, asked afresh
  * each time `asking` turns on (the option ticked) and each time `reinspect` is called, so what changed while it was off
@@ -25,7 +25,6 @@ import { useDaemon, useDaemonStore } from "../../store";
  * again, so what shows it and the Try again that retried are not taken away under focus; `answered` is the attempt that
  * the shown answer is of, for the failure to be announced again when a retry fails in the same words. */
 function useAccountTrashInspection(accountId: string, asking: boolean): { pending: boolean; outcome?: AccountTrashOutcome; failure?: ErrorPresentation; answered?: number; retry: () => void; reinspect: () => void } {
-  const t = useT();
   const { request } = useDaemon();
   const [tick, setTick] = useState(0);
   const [attempt, setAttempt] = useState(0);
@@ -42,7 +41,7 @@ function useAccountTrashInspection(accountId: string, asking: boolean): { pendin
     if (!asking) return;
     let active = true;
     request({ type: "inspect_account_trash", account: accountId }).then(
-      (result) => active && setAnswer(result.type === "account_trash_inspected" ? { tick, attempt, outcome: result.outcome } : { tick, attempt, failure: errorPresentation(new Error(t("error.unexpectedReply"))) }),
+      (result) => active && setAnswer({ tick, attempt, outcome: result.outcome }),
       (err: unknown) => active && setAnswer({ tick, attempt, failure: errorPresentation(err) }),
     );
     return () => { active = false; };
@@ -71,7 +70,7 @@ const DIRECTORY_REFUSALS = new Set(["account_directory_shared", "account_directo
 
 /** Whether the inspection is asked again after the removal was refused with `err`: not for a login that did not end
  * (`signing_in`), which the inspection does not look at, so asking again would only repeat an answer it gave before. */
-const asksAgain = (err: DaemonRequestError): boolean => DIRECTORY_REFUSALS.has(err.code) && err.params.cause !== "signing_in";
+const asksAgain = (err: CodedError): boolean => DIRECTORY_REFUSALS.has(err.code) && err.params.cause !== "signing_in";
 
 /** Why the directory cannot be moved to the Trash, said only as the cause, or nothing when `outcome` has none. */
 function trashRefusal(outcome: AccountTrashOutcome | undefined): React.ReactElement | undefined {
@@ -102,13 +101,15 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
-  const sessions = useDaemonStore((s) => s.sessions);
-  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
-  // Read live: a session that starts or ends while the dialog is open joins or leaves the list.
-  const { delegatingIds } = indexSessions(sessions);
-  const running = Array.from(sessions.values())
-    .filter((s) => s.agent === account.agent && isLive(s.status) && (s.account_id === account.id || s.config_dir === account.config_dir))
-    .sort((a, b) => compareSessions(a, b, delegatingIds, byStatus));
+  // Read live: a session that starts or ends while the dialog is open joins or leaves the list, and the dialog renders
+  // again for no other change among the sessions.
+  const running = useDaemonStoreEqual((s) => {
+    const { delegatingIds } = indexSessions(s.sessions);
+    const byStatus = s.settings.sidebar_order_by_status;
+    return Array.from(s.sessions.values())
+      .filter((session) => session.agent === account.agent && isLive(session.status) && (session.account_id === account.id || session.config_dir === account.config_dir))
+      .sort((a, b) => compareSessions(a, b, delegatingIds, byStatus));
+  });
   const inspection = useAccountTrashInspection(account.id, trash);
   const afterErrorAlert = useAfterErrorAlert();
   const alertId = useId();
@@ -116,6 +117,7 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
   const refusal = trash ? trashRefusal(inspection.outcome) : undefined;
   const problem = trash && (refusal !== undefined || inspection.failure !== undefined);
   const blocked = trash && running.length > 0;
+  const describedBy = [problem ? alertId : undefined, blocked ? runningId : undefined].filter(Boolean).join(" ");
   const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[account.agent]}</InlineReference>;
   return (
     <ConfirmDialog
@@ -137,7 +139,7 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
             isReadOnly={busy}
             label={t("settings.accounts.removeTrash")}
             hint={t(trash && inspection.outcome?.status === "missing" ? "settings.accounts.removeTrashHintMissing" : "settings.accounts.removeTrashHint")}
-            describedBy={[problem ? alertId : undefined, blocked ? runningId : undefined].filter(Boolean).join(" ") || undefined}
+            describedBy={describedBy || undefined}
           />
           {/* A reason the removal cannot go ahead is an Alert under the option, announced as it appears. */}
           {trash && refusal !== undefined && (
@@ -166,7 +168,7 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
         } catch (err) {
           // What the directory is now is asked again once the alert has closed, so the reason stands under the option, and
           // is announced and handed focus (Remove to Cancel) with the dialog back in view.
-          if (trash && err instanceof DaemonRequestError && asksAgain(err)) afterErrorAlert(inspection.reinspect);
+          if (trash && err instanceof CodedError && asksAgain(err)) afterErrorAlert(inspection.reinspect);
           throw err;
         }
         onRemoved();

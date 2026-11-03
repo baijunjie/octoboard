@@ -58,7 +58,7 @@ const LINE_PAD: f64 = 4.0;
 /// and centred, and the title's text field 4 pt after the picture, or `INSET` in on a line with no
 /// picture, centred too. Read from the views `NSMenu` lays its items out in on macOS 26, with the
 /// 18 pt pictures the UI draws for the menu (`SIZE` in
-/// `packages/ui/src/lifecycle/statusItemIcons.ts`); another version, or a picture of another size,
+/// `packages/ui/src/statusItem/statusItemIcons.ts`); another version, or a picture of another size,
 /// may be placed otherwise.
 const ITEM_HEIGHT: f64 = 24.0;
 pub(super) const PICTURE_X: f64 = 16.0;

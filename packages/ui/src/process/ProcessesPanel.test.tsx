@@ -6,11 +6,12 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { windowAttention } from "../components/announce/windowTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { mountForTooltip } from "../components/hint/tooltipTestSupport";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Event, ProcessTree, RequestBody, Session } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { ProcessesPanel } from "./ProcessesPanel";
 import { ProcessPanelProvider, useProcessPanel } from "./useProcessPanel";
 import type { Project } from "../protocol";
@@ -37,16 +38,13 @@ async function mount(scope: ProcessesScope, request: (body: RequestBody) => Prom
     vi.useRealTimers();
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
-  const daemon: Daemon = {
-    store: createStateStore({ sessions: new Map(sessions.map((s) => [s.id, s])), projects: new Map([[project.id, project]]) }),
-    request: vi.fn(request) as never,
+  const handler = vi.fn(request);
+  const daemon = testDaemon({
+    state: { sessions: new Map(sessions.map((s) => [s.id, s])), projects: new Map([[project.id, project]]) },
+    request: handler,
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+    showNotice: vi.fn(),
+  });
   let switchScope!: (scope: ProcessesScope) => void;
   function Panel() {
     const [view, setView] = useState(scope);
@@ -55,9 +53,9 @@ async function mount(scope: ProcessesScope, request: (body: RequestBody) => Prom
     const data = useProcessPanel(owner, "session" in view ? view.session.id : undefined, "live");
     return <ProcessPanelProvider value={data}><section data-region="panel-processes" tabIndex={-1}><ProcessesPanel /></section></ProcessPanelProvider>;
   }
-  mountForTooltip(<DaemonProvider value={daemon}><Panel /></DaemonProvider>);
+  mountForTooltip(<TestHost daemon={daemon}><Panel /></TestHost>);
   await act(async () => {});
-  return { daemon, switchScope };
+  return { daemon, request: handler, switchScope };
 }
 
 const panel = () => document.querySelector('[data-region="panel-processes"]')!;
@@ -73,7 +71,7 @@ async function confirmWithPointer() {
   await act(async () => void document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true })));
   await act(async () => void submit.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 })));
 }
-const sent = (daemon: Daemon, type: string) => vi.mocked(daemon.request).mock.calls.map(([body]) => body).filter((body) => body.type === type);
+const sent = (request: ReturnType<typeof vi.fn<(body: RequestBody) => Promise<Event>>>, type: string) => request.mock.calls.map(([body]) => body).filter((body) => body.type === type);
 
 it("lists a session's trees with their command, working directory, ports, memory, age and process count", async () => {
   await mount({ session: running }, async () => ({
@@ -110,7 +108,7 @@ it("says there is nothing, not that it is loading, once the list comes back empt
 });
 
 it("reads a session whose process has ended as having none, raising nothing", async () => {
-  await mount({ session: running }, async () => { throw new DaemonRequestError("gone", "session_not_running", {}); });
+  await mount({ session: running }, async () => { throw new CodedError("gone", "session_not_running", {}); });
   expect(panel().textContent).toContain("No processes");
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
 });
@@ -204,7 +202,7 @@ it("sets the panel's explanation and the Project processes note in one style", a
 });
 
 it("groups a project's trees under the sessions' titles and puts those no session owns under Project processes, kept or left behind", async () => {
-  const { daemon } = await mount({ project }, async () => ({
+  const { request } = await mount({ project }, async () => ({
     type: "processes_listed",
     id: null,
     trees: [
@@ -214,7 +212,7 @@ it("groups a project's trees under the sessions' titles and puts those no sessio
       tree("4:4", { session_id: undefined, command: "node old.js", cwd_missing: true }),
     ],
   }));
-  expect(sent(daemon, "list_processes")).toEqual([{ type: "list_processes", project_id: project.id }]);
+  expect(sent(request, "list_processes")).toEqual([{ type: "list_processes", project_id: project.id }]);
   const headings = [...panel().querySelectorAll("h3")].map((heading) => heading.textContent);
   expect(headings).toEqual(["Session processes", "Project processes"]);
   expect([...panel().querySelectorAll("h4")].map((heading) => heading.textContent)).toEqual(["Fix search", "Add filters"]);
@@ -225,7 +223,7 @@ it("groups a project's trees under the sessions' titles and puts those no sessio
 
 it("stops a tree on request, drops it from the list and says so", async () => {
   const stopped = new Set<string>();
-  const { daemon } = await mount({ session: running }, async (body) => {
+  const { daemon, request } = await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
       body.ids.forEach((id) => stopped.add(id));
       return { type: "processes_stopped", id: null, ids: body.ids };
@@ -233,10 +231,10 @@ it("stops a tree on request, drops it from the list and says so", async () => {
     return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
   });
   await act(async () => button("Stop").click());
-  expect(sent(daemon, "stop_processes")).toEqual([]);
+  expect(sent(request, "stop_processes")).toEqual([]);
   await confirmStop();
-  expect(sent(daemon, "stop_processes")).toEqual([{ type: "stop_processes", ids: ["1:1"] }]);
-  expect(daemon.toastNotice).toHaveBeenCalledWith("Stopped the process.");
+  expect(sent(request, "stop_processes")).toEqual([{ type: "stop_processes", ids: ["1:1"] }]);
+  expect(daemon.showNotice).toHaveBeenCalledWith("Stopped the process.");
   expect(rows().map((row) => row.textContent)).toEqual([expect.stringContaining("tail -f log")]);
 });
 
@@ -274,7 +272,7 @@ it("offers a console session's trees only Stop", async () => {
 
 it("keeps a tree on request after a confirmation, drops it from the list and says so", async () => {
   const kept = new Set<string>();
-  const { daemon } = await mount({ session: running }, async (body) => {
+  const { daemon, request } = await mount({ session: running }, async (body) => {
     if (body.type === "keep_processes") {
       body.ids.forEach((id) => kept.add(id));
       return { type: "processes_kept", id: null, ids: body.ids };
@@ -282,26 +280,26 @@ it("keeps a tree on request after a confirmation, drops it from the list and say
     return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !kept.has(candidate.id)) };
   });
   await act(async () => button("Keep").click());
-  expect(sent(daemon, "keep_processes")).toEqual([]);
+  expect(sent(request, "keep_processes")).toEqual([]);
   expect(confirmation().textContent).toContain("Keep process");
   expect(confirmation().textContent).toContain("no longer stop when the session ends");
   await confirmStop();
-  expect(sent(daemon, "keep_processes")).toEqual([{ type: "keep_processes", ids: ["1:1"] }]);
-  expect(daemon.toastNotice).toHaveBeenCalledWith("Kept the process.");
+  expect(sent(request, "keep_processes")).toEqual([{ type: "keep_processes", ids: ["1:1"] }]);
+  expect(daemon.showNotice).toHaveBeenCalledWith("Kept the process.");
   expect(rows().map((row) => row.textContent)).toEqual([expect.stringContaining("tail -f log")]);
 });
 
 it("cancels a keep confirmation without sending a request", async () => {
-  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
+  const { request } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   await act(async () => button("Keep").click());
   await act(async () => [...confirmation().querySelectorAll("button")].find((element) => element.textContent === "Cancel")!.click());
-  expect(sent(daemon, "keep_processes")).toEqual([]);
+  expect(sent(request, "keep_processes")).toEqual([]);
   expect(confirmation()).toBeNull();
 });
 
 it("raises a refused keep as an error alert and keeps the tree listed", async () => {
   await mount({ session: running }, async (body) => {
-    if (body.type === "keep_processes") throw new DaemonRequestError("no", "internal_error", {});
+    if (body.type === "keep_processes") throw new CodedError("no", "internal_error", {});
     return { type: "processes_listed", id: null, trees: [tree("1:1")] };
   });
   await act(async () => button("Keep").click());
@@ -319,22 +317,22 @@ it("shows the whole command in a confirmation, wrapped rather than cut", async (
 });
 
 it("cancels a stop confirmation without sending a request", async () => {
-  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1", { process_count: 4 })] }));
+  const { request } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1", { process_count: 4 })] }));
   await act(async () => button("Stop").click());
-  expect(sent(daemon, "stop_processes")).toEqual([]);
+  expect(sent(request, "stop_processes")).toEqual([]);
   expect(confirmation().textContent).toContain("This process and its child processes will be stopped.");
   expect(confirmation().textContent).toContain("npm run dev");
   expect(confirmation().textContent).toContain("3 child processes");
   await act(async () => [...confirmation().querySelectorAll("button")].find((element) => element.textContent === "Cancel")!.click());
-  expect(sent(daemon, "stop_processes")).toEqual([]);
+  expect(sent(request, "stop_processes")).toEqual([]);
   expect(rows()).toHaveLength(1);
 });
 
 it("raises a refused stop as an error alert and keeps the tree listed", async () => {
   let failing = true;
-  const { daemon } = await mount({ session: running }, async (body) => {
+  const { request } = await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
-      if (failing) throw new DaemonRequestError("no", "internal_error", {});
+      if (failing) throw new CodedError("no", "internal_error", {});
       return { type: "processes_stopped", id: null, ids: body.ids };
     }
     return { type: "processes_listed", id: null, trees: [tree("1:1")] };
@@ -347,23 +345,23 @@ it("raises a refused stop as an error alert and keeps the tree listed", async ()
   failing = false;
   await act(async () => errorAlerts.acknowledge());
   await confirmStop();
-  expect(sent(daemon, "stop_processes")).toHaveLength(2);
+  expect(sent(request, "stop_processes")).toHaveLength(2);
 });
 
 it("asks again every few seconds while open, and shows a failed refresh as an Alert over the last list, never as an error alert dialog", async () => {
   let failing = false;
-  const { daemon } = await mount({ session: running }, async () => {
-    if (failing) throw new DaemonRequestError("down", "internal_error", {});
+  const { request } = await mount({ session: running }, async () => {
+    if (failing) throw new CodedError("down", "internal_error", {});
     return { type: "processes_listed", id: null, trees: [tree("1:1", { ports: [3000] })] };
   });
-  expect(sent(daemon, "list_processes")).toHaveLength(1);
+  expect(sent(request, "list_processes")).toHaveLength(1);
   expect(panel().textContent).not.toContain("Could not refresh the list");
   await act(async () => void vi.advanceTimersByTime(3000));
-  expect(sent(daemon, "list_processes")).toHaveLength(2);
+  expect(sent(request, "list_processes")).toHaveLength(2);
   failing = true;
   await act(async () => void vi.advanceTimersByTime(3000));
   await act(async () => void vi.advanceTimersByTime(3000));
-  expect(sent(daemon, "list_processes")).toHaveLength(4);
+  expect(sent(request, "list_processes")).toHaveLength(4);
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   expect(panel().textContent).toContain("Could not refresh the list");
   expect(panel().textContent).toContain("The processes shown may be out of date.");
@@ -377,7 +375,7 @@ it("keeps showing the refresh failure after a stop, which asks again at once", a
   let failing = false;
   await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") return { type: "processes_stopped", id: null, ids: body.ids };
-    if (failing) throw new DaemonRequestError("down", "internal_error", {});
+    if (failing) throw new CodedError("down", "internal_error", {});
     return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2")] };
   });
   failing = true;
@@ -390,7 +388,7 @@ it("keeps showing the refresh failure after a stop, which asks again at once", a
 
 it("shows a first-list failure in the panel and waits for explicit retry", async () => {
   let failing = true;
-  const { daemon } = await mount({ session: running }, async () => {
+  const { request } = await mount({ session: running }, async () => {
     if (failing) throw new Error("socket closed");
     return { type: "processes_listed", id: null, trees: [tree("1:1")] };
   });
@@ -398,12 +396,12 @@ it("shows a first-list failure in the panel and waits for explicit retry", async
   expect(panel().querySelector("h2")?.textContent).toBe("Processes");
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   await act(async () => void vi.advanceTimersByTime(9000));
-  expect(sent(daemon, "list_processes")).toHaveLength(1);
+  expect(sent(request, "list_processes")).toHaveLength(1);
   failing = false;
   await act(async () => [...panel().querySelectorAll("button")].find((candidate) => candidate.textContent === "Try again")!.click());
   expect(rows()).toHaveLength(1);
   await act(async () => void vi.advanceTimersByTime(3000));
-  expect(sent(daemon, "list_processes")).toHaveLength(3);
+  expect(sent(request, "list_processes")).toHaveLength(3);
 });
 
 it("makes row controls and Cancel unavailable while the confirmed stop is pending", async () => {
@@ -446,20 +444,20 @@ it("hands focus back into the panel when a focused process row disappears during
 
 it("dismisses the confirmation if its process disappears before confirmation", async () => {
   let gone = false;
-  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: gone ? [] : [tree("1:1")] }));
+  const { request } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: gone ? [] : [tree("1:1")] }));
   await act(async () => button("Stop").click());
   gone = true;
   await act(async () => void vi.advanceTimersByTime(3000));
   expect(confirmation()).toBeNull();
-  expect(sent(daemon, "stop_processes")).toEqual([]);
+  expect(sent(request, "stop_processes")).toEqual([]);
 });
 
 it("dismisses an unconfirmed stop when the owner changes without sending it", async () => {
-  const { daemon, switchScope } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
+  const { request, switchScope } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   await act(async () => button("Stop").click());
   await act(async () => switchScope({ project: { ...project, id: "other" } }));
   expect(confirmation()).toBeNull();
-  expect(sent(daemon, "stop_processes")).toEqual([]);
+  expect(sent(request, "stop_processes")).toEqual([]);
 });
 
 const settleFocus = () => act(async () => void vi.advanceTimersByTime(100));
@@ -549,7 +547,7 @@ it("keeps the confirmation, the toast and the focus hand-over when a refresh tak
   expect(confirmation()).not.toBeNull();
   await act(async () => answer({ type: "processes_stopped", id: null, ids: ["1:1"] }));
   await settleFocus();
-  expect(daemon.toastNotice).toHaveBeenCalledWith("Stopped the process.");
+  expect(daemon.showNotice).toHaveBeenCalledWith("Stopped the process.");
   expect(confirmation()).toBeNull();
   expect(document.activeElement).toBe(panel().querySelector('button[aria-label="Filter by session"]'));
 });

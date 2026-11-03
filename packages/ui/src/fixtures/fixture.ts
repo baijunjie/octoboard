@@ -4,7 +4,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { State } from "../store";
-import type { BroadcastToastEvent } from "../store/toasts";
+import type { NotifiedBroadcast } from "../store/notifications";
 import type { FixtureGit } from "./changeFixtures";
 import type { TerminalBehaviour } from "./fakeTerminal";
 import type { FixtureError, FixtureFiles } from "./sampleFiles";
@@ -17,12 +17,12 @@ export type ToastFixture =
   | RaisedToastFixture
   | NoticeToastFixture;
 
-/** An event the daemon sends unasked, shown as the app shows it (`broadcastToast`): a failure or a notice carrying raw
+/** An event the daemon sends unasked, shown as the app shows it (`broadcastNotification`): a failure or a notice carrying raw
  * text becomes an error alert and any other notice a toast. `event.message` is the daemon's English fallback for a code
  * the catalog lacks, as in the real event; the text shown is worded from the catalog. */
 export interface BroadcastToastFixture {
   kind: "broadcast";
-  event: BroadcastToastEvent;
+  event: NotifiedBroadcast;
 }
 
 /** An error alert an action of the app raises for a failure of its own request (`Daemon.raiseError`). `title` is the
@@ -38,11 +38,11 @@ export interface RaisedToastFixture {
   params?: MessageParams;
   /** The session the call site knows the failure is about. */
   session?: string;
-  /** The remedy the call site gives its error alert in place of its failure's own (`ToastRequest.recovery`). */
+  /** The remedy the call site gives its error alert in place of its failure's own (`NotificationRequest.recovery`). */
   recovery?: ErrorRecovery;
 }
 
-/** A timed notice the UI words itself (`Daemon.toastNotice`), worded in the viewing language when a function. */
+/** A timed notice the UI words itself (`Daemon.showNotice`), worded in the viewing language when a function. */
 export interface NoticeToastFixture {
   kind: "notice";
   message: string | ((t: Translate) => string);

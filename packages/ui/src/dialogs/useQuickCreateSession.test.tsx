@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AGENT_OPTIONS } from "../agents/agents";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { Account, Session } from "../protocol";
@@ -31,7 +31,7 @@ function mount(initial: Partial<State> = {}) {
     state: initial,
     request: vi.fn(async () => ({ type: "session_opened", id: null, session: sessionOf("s-new", parent.id, project.id, "", "idle") })) as Daemon["request"],
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
+    showNotice: vi.fn(),
   });
   const onOpened = vi.fn();
   let quickCreate!: (target: NewSessionRequest) => void;
@@ -84,7 +84,7 @@ it("opens a console session with no project", async () => {
 
 it("reports a refusal as a toast and selects nothing", async () => {
   const { daemon, onOpened, run } = mount();
-  const refusal = new DaemonRequestError("No such agent", "agent_unavailable", {});
+  const refusal = new CodedError("No such agent", "agent_unavailable", {});
   vi.mocked(daemon.request).mockRejectedValue(refusal);
   await run({ kind: "new-console-session", console: parent });
   expect(raised()).toHaveLength(1);

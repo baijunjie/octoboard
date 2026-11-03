@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import { listProcesses, type ProcessTarget } from "./processes";
 import { SESSION_NOT_RUNNING, type ProcessTree } from "../protocol";
@@ -26,7 +26,7 @@ export function useProcessTrees(target: ProcessTarget | undefined, polling: Proc
     try {
       return await listProcesses(request, JSON.parse(key) as ProcessTarget);
     } catch (err) {
-      if (err instanceof DaemonRequestError && err.code === SESSION_NOT_RUNNING) return [];
+      if (err instanceof CodedError && err.code === SESSION_NOT_RUNNING) return [];
       throw err;
     }
   }, [request]);

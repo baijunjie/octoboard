@@ -1,29 +1,17 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 
-vi.mock("../store", () => ({
-  useDaemon: () => ({ request }),
-  useDaemonStore: (selector: (state: { trustedDirectories: string[]; homeDir: string }) => unknown) =>
-    selector({ trustedDirectories: ["/home/dev/work"], homeDir: "/home/dev" }),
-}));
-
 function mount(element: React.ReactElement) {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() => root.render(element));
-  return container;
+  return mountHost(element, { daemon: testDaemon({ state: { trustedDirectories: ["/home/dev/work"], homeDir: "/home/dev" }, request }) });
 }
 
 const click = (element: Element | null | undefined) => act(async () => void (element as HTMLElement | undefined)?.click());

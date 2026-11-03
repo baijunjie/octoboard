@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
 import type { PlatformAdapter } from "../platform";
-import { PlatformProvider } from "../platform/react";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 import { ConfigurationSection } from "./ConfigurationSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -17,32 +16,7 @@ vi.hoisted(() => localStorage.setItem("octoboard.sidebarConsole", "c-docs"));
 const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", configurationFile: { save: vi.fn(), open: vi.fn() } };
 
 function mount(consoles: ReturnType<typeof consoleOf>[], platform: PlatformAdapter = WITH_CONFIGURATION_FILE): HTMLElement {
-  const daemon: Daemon = {
-    store: createStateStore({ consoles: new Map(consoles.map((c) => [c.id, c])) }),
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() =>
-    root.render(
-      <PlatformProvider value={platform}>
-        <DaemonProvider value={daemon}>
-          <ConfigurationSection />
-        </DaemonProvider>
-      </PlatformProvider>,
-    ),
-  );
-  return container;
+  return mountHost(<ConfigurationSection />, { daemon: testDaemon({ state: { consoles: new Map(consoles.map((c) => [c.id, c])) } }), platform });
 }
 
 const press = (label: string) =>

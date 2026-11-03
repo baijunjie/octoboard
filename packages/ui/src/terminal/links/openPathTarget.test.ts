@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { openPathTarget } from "./openPathTarget";
 
 const file = (over: object) => ({ size: 1, kind: "text", media_type: null, text: "x", data: null, ...over });
@@ -32,22 +32,22 @@ it("shows an image too, but opens other binary on the host", async () => {
 });
 
 it("opens a file past the read cap on the host, and reports any other failed read, a gone file with the remedy of finding it again", async () => {
-  const big = click(target, () => Promise.reject(new DaemonRequestError("too large", "limit_exceeded", {})));
+  const big = click(target, () => Promise.reject(new CodedError("too large", "limit_exceeded", {})));
   await big.done;
   expect(big.viewFile).not.toHaveBeenCalled();
   expect(big.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/a.ts" });
-  const failed = click(target, () => Promise.reject(new DaemonRequestError("gone", "file_not_found", {})));
+  const failed = click(target, () => Promise.reject(new CodedError("gone", "file_not_found", {})));
   await failed.done;
   expect(failed.raiseError).toHaveBeenCalledOnce();
   expect(failed.raiseError.mock.calls[0][1].recovery).toBe("hostPathGone");
   expect(failed.request).toHaveBeenCalledTimes(1);
-  const refused = click(target, () => Promise.reject(new DaemonRequestError("denied", "permission_denied", { path: "a.ts", detail: "x" })));
+  const refused = click(target, () => Promise.reject(new CodedError("denied", "permission_denied", { path: "a.ts", detail: "x" })));
   await refused.done;
   expect(refused.raiseError.mock.calls[0][1].recovery).toBeUndefined();
 });
 
 it("reports a path outside every root (outside_scope) without the remedy of the browse views, whichever step of the click found it", async () => {
-  const outside = () => Promise.reject(new DaemonRequestError("outside", "outside_scope", { path: "/r/a.ts" }));
+  const outside = () => Promise.reject(new CodedError("outside", "outside_scope", { path: "/r/a.ts" }));
   const raiseError = vi.fn();
   await openPathTarget({ target: { path: "/r/a.ts" }, project: "p", request: outside as never, viewFile: undefined, raiseError });
   expect(raiseError.mock.calls[0][1].recovery).toBe("none");
@@ -100,7 +100,7 @@ it("opens the folder itself on the host when its entry file cannot be shown or r
   await binary.done;
   expect(binary.viewFile).not.toHaveBeenCalled();
   expect(binary.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/docs" });
-  const failed = click(folder, () => Promise.reject(new DaemonRequestError("gone", "file_not_found", {})));
+  const failed = click(folder, () => Promise.reject(new CodedError("gone", "file_not_found", {})));
   await failed.done;
   expect(failed.viewFile).not.toHaveBeenCalled();
   expect(failed.raiseError).not.toHaveBeenCalled();
@@ -118,7 +118,7 @@ it("opens a folder on the host without reading its entry file when asked to, but
 });
 
 it("reports a path gone since it was probed, with the remedy of finding it in the project's files only for one in the project", async () => {
-  const gone = (root?: string) => () => Promise.reject(new DaemonRequestError("gone", "file_not_found", { path: "x", ...(root && { root }) }));
+  const gone = (root?: string) => () => Promise.reject(new CodedError("gone", "file_not_found", { path: "x", ...(root && { root }) }));
   const onHost = (answer: () => Promise<unknown>) => vi.fn((body: { type: string }) => (body.type === "open_path_link" ? answer() : Promise.resolve({ type: "ack", id: null }))) as never;
   const temporary = vi.fn();
   await openPathTarget({ target: { path: "/tmp/x.log", line: undefined }, project: "p", request: onHost(gone("temporary")), viewFile: vi.fn(), raiseError: temporary });

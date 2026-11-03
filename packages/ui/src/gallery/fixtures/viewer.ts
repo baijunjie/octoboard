@@ -645,7 +645,7 @@ const longPatch = () =>
 /** Shared file subjects, built only when a viewer scenario opens; navigation selects its explicit
  * normal or exceptional targets below. */
 async function allFiles(): Promise<ViewerSubject[]> {
-  const { DaemonRequestError } = await import("../../daemon-client");
+  const { CodedError } = await import("../../errors/codedError");
   return [
     file("src/session.ts", text("src/session.ts", NEW_SESSION)),
     file("scripts/build.py", text("scripts/build.py", PYTHON)),
@@ -683,7 +683,7 @@ async function allFiles(): Promise<ViewerSubject[]> {
       path: "src/gone.ts",
       content: {
         state: "error",
-        message: new DaemonRequestError("src/gone.ts does not exist any more.", "file_not_found", { path: "src/gone.ts" }),
+        message: new CodedError("src/gone.ts does not exist any more.", "file_not_found", { path: "src/gone.ts" }),
       },
     },
     { key: "live:src/offline.ts", path: "src/offline.ts", content: { state: "disconnected", what: "file" } },
@@ -1093,10 +1093,10 @@ function failure(id: string, title: string, description: string, slot: "file" | 
     id, group: GROUP, category: "exceptional", title, description, steps,
     viewer: {
       subjects: async (language) => {
-        const { DaemonRequestError } = await import("../../daemon-client");
+        const { CodedError } = await import("../../errors/codedError");
         const { displayWirePath } = await import("../../format/wirePath");
         const t: Translate = (key, ...args) => format(language, key, ...args);
-        const message = new DaemonRequestError(refusal.message, refusal.code, { path: displayWirePath(path), ...refusal.params });
+        const message = new CodedError(refusal.message, refusal.code, { path: displayWirePath(path), ...refusal.params });
         switch (slot) {
           case "file":
             return [{ key: `live:${path}`, path, host: hostOf(path), content: { state: "error", message } }];
@@ -1134,11 +1134,11 @@ function bodiesFailure(id: string, title: string, description: string, build: (t
     id, group: GROUP, category: "exceptional", title, description,
     viewer: {
       subjects: async (language) => {
-        const { DaemonRequestError } = await import("../../daemon-client");
+        const { CodedError } = await import("../../errors/codedError");
         const { changeBodiesFailure } = await import("../../viewer/viewerError");
         const t: Translate = (key, ...args) => format(language, key, ...args);
         return [build(t, (header, refusal) => () => {
-          const error = new DaemonRequestError(refusal.message, refusal.code, refusal.params);
+          const error = new CodedError(refusal.message, refusal.code, refusal.params);
           return Promise.reject(changeBodiesFailure(t, language, error, header, { consoles: new Map(), projects: new Map(), sessions: new Map() }));
         })];
       },

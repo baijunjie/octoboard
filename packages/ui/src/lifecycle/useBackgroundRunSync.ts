@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { usePlatform } from "../platform/react";
 import { runInBackground } from "./runInBackground";
-import { useSerialPush } from "./useSerialPush";
+import { useSerialPush } from "../components/hooks/useSerialPush";
 
 /**
  * Pushes the run-in-background choice to the shell on mount, before the window can be closed, and

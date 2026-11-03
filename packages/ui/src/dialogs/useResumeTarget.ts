@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { choiceKey, findEntry } from "../accounts/accountChoices";
+import { choiceKey, findEntry } from "../accounts/choiceEntries";
 import { AGENT_LABEL } from "../agents/agents";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { CONVERSATION_ID } from "../agents/conversationId";
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import { isolate } from "../i18n/isolate";
@@ -36,7 +36,7 @@ const FOUND_SESSION_MESSAGE = {
  * no session, a session the store does not have, or one whose project or console it does not have,
  * which the caller words generally instead. The names are isolated.
  */
-function useHeldElsewhere(sessionId: string | undefined): DaemonRequestError | undefined {
+function useHeldElsewhere(sessionId: string | undefined): CodedError | undefined {
   const t = useT();
   const { session, project, owner } = useDaemonStore(useShallow((s) => {
     const held = sessionId === undefined ? undefined : s.sessions.get(sessionId);
@@ -48,9 +48,9 @@ function useHeldElsewhere(sessionId: string | undefined): DaemonRequestError | u
   }));
   if (!session) return undefined;
   if (session.project_id) {
-    return project && new DaemonRequestError(t("dialog.session.resumeHeldInProject", { session: isolate(sessionDisplayTitle(t, session)), project: isolate(project.name) }), "conversation_held_in_project", { session: session.id, project: project.id });
+    return project && new CodedError(t("dialog.session.resumeHeldInProject", { session: isolate(sessionDisplayTitle(t, session)), project: isolate(project.name) }), "conversation_held_in_project", { session: session.id, project: project.id });
   }
-  return owner && new DaemonRequestError(t("dialog.session.resumeHeldInConsole", { session: isolate(sessionDisplayTitle(t, session)), console: isolate(owner.name) }), "conversation_held_in_console", { session: session.id, console: owner.id });
+  return owner && new CodedError(t("dialog.session.resumeHeldInConsole", { session: isolate(sessionDisplayTitle(t, session)), console: isolate(owner.name) }), "conversation_held_in_console", { session: session.id, console: owner.id });
 }
 
 /**

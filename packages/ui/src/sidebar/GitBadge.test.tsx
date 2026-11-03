@@ -7,9 +7,10 @@ import { expectIndependentMarquees, stubMarquee } from "../components/motion/mar
 import { enter, leave, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import { PlatformProvider } from "../platform/react";
 import type { GitStatus } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import type { Daemon, State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { Sidebar } from "./Sidebar";
@@ -42,20 +43,12 @@ interface Placement {
 }
 
 /** The store of the placement mounted last, so a test can change the status under it. */
-let store: ReturnType<typeof createStateStore>;
+let store: Daemon["store"];
 
 function daemonWith(status: GitStatus): Daemon {
-  store = createStateStore({ gitStatuses: new Map([[web.id, status]]), sessions: new Map(sessions.map((session) => [session.id, session])) } satisfies Partial<State>);
-  return {
-    store,
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const daemon = testDaemon({ state: { gitStatuses: new Map([[web.id, status]]), sessions: new Map(sessions.map((session) => [session.id, session])) } satisfies Partial<State> });
+  store = daemon.store;
+  return daemon;
 }
 
 const handlers = () =>
@@ -63,9 +56,7 @@ const handlers = () =>
 
 function mountOver(status: GitStatus, view: React.ReactElement): HTMLElement {
   return mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
-      <DaemonProvider value={daemonWith(status)}>{view}</DaemonProvider>
-    </PlatformProvider>,
+    <TestHost daemon={daemonWith(status)}>{view}</TestHost>,
   );
 }
 

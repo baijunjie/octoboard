@@ -1,32 +1,30 @@
-import { CircleAlert, CircleCheck, CircleDot, CircleMinus, CircleSlash, TriangleAlert, type LucideIcon } from "lucide-react";
-import React, { useId } from "react";
+import { CircleAlert, CircleCheck, CircleDot, CircleMinus, CircleSlash, TriangleAlert } from "lucide-react";
+import React from "react";
 
 import { AlertStatusContext } from "../components/alerts/AlertButton";
-import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus } from "../protocol";
-import { CARD_CLASS, CARD_HEADER_CLASS, FailureReason, FallbackMark } from "./importParts";
+import { Card, CARD_HEADER_CLASS, CardTitle, FailureReason, FallbackMark, STATUS_TONE, StatusGlyph, type StatusEntry } from "./importParts";
 
 type Status = ImportStatus | AccountOutcome;
 
-/** What each outcome is called, drawn and coloured. The colour only strengthens the word and the shape, which differ
- * between the outcomes. */
-const STATUS: Record<Status, { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
-  created: { label: "configuration.import.result.created", icon: CircleCheck, tone: "text-success-soft-foreground" },
-  existing: { label: "configuration.import.result.existing", icon: CircleDot, tone: "text-app-muted" },
-  left_out: { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: "text-app-muted" },
-  not_attempted: { label: "configuration.import.result.status.notAttempted", icon: CircleSlash, tone: "text-app-muted" },
-  failed: { label: "configuration.import.result.failed", icon: CircleAlert, tone: "text-danger-soft-foreground" },
+/** What each outcome is called, drawn and coloured. */
+const STATUS: Record<Status, StatusEntry> = {
+  created: { label: "configuration.import.result.created", icon: CircleCheck, tone: STATUS_TONE.success },
+  existing: { label: "configuration.import.result.existing", icon: CircleDot, tone: STATUS_TONE.muted },
+  left_out: { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: STATUS_TONE.muted },
+  not_attempted: { label: "configuration.import.result.status.notAttempted", icon: CircleSlash, tone: STATUS_TONE.muted },
+  failed: { label: "configuration.import.result.failed", icon: CircleAlert, tone: STATUS_TONE.danger },
 };
 
 /** An outcome as a glyph and its word. */
 function Outcome({ status }: { status: Status }): React.ReactElement {
   const t = useT();
-  const { label, icon: Icon, tone } = STATUS[status];
+  const entry = STATUS[status];
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm">
-      <Icon aria-hidden="true" className={`size-4 shrink-0 ${tone}`} />
-      {t(label)}
+      <StatusGlyph entry={entry} size="size-4" />
+      {t(entry.label)}
     </span>
   );
 }
@@ -49,25 +47,22 @@ export function ResultCard({
   failure?: ImportFailure | null;
   children: React.ReactNode;
 }): React.ReactElement {
-  const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className={CARD_CLASS}>
-      <div className={`flex flex-wrap items-start justify-between gap-x-4 gap-y-1 ${CARD_HEADER_CLASS}`}>
-        <div className="flex min-w-40 flex-1 items-start gap-1">
-          <h3 id={headingId} className="min-w-0 text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
-            {name}
-          </h3>
-          <FallbackMark subject={name} fallbacks={fallbacks ?? []} size="text-base" />
+    <Card
+      header={(headingId) => (
+        <div className={`flex flex-wrap items-start justify-between gap-x-4 gap-y-1 ${CARD_HEADER_CLASS}`}>
+          <CardTitle id={headingId} name={name} fallbacks={fallbacks ?? []} className="min-w-40 flex-1" />
+          {status && <Outcome status={status} />}
         </div>
-        {status && <Outcome status={status} />}
-      </div>
+      )}
+    >
       {failure && (
         <div className="groove-b px-4 py-3 last:border-b-0">
           <FailureReason failure={failure} />
         </div>
       )}
       {children}
-    </section>
+    </Card>
   );
 }
 

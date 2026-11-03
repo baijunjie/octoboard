@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { usePlatform } from "../platform/react";
 import { useOctoboardTheme } from "../preferences/theme";
-import { useSerialPush } from "./useSerialPush";
+import { useSerialPush } from "../components/hooks/useSerialPush";
 
 /**
  * Pushes the user's theme choice onto the native window's own appearance (on macOS the traffic

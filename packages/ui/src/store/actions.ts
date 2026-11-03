@@ -2,12 +2,13 @@ import type { StoreApi } from "zustand";
 
 import type { AccountLogin, Agent, Event, ShellTerminal } from "../protocol";
 import { reducer } from "./reducer";
-import { accountLoginKey, type State } from "./state";
+import { accountKey } from "../accounts/accountRecords";
+import type { State } from "./state";
 
 /** Notes that this window is starting the login of an account, so that it opens the authorization page when it
  * comes (`tracked`), or that it is not any more: the page has been opened, or the request was refused. */
 export function trackAccountLogin(store: StoreApi<State>, agent: Agent, account: string | null, tracked: boolean): void {
-  store.setState((state) => reducer(state, { kind: "track_account_login", key: accountLoginKey(agent, account), tracked }));
+  store.setState((state) => reducer(state, { kind: "track_account_login", key: accountKey(agent, account), tracked }));
 }
 
 /** Adds `ids` to the sessions account-switch batches have not finished with, or takes them out

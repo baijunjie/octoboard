@@ -1,14 +1,14 @@
 // What the fixture daemon answers for the agent accounts: their creation and removal, sharing, sign-in, the default
 // account's name and the use of a Codex reset credit, and the refusals a session gets on an account.
-import { consoleAccount, inheritedAccount } from "../accounts/accountChoices";
+import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
 import { AGENT_LABEL } from "../agents/agents";
-import { DEFAULT_ACCOUNT_NAME, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Event, type Project, type QuotaWindow, type RequestBody, type SharingCause } from "../protocol";
+import { DEFAULT_ACCOUNT_NAME, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type RequestBody, type SharingCause } from "../protocol";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../accounts/quotaFormat";
 import { applyDaemonEvent } from "../store";
 import { ALL_AGENTS } from "./builders";
 import type { FixtureError } from "./sampleFiles";
-import { normalizedPath, type FixtureContext, type Handlers } from "./fixtureContext";
+import { neverReplied, normalizedPath, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** Whether a held reading has a credit a use can take: the first the list names that has not expired (the list is in
  * the order they are used), or any, where the reading holds only the count. */
@@ -183,7 +183,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
   /** The `inspect_account_trash` requests answered so far, which a list of answers is read by. */
   let trashInspections = 0;
 
-  const changeAccount = (body: Extract<RequestBody, { type: "create_account" | "update_account" }>): Event | Promise<Event> => {
+  const changeAccount = (body: Extract<RequestBody, { type: "create_account" | "update_account" }>): Ack => {
     const current = store.getState();
     const editing = body.type === "update_account" ? current.settings.accounts.find((account) => account.id === body.account) : undefined;
     if (body.type === "update_account" && !editing) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
@@ -324,7 +324,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
         return fail({ code: "unknown_account", params: { account }, message: `unknown account ${account}` });
       }
       const staged = scenario.resetCreditUse;
-      if (staged === "pending") return new Promise<Event>(() => {});
+      if (staged === "pending") return neverReplied();
       const reading = accountQuotaOf(current.accountQuotas, "codex", account);
       const held = typeof reading === "object" ? reading : undefined;
       // The daemon reads the account again after every run of Codex, a failed one included, a moment after it
@@ -362,7 +362,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
       const answers = scenario.accountTrashInspection;
       const inspection = (Array.isArray(answers) ? answers[Math.min(trashInspections, answers.length - 1)] : answers) ?? { status: "ok" } as const;
       trashInspections += 1;
-      if (inspection === "pending") return new Promise<Event>(() => {});
+      if (inspection === "pending") return neverReplied();
       if ("code" in inspection) return fail(inspection);
       return { type: "account_trash_inspected", id: null, outcome: inspection };
     },

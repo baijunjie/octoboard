@@ -6,7 +6,8 @@ import { canTakeFocus } from "../components/focus/regionFocus";
 import { focusAfterModalCloses, focusOpenDialog } from "../components/focus/modalFocus";
 import { usePressedControl } from "../components/controls/usePressedControl";
 import { usePlatform } from "../platform/react";
-import type { SettingsSectionId } from "./SettingsDialog";
+import type { SettingsNavigation, SettingsSectionId } from "./sections";
+import type { OpenSettings } from "./settingsLauncher";
 
 /**
  * Whether the settings dialog is open, and how to open it (on its first section, or at a given one with
@@ -32,17 +33,10 @@ export function useSettingsDialog({
   focusTerminal: () => void;
 }): {
   settingsOpen: boolean;
-  /** What the dialog was last asked for: the section (none for its first), whether to put its Add agent dialog in
-   * front, and the account (if any) whose sharing switch to focus. `nonce` changes with every request, so an open
-   * dialog can follow a later one. */
-  settingsNavigation: {
-    nonce: number;
-    section: SettingsSectionId | undefined;
-    addAgent: boolean;
-    account: string | undefined;
-  };
+  /** What the dialog was last asked for. */
+  settingsNavigation: SettingsNavigation;
   openSettings: () => void;
-  openSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean; account?: string }) => void;
+  openSettingsAt: OpenSettings;
   closeSettings: () => void;
 } {
   const [open, setOpen] = useState(false);
@@ -94,6 +88,14 @@ export function useSettingsDialog({
     wasOpenRef.current = open;
   }, [open]);
 
+  const openSettingsAt: OpenSettings = (target, options) => {
+    setSection(target);
+    setAddAgent(options?.addAgent ?? false);
+    setAccount(options?.account);
+    setNonce((count) => count + 1);
+    show();
+  };
+
   // Read through a ref so the subscription is made once.
   const requestFromMenuRef = useLatest(() => {
     if (ready && !open && !otherModalOpen && !isActionMenuOpen()) show();
@@ -103,14 +105,6 @@ export function useSettingsDialog({
     if (ready && !otherModalOpen && !isActionMenuOpen()) openSettingsAt("about");
   });
   useEffect(() => appMenu?.onAboutRequested?.(() => requestAboutFromMenuRef.current()), [appMenu]);
-
-  function openSettingsAt(target: SettingsSectionId, options?: { addAgent?: boolean; account?: string }): void {
-    setSection(target);
-    setAddAgent(options?.addAgent ?? false);
-    setAccount(options?.account);
-    setNonce((count) => count + 1);
-    show();
-  }
 
   return {
     settingsOpen: open,

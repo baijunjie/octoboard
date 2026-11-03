@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import { useT } from "../i18n/react";
 import type { ProcessTree, SessionBranchItem } from "../protocol";
@@ -96,7 +96,7 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
         }
       },
       accept: (reply) => () => {
-        if (reply instanceof DaemonRequestError) return { round, items: [], failed: false, inspection: reply.params.inspection || undefined };
+        if (reply instanceof CodedError) return { round, items: [], failed: false, inspection: reply.params.inspection || undefined };
         if (reply.type !== "project_removal_inspected") return inspectionFailed;
         return { round, items: reply.items, failed: false, inspection: reply.inspection || undefined };
       },

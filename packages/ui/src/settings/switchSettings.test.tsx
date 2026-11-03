@@ -1,30 +1,24 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LanguageProvider } from "../i18n/react";
 import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { BOOLEAN_SETTINGS } from "../configuration/booleanSettings";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { DEFAULT_SETTINGS } from "../store";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 const raiseError = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
-let settings: Record<string, boolean | undefined> = {};
-
-vi.mock("../store", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../store")>()),
-  useDaemon: () => ({ request, raiseError }),
-  useDaemonStore: (selector: (state: { settings: typeof settings }) => unknown) => selector({ settings }),
-}));
 
 beforeEach(() => {
   request.mockClear();
   raiseError.mockClear();
   request.mockImplementation(() => Promise.resolve({}) as Promise<never>);
-  settings = {};
 });
 
 it("lists every switch the settings page covers once", () => {
@@ -47,19 +41,12 @@ const switches = [
   { key: "auto_start_quota_windows", label: "Start usage windows automatically", help: "About starting usage windows automatically", onText: "starts counting once it resets" },
 ];
 
-function mount(field: string) {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() =>
-    root.render(
-      <LanguageProvider>
-        <DaemonSwitchSetting field={field as never} />
-      </LanguageProvider>,
-    ),
+function mount(field: string, on = false) {
+  const container = mountHost(
+    <LanguageProvider>
+      <DaemonSwitchSetting field={field as never} />
+    </LanguageProvider>,
+    { daemon: testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, [field]: on } }, request }) },
   );
   return container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
 }
@@ -69,8 +56,7 @@ describe.each(switches)("$key", ({ key, label, help, onText }) => {
     { name: "off while it is on", on: true },
     { name: "on while it is off", on: false },
   ])("shows the daemon's value and turns the switch $name", async ({ on }) => {
-    settings = { [key]: on };
-    const toggle = mount(key);
+    const toggle = mount(key, on);
     expect(toggle.checked).toBe(on);
     await act(async () => {
       toggle.click();
@@ -82,8 +68,7 @@ describe.each(switches)("$key", ({ key, label, help, onText }) => {
     { name: "what is happening now while it is on", on: true, shown: onText, hidden: OFF_TEXT },
     { name: "what turning it on does while it is off", on: false, shown: OFF_TEXT, hidden: undefined },
   ])("describes $name", ({ on, shown, hidden }) => {
-    settings = { [key]: on };
-    mount(key);
+    mount(key, on);
     expect(document.body.textContent).toContain(shown);
     if (hidden) expect(document.body.textContent).not.toContain(hidden);
   });

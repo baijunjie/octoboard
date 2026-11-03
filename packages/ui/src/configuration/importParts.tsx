@@ -1,4 +1,5 @@
-import React from "react";
+import { Info, type LucideIcon } from "lucide-react";
+import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents/agents";
 import { DetailsButton } from "../components/alerts/DetailsButton";
@@ -14,6 +15,7 @@ import { isolate } from "../i18n/isolate";
 import { joinNodes } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { AccountFallback, Agent, ImportFailure } from "../protocol";
+import type { PlainMessageKey } from "../i18n/catalog";
 import { useFailureNode } from "./failureText";
 import { type DirectoryProblem } from "./importPlan";
 import type { SettingValue } from "./importValues";
@@ -26,6 +28,69 @@ import type { SettingValue } from "./importValues";
 export const CARD_CLASS = "flex flex-col rounded-xl panel-edge";
 /** A card's header row, filled like the fields in the rows so it reads apart from the rows under it. */
 export const CARD_HEADER_CLASS = "rounded-t-xl bg-(--control-fill) groove-b px-4 py-3 last:rounded-b-xl last:border-b-0";
+
+/**
+ * A card: a section labelled by its heading, with the header row `header` draws for the id of that heading (the heading
+ * is `CardHeading` where it is the header itself, else `CardTitle` within a header of its own), then the rows.
+ */
+export function Card({ header, children }: { header: (headingId: string) => React.ReactNode; children: React.ReactNode }): React.ReactElement {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className={CARD_CLASS}>
+      {header(headingId)}
+      {children}
+    </section>
+  );
+}
+
+/** A card's heading as its whole header row. */
+export function CardHeading({ id, children }: { id: string; children: React.ReactNode }): React.ReactElement {
+  return <h3 id={id} className={`${CARD_HEADER_CLASS} text-base font-semibold text-foreground`}>{children}</h3>;
+}
+
+/** A card's heading inside a header row of its own: the name, and after it the warning mark of the account
+ * references that fell back to a default account. `className` lays it out in the row. */
+export function CardTitle({ id, name, fallbacks, className }: { id: string; name: string; fallbacks: AccountFallback[]; className: string }): React.ReactElement {
+  return (
+    <div className={`flex items-start gap-1 ${className}`}>
+      <h3 id={id} className="min-w-0 text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
+        {name}
+      </h3>
+      <FallbackMark subject={name} fallbacks={fallbacks} size="text-base" />
+    </div>
+  );
+}
+
+/** A note under the cards, marked by an information glyph. */
+export function InfoNote({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <p className="flex items-start gap-2 text-sm">
+      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
+      <span className="min-w-0">{children}</span>
+    </p>
+  );
+}
+
+/** The colours of a status glyph. The colour only strengthens the word and the shape, which differ between statuses. */
+export const STATUS_TONE = {
+  success: "text-success-soft-foreground",
+  accent: "text-accent-soft-foreground",
+  danger: "text-danger-soft-foreground",
+  muted: "text-app-muted",
+} as const;
+
+/** One status of a table (an outcome, a state): the word that names it, its glyph and the glyph's colour. */
+export interface StatusEntry {
+  label: PlainMessageKey;
+  icon: LucideIcon;
+  tone: (typeof STATUS_TONE)[keyof typeof STATUS_TONE];
+}
+
+/** The glyph of a status, `size` being its size (and margin) classes. */
+export function StatusGlyph({ entry, size }: { entry: StatusEntry; size: string }): React.ReactElement {
+  const Icon = entry.icon;
+  return <Icon aria-hidden="true" className={`${size} shrink-0 ${entry.tone}`} />;
+}
 
 /** `useSubmitValidation`'s `shown`: holds a field's message back until the user has tried to import. */
 export type Shown = ReturnType<typeof useSubmitValidation>["shown"];

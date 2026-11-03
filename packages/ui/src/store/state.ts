@@ -2,20 +2,21 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import type {
-  AccountLogin,
-  AccountQuota,
-  AccountSharing,
-  Agent,
-  AgentAvailability,
-  Console,
-  GitStatus,
-  Host,
-  Page,
-  Project,
-  Session,
-  Settings,
-  ShellTerminal,
+import {
+  AGENTS,
+  type AccountLogin,
+  type AccountQuota,
+  type AccountSharing,
+  type Agent,
+  type AgentAvailability,
+  type Console,
+  type GitStatus,
+  type Host,
+  type Page,
+  type Project,
+  type Session,
+  type Settings,
+  type ShellTerminal,
 } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
@@ -87,7 +88,7 @@ export interface State {
    * `account_login_updated` said; an ended login stays until the account's next login, a snapshot, or the user
    * dismissing it (see `dismissAccountLogin`). */
   accountLogins: AccountLogin[];
-  /** The logins this window started whose authorization page it has not opened yet, as `accountLoginKey`s: the
+  /** The logins this window started whose authorization page it has not opened yet, as `accountKey`s: the
    * page is opened by the window that asked for the login, not by every window watching it. An entry goes when the
    * page has been opened or the login ends. Client state, which the daemon knows nothing of. */
   loginsStartedHere: string[];
@@ -112,7 +113,7 @@ export interface State {
 }
 
 /** The three entries every run begins with, before the daemon's one-time determination lands. */
-const INITIAL_AGENT_AVAILABILITY: AgentAvailability[] = (["claude", "codex", "grok"] as Agent[]).map((agent) => ({
+const INITIAL_AGENT_AVAILABILITY: AgentAvailability[] = AGENTS.map((agent) => ({
   agent,
   availability: "not_determined",
   default_account_dir: null,
@@ -145,9 +146,4 @@ const initialState: State = {
 /** A store holding the empty state with `initial` laid over it. */
 export function createStateStore(initial: Partial<State> = {}): StoreApi<State> {
   return createStore<State>(() => ({ ...initialState, ...initial }));
-}
-
-/** What names an account's login among the logins: its agent and account (`null` for the agent's default account). */
-export function accountLoginKey(agent: Agent, account: string | null): string {
-  return `${agent}:${account ?? ""}`;
 }

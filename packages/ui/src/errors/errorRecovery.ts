@@ -1,7 +1,7 @@
 import { isKeptForItsFolder, pathLinkRefusedCause, relocationCause, sourceUnavailableCause, storeWriteCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, type StoreWriteCause } from "../protocol";
 import { ActionableError } from "./actionableError";
-import { codeRecord } from "./codes";
-import { DaemonRequestError } from "../daemon-client";
+import { CODE, codeRecord } from "./codes";
+import { CodedError } from "./codedError";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
 
 export type ErrorRecovery =
@@ -74,8 +74,8 @@ const PATH_LINK_REFUSED_RECOVERY: Record<PathLinkRefusedCause, ErrorRecovery> = 
  * one of which whether it is or holds another project's folder could not be told, whose group's note says what to do
  * with it, or the home folder, the root of a disk or a folder holding Octoboard's data, which is to stay. The alert then
  * adds no remedy of its own, which would have the person remove them. A list that also names anything else keeps it. */
-function onlyKeptForTheirFolder(error: DaemonRequestError): boolean {
-  if (error.code !== "session_branches_not_removed") return false;
+function onlyKeptForTheirFolder(error: CodedError): boolean {
+  if (error.code !== CODE.session_branches_not_removed) return false;
   try {
     const items: unknown = JSON.parse(error.params.items ?? "");
     return Array.isArray(items) && items.length > 0
@@ -96,8 +96,8 @@ function withoutRetry(recovery: ErrorRecovery | undefined): ErrorRecovery | unde
 
 /** Whether `error` is a handoff that failed once the receiving session was running and the work had moved
  * (`handoff_archive_failed`, `handoff_move_failed`). */
-export function isHandoffAfterMove(error: unknown): error is DaemonRequestError {
-  return error instanceof DaemonRequestError && (error.code === "handoff_archive_failed" || error.code === "handoff_move_failed");
+export function isHandoffAfterMove(error: unknown): error is CodedError {
+  return error instanceof CodedError && (error.code === CODE.handoff_archive_failed || error.code === CODE.handoff_move_failed);
 }
 
 /** The remedies of a nested failure that name a session to unlock, wait for or archive, worded for a handoff that failed
@@ -106,13 +106,13 @@ const HANDOFF_ORIGINAL_RECOVERY: Partial<Record<ErrorRecovery, ErrorRecovery>> =
 
 /** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */
 function isNotRestored(error: unknown): boolean {
-  return error instanceof DaemonRequestError && error.code === "relocation_failed" && relocationCause(error.params.cause) === "not_restored";
+  return error instanceof CodedError && error.code === CODE.relocation_failed && relocationCause(error.params.cause) === "not_restored";
 }
 
 /** The cause the system's own text names in a failure that states only its cause (`causeOnly`: no remedy follows it),
  * so its alert can say the cause after the failure's own sentence; the raw text stays in the details. */
 export function namedSystemCause(error: unknown): ErrorRecovery | undefined {
-  return error instanceof DaemonRequestError && codeRecord(error.code)?.causeOnly ? environmentRecovery(error) : undefined;
+  return error instanceof CodedError && codeRecord(error.code)?.causeOnly ? environmentRecovery(error) : undefined;
 }
 
 /** The remedy that goes with a failure's own as well, said after it: what a recognised operating-system signature in
@@ -122,22 +122,22 @@ export function namedSystemCause(error: unknown): ErrorRecovery | undefined {
 export function additionalRecovery(error: unknown): ErrorRecovery | undefined {
   // Said whatever the failure's own remedy is, or whether it has one: the original is still open, and after a failed
   // move both sessions are running.
-  if (error instanceof DaemonRequestError && error.code === "handoff_archive_failed") return "archiveOriginal";
-  if (error instanceof DaemonRequestError && error.code === "handoff_move_failed") return "handoffBothRunning";
+  if (error instanceof CodedError && error.code === CODE.handoff_archive_failed) return "archiveOriginal";
+  if (error instanceof CodedError && error.code === CODE.handoff_move_failed) return "handoffBothRunning";
   if (isNotRestored(error)) return environmentRecovery(error);
-  const cause = error instanceof DaemonRequestError && error.code === "account_switch_automatically_failed" ? nestedFailure(error) : undefined;
+  const cause = error instanceof CodedError && error.code === CODE.account_switch_automatically_failed ? nestedFailure(error) : undefined;
   return cause && isNotRestored(cause) ? withoutRetry(environmentRecovery(cause)) : undefined;
 }
 
 /** The failure a failed automatic switch or a handoff that failed after the work moved reports, as a failure of its
  * own (its `reason` as the message), or its own failure when it names none. */
-function nestedFailure(error: DaemonRequestError): DaemonRequestError {
+function nestedFailure(error: CodedError): CodedError {
   const cause = error.params.reason_code;
-  return cause && cause !== error.code ? new DaemonRequestError(error.params.reason ?? "", cause, error.params) : error;
+  return cause && cause !== error.code ? new CodedError(error.params.reason ?? "", cause, error.params) : error;
 }
 
 /** The code whose remedy `error` shows: the failure a `failureAndRemedy` notice nests, or its own. */
-function remedyCode(error: DaemonRequestError): string | undefined {
+function remedyCode(error: CodedError): string | undefined {
   return codeRecord(error.code)?.nested === "failureAndRemedy" ? error.params.reason_code : error.code;
 }
 
@@ -145,9 +145,9 @@ function remedyCode(error: DaemonRequestError): string | undefined {
  * system's text in `detail` says (SQLite's text carries no operating-system signature to read), raised directly or as
  * the cause of a failure that nests one (`failureAndRemedy`). Undefined for any other failure. */
 function storeWriteRecovery(error: unknown): ErrorRecovery | undefined {
-  if (!(error instanceof DaemonRequestError)) return undefined;
+  if (!(error instanceof CodedError)) return undefined;
   const code = remedyCode(error);
-  return code === "store_write_failed" ? STORE_WRITE_CAUSE_RECOVERY[storeWriteCause(error.params.cause)] : undefined;
+  return code === CODE.store_write_failed ? STORE_WRITE_CAUSE_RECOVERY[storeWriteCause(error.params.cause)] : undefined;
 }
 
 export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorClassification {
@@ -168,7 +168,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   const stored = storeWriteRecovery(error);
   if (stored) return { kind: "actionable", recovery: stored };
   const explicit = recovery ?? (error instanceof ActionableError ? error.recovery : undefined);
-  if (!explicit && error instanceof DaemonRequestError && error.code === "message_not_sent" && error.params.submit_retry === "once") {
+  if (!explicit && error instanceof CodedError && error.code === CODE.message_not_sent && error.params.submit_retry === "once") {
     return { kind: "actionable", recovery: "submitRetry" };
   }
   // A file that could not be read keeps its own remedy over the one an operating-system signature names: the
@@ -178,13 +178,13 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   if (isNotRestored(error)) return { kind: "actionable", recovery: "notRestored" };
   // A denied read keeps its own remedy over the access remedy its operating-system signature names, which is about
   // writing and choosing another folder.
-  if (!explicit && error instanceof DaemonRequestError && codeRecord(error.code)?.recovery === "readAccess") return { kind: "actionable", recovery: "readAccess" };
+  if (!explicit && error instanceof CodedError && codeRecord(error.code)?.recovery === "readAccess") return { kind: "actionable", recovery: "readAccess" };
   // A failed automatic switch has nothing left to retry, so none of its remedies says to: the session could not be
   // brought back up, and the nested cause's remedy (wait for a change, correct a path) is not for the person to act
   // on. The exceptions are an older item kept aside, which is lost unless it is copied out in time, and what the
   // system said (a full disk, a denied access). A cause the application has no words for stays unexpected, with
   // the guidance to report it, unless its raw text names what the system said, which the reason line already says.
-  if (error instanceof DaemonRequestError && error.code === "account_switch_automatically_failed") {
+  if (error instanceof CodedError && error.code === CODE.account_switch_automatically_failed) {
     const nested = nestedFailure(error);
     if (nested === error) return { kind: "unexpected" };
     // Recognised as the cause names itself or as the system's text does, in lockstep with the generic sentence
@@ -202,17 +202,17 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     return { kind: "actionable", recovery: withoutRetry(environmentRecovery(nested)) ?? "none" };
   }
   // Ahead of the operating-system signature, whose remedy would otherwise be added.
-  if (!explicit && error instanceof DaemonRequestError && codeRecord(error.code)?.causeOnly) return { kind: "actionable", recovery: "none" };
+  if (!explicit && error instanceof CodedError && codeRecord(error.code)?.causeOnly) return { kind: "actionable", recovery: "none" };
   const remedy = environmentRecovery(error) ?? explicit;
   if (remedy) return { kind: "actionable", recovery: remedy };
-  if (error instanceof DaemonRequestError) {
+  if (error instanceof CodedError) {
     const code = remedyCode(error);
-    if (code === "source_unavailable") return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
-    if (code === "path_link_refused") return { kind: "actionable", recovery: PATH_LINK_REFUSED_RECOVERY[pathLinkRefusedCause(error.params.cause)] };
+    if (code === CODE.source_unavailable) return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
+    if (code === CODE.path_link_refused) return { kind: "actionable", recovery: PATH_LINK_REFUSED_RECOVERY[pathLinkRefusedCause(error.params.cause)] };
     if (onlyKeptForTheirFolder(error)) return { kind: "actionable", recovery: "none" };
     const domain = code ? codeRecord(code)?.recovery : undefined;
     if (domain) return { kind: "actionable", recovery: domain };
-    const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[relocationCause(error.params.cause)] : undefined;
+    const relocation = code === CODE.relocation_failed ? RELOCATION_CAUSE_RECOVERY[relocationCause(error.params.cause)] : undefined;
     if (relocation) return { kind: "actionable", recovery: relocation };
   }
   return { kind: "unexpected" };
@@ -223,16 +223,16 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
  * answer and no Try again is offered. Whether asking again can change the answer to `error`: false for such a
  * failure, where a Try again would only fail the same way. */
 export function retryCanHelp(error: unknown): boolean {
-  if (!(error instanceof DaemonRequestError)) return true;
+  if (!(error instanceof CodedError)) return true;
   const recovery = codeRecord(error.code)?.recovery;
-  return !(recovery === "gitHistory" || recovery === "repository" || recovery === "scope" || recovery === "limit" || error.code === "invalid_path");
+  return !(recovery === "gitHistory" || recovery === "repository" || recovery === "scope" || recovery === "limit" || error.code === CODE.invalid_path);
 }
 
 /** The remedy for a file or folder an action on the project's files no longer finds: it is found again in the project's
  * files, not by the general remedy of its codes, which picks one with Browse in a form. Undefined for any other failure,
  * which keeps its own. */
 export function hostPathRecovery(error: unknown): ErrorRecovery | undefined {
-  return error instanceof DaemonRequestError && codeRecord(error.code)?.hostPathGone ? "hostPathGone" : undefined;
+  return error instanceof CodedError && codeRecord(error.code)?.hostPathGone ? "hostPathGone" : undefined;
 }
 
 /** The remedy for a failed read or write of the application's own data (a setting, the order of the agents): a
@@ -250,7 +250,7 @@ export function appDataRecovery(error: unknown): ErrorRecovery | undefined {
  * to pick another, not the launch settings of a new session that the code's own remedy points to. Undefined for any
  * other failure, which keeps its own. */
 export function modelChangeRecovery(error: unknown): ErrorRecovery | undefined {
-  return error instanceof DaemonRequestError && error.code === "invalid_launch_setting" ? "changeModelSetting" : undefined;
+  return error instanceof CodedError && error.code === CODE.invalid_launch_setting ? "changeModelSetting" : undefined;
 }
 
 /** The remedy for a failed click on a path link, at either step of it (reading the file for the viewer, or opening the
@@ -259,8 +259,8 @@ export function modelChangeRecovery(error: unknown): ErrorRecovery | undefined {
  * no use to the browse views' `scope` remedy, so the sentence alone says what is wrong. Undefined for any other
  * failure, which keeps its own. */
 export function pathLinkRecovery(error: unknown): ErrorRecovery | undefined {
-  if (!(error instanceof DaemonRequestError)) return undefined;
-  if (error.code === "outside_scope") return "none";
+  if (!(error instanceof CodedError)) return undefined;
+  if (error.code === CODE.outside_scope) return "none";
   const recovery = hostPathRecovery(error);
   return recovery && error.params.root === "temporary" ? "none" : recovery;
 }

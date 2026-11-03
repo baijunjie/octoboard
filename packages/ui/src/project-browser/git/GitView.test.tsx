@@ -2,7 +2,7 @@
 import { act, useState } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { ProjectSourceInfo } from "../../protocol";
 import { press } from "../../components/alerts/detailsTestSupport";
@@ -273,7 +273,7 @@ it("offers no Try again on a failure that is the state of the repository, where 
   const { container } = mountPartFailure({
     items: [changeItem(change("unstaged", "a.ts"))],
     uncommitted: { state: "notCheckedOut", branch: "feature" },
-    committed: { state: "compare", branch: "feature", base: "main", baseKind: "remote", comparison: { state: "error", message: new DaemonRequestError("no common commit", "no_merge_base", { left: "main", right: "feature" }) }, commits: undefined },
+    committed: { state: "compare", branch: "feature", base: "main", baseKind: "remote", comparison: { state: "error", message: new CodedError("no common commit", "no_merge_base", { left: "main", right: "feature" }) }, commits: undefined },
   });
   const mark = container.querySelector<HTMLButtonElement>("[data-section-heading-control]")!;
   press(mark);
@@ -425,8 +425,8 @@ it("marks the committed changes and the commits that were cut short on the Commi
 /** A comparison of `feature` with `main` made at time 0, shown while the branch list is read again at time 1. */
 function mountGoneComparison() {
   const both = [{ name: "main", commit: "c1" }, { name: "feature", commit: "c2" }];
-  const list = (branches: typeof both, error?: DaemonRequestError): ChangesViewProps["branches"] => ({ state: "loaded", branches, complete: true, sentAt: 1, error });
-  let read = (_branches: typeof both, _error?: DaemonRequestError) => {};
+  const list = (branches: typeof both, error?: CodedError): ChangesViewProps["branches"] => ({ state: "loaded", branches, complete: true, sentAt: 1, error });
+  let read = (_branches: typeof both, _error?: CodedError) => {};
   const selectorsRef = { current: null as HTMLDivElement | null };
   function Host() {
     const [branches, setBranches] = useState(list(both));
@@ -458,7 +458,7 @@ function mountGoneComparison() {
     );
   }
   const container = mountRows(<Host />);
-  return { container, both, read: (next: typeof both, error?: DaemonRequestError) => act(() => read(next, error)), selectorsRef };
+  return { container, both, read: (next: typeof both, error?: CodedError) => act(() => read(next, error)), selectorsRef };
 }
 
 const GONE_MARK = 'button[aria-label$=" deleted"]';

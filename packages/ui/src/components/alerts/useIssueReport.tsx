@@ -11,7 +11,7 @@ import { diagnosticText } from "../../errors/errorText";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import { issueReportUrl, recordNames, type ReportableFailure } from "../../errors/issueReport";
 import { useOptionalPlatform } from "../../platform/react";
-import { useErrorRecords } from "../../store";
+import { useDaemonStoreOrEmpty } from "../../store";
 
 export const issueUrl = appConfig.issueUrl;
 
@@ -59,8 +59,8 @@ export function useIssueReport(failures: readonly ReportableFailure[] | undefine
     return () => { current = false; };
   }, [unexpected, platform]);
   // Walking every record is only worth it for a failure that is going to be reported.
-  const names = useErrorRecords(useShallow((state) => (unexpected ? recordNames(state) : NO_NAMES)));
-  const homeDir = useErrorRecords((state) => state.homeDir);
+  const names = useDaemonStoreOrEmpty(useShallow((state) => (unexpected ? recordNames(state) : NO_NAMES)));
+  const homeDir = useDaemonStoreOrEmpty((state) => state.homeDir);
   const reportUrl = failures
     ? issueReportUrl(issueUrl, {
       failures,

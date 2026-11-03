@@ -1,7 +1,7 @@
 import { type Dispatch, type SetStateAction, useRef, useState } from "react";
 
 import { runAccountSwitchBatch } from "../dialogs/accountSwitchBatch";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import type { ConfirmLaunch } from "../dialogs/useConfirmIncompleteLaunch";
 import type { ModelEdits } from "../dialogs/SessionModelDialog";
 import { modelChangeRecovery } from "../errors/errorRecovery";
@@ -133,7 +133,7 @@ async function runOnceRejecting(inFlight: Set<string>, key: string, action: () =
     // The in-flight guard above already stops this client from causing the double-click kind of
     // "already running" (see `ALREADY_RUNNING_CODES`), but another path to the same session — the
     // sidebar row and the terminal's Resume button, for instance — can still race it.
-    const isAlreadyRunning = err instanceof DaemonRequestError && ALREADY_RUNNING_CODES.includes(err.code);
+    const isAlreadyRunning = err instanceof CodedError && ALREADY_RUNNING_CODES.includes(err.code);
     if (!isAlreadyRunning) throw err;
   } finally {
     inFlight.delete(key);

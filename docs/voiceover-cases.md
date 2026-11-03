@@ -379,7 +379,7 @@ mapping.
   the field "Project name contains" holding "Alpha", the project is renamed by the daemon to "Status fixture Beta" while
   the field keeps focus and value. The filter then matches nothing, and renaming back clears the status.
 - **Mechanism.** A `StatusAnnouncer` mounted for the life of the projects section, empty until the change.
-  `packages/ui/src/sidebar/Sidebar.tsx` (the no-match text, derived from projects existing and none matching the filter)
+  `packages/ui/src/sidebar/ConsoleView.tsx` (the no-match text, derived from projects existing and none matching the filter)
   renders it inside a `div` marked `data-live-announcer="true"`, which keeps the region exposed beside the modal filter
   popover; the visible empty panel is `silent`, so nothing is said twice. The announcer's default 100 ms first write
   delay had long elapsed, so this later change is written at once. No caller timer.
@@ -1501,7 +1501,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 
 | Caller (file, symbol) | Announces | Case | Basis | Why |
 |---|---|---|---|---|
-| `sidebar/Sidebar.tsx` | filter no-match | SA-A for a change while the section is mounted; no match for the rest | Heard | The section is kept per console, so it can mount with the no-match text already present (switching back to a console, leaving a focus view). SA-H does not cover that: SA-H was heard for a panel toggle with focus left on the toggle, while these mounts come with a console or view switch whose focus relation was not recorded. |
+| `sidebar/ConsoleView.tsx` | filter no-match | SA-A for a change while the section is mounted; no match for the rest | Heard | The section is kept per console, so it can mount with the no-match text already present (switching back to a console, leaving a focus view). SA-H does not cover that: SA-H was heard for a panel toggle with focus left on the toggle, while these mounts come with a console or view switch whose focus relation was not recorded. |
 | `shell/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
 | `settings/accounts/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
 | `settings/accounts/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the current table and the second mount in `settings/accounts/AccountDetailsDialog.tsx` (E10) | Heard | Current table direct/menu/return paths and the owned-account details path were heard in E10; SA-E heard the table remount. |

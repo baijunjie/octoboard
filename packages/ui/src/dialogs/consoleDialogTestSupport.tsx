@@ -55,7 +55,7 @@ export function render(
     },
     request,
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
+    showNotice: vi.fn(),
   });
   lastStore = daemon.store;
   const container = document.body.appendChild(document.createElement("div"));

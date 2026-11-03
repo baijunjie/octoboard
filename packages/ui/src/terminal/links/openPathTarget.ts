@@ -1,5 +1,5 @@
 import { BROWSE_SLOTS } from "../../browse/budget";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import type { Event, RequestBody } from "../../protocol";
 import type { ViewedFile } from "../../viewer/viewedFile";
 import { pathLinkRecovery } from "../../errors/errorRecovery";
@@ -62,7 +62,7 @@ export async function openPathTarget({
     if (reply.type === "project_file" && bodyFromFileContent(view.path, reply.file).kind !== "binary") viewFile({ ...file, read: reply });
     else await openOnHost();
   } catch (error) {
-    if (directory || (error instanceof DaemonRequestError && error.code === "limit_exceeded")) return openOnHost();
+    if (directory || (error instanceof CodedError && error.code === "limit_exceeded")) return openOnHost();
     report(error);
   }
 }

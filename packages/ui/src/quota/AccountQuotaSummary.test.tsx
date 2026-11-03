@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, QuotaWindow } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { mountHost } from "../test/mountHost";
 import { AccountNameLine, AccountQuotaSummary, QuotaPlan } from "./AccountQuotaSummary";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -40,16 +39,8 @@ const quota = (patch: Partial<AccountQuota> = {}): AccountQuota => ({
 function mount(element: React.ReactNode): HTMLElement {
   const previousLanguage = currentLanguage();
   act(() => setLanguage("en"));
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-    act(() => setLanguage(previousLanguage));
-  });
-  const daemon = { store: createStateStore({}) } as Daemon;
-  act(() => root.render(<DaemonProvider value={daemon}>{element}</DaemonProvider>));
-  return container;
+  onTestFinished(() => act(() => setLanguage(previousLanguage)));
+  return mountHost(element);
 }
 
 /** The text with the bidi isolates that wrap the values put into a sentence taken out. */

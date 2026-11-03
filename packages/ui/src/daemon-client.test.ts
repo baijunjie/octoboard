@@ -3,18 +3,21 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { sessionOf } from "./fixtures/builders";
 import type { Event } from "./protocol";
-import { DaemonClient, DaemonRequestError } from "./daemon-client";
+import { DaemonClient } from "./daemon-client";
+import { CodedError } from "./errors/codedError";
 import { setLanguage } from "./i18n/language";
 
 class FakeSocket extends EventTarget {
   static OPEN = 1;
   static CLOSED = 3;
   static last: FakeSocket;
+  static all: FakeSocket[] = [];
   readyState = FakeSocket.OPEN;
   sent: string[] = [];
   constructor() {
     super();
     FakeSocket.last = this;
+    FakeSocket.all.push(this);
   }
   send(payload: string): void {
     this.sent.push(payload);
@@ -35,6 +38,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  FakeSocket.all = [];
   vi.useRealTimers();
   vi.unstubAllGlobals();
   frame = undefined;
@@ -93,7 +97,7 @@ it("fails a request the reconnect cut off in the UI's language, as a closed conn
     const reply = client.request({ type: "shutdown" });
     client.reconnect();
     const error = await reply.catch((cause: unknown) => cause);
-    expect(error).toBeInstanceOf(DaemonRequestError);
+    expect(error).toBeInstanceOf(CodedError);
     expect(error).toMatchObject({ code: "connection_closed", message: "守护进程控制连接在收到回复前已重新建立。" });
   } finally {
     setLanguage("en");
@@ -161,4 +165,53 @@ it("gives a connection that delivered its snapshot the whole budget again when i
   open(FakeSocket.last);
   FakeSocket.last.receive(snapshot);
   expect(states.at(-1)).toBe("open");
+});
+
+it("rejects a reply of another type than its request is answered with as an unexpected reply", async () => {
+  const client = new DaemonClient("ws://test");
+  const reply = client.request({ type: "list_all_processes" });
+  const id = (JSON.parse(FakeSocket.last.sent[0]) as { id: string }).id;
+  FakeSocket.last.receive({ type: "ack", id });
+  const error = await reply.catch((cause: unknown) => cause);
+  expect(error).toBeInstanceOf(CodedError);
+  expect(error).toMatchObject({ code: "unexpected_reply", params: { request: "list_all_processes", reply: "ack" } });
+});
+
+it("fails a request made after close at once, as a closed connection", async () => {
+  const client = new DaemonClient("ws://test");
+  const socket = FakeSocket.last;
+  drop(socket);
+  // A reconnect was scheduled before the window closed the client for good.
+  client.close();
+  let settled: unknown;
+  void client.request({ type: "shutdown" }).catch((error: unknown) => (settled = error));
+  await Promise.resolve();
+  expect(settled).toMatchObject({ code: "connection_closed" });
+  expect(socket.sent).toEqual([]);
+});
+
+it("reports a Retry as reconnecting until the socket opens", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  for (const delay of [500, 1000]) {
+    drop(FakeSocket.last);
+    vi.advanceTimersByTime(delay);
+  }
+  drop(FakeSocket.last);
+  expect(states.at(-1)).toBe("closed");
+  client.reconnect();
+  expect(states.at(-1)).toBe("reconnecting");
+  open(FakeSocket.last);
+  expect(states.at(-1)).toBe("open");
+});
+
+it("gives every request its own id, across reconnects", () => {
+  const client = new DaemonClient("ws://test");
+  void client.request({ type: "shutdown" }).catch(() => {});
+  client.reconnect();
+  void client.request({ type: "shutdown" }).catch(() => {});
+  const ids = [...FakeSocket.all.flatMap((socket) => socket.sent)].map((sent) => (JSON.parse(sent) as { id: string }).id);
+  expect(ids).toHaveLength(2);
+  expect(new Set(ids).size).toBe(2);
 });

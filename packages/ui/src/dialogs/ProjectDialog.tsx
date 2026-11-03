@@ -1,7 +1,8 @@
 import React, { useId, useMemo, useState } from "react";
 
 import { orderedAccounts } from "../accounts/accountOrder";
-import { accountDisabled, consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accounts/accountChoices";
+import { accountDisabled } from "../accounts/choiceEntries";
+import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accounts/accountInheritance";
 import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agents/agentFields";
 import {
   AGENT_LABEL,

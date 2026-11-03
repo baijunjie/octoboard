@@ -2,7 +2,7 @@
 import { expect, it } from "vitest";
 
 import { appConfig } from "../appConfig";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "./codedError";
 import { ActionableError } from "./actionableError";
 import { issueReportUrl, osFromUserAgent, recordNames, sanitizeReportText, type IssueFacts } from "./issueReport";
 
@@ -167,7 +167,7 @@ it("describes a thrown error with its sanitized message and stack, and the envir
 });
 
 it("gives an actionable failure only its kind, code and parameter names, never their values, its message or a title of its own", () => {
-  const locked = new DaemonRequestError("Localized wording about Secret Project", "session_locked", { path: "/Users/alice/p", name: "Secret Project" });
+  const locked = new CodedError("Localized wording about Secret Project", "session_locked", { path: "/Users/alice/p", name: "Secret Project" });
   const plain = new ActionableError("Could not write /Users/alice/Secret Project", "clipboard");
   const { title, body } = parse(issueReportUrl(BASE, facts([{ error: locked }, { error: plain }])));
   expect(title).toBe("Unexpected error");
@@ -178,7 +178,7 @@ it("gives an actionable failure only its kind, code and parameter names, never t
 });
 
 it("describes a JavaScript error the daemon client wrapped as unexpected_error by its stack, led by its message", () => {
-  const error = new DaemonRequestError("Cannot read x of undefined", "unexpected_error", {});
+  const error = new CodedError("Cannot read x of undefined", "unexpected_error", {});
   error.stack = "    at f (tauri://localhost/assets/index-ab12.js:1:2)";
   const { title, body } = parse(issueReportUrl(BASE, facts([{ error }])));
   expect(title).toBe("Unexpected error: Cannot read x of undefined");
@@ -187,13 +187,13 @@ it("describes a JavaScript error the daemon client wrapped as unexpected_error b
 
 it("adds the raw text an alert shows for an unexpected coded failure, but not for an actionable one", () => {
   const detail = "Unexpected state in /Users/alice/Secret Project";
-  const unexpected = new DaemonRequestError(detail, "internal_error", { detail });
+  const unexpected = new CodedError(detail, "internal_error", { detail });
   const { title, body } = parse(issueReportUrl(BASE, facts([{ error: unexpected }])));
   expect(title).toBe("Unexpected error: Unexpected state in <path>");
-  expect(parse(issueReportUrl(BASE, facts([{ error: new DaemonRequestError("", "internal_error", {}) }]))).title).toBe("Unexpected error: internal_error");
+  expect(parse(issueReportUrl(BASE, facts([{ error: new CodedError("", "internal_error", {}) }]))).title).toBe("Unexpected error: internal_error");
   expect(body).toContain("- Parameters: `detail`");
   expect(body).toContain("```\nUnexpected state in <path>\n```");
-  const actionable = new DaemonRequestError("No space left on device (os error 28)", "internal_error", { detail: "disk /Users/alice" });
+  const actionable = new CodedError("No space left on device (os error 28)", "internal_error", { detail: "disk /Users/alice" });
   const other = parse(issueReportUrl(BASE, facts([{ error: actionable }]))).body;
   expect(other).toContain("- Kind: actionable");
   expect(other).not.toContain("```");

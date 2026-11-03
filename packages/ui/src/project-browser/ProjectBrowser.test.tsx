@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { press as pressMark } from "../components/alerts/detailsTestSupport";
 import { isolate } from "../i18n/isolate";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { PlatformProvider } from "../platform/react";
 import type { Event, GitStatus, Project, RequestBody } from "../protocol";
 import { DaemonProvider } from "../store";
@@ -478,7 +478,7 @@ it("announces a files failure that appears after the panel painted, but not one 
   await mount("files-fail-announce", "files");
   const index = pending.findIndex((request) => request.body.type === "list_project_dir");
   const [request] = pending.splice(index, 1);
-  await act(async () => request.reject(new DaemonRequestError("no access", "unexpected_error", {})));
+  await act(async () => request.reject(new CodedError("no access", "unexpected_error", {})));
   expect(document.querySelector('[data-slot="empty-state"]')).not.toBeNull();
   expect(document.querySelector("[role=alert]")?.textContent).toContain("Something unexpected went wrong.");
   expect(document.querySelector("[role=alert]")?.textContent).not.toContain("no access");

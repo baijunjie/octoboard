@@ -1,8 +1,9 @@
 import type { ConnectionState } from "../daemon-client";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
-import { sameValue } from "./sameValue";
-import type { AccountLogin, AccountQuota, AccountSharing, Event, Project, Session, ShellTerminal } from "../protocol";
-import { accountLoginKey, type State, type TrustPrompt } from "./state";
+import { accountKey, loginIsActive } from "../accounts/accountRecords";
+import { sameValue } from "../values/sameValue";
+import { TRUST_ANSWER_FAILED, type AccountLogin, type AccountQuota, type AccountSharing, type Event, type Project, type Session, type ShellTerminal } from "../protocol";
+import type { State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
 
 export type Action =
@@ -34,6 +35,16 @@ function keepSameQuotas(previous: AccountQuota[], quotas: AccountQuota[]): Accou
     const held = accountQuotaOf(previous, quota.agent, quota.account);
     return held !== undefined && sameValue(held, quota) ? held : quota;
   });
+}
+
+/** `next` with each field the value `previous` already holds when it is the same data, or `previous` itself when every
+ * field is: the settings arrive whole on every change of any one of them, and a component reading one field (the
+ * accounts every session row reads) must not render again for a change of another. */
+function keepSameFields<T extends object>(previous: T, next: T): T {
+  const keys = Object.keys(next) as (keyof T)[];
+  const kept = Object.fromEntries(keys.map((key) => [key, sameValue(previous[key], next[key]) ? previous[key] : next[key]])) as T;
+  const unchanged = keys.length === Object.keys(previous).length && keys.every((key) => kept[key] === previous[key]);
+  return unchanged ? previous : kept;
 }
 
 /** Whether `sharing` says anything beyond naming the account; one that does not means the account is free. */
@@ -146,11 +157,11 @@ export function reducer(state: State, action: Action): State {
             trustedDirectories: event.trusted_directories,
             sessionRequests: [],
             gitStatuses: keepSame(state.gitStatuses, event.git_statuses, (s) => s.project),
-            settings: event.settings,
+            settings: keepSameFields(state.settings, event.settings),
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
             accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas),
             accountLogins: event.account_logins,
-            loginsStartedHere: state.loginsStartedHere.filter((key) => event.account_logins.some((login) => accountLoginKey(login.agent, login.account) === key)),
+            loginsStartedHere: state.loginsStartedHere.filter((key) => event.account_logins.some((login) => accountKey(login.agent, login.account) === key)),
             accountSharing: keepSame(state.accountSharing, event.account_sharing.filter(hasSharingState), (sharing) => sharing.account),
             homeDir: event.home_dir,
             shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
@@ -256,7 +267,7 @@ export function reducer(state: State, action: Action): State {
           // Octoboard could not press the session's confirmation: it is left for the person to answer
           // in the terminal, which the notice says, so a prompt still queued for it would ask about
           // something no go-ahead can do any more.
-          if (event.code !== "trust_answer_failed") return state;
+          if (event.code !== TRUST_ANSWER_FAILED) return state;
           const trustPrompts = state.trustPrompts.filter((p) => p.session !== event.session);
           return trustPrompts.length === state.trustPrompts.length ? state : { ...state, trustPrompts };
         }
@@ -330,8 +341,10 @@ export function reducer(state: State, action: Action): State {
           shellTerminals.delete(event.shell_terminal);
           return { ...state, shellTerminals };
         }
-        case "settings_updated":
-          return { ...state, settings: event.settings };
+        case "settings_updated": {
+          const settings = keepSameFields(state.settings, event.settings);
+          return settings === state.settings ? state : { ...state, settings };
+        }
         case "agent_availability_updated":
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
         case "account_quotas_updated":
@@ -346,8 +359,8 @@ export function reducer(state: State, action: Action): State {
         case "account_login_updated": {
           const { login } = event;
           const others = state.accountLogins.filter((held) => held.agent !== login.agent || held.account !== login.account);
-          const key = accountLoginKey(login.agent, login.account);
-          const running = login.status === "starting" || login.status === "waiting";
+          const key = accountKey(login.agent, login.account);
+          const running = loginIsActive(login);
           return {
             ...state,
             accountLogins: [...others, login],

@@ -6,7 +6,7 @@ import { FailureBody } from "../components/alerts/errorParts";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { daemonMessage } from "../errors/daemonMessage";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { failureSummaryText } from "../errors/errorText";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -43,7 +43,7 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
     unavailable ? daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, s) : undefined,
   );
   // Why there are no models, with what it names set as code where the message has such params.
-  const reason = unavailable ? new DaemonRequestError(unavailableText ?? unavailable.message, unavailable.code, unavailable.params) : error;
+  const reason = unavailable ? new CodedError(unavailableText ?? unavailable.message, unavailable.code, unavailable.params) : error;
   // The region says the sentence the mark's popover opens with; the raw message, the remedy and the
   // details belong in the popover.
   const reasonText = useDaemonStore((s) => (reason === undefined ? undefined : failureSummaryText(t, language, reason, s)));

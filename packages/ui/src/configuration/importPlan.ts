@@ -4,7 +4,6 @@ import type {
   Agent,
   ImportChoiceKind,
   ImportedAccounts,
-  Event,
   ImportedConsole,
   InspectedAccount,
   InspectedAccounts,
@@ -12,6 +11,7 @@ import type {
   InspectedProject,
   ProjectResolution,
 } from "../protocol";
+import type { ReplyOf } from "../requests";
 import { AGENT_LABEL } from "../agents/agents";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import type { PlainMessageKey } from "../i18n/catalog";
@@ -21,7 +21,7 @@ import { effectiveBindings, sanitizeOverrides, type Overrides } from "../shortcu
 import type { Region } from "./RegionTabs";
 
 /** What the daemon answers to inspecting a configuration document. */
-export type Inspection = Extract<Event, { type: "configuration_inspected" }>;
+export type Inspection = ReplyOf<"inspect_configuration">;
 
 /** The choices a project's offers can name: the three directories the daemon works out. The fourth,
  * a directory the user points at, is never offered, and leaving the project out is no directory. */

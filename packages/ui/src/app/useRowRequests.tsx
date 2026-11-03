@@ -23,7 +23,7 @@ import { alertFailure } from "../components/alerts/raiseError";
 export function useRowRequests() {
   const t = useT();
   const { links } = usePlatform();
-  const { request, toastNotice, raiseError } = useDaemon();
+  const { request, showNotice, raiseError } = useDaemon();
   const copy = useCopyWithNotice();
 
   const pullProjectBranch = (project: Project) => {
@@ -52,7 +52,7 @@ export function useRowRequests() {
 
   const pushProjectBranch = (project: Project) => {
     request({ type: "push_project_branch", project: project.id })
-      .then(() => toastNotice(t("sidebar.project.pushed")))
+      .then(() => showNotice(t("sidebar.project.pushed")))
       .catch(alertFailure({ title: t("sidebar.project.pushFailedTitle") }));
   };
 

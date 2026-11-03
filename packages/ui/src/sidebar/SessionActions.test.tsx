@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
+import type { RequestHandler } from "../requests";
 import { enter, openTooltip, press, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
@@ -10,37 +11,30 @@ import type { Binding } from "../shortcuts/binding";
 import { BindingKbd } from "../shortcuts/ShortcutKbd";
 import { defaultBinding } from "../shortcuts/commands";
 import { restoreAllBindings, setBinding } from "../shortcuts/store";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { SessionActions } from "./SessionActions";
 import type { SidebarHandlers } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function mount(session: Session, inspect: Daemon["request"]) {
+function mount(session: Session, inspect: RequestHandler) {
   const handlers = { onOpenDialog: vi.fn(), onArchiveSession: vi.fn(), onCopySessionId: vi.fn() } as unknown as SidebarHandlers;
-  const daemon: Daemon = {
-    store: createStateStore({ sessions: new Map([[session.id, session]]) }),
-    request: vi.fn(inspect) as never,
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const request = vi.fn(inspect);
+  const daemon = testDaemon({ state: { sessions: new Map([[session.id, session]]) }, request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const render = (next: Session) => act(() => root.render(
-    <DaemonProvider value={daemon}>
+    <TestHost daemon={daemon}>
       <SessionActions session={next} handlers={handlers} accounts={[]} hasBoundSessions={false} rowRef={{ current: container }} />
-    </DaemonProvider>,
+    </TestHost>,
   ));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
   render(session);
-  return { container, daemon, handlers, render };
+  return { container, daemon, request, handlers, render };
 }
 
 afterEach(() => {
@@ -60,10 +54,10 @@ it.each<[Session["status"], boolean, string | undefined]>([
   ["idle", true, "Archive"],
 ])("offers a shortcut for %s, conversation=%s without inspecting native records", (status, has_conversation, label) => {
   const session = { ...unused, status, has_conversation };
-  const { container, daemon, handlers } = mount(session, async () => { throw new Error("No inspection expected"); });
+  const { container, request, handlers } = mount(session, async () => { throw new Error("No inspection expected"); });
   expect(shortcut(container, "Delete") !== null).toBe(label === "Delete");
   expect(shortcut(container, "Archive") !== null).toBe(label === "Archive");
-  expect(daemon.request).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
   if (label === "Delete") {
     act(() => shortcut(container, "Delete")!.click());
     expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "delete-session", session });
@@ -76,11 +70,11 @@ it("offers a bound unused session the user opened the Delete shortcut", () => {
 });
 
 it("removes the delete shortcut as soon as the first conversation is reported", () => {
-  const { container, daemon, render } = mount({ ...unused, status: "idle" }, async () => ({ type: "ack", id: null }));
+  const { container, request, render } = mount({ ...unused, status: "idle" }, async () => ({ type: "ack", id: null }));
   expect(shortcut(container, "Delete")).not.toBeNull();
   render({ ...unused, status: "working", has_conversation: true });
   expect(shortcut(container, "Delete")).toBeNull();
-  expect(daemon.request).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
 });
 
 it.each([false, true])("hides removal shortcuts on a locked session, conversation=%s", (has_conversation) => {

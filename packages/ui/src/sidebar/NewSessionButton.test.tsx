@@ -6,7 +6,9 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AGENT_OPTIONS } from "../agents/agents";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { consoleOf } from "../fixtures/builders";
-import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import type { State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { IS_MAC } from "../input/keys";
 import { NewSessionButton } from "./NewSessionButton";
 
@@ -18,24 +20,15 @@ const request: NewSessionRequest = { kind: "new-console-session", console: conso
 const MODIFIER = IS_MAC ? { metaKey: true } : { ctrlKey: true };
 
 function mount(initial: Partial<State> = {}, shortcut = false) {
-  const daemon: Daemon = {
-    store: createStateStore(initial),
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const daemon = testDaemon({ state: initial });
   const onOpen = vi.fn();
   const onQuickCreate = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(
-    <DaemonProvider value={daemon}>
+    <TestHost daemon={daemon}>
       <NewSessionButton shortcut={shortcut} label="New session" quickLabel="New session with defaults" target={() => request} onOpen={onOpen} onQuickCreate={onQuickCreate} />
-    </DaemonProvider>,
+    </TestHost>,
   ));
   onTestFinished(() => {
     // The held state outlives the button, so a test that leaves it down must not carry it on.

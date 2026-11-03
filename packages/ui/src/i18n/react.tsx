@@ -1,9 +1,9 @@
-import React, { useCallback, useSyncExternalStore } from "react";
+import React, { useMemo, useSyncExternalStore } from "react";
 import { I18nProvider } from "react-aria-components";
 
 import { InlineReference } from "./InlineReference";
 
-import { format, globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, type Translate } from "./catalog";
+import { globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, translatorFor, type Translate } from "./catalog";
 import { currentLanguage, subscribeLanguage } from "./language";
 import type { Language } from "./languages";
 
@@ -15,7 +15,7 @@ export function useCurrentLanguage(): Language {
 /** The message lookup bound to the current language; the caller re-renders when it changes. */
 export function useT(): Translate {
   const language = useCurrentLanguage();
-  return useCallback<Translate>((key, ...args) => format(language, key, args[0]), [language]);
+  return useMemo(() => translatorFor(language), [language]);
 }
 
 /**

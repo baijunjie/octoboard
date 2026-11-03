@@ -20,7 +20,7 @@ vi.setConfig({ testTimeout: 20_000 });
 
 vi.mock("./report/ReportPanel", () => ({ ReportPanel: () => null }));
 // The menu bar icon's menu is drawn with a canvas, which jsdom has none of.
-vi.mock("./lifecycle/statusItemIcons", () => ({ withIcons: async (draft: object) => ({ ...draft, icons: {} }) }));
+vi.mock("./statusItem/statusItemIcons", () => ({ withIcons: async (draft: object) => ({ ...draft, icons: {} }) }));
 // The aside's Files panel says whose project it shows.
 vi.mock("./project-browser/LazyProjectBrowser", () => ({ LazyProjectBrowser: ({ project }: { project: Project }) => <div data-browser={project.id} /> }));
 // The agent terminal's input stands in for xterm's.

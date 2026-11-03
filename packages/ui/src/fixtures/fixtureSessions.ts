@@ -1,11 +1,11 @@
 // What the fixture daemon answers for the sessions: opening, resuming, archiving and deleting them, handing one off,
 // switching its account or model, and the small changes to one (pin, lock, colour, title).
 import { AGENT_LABEL, isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
-import { CONSOLE_SESSION_COLOURS, type Agent, type ConsoleSessionColour, type Event, type Session, type SessionRecordsPresence } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, type Agent, type ConsoleSessionColour, type Session, type SessionRecordsPresence } from "../protocol";
 import { applyDaemonEvent } from "../store";
 import type { AccountGuards } from "./fixtureAccounts";
 import type { ProcessLedger } from "./fixtureProcesses";
-import { type FixtureContext, type Handlers } from "./fixtureContext";
+import { neverReplied, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** How long a tree's top process must have run before an archive's inspection lists it: what started a moment ago is
  * a command still finishing (the daemon's `ASK_AFTER`, repeated here as the fixture stands on the daemon's side). */
@@ -72,7 +72,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       return { type: "ack", id: null };
     },
     resume_session: (body) => {
-      if (scenario.sessionResumes?.[body.session] === "pending") return new Promise<Event>(() => {});
+      if (scenario.sessionResumes?.[body.session] === "pending") return neverReplied();
       const current = store.getState();
       const session = current.sessions.get(body.session);
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
@@ -110,7 +110,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const { switching_account: _, ...resting } = session;
       applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, switching_account: true } });
       const reply = scenario.sessionAccountSwitches?.[body.session];
-      if (reply === "pending") return new Promise<Event>(() => {});
+      if (reply === "pending") return neverReplied();
       if (reply) {
         // A relaunch under the new account that ended at once leaves the session interrupted on the account it had;
         // any other refusal leaves it as it was.
@@ -143,7 +143,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const reply = scenario.sessionModelChanges?.[body.session];
       if (reply === "pending") {
         applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "starting" } });
-        return new Promise<Event>(() => {});
+        return neverReplied();
       }
       if (reply) {
         // Only a relaunch that ended at once leaves the process down; a process that did not stop is as it was.
@@ -160,7 +160,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
       // A refusal the scenario stages: one the window could not have seen coming.
       const staged = scenario.sessionHandoffs?.[body.session];
-      if (staged === "pending") return new Promise<Event>(() => {});
+      if (staged === "pending") return neverReplied();
       if (staged) return fail(staged);
       if (session.status === "archived") return fail({ code: "session_archived", params: { session: session.id }, message: "An archived session cannot be handed off" });
       if (session.status === "working" || session.status === "starting") return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
@@ -255,7 +255,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
     },
     locate_conversation_to_resume: () => {
       const located = scenario.conversationLocation ?? { kind: "not_found" as const };
-      if (located === "pending") return new Promise<Event>(() => {});
+      if (located === "pending") return neverReplied();
       if ("code" in located) return fail(located);
       return { type: "conversation_located", id: null, location: located };
     },
@@ -314,7 +314,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
     read_session_history: (body) => {
       if (!store.getState().sessions.has(body.session)) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
       const history = scenario.sessionHistory?.[body.session] ?? [];
-      if (history === "pending") return new Promise<Event>(() => {});
+      if (history === "pending") return neverReplied();
       if (history === "unavailable") return { type: "session_history", id: null, session: body.session, messages: [], unavailable: true };
       if (!Array.isArray(history)) return fail(history);
       return { type: "session_history", id: null, session: body.session, messages: history };
@@ -323,7 +323,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       return { type: "session_records_inspected", id: null, presence: recordsPresence(body.sessions) };
     },
     inspect_session_branches: (body) => {
-      if (scenario.sessionBranches === "pending") return new Promise<Event>(() => {});
+      if (scenario.sessionBranches === "pending") return neverReplied();
       if (scenario.sessionBranches && !Array.isArray(scenario.sessionBranches)) return fail(scenario.sessionBranches);
       const sessions = store.getState().sessions;
       const asked = new Set(body.sessions.filter((id) => sessions.has(id)));

@@ -2,7 +2,7 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "./errorAlerts";
 import { mountForTooltip } from "../hint/tooltipTestSupport";
 import { PaneFailure } from "./PaneFailure";
@@ -35,7 +35,7 @@ it("announces itself when told the pane has painted", () => {
 });
 
 it("holds the rest of the failure on a surface under the lines, with Try again the only button, and has no Try again without a retry", () => {
-  const error = new DaemonRequestError("Environment unavailable", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
+  const error = new CodedError("Environment unavailable", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
   const container = mountForTooltip(<PaneFailure title="Could not read the file" message={error} announce onRetry={() => {}} />);
   const panel = container.querySelector('[data-slot="empty-state"]')!;
   expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
@@ -47,7 +47,7 @@ it("holds the rest of the failure on a surface under the lines, with Try again t
 });
 
 it.each(["internal_error", "unexpected_error", "some_code_from_a_newer_daemon"])("shows the generic sentence for %s, and the raw message only on the details surface", (code) => {
-  const error = new DaemonRequestError("database is locked", code, { detail: "database is locked" });
+  const error = new CodedError("database is locked", code, { detail: "database is locked" });
   const container = mountForTooltip(<PaneFailure title="Could not load the pages" message={error} announce onRetry={() => {}} />);
   const panel = container.querySelector('[data-slot="empty-state"]')!;
   expect(panel.querySelector("p")?.textContent).toBe("Something unexpected went wrong.");

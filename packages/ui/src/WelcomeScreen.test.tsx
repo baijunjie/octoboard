@@ -16,7 +16,7 @@ import { WelcomeScreen } from "./WelcomeScreen";
 const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", configurationFile: { save: vi.fn(), open: vi.fn() } };
 
 function mount(onOpenDialog = vi.fn(), state: Partial<State> = {}, platform: PlatformAdapter = { kind: "browser" }): HTMLElement {
-  const daemon = testDaemon({ state, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ state, request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {

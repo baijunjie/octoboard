@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { consoleOf } from "../fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
 
@@ -44,12 +43,6 @@ const project = (id: string, name: string, pinned = false): Project => ({
   accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
   launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
   git_workflow: FOLLOWING_GIT_WORKFLOW,
-});
-
-describe("ordersByStatus", () => {
-  it.each([true, false])("follows the setting (%s)", (value) => {
-    expect(ordersByStatus({ ...DEFAULT_SETTINGS, sidebar_order_by_status: value })).toBe(value);
-  });
 });
 
 describe("liveSessions", () => {

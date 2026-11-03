@@ -17,11 +17,13 @@ import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTo
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
-import { sessionAccountModelLine, sessionDisplayTitle, sessionRowName } from "../sessions/sessionLabel";
-import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessions/sessionModel";
+import { sessionAccountModelLine, sessionDisplayTitle } from "../sessions/sessionLabel";
+import { inheritedLaunch, sessionModelEffort } from "../sessions/sessionModel";
 import { archivedSessionRows, boundArchivedSessions } from "../sessions/order";
-import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
-import { useFlip } from "../sidebar/useFlip";
+import { HOVER_ACTIONS_CLASS } from "../components/rows/hoverActions";
+import { NESTED_ROW_CLASS, TreeRow } from "../components/rows/TreeRow";
+import { useListMotion } from "../components/motion/useListMotion";
+import { sessionRowModel } from "../sessions/sessionRowModel";
 import { ringForAutomaticFocus } from "../input/touchInput";
 
 /** How many rows the list adds each time its end scrolls into view. */
@@ -96,7 +98,7 @@ export function ArchiveView({
   active?: boolean;
 }): React.ReactElement {
   const t = useT();
-  const listRef = useFlip<HTMLUListElement>();
+  const listRef = useListMotion<HTMLUListElement>();
   const archived = archivedSessionRows(boundTo ? boundArchivedSessions(sessions, boundTo.id) : sessions);
   const [shown, setShown] = useState(restore?.shown ?? PAGE);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -215,7 +217,7 @@ export function ArchiveView({
         ) : (
           <ul ref={listRef} className="relative flex flex-col gap-0.5 p-2">
             {archived.slice(0, shown).map(({ session, under }) => (
-              <li key={session.id} data-flip={session.id} className={under ? NESTED_ROW_CLASS : ""}>
+              <li key={session.id} data-list-motion={session.id} className={under ? NESTED_ROW_CLASS : ""}>
                 <ArchiveRow
                   session={session}
                   under={under}
@@ -276,11 +278,11 @@ function ArchiveRow({
   const datesId = useId();
   const context = hasVisibleContext(session.context);
   const launch = sessionModelEffort(session, inheritedLaunch(session, consoles, projects));
-  const modelLabel = sessionModelLabel(t, session.agent, launch);
+  const { modelLabel, name } = sessionRowModel(t, language, session, [under], "archived", { accounts, defaultNames, launch });
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   return (
     <TreeRow
-      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [under], modelLabel, status: "archived" })}
+      ariaLabel={name}
       describedBy={context ? `${contextId} ${datesId}` : datesId}
       selected={selected}
       onActivate={() => onSelect(session)}
@@ -301,13 +303,9 @@ function ArchiveRow({
       {/* The actions and the dates move to a line of their own together, so a narrow pane still
           has the dates at the row's end with the actions beside them. */}
       <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-y-1">
-        {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls, and
-            always on a device that cannot hover, where nothing would reveal them before a tap.
-            Hidden by clipping to no width rather than removed, so they take no room from
-            the title yet stay reachable with Tab; focus lifts the clip so the focus ring
-            can paint. The gap before the dates sits inside the clip, so a hidden pair
-            leaves none. */}
-        <div className="flex max-w-0 shrink-0 overflow-hidden opacity-0 transition-opacity motion-reduce:transition-none [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:max-w-none group-hover:opacity-100 group-focus-within:max-w-none group-focus-within:overflow-visible group-focus-within:opacity-100">
+        {/* Shown as the sidebar rows' controls are (`HOVER_ACTIONS_CLASS`). The gap before the dates
+            sits inside the clip, so a hidden pair leaves none. */}
+        <div className={HOVER_ACTIONS_CLASS}>
           <div className="sidebar-fills flex shrink-0 items-center pe-3">
             {/* Only this wrapper, padding-free, keeps a press from reaching the row. */}
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>

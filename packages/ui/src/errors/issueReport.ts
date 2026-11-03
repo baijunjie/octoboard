@@ -1,7 +1,8 @@
 import { appConfig } from "../appConfig";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "./codedError";
 import type { RecordNames } from "./daemonMessage";
 import { diagnosticText, errorDiagnostic, rawFailureText } from "./errorText";
+import { CODE } from "./codes";
 import { classifyError, type ErrorClassification, type ErrorRecovery } from "./errorRecovery";
 import type { GitStatus } from "../protocol";
 
@@ -223,7 +224,7 @@ function head(text: string, limit: number): string {
 /** What an unexpected failure says of itself in a report: for one the daemon coded, the raw text its alert shows under
  * "Error details" (see `rawFailureText`); for any other error its stack, led by its name and message. */
 function diagnosticOf(error: unknown): string | undefined {
-  if (error instanceof DaemonRequestError) return rawFailureText(error);
+  if (error instanceof CodedError) return rawFailureText(error);
   if (error instanceof Error) return errorDiagnostic(error);
   return diagnosticText(error);
 }
@@ -231,8 +232,8 @@ function diagnosticOf(error: unknown): string | undefined {
 /** What the title says of a failure: the daemon's code, except for the generic codes that say nothing, which give way to
  * the first line of the raw text the body shows; else the first line of a thrown error's message. */
 function summaryOf(error: unknown, context: SanitizeContext): string | undefined {
-  const coded = error instanceof DaemonRequestError ? error : undefined;
-  const generic = coded?.code === "internal_error" || coded?.code === "unexpected_error";
+  const coded = error instanceof CodedError ? error : undefined;
+  const generic = coded?.code === CODE.internal_error || coded?.code === "unexpected_error";
   if (coded && !generic) return coded.code;
   const text = coded ? rawFailureText(coded) : error instanceof Error ? error.message || error.name : diagnosticText(error);
   const line = text ? firstLine(sanitizeReportText(text, context)) : "";
@@ -258,7 +259,7 @@ function reportedFailures({ failures, context, known }: IssueFacts): ReportedFai
   for (const failure of failures) {
     const { error } = failure;
     const classification = classificationOf(failure);
-    const coded = error instanceof DaemonRequestError ? error : undefined;
+    const coded = error instanceof CodedError ? error : undefined;
     // An actionable failure's message is worded for the user and its params are theirs: only what kind it is.
     const diagnostic = classification.kind === "unexpected" ? diagnosticOf(error) : undefined;
     const entry: ReportedFailure = {

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { daemonMessage, type RecordNames } from "../errors/daemonMessage";
 import type { ErrorRecovery } from "../errors/errorRecovery";
 import { errorPresentation, noticeErrorPresentation, noticeKind } from "../errors/errorPresentation";
@@ -8,23 +8,21 @@ import { errorText } from "../errors/errorText";
 import type { Language } from "../i18n/languages";
 import type { Event } from "../protocol";
 
-/**
- * A window notification. Errors require acknowledgement in the shared error dialog; notices
- * remain timed toasts. The onToast name is retained for existing producers and consumers.
- */
-export interface ToastRequest {
+/** A notification in the window: an error, which the user acknowledges in the shared error alert, or a notice, shown as
+ * a timed toast. */
+export interface NotificationRequest {
   kind: "error" | "notice";
   message: string;
   /** Optional markup; `message` stays plain for deduplication and text-only consumers. */
   content?: ReactNode;
-  daemonTitle?: DaemonRequestError;
+  daemonTitle?: CodedError;
   /** The daemon's own code and params, kept for a structured rendering of the message (a literal
    * set as code), for a notice as well as an error. Absent for a message the UI worded itself. */
-  daemonError?: DaemonRequestError;
+  daemonError?: CodedError;
   /** The original local exception, including its cause and platform error code. */
   error?: unknown;
-  /** The session the toast is about, so the stack can say where it is. A daemon `notice` always
-   * has one; a notice the UI raises itself (`toastNotice`) has none. An `error` has one only where
+  /** The session the notification is about, so the window can say where it is. A daemon `notice` always
+   * has one; a notice the UI raises itself (`showNotice`) has none. An `error` has one only where
    * the call site knows which session the daemon's message is about — the daemon says "this
    * session" without naming it, having no notion of what the client calls it, so the alert's body
    * is the only thing that tells the user which one. */
@@ -44,7 +42,7 @@ export interface AlertOptions {
    * error nothing caught (`main.tsx`), or where the request is built only for its body and details and the caller
    * titles the alert itself (`useFailureWhenBlocked`). */
   title: string | undefined;
-  /** The session the failure is about; see `ToastRequest.session`. */
+  /** The session the failure is about; see `NotificationRequest.session`. */
   session?: string;
   /** The remedy in place of the one the failure's kind has (see `classifyError`). */
   recovery?: ErrorRecovery;
@@ -57,24 +55,24 @@ export interface AlertOptions {
   keepTitle?: boolean;
 }
 
-/** The error request every raising route builds for `error` (`Daemon.raiseError` and `raiseError`), with the daemon's
+/** The error notification every raising route builds for `error` (`Daemon.raiseError` and `raiseError`), with the daemon's
  * code and params kept when it is an error that has them. */
-export function errorToast(error: unknown, { title, session, recovery, content, keepTitle }: AlertOptions): ToastRequest {
+export function errorNotification(error: unknown, { title, session, recovery, content, keepTitle }: AlertOptions): NotificationRequest {
   const presentation = errorPresentation(error);
   return { kind: "error", message: errorText(presentation), session, title, content, keepTitle, error, daemonError: presentation, recovery };
 }
 
-/** The two events the daemon sends that are shown as a toast: a notice about a session, and an `error` that answers no
+/** The two events the daemon sends that are shown as a notification: a notice about a session, and an `error` that answers no
  * request. */
-export type BroadcastToastEvent = Extract<Event, { type: "session_notice" }> | Extract<Event, { type: "error" }>;
+export type NotifiedBroadcast = Extract<Event, { type: "session_notice" }> | Extract<Event, { type: "error" }>;
 
-/** The toast to show for a broadcast of the daemon, worded in `language` with the names of `records`. A request's own
+/** The notification to show for a broadcast of the daemon, worded in `language` with the names of `records`. A request's own
  * `error` reply carries its request id and reaches its caller as a rejected promise instead, so it is no broadcast and
  * is left to the caller to filter out. Pure, so that the gallery's daemon routes its fixtures through the same code. */
-export function broadcastToast(event: BroadcastToastEvent, records: RecordNames, language: Language): ToastRequest {
+export function broadcastNotification(event: NotifiedBroadcast, records: RecordNames, language: Language): NotificationRequest {
   const message = daemonMessage(language, event.code, event.params, event.message, records);
   if (event.type === "error") {
-    return { kind: "error", daemonError: new DaemonRequestError(event.message, event.code, event.params), message };
+    return { kind: "error", daemonError: new CodedError(event.message, event.code, event.params), message };
   }
   // A failed launch is presented as the failure it reports, laid out beneath a title that does
   // not repeat the reason; any other notice as itself.
@@ -82,8 +80,8 @@ export function broadcastToast(event: BroadcastToastEvent, records: RecordNames,
   return {
     kind: noticeKind(event.code, event.params),
     message,
-    daemonTitle: failure ? new DaemonRequestError(event.message, `${event.code}.title`, event.params) : undefined,
-    daemonError: failure ?? new DaemonRequestError(event.message, event.code, event.params),
+    daemonTitle: failure ? new CodedError(event.message, `${event.code}.title`, event.params) : undefined,
+    daemonError: failure ?? new CodedError(event.message, event.code, event.params),
     session: event.session,
   };
 }

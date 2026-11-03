@@ -1,7 +1,7 @@
 import { Description, Tabs } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
-import { storedAccount } from "../accounts/accountChoices";
+import { storedAccount } from "../accounts/accountInheritance";
 import {
   AGENT_LABEL,
   agentChoiceBadge,

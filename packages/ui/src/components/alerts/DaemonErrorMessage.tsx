@@ -1,7 +1,8 @@
 import React, { useId } from "react";
 
-import { DaemonRequestError } from "../../daemon-client";
-import { daemonParams, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchName, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow, type LeftBranchItem } from "../../errors/daemonMessage";
+import { CodedError } from "../../errors/codedError";
+import { daemonParams, hasTrustDiagnostic, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow } from "../../errors/daemonMessage";
+import { leftBranchDetail, leftBranchGroups, leftBranchName, type LeftBranchItem } from "../../errors/branchCleanupItems";
 import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { ActionableError } from "../../errors/actionableError";
@@ -11,7 +12,7 @@ import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { MessageParams } from "../../protocol";
 import { sessionTask } from "../../sessions/sessionLabel";
-import { useErrorRecords } from "../../store";
+import { useDaemonStoreOrEmpty } from "../../store";
 import { BranchGroups } from "./BranchGroups";
 import { DiagnosticBlock } from "./DiagnosticBlock";
 import { daemonErrorParts } from "./daemonErrorParts";
@@ -44,7 +45,7 @@ export type DaemonErrorPart = "summary" | "remedy" | "details" | "further" | "ra
  * whole message), git's message is not under its name in the list but in `raw`, under that name again. */
 function LeftBranches({ count, items, part }: { count: number; items: LeftBranchItem[]; part?: DaemonErrorPart }): React.ReactElement | null {
   const t = useT();
-  const homeDir = useErrorRecords((s) => s.homeDir);
+  const homeDir = useDaemonStoreOrEmpty((s) => s.homeDir);
   const groups = leftBranchGroups(items).map((group) => ({
     key: group.key,
     // A `Message` rather than `t`, so a product name in the lead is a chip as in any prose.
@@ -86,16 +87,16 @@ function LeftBranchDetail({ name, detail }: { name: string; detail: string }): R
 }
 
 /** A failure with names or technical literals set apart as chips in the catalog's wording. */
-function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?: DaemonErrorPart }): React.ReactElement | null {
+function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonErrorPart }): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
   // The records are subscribed to only for a message that names one, so a failure that does not
   // re-renders with none of them.
-  const consoles = useErrorRecords((s) => ("console" in error.params ? s.consoles : NO_RECORDS));
-  const projects = useErrorRecords((s) => ("project" in error.params ? s.projects : NO_RECORDS));
-  const sessions = useErrorRecords((s) => ("session" in error.params || "receiving_session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS));
-  const shellTerminals = useErrorRecords((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS));
-  const accounts = useErrorRecords((s) => (error.code === "unknown_account" ? s.settings.accounts : undefined));
+  const consoles = useDaemonStoreOrEmpty((s) => ("console" in error.params ? s.consoles : NO_RECORDS));
+  const projects = useDaemonStoreOrEmpty((s) => ("project" in error.params ? s.projects : NO_RECORDS));
+  const sessions = useDaemonStoreOrEmpty((s) => ("session" in error.params || "receiving_session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS));
+  const shellTerminals = useDaemonStoreOrEmpty((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS));
+  const accounts = useDaemonStoreOrEmpty((s) => (error.code === "unknown_account" ? s.settings.accounts : undefined));
   const id = `daemon.${richMessageCode(error.code, error.params)}`;
   const parts = daemonErrorParts(error);
   // An `ActionableError`'s `detail` is raw text of its own, whatever the catalog says of its code.
@@ -121,7 +122,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   if (running) {
     params.sessions = joinNodes(language, running, (id, key) => <InlineReference key={key} dir={sessions.has(id) ? "auto" : "ltr"} monospace={!sessions.has(id)} wrap>{sessions.get(id)?.title ?? id}</InlineReference>);
   }
-  const structuredNested = parts.nested && new DaemonRequestError(parts.nested.message, parts.nested.code, parts.nested.params);
+  const structuredNested = parts.nested && new CodedError(parts.nested.message, parts.nested.code, parts.nested.params);
   if (structuredNested) params.reason = <DaemonErrorMessage error={structuredNested} part="summary" />;
   const trustReasonId = `daemon.trust_reason.${error.params.reason_code}`;
   if ((error.code === "trust_answer_failed" || error.code === "trust_not_carried_over") && isMessageKey(trustReasonId)) {

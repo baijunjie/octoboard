@@ -7,6 +7,7 @@ import { openingFocus } from "../components/focus/modalFocus";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
 import { dialogAround } from "../components/dialog/dialogElement";
+import { tryEachFrame } from "../components/focus/tryEachFrame";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
@@ -22,11 +23,11 @@ import { NotificationsSection } from "./NotificationsSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { SETTINGS_GROUP_HEADING_HEIGHT } from "./SettingsGroup";
 import { ShortcutsSection } from "./ShortcutsSection";
+import { SETTINGS_SECTION_IDS, type SettingsNavigation, type SettingsSectionId } from "./sections";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 
 interface Section {
-  id: string;
   label: PlainMessageKey;
   Icon: LucideIcon;
   Content: () => React.ReactElement;
@@ -34,24 +35,25 @@ interface Section {
   stickyHeadingHeight?: number;
 }
 
-const SECTIONS = [
-  { id: "general", label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
-  { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
-  { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
-  { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
-  { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
-  { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
-  { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
-  { id: "shortcuts", label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
-  { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
-  { id: "about", label: "settings.section.about", Icon: Info, Content: AboutSection },
-] as const satisfies readonly Section[];
+/** What each section of `SETTINGS_SECTION_IDS` shows; a section missing here does not compile. */
+const SECTIONS: Record<SettingsSectionId, Section> = {
+  general: { label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
+  git: { label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
+  accounts: { label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
+  "agent-permissions": { label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
+  "trusted-folders": { label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
+  permissions: { label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
+  notifications: { label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
+  shortcuts: { label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
+  configuration: { label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
+  about: { label: "settings.section.about", Icon: Info, Content: AboutSection },
+};
 
 /** How many animation frames (about half a second) a tab waits for a modal in front of Settings to go before it
  * gives up taking focus. */
 const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
 
-export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
+export type { SettingsSectionId } from "./sections";
 
 /** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
  * still be scrolled towards, as the body of a `Dialog` does. The scroller sits inside the panel, not
@@ -86,7 +88,7 @@ function SectionPanel({ id, stickyHeadingHeight, children }: { id: string; stick
  * when given, the first section otherwise; `navigation` says the same and more (see its prop).
  */
 export function SettingsDialog({
-  initialSection = SECTIONS[0].id,
+  initialSection = SETTINGS_SECTION_IDS[0],
   navigation,
   onClose,
 }: {
@@ -96,7 +98,7 @@ export function SettingsDialog({
   /** What the dialog is asked to show, first on opening and again by a request made while it is open (each has
    * its own `nonce`): a section, the Add agent dialog in front for `addAgent`, and an account's sharing switch to
    * focus for `account`. */
-  navigation?: { nonce: number; section: SettingsSectionId | undefined; addAgent: boolean; account?: string };
+  navigation?: SettingsNavigation;
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
@@ -131,19 +133,13 @@ export function SettingsDialog({
     // Read off the page: the tabs hand their element to `selectedRef` a render later than they select. While a
     // modal in front (the Add agent dialog being dismissed) has made this one inert, it waits, frame by frame,
     // and gives up after `MAX_FRAMES_TO_WAIT_FOR_MODAL`.
-    let frames = 0;
-    let frame = 0;
-    const focusSelected = () => {
+    return tryEachFrame(() => {
       const settings = dialogAround(markerRef);
-      if (!settings) return;
-      if (settings.closest('[inert], [aria-hidden="true"]')) {
-        if (frames++ < MAX_FRAMES_TO_WAIT_FOR_MODAL) frame = requestAnimationFrame(focusSelected);
-        return;
-      }
+      if (!settings) return true;
+      if (settings.closest('[inert], [aria-hidden="true"]')) return false;
       settings.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
-    };
-    frame = requestAnimationFrame(focusSelected);
-    return () => cancelAnimationFrame(frame);
+      return true;
+    }, MAX_FRAMES_TO_WAIT_FOR_MODAL);
   }, [tabFocusRequests]);
   const focusedOnOpen = useRef(false);
   const markerRef = useRef<HTMLSpanElement>(null);
@@ -160,7 +156,7 @@ export function SettingsDialog({
     // The row of tabs below the breakpoint scrolls, so a section picked from a link may start off
     // screen. Only the tab row itself moves (`block: "nearest"` leaves the dialog where it is).
     tab?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, []);
+  }, [sectionTakesFocus]);
 
   // Where a section that loses focus (see `useSectionRefocus`) sends it back: the selected tab.
   const focusTarget = useCallback(() => selectedRef.current, []);
@@ -189,7 +185,7 @@ export function SettingsDialog({
                 itself, with no rule between it and the section. Narrow, it is the row along the top
                 instead, clear of the close button at its end and scrolling sideways on its own.
                 `self-start` keeps the column at its own height rather than the dialog's, which is
-                what bounds how many sections fit — see `SECTIONS`. */}
+                what bounds how many sections fit — see `SETTINGS_SECTION_IDS`. */}
             <Tabs.ListContainer
               className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-phone:ms-3 max-phone:mt-2 max-phone:max-w-[calc(100%-3.75rem)] max-docked:w-max max-docked:max-w-[calc(100%-4rem)] max-docked:self-start docked:my-6 docked:me-0 docked:w-48 docked:self-start"
               render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}
@@ -198,31 +194,37 @@ export function SettingsDialog({
                   tabs read from the start like any list of names rather than centred. */}
               <Tabs.List aria-label={t("settings.sections")} className="max-docked:min-w-0 max-docked:p-1.5 docked:w-full">
                 {/* Hovered labels take the foreground colour for clear feedback. */}
-                {SECTIONS.map(({ id, label, Icon }) => (
-                  <Tabs.Tab
-                    key={id}
-                    id={id}
-                    className="justify-start gap-2 whitespace-nowrap hover:text-foreground max-docked:w-auto max-docked:flex-none max-docked:scroll-mx-1.5"
-                    ref={id === sectionId ? attachSelected : undefined}
-                    {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
-                  >
-                    <Icon aria-hidden="true" className="size-4 shrink-0" />
-                    {t(label)}
-                    <Tabs.Indicator />
-                  </Tabs.Tab>
-                ))}
+                {SETTINGS_SECTION_IDS.map((id) => {
+                  const { label, Icon } = SECTIONS[id];
+                  return (
+                    <Tabs.Tab
+                      key={id}
+                      id={id}
+                      className="justify-start gap-2 whitespace-nowrap hover:text-foreground max-docked:w-auto max-docked:flex-none max-docked:scroll-mx-1.5"
+                      ref={id === sectionId ? attachSelected : undefined}
+                      {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
+                    >
+                      <Icon aria-hidden="true" className="size-4 shrink-0" />
+                      {t(label)}
+                      <Tabs.Indicator />
+                    </Tabs.Tab>
+                  );
+                })}
               </Tabs.List>
             </Tabs.ListContainer>
-            {SECTIONS.map(({ id, label, Content, ...section }) => (
-              <SectionPanel key={id} id={id} stickyHeadingHeight={"stickyHeadingHeight" in section ? section.stickyHeadingHeight : undefined}>
-                <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
-                <SettingsFocusContext.Provider value={focusTarget}>
-                  <AccountsNavigationContext.Provider value={accountsNavigation}>
-                    <Content />
-                  </AccountsNavigationContext.Provider>
-                </SettingsFocusContext.Provider>
-              </SectionPanel>
-            ))}
+            {SETTINGS_SECTION_IDS.map((id) => {
+              const { label, Content, stickyHeadingHeight } = SECTIONS[id];
+              return (
+                <SectionPanel key={id} id={id} stickyHeadingHeight={stickyHeadingHeight}>
+                  <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
+                  <SettingsFocusContext.Provider value={focusTarget}>
+                    <AccountsNavigationContext.Provider value={accountsNavigation}>
+                      <Content />
+                    </AccountsNavigationContext.Provider>
+                  </SettingsFocusContext.Provider>
+                </SectionPanel>
+              );
+            })}
           </Tabs>
         </Modal.Dialog>
       </Modal.Container>

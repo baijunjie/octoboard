@@ -42,7 +42,7 @@ function render(accounts: Account[], ui: (daemon: Daemon) => React.ReactElement,
     },
     request: request as Daemon["request"],
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
+    showNotice: vi.fn(),
   });
   daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts } });
   const container = document.body.appendChild(document.createElement("div"));

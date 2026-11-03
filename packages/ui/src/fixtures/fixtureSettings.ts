@@ -1,11 +1,11 @@
 // What the fixture daemon answers for the application's settings: the preferences the daemon stores, the agents the user
 // has added, the approval choices and the trusted folders.
 import { AGENT_LABEL } from "../agents/agents";
-import type { Agent, Event, RequestBody } from "../protocol";
+import type { Agent, RequestBody } from "../protocol";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { SAMPLE_MODELS } from "./agentModels";
 import { ALL_AGENTS, effectiveClaudeCompatibility } from "./builders";
-import { HOME, normalizedPath, normalizeTags, type FixtureContext, type Handlers } from "./fixtureContext";
+import { HOME, neverReplied, normalizedPath, normalizeTags, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** Keeps the window's settings in step with the user's explicit choices (`claudeCompatibilityChoices`): what the window is
  * told is the value in effect, which follows the added agents while Codex's is unset. */
@@ -23,7 +23,7 @@ export function keepClaudeCompatibilityInEffect({ store, claudeCompatibilityChoi
 
 /** The replies about settings. */
 export function createSettingsReplies({ scenario, store, fail, claudeCompatibilityChoices }: FixtureContext): Handlers {
-  const changeAgentList = (body: Extract<RequestBody, { type: "remove_agent" | "reorder_agents" }>): Event | Promise<Event> => {
+  const changeAgentList = (body: Extract<RequestBody, { type: "remove_agent" | "reorder_agents" }>): Ack => {
     if (scenario.agentListError) return fail(scenario.agentListError);
     const current = store.getState();
     const added = current.settings.added_agents;
@@ -105,7 +105,7 @@ export function createSettingsReplies({ scenario, store, fail, claudeCompatibili
     },
     list_agent_models: (body) => {
       const listed = scenario.agentModels?.[body.agent];
-      if (listed === "pending") return new Promise<Event>(() => {});
+      if (listed === "pending") return neverReplied();
       const { models, unavailable = null } = listed ?? { models: SAMPLE_MODELS[body.agent] };
       return { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models, unavailable };
     },

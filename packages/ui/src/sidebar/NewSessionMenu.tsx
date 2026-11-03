@@ -13,7 +13,7 @@ import { useDaemonStore } from "../store";
 import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
 import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { sortProjects } from "../sessions/order";
-import { RowIconButton } from "./rows";
+import { RowIconButton } from "../components/rows/RowIconButton";
 import { useNewSessionMode } from "./useNewSessionMode";
 
 /**

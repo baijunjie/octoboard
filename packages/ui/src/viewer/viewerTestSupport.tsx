@@ -1,6 +1,7 @@
 // Shared by the viewer's tests: the providers the header needs around a `FileViewer`.
 import React from "react";
 
+import type { RequestHandler } from "../requests";
 import { forwardAlerts } from "../components/alerts/alertTestSupport";
 import { errorText } from "../errors/errorText";
 import { errorPresentation } from "../errors/errorPresentation";
@@ -23,11 +24,11 @@ export function ViewerHost({
   clipboard?: PlatformAdapter["clipboard"];
   links?: PlatformAdapter["links"];
   toasts?: { notice: (message: string) => void; error: (message: string) => void };
-  request?: Daemon["request"];
+  request?: RequestHandler;
   children: React.ReactNode;
 }): React.ReactElement {
   const daemon = React.useMemo<Daemon>(
-    () => testDaemon({ request, raiseError: (error) => toasts.error(errorText(errorPresentation(error))), toastNotice: toasts.notice }),
+    () => testDaemon({ request, raiseError: (error) => toasts.error(errorText(errorPresentation(error))), showNotice: toasts.notice }),
     [toasts.error, toasts.notice, request],
   );
   // A layout effect, so it is installed before the children's passive effects (where an alert raised as they mount

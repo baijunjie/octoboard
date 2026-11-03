@@ -4,13 +4,14 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished } from "vitest";
 
+import type { RequestHandler } from "../requests";
 import { forwardAlerts } from "../components/alerts/alertTestSupport";
 import { errorText } from "../errors/errorText";
 import { errorPresentation } from "../errors/errorPresentation";
 import type { PlatformAdapter } from "../platform";
 import { isolate } from "../i18n/isolate";
 import type { ChangeEntry, LineStats } from "../protocol";
-import type { Daemon, State } from "../store";
+import type { State } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import type { ChangeViewState } from "./git/changeView";
@@ -78,7 +79,7 @@ interface ToastSpies {
 }
 
 interface MountRowsOptions {
-  request?: Daemon["request"];
+  request?: RequestHandler;
   /** The platform the rows render on. */
   clipboard?: PlatformAdapter["clipboard"];
   /** Where the daemon's toasts go. */
@@ -108,7 +109,7 @@ export function mountRows(children: React.ReactNode, { request, clipboard, toast
   });
   // The alerts raised without a daemon (`raiseError` from `components/alerts/raiseError`) go where the daemon's do.
   onTestFinished(forwardAlerts(toasts.error));
-  const daemon = testDaemon({ state, request, raiseError: (error) => toasts.error(errorText(errorPresentation(error))), toastNotice: toasts.notice });
+  const daemon = testDaemon({ state, request, raiseError: (error) => toasts.error(errorText(errorPresentation(error))), showNotice: toasts.notice });
   act(() => root.render(<TestHost daemon={daemon} platform={{ kind: "browser", clipboard }}>{children}</TestHost>));
   return container;
 }

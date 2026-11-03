@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import type { ChangeEntry, ChangeSide, Event, RequestBody, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/code/patch";
 import { FixtureUnfillableError } from "../../fixtures/banner";
@@ -420,10 +420,10 @@ describe("the sample repository's changes", () => {
     const answer = async (at: string, request: Promise<Event>): Promise<string> => {
       const reply = await request.catch((error: unknown) => {
         rethrowUnfillable(error);
-        if (!(error instanceof DaemonRequestError)) throw error;
+        if (!(error instanceof CodedError)) throw error;
         return error;
       });
-      if (reply instanceof DaemonRequestError) {
+      if (reply instanceof CodedError) {
         return `${at}: ${reply.code}${reply.params.limit ? ` (${reply.params.limit})` : ""}`;
       }
       if (reply.type !== "project_change_bodies" && reply.type !== "project_comparison_change_bodies" && reply.type !== "project_commit_change_bodies") throw new Error(`${at}: ${reply.type}`);
@@ -576,7 +576,7 @@ describe("the sample repository's changes", () => {
               then?.(event);
             },
             (failure: unknown) => {
-              if (!(failure instanceof DaemonRequestError)) throw failure;
+              if (!(failure instanceof CodedError)) throw failure;
               expect(failure.code, `${at} fails with the error staged for it`).toBe(error);
             },
           ),
@@ -684,7 +684,7 @@ describe("the sample repository's changes", () => {
 
     // Not a daemon error, which a scenario answers with on purpose.
     await expect(read).rejects.toThrow(FixtureUnfillableError);
-    await expect(read).rejects.not.toBeInstanceOf(DaemonRequestError);
+    await expect(read).rejects.not.toBeInstanceOf(CodedError);
     // Visible to whoever opened the scenario, not only to a test run, and it names the change it is
     // about, since a fixture is found by its worktree, its section and its path.
     expect(banner()).toContain("carries no whole text");
@@ -701,7 +701,7 @@ describe("the sample repository's changes", () => {
     const read = sampleDaemon(gap()).request({ type: "read_project_change_bodies", project: "p-1", worktree: "wt-gap", change, ...versions });
 
     await expect(read).rejects.toThrow(FixtureUnfillableError);
-    await expect(read).rejects.not.toBeInstanceOf(DaemonRequestError);
+    await expect(read).rejects.not.toBeInstanceOf(CodedError);
     expect(banner()).toContain("wt-gap staged bodies (src/gap.ts): the daemon reads this side's whole body, and the fixture carries none");
     expect(logged).toHaveBeenCalled();
   });

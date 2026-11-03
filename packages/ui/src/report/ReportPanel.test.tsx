@@ -29,7 +29,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
   const store = createStateStore({
     pages: new Map([["console-session", [pageOf("first", "console-session", "<body data-website-preview-report>First</body>", 0)]]]),
   });
-  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -61,7 +61,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
 function renderReport(pageCount = 2) {
   const pages = Array.from({ length: pageCount }, (_, i) => pageOf(`page-${i}`, "console-session", `<p>Page ${i}</p>`, i));
   const store = createStateStore({ pages: new Map([["console-session", pages]]) });
-  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("section"));
   container.dataset.region = "panel-report";
   const root = createRoot(container);
@@ -151,7 +151,7 @@ it("shows a failed page listing in the panel with its reason and Try again, and 
   const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack", id: null });
   const raiseError = vi.fn();
   const store = createStateStore({ connectionState: "open" });
-  const daemon = testDaemon({ store, request, raiseError, toastNotice: vi.fn() });
+  const daemon = testDaemon({ store, request, raiseError, showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("section"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -188,7 +188,7 @@ async function renderListed(request: Daemon["request"]) {
 }
 
 async function renderWith(request: Daemon["request"], store: ReturnType<typeof createStateStore>) {
-  const daemon = testDaemon({ store, request, raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ store, request, raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("section"));
   container.dataset.region = "panel-report";
   const root = createRoot(container);

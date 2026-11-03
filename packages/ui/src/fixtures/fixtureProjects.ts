@@ -1,14 +1,15 @@
 // What the fixture daemon answers for the projects: adding, changing and removing one, the actions the host carries out for
 // it, the branch switch and the restore that change its files, and its shell terminals.
+import type { ReplyOf } from "../requests";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
-import { scopeCause, type ProjectAccount, type Event, type Project, type RequestBody, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
+import { scopeCause, type ProjectAccount, type Project, type RequestBody, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
 import { createGitReplies } from "./fixtureGit";
 import { refuseUnfillable } from "./banner";
 import { projectOf } from "./builders";
 import { permissionDenied, sourceUnavailable, type FixtureError } from "./sampleFiles";
 import { genericListing } from "./fixtureFiles";
 import type { ProcessLedger } from "./fixtureProcesses";
-import { normalizedPath, trimmedOrNull, changedPerAgent, changedLaunch, normalizeTags, type FixtureContext, type Handlers } from "./fixtureContext";
+import { neverReplied, normalizedPath, trimmedOrNull, changedPerAgent, changedLaunch, normalizeTags, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** What the daemon sends for the project's place in another worktree when it cannot be used, by why (the worktree's
  * `scope_cause`): its own text for a folder that is not there, one reached through a link and one that is not a folder,
@@ -45,19 +46,19 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
   let createdShellTerminalCount = 0;
   /** A project action the host would carry out: refused for an unknown project, failed with the scenario's error when it
    * sets one, and acknowledged otherwise. */
-  const projectAction = (project: string, error: FixtureError | undefined): Event => {
+  const projectAction = (project: string, error: FixtureError | undefined): Ack => {
     refuseUnknownProject(project);
     if (error) return fail(error);
     return { type: "ack", id: null };
   };
 
-  const openPath = (body: Extract<RequestBody, { type: "open_project_path" | "reveal_project_path" }>): Event | Promise<Event> => {
+  const openPath = (body: Extract<RequestBody, { type: "open_project_path" | "reveal_project_path" }>): Ack => {
     return projectAction(body.project, scenario.projectPathActionError);
   };
 
-  const detectAgent = (body: Extract<RequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>): Event | Promise<Event> => {
+  const detectAgent = (body: Extract<RequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>): ReplyOf<"detect_directory_agent"> | Promise<never> => {
     const detected = scenario.detections?.[body.type === "probe_git_remote" ? body.remote_url : body.path];
-    if (detected === "pending") return new Promise<Event>(() => {});
+    if (detected === "pending") return neverReplied();
     if (detected && "code" in detected) return fail(detected);
     return { type: "agent_detected", id: null, agent: detected?.agent ?? null };
   };
@@ -170,7 +171,7 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
     create_shell_terminal: (body) => {
       const project = store.getState().projects.get(body.project);
       if (!project) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
-      if (scenario.shellTerminalStart === "pending") return new Promise<Event>(() => {});
+      if (scenario.shellTerminalStart === "pending") return neverReplied();
       if (scenario.shellTerminalStartError) return fail(scenario.shellTerminalStartError);
       // A project's place in another worktree is that worktree's root joined with the repository's `scope`, as
       // `get_project_source` builds the project's own: the refusal names that place, and a terminal started there starts in it.
@@ -210,7 +211,7 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
     },
     close_shell_terminal: (body) => {
       if (!store.getState().shellTerminals.has(body.shell_terminal)) return fail({ code: "unknown_shell_terminal", params: { shell_terminal: body.shell_terminal }, message: `unknown shell terminal ${body.shell_terminal}` });
-      if (scenario.shellTerminalClose === "pending") return new Promise<Event>(() => {});
+      if (scenario.shellTerminalClose === "pending") return neverReplied();
       store.setState((state) => ({ shellTerminals: new Map([...state.shellTerminals].filter(([id]) => id !== body.shell_terminal)) }));
       return { type: "ack", id: null };
     },

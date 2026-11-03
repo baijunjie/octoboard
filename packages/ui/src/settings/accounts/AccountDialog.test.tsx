@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { accountOf } from "../../fixtures/builders";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { Account, Agent, AgentAvailability, RequestBody } from "../../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import { mountHost } from "../../test/mountHost";
+import { testDaemon } from "../../test/testDaemon";
 import { AccountDialog } from "./AccountDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
@@ -25,32 +25,17 @@ function render(
   renameDefault = false,
   options: { accounts?: Account[]; listDirectory?: () => Promise<unknown> } = {},
 ) {
-  const daemon: Daemon = {
-    store: createStateStore({ settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: options.accounts ?? [work] }, agentAvailability }),
-    request: vi.fn((body: RequestBody) => body.type === "list_dir"
-      ? options.listDirectory?.() ?? Promise.resolve({ type: "dir_listing", path: "/home/dev", entries: [] })
-      : request(body)) as Daemon["request"],
+  const handler = vi.fn((body: RequestBody) => body.type === "list_dir"
+    ? options.listDirectory?.() ?? Promise.resolve({ type: "dir_listing", path: "/home/dev", entries: [] })
+    : request(body));
+  const daemon = testDaemon({
+    state: { settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: options.accounts ?? [work] }, agentAvailability },
+    request: handler as never,
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
+    showNotice: vi.fn(),
   });
-  act(() =>
-    root.render(
-      <DaemonProvider value={daemon}>
-        <AccountDialog account={editing} agent="claude" renameDefault={renameDefault} onClose={() => {}} />
-      </DaemonProvider>,
-    ),
-  );
-  return daemon;
+  mountHost(<AccountDialog account={editing} agent="claude" renameDefault={renameDefault} onClose={() => {}} />, { daemon });
+  return { store: daemon.store, request: handler };
 }
 
 const input = (label: string) =>
@@ -86,7 +71,7 @@ it("lists only the added agents, in the list's order", async () => {
 });
 
 const taken = () =>
-  new DaemonRequestError("taken", "config_dir_taken", { agent: "Claude Code", name: "Work" });
+  new CodedError("taken", "config_dir_taken", { agent: "Claude Code", name: "Work" });
 
 it("reports a refused directory in the error alert dialog, leaving the field and its value alone", async () => {
   render(work, () => Promise.reject(taken()));
@@ -148,7 +133,7 @@ it("fixes the agent when renaming a default account, so no other agent's default
   expect(request).toHaveBeenCalledWith({ type: "set_default_account_name", agent: "claude", name: "Main" });
 });
 
-const denied = () => new DaemonRequestError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
+const denied = () => new CodedError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
 
 it("gives a denied rename of a default account the data folder remedy", async () => {
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
@@ -209,7 +194,7 @@ it("keeps a manual directory when the home listing answers later", async () => {
 });
 
 it("keeps failed suggestions retryable and returns retry focus to the filled directory", async () => {
-  const failure = new DaemonRequestError("unreadable", "directory_unreadable", { path: "/home/dev", detail: "denied" });
+  const failure = new CodedError("unreadable", "directory_unreadable", { path: "/home/dev", detail: "denied" });
   const listDirectory = vi.fn().mockRejectedValueOnce(failure).mockRejectedValueOnce(failure)
     .mockResolvedValue({ type: "dir_listing", path: "/home/dev", entries: [] });
   render(undefined, () => Promise.resolve(), new Map(), null, false, { listDirectory });

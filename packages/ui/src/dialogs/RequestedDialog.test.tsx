@@ -3,13 +3,14 @@ import { act, StrictMode } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, vi } from "vitest";
 
+import type { RequestHandler } from "../requests";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import type { DialogRequest } from "./dialogRequest";
@@ -24,12 +25,21 @@ const project = projectOf("p-1", console_.id, "Search API");
 const owner = sessionOf("s-owner", console_.id, project.id, "Owner", "idle");
 const account: Account = accountOf("a-1", "claude", "Work", "/home/dev/.claude-work");
 
+/** `request` answering a process list it gives no list for (a stand-in that answers every other request with `ack`)
+ * as a list of no processes: the daemon answers `list_processes` with nothing else. */
+function withProcessList(request: RequestHandler): RequestHandler {
+  return async (body) => {
+    const reply = await request(body);
+    return body.type === "list_processes" && reply.type !== "processes_listed" ? { type: "processes_listed", id: null, trees: [] } : reply;
+  };
+}
+
 /** Mounts the dialog for `dialog` over a store holding `sessions` and `accounts`. */
 function mount(
   dialog: DialogRequest,
   sessions: Session[],
   accounts: Account[] = [],
-  callbacks: { projects?: Project[]; onClose?: () => void; request?: Daemon["request"]; onSwitchAccounts?: (sessionIds: string[], account: string | null, accountName: string) => void; strict?: boolean } = {},
+  callbacks: { projects?: Project[]; onClose?: () => void; request?: RequestHandler; onSwitchAccounts?: (sessionIds: string[], account: string | null, accountName: string) => void; strict?: boolean } = {},
 ): { container: HTMLElement; daemon: Daemon } {
   const daemon = testDaemon({
     state: {
@@ -37,9 +47,9 @@ function mount(
       projects: new Map((callbacks.projects ?? []).map((p) => [p.id, p])),
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     },
-    request: vi.fn(callbacks.request ?? (async () => ({ type: "ack", id: null }))) as never,
+    request: vi.fn(withProcessList(callbacks.request ?? (async () => ({ type: "ack", id: null })))) as never,
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
+    showNotice: vi.fn(),
   });
   const content = <DaemonProvider value={daemon}>
     <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onResumeSession={async () => {}} onSwitchAccounts={callbacks.onSwitchAccounts ?? (() => {})} onChangeSessionModel={() => {}} />
@@ -1015,11 +1025,11 @@ it("asks again what goes along once a project's removal with its folder is refus
     request: async (body) => {
       if (body.type === "inspect_project_removal") {
         inspections += 1;
-        if (inspections === 1) throw new DaemonRequestError("refused", "project_directory_trash_failed", { ...refusal, inspection: "token-1" });
+        if (inspections === 1) throw new CodedError("refused", "project_directory_trash_failed", { ...refusal, inspection: "token-1" });
         await second.promise;
         return { type: "project_removal_inspected", id: null, items: [UNCOMMITTED], processes: [] };
       }
-      if (body.type === "delete_project" && body.inspection) throw new DaemonRequestError("refused", "project_directory_trash_failed", refusal);
+      if (body.type === "delete_project" && body.inspection) throw new CodedError("refused", "project_directory_trash_failed", refusal);
       return { type: "ack", id: null };
     },
   });
@@ -1151,7 +1161,7 @@ it.each([
 ])("warns of nothing going along with a project whose removal would be refused with %s", async (code, params) => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
-      if (body.type === "inspect_project_removal") throw new DaemonRequestError("refused", code, params);
+      if (body.type === "inspect_project_removal") throw new CodedError("refused", code, params);
       return { type: "ack", id: null };
     },
   });
@@ -1296,7 +1306,7 @@ it("keeps the unbind confirmation open when the release fails unexpectedly", asy
   try {
     const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
       onClose,
-      request: async () => { throw new DaemonRequestError("internal error", "internal_error", {}); },
+      request: async () => { throw new CodedError("internal error", "internal_error", {}); },
     });
     await submitDialog();
     expect(onClose).not.toHaveBeenCalled();
@@ -1312,7 +1322,7 @@ it("closes the unbind confirmation silently when the daemon refuses with session
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
     onClose,
-    request: async () => { throw new DaemonRequestError("`s-unbindable` is not bound to any owner, so there is nothing to release", "session_not_bound", { session: unbindable.id }); },
+    request: async () => { throw new CodedError("`s-unbindable` is not bound to any owner, so there is nothing to release", "session_not_bound", { session: unbindable.id }); },
   });
   await submitDialog();
   expect(onClose).toHaveBeenCalledOnce();
@@ -1326,7 +1336,7 @@ it("shows session_binding_changed and keeps the unbind confirmation open, naming
   try {
     const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, newOwner, unbindable], [], {
       onClose,
-      request: async () => { throw new DaemonRequestError("raw daemon text", "session_binding_changed", { session: unbindable.id }); },
+      request: async () => { throw new CodedError("raw daemon text", "session_binding_changed", { session: unbindable.id }); },
     });
     await submitDialog();
     expect(onClose).not.toHaveBeenCalled();
@@ -1350,7 +1360,7 @@ it("closes the unbind confirmation silently on session_binding_changed when the 
     onClose,
     request: async () => {
       daemon.store.setState({ sessions: new Map([unbindOwner, { ...unbindable, bound_to: null }].map((s) => [s.id, s])) });
-      throw new DaemonRequestError("raw daemon text", "session_binding_changed", { session: unbindable.id });
+      throw new CodedError("raw daemon text", "session_binding_changed", { session: unbindable.id });
     },
   });
   await submitDialog();
@@ -1366,7 +1376,7 @@ it.each([
   try {
     mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
       onClose,
-      request: async () => { throw new DaemonRequestError("raw daemon text", code, params); },
+      request: async () => { throw new CodedError("raw daemon text", code, params); },
     });
     await submitDialog();
     expect(onClose).not.toHaveBeenCalled();
@@ -1453,7 +1463,7 @@ it("closes once its own deletion fails over an archive emptied meanwhile", async
     await submitDialog();
     act(() => daemon.store.setState({ sessions: new Map() }));
     expect(onClose).not.toHaveBeenCalled();
-    await act(async () => refuse(new DaemonRequestError("project not found", "project_not_found", {})));
+    await act(async () => refuse(new CodedError("project not found", "project_not_found", {})));
     expect(onClose).toHaveBeenCalledOnce();
     // The failure is still told, though the confirmation it came from has closed.
     expect(errorAlerts.getSnapshot()).toHaveLength(1);

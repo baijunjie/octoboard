@@ -22,12 +22,12 @@ export interface CopyNotice {
 export function useCopyWithNotice(): (text: string, notice: CopyNotice) => void {
   const t = useT();
   const { clipboard } = usePlatform();
-  const { toastNotice } = useDaemon();
+  const { showNotice } = useDaemon();
   return (text, { copied, failed, onCopied, anchor }) => {
     copyText(text, { clipboard, anchor }).then(
       () => {
         onCopied?.();
-        if (copied) toastNotice(copied);
+        if (copied) showNotice(copied);
       },
       (cause: unknown) => raiseError(new ActionableError(failed, "clipboard", { cause }), { title: t("common.copyFailedTitle") }),
     );

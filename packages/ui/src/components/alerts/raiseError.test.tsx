@@ -3,11 +3,11 @@ import { createRoot } from "react-dom/client";
 import { act, type ReactNode } from "react";
 import { afterEach, expect, it } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../../fixtures/builders";
 import { errorAlerts } from "./errorAlerts";
 import { alertFailure, errorAlertOf, raiseError } from "./raiseError";
-import { createStateStore, errorToast } from "../../store";
+import { createStateStore, errorNotification } from "../../store";
 
 afterEach(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 
@@ -33,7 +33,7 @@ it("queues an alert titled for the call site where the code has no title of its 
 });
 
 it("lets the code's own alert title win, unless the call site keeps its own", () => {
-  const error = new DaemonRequestError("Trust failed.", "trust_answer_failed", {});
+  const error = new CodedError("Trust failed.", "trust_answer_failed", {});
   raiseError(error, { title: "Could not save" });
   expect(queued().title).toBe("Could not answer the trust confirmation");
   errorAlerts.acknowledge();
@@ -61,7 +61,7 @@ it("names the session and its project ahead of the body, from the records", () =
     projects: new Map([["p", projectOf("p", "c", "Octoboard")]]),
     sessions: new Map([["s", sessionOf("s", "c", "p", "Fix login", "idle")]]),
   });
-  const request = errorToast(new Error("boom"), { title: "Could not do it", session: "s" });
+  const request = errorNotification(new Error("boom"), { title: "Could not do it", session: "s" });
   const text = textOf(errorAlertOf(request, store.getState()).content);
   expect(text).toContain("Session: ");
   expect(text).toContain("Fix login");
@@ -70,8 +70,8 @@ it("names the session and its project ahead of the body, from the records", () =
 });
 
 it("names a session that is gone from the name its notice left, with no place", () => {
-  const request = errorToast(new Error("boom"), { title: "Could not do it", session: "s9" });
-  const gone = errorAlertOf({ ...request, daemonTitle: new DaemonRequestError("", "x", { title: "Fix login" }) }, createStateStore().getState());
+  const request = errorNotification(new Error("boom"), { title: "Could not do it", session: "s9" });
+  const gone = errorAlertOf({ ...request, daemonTitle: new CodedError("", "x", { title: "Fix login" }) }, createStateStore().getState());
   const text = textOf(gone.content);
   expect(text).toContain("Fix login");
   expect(text).not.toContain("Project: ");

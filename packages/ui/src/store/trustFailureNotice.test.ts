@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import type { Event } from "../protocol";
 import { createDaemon } from ".";
-import type { ToastRequest } from "./toasts";
+import type { NotificationRequest } from "./notifications";
 
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
@@ -30,7 +30,7 @@ const snapshot = {
 const prompt = (session: string): Event => ({ type: "trust_prompt", session, agent: "claude", project: "p", path: "/work/app", trust_dir: null });
 
 let daemon: ReturnType<typeof createDaemon>;
-let toasts: ToastRequest[];
+let toasts: NotificationRequest[];
 const receive = (event: Event) => {
   client.onEvents!([event]);
   client.onEvent!(event);
@@ -39,7 +39,7 @@ const receive = (event: Event) => {
 beforeEach(() => {
   daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   toasts = [];
-  daemon.onToast((toast) => toasts.push(toast));
+  daemon.onNotification((toast) => toasts.push(toast));
 });
 
 it("swallows the notice of this window's own failed go-ahead but still removes the session's trust prompt", async () => {
@@ -47,8 +47,8 @@ it("swallows the notice of this window's own failed go-ahead but still removes t
   receive(prompt("t"));
   const outcome = daemon.request({ type: "confirm_trust", session: "s", remember: false }).catch((err: unknown) => err);
   receive(notice("s"));
-  client.reject!(new DaemonRequestError("raw", "trust_answer_failed", {}));
-  expect(await outcome).toBeInstanceOf(DaemonRequestError);
+  client.reject!(new CodedError("raw", "trust_answer_failed", {}));
+  expect(await outcome).toBeInstanceOf(CodedError);
   expect(toasts).toEqual([]);
   expect(daemon.store.getState().trustPrompts.map((p) => p.session)).toEqual(["t"]);
 });
@@ -65,7 +65,7 @@ it("shows the notice held while a go-ahead was in flight once the go-ahead succe
 it("leaves no token when a snapshot arrives between the go-ahead and its rejection", async () => {
   const outcome = daemon.request({ type: "confirm_trust", session: "s", remember: false }).catch((err: unknown) => err);
   receive(snapshot);
-  client.reject!(new DaemonRequestError("raw", "trust_answer_failed", {}));
+  client.reject!(new CodedError("raw", "trust_answer_failed", {}));
   await outcome;
   receive(notice("s"));
   expect(toasts).toHaveLength(1);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { errorText } from "../errors/errorText";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
@@ -12,7 +12,7 @@ const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as n
 const records = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 
 function sourceUnavailable(path: string) {
-  return new DaemonRequestError("unreadable", "source_unavailable", { path, detail: "denied" });
+  return new CodedError("unreadable", "source_unavailable", { path, detail: "denied" });
 }
 
 /** The plain text of a failure to show. */
@@ -40,13 +40,13 @@ describe("browseFailure by code", () => {
   const sort = (err: unknown) => browseFailure(t, "en", err, records).kind;
 
   it("takes a request lost with the connection for disconnected, and a timed-out one for a failure to show", () => {
-    expect(sort(new DaemonRequestError("closed", "connection_closed", {}))).toBe("disconnected");
-    expect(sort(new DaemonRequestError("timed out", "request_timed_out", {}))).toBe("failed");
+    expect(sort(new CodedError("closed", "connection_closed", {}))).toBe("disconnected");
+    expect(sort(new CodedError("timed out", "request_timed_out", {}))).toBe("failed");
   });
 
   it("drops a superseded request, retries a changed one, and shows an error that is not the daemon's", () => {
-    expect(sort(new DaemonRequestError("", "request_superseded", {}))).toBe("superseded");
-    expect(sort(new DaemonRequestError("", "source_changed", {}))).toBe("changed");
+    expect(sort(new CodedError("", "request_superseded", {}))).toBe("superseded");
+    expect(sort(new CodedError("", "source_changed", {}))).toBe("changed");
     expect(browseFailure(t, "en", new Error("boom"), records)).toMatchObject({ kind: "failed", code: "unexpected_error" });
   });
 });

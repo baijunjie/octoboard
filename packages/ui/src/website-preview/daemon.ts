@@ -1,6 +1,8 @@
-import { DaemonRequestError } from "../daemon-client";
+import { looseRequestSender } from "../requests";
+import { CodedError } from "../errors/codedError";
 import { BROWSE_REQUESTS, createFixtureDaemon } from "../fixtures/fixtureDaemon";
 import type { Fixture } from "../fixtures/fixture";
+import type { Event, RequestBody } from "../protocol";
 import type { Daemon } from "../store";
 import { previewRepositories } from "./repositories";
 
@@ -24,7 +26,7 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
   );
   return {
     ...daemon,
-    request: async (body) => {
+    request: looseRequestSender(async (body: RequestBody): Promise<Event> => {
       if (!BROWSE_REQUESTS.has(body.type)) return daemon.request(body);
       if (!("project" in body) || typeof body.project !== "string")
         throw new Error("Browse request needs a project");
@@ -35,7 +37,7 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
         !reader ||
         !daemon.store.getState().projects.has(body.project)
       )
-        throw new DaemonRequestError(
+        throw new CodedError(
           "Unknown preview project",
           "unknown_project",
           { project: body.project },
@@ -46,7 +48,7 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
         body.worktree !== undefined &&
         !repository.git.worktrees.some((w) => w.id === body.worktree)
       )
-        throw new DaemonRequestError(
+        throw new CodedError(
           "Worktree belongs to another preview project",
           "worktree_unavailable",
           { worktree: body.worktree },
@@ -81,13 +83,13 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
           from.branch !== "main" &&
           from.branch !== repository.branch
         )
-          throw new DaemonRequestError(
+          throw new CodedError(
             "Unknown preview branch",
             "unknown_branch",
             { branch: from.branch },
           );
         if (from.kind === "commit" && from.commit !== repository.head)
-          throw new DaemonRequestError(
+          throw new CodedError(
             "Unknown preview revision",
             "file_not_found",
             { path: body.path },
@@ -96,7 +98,7 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
           ? repository.committed[body.path]
           : reply.file.text;
         if (text === undefined || text === null)
-          throw new DaemonRequestError(
+          throw new CodedError(
             "File is absent in this revision",
             "file_not_found",
             { path: body.path },
@@ -123,6 +125,6 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
         };
       }
       return reply;
-    },
+    }),
   };
 }

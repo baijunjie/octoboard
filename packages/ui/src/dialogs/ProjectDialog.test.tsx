@@ -4,7 +4,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { projectOf } from "../fixtures/builders";
 import type { Agent } from "../protocol";
 import { roots, work, personal, render, input, type, settle, click, answer, chooseSource, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
@@ -42,7 +42,7 @@ it.each(["path_not_found", "path_not_a_directory"])("shows %s as the Directory f
   const pending = render();
   type(input("Directory"), "~/code/missing");
   await settle(500);
-  await act(async () => pending[0].reject(new DaemonRequestError("plain", code, { path: "/Users/dev/code/missing" })));
+  await act(async () => pending[0].reject(new CodedError("plain", code, { path: "/Users/dev/code/missing" })));
   const error = document.body.querySelector('[data-slot="field-error"] [role="alert"]');
   expect(error?.querySelector("code")?.textContent).toBe("/Users/dev/code/missing");
   expect(error?.querySelector("code")?.getAttribute("data-color")).toBe("danger");
@@ -55,7 +55,7 @@ it("keeps an Alert under the Directory field when the check could not run", asyn
   const pending = render();
   type(input("Directory"), "~/code/a");
   await settle(500);
-  await act(async () => pending[0].reject(new DaemonRequestError("plain", "directory_unreachable", { path: "/Users/dev/code/a" })));
+  await act(async () => pending[0].reject(new CodedError("plain", "directory_unreachable", { path: "/Users/dev/code/a" })));
   const alert = document.body.querySelector('[data-slot="alert-root"]')!.parentElement!;
   expect(input("Directory").getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
   expect(document.body.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent ?? "").toBe("");

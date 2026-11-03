@@ -1,5 +1,5 @@
-import { CircleCheck, CircleDot, Info, type LucideIcon } from "lucide-react";
-import React, { useId } from "react";
+import { CircleCheck, CircleDot } from "lucide-react";
+import React from "react";
 
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents/agents";
 import { InlineReference } from "../i18n/InlineReference";
@@ -14,7 +14,7 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, InspectedAccount, InspectedAccounts } from "../protocol";
 import { useFailureNode } from "./failureText";
 import { accountChoicesFor, directoryProblem, hasNameProblem, withAccountRow, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
-import { AgentList, CARD_CLASS, CARD_HEADER_CLASS, DirectoryChoiceField, Field, type Shown } from "./importParts";
+import { AgentList, Card, CardHeading, DirectoryChoiceField, Field, InfoNote, STATUS_TONE, StatusGlyph, type StatusEntry, type Shown } from "./importParts";
 
 const CHOICE_LABEL: Record<AccountRowState["choice"], PlainMessageKey> = {
   create: "configuration.import.accounts.choice.create",
@@ -22,12 +22,11 @@ const CHOICE_LABEL: Record<AccountRowState["choice"], PlainMessageKey> = {
   leave_out: "configuration.import.choice.skip",
 };
 
-/** What an account of the document would come to here when it can be used: drawn and coloured so the colour only
- * strengthens the word and the glyph. A directory in use and an account that is not valid are a warning mark after the
- * name instead (`UnusableMark`). */
-const STATUS: Record<"new" | "existing", { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
-  new: { label: "configuration.import.accounts.status.new", icon: CircleCheck, tone: "text-success-soft-foreground" },
-  existing: { label: "configuration.import.accounts.status.existing", icon: CircleDot, tone: "text-app-muted" },
+/** What an account of the document would come to here when it can be used. A directory in use and an account that is
+ * not valid are a warning mark after the name instead (`UnusableMark`). */
+const STATUS: Record<"new" | "existing", StatusEntry> = {
+  new: { label: "configuration.import.accounts.status.new", icon: CircleCheck, tone: STATUS_TONE.success },
+  existing: { label: "configuration.import.accounts.status.existing", icon: CircleDot, tone: STATUS_TONE.muted },
 };
 
 function AccountRow({
@@ -67,7 +66,7 @@ function AccountRow({
           </span>
           {settled && (
             <span className="flex items-start gap-1.5 text-sm text-app-muted">
-              <settled.icon aria-hidden="true" className={`mt-0.5 size-3.5 shrink-0 ${settled.tone}`} />
+              <StatusGlyph entry={settled} size="mt-0.5 size-3.5" />
               <span className="min-w-0 [overflow-wrap:anywhere]" dir="auto">{t(settled.label)}</span>
             </span>
           )}
@@ -181,10 +180,7 @@ export function ImportAccounts({
           onRow={(i, row) => onReview(withAccountRow(review, a, i, row))}
         />
       ))}
-      <p className="flex items-start gap-2 text-sm">
-        <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
-        <span className="min-w-0">{t("configuration.import.accounts.note")}</span>
-      </p>
+      <InfoNote>{t("configuration.import.accounts.note")}</InfoNote>
     </>
   );
 }
@@ -203,10 +199,8 @@ function AgentCard({
   onRow: (account: number, row: AccountRowState) => void;
 }): React.ReactElement {
   const t = useT();
-  const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className={CARD_CLASS}>
-      <h3 id={headingId} className={`${CARD_HEADER_CLASS} text-base font-semibold text-foreground`}>{AGENT_LABEL[agent]}</h3>
+    <Card header={(headingId) => <CardHeading id={headingId}>{AGENT_LABEL[agent]}</CardHeading>}>
       {accounts.length === 0 ? (
         <p className="px-4 py-3 text-sm text-app-muted">{t("configuration.import.accounts.none")}</p>
       ) : (
@@ -223,6 +217,6 @@ function AgentCard({
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

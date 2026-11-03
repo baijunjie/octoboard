@@ -50,7 +50,7 @@ function mountWith(incomplete: boolean) {
   const daemon = testDaemon({
     state,
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(),
+    raiseError: vi.fn(), showNotice: vi.fn(),
   });
   daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts: [account(incomplete)] } });
   const container = mountForTooltip(

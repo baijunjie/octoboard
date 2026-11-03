@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AGENT_INSTALL_URL } from "../../agents/agents";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { Agent, AgentAvailability, RequestBody } from "../../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import { mountHost } from "../../test/mountHost";
+import { testDaemon } from "../../test/testDaemon";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
@@ -20,27 +20,18 @@ function render(
   request: (body: RequestBody) => Promise<unknown> = () => Promise.resolve({ type: "ack", id: null }),
   onClose = () => {},
 ) {
-  const daemon: Daemon = {
-    store: createStateStore({
+  const handler = vi.fn(request);
+  const daemon = testDaemon({
+    state: {
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
       agentAvailability: new Map(Object.entries(availability).map(([agent, state]) => [agent as Agent, { agent: agent as Agent, availability: state, default_account_dir: null }])),
-    }),
-    request: vi.fn(request) as Daemon["request"],
+    },
+    request: handler as never,
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
+    showNotice: vi.fn(),
   });
-  act(() => root.render(<DaemonProvider value={daemon}><AddAgentDialog onClose={onClose} /></DaemonProvider>));
-  return daemon;
+  mountHost(<AddAgentDialog onClose={onClose} />, { daemon });
+  return { store: daemon.store, request: handler };
 }
 
 const rows = () => [...document.querySelectorAll("li")];
@@ -92,7 +83,7 @@ it("presents a refusal and keeps the dialog open", async () => {
   const reported = vi.spyOn(errorAlerts, "report");
   onTestFinished(() => reported.mockRestore());
   const onClose = vi.fn();
-  render({ codex: "available" }, [], () => Promise.reject(new DaemonRequestError("gone", "agent_not_installed", { agent: "Codex" })), onClose);
+  render({ codex: "available" }, [], () => Promise.reject(new CodedError("gone", "agent_not_installed", { agent: "Codex" })), onClose);
   await act(async () => button("Add Codex").click());
   await act(async () => {});
   expect(reported).toHaveBeenCalled();

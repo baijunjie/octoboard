@@ -19,10 +19,12 @@ the same change:
   it is read, so its record needs only its message facets, not a remedy.
 - Adds its record to `CODES` with `origin: "daemon"`, and `daemon.<code>` in every message catalog under
   `packages/ui/src/i18n/messages/`. The sentence says what happened, and no remedy beyond a code-specific step as set
-  out below. Where `messageCode` words the code only by a param (one key per `kind` or `cause`), the key it resolves to
-  with no such param is still needed: it is what a newer daemon's variant the window does not know is shown with, so
-  word it for any of them, not as a placeholder. A notice that is a failure, shown as an error alert rather than a
-  toast, needs `failureNotice: true`; nothing else makes it one.
+  out below. Where the code is worded by a param (one key per `kind` or `cause`), its record names the variant with
+  `variantOf` (`daemon.<code>.<variant>`), with the variant's own params facets under `variants` where they differ;
+  `messageCode` only looks it up. The code's own key, what `variantOf` returning nothing is worded with, is still
+  needed: it is what a newer daemon's variant the window does not know is shown with, so word it for any of them, not
+  as a placeholder. A notice that is a failure, shown as an error alert rather than a toast, needs
+  `failureNotice: true`; nothing else makes it one.
 - Gives the record a `recovery`. Reuse a group whose remedy fits, or add an `ErrorRecovery` with its
   `error.recovery.<name>` text in every catalog. The group's remedy, the general advice for its kind of failure, goes in
   that `error.recovery.<name>` text, never in `daemon.<code>`. The group does not decide the remedy on its own:
@@ -56,7 +58,7 @@ the same change:
 - Where the record has `detailBlock: true` (its `detail` shown as raw text of its own), an error of it that carries
   `detail` is worded by `daemon.<messageCode>.summary` (`richMessageCode`), and with that key missing the alert shows
   the daemon's own English message. The test only checks that some message of the code has a `.summary`, so where
-  `messageCode` words the code by a param such as `cause`, give a `.summary` key to every variant that could ever
+  `variantOf` words the code by a param such as `cause`, give a `.summary` key to every variant that could ever
   arrive with `detail`, the one the normaliser maps an unknown `cause` to included (a newer daemon's cause with
   `detail` lands there), not only the variants today's daemon sends `detail` with; never drop such a key as unused,
   except for a code marked `noSummary`, which has none (next bullet).

@@ -3,6 +3,10 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Project } from "../protocol";
+import type { Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { hasNewProjectId, useGitStatusSchedule } from "./useGitStatusSchedule";
 
 describe("hasNewProjectId", () => {
@@ -31,17 +35,8 @@ describe("hasNewProjectId", () => {
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 
-/** A stand-in for the store slice `useGitStatusSchedule` reads, mutable per test. */
-let fakeState: {
-  connectionState: string;
-  snapshotEpoch: number;
-  projects: Map<string, { id: string; console_id: string }>;
-};
-
-vi.mock("../store", () => ({
-  useDaemon: () => ({ request }),
-  useDaemonStore: (selector: (state: typeof fakeState) => unknown) => selector(fakeState),
-}));
+let daemon: Daemon;
+const projectsOf = (...ids: string[]) => new Map(ids.map((id) => [id, { id, console_id: "c1" } as Project]));
 
 function Host({ consoleId }: { consoleId: string | undefined }) {
   useGitStatusSchedule(consoleId);
@@ -51,9 +46,10 @@ function Host({ consoleId }: { consoleId: string | undefined }) {
 function mount(consoleId: string | undefined) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<Host consoleId={consoleId} />));
+  const render = (id: string | undefined) => act(() => root.render(<TestHost daemon={daemon}><Host consoleId={id} /></TestHost>));
+  render(consoleId);
   return {
-    rerender: (id: string | undefined) => act(() => root.render(<Host consoleId={id} />)),
+    rerender: render,
     unmount: () => {
       act(() => root.unmount());
       container.remove();
@@ -67,11 +63,7 @@ describe("useGitStatusSchedule", () => {
   beforeEach(() => {
     request.mockClear();
     vi.useFakeTimers();
-    fakeState = {
-      connectionState: "open",
-      snapshotEpoch: 0,
-      projects: new Map([["p1", { id: "p1", console_id: "c1" }]]),
-    };
+    daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 0, projects: projectsOf("p1") }, request });
   });
 
   afterEach(() => {
@@ -122,7 +114,7 @@ describe("useGitStatusSchedule", () => {
     // would tick 2 min later than the original schedule and the assertions below would catch it.
     act(() => vi.advanceTimersByTime(2 * 60_000));
 
-    fakeState = { ...fakeState, projects: new Map(fakeState.projects).set("p2", { id: "p2", console_id: "c1" }) };
+    act(() => daemon.store.setState({ projects: projectsOf("p1", "p2") }));
     host.rerender("c1");
     expect(request).toHaveBeenCalledTimes(2);
 

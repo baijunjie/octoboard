@@ -1,4 +1,4 @@
-import { accountDisabled } from "../accounts/accountChoices";
+import { accountDisabled } from "../accounts/choiceEntries";
 import { orderedAccounts } from "../accounts/accountOrder";
 import type { Account, Agent, Settings } from "../protocol";
 

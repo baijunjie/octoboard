@@ -22,7 +22,7 @@ const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fet
 function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = []) {
   const store = createStateStore({ accountQuotas });
   store.setState({ settings: { ...store.getState().settings, ...settings } });
-  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{ui}</DaemonProvider>));

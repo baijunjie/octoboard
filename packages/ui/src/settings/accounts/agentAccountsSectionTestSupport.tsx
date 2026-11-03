@@ -1,6 +1,6 @@
 // Shared by the `AgentAccountsSection` test files, which split the section's tests by area. Importing it resets the
-// daemon state of `./agentAccountsSectionTestState` before each test of the importing file, and clears what a test
-// left behind after it; each file still declares the six `vi.mock` calls that state module has the stand-ins for.
+// starting state of `./agentAccountsSectionTestState` before each test of the importing file, and clears what a test
+// left behind after it; each file still declares the five `vi.mock` calls that state module has the stand-ins for.
 import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
@@ -8,6 +8,9 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { afterEach, beforeEach, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import type { Account, AccountSharing, Settings } from "../../protocol";
+import type { State } from "../../store";
+import { TestHost } from "../../test/TestHost";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import {
@@ -16,16 +19,14 @@ import {
   accountQuotas,
   accountSharing,
   availability,
-  bus,
   consoles,
-  dismissAccountLogin,
   projects,
   request,
   sectionEntry,
   sessions,
   settings,
   raiseError,
-  trackAccountLogin,
+  startDaemon,
 } from "./agentAccountsSectionTestState";
 import { SettingsFocusContext } from "../useSectionRefocus";
 
@@ -47,8 +48,6 @@ beforeEach(() => {
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
   raiseError.mockClear();
-  dismissAccountLogin.mockClear();
-  trackAccountLogin.mockClear();
   settings.added_agents = ["claude", "codex", "grok"];
   consoles.clear();
   projects.clear();
@@ -85,6 +84,22 @@ export function mount(tab?: string, strict = false) {
   const root = createRoot(container);
   const entry = document.body.appendChild(document.createElement("button"));
   sectionEntry.current = entry;
+  const daemon = startDaemon();
+  const { store } = daemon;
+  /** Puts `patch` to the store, as the daemon's events do. */
+  const set = (patch: Partial<State>) => act(() => store.setState(patch));
+  /** Puts `patch` over the stored settings, as a `settings_updated` event does. */
+  const setSettings = (patch: Partial<Settings>) => set({ settings: { ...store.getState().settings, ...patch } });
+  /** Puts `sharing` as the stored sharing state of an account, or takes the account's entry away (`null`). */
+  const setSharing = (id: string, sharing: AccountSharing | null) => {
+    const next = new Map(store.getState().accountSharing);
+    if (sharing) next.set(id, sharing);
+    else next.delete(id);
+    return set({ accountSharing: next });
+  };
+  /** Puts `patch` over one stored account, as a `settings_updated` event does. */
+  const setAccount = (id: string, patch: Partial<Account>) =>
+    setSettings({ accounts: store.getState().settings.accounts.map((held) => (held.id === id ? { ...held, ...patch } : held)) });
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
@@ -93,9 +108,8 @@ export function mount(tab?: string, strict = false) {
   });
   let navigation: React.ContextType<typeof AccountsNavigationContext> = { pending: false, dismissForms: 0, consume: () => {}, consumeAccount: () => {} };
   const render = () => act(() => {
-    const section = <SettingsFocusContext.Provider value={() => entry}><AccountsNavigationContext.Provider value={navigation}><AgentAccountsSection /></AccountsNavigationContext.Provider></SettingsFocusContext.Provider>;
+    const section = <TestHost daemon={daemon}><SettingsFocusContext.Provider value={() => entry}><AccountsNavigationContext.Provider value={navigation}><AgentAccountsSection /></AccountsNavigationContext.Provider></SettingsFocusContext.Provider></TestHost>;
     root.render(strict ? <StrictMode>{section}</StrictMode> : section);
-    bus.notify();
   });
   render();
   // What opening the section asked for is kept apart, so a test sees only the requests it makes.
@@ -115,7 +129,7 @@ export function mount(tab?: string, strict = false) {
     navigation = { ...navigation, account, dismissForms: navigation.dismissForms + 1 };
     render();
   };
-  return { container, selects, change, opening, render, navigate, showSharingOf };
+  return { container, selects, change, opening, render, navigate, showSharingOf, store, set, setSettings, setAccount, setSharing };
 }
 
 export const sharingSwitches = (container: HTMLElement) => [...container.querySelectorAll<HTMLInputElement>('input[role="switch"]')].filter((input) => input.getAttribute("aria-label")?.includes("Share default configuration"));

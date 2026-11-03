@@ -3,13 +3,12 @@ export { createDaemon } from "./connection";
 export type { Daemon } from "./connection";
 export { consolePreference, currentConsoleOf, useCurrentConsole } from "./currentConsole";
 export { DEFAULT_SETTINGS } from "./defaultSettings";
-export { DaemonProvider, useDaemon, useDaemonStore, useDaemonStoreEqual, useErrorRecords } from "./react";
-export { sameValue } from "./sameValue";
+export { DaemonProvider, useDaemon, useDaemonStore, useDaemonStoreEqual, useDaemonStoreOrEmpty } from "./react";
 export type { SessionRequest } from "./sessionRequests";
-export { accountLoginKey, createStateStore } from "./state";
+export { createStateStore } from "./state";
 export type { State, TrustPrompt } from "./state";
-export { errorToast } from "./toasts";
-export type { AlertOptions, ToastRequest } from "./toasts";
+export { errorNotification } from "./notifications";
+export type { AlertOptions, NotificationRequest } from "./notifications";
 export {
   useArchivedOwnerSessions,
   useConsoleSessions,

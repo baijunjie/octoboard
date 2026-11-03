@@ -13,7 +13,7 @@ import type { ErrorRecovery } from "../../errors/errorRecovery";
  * `resetKey` naming the current one: when it changes the busy state is cleared, and an action
  * still running for the previous subject no longer reports into it. A failure is titled
  * `errorTitle`, the plain name of what failed; `errorRecovery` gives the remedy for a failure where the action knows a
- * better one than its kind has (see `ToastRequest.recovery`). */
+ * better one than its kind has (see `NotificationRequest.recovery`). */
 export function useDialogAction(resetKey: string | undefined, errorTitle: string, errorRecovery?: (error: unknown) => ErrorRecovery | undefined): {
   busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;

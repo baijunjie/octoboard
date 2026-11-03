@@ -4,19 +4,19 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { setLanguage } from "../i18n/language";
+import { DEFAULT_SETTINGS, type Daemon, type State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { useInterfaceLanguageSync } from "./useInterfaceLanguageSync";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 
-/** A stand-in for the store slice the hook reads, mutable per test. */
-let fakeState: { connectionState: string; snapshotEpoch: number; settings: { interface_language?: string | null } };
-
-vi.mock("../store", () => ({
-  useDaemon: () => ({ request }),
-  useDaemonStore: (selector: (state: typeof fakeState) => unknown) => selector(fakeState),
-}));
+let daemon: Daemon;
+/** Puts `patch` to the store, as the daemon connection does. */
+const set = (patch: Partial<State>) => act(() => daemon.store.setState(patch));
+const setLanguageOnDaemon = (interface_language: string | null) => set({ settings: { ...daemon.store.getState().settings, interface_language } });
 
 function Host() {
   useInterfaceLanguageSync();
@@ -26,18 +26,19 @@ function Host() {
 function mount() {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<Host />));
+  const render = () => act(() => root.render(<TestHost daemon={daemon}><Host /></TestHost>));
+  render();
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
-  return { rerender: () => act(() => root.render(<Host />)) };
+  return { rerender: render };
 }
 
 beforeEach(() => {
   request.mockClear();
   setLanguage("zh-Hans");
-  fakeState = { connectionState: "open", snapshotEpoch: 1, settings: { interface_language: null } };
+  daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1, settings: { ...DEFAULT_SETTINGS, interface_language: null } }, request });
 });
 
 it("seeds a daemon that holds no language with this client's", () => {
@@ -46,16 +47,15 @@ it("seeds a daemon that holds no language with this client's", () => {
 });
 
 it("leaves a language the daemon already holds alone, whatever this client's is", () => {
-  fakeState.settings.interface_language = "de";
+  setLanguageOnDaemon("de");
   mount();
   expect(request).not.toHaveBeenCalled();
 });
 
 it("sends nothing before the first snapshot or while the connection is down", () => {
-  fakeState.snapshotEpoch = 0;
+  set({ snapshotEpoch: 0 });
   const { rerender } = mount();
-  fakeState.snapshotEpoch = 1;
-  fakeState.connectionState = "reconnecting";
+  set({ snapshotEpoch: 1, connectionState: "reconnecting" });
   rerender();
   expect(request).not.toHaveBeenCalled();
 });
@@ -64,11 +64,11 @@ it("does not send again for a re-render, only once the daemon still has none aft
   const { rerender } = mount();
   rerender();
   expect(request).toHaveBeenCalledTimes(1);
-  fakeState.snapshotEpoch = 2;
+  set({ snapshotEpoch: 2 });
   rerender();
   expect(request).toHaveBeenCalledTimes(2);
-  fakeState.settings.interface_language = "zh-Hans";
-  fakeState.snapshotEpoch = 3;
+  setLanguageOnDaemon("zh-Hans");
+  set({ snapshotEpoch: 3 });
   rerender();
   expect(request).toHaveBeenCalledTimes(2);
 });

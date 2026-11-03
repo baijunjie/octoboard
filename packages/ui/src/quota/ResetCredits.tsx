@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "../components/controls/Button";
 import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { afterFrames } from "../components/focus/afterFrames";
 import { focusFellToPage } from "../components/focus/regionFocus";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { ConfirmConsequences } from "../components/dialog/ConfirmConsequences";
@@ -48,16 +49,14 @@ export function ResetCreditsLine({ quota, accountName, onUse, preventFocusOnPres
  * `restore` if focus fell to the page, the way `useLoginFocusReturn` does for the login dialog. The user did not ask for
  * the move, so the destination shows its ring. Nothing runs once the surface is gone. */
 export function useResetFocusReturn(restore: () => void): () => void {
-  const frame = useRef(0);
-  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const cancel = useRef<() => void>(undefined);
+  useEffect(() => () => cancel.current?.(), []);
   return () => {
-    cancelAnimationFrame(frame.current);
-    frame.current = requestAnimationFrame(() => {
-      frame.current = requestAnimationFrame(() => {
-        if (!focusFellToPage()) return;
-        ringForAutomaticFocus();
-        restore();
-      });
+    cancel.current?.();
+    cancel.current = afterFrames(2, () => {
+      if (!focusFellToPage()) return;
+      ringForAutomaticFocus();
+      restore();
     });
   };
 }
@@ -99,7 +98,7 @@ export function UseResetCreditDialog({ account, accountName, onClose }: {
 }): React.ReactElement {
   const t = useT();
   const now = useNow();
-  const { request, toastNotice, store } = useDaemon();
+  const { request, showNotice, store } = useDaemon();
   const quota = useAccountQuota("codex", account);
   const [stage, setStage] = useState<Stage>({ kind: "ask" });
   // The reading the confirm was pressed on, from then until the request fails: the daemon takes a used credit out of
@@ -133,17 +132,13 @@ export function UseResetCreditDialog({ account, accountName, onClose }: {
       setPressed(undefined);
       throw error;
     });
-    if (reply.type !== "reset_credit_used") {
-      setPressed(undefined);
-      return;
-    }
     const key = OUTCOME_NOTICE[reply.outcome];
     if (key === undefined) {
       const held = accountQuotaOf(store.getState().accountQuotas, "codex", account);
       setStage({ kind: "waiting", frozen: quota, baseline: typeof held === "object" ? held : quota });
       return;
     }
-    toastNotice(t(key, { account: isolate(accountName) }), <Message id={key} params={{ account: nameChip }} />);
+    showNotice(t(key, { account: isolate(accountName) }), <Message id={key} params={{ account: nameChip }} />);
     onClose();
   };
   const updatedBar = stage.kind === "done" && stage.updated && typeof quota === "object" ? usageBarWindows(quota) : undefined;

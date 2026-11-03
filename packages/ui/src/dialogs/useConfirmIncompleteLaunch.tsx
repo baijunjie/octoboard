@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { incompleteAccount } from "../accounts/accountChoices";
+import { incompleteAccount } from "../accounts/choiceEntries";
 import { InlineReference } from "../i18n/InlineReference";
 import { Message, useT } from "../i18n/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";

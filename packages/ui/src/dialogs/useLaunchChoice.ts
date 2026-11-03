@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { agentOpeningChoice, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, openingChoice, type AccountChoice, type ChoiceGroup } from "../accounts/accountChoices";
+import { agentOpeningChoice, currentChoice, openingChoice } from "../accounts/openingChoice";
+import { choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, findEntry, type AccountChoice, type ChoiceGroup } from "../accounts/choiceEntries";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents/agents";
 import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { isolate } from "../i18n/isolate";

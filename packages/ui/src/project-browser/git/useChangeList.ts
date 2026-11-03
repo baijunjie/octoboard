@@ -5,7 +5,8 @@ import { usePoll } from "../../components/hooks/usePoll";
 import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { WORKTREE_UNAVAILABLE } from "../../protocol";
-import { sameValue, useDaemon } from "../../store";
+import { useDaemon } from "../../store";
+import { sameValue } from "../../values/sameValue";
 import { AUTO_REFRESH_CATCH_UP_MS, AUTO_REFRESH_MS } from "../autoRefresh";
 import { changeItems, type ChangeItem } from "./changes";
 

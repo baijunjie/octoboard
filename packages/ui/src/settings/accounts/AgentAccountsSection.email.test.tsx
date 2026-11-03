@@ -5,7 +5,6 @@ import type { Account, AccountQuota } from "../../protocol";
 import { accountQuotas } from "./agentAccountsSectionTestState";
 import { mount, openDetailsOf, openSettingsOf, rowOf } from "./agentAccountsSectionTestSupport";
 
-vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
 vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));

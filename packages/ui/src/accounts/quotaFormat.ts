@@ -13,6 +13,15 @@ const WINDOW_ORDER: Record<QuotaWindow["kind"], number> = {
   weekly_model: 3,
 };
 
+/** How long a credit pool's current period is, by the minutes the agent reports for it: a week (6 to 8 days), a month
+ * (28 to 31 days), or neither, as with a period of unknown length. */
+export function creditPeriodLength(window: QuotaWindow): "weekly" | "monthly" | undefined {
+  const days = (window.window_minutes ?? 0) / DAY_MINUTES;
+  if (days >= 6 && days <= 8) return "weekly";
+  if (days >= 28 && days <= 31) return "monthly";
+  return undefined;
+}
+
 /** Account-wide limits precede model-specific limits regardless of the agent's response order.
  * Copy before the stable sort so store readings and the order among model limits stay intact. */
 export function orderedQuotaWindows(windows: readonly QuotaWindow[]): QuotaWindow[] {
@@ -74,10 +83,8 @@ export function quotaWindowLabel(t: Translate, naming: QuotaNaming, window: Quot
     case "weekly_model":
       return window.label ? t("quota.window.weeklyModel", { model: isolate(window.label) }) : t("quota.window.weekly");
     case "credit_period": {
-      const days = (window.window_minutes ?? 0) / DAY_MINUTES;
-      if (days >= 6 && days <= 8) return t("quota.window.weekly");
-      if (days >= 28 && days <= 31) return t("quota.window.monthly");
-      return t("quota.window.credits");
+      const length = creditPeriodLength(window);
+      return t(length === "weekly" ? "quota.window.weekly" : length === "monthly" ? "quota.window.monthly" : "quota.window.credits");
     }
   }
 }
@@ -184,10 +191,8 @@ export function quotaWindowPhrase(t: Translate, naming: QuotaNaming, window: Quo
     case "weekly_model":
       return window.label ? t("quota.windowPhrase.weeklyModel", { model: isolate(window.label) }) : t("quota.windowPhrase.weekly");
     case "credit_period": {
-      const days = (window.window_minutes ?? 0) / DAY_MINUTES;
-      if (days >= 6 && days <= 8) return t("quota.windowPhrase.weekly");
-      if (days >= 28 && days <= 31) return t("quota.windowPhrase.monthly");
-      return t("quota.windowPhrase.credits");
+      const length = creditPeriodLength(window);
+      return t(length === "weekly" ? "quota.windowPhrase.weekly" : length === "monthly" ? "quota.windowPhrase.monthly" : "quota.windowPhrase.credits");
     }
   }
 }

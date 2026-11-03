@@ -12,7 +12,9 @@ It is excluded from the production type check and from release verification, and
   account, a model change in flight). It answers a request only if some scenario sends it. It holds no replies of its
   own: `createFixtureContext` (`fixtureContext.ts`) builds what the domain modules share (the scenario, the store, `fail`,
   the refusals more than one needs), and each module answers the requests of one domain, as a `Handlers` table that
-  `mergeHandlers` joins (a request answered by two modules throws): `fixtureSessions.ts` (sessions),
+  `mergeHandlers` joins (a request answered by two modules throws; a `Handler` is typed to reply with the event its
+  request is answered with, as `REPLY_TYPES` of `daemon-client.ts` names it, so a wrong reply fails the type check, and
+  `neverReplied` is the reply of a request a scenario holds pending): `fixtureSessions.ts` (sessions),
   `fixtureConsoles.ts`, `fixtureAccounts.ts` (accounts, and the refusals a session gets on one), `fixtureSettings.ts`,
   `fixtureProjects.ts` (projects and their shell terminals), `fixtureFiles.ts` (a project's files, folder listings, path
   links) and `fixtureProcesses.ts` (the process ledger). A request no module answers is acknowledged. A new reply goes
@@ -58,7 +60,7 @@ The fixture stands on the daemon's side of the protocol, so a reply it sends mus
   scenario without a `git` is answered from included), so a new fixture is read without being named; it lets a daemon
   error through only where the fixture stages that very error for the change, and checks that each read reached its
   target.
-- `FixtureUnfillableError` is deliberately not a `DaemonRequestError`: a scenario's daemon error is a legitimate UI
+- `FixtureUnfillableError` is deliberately not a `CodedError`: a scenario's daemon error is a legitimate UI
   state to show, so a gap in the gallery's own data must not be dressed as one that a test, or someone looking at the
   page, would let pass.
 - A fixture field says what a reply costs (`expand.delay`, `expand.error`), never whether it is given. Whether the

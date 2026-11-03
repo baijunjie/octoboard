@@ -1,4 +1,4 @@
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "./codedError";
 import { codeRecord } from "./codes";
 import { daemonMessage, type RecordNames } from "./daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, type ErrorPresentation } from "./errorPresentation";
@@ -62,7 +62,7 @@ export function rawFailureText(error: ErrorPresentation): string | undefined {
  * else its message. */
 export function diagnosticText(error: unknown): string | undefined {
   if (typeof error === "string") return error;
-  if (error instanceof DaemonRequestError) return unexpectedFailureDiagnostic(error);
+  if (error instanceof CodedError) return unexpectedFailureDiagnostic(error);
   if (!error || typeof error !== "object") return error === undefined || error === null ? undefined : String(error);
   try {
     if ("stack" in error && typeof error.stack === "string" && error.stack) return error.stack;

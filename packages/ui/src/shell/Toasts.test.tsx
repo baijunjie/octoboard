@@ -4,11 +4,11 @@ import { createRoot } from "react-dom/client";
 import { toast } from "@heroui/react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errors/errorPresentation";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import { createStateStore, DaemonProvider, errorToast, type Daemon } from "../store";
+import { createStateStore, DaemonProvider, errorNotification, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -16,7 +16,7 @@ import { Toasts } from "./Toasts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const daemon = testDaemon({ request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
+const daemon = testDaemon({ request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
 
 class FakeResizeObserver {
   observe(): void {}
@@ -40,19 +40,19 @@ it.each(["model_change_did_not_stop", "model_change_did_not_come_up"])("names th
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
+  let deliver!: (request: import("../store").NotificationRequest) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]) }),
-    onToast: (listener) => { deliver = listener; return () => {}; },
+    onNotification: (listener) => { deliver = listener; return () => {}; },
   };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { session: "s1" };
-    const error = new DaemonRequestError(daemonMessage("en", code, params, "fallback", source.store.getState()), code, params);
-    act(() => deliver(errorToast(error, { title: "Could not change the model", session: "s1" })));
+    const error = new CodedError(daemonMessage("en", code, params, "fallback", source.store.getState()), code, params);
+    act(() => deliver(errorNotification(error, { title: "Could not change the model", session: "s1" })));
     const alert = document.querySelector('[role="alertdialog"]')!;
     expect(alert.querySelector("h2")?.textContent).toBe("Could not change the model");
     expect(alert.textContent?.split("Fix login")).toHaveLength(2);
@@ -115,13 +115,13 @@ it("renders a coded shell timeout with a separate title and command while plain 
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
-    const error = new DaemonRequestError("plain fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
+    const error = new CodedError("plain fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const alert = document.querySelector('[role="alertdialog"]');
     expect(alert?.textContent).toContain("Shell environment timed out");
@@ -134,7 +134,7 @@ it("renders a coded shell timeout with a separate title and command while plain 
     act(() => errorAlerts.acknowledge());
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("a plain failure");
     act(() => errorAlerts.acknowledge());
-    act(() => deliver({ kind: "error", message: "This request is no longer waiting.", daemonError: new DaemonRequestError("", "session_request_not_waiting", {}) }));
+    act(() => deliver({ kind: "error", message: "This request is no longer waiting.", daemonError: new CodedError("", "session_request_not_waiting", {}) }));
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("This request is no longer waiting.");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
@@ -152,13 +152,13 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
-    const error = new DaemonRequestError("plain fallback", code, params);
+    const error = new CodedError("plain fallback", code, params);
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const text = document.querySelector('[role="alertdialog"]')?.textContent ?? "";
     expect(text).toContain("Work");
@@ -181,15 +181,15 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     // The notice's own params over the failure's, as the daemon puts them.
     const params = { ...nested, agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: reasonCode };
-    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    const error = new CodedError("plain fallback", "account_switch_automatically_failed", params);
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const alert = document.querySelector('[role="alertdialog"]')!;
     expect(alert.textContent).toContain("Could not switch account");
@@ -210,14 +210,14 @@ it("tells a failed automatic switch's user to copy out the older item it kept as
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { path: "/t", stage: "kept_staging", cause: "not_restored", kept_in: "/t/.octoboard-switch/x", detail: "disk full", agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: "relocation_failed" };
-    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    const error = new CodedError("plain fallback", "account_switch_automatically_failed", params);
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const text = document.querySelector('[role="alertdialog"]')!.textContent;
     expect(text).toContain("nor bring it back up on");
@@ -238,14 +238,14 @@ it("adds the remedy for what the system said to the copy-out advice of a failed 
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { path: "/t", stage: "kept_staging", cause: "not_restored", kept_in: "/t/.octoboard-switch/x", detail: "No space left on device (os error 28)", agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: "relocation_failed" };
-    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    const error = new CodedError("plain fallback", "account_switch_automatically_failed", params);
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const text = document.querySelector('[role="alertdialog"]')!.textContent ?? "";
     const copyOut = text.indexOf("copy it out of the folder named above");
@@ -267,14 +267,14 @@ it("adds the remedy for what the system said to a failed automatic switch with a
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { path: "/t", stage: "copy", cause: "other", detail: "No space left on device (os error 28)", agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: "relocation_failed" };
-    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    const error = new CodedError("plain fallback", "account_switch_automatically_failed", params);
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const text = document.querySelector('[role="alertdialog"]')!.textContent ?? "";
     expect(text).toContain("nor bring it back up on");
@@ -300,14 +300,14 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { agent: "Claude Code", from: "Work", account: "Spare", reason, reason_code: reasonCode };
-    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    const error = new CodedError("plain fallback", "account_switch_automatically_failed", params);
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const alert = document.querySelector('[role="alertdialog"]')!;
     expect(alert.textContent).toContain("nor bring it back up on");
@@ -330,13 +330,13 @@ it("sets the path of a coded daemon error as code in its acknowledgement dialog"
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
-    const error = new DaemonRequestError("plain fallback", "path_not_found", { path: "/Users/dev/missing" });
+    const error = new CodedError("plain fallback", "path_not_found", { path: "/Users/dev/missing" });
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
     const alert = document.querySelector('[role="alertdialog"]');
     expect(alert?.querySelector("code")?.textContent).toBe("/Users/dev/missing");
@@ -353,17 +353,17 @@ it("shows a coded notice under the session's location, the path as code in the d
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
+  let deliver!: (request: import("../store").NotificationRequest) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", undefined, "Hub", "idle")]]) }),
-    onToast: (listener) => { deliver = listener; return () => {}; },
+    onNotification: (listener) => { deliver = listener; return () => {}; },
   };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
-    const error = new DaemonRequestError("plain fallback", "trust_not_carried_over", { agent: "Codex", path: "/Users/dev/code", reason: "why" });
+    const error = new CodedError("plain fallback", "trust_not_carried_over", { agent: "Codex", path: "/Users/dev/code", reason: "why" });
     act(() => deliver({ kind: "notice", message: error.message, daemonError: error, session: "s1" }));
     const description = document.querySelector('[data-slot="toast-description"]');
     expect(description?.querySelector("code")?.textContent).toBe("/Users/dev/code");
@@ -382,17 +382,17 @@ it.each<{ code: string; params: Record<string, string>; title: string; sentence:
   { code: "account_sharing_repair_failed", params: { account: "a1", name: "Work", items: "[]", cause: "permission_denied" }, title: "Could not repair sharing links", sentence: "You do not have permission to change the account’s directory.", raw: "plain fallback" },
 ])("shows a $code notice as an error alert, not a toast, its sentence the body and the system's text behind Error details, under a plain title", ({ code, params, title, sentence, raw }) => {
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
+  let deliver!: (request: import("../store").NotificationRequest) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", undefined, "Hub", "idle")]]) }),
-    onToast: (listener) => { deliver = listener; return () => {}; },
+    onNotification: (listener) => { deliver = listener; return () => {}; },
   };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
-    const error = new DaemonRequestError("plain fallback", code, params);
+    const error = new CodedError("plain fallback", code, params);
     // As the store routes a session notice.
     act(() => deliver({ kind: noticeKind(code, params), message: error.message, daemonError: error, session: "s1" }));
     expect(document.querySelector('[data-slot="toast-description"]')).toBeNull();
@@ -417,8 +417,8 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
@@ -427,7 +427,7 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
     const params = { title: "Draft the notes", reason_code: "shell_environment_timeout", shell: "/bin/zsh", command: "env -0", timeout: "10s" };
     const error = noticeErrorPresentation("launch_failed", params, "fallback");
     const message = daemonMessage("en", "launch_failed.title", params, "fallback", daemon.store.getState());
-    act(() => deliver({ kind: "notice", message, daemonError: error, daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) }));
+    act(() => deliver({ kind: "notice", message, daemonError: error, daemonTitle: new CodedError(message, "launch_failed.title", params) }));
     expect(document.querySelector('[data-slot="toast-title"]')?.textContent).toBe("Could not start Draft the notes");
     expect(document.querySelector('[data-slot="toast-title"] [data-inline-reference]')?.textContent).toBe("Draft the notes");
     const description = document.querySelector('[data-slot="toast-description"]');
@@ -445,18 +445,18 @@ it("shows the error heading above a structured error's details when the alert ha
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
+  let deliver!: (request: import("../store").NotificationRequest) => void;
   const session = { id: "s1", console_id: "c1", project_id: "p1" } as unknown as import("../protocol").Session;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({ sessions: new Map([["s1", session]]) }),
-    onToast: (listener) => { deliver = listener; return () => {}; },
+    onNotification: (listener) => { deliver = listener; return () => {}; },
   };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
-    const error = new DaemonRequestError("fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
+    const error = new CodedError("fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
     act(() => deliver({ kind: "error", message: error.message, session: "s1", daemonError: error }));
     const alert = document.querySelector('[role="alertdialog"]');
     expect(alert?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
@@ -477,7 +477,7 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
+  let deliver!: (request: import("../store").NotificationRequest) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({
@@ -485,13 +485,13 @@ it.each([
       projects: new Map(known ? [["p1", projectOf("p1", "c1", "Search API")]] : []),
       consoles: new Map(known ? [["c1", consoleOf("c1", "Main")]] : []),
     }),
-    onToast: (listener) => { deliver = listener; return () => {}; },
+    onNotification: (listener) => { deliver = listener; return () => {}; },
   };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
-    act(() => deliver({ kind: "error", message: "Not sent.", session: "s1", daemonError: new DaemonRequestError("", "message_not_sent", { agent: "Claude Code" }) }));
+    act(() => deliver({ kind: "error", message: "Not sent.", session: "s1", daemonError: new CodedError("", "message_not_sent", { agent: "Claude Code" }) }));
     const alert = document.querySelector('[role="alertdialog"]');
     expect(alert?.querySelector("h2")?.textContent).toBe("Message not sent");
     const sessionLine = [...alert!.querySelectorAll("p")].find((line) => line.textContent === "Session: Fix 登录 مراجعة")!;
@@ -516,14 +516,14 @@ it("titles a failed launch's alert for the failure, never with the session's nam
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
+  let deliver!: (request: import("../store").NotificationRequest) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({
       sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]),
       projects: new Map([["p1", { id: "p1", name: "Hub" } as unknown as import("../protocol").Project]]),
     }),
-    onToast: (listener) => { deliver = listener; return () => {}; },
+    onNotification: (listener) => { deliver = listener; return () => {}; },
   };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -531,7 +531,7 @@ it("titles a failed launch's alert for the failure, never with the session's nam
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { title: "Fix login", reason_code: "path_not_found", path: "/missing" };
     const message = daemonMessage("en", "launch_failed", params, "fallback", source.store.getState());
-    const request = { kind: "error" as const, message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) };
+    const request = { kind: "error" as const, message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new CodedError(message, "launch_failed.title", params) };
     act(() => deliver({ ...request, session: "s1" }));
     const alert = document.querySelector('[role="alertdialog"]');
     expect(alert?.querySelector("h2")?.textContent).toBe("Could not start the session");
@@ -544,7 +544,7 @@ it("titles a failed launch's alert for the failure, never with the session's nam
     expect(gone?.textContent).toContain("Session: Fix login");
     expect(gone?.textContent).not.toMatch(/Project:|Console:/);
     act(() => errorAlerts.acknowledge());
-    act(() => deliver(errorToast(new DaemonRequestError("The session is gone.", "session_archived", {}), { title: undefined, session: "unknown" })));
+    act(() => deliver(errorNotification(new CodedError("The session is gone.", "session_archived", {}), { title: undefined, session: "unknown" })));
     expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toMatch(/Session:|Project:|Console:/);
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
@@ -557,14 +557,14 @@ it("titles the toast of an automatic account switch with the session's project a
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
+  let deliver!: (request: import("../store").NotificationRequest) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({
       sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]),
       projects: new Map([["p1", { id: "p1", name: "Hub" } as unknown as import("../protocol").Project]]),
     }),
-    onToast: (listener) => { deliver = listener; return () => {}; },
+    onNotification: (listener) => { deliver = listener; return () => {}; },
   };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -572,7 +572,7 @@ it("titles the toast of an automatic account switch with the session's project a
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { agent: "Claude Code", from: "Work", account: "Spare", session: "s1" };
     const message = daemonMessage("en", "account_switched_automatically", params, "fallback", source.store.getState());
-    const error = new DaemonRequestError(message, "account_switched_automatically", params);
+    const error = new CodedError(message, "account_switched_automatically", params);
     act(() => deliver({ kind: "notice", message, daemonError: error, session: "s1" }));
     // The title says where the session is (its project); the sentence names the session itself.
     expect(document.querySelector('[data-slot="toast-title"]')?.textContent).toBe("Hub");
@@ -588,15 +588,15 @@ it("preserves a failed launch's name and nested path, and renders rich notices f
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").ToastRequest) => void;
-  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  let deliver!: (request: import("../store").NotificationRequest) => void;
+  const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { title: "Draft", reason_code: "path_not_found", path: "/missing" };
     const message = daemonMessage("en", "launch_failed", params, "fallback", daemon.store.getState());
-    act(() => deliver({ kind: "notice", message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) }));
+    act(() => deliver({ kind: "notice", message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new CodedError(message, "launch_failed.title", params) }));
     const title = document.querySelector('[data-slot="toast-title"]');
     const description = document.querySelector('[data-slot="toast-description"]');
     expect(title?.querySelector("[data-inline-reference]")?.textContent).toBe("Draft");

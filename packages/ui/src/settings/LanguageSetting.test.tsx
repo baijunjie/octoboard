@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { LanguageProvider } from "../i18n/react";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 import { LanguageSetting } from "./LanguageSetting";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 
@@ -13,11 +14,6 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 const raiseError = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
 
-vi.mock("../store", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../store")>()),
-  useDaemon: () => ({ request, raiseError }),
-}));
-
 beforeEach(() => {
   request.mockClear();
   raiseError.mockClear();
@@ -25,18 +21,11 @@ beforeEach(() => {
 });
 
 function mount() {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() =>
-    root.render(
-      <LanguageProvider>
-        <LanguageSetting />
-      </LanguageProvider>,
-    ),
+  const container = mountHost(
+    <LanguageProvider>
+      <LanguageSetting />
+    </LanguageProvider>,
+    { daemon: testDaemon({ request }) },
   );
   return container.querySelector("select")!;
 }

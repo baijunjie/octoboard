@@ -40,7 +40,7 @@ So nothing may count on `App`, or on a list's parent such as the sidebar's `Cons
 session changes. Code that worked only because they used to — an effect with no dependency list that checks a ref
 against the store on every render, a hook that measures its children on each of its owner's renders — silently stops
 running, and nothing fails. Select the value such code waits for, so that its change renders the component (as
-`archivingStatus` in `packages/ui/src/app/useArchiveSession.ts` does), or have it watch the DOM itself (`useFlip`'s
+`archivingStatus` in `packages/ui/src/app/useArchiveSession.ts` does), or have it watch the DOM itself (`useListMotion`'s
 `ResizeObserver`). Code brought in from a branch that still reads the whole `sessions` map in such a component is
 rewritten the same way when it is merged, never given the map back.
 

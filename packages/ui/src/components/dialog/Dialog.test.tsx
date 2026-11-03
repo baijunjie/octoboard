@@ -7,7 +7,7 @@ import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
 import { ActionableError } from "../../errors/actionableError";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { Dialog } from "./Dialog";
 import { useDialogAction } from "./dialogHooks";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
@@ -724,7 +724,7 @@ it("titles a failed dialog action with the dialog's title even where the failure
   }
   try {
     act(() => root.render(<Subject />));
-    await act(() => action.run(() => Promise.reject(new DaemonRequestError("Not removed.", "session_branches_not_removed", {}))));
+    await act(() => action.run(() => Promise.reject(new CodedError("Not removed.", "session_branches_not_removed", {}))));
     expect(errorAlerts.getSnapshot()[0].title).toBe("Could not remove the branches");
   } finally {
     act(() => root.unmount());

@@ -10,7 +10,7 @@ import { hasCodeParams, hasShellTimeoutDetails } from "../errors/errorPresentati
 import { t } from "../i18n/language";
 import { useT } from "../i18n/react";
 import { sessionLocationContent } from "../sessions/sessionCopy";
-import { useDaemon, type ToastRequest } from "../store";
+import { useDaemon, type NotificationRequest } from "../store";
 import { TOAST_BREAKPOINT } from "../components/dialog/toastGeometry";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useMediaQuery } from "../components/hooks/breakpoint";
@@ -35,11 +35,11 @@ const shownToasts = new Map<string, string>();
  * was, remain selectable, and move clear of dialog footers.
  */
 export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement {
-  const { store, onToast } = useDaemon();
+  const { store, onNotification } = useDaemon();
 
   useEffect(
     () =>
-      onToast((request) => {
+      onNotification((request) => {
         if (request.kind === "error") {
           errorAlerts.report(errorAlertOf(request, store.getState()));
           return;
@@ -48,7 +48,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
         const session = request.session ? sessions.get(request.session) : undefined;
         showToast(request, session && sessionLocationContent(t, session, consoles, projects));
       }),
-    [store, onToast],
+    [store, onNotification],
   );
 
   // `keepFocus` has to stay the same function, or HeroUI re-runs it and re-attaches its listeners.
@@ -139,7 +139,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   );
 }
 
-function showToast({ kind, message, session, daemonError, daemonTitle, content }: ToastRequest, location: React.ReactNode): void {
+function showToast({ kind, message, session, daemonError, daemonTitle, content }: NotificationRequest, location: React.ReactNode): void {
   const signature = JSON.stringify([kind, message, session]);
   const body = content ?? message;
   const shell = daemonError && hasShellTimeoutDetails(daemonError) ? daemonError : undefined;

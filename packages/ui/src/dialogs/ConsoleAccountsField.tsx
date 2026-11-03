@@ -2,7 +2,8 @@ import { KeyRound } from "lucide-react";
 import React, { useId, useRef, useState } from "react";
 
 import { Button } from "../components/controls/Button";
-import { choiceGroups, choiceKey, findEntry, storedAccount } from "../accounts/accountChoices";
+import { choiceGroups, choiceKey, findEntry } from "../accounts/choiceEntries";
+import { storedAccount } from "../accounts/accountInheritance";
 import { AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, listedPickerAgents } from "../agents/agents";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { FadeOverflow } from "../components/text/FadeOverflow";

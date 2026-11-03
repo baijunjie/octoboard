@@ -52,7 +52,7 @@ async function mountApp(phone: boolean) {
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [session] }),
     request: vi.fn(async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: structuredClone(trees) } : { type: "ack", id: null }) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(),
+    raiseError: vi.fn(), showNotice: vi.fn(),
   });
   let stacks!: ReturnType<typeof usePanelStacks>;
   function StackReset() { stacks = usePanelStacks(); return null; }

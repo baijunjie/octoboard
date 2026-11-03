@@ -9,8 +9,8 @@ import { errorRemedy, rawErrorDetails } from "../../components/alerts/errorParts
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { InlineReference } from "../../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
-import { DaemonRequestError } from "../../daemon-client";
-import { daemonMessage } from "../../errors/daemonMessage";
+import { CodedError } from "../../errors/codedError";
+import { daemonMessage, NO_RECORDS } from "../../errors/daemonMessage";
 import { RecoveryGuidance } from "../../components/alerts/ErrorGuidance";
 import { uncataloguedSummaryKey } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
@@ -19,20 +19,12 @@ import { Dialog } from "../../components/dialog/Dialog";
 import { useIssueReport } from "../../components/alerts/useIssueReport";
 import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import type { AccountLogin, Agent, MessageParams } from "../../protocol";
+import type { AccountLogin, Agent, CodedMessage } from "../../protocol";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
 import { ringForAutomaticFocus } from "../../input/touchInput";
-import { accountLoginOf, loginIsActive, useAccountLoginActions } from "./AccountLogin";
+import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
+import { useAccountLoginActions } from "./AccountLogin";
 import { raiseError } from "../../components/alerts/raiseError";
-
-const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
-
-/** A coded message saying why a login did not go through: the daemon's refusal to start one, or the failure of one that ran. */
-interface Failure {
-  code: string;
-  params: MessageParams;
-  message: string;
-}
 
 /** The login of one account (`null` for an agent's default account), in a modal of its own. With `start` it asks
  * the daemon to start the login on opening; without, it takes up one that is already running (after a reload, or
@@ -63,7 +55,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const [heldAtOpen] = useState(() => (start && held && !loginIsActive(held) ? held : undefined));
   const current = held === heldAtOpen ? undefined : held;
   const name = useDaemonStore((s) => (account && s.settings.accounts.find((stored) => stored.id === account)?.name) || defaultAccountName(t, s.settings.default_account_names, agent));
-  const [refusal, setRefusal] = useState<Failure>();
+  const [refusal, setRefusal] = useState<CodedMessage>();
   // The last record of this login seen: until there is one, no record means the login is still starting; after one
   // that was running, a record that is gone (a snapshot after a reconnect dropped it) means the login is over, and
   // after one that had ended, the ended login stays shown.
@@ -75,7 +67,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const pendingStart = useRef<Promise<void> | undefined>(undefined);
 
   const cancel = () => actions.cancel(agent, account).catch((err: unknown) => {
-    if ((err as Partial<DaemonRequestError>).code !== "login_not_running") raiseError(err, { title: t("settings.accounts.login.cancelFailedTitle") });
+    if ((err as Partial<CodedError>).code !== "login_not_running") raiseError(err, { title: t("settings.accounts.login.cancelFailedTitle") });
   });
   const begin = () => {
     setRefusal(undefined);
@@ -84,7 +76,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
     const earlier = accountLoginOf(store.getState().accountLogins, agent, account);
     if (earlier && !loginIsActive(earlier)) dismissAccountLogin(store, earlier);
     const pending: Promise<void> = actions.start(agent, account).catch((err: unknown) => {
-      const refused = err as Partial<DaemonRequestError>;
+      const refused = err as Partial<CodedError>;
       // A login of this account is already running: take it up, as the daemon's events bring it in.
       if (refused.code === "login_already_running") return;
       setRefusal({ code: refused.code ?? "", params: refused.params ?? {}, message: refused.message ?? String(err) });
@@ -137,21 +129,21 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   };
 
   const who = <InlineReference dir="auto" wrap>{name}</InlineReference>;
-  const failure: Failure | undefined = refusal ?? (login?.failure ?? undefined);
+  const failure: CodedMessage | undefined = refusal ?? (login?.failure ?? undefined);
   const reason = failure && daemonMessage(language, failure.code, failure.params, failure.message, NO_RECORDS);
   const code = login?.status === "waiting" ? login.device_code : null;
   const progress = t(login?.status === "waiting" ? "settings.accounts.login.waiting" : "settings.accounts.login.starting");
   const timedOut = login?.status === "timed_out" && !refusal;
   const agentChip = <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference>;
 
-  const presentation = failure && reason !== undefined ? new DaemonRequestError(reason, failure.code, failure.params) : undefined;
+  const presentation = failure && reason !== undefined ? new CodedError(reason, failure.code, failure.params) : undefined;
   // A failure the application has no words for is its generic sentence as the cause, and where it is classified
   // unexpected, that sentence is "Something unexpected went wrong" with the request to report it.
   const uncatalogued = !!presentation && !timedOut && isUncataloguedFailure(presentation);
   const classification = uncatalogued ? classifyError(presentation) : undefined;
   const unexpected = classification?.kind === "unexpected";
   // The report is made from the daemon's own text, not `reason`, which is worded for the user.
-  const issue = useIssueReport(unexpected && failure ? [{ error: new DaemonRequestError(failure.message, failure.code, failure.params), unexpected: true }] : undefined);
+  const issue = useIssueReport(unexpected && failure ? [{ error: new CodedError(failure.message, failure.code, failure.params), unexpected: true }] : undefined);
 
   if (ended) {
     const remedy = presentation && errorRemedy(presentation);

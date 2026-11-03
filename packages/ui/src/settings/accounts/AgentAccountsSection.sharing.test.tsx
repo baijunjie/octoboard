@@ -3,14 +3,13 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { AccountSharing } from "../../protocol";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { press } from "../../components/hint/tooltipTestSupport";
 import { accountSharing, request, settings } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, mountSettings, openSettingsOf, sharingSwitches } from "./agentAccountsSectionTestSupport";
 
-vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
 vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
@@ -63,10 +62,9 @@ it.each([
 ] as const)("follows the current agent’s default account name in the description when sharing is %s", async (shared, description) => {
   settings.accounts[1]!.share_default_config = shared;
   settings.default_account_names = { claude: "Personal", codex: "Team" };
-  const { container, render } = await mountSettings("Codex");
+  const { container, setSettings } = await mountSettings("Codex");
   expect(container.textContent).toContain(`${description} Team’s directory.`);
-  settings.default_account_names = { ...settings.default_account_names, codex: "Office" };
-  render();
+  setSettings({ default_account_names: { ...settings.default_account_names, codex: "Office" } });
   expect(container.textContent).toContain(`${description} Office’s directory.`);
   expect(container.textContent).not.toContain("Team’s directory.");
 });
@@ -184,10 +182,9 @@ describe("the phases of a running change", () => {
 
   it("counts entries only while changing, and waits to start until the first one", async () => {
     phase({ share: true, phase: "changing", done: 0, total: 5 });
-    const { container, render } = await mountSettings("Codex");
+    const { container, setSharing } = await mountSettings("Codex");
     expect(valueText(container)).toBe("Waiting to start…");
-    phase({ share: true, phase: "changing", done: 2, total: 5, item: "skills" });
-    render();
+    setSharing("codex-work", { account: "codex-work", progress: { share: true, phase: "changing", done: 2, total: 5, item: "skills" } });
     expect(bar(container).getAttribute("aria-valuenow")).toBe("2");
     expect(container.textContent).toContain("2 of 5");
     expect(container.textContent).toContain("Now: skills");
@@ -196,20 +193,18 @@ describe("the phases of a running change", () => {
 
 describe("the announcement of the phases", () => {
   it("keeps what was said when the entries phase starts, and speaks again for the other phases", async () => {
-    const set = (phase: "waiting" | "stopping" | "changing" | "resuming") => accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase, done: 0, total: 3 } });
+    const sharingIn = (phase: "waiting" | "stopping" | "changing" | "resuming"): AccountSharing => ({ account: "codex-work", progress: { share: true, phase, done: 0, total: 3 } });
     vi.useFakeTimers();
     onTestFinished(() => { vi.useRealTimers(); });
-    set("stopping");
-    const { container, render } = await mountSettings("Codex");
+    accountSharing.set("codex-work", sharingIn("stopping"));
+    const { container, setSharing } = await mountSettings("Codex");
     act(() => { vi.advanceTimersByTime(300); });
     const said = () => [...container.querySelectorAll('[role="status"]')].map((node) => node.textContent).find((text) => text?.startsWith("Turning sharing on"));
     expect(said()).toBe("Turning sharing on. Ending idle sessions…");
-    set("changing");
-    render();
+    setSharing("codex-work", sharingIn("changing"));
     act(() => { vi.advanceTimersByTime(300); });
     expect(said()).toBe("Turning sharing on. Ending idle sessions…");
-    set("resuming");
-    render();
+    setSharing("codex-work", sharingIn("resuming"));
     expect(said()).toBe("Turning sharing on. Resuming sessions…");
   });
 
@@ -283,26 +278,23 @@ describe("a change that runs", () => {
 
   it("follows the progress as the daemon reports it", async () => {
     running({ share: true, phase: "changing", done: 1, total: 4, item: "skills" });
-    const { container, render } = await mountSettings("Codex");
+    const { container, setSharing } = await mountSettings("Codex");
     expect(container.querySelector('[role="progressbar"]')!.getAttribute("aria-valuenow")).toBe("1");
-    running({ share: true, phase: "changing", done: 2, total: 4, item: "plugins" });
-    render();
+    setSharing("codex-work", { account: "codex-work", progress: { share: true, phase: "changing", done: 2, total: 4, item: "plugins" } });
     expect(container.querySelector('[role="progressbar"]')!.getAttribute("aria-valuenow")).toBe("2");
     expect(container.textContent).toContain("Now: plugins");
-    accountSharing.delete("codex-work");
-    render();
+    setSharing("codex-work", null);
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
     expect(sharingSwitches(container)[0]!.hasAttribute("aria-disabled")).toBe(false);
   });
 });
 
 it("asks for sharing to be turned on and off for the account", async () => {
-  const { container, render } = await mountSettings("Codex");
+  const { container, setAccount } = await mountSettings("Codex");
   act(() => sharingSwitches(container)[0]!.click());
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: true });
   await act(async () => {});
-  settings.accounts[1]!.share_default_config = true;
-  render();
+  setAccount("codex-work", { share_default_config: true });
   request.mockClear();
   act(() => sharingSwitches(container)[0]!.click());
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
@@ -311,7 +303,7 @@ it("asks for sharing to be turned on and off for the account", async () => {
 
 it("reports a refused sharing change and leaves the switch as the daemon records it", async () => {
   const { container } = await mountSettings("Codex");
-  request.mockRejectedValueOnce(new DaemonRequestError("refused", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
+  request.mockRejectedValueOnce(new CodedError("refused", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
   act(() => sharingSwitches(container)[0]!.click());
   await act(async () => {});
   expect(reported()).toEqual([["Could not change sharing", "account_in_use"]]);
@@ -320,7 +312,7 @@ it("reports a refused sharing change and leaves the switch as the daemon records
 
 it("opens the error alert dialog when the change it asked for ends unfinished", async () => {
   const { container } = await mountSettings("Codex");
-  request.mockRejectedValueOnce(new DaemonRequestError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" }));
+  request.mockRejectedValueOnce(new CodedError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" }));
   act(() => sharingSwitches(container)[0]!.click());
   await act(async () => {});
   expect(reported()).toEqual([["Could not change sharing", "account_sharing_failed"]]);
@@ -522,52 +514,49 @@ describe("a change that did not finish", () => {
   it("speaks a failure that follows a change it saw run, and not one restated by an unrelated update", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container, render } = await mountSettings("Codex");
+    const { container, setSharing } = await mountSettings("Codex");
     expect(await spoken(container)).toBe("");
-    accountSharing.set("codex-work", { account: "codex-work", failure: failure(), in_use: { sessions: 1, signing_in: false } });
-    render();
+    setSharing("codex-work", { account: "codex-work", failure: failure(), in_use: { sessions: 1, signing_in: false } });
     expect(await spoken(container)).toBe("");
-    accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } });
-    render();
+    setSharing("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } });
     expect(mark(container)).toBeNull();
-    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ detail: "again" }) });
-    render();
+    setSharing("codex-work", { account: "codex-work", failure: failure({ detail: "again" }) });
     expect(mark(container)).not.toBeNull();
     expect(await spoken(container)).toBe("Could not finish turning sharing on.");
   });
 
   it("keeps the mark as lasting state for a change asked for here, and leaves the announcing to the error alert dialog", async () => {
-    const { container, render } = await mountSettings("Codex");
+    const { container, setAccount, setSharing } = await mountSettings("Codex");
     let fail!: (error: Error) => void;
     request.mockReturnValueOnce(new Promise((_, reject) => void (fail = reject)));
     act(() => sharingSwitches(container)[0]!.click());
     // The daemon records the failure before it answers the request.
-    unfinished();
-    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    render();
+    act(() => {
+      setAccount("codex-work", { share_default_config: true, share_default_config_incomplete: true });
+      setSharing("codex-work", { account: "codex-work", failure: failure() });
+    });
     expect(mark(container)).not.toBeNull();
-    await act(async () => fail(new DaemonRequestError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" })));
+    await act(async () => fail(new CodedError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" })));
     expect(reported()).toEqual([["Could not change sharing", "account_sharing_failed"]]);
     expect(mark(container)).not.toBeNull();
     expect(await spoken(container)).toBe("");
   });
 
   it("speaks a change another window starts and ends unfinished, though an earlier change was asked for here", async () => {
-    const { container, render } = await mountSettings("Codex");
+    const { container, setAccount, setSharing } = await mountSettings("Codex");
     let fail!: (error: Error) => void;
     request.mockReturnValueOnce(new Promise((_, reject) => void (fail = reject)));
     act(() => sharingSwitches(container)[0]!.click());
-    unfinished();
-    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    render();
-    await act(async () => fail(new DaemonRequestError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" })));
+    act(() => {
+      setAccount("codex-work", { share_default_config: true, share_default_config_incomplete: true });
+      setSharing("codex-work", { account: "codex-work", failure: failure() });
+    });
+    await act(async () => fail(new CodedError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" })));
     expect(await spoken(container)).toBe("");
     // The next change is started elsewhere: progress arrives with no request of this window's.
-    accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } });
-    render();
+    setSharing("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } });
     expect(mark(container)).toBeNull();
-    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ detail: "again" }) });
-    render();
+    setSharing("codex-work", { account: "codex-work", failure: failure({ detail: "again" }) });
     expect(mark(container)).not.toBeNull();
     expect(await spoken(container)).toBe("Could not finish turning sharing on.");
   });
@@ -583,25 +572,24 @@ describe("a change that did not finish", () => {
   it("moves focus from the mark to the switch when the warning goes, and leaves other focus alone", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container, render } = await mountSettings("Codex");
+    const { container, setAccount, setSharing } = await mountSettings("Codex");
     act(() => mark(container)!.focus());
-    accountSharing.delete("codex-work");
-    // A new array, as the store sends one: the section's own refocus (`useSectionRefocus`) runs on the change and
-    // would take focus from `<body>`, so the hand-off must have placed it on the switch by then.
-    settings.accounts = settings.accounts.map((account, index) => index === 1 ? { ...account, share_default_config_incomplete: false } : account);
-    render();
+    // A new array of accounts, as the store sends one: the section's own refocus (`useSectionRefocus`) runs on the
+    // change and would take focus from `<body>`, so the hand-off must have placed it on the switch by then.
+    act(() => {
+      setSharing("codex-work", null);
+      setAccount("codex-work", { share_default_config_incomplete: false });
+    });
     expect(mark(container)).toBeNull();
     expect(document.activeElement).toBe(sharingSwitches(container)[0]);
     // The switch knows it has focus, and shows the ring, once the commit that moved it is over.
     await act(async () => {});
     expect(sharingSwitches(container)[0]!.closest("label")!.hasAttribute("data-focus-visible")).toBe(true);
     // Focus that was elsewhere stays there.
-    settings.accounts[1] = { ...settings.accounts[1]!, share_default_config_incomplete: true };
-    render();
+    setAccount("codex-work", { share_default_config_incomplete: true });
     const outside = container.querySelector<HTMLElement>('button[aria-label="About sharing the default configuration"]')!;
     act(() => outside.focus());
-    settings.accounts[1] = { ...settings.accounts[1]!, share_default_config_incomplete: false };
-    render();
+    setAccount("codex-work", { share_default_config_incomplete: false });
     expect(mark(container)).toBeNull();
     expect(document.activeElement).toBe(outside);
   });
@@ -609,7 +597,7 @@ describe("a change that did not finish", () => {
   it("reports a retry the daemon refuses", async () => {
     unfinished(false);
     const { container } = await mountSettings("Codex");
-    request.mockRejectedValueOnce(new DaemonRequestError("busy", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
+    request.mockRejectedValueOnce(new CodedError("busy", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
     await act(async () => sharingSwitches(container)[0]!.click());
     expect(reported()).toEqual([["Could not change sharing", "account_in_use"]]);
   });
@@ -641,15 +629,14 @@ describe("an unavailable control keeps keyboard focus", () => {
 
   it("keeps the switch focused while the request is under way and while a change runs", async () => {
     let finish!: (value: object) => void;
-    const { container, render } = await mountSettings("Codex");
+    const { container, setSharing } = await mountSettings("Codex");
     request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const [sharing] = sharingSwitches(container);
     sharing!.focus();
     act(() => sharing!.click());
     expect(document.activeElement).toBe(sharing);
     expect(sharing!.getAttribute("aria-disabled")).toBe("true");
-    accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } });
-    render();
+    setSharing("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } });
     expect(document.activeElement).toBe(sharingSwitches(container)[0]);
     await act(async () => finish({}));
     expect(document.activeElement).toBe(sharingSwitches(container)[0]);
@@ -658,10 +645,9 @@ describe("an unavailable control keeps keyboard focus", () => {
 
 it("shows the switch off again for an account that was repointed and no longer shares", async () => {
   settings.accounts[1]!.share_default_config = true;
-  const { container, render } = await mountSettings("Codex");
+  const { container, setAccount } = await mountSettings("Codex");
   expect(sharingSwitches(container)[0]!.checked).toBe(true);
-  settings.accounts[1] = { ...settings.accounts[1]!, config_dir: "/home/dev/.elsewhere", share_default_config: false, share_default_config_incomplete: false };
-  render();
+  setAccount("codex-work", { config_dir: "/home/dev/.elsewhere", share_default_config: false, share_default_config_incomplete: false });
   expect(sharingSwitches(container)[0]!.checked).toBe(false);
 });
 

@@ -35,8 +35,8 @@ const notInto = (depth, denied, message) =>
 // What code below src/ may import from src/'s root: the daemon contract, the app's configuration mirror, and the
 // barrels of store/ and platform/ (a directory with an index, imported without a trailing slash). The rest of the root
 // (the entry, App, the screens, style.css) is imported by nothing below src/.
-const ROOT_SHARED = ["protocol", "daemon", "daemon-client", "appConfig", "store", "platform"];
-const ROOT_MESSAGE = "Below src/, only protocol, daemon, daemon-client, appConfig and the store and platform barrels are imported from src/'s root.";
+const ROOT_SHARED = ["protocol", "requests", "daemon", "daemon-client", "appConfig", "store", "platform"];
+const ROOT_MESSAGE = "Below src/, only protocol, requests, daemon, daemon-client, appConfig and the store and platform barrels are imported from src/'s root.";
 const onlyRoot = (depth, message, roots = ROOT_SHARED) =>
   ({ regex: `^(?:\\.\\./){${depth}}(?!(?:${roots.join("|")})$)[^/]+$`, message });
 /** Outside itself, `dir` imports only the `allowed` top-level directories and the `roots` files at src/'s root. */
@@ -46,8 +46,8 @@ const layer = (dir, allowed, message, roots = ROOT_SHARED) => DEPTHS.map((depth)
   rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message), onlyRoot(depth, message, roots)]) },
 }));
 // The pure layers, which import no component, no store and no feature directory.
-const PURE_LAYERS = ["i18n", "platform", "preferences", "input", "format", "agents", "git", "sessions", "errors", "browse"];
-const PURE_MESSAGE = "the pure layers (i18n/, platform/, preferences/, input/, format/, agents/, git/, sessions/, errors/, browse/)";
+const PURE_LAYERS = ["values", "i18n", "platform", "preferences", "input", "format", "agents", "git", "sessions", "errors", "browse"];
+const PURE_MESSAGE = "the pure layers (values/, i18n/, platform/, preferences/, input/, format/, agents/, git/, sessions/, errors/, browse/)";
 const LEAF_MESSAGE = `components/ imports, outside itself, only ${PURE_MESSAGE} and the shared root files.`;
 const SHELL_MESSAGE = "Only the files at src/'s root and App's hooks put the window shell together; nothing else below src/ imports shell/.";
 const APP_MESSAGE = "app/ holds App's own hooks and logic: only App.tsx and the tests import it.";
@@ -55,6 +55,7 @@ const APP_MESSAGE = "app/ holds App's own hooks and logic: only App.tsx and the 
 const APP_ROOT_IMPORT = { regex: "^\\./app(?:/|$)", message: APP_MESSAGE, caseSensitive: true };
 const PRODUCTION_MESSAGE = "Production code does not import fixtures/ or gallery/: they are the runtime of the gallery and the website preview.";
 const GALLERY_MESSAGE = "gallery/ is the dev-only gallery: the website preview and fixtures/ depend on nothing in it.";
+const PROTOCOL_MESSAGE = "protocol.ts imports nothing: apps/web type-checks it, and everything it imports, under its own options.";
 const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:fixtures|gallery)(?:/|$)", message: PRODUCTION_MESSAGE };
 const notIntoApp = (depth) => ({ ...notInto(depth, ["app"], APP_MESSAGE), caseSensitive: true });
 
@@ -107,6 +108,12 @@ export default [
     rules: { "no-restricted-imports": uiImports([APP_ROOT_IMPORT, ROOT_PRODUCTION_IMPORT]) },
   },
   {
+    // apps/web type-checks protocol.ts (through @octoboard/ui/agent-marks) under its own stricter compiler options, so
+    // nothing protocol.ts imports may pull more of the UI into that check.
+    files: [`${UI_SRC}/protocol.ts`],
+    rules: { "no-restricted-imports": uiImports([{ regex: "^\\.\\.?/", message: PROTOCOL_MESSAGE }]) },
+  },
+  {
     // App.tsx is the one root file that may import app/, and is production code like the rest.
     files: [`${UI_SRC}/App.tsx`],
     rules: { "no-restricted-imports": uiImports([ROOT_PRODUCTION_IMPORT]) },
@@ -114,6 +121,7 @@ export default [
   // Leaf layer: shared building blocks depend on no feature directory.
   ...layer("components", PURE_LAYERS, LEAF_MESSAGE),
   // Domain layers: each sits below every feature, and imports only the layers beneath it, plus the root files it lists.
+  ...layer("values", [], "values/ imports nothing else below src/.", []),
   ...layer("platform", [], "platform/ imports nothing else below src/, apart from protocol.", ["protocol"]),
   ...layer("preferences", [], "preferences/ imports nothing else below src/.", []),
   ...layer("input", [], "input/ imports nothing else below src/, apart from the platform barrel.", ["platform"]),
@@ -122,9 +130,9 @@ export default [
   ...layer("git", ["i18n"], "git/ imports, outside itself, only i18n/ and protocol.", ["protocol"]),
   ...layer("sessions", ["i18n", "agents"], "sessions/ imports, outside itself, only i18n/, agents/ and protocol.", ["protocol"]),
   ...layer("accounts", ["i18n", "agents", "sessions", "format"], "accounts/ imports, outside itself, only i18n/, agents/, sessions/, format/ and protocol.", ["protocol"]),
-  ...layer("errors", ["i18n", "agents", "sessions", "accounts", "format"], "errors/ imports, outside itself, only i18n/, agents/, sessions/, accounts/, format/, protocol, appConfig and daemon-client.", ["protocol", "appConfig", "daemon-client"]),
-  ...layer("browse", ["i18n", "errors", "format"], "browse/ imports, outside itself, only i18n/, errors/, format/, protocol and daemon-client.", ["protocol", "daemon-client"]),
-  ...layer("store", ["i18n", "errors", "accounts", "sessions", "preferences", "git"], "store/ imports, outside itself, only i18n/, errors/, accounts/, sessions/, preferences/, git/, protocol, daemon and daemon-client.", ["protocol", "daemon", "daemon-client"]),
+  ...layer("errors", ["i18n", "agents", "sessions", "accounts", "format"], "errors/ imports, outside itself, only i18n/, agents/, sessions/, accounts/, format/, protocol and appConfig.", ["protocol", "appConfig"]),
+  ...layer("browse", ["i18n", "errors", "format"], "browse/ imports, outside itself, only i18n/, errors/, format/ and protocol.", ["protocol"]),
+  ...layer("store", ["values", "i18n", "errors", "accounts", "sessions", "preferences", "git"], "store/ imports, outside itself, only values/, i18n/, errors/, accounts/, sessions/, preferences/, git/, protocol, requests, daemon and daemon-client.", ["protocol", "requests", "daemon", "daemon-client"]),
   ...layer("i18n", ["preferences"], "i18n/ imports, outside itself, only preferences/ and appConfig.", ["appConfig"]),
   ...layer("shortcuts", ["i18n", "preferences", "input", "components"], "shortcuts/ imports, outside itself, only i18n/, preferences/, input/ and components/.", []),
   // Self-contained features: they use the leaf layer and import no other feature directory.
@@ -133,6 +141,7 @@ export default [
   ...layer("updates", ["components", ...PURE_LAYERS], `updates/ imports, outside itself, only components/ and ${PURE_MESSAGE}, apart from the platform barrel.`, ["platform"]),
   ...layer("layout", ["components", ...PURE_LAYERS], `layout/ imports, outside itself, only components/ and ${PURE_MESSAGE}, apart from protocol.`, ["protocol"]),
   ...layer("quota", ["components", "accounts", ...PURE_LAYERS], `quota/ imports, outside itself, only components/, accounts/, ${PURE_MESSAGE}, and the shared root files.`),
+  ...layer("statusItem", ["components", "accounts", "quota", ...PURE_LAYERS], `statusItem/ imports, outside itself, only components/, accounts/, quota/, ${PURE_MESSAGE}, protocol and the store and platform barrels.`, ["protocol", "store", "platform"]),
   // The project browser builds on the viewer and on no other feature.
   ...layer("project-browser", ["components", "viewer", ...PURE_LAYERS], `project-browser/ imports, outside itself, only components/, viewer/, ${PURE_MESSAGE}, and the shared root files.`),
   {

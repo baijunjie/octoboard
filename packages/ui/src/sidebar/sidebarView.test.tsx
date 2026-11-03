@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { type SidebarView, useSidebarView } from "./sidebarView";
 import type { FocusTarget } from "./types";
 
@@ -19,7 +20,7 @@ const unbound = sessionOf("s-unbound", main.id, project.id, "Unbound", "idle");
 const byId = <T extends { id: string }>(items: T[]) => new Map(items.map((item) => [item.id, item]));
 const projects = byId([project, projectOf("p-2", other.id, "Elsewhere")]);
 const sessions = byId([hub, bound, unbound, { ...hub, id: "s-archived-hub", status: "archived" as const }]);
-const daemonOver = () => ({ store: createStateStore({ projects, sessions }) }) as Daemon;
+const daemonOver = () => testDaemon({ state: { projects, sessions } });
 
 const projectFocus: FocusTarget = { project };
 const hubFocus: FocusTarget = { consoleSession: hub };
@@ -34,7 +35,7 @@ function mountView(): { view: () => SidebarView; unmount: () => void } {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const daemon = daemonOver();
-  act(() => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
+  act(() => root.render(<TestHost daemon={daemon}><Probe /></TestHost>));
   return { view: () => latest, unmount: () => (act(() => root.unmount()), container.remove()) };
 }
 
@@ -61,7 +62,7 @@ it("forgets a console session that was archived while in focus, so reopening it 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const daemon = daemonOver();
-  act(() => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
+  act(() => root.render(<TestHost daemon={daemon}><Probe /></TestHost>));
   act(() => latest.selectConsole(main.id));
   act(() => latest.setFocus(hubFocus));
   act(() => daemon.store.setState({ sessions: byId([{ ...hub, status: "archived" as const }, bound, unbound]) }));

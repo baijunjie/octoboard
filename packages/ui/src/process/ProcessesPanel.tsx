@@ -7,6 +7,7 @@ import { Button } from "../components/controls/Button";
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { errorDetails } from "../components/alerts/errorParts";
+import { HOVER_ACTIONS_CLASS } from "../components/rows/hoverActions";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { focusFellToPage, focusLanding } from "../components/focus/regionFocus";
 import { PaneFailure } from "../components/alerts/PaneFailure";
@@ -47,13 +48,18 @@ const ACTIONS = {
 
 function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof useProcessPanelContext>> }): React.ReactElement {
   const t = useT();
-  const { toastNotice } = useDaemon();
+  const { showNotice } = useDaemon();
   const { trees, error, retry, settle } = data;
   const scrollRegion = useFadeRegion({ label: t("panel.processes.name") });
   const bodyRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [categoryHeadingHeight, setCategoryHeadingHeight] = useState(0);
+  const grouped = data.projectId !== undefined && data.sessionId === undefined;
+  // Which category headings the list draws: one for the session trees, one for the project's own.
+  const hasSessionTrees = grouped && (trees?.some((tree) => tree.session_id !== undefined) ?? false);
+  const hasProjectTrees = grouped && (trees?.some((tree) => tree.session_id === undefined) ?? false);
   // Notes wrap with the pane width and language; keep focused rows below the whole pinned header.
+  // Measured again when the set of headings changes; the observer follows their size from there.
   useLayoutEffect(() => {
     const headings = bodyRef.current?.querySelectorAll<HTMLElement>("[data-sticky-heading]");
     const scroller = scrollerRef.current;
@@ -71,7 +77,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
       observer.disconnect();
       scroller.removeEventListener("scroll", measure);
     };
-  });
+  }, [hasSessionTrees, hasProjectTrees]);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterToggle = useRef<HTMLButtonElement>(null);
   const filterShown = filterOpen || data.sessionId !== undefined;
@@ -80,7 +86,6 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
     if (!open) data.selectSession(undefined);
   };
   const failed = trees === undefined && error !== undefined;
-  const grouped = data.projectId !== undefined && data.sessionId === undefined;
   const [selected, setSelected] = useState<{ tree: ProcessTree; action: ProcessAction; nextId?: string }>();
   // A confirmed request that is on its way keeps its confirmation, and with it the success toast and the
   // hand-over of focus, even when a refresh has already taken the tree out of the list.
@@ -116,7 +121,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
   const onDone = (tree: ProcessTree, action: ProcessAction, ids: string[]) => {
     const nextId = nextIdOf(tree.id) ?? selected?.nextId;
     settle(ids);
-    if (ids.length > 0) toastNotice(t(ACTIONS[action].done));
+    if (ids.length > 0) showNotice(t(ACTIONS[action].done));
     setSelected(undefined);
     focusAfterAction(nextId);
   };
@@ -355,7 +360,7 @@ function TreeRow({ tree, acting, keepable, onStop, onKeep }: {
       <ProcessTreeDetails tree={tree} actions={
         /* Clipping keeps hidden actions reachable with Tab without taking width from the facts;
            revealing them leaves the command and directory at the card's full width. */
-        <div className="flex max-w-0 shrink-0 items-center gap-1 overflow-hidden opacity-0 transition-opacity motion-reduce:transition-none [@media(hover:none)]:ms-2 [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:ms-2 group-hover:max-w-none group-hover:opacity-100 group-focus-within:ms-2 group-focus-within:max-w-none group-focus-within:overflow-visible group-focus-within:opacity-100">
+        <div className={`${HOVER_ACTIONS_CLASS} items-center gap-1 [@media(hover:none)]:ms-2 group-hover:ms-2 group-focus-within:ms-2`}>
           {keepable && (
             <Button data-region-landing size="xs" variant="secondary" aria-label={t("processes.keepNamed", { command })} preventFocusOnPress isDisabled={acting} onPress={onKeep}>
               {t("processes.keep")}

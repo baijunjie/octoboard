@@ -2,7 +2,7 @@ import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import type { DialogRequest, NewSessionRequest } from "../dialogs/dialogRequest";
 import type { PanelKind } from "../layout/panelKind";
 import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";
-import type { SettingsSectionId } from "../settings/SettingsDialog";
+import type { SettingsSectionId } from "../settings/sections";
 
 /** Which archive the archive view lists: a project's archived sessions, the archived sessions
  * under a console session (bound to it, or to an archived lead session bound to it), or with

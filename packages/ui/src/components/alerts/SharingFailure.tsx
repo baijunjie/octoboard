@@ -1,18 +1,18 @@
 import React, { useId } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, sharingReasonKey, sharingItemLabel, type SharingFailureItem } from "../../errors/daemonMessage";
+import { sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, sharingReasonKey, sharingItemLabel, type SharingFailureItem } from "../../errors/sharingFailure";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { SharingEntryCause } from "../../protocol";
-import { useErrorRecords } from "../../store";
+import { useDaemonStoreOrEmpty } from "../../store";
 import { DiagnosticBlock } from "./DiagnosticBlock";
 import { InlineReference } from "../../i18n/InlineReference";
 
 /** The names of the sessions with these ids, read through a selector that changes only when one of those names does. */
 function useSessionTitles(items: SharingFailureItem[]): (id: string) => string | undefined {
   const ids = [...new Set(items.flatMap((item) => item.sessions))];
-  const titles = useErrorRecords(useShallow((s) => ids.map((id) => s.sessions.get(id)?.title)));
+  const titles = useDaemonStoreOrEmpty(useShallow((s) => ids.map((id) => s.sessions.get(id)?.title)));
   return (id) => titles[ids.indexOf(id)];
 }
 

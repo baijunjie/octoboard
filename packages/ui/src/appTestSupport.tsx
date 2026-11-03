@@ -45,7 +45,7 @@ export function fakeDaemon(state: Partial<State>, answer: (body: RequestBody) =>
   return testDaemon({
     state,
     request: vi.fn(async (body: RequestBody) => answer(body)) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(), reconnect: vi.fn(),
+    raiseError: vi.fn(), showNotice: vi.fn(), reconnect: vi.fn(),
   });
 }
 

@@ -112,3 +112,9 @@ export function format(language: Language, key: MessageKey, params?: Record<stri
     })
     .join("");
 }
+
+/** The message lookup in `language`, for code that words something in a language it is given rather than the current
+ * one. */
+export function translatorFor(language: Language): Translate {
+  return (key, ...args) => format(language, key, args[0]);
+}

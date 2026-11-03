@@ -49,7 +49,7 @@ async function mount(initial: ProcessCount[]) {
   });
   const daemon = testDaemon({
     state: { consoles: new Map([[main.id, main]]), projects: new Map([[project.id, project]]), sessions: new Map([[hub.id, hub]]) },
-    request: request as unknown as Daemon["request"], toastNotice: vi.fn(),
+    request: request as unknown as Daemon["request"], showNotice: vi.fn(),
   });
   const container = mountForTooltip(<DaemonProvider value={daemon}><nav><RailProcessesEntry onOpen={onOpen} /><button id="next">Next</button><span id="elsewhere"><DetailsButton>Elsewhere</DetailsButton></span></nav></DaemonProvider>);
   await act(async () => {});

@@ -37,9 +37,9 @@ export const DESKTOP_CONTRACT = [
   "packages/ui/src/daemon.ts",
   "packages/ui/src/i18n/language.ts",
   "packages/ui/src/lifecycle/useNativeMenuLabels.ts",
-  "packages/ui/src/lifecycle/statusItemIcons.ts",
-  "packages/ui/src/lifecycle/statusItemIconKeys.ts",
-  "packages/ui/src/lifecycle/statusItemMenu.ts",
+  "packages/ui/src/statusItem/statusItemIcons.ts",
+  "packages/ui/src/statusItem/statusItemIconKeys.ts",
+  "packages/ui/src/statusItem/statusItemMenu.ts",
 ];
 export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 

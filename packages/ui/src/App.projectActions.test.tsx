@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import * as reactAria from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "./daemon-client";
+import { CodedError } from "./errors/codedError";
 import { ErrorAlerts } from "./shell/ErrorAlerts";
 import { errorAlerts } from "./components/alerts/errorAlerts";
 import { App } from "./App";
@@ -75,7 +75,7 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects, sessions }),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(),
+    raiseError: vi.fn(), showNotice: vi.fn(),
   });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser", clipboard, links }}>
@@ -272,7 +272,7 @@ it("copies the project name unchanged and reports success", async () => {
   await openProjectMenu(project.name);
   await press("Copy project name");
   expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith(project.name);
-  expect(daemon.toastNotice).toHaveBeenCalledWith("Project name copied");
+  expect(daemon.showNotice).toHaveBeenCalledWith("Project name copied");
 });
 
 it("reports a clipboard failure", async () => {
@@ -281,7 +281,7 @@ it("reports a clipboard failure", async () => {
   await openProjectMenu(project.name);
   await press("Copy project name");
   expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the project name", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
-  expect(daemon.toastNotice).not.toHaveBeenCalled();
+  expect(daemon.showNotice).not.toHaveBeenCalled();
 });
 
 it("copies the session ID unchanged and reports success", async () => {
@@ -293,7 +293,7 @@ it("copies the session ID unchanged and reports success", async () => {
   expect(document.getElementById(copyItem.getAttribute("aria-describedby")!)?.textContent).toBe("s-archive");
   await press("Copy session ID");
   expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith("s-archive");
-  expect(daemon.toastNotice).toHaveBeenCalledWith("Session ID copied");
+  expect(daemon.showNotice).toHaveBeenCalledWith("Session ID copied");
 });
 
 it("reports a session ID clipboard failure", async () => {
@@ -302,7 +302,7 @@ it("reports a session ID clipboard failure", async () => {
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Copy session ID");
   expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the session ID", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
-  expect(daemon.toastNotice).not.toHaveBeenCalled();
+  expect(daemon.showNotice).not.toHaveBeenCalled();
 });
 
 async function openRestoreConfirmation() {
@@ -334,7 +334,7 @@ it("restores only the confirmed project and reports success", async () => {
   const dialog = document.querySelector('[role="alertdialog"]')!;
   await act(async () => dialog.querySelector("form")!.requestSubmit());
   expect(daemon.request).toHaveBeenCalledWith({ type: "restore_project_changes", project: project.id });
-  expect(daemon.toastNotice).toHaveBeenCalledWith("File changes restored");
+  expect(daemon.showNotice).toHaveBeenCalledWith("File changes restored");
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
@@ -375,7 +375,7 @@ it("keeps the restore confirmation open and displays a refusal", async () => {
   vi.mocked(daemon.request).mockRejectedValueOnce(new Error("Finish the merge first."));
   await act(async () => document.querySelector('[role="alertdialog"] form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
   expect([...document.querySelectorAll('[role="alertdialog"]')].some((dialog) => dialog.textContent?.includes("Finish the merge first."))).toBe(true);
-  expect(daemon.toastNotice).not.toHaveBeenCalled();
+  expect(daemon.showNotice).not.toHaveBeenCalled();
 });
 
 it("hands focus on once an unselected session archived from its menu reads archived", async () => {
@@ -734,7 +734,7 @@ it("announces nothing when the session had the model settings already", async ()
 });
 
 it("points a launch setting the agent does not offer back to Change model", async () => {
-  const error = new DaemonRequestError("No.", "invalid_launch_setting", { field: "model", value: "sonnet", agent: "Codex" });
+  const error = new CodedError("No.", "invalid_launch_setting", { field: "model", value: "sonnet", agent: "Codex" });
   const { daemon } = await pickSonnetInChangeModel((body) => {
     if (body.type === "set_session_model") throw error;
     return { type: "ack", id: null };
@@ -756,7 +756,7 @@ it("opens Change model for the session from the alert of a launch setting the ag
 });
 
 it("reports a refused model change under its own title for the session", async () => {
-  const error = new DaemonRequestError("Did not stop.", "model_change_did_not_stop", { session: "s-archive" });
+  const error = new CodedError("Did not stop.", "model_change_did_not_stop", { session: "s-archive" });
   const { daemon } = await pickSonnetInChangeModel((body) => {
     if (body.type === "set_session_model") throw error;
     return { type: "ack", id: null };

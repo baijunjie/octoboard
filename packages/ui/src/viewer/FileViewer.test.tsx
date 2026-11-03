@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
 import { errorAlerts } from "../components/alerts/errorAlerts";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { isolate } from "../i18n/isolate";
 import { t } from "../i18n/language";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
@@ -120,7 +120,7 @@ function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation,
 
 it.each(["error", "conflict", "change"] as const)("does not repeat the header path in a %s failure", (state) => {
   const path = "src/gone.ts";
-  const error = new DaemonRequestError("src/gone.ts does not exist any more.", "file_not_found", { path });
+  const error = new CodedError("src/gone.ts does not exist any more.", "file_not_found", { path });
   const content: ViewerContent = state === "error"
     ? { state, message: error }
     : state === "conflict"
@@ -388,7 +388,7 @@ it("falls back to saying nothing changed when that content cannot be read", asyn
 
 it.each([
   { case: "an internal failure", failure: () => {
-    const error = new DaemonRequestError("database is locked", "internal_error", { detail: "database is locked" });
+    const error = new CodedError("database is locked", "internal_error", { detail: "database is locked" });
     // As `useChangeReader` raises it: a failure the application has no words for carries no wording.
     return new ChangeBodiesError("failed", undefined, rawFailureText(error));
   } },
@@ -410,7 +410,7 @@ it.each([
 it.each([false, true])("does not repeat the path when unchanged content fails to load, renamed %s", async (renamed) => {
   const path = "src/gone.ts";
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
-  const message = viewerErrorText(t, "en", new DaemonRequestError("gone", "file_not_found", { path }), path, NO_RECORDS);
+  const message = viewerErrorText(t, "en", new CodedError("gone", "file_not_found", { path }), path, NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-content", path, content: { state: "change", change: { old: side(renamed ? "src/old.ts" : path), new: side(path), patch: "", loadBodies } } });
   await settled();
@@ -421,7 +421,7 @@ it.each([false, true])("does not repeat the path when unchanged content fails to
 it("sets a path in the cause of a failed read of the unchanged content as a chip in the mark's popover", async () => {
   const side: ViewerChangeSide = { state: "present", path: "f", kind: "file" };
   const failure = { code: "file_not_found", params: { path: "src/other.ts" } };
-  const message = viewerErrorText(t, "en", new DaemonRequestError("gone", failure.code, failure.params), "f", NO_RECORDS);
+  const message = viewerErrorText(t, "en", new CodedError("gone", failure.code, failure.params), "f", NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message, undefined, failure));
   show({ key: "chip", path: "f", content: { state: "change", change: { old: side, new: side, patch: "", loadBodies } } });
   await settled();
@@ -434,7 +434,7 @@ it("sets a path in the cause of a failed read of the unchanged content as a chip
 it("does not repeat the path in an expansion failure", async () => {
   const path = "src/gone.ts";
   const side: ViewerChangeSide = { state: "present", path, kind: "file" };
-  const message = viewerErrorText(t, "en", new DaemonRequestError("gone", "file_not_found", { path }), path, NO_RECORDS);
+  const message = viewerErrorText(t, "en", new CodedError("gone", "file_not_found", { path }), path, NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-lines", path, content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n", loadBodies } } });
   await settled();
@@ -592,7 +592,7 @@ it("announces a conflict's read failure once, as an alert on its pane, with the 
     path: "src/gone.ts",
     content: { state: "conflict", conflict: "Merge conflict", ...content },
   });
-  const error = new DaemonRequestError("gone", "file_not_found", { path: "src/gone.ts" });
+  const error = new CodedError("gone", "file_not_found", { path: "src/gone.ts" });
   show(conflict({}));
   show(conflict({ message: error }));
   expect(document.querySelectorAll("[role=alert]")).toHaveLength(0);

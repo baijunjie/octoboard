@@ -1,4 +1,4 @@
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "./codedError";
 import type { ErrorRecovery } from "./errorRecovery";
 import type { MessageParams } from "../protocol";
 
@@ -7,7 +7,7 @@ import type { MessageParams } from "../protocol";
  * message and is shown apart from it, behind Details. An operating-system signature in it or its cause still takes
  * over `recovery` (see `classifyError`), and those name remedies for writing (access, disk space): a failed read
  * passes `fileRead`, which always wins. */
-export class ActionableError extends DaemonRequestError {
+export class ActionableError extends CodedError {
   readonly detail?: string;
   constructor(message: string, readonly recovery: ErrorRecovery, options?: ErrorOptions & { code?: string; params?: MessageParams; detail?: string }) {
     super(message, options?.code ?? "ui_actionable", options?.params ?? {});

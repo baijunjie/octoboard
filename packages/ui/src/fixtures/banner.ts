@@ -31,7 +31,7 @@ export function galleryFailure(message: string, cause?: unknown): void {
 
 /**
  * Why a fixture cannot be answered as the real daemon would answer. Deliberately not a
- * `DaemonRequestError`: scenarios answer requests with a daemon error on purpose, and those are
+ * `CodedError`: scenarios answer requests with a daemon error on purpose, and those are
  * legitimate UI states under test, so a gap in the gallery's own data must not be dressed as one.
  */
 export class FixtureUnfillableError extends Error {

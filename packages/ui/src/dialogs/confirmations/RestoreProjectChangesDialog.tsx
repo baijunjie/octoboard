@@ -9,7 +9,7 @@ import { useDaemon } from "../../store";
 /** Confirms restoring a project's working tree to its current commit, discarding the changes to its tracked files. */
 export function RestoreProjectChangesDialog({ project, onClose }: { project: Project; onClose: () => void }): React.ReactElement {
   const t = useT();
-  const { request, toastNotice } = useDaemon();
+  const { request, showNotice } = useDaemon();
   return (
     <ConfirmDialog
       title={t("dialog.restoreProjectChanges.title")}
@@ -22,7 +22,7 @@ export function RestoreProjectChangesDialog({ project, onClose }: { project: Pro
       onCancel={onClose}
       onConfirm={async () => {
         await request({ type: "restore_project_changes", project: project.id });
-        toastNotice(t("sidebar.project.changesRestored"));
+        showNotice(t("sidebar.project.changesRestored"));
         onClose();
       }}
     />

@@ -1,4 +1,5 @@
-import { choiceGroups, settledInitialChoice, type AccountChoice } from "../accounts/accountChoices";
+import { choiceGroups, type AccountChoice } from "../accounts/choiceEntries";
+import { settledInitialChoice } from "../accounts/openingChoice";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, RequestBody, Settings } from "../protocol";
 import type { NewSessionBinding, NewSessionRequest } from "./dialogRequest";

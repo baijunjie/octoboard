@@ -6,7 +6,7 @@ import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import { useProjectProcesses } from "../../process/useProjectProcesses";
 import { isLive, type Project } from "../../protocol";
-import { compareSessions, ordersByStatus } from "../../sessions/order";
+import { compareSessions } from "../../sessions/order";
 import { useDaemon, useDaemonStore, useDelegatingIds, useProjectSessions } from "../../store";
 import { useProjectRemovalCleanup } from "../BranchCleanupOptions";
 import { isRemovalRefusal } from "../branchInspection";
@@ -29,7 +29,7 @@ export function DeleteProjectDialog({ project, onClose }: { project: Project; on
   const projectProcesses = useProjectProcesses([project.id]);
   const projectSessions = useProjectSessions(project.id);
   const delegatingIds = useDelegatingIds();
-  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
+  const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
   const running = projectSessions
     .filter((s) => isLive(s.status))
     .sort((a, b) => compareSessions(a, b, delegatingIds, byStatus));

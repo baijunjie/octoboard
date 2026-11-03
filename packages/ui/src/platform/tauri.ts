@@ -63,6 +63,21 @@ function unlistenTracker(): { track: (unlisten: () => void) => void; undo: () =>
   };
 }
 
+/** Listens to the shell's `event` until the returned function is called, even when that is before the
+ * listener exists (see `unlistenTracker`). `handler` gets the event's payload. */
+function listenTo<T = undefined>(event: string, handler: (payload: T) => void): () => void {
+  const { track, undo } = unlistenTracker();
+  void import("@tauri-apps/api/event").then(async ({ listen }) => {
+    track(await listen<T>(event, (e) => handler(e.payload)));
+  });
+  return undo;
+}
+
+/** The `{ kind, detail? }` a shell command rejects with, when it did. */
+function shellFailure(err: unknown): { kind?: string; detail?: string } {
+  return (typeof err === "object" && err !== null ? err : {}) as { kind?: string; detail?: string };
+}
+
 /** The shell hides the native titlebar and puts a translucent material behind the page on macOS
  * alone (`open_main_window` in `apps/desktop/src-tauri/src/lib.rs`). */
 function onMac(): boolean {
@@ -106,18 +121,10 @@ function tauriWindowChrome(): WindowChromeCapability | undefined {
 function tauriAppMenu(): AppMenuCapability {
   return {
     onSettingsRequested(handler) {
-      const { track, undo } = unlistenTracker();
-      void import("@tauri-apps/api/event").then(async ({ listen }) => {
-        track(await listen("settings-requested", () => handler()));
-      });
-      return undo;
+      return listenTo("settings-requested", () => handler());
     },
     onAboutRequested(handler) {
-      const { track, undo } = unlistenTracker();
-      void import("@tauri-apps/api/event").then(async ({ listen }) => {
-        track(await listen("about-requested", () => handler()));
-      });
-      return undo;
+      return listenTo("about-requested", () => handler());
     },
     async setLabels(labels, settingsAccelerator) {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -133,18 +140,10 @@ function tauriStatusItem(): StatusItemCapability {
       await invoke("set_tray_menu", { menu });
     },
     onSessionChosen(handler) {
-      const { track, undo } = unlistenTracker();
-      void import("@tauri-apps/api/event").then(async ({ listen }) => {
-        track(await listen<string>("tray-session-chosen", (event) => handler(event.payload)));
-      });
-      return undo;
+      return listenTo<string>("tray-session-chosen", handler);
     },
     onOpened(handler) {
-      const { track, undo } = unlistenTracker();
-      void import("@tauri-apps/api/event").then(async ({ listen }) => {
-        track(await listen("tray-menu-opened", () => handler()));
-      });
-      return undo;
+      return listenTo("tray-menu-opened", () => handler());
     },
   };
 }
@@ -264,7 +263,7 @@ function tauriClipboard(): ClipboardCapability {
  * else. The shell answers `null` for a dismissed dialog and rejects with `{ kind, detail? }`. */
 function tauriConfigurationFile(): ConfigurationFileCapability {
   const failure = (err: unknown): ConfigurationFileError => {
-    const { kind, detail } = (typeof err === "object" && err !== null ? err : {}) as { kind?: string; detail?: string };
+    const { kind, detail } = shellFailure(err);
     if (kind === "too_large" || kind === "not_text") return new ConfigurationFileError(kind);
     return new ConfigurationFileError("io", detail ?? String(err));
   };
@@ -330,7 +329,7 @@ function tauriBackgroundRun(): BackgroundRunCapability {
  * the download's progress out. The shell rejects with `{ kind, detail? }`. */
 function tauriUpdater(): UpdaterCapability {
   const failure = (err: unknown): UpdaterError => {
-    const { kind, detail } = (typeof err === "object" && err !== null ? err : {}) as { kind?: string; detail?: string };
+    const { kind, detail } = shellFailure(err);
     if (kind === "busy" || kind === "installed" || kind === "nothing_to_install") return new UpdaterError(kind);
     return new UpdaterError("failed", detail ?? (err instanceof Error ? err.message : typeof err === "string" ? err : ""));
   };

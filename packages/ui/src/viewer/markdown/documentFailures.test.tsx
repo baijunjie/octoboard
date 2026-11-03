@@ -4,7 +4,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { press, tap } from "../../components/hint/tooltipTestSupport";
 import { DocumentImage } from "./DocumentImage";
@@ -66,7 +66,7 @@ it.each([false, true])("notes an over-budget formula with a mark beside its sour
 });
 
 it.each(["file_not_found", "permission_denied", "unexpected_error"])("marks a project image whose read fails with %s, with no error alert dialog", async (code) => {
-  const error = new DaemonRequestError("Image read failed", code, { path: "image.png" });
+  const error = new CodedError("Image read failed", code, { path: "image.png" });
   await mount(
     <ViewerHost request={async () => { throw error; }}>
       <p id="paragraph"><DaemonImageFixture /></p>

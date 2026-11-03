@@ -29,8 +29,8 @@ already moved focus to `<body>`, and the check finds nothing inside the region t
 
 Reordering does it too: React reorders keyed children by moving their DOM nodes, and moving the node that holds focus
 blurs it to `<body>`, so a keyboard user on a row loses their place whenever a live status update re-sorts the list.
-Render any list whose order can change while one of its rows may hold focus through `useFlip`
-(`packages/ui/src/sidebar/useFlip.ts`), which puts focus back after the move, rather than beside it.
+Render any list whose order can change while one of its rows may hold focus through `useListMotion`
+(`packages/ui/src/components/motion/useListMotion.ts`), which puts focus back after the move, rather than beside it.
 
 A wrapper that renders nothing once its last child is gone takes focus down with it, and a library's own rescue does
 not reach that case: react-aria's `useTagGroup` focuses its list element when the last tag is removed, but a list
@@ -39,8 +39,8 @@ that unmounts in the same commit is gone before the effect runs, and one laid ou
 on to take focus. So move focus to a named element yourself, in the removal handler, rather than leave it to the
 library — `TagsInput` hands it to its text input on every removal, a dialog being where focus on `<body>` costs Escape
 and Tab as well — and for any control a handler of its own takes away, call `handFocusOff`
-(`packages/ui/src/components/focus/handFocusOff.ts`) before the removal, as `PinButton` in
-`packages/ui/src/sidebar/rows.tsx` and `AvatarField` in `packages/ui/src/dialogs/AvatarField.tsx` do. Where the
+(`packages/ui/src/components/focus/handFocusOff.ts`) before the removal, as `RowMarkButton` in
+`packages/ui/src/components/rows/RowMarkButton.tsx` and `AvatarField` in `packages/ui/src/dialogs/AvatarField.tsx` do. Where the
 element goes away from a state change rather than from a handler of its own — a region closed by a toggle pressed
 with `preventFocusOnPress`, a control removed or disabled by the answer it was waiting for — there is no removal
 handler to put focus back from, so wrap it in `useFocusHandoff` (`packages/ui/src/components/focus/useFocusHandoff.ts`),

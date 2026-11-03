@@ -6,7 +6,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { setGitModeWorktree } from "../../project-browser/gitModeWorktree";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { presence, stubListMotion } from "../../components/motion/listMotionTestSupport";
 import { isolate } from "../../i18n/isolate";
 import { PanelFrameProvider, type PanelFrame } from "../../components/panel/PanelHeader";
@@ -62,7 +62,7 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, fram
     }
     return { type: "ack", id: null } as Event;
   });
-  const daemon = testDaemon({ store, request, raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ store, request, raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -225,7 +225,7 @@ it("starts a terminal in the project's own directory for an empty place, not in 
 
 it("words a refused start in a folder as that folder being gone, and a refused start elsewhere by its own code", async () => {
   const raiseError = vi.fn();
-  const gone = new DaemonRequestError("not a folder", "path_not_a_directory", { path: "/w/src" });
+  const gone = new CodedError("not a folder", "path_not_a_directory", { path: "/w/src" });
   const daemon = testDaemon({ request: vi.fn(async () => { throw gone; }), raiseError });
   await startShellTerminal(daemon, "p", { place: { path: "src" } });
   await startShellTerminal(daemon, "p", { place: {} });

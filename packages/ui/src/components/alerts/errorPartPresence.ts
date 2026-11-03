@@ -1,4 +1,4 @@
-import { leftBranchDetail } from "../../errors/daemonMessage";
+import { leftBranchDetail } from "../../errors/branchCleanupItems";
 import type { MessageParams } from "../../protocol";
 import { daemonErrorParts } from "./daemonErrorParts";
 

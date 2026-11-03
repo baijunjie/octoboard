@@ -1,6 +1,6 @@
 // What the fixture daemon answers for the processes the Processes panel lists and the confirmations stop or keep.
-import { isLive, type ProcessCount, type Event, type ProcessTree } from "../protocol";
-import { type FixtureContext, type Handlers } from "./fixtureContext";
+import { isLive, type ProcessCount, type ProcessTree } from "../protocol";
+import { neverReplied, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** How long after its first `list_processes` (or, for the rail's list, its first `list_all_processes`) the fixture
  * daemon starts answering with a scenario's `listLater`: past the moments a dialog asks twice while it mounts
@@ -73,7 +73,7 @@ export function createProcessReplies({ scenario, store, fail, refuseUnknownProje
 
   return {
     list_processes: (body) => {
-      if (scenario.processes?.list === "pending") return new Promise<Event>(() => {});
+      if (scenario.processes?.list === "pending") return neverReplied();
       if (scenario.processes?.list) return fail(scenario.processes.list);
       firstListedAt ??= Date.now();
       if (scenario.processes?.listLater && Date.now() - firstListedAt >= LIST_LATER_AFTER_MS) return fail(scenario.processes.listLater);
@@ -89,19 +89,19 @@ export function createProcessReplies({ scenario, store, fail, refuseUnknownProje
       return { type: "processes_listed", id: null, trees: [...running.flatMap((session) => treesOfSession(session.id)), ...projectTrees(body.project_id)] };
     },
     list_all_processes: () => {
-      if (scenario.processes?.list === "pending") return new Promise<Event>(() => {});
+      if (scenario.processes?.list === "pending") return neverReplied();
       if (scenario.processes?.list) return fail(scenario.processes.list);
       firstAllListedAt ??= Date.now();
       if (scenario.processes?.listLater && Date.now() - firstAllListedAt >= LIST_LATER_AFTER_MS) return fail(scenario.processes.listLater);
       return { type: "all_processes_listed", id: null, counts: allProcessCounts() };
     },
     stop_processes: (body) => {
-      if (scenario.processes?.stop === "pending") return new Promise<Event>(() => {});
+      if (scenario.processes?.stop === "pending") return neverReplied();
       if (scenario.processes?.stop) return fail(scenario.processes.stop);
       return { type: "processes_stopped", id: null, ids: stopTrees(body.ids) };
     },
     keep_processes: (body) => {
-      if (scenario.processes?.keep === "pending") return new Promise<Event>(() => {});
+      if (scenario.processes?.keep === "pending") return neverReplied();
       if (scenario.processes?.keep) return fail(scenario.processes.keep);
       return { type: "processes_kept", id: null, ids: keepTrees(body.ids) };
     },

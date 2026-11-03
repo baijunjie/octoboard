@@ -1,8 +1,10 @@
-import { DaemonRequestError } from "../../daemon-client";
 import { ActionableError } from "../../errors/actionableError";
+import { leftBranchItems, type LeftBranchItem } from "../../errors/branchCleanupItems";
+import { CodedError } from "../../errors/codedError";
 import { codeRecord } from "../../errors/codes";
-import { furtherKey, hasRichMessage, hasTrustDiagnostic, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey, type LeftBranchItem, type SharingFailureItem } from "../../errors/daemonMessage";
+import { furtherKey, hasRichMessage, hasTrustDiagnostic, messageCode } from "../../errors/daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason } from "../../errors/errorPresentation";
+import { sharingFailureItems, sharingRawReason, sharingReasonKey, type SharingFailureItem } from "../../errors/sharingFailure";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { isMessageKey, type MessageKey, type PlainMessageKey } from "../../i18n/catalog";
 import type { MessageParams } from "../../protocol";
@@ -70,7 +72,7 @@ export function daemonErrorParts(error: Failure): DaemonErrorParts {
     further: furtherKey(error.code, error.params),
     sharing: reason && { items: sharingFailureItems(error.code, error.params), raw: reason.raw, hasReasonLine: sharingReasonKey(error.params.cause) !== undefined },
     diagnostic,
-    unworded: unwordedRaw === undefined ? undefined : { raw: unwordedRaw, summary: record?.nested ? uncataloguedSummaryKey(new DaemonRequestError(unwordedRaw, error.params.reason_code ?? error.code, error.params)) : "daemon.trust_reason.unexpected" },
+    unworded: unwordedRaw === undefined ? undefined : { raw: unwordedRaw, summary: record?.nested ? uncataloguedSummaryKey(new CodedError(unwordedRaw, error.params.reason_code ?? error.code, error.params)) : "daemon.trust_reason.unexpected" },
     recovery: record?.recoveryLine && isMessageKey(recovery) ? recovery : undefined,
     nested: nestedFailure(error),
     nestedRemedy: record?.nested === "failureAndRemedy",

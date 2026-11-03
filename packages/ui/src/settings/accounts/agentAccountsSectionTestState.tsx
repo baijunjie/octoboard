@@ -1,17 +1,17 @@
-// The daemon state the `AgentAccountsSection` tests run against, and the stand-ins their `vi.mock` factories
-// return. The tests are split across several files by area; each file mocks the same six modules and loads this
-// one from its factories, so it must import nothing those files mock.
-import { useEffect, useSyncExternalStore } from "react";
+// The daemon state the `AgentAccountsSection` tests start from, and the stand-ins their `vi.mock` factories return.
+// The tests are split across several files by area; each file mocks the same five modules and loads this one from its
+// factories, so it must import nothing those files mock.
+import { useEffect } from "react";
 import { vi } from "vitest";
 
-import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
+import { DEFAULT_SETTINGS, type Daemon } from "../../store";
 import { accountOf } from "../../fixtures/builders";
-import { delegatingSessionIds, sessionShownStatusKind } from "../../sessions/sessionStatus";
-import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, Session, Settings } from "../../protocol";
+import { testDaemon } from "../../test/testDaemon";
+import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Event, Project, RequestBody, Session, Settings } from "../../protocol";
 
-export const request = vi.fn(() => Promise.resolve({}));
+export const request = vi.fn((_body: RequestBody): Promise<object> => Promise.resolve({}));
 export const raiseError = vi.fn();
-export const toastNotice = vi.fn();
+export const showNotice = vi.fn();
 export const settings: Settings = { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects" };
 export const accountQuotas: AccountQuota[] = [];
 export const accountLogins: AccountLogin[] = [];
@@ -20,44 +20,21 @@ export const availability = new Map<Agent, AgentAvailability>();
 export const consoles = new Map<string, Console>();
 export const projects = new Map<string, Project>();
 export const sessions = new Map<string, Session>();
-export const dismissAccountLogin = vi.fn((_store: unknown, login: AccountLogin) => {
-  const at = accountLogins.indexOf(login);
-  if (at >= 0) accountLogins.splice(at, 1);
-});
-export const trackAccountLogin = vi.fn();
-// The store is not reactive here; a test that changes it calls `bus.notify`, which re-renders whatever reads it.
-export const bus = (() => {
-  let version = 0;
-  const listeners = new Set<() => void>();
-  return {
-    subscribe: (listener: () => void) => (listeners.add(listener), () => listeners.delete(listener)),
-    version: () => version,
-    notify: () => {
-      version += 1;
-      listeners.forEach((listener) => listener());
-    },
-  };
-})();
-const state = () => ({ settings, agentAvailability: availability, accountQuotas, accountLogins, accountSharing, consoles, projects, sessions });
+
+/** The daemon a test mounts the section over: its store starts at a copy of the state above, so a test lays out what
+ * the section opens on by changing that state before it mounts, and changes the store itself afterwards. */
+export const startDaemon = (): Daemon =>
+  testDaemon({
+    state: structuredClone({ settings, agentAvailability: availability, accountQuotas, accountLogins, accountSharing, consoles, projects, sessions }),
+    request: (body) => request(body) as Promise<Event>,
+    raiseError,
+    showNotice,
+  });
+
 // What a section does when focus is lost, with the Settings dialog's section entry stood in for by a button.
 export const sectionEntry = { current: null as HTMLElement | null };
 
 export const account = (id: string, agent: Account["agent"]): Account => accountOf(id, agent, id, `/home/dev/.${id}`);
-
-/** `../../store` reading `state()`, with `request`, `raiseError` and `toastNotice` as the daemon's. */
-export const storeStandIn = (original: typeof import("../../store")) => ({
-  ...original,
-  useDaemon: () => ({ request, raiseError, toastNotice, store: { getState: () => state() } }),
-  useDaemonStore: (selector: (s: unknown) => unknown) => {
-    useSyncExternalStore(bus.subscribe, bus.version);
-    return selector(state());
-  },
-  useDaemonStoreEqual: (selector: (s: unknown) => unknown) => selector(state()),
-  useDelegatingIds: () => delegatingSessionIds(sessions.values()),
-  useSessionShownStatus: (session: Session) => sessionShownStatusKind(session, delegatingSessionIds(sessions.values())),
-  dismissAccountLogin: (...args: Parameters<typeof dismissAccountLogin>) => dismissAccountLogin(...args),
-  trackAccountLogin: (...args: unknown[]) => trackAccountLogin(...args),
-});
 
 /** `../useSectionRefocus` taking focus that fell to `<body>` to `sectionEntry`. */
 export const sectionRefocusStandIn = (original: typeof import("../useSectionRefocus")) => ({

@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { press } from "../components/alerts/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { errorAlerts } from "../components/alerts/errorAlerts";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
@@ -232,7 +232,7 @@ it.each([
   ["handoff_archive_failed", "archiving the original session failed"],
   ["handoff_move_failed", "handing the work off to it did not complete"],
 ])("treats a %s as handed off: closes, selects the receiving session and raises the alert", async (code) => {
-  const error = new DaemonRequestError("text", code, { receiving_session: "s-new", reason: "locked", reason_code: "session_locked", session: "s-1" });
+  const error = new CodedError("text", code, { receiving_session: "s-new", reason: "locked", reason_code: "session_locked", session: "s-1" });
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
   const { onClose, onHandedOff } = mount(session, [], [], {}, null, [], {}, error);
   await settle();
@@ -247,7 +247,7 @@ it.each([
 });
 
 it("keeps the dialog open and the old title for another handoff failure", async () => {
-  const error = new DaemonRequestError("text", "session_locked", { session: "s-1" });
+  const error = new CodedError("text", "session_locked", { session: "s-1" });
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
   const { onClose, onHandedOff } = mount(session, [], [], {}, null, [], {}, error);
   await settle();

@@ -8,7 +8,7 @@ import { HelpTip } from "../../components/hint/HelpTip";
 import { InlineReference } from "../../i18n/InlineReference";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { StatusMark } from "../../components/status/StatusMark";
-import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../../errors/daemonMessage";
+import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../../errors/sharingFailure";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Account, AccountSharing } from "../../protocol";
@@ -53,7 +53,8 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
   const shared = account.share_default_config;
   const progress = sharing?.progress;
   const idle = sharing?.idle_sessions ?? 0;
-  const inUse = sharing?.in_use && (sharing.in_use.sessions > 0 || sharing.in_use.signing_in) ? sharing.in_use : undefined;
+  const held = sharing?.in_use;
+  const inUse = held !== undefined && (held.sessions > 0 || held.signing_in) ? held : undefined;
   // A change that did not finish: the daemon says so with the flag, and may hold why (`failure`, until the next change
   // starts); after a restart there is the flag alone.
   const unfinished = !progress && account.share_default_config_incomplete;
@@ -106,13 +107,14 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
       {inUse.signing_in && <span className="block">{t("settings.accounts.sharing.inUseSigningIn")}</span>}
     </>
     : undefined;
-  const describedBy = [
+  const describedByIds = [
     caption !== undefined && `${id}-caption`,
     progress && `${id}-label`,
     progress && `${id}-value`,
     progress && progress.phase === "changing" && progress.item !== undefined && `${id}-current`,
     unfinished && `${id}-title`,
-  ].filter(Boolean).join(" ") || undefined;
+  ].filter(Boolean).join(" ");
+  const describedBy = describedByIds || undefined;
   return (
     <SettingRow
       label={t("settings.accounts.sharing.label")}

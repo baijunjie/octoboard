@@ -49,7 +49,7 @@ export function SettingRow({
           {description && <div className="text-sm text-app-muted">{description}</div>}
         </div>
         {/* A row whose controls all render nothing (`false`) draws no empty box taking the gap. */}
-        {React.Children.toArray(children).length > 0 && <div className={`shrink-0${compact ? "" : fill ? " max-sm:flex max-sm:w-full max-sm:*:min-w-0 max-sm:*:flex-1" : " max-sm:self-end-safe"}`}>{children}</div>}
+        {React.Children.toArray(children).length > 0 && <div className={compact ? "shrink-0" : fill ? "shrink-0 max-sm:flex max-sm:w-full max-sm:*:min-w-0 max-sm:*:flex-1" : "shrink-0 max-sm:self-end-safe"}>{children}</div>}
       </div>
       {below}
     </div>

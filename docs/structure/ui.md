@@ -24,7 +24,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 | `packages/ui/scripts/compiler-bailouts.mjs` | `pnpm compiler:bailouts`: lists the components and hooks the React Compiler leaves uncompiled, and exits 1 when there is any (run by hand; not part of `pnpm verify`) |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
-| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`) and its providers (`TestHost`) |
+| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`), its providers (`TestHost`) and `mountHost`, which renders under them |
 
 ## Directory map of `src/`
 
@@ -35,12 +35,15 @@ in `app/`), `AppRoot.tsx` (the provider tree around `App` — platform, language
 sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx`,
 `ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `daemon.ts` (locating the daemon from the
 page's address), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch);
+`requests.ts` (the request-to-reply contract: `REPLY_TYPES` names the reply each request is answered with, `ReplyOf`
+and `RequestSender` type a request's result from it, and `looseRequestSender` adapts a stand-in for the daemon);
 `protocol.ts` (hand-written TypeScript mirror of the wire protocol) checked against `protocol.generated.ts` (written by
 the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts` (facts from `config/app.json`);
 `style.css` (Tailwind theme and the design tokens).
 
 ### Pure domain layers (bottom)
 
+- `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by; imports nothing.
 - `src/platform/` — `PlatformAdapter`, the interface to everything native, made of optional capabilities: `tauri.ts`
   (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`.
 - `src/preferences/` — the `localStorage` key of every persisted preference, the guarded store behind them, the theme.
@@ -51,22 +54,28 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/agents/` — agent names, install pages, model and effort picker rules, per-agent launch settings.
 - `src/git/` — git workflow settings and git-badge wording, repository host links.
 - `src/sessions/` — pure session rules and wording (index, order, labels, status derivation, colours, filtering, waiting).
-- `src/accounts/` — pure account rules (order, quota of an account, picker rules, quota formatting).
-- `src/errors/` — turning a failure into words: `codes.ts` (the one record per error code), daemon wording, the shared
-  `ErrorPresentation`, recovery classification, issue-report address.
+- `src/accounts/` — pure account rules: order, quota of an account, quota formatting, how an account is found among the
+  records (`accountRecords.ts`), and the account picker split by concern (`choiceEntries.ts`, `accountInheritance.ts`,
+  `accountRanking.ts`, `openingChoice.ts`, `switchEntries.ts`).
+- `src/errors/` — turning a failure into words: `codedError.ts` (`CodedError`, the failure carrying a daemon or client
+  code), `codes.ts` (the one record per error code, with `Code` and `CODE`), daemon wording (`daemonMessage.ts`, with
+  `sharingFailure.ts` and `branchCleanupItems.ts` for the two items-bearing messages), the shared `ErrorPresentation`,
+  recovery classification, issue-report address.
 - `src/browse/` — browse requests to the daemon: `budget.ts` (the window's shares of the daemon's bound of outstanding
   browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
   (`lane.ts`), and how a failed browse request is treated and worded (`failure.ts`).
 - `src/store/` — the Zustand store of the connection and the state derived from daemon events (state, reducer, actions,
-  session requests, toasts, connection, React bindings, session-group hooks), re-exported by `index.ts`.
+  session requests, the notification bus in `notifications.ts`, connection, React bindings, session-group hooks),
+  re-exported by `index.ts`.
 
 ### Leaf layer and window shell
 
 - `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `dialog/` (the
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/`, `focus/`, `announce/`, `panel/`, `host/`,
-  `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, polling, the latest-request hook, `settle`, a
-  `try`/`finally` helper kept outside components because the React Compiler skips a function holding one).
+  `rows/` (the tree row, its icon and mark buttons, section headings, the hover-actions class), `hooks/` (breakpoints,
+  `createLauncher`, `retryableLazy`, polling, the latest-request hook, `useSerialPush`, `settle`, a `try`/`finally`
+  helper kept outside components because the React Compiler skips a function holding one).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
   with its panels in `rail-quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
@@ -80,9 +89,12 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/layout/` — pane layout: panel kinds and widths, the resize handle, the sidebar drawer, swipes below `phone`.
 - `src/shortcuts/` — the central registry of keyboard shortcuts and its persisted overrides.
 - `src/navigation/` — Back and Forward through the locations the content area has shown.
-- `src/lifecycle/` — hooks tying the UI to the platform: exit flow, notifications, native menu and menu bar icon, native
-  window theme, run in background, git status schedule, interface language report, `useSerialPush`.
-- `src/sidebar/` — one console's sessions and projects, focus modes, rows and menus, new-session controls.
+- `src/lifecycle/` — hooks tying the UI to the platform: exit flow, notifications, native menu, native
+  window theme, run in background, git status schedule, interface language report.
+- `src/statusItem/` — the menu-bar menu: its builder, quota submenus, icons and the hook that pushes it to the platform.
+- `src/sidebar/` — one console's sessions and projects: `Sidebar` picks the view over `SidebarFrame`, `ConsoleView` and
+  `FocusView` list them with `ProjectNode` and `SessionRow` (their pin and lock buttons in `MarkButtons.tsx`, the row's
+  derived state in `sessionRowModel.ts`), plus focus modes, menus and new-session controls.
 - `src/archive/` — archived sessions over the terminal area, with deletion.
 - `src/terminal/` — the xterm.js terminal: controller and the surface it draws on, pane, reconnect, the reading of its
   output as text, path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
@@ -97,15 +109,18 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
   library, which `terminal/history/` uses too: `markdown/` (documents, Mermaid, formulas, fenced code), `code/` (the
   code and diff renderer and its budgets) and `find/` (the find bar); `@pierre/diffs` is imported only inside it.
 - `src/quota/` — plan quota wording, meters, reset credits.
-- `src/settings/` — the settings modal and its sections; `accounts/` the Agent accounts section.
-- `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust),
-  on the `components/dialog/` toolkit. `RequestedDialog.tsx` only routes a requested dialog to its component; the
-  archive, removal and restore confirmations are in `confirmations/`. The dialogs' daemon lookups (detected agent,
-  located conversation, agent models, session records, branch inspections) are built on `useLatestRequest`;
-  `branchInspection.ts` holds the pure part of a branch inspection and `useBranchInspections.ts` its hooks.
+- `src/settings/` — the settings modal and its sections (`sections.ts` holds the section ids and `SettingsNavigation`);
+  `accounts/` the Agent accounts section.
+- `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
+  archive and removal choices), on the `components/dialog/` toolkit. `RequestedDialog.tsx` only routes a requested
+  dialog to its component; the archive, removal and restore confirmations are in `confirmations/`. The dialogs' daemon
+  lookups (detected agent, located conversation, agent models, session records, branch inspections) are built on
+  `useLatestRequest`; `branchInspection.ts` holds the pure part of a branch inspection and `useBranchInspections.ts`
+  its hooks.
 - `src/process/` — the Processes panel and its data, and the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces).
-- `src/configuration/` — configuration export and import dialogs, and the list of plain switch settings.
+- `src/configuration/` — configuration export and import dialogs (with the cards and parts they share, `SettingsCard.tsx`
+  and `importParts.tsx`), and the list of plain switch settings.
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
 
 ### Dev-only and website-facing
@@ -124,18 +139,20 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 tests and test-support files are exempt). A layer imports only the directories and root files its block names, so the exact allowed set is in the config;
 the shape is:
 
-- Each pure layer imports only layers beneath it: `platform/` (and `protocol`) and `preferences/` import nothing else
-  below `src/`; `input/` only the `platform/` barrel; `i18n/` only `preferences/` and `appConfig`; `format/` only
-  `i18n/`; `agents/` and `git/` only `i18n/` and `protocol`; `sessions/` adds `agents/`; `accounts/` adds `sessions/`
-  and `format/`; `errors/` adds `accounts/`, `appConfig` and `daemon-client`; `browse/` imports `i18n/`, `errors/`,
-  `format/`, `protocol` and `daemon-client`; `store/` imports `i18n/`, `errors/`, `accounts/`, `sessions/`,
-  `preferences/`, `git/`, `protocol`, `daemon` and `daemon-client`.
+- `protocol` imports nothing else below `src/`, and neither do `values/` and `preferences/`; `platform/` imports only
+  `protocol`. Each other pure layer imports only layers beneath it: `input/` only the `platform/` barrel; `i18n/` only
+  `preferences/` and `appConfig`; `format/` only `i18n/`; `agents/` and `git/` only `i18n/` and `protocol`; `sessions/`
+  adds `agents/`; `accounts/` adds `sessions/` and `format/`; `errors/` adds `accounts/` and `appConfig`; `browse/`
+  imports `i18n/`, `errors/`, `format/` and `protocol`; `store/` imports `values/`, `i18n/`, `errors/`, `accounts/`,
+  `sessions/`, `preferences/`, `git/`, `protocol`, `requests`, `daemon` and `daemon-client`. `errors/` and `browse/`
+  do not import `daemon-client`: its `CodedError` lives in `errors/codedError.ts`, and the codes it raises are records in
+  `errors/codes.ts`.
 - `components/` is the leaf layer: outside itself it imports only the pure layers, the `store/` barrel and the shared
   root files. `shortcuts/` imports `i18n/`, `preferences/`, `input/` and `components/`.
-- `viewer/`, `about/`, `updates/`, `layout/` and `quota/` import the leaf layer and the pure layers (`quota/` also
-  `accounts/`) and no other feature directory; `project-browser/` additionally imports `viewer/`. The remaining feature
+- `viewer/`, `about/`, `updates/`, `layout/`, `quota/` and `statusItem/` import the leaf layer and the pure layers (`quota/` also
+  `accounts/`; `statusItem/` also `accounts/` and `quota/`) and no other feature directory; `project-browser/` additionally imports `viewer/`. The remaining feature
   directories import one another freely.
-- From below `src/`, the root files that may be imported are `protocol`, `daemon`, `daemon-client`, `appConfig` and the
+- From below `src/`, the root files that may be imported are `protocol`, `requests`, `daemon`, `daemon-client`, `appConfig` and the
   `store/` and `platform/` barrels. The entry, `App` and the screens are imported by nothing below them.
 - `shell/` is imported only by root files, `app/`, the gallery and the website preview; `app/` only by `App.tsx`.
 - Production code imports neither `fixtures/` nor `gallery/`; `fixtures/` and `website-preview/` never import
@@ -159,6 +176,7 @@ dependency).
 - A user-facing string goes through `i18n/` with its key in every catalog (typed `Translation<...>`, so a missing
   message fails type checking).
 - A new daemon error code needs its record in `errors/codes.ts` in the same change.
+- A new request names its reply in `REPLY_TYPES` in `requests.ts`; the type check fails until it does.
 - A new protocol type is added to `protocol.ts` by hand; the contract check fails until it matches the generated types.
 - A new UI state worth seeing is a scenario under `src/gallery/fixtures/`; data used by both the gallery and the website
   preview or application tests belongs in `src/fixtures/`.
@@ -172,8 +190,17 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Need | Entry point |
 |---|---|
 | Raise an error alert for a failure | `raiseError`, `alertFailure` (as a request's catch handler) and `errorAlertOf` in `src/components/alerts/raiseError.tsx`; for a failure about a session, `Daemon.raiseError` (`src/store/connection.ts`). Alerts are drawn through `ErrorAlert` and the two built on it (`FailureAlert`, `ChoiceWarning`) |
-| What a daemon broadcast or failure shows as a toast | `broadcastToast` and `errorToast` in `src/store/toasts.ts` (used by the store and the fixture daemon) |
-| Wording and handling of an error code | one record per code in `src/errors/codes.ts` (`CODES`) |
+| What a daemon broadcast or failure shows as a notification (a toast, or an error alert to acknowledge) | `broadcastNotification` and `errorNotification` in `src/store/notifications.ts`, which `Daemon.showNotice` and `Daemon.raiseError` feed to the window through `onNotification` (used by the store and the fixture daemon) |
+| Wording and handling of an error code | one record per code in `src/errors/codes.ts` (`CODES`; `Code` and `CODE` name a code, `variantOf` on a record picks the message variant) |
+| A request to the daemon, and the type of its reply | `Daemon.request` (`src/store/connection.ts`) typed by `REPLY_TYPES` in `src/requests.ts`; a reply of another type rejects with the client code `unexpected_reply` (checked in `DaemonClient.request`, which `Daemon.request` wraps). A stand-in for the daemon (fixture daemon, preview, `testDaemon`) wraps its handler in `looseRequestSender`, which does not check the reply type |
+| A failure carrying a daemon or client code | `CodedError` (`src/errors/codedError.ts`) |
+| Keep unchanged data by identity when a reducer rebuilds it | `sameValue` (`src/values/sameValue.ts`), as the `settings_updated` reducer does |
+| A tree row in a list, with its icon and mark buttons and the heading above a section | `TreeRow`, `RowIconButton`, `RowMarkButton`, `SectionHeading` and `HOVER_ACTIONS_CLASS` in `src/components/rows/`; a list that animates its reordering uses `useListMotion` (`src/components/motion/`), not a row-level FLIP |
+| Pin and lock buttons of a session row; its derived state | `PinButton`, `LockButton` and `SessionMarkButtons` (`src/sidebar/MarkButtons.tsx`); `sessionRowModel` (`src/sessions/sessionRowModel.ts`) with the `useSessionRowModel` hook (`src/sidebar/`) |
+| An account's record, login or key among the daemon's lists | `accountRecordOf`, `accountLoginOf`, `loginIsActive` and `accountKey` (`src/accounts/accountRecords.ts`) |
+| Retry a focus move across frames until its target exists, or run after a few frames | `tryEachFrame` and `afterFrames` (`src/components/focus/`) |
+| The Git workflow items a setting offers | `GIT_WORKFLOW_ITEMS` and `GIT_WORKFLOW_ITEM_KEYS` (`src/git/gitWorkflow.ts`) |
+| A test that mounts a component under the app's providers | `mountHost` (`src/test/mountHost.tsx`) over `testDaemon` (the real store, requests rejected unless the test gives a handler); the container it returns has `render(ui)` to render again under the same host |
 | A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts` |
 | An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalSurface`, `TerminalCover` and `TerminalNoticeBar` (`src/terminal/`), shared by the session pane and shell terminals |
 | The loading line of a panel | `LoadingState` (`src/components/panel/LoadingState.tsx`) |
@@ -189,7 +216,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A rail entry whose button opens a popover panel | `RailPanelEntry` (`src/shell/RailPanelEntry.tsx`), which wires the popover; the status marks and Details popovers the panel opens are tagged with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`) and asked about through `nestedPopovers` (`src/shell/nestedPopover.ts`), and `CloseWhenCovered` (`src/shell/`) closes the panel under another modal |
 | Put a panel of the aside's owner (a project, or a console session) on screen | `showPanel` from `useProjectPanels` (`src/app/`); a jump from the global process list is `useProcessJump` |
 | Send focus into a panel the user opened deliberately | `landInPanel` (`src/panels/panelLanding.ts`), as `useFloatingPanel` and `useProcessJump` do |
-| Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/lifecycle/useSerialPush.ts`) |
+| Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/components/hooks/useSerialPush.ts`) |
 | Browse directories in a picker | `useDirectoryBrowse` with `DirectoryPicker` (`src/components/dialog/`) |
 | Delete options of a dialog that deletes sessions | `useSessionDeletionOptions` (`src/dialogs/`) |
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |

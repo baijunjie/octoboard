@@ -52,8 +52,10 @@ export function useMacosPermissions(): {
     const read = ++reads.current;
     let next: MacosPermissionsStatus | undefined;
     let failed = false;
+    // Started inside a promise chain, so a platform method that throws synchronously fails the read like a rejection.
+    const reading = Promise.resolve().then(() => macosPermissions?.status());
     try {
-      next = await macosPermissions?.status();
+      next = await reading;
     } catch {
       failed = true;
     }
@@ -78,24 +80,20 @@ export function useMacosPermissions(): {
     async (kind: MacosPermissionKind) => {
       if (!macosPermissions) return;
       setPending((p) => ({ ...p, [kind]: true }));
-      try {
-        const granted = await macosPermissions.request(kind);
+      // Promise chains, not `try`/`finally`: the React Compiler leaves a function with one uncompiled.
+      await Promise.resolve().then(() => macosPermissions.request(kind)).then((granted) => {
         if (mounted.current && !granted) setRefused((r) => ({ ...r, [kind]: true }));
-      } finally {
+      }).finally(async () => {
         if (mounted.current) setPending((p) => ({ ...p, [kind]: false }));
         await refresh();
-      }
+      });
     },
     [macosPermissions, refresh],
   );
 
   const openSystemSettings = useCallback(
     async (kind: MacosPermissionKind) => {
-      try {
-        await macosPermissions?.openSystemSettings(kind);
-      } finally {
-        await refresh();
-      }
+      await Promise.resolve().then(() => macosPermissions?.openSystemSettings(kind)).finally(refresh);
     },
     [macosPermissions, refresh],
   );

@@ -1,5 +1,7 @@
+import { CodedError } from "./errors/codedError";
 import { t } from "./i18n/language";
-import type { Event, MessageParams, Request, RequestBody } from "./protocol";
+import type { Event, Request } from "./protocol";
+import { REPLY_TYPES, type RequestSender, type RequestType } from "./requests";
 
 type Listener = (event: Event) => void;
 type BatchListener = (events: Event[]) => void;
@@ -17,27 +19,25 @@ const QUEUED_REQUEST_TIMEOUT_MS = 5000;
  * hidden window gets no frames, and its state must not fall behind for as long as it stays hidden. */
 const BROADCAST_FLUSH_FALLBACK_MS = 250;
 
+/** Whether `reply` is of a type `request` is answered with. */
+function answers(request: RequestType, reply: Event): boolean {
+  const expected: Event["type"] | readonly Event["type"][] = REPLY_TYPES[request];
+  return typeof expected === "string" ? reply.type === expected : expected.includes(reply.type);
+}
+
+/** The failure of a request answered with a reply of another type than it is answered with. */
+function unexpectedReply(request: RequestType, reply: Event): CodedError {
+  return new CodedError(t("error.unexpectedReply"), "unexpected_reply", { request, reply: reply.type });
+}
+
 /** `connecting` is the first attempt, before the socket has ever been open — distinct from
  * `reconnecting`, so a window that has never connected does not claim to be re-trying. */
 export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
 
-/** An `error` reply: its `code` and `params` (see "Coded messages" in `apps/daemon/PROTOCOL.md`)
- * for a caller that branches on the failure, and a `message` to show. The client puts the daemon's
- * English text there, and the store replaces it with the wording in the current language. */
-export class DaemonRequestError extends Error {
-  readonly code: string;
-  readonly params: MessageParams;
-  constructor(message: string, code: string, params: MessageParams) {
-    super(message);
-    this.code = code;
-    this.params = params;
-  }
-}
-
 /**
  * The `/ws/control` connection for the lifetime of the window. Every mutating action (`request`)
  * is correlated to its reply by a generated `id`: the daemon answers on the same socket with `ack`
- * or `error` carrying that `id` (or, for `list_dir`, `dir_listing`), and state changes it
+ * or `error` carrying that `id` (or the reply `REPLY_TYPES` names for it), and state changes it
  * broadcasts to every client — including ones this client itself caused — arrive with no `id` at
  * all and are only ever delivered through `onEvent`.
  *
@@ -76,6 +76,9 @@ export class DaemonClient {
   private connectionState: ConnectionState = "connecting";
   /** Set by `close()` so a deliberate shutdown never schedules a reconnect. */
   private closedPermanently = false;
+  /** The last request id handed out. Ids only have to be unique among this client's requests, and a counter needs no
+   * secure context, which `crypto.randomUUID` does and the desktop webview's page is not reliably counted as. */
+  private lastRequestId = 0;
 
   constructor(url: string) {
     this.url = url;
@@ -148,6 +151,8 @@ export class DaemonClient {
    * affordance calls this; nothing calls it automatically. */
   reconnect(): void {
     this.reconnectAttempts = 0;
+    // The banner says a retry is under way until the socket opens or drops again.
+    this.setConnectionState("reconnecting");
     this.connect();
   }
 
@@ -155,7 +160,7 @@ export class DaemonClient {
    * with no memory of them, so they can only ever be reported as failed. */
   private failPending(reason: string): void {
     for (const pending of this.pending.values()) {
-      pending.reject(new DaemonRequestError(reason, "connection_closed", {}));
+      pending.reject(new CodedError(reason, "connection_closed", {}));
     }
     this.pending.clear();
   }
@@ -174,7 +179,7 @@ export class DaemonClient {
     if (id && pending) {
       this.flushBroadcasts();
       this.pending.delete(id);
-      if (event.type === "error") pending.reject(new DaemonRequestError(event.message, event.code, event.params));
+      if (event.type === "error") pending.reject(new CodedError(event.message, event.code, event.params));
       else pending.resolve(event);
       this.deliver([event]);
       return;
@@ -224,46 +229,57 @@ export class DaemonClient {
     return () => this.connectionListeners.delete(listener);
   }
 
-  /** Sends a request and resolves with its correlated reply, or rejects with the `error` message
-   * (as a `DaemonRequestError`, carrying its `code` and `params`). */
-  request(body: RequestBody): Promise<Event> {
-    const id = crypto.randomUUID();
+  /** Sends a request and resolves with its correlated reply, or rejects with the `error` message (as a `CodedError`,
+   * carrying its `code` and `params`). A reply of a type the request is not answered with (`REPLY_TYPES`) rejects it
+   * as `unexpected_reply`. */
+  readonly request: RequestSender = (body) => {
+    const id = String(++this.lastRequestId);
     const payload: Request = { ...body, id };
     const json = JSON.stringify(payload);
     return new Promise((resolve, reject) => {
+      const settle = (event: Event) => {
+        // `answers` has checked that the event is of the type `ReplyOf` names for this request.
+        if (answers(body.type, event)) resolve(event as never);
+        else reject(unexpectedReply(body.type, event));
+      };
+      if (this.closedPermanently) {
+        reject(new CodedError(t("connection.error.connectionIsClosed"), "connection_closed", {}));
+        return;
+      }
       const socket = this.socket;
       if (socket?.readyState === WebSocket.OPEN) {
-        this.pending.set(id, { resolve, reject });
+        this.pending.set(id, { resolve: settle, reject });
         socket.send(json);
         return;
       }
       if (socket?.readyState === WebSocket.CLOSED && !this.reconnectTimer) {
         // The socket is dead and no retry is scheduled (the reconnect budget is spent) — queuing
         // would hang the caller forever, which a quit's `shutdown` request must never do.
-        reject(new DaemonRequestError(t("connection.error.connectionIsClosed"), "connection_closed", {}));
+        reject(new CodedError(t("connection.error.connectionIsClosed"), "connection_closed", {}));
         return;
       }
       // Still connecting, or a reconnect is scheduled: queue it, but bounded — the daemon might
       // never come back, and nothing else will reject this once `sendQueue` is the only place it
       // lives.
-      this.pending.set(id, { resolve, reject });
+      this.pending.set(id, { resolve: settle, reject });
       const queued: QueuedRequest = {
         payload: json,
         timer: setTimeout(() => {
           if (!this.pending.delete(id)) return;
           const queuedIndex = this.sendQueue.indexOf(queued);
           if (queuedIndex !== -1) this.sendQueue.splice(queuedIndex, 1);
-          reject(new DaemonRequestError(t("connection.error.timedOut"), "request_timed_out", {}));
+          reject(new CodedError(t("connection.error.timedOut"), "request_timed_out", {}));
         }, QUEUED_REQUEST_TIMEOUT_MS),
       };
       this.sendQueue.push(queued);
     });
-  }
+  };
 
   close(): void {
     this.closedPermanently = true;
     this.flushBroadcasts();
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
     this.socket?.close();
   }
 }

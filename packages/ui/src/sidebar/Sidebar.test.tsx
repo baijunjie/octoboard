@@ -9,9 +9,9 @@ import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { PANE_ID } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
-import { PlatformProvider } from "../platform/react";
 import type { Agent, AgentAvailability, Session } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
 
@@ -49,26 +49,17 @@ type SidebarTestProps = Partial<ComponentProps<typeof Sidebar>> & { sessions?: S
 const sessionMap = (list: Session[]) => new Map(list.map((session) => [session.id, session]));
 
 function isExpanded(container: HTMLElement, projectId: string): boolean {
-  return container.querySelector(`[data-flip="${projectId}"] [aria-expanded="true"]`) !== null;
+  return container.querySelector(`[data-list-motion="${projectId}"] [aria-expanded="true"]`) !== null;
 }
 
 function toggleProject(container: HTMLElement, projectId: string): void {
-  act(() => container.querySelector<HTMLElement>(`[data-flip="${projectId}"] [aria-expanded]`)!.click());
+  act(() => container.querySelector<HTMLElement>(`[data-list-motion="${projectId}"] [aria-expanded]`)!.click());
 }
 
 /** Mounts the sidebar over a stand-in daemon, `beside` next to it; `render` mounts it again with
  * other props. */
 function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
-  const daemon: Daemon = {
-    store: createStateStore({ sessions: sessionMap(sessions) }),
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const daemon = testDaemon({ state: { sessions: sessionMap(sessions) } });
   const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -80,12 +71,10 @@ function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
     act(() => {
       if (held) daemon.store.setState({ sessions: sessionMap(held) });
       root.render(
-        <PlatformProvider value={{ kind: "browser" }}>
-          <DaemonProvider value={daemon}>
-            {beside}
-            <Sidebar {...handlers} projects={[web]} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
-          </DaemonProvider>
-        </PlatformProvider>,
+        <TestHost daemon={daemon}>
+          {beside}
+          <Sidebar {...handlers} projects={[web]} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
+        </TestHost>,
       );
     });
   render(initial);
@@ -386,7 +375,7 @@ it("lets the card go once the pointer is off the card, its gap, its toggle and t
 it("updates a session's visible and accessible name as the daemon title changes", () => {
   const session = { ...sessions[2], terminal_title: "Explain the gallery" };
   const { container, render } = mountSidebar({ sessions: [hub1, session] });
-  const row = () => container.querySelector<HTMLElement>(`[data-flip="${session.id}"] [role="button"]`)!;
+  const row = () => container.querySelector<HTMLElement>(`[data-list-motion="${session.id}"] [role="button"]`)!;
   const first = `${isolate("Explain the gallery")}｜${isolate(session.title)}`;
   expect(row().textContent).toContain(first);
   expect(row().getAttribute("aria-label")).toContain(isolate(first));
@@ -466,8 +455,8 @@ it("orders project groups by their sessions' priority and follows status changes
   const a = sessionOf("s-alpha", main.id, alpha.id, "Alpha task", "working");
   const b = sessionOf("s-beta", main.id, beta.id, "Beta task", "idle");
   const { container, daemon } = mountSidebar({ projects: [alpha, beta], sessions: [a, b] });
-  const order = () => Array.from(container.querySelectorAll<HTMLElement>("[data-flip]"))
-    .map((row) => row.dataset.flip).filter((id) => id === alpha.id || id === beta.id);
+  const order = () => Array.from(container.querySelectorAll<HTMLElement>("[data-list-motion]"))
+    .map((row) => row.dataset.listMotion).filter((id) => id === alpha.id || id === beta.id);
   expect(order()).toEqual([beta.id, alpha.id]);
 
   const background = { ...b, background_tasks: [{ id: "watch" }] };
@@ -502,10 +491,10 @@ it("expands only projects with unarchived sessions and keeps interrupted project
   expect([web, stopped, archived, empty].map((project) => isExpanded(container, project.id))).toEqual([true, true, false, false]);
   press("Collapse all projects");
   press("Expand projects with unarchived sessions");
-  const groups = Array.from(container.querySelectorAll<HTMLElement>("[data-flip]")).filter((row) =>
-    [stopped.id, archived.id, empty.id, web.id].includes(row.dataset.flip!),
+  const groups = Array.from(container.querySelectorAll<HTMLElement>("[data-list-motion]")).filter((row) =>
+    [stopped.id, archived.id, empty.id, web.id].includes(row.dataset.listMotion!),
   );
-  expect(groups.map((row) => row.dataset.flip)).toEqual([web.id, stopped.id, archived.id, empty.id]);
+  expect(groups.map((row) => row.dataset.listMotion)).toEqual([web.id, stopped.id, archived.id, empty.id]);
   expect(groups.map((row) => row.hasAttribute("data-inactive"))).toEqual([false, false, true, true]);
   expect(groups.map((row) => row.querySelector('[aria-expanded="true"]') !== null)).toEqual([true, true, false, false]);
 });
@@ -539,7 +528,7 @@ it("shows existing rows immediately when switching consoles and animates additio
   animate.mockClear();
   render({ projects: [...projects, added], sessions: [...held, addedHub] });
   expect(presenceCalls()).toHaveLength(2);
-  expect(animate.mock.contexts.map((element) => (element as HTMLElement).dataset.flip)).toEqual(expect.arrayContaining([added.id, addedHub.id]));
+  expect(animate.mock.contexts.map((element) => (element as HTMLElement).dataset.listMotion)).toEqual(expect.arrayContaining([added.id, addedHub.id]));
 });
 
 
@@ -562,7 +551,7 @@ it("animates project contents when folded, making departing controls inert and c
     vi.unstubAllGlobals();
   });
   const { container } = mountSidebar({ sessions });
-  const group = container.querySelector<HTMLElement>(`[data-flip="${web.id}"]`)!;
+  const group = container.querySelector<HTMLElement>(`[data-list-motion="${web.id}"]`)!;
   expect(group.querySelector("[data-sessions]")).not.toBeNull();
   expect(animate).not.toHaveBeenCalled();
   const bodyList = group.querySelector<HTMLElement>("[data-sessions]")!.parentElement!;
@@ -570,7 +559,7 @@ it("animates project contents when folded, making departing controls inert and c
   toggleProject(container, web.id);
   expect(bodyList.style.overflowY).toBe("clip");
   expect(animate.mock.calls.some(([frames]) => frames[0].height === "100px" && frames[1].height === "0px")).toBe(true);
-  expect(group.querySelector('[data-flip="web-bound"]')).toBeNull();
+  expect(group.querySelector('[data-list-motion="web-bound"]')).toBeNull();
   const ghost = group.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
   expect(ghost).not.toBeNull();
   expect(ghost.hasAttribute("inert")).toBe(true);
@@ -582,7 +571,7 @@ it("animates project contents when folded, making departing controls inert and c
   ]);
   toggleProject(container, web.id);
   expect(group.querySelector("[data-list-motion-ghost]")).toBeNull();
-  expect(group.querySelector('[data-flip="web-bound"]')).not.toBeNull();
+  expect(group.querySelector('[data-list-motion="web-bound"]')).not.toBeNull();
   expect(presenceCalls()[1][0]).toEqual([{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "none" }]);
   toggleProject(container, web.id);
   act(() => animate.mock.results.filter((_, index) => animate.mock.calls[index][0][0].opacity === 1).at(-1)?.value.onfinish?.());

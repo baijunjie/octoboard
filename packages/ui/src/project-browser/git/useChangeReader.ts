@@ -6,7 +6,7 @@ import { projectBrowseFailure } from "../../browse/failure";
 import { useLatest } from "../../components/hooks/useLatest";
 import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import { InlineReference } from "../../i18n/InlineReference";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import type { Translate } from "../../i18n/catalog";
 import type { Language } from "../../i18n/languages";
 import { isolate } from "../../i18n/isolate";
@@ -56,7 +56,7 @@ export type ChangeOrigin =
 
 /** Whether `err` says the worktree an uncommitted change from `origin` is read from is gone. */
 function isWorktreeGone(err: unknown, origin: ChangeOrigin): boolean {
-  return origin.kind === "worktree" && err instanceof DaemonRequestError && err.code === WORKTREE_UNAVAILABLE;
+  return origin.kind === "worktree" && err instanceof CodedError && err.code === WORKTREE_UNAVAILABLE;
 }
 
 function sameOrigin(a: ChangeOrigin, b: ChangeOrigin): boolean {
@@ -210,8 +210,8 @@ function bodiesLoader(
         closeGone(item, origin);
         throw new ChangeBodiesError("superseded");
       }
-      if (err instanceof DaemonRequestError && BODIES_NEVER_DELIVERED.has(err.code)) throw new ChangeBodiesError("unavailable");
-      if (err instanceof DaemonRequestError && err.code === "limit_exceeded" && BODY_LIMITS.has(err.params.limit ?? "")) {
+      if (err instanceof CodedError && BODIES_NEVER_DELIVERED.has(err.code)) throw new ChangeBodiesError("unavailable");
+      if (err instanceof CodedError && err.code === "limit_exceeded" && BODY_LIMITS.has(err.params.limit ?? "")) {
         throw new ChangeBodiesError("unavailable");
       }
       const state = store.getState();

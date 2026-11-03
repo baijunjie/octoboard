@@ -5,7 +5,7 @@ import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { Tag } from "../components/form/Tag";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
-import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../git/gitWorkflow";
+import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { Message } from "../i18n/react";
 import type { Agent, GitWorkflowSettings } from "../protocol";
@@ -13,7 +13,7 @@ import type { Binding } from "../shortcuts/binding";
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
 import type { Overrides } from "../shortcuts/store";
 import { BindingKbd } from "../shortcuts/ShortcutKbd";
-import { sameValue } from "../store/sameValue";
+import { sameValue } from "../values/sameValue";
 import type { shortcutsReview } from "./importPlan";
 
 /** One value of a composite setting, listed under its line of the import cards: the item and what it is. */
@@ -30,23 +30,24 @@ function shown(value: React.ReactNode, current?: React.ReactNode): React.ReactNo
 
 const onOff = (on: boolean): PlainMessageKey => (on ? "configuration.import.value.on" : "configuration.import.value.off");
 
-/** Keyed by every field, so a field added to the settings is a type error here until it is listed; in the order the
- * settings page lists them. */
-const GIT_WORKFLOW_ITEMS: Record<keyof GitWorkflowSettings, { label: PlainMessageKey; word: (workflow: GitWorkflowSettings) => PlainMessageKey }> = {
-  development: { label: "settings.gitWorkflow.development.label", word: (w) => DEVELOPMENT_CHOICES.find((choice) => choice.value === w.development)!.label },
-  squash_before_delivery: { label: "settings.gitWorkflow.squash.label", word: (w) => onOff(w.squash_before_delivery) },
-  rebase_before_merge: { label: "settings.gitWorkflow.rebaseBeforeDelivery.label", word: (w) => onOff(w.rebase_before_merge) },
-  delivery: { label: "settings.gitWorkflow.delivery.label", word: (w) => DELIVERY_CHOICES.find((choice) => choice.value === w.delivery)!.label },
-  revert_gate: { label: "settings.gitWorkflow.revertGate.label", word: (w) => onOff(w.revert_gate) },
+/** How each item's value is worded in the review, by the item's field (labelled by `GIT_WORKFLOW_ITEMS`). */
+const GIT_WORKFLOW_WORDS: Record<keyof GitWorkflowSettings, (workflow: GitWorkflowSettings) => PlainMessageKey> = {
+  development: (w) => DEVELOPMENT_CHOICES.find((choice) => choice.value === w.development)!.label,
+  squash_before_delivery: (w) => onOff(w.squash_before_delivery),
+  rebase_before_merge: (w) => onOff(w.rebase_before_merge),
+  delivery: (w) => DELIVERY_CHOICES.find((choice) => choice.value === w.delivery)!.label,
+  revert_gate: (w) => onOff(w.revert_gate),
 };
 
 /** Each git workflow item with its value, named as the settings page names them. With `current`, only the
  * items that differ from it, each with what it is now. */
 export function gitWorkflowValues(t: Translate, wanted: GitWorkflowSettings, current?: GitWorkflowSettings): SettingValue[] {
-  return (Object.keys(GIT_WORKFLOW_ITEMS) as (keyof GitWorkflowSettings)[])
+  return GIT_WORKFLOW_ITEM_KEYS
     .filter((field) => !current || wanted[field] !== current[field])
-    .map((field) => GIT_WORKFLOW_ITEMS[field])
-    .map(({ label, word }) => ({ item: t(label), value: shown(t(word(wanted)), current && t(word(current))) }));
+    .map((field) => ({
+      item: t(GIT_WORKFLOW_ITEMS[field].label),
+      value: shown(t(GIT_WORKFLOW_WORDS[field](wanted)), current && t(GIT_WORKFLOW_WORDS[field](current))),
+    }));
 }
 
 /** The agents' Claude compatibility, each On or Off. With `current`, only the agents applying would change, each

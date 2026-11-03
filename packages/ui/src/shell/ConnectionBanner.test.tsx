@@ -12,7 +12,7 @@ import { ConnectionBanner } from "./ConnectionBanner";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const daemon = testDaemon({ request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
+const daemon = testDaemon({ request: vi.fn(), raiseError: vi.fn(), showNotice: vi.fn() });
 
 // The banner measures itself with one as it appears, and jsdom has none of its own.
 class FakeResizeObserver {

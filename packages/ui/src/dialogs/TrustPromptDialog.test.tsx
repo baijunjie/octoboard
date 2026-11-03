@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PlatformProvider } from "../platform/react";
 import { ErrorAlerts } from "../shell/ErrorAlerts";
@@ -82,7 +82,7 @@ it("a prompt asked about again starts unticked", async () => {
 // A folder refused as too broad, or whose project's directory could not be looked at in time,
 // answered nothing, so the dialog stays for the user to untick it and go on without it.
 it.each(["trust_directory_too_broad", "trust_directory_unreachable"])("a folder refused with %s keeps the dialog open", async (code) => {
-  const refused = new DaemonRequestError("refused", code, { session: "s-1" });
+  const refused = new CodedError("refused", code, { session: "s-1" });
   const dialog = mount([prompt], () => Promise.reject(refused));
   await tick();
   await confirm();
@@ -96,7 +96,7 @@ it("a folder that could not be checked in time is refused with the trust dialog'
   const clear = () => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   clear();
   onTestFinished(clear);
-  const refused = new DaemonRequestError("refused", "trust_directory_unreachable", { path: prompt.path });
+  const refused = new CodedError("refused", "trust_directory_unreachable", { path: prompt.path });
   mount([prompt], () => Promise.reject(refused));
   await tick();
   await confirm();
@@ -187,7 +187,7 @@ it("describes the folder option by its warning while ticked and speaks it once a
 // A go-ahead that fails once the dialog has closed is still titled for what the dialog was doing, whatever title the
 // failure's code carries.
 it("a go-ahead that fails keeps the dialog's failure title", async () => {
-  const failure = new DaemonRequestError("could not start", "launch_failed", { session: "s-1" });
+  const failure = new CodedError("could not start", "launch_failed", { session: "s-1" });
   const dialog = mount([prompt], () => Promise.reject(failure));
   await confirm();
   expect(dialog.toasts()).toEqual([[failure, { title: "Could not answer the trust confirmation", keepTitle: true, session: "s-1" }]]);
@@ -195,7 +195,7 @@ it("a go-ahead that fails keeps the dialog's failure title", async () => {
 
 // Carrying the trust entry over failing is not a failed answer: it keeps its code's title, as its session notice does.
 it("a go-ahead whose trust entry is not carried over keeps the code's title", async () => {
-  const failure = new DaemonRequestError("not carried over", "trust_not_carried_over", { session: "s-1" });
+  const failure = new CodedError("not carried over", "trust_not_carried_over", { session: "s-1" });
   const dialog = mount([prompt], () => Promise.reject(failure));
   await confirm();
   expect(dialog.toasts()).toEqual([[failure, { title: "Could not answer the trust confirmation", keepTitle: false, session: "s-1" }]]);

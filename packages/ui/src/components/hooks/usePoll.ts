@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { unexpectedFailureDiagnostic } from "../../errors/errorText";
-import { sameValue } from "../../store";
+import { sameValue } from "../../values/sameValue";
 import { useLatest } from "./useLatest";
 
 /** How a poll is paced. The callbacks are read each time they are needed. */

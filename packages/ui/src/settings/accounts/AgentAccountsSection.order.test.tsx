@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { request, settings } from "./agentAccountsSectionTestState";
 import { chooseItem, mount, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 
-vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
 vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
@@ -57,14 +56,14 @@ describe("account order in Settings", () => {
     await menu(container, "default:claude");
     const earlier = [...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent === "Move earlier")!;
     expect(earlier.getAttribute("aria-disabled")).toBe("true");
-    await act(async () => reject(new DaemonRequestError("changed", "account_order_invalid", {})));
+    await act(async () => reject(new CodedError("changed", "account_order_invalid", {})));
     expect(rows(container)).toEqual(["default:claude", "claude-work"]);
     expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not reorder the accounts"]);
     errorAlerts.acknowledge();
   });
 
   it("drags by the grip and keeps the optimistic order when the reply precedes the broadcast", async () => {
-    const { container, render } = mount();
+    const { container, setSettings } = mount();
     geometry(container);
     act(() => { pointer(grip(container), "pointerdown", 25); pointer(document, "pointermove", 70); });
     expect(rowOf(container, "default:claude").style.transform).toBe("translateY(45px)");
@@ -72,12 +71,9 @@ describe("account order in Settings", () => {
     await act(async () => pointer(document, "pointerup", 70));
     expect(rows(container)).toEqual(["claude-work", "default:claude"]);
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "reorder_accounts", agent: "claude", accounts: ["claude-work", null] });
-    settings.account_order = { claude: ["claude-work", null] };
-    onTestFinished(() => { settings.account_order = {}; });
-    render();
+    setSettings({ account_order: { claude: ["claude-work", null] } });
     expect(rows(container)).toEqual(["claude-work", "default:claude"]);
-    settings.account_order = {};
-    render();
+    setSettings({ account_order: {} });
     expect(rows(container)).toEqual(["default:claude", "claude-work"]);
   });
 

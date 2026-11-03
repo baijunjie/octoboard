@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { isolate } from "../i18n/isolate";
 import type { BrowseEntry, ChangeGroup, Event, FileContent, RequestBody } from "../protocol";
 import { DaemonProvider, type Daemon } from "../store";
@@ -101,7 +101,7 @@ it("takes a directory's latest listing only, and drops what was held when the pr
 });
 
 /** What the daemon client rejects a pending request with when its connection closes. */
-const connectionClosed = () => new DaemonRequestError("The connection closed.", "connection_closed", {});
+const connectionClosed = () => new CodedError("The connection closed.", "connection_closed", {});
 
 const file = (path: string, text: string, version = "1"): Event => {
   const content: FileContent = { size: text.length, kind: "text", media_type: null, text, data: null };
@@ -276,12 +276,12 @@ it("keeps a failed change list on screen through a background refresh, and shows
   const { daemon, pending } = controlledDaemon();
   const hook = mount(daemon, () => useChangeList("p", undefined, true));
   const failed = { code: "git_failed", params: { detail: "boom" }, message: "boom" };
-  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError(failed.message, failed.code, failed.params)));
+  await act(async () => pending.splice(0)[0].reject(new CodedError(failed.message, failed.code, failed.params)));
   expect(hook.current().list).toMatchObject({ state: "error", refreshing: false });
   // A reconnect asks again in the background: the failure, and its Try again, stay.
   act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
   expect(hook.current().list).toMatchObject({ state: "error", refreshing: true });
-  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError(failed.message, failed.code, failed.params)));
+  await act(async () => pending.splice(0)[0].reject(new CodedError(failed.message, failed.code, failed.params)));
   act(() => void hook.current().refresh());
   expect(hook.current().list).toEqual({ state: "loading" });
 });
@@ -469,7 +469,7 @@ it.each([
 ])("words a failed body read by the daemon's path only when it is not the current one: %s", async (_name, path, message) => {
   const { pending, loadBodies } = await openedChange();
   const outcome = expect(loadBodies()).rejects.toMatchObject({ reason: "failed", message });
-  await act(async () => pending[0].reject(new DaemonRequestError("gone", "file_not_found", { path })));
+  await act(async () => pending[0].reject(new CodedError("gone", "file_not_found", { path })));
   await outcome;
 });
 
@@ -483,7 +483,7 @@ it.each([
 ])("tells why a change's bodies were not delivered: %j is %s", async ({ code, params }, reason) => {
   const { pending, loadBodies } = await openedChange();
   const outcome = expect(loadBodies()).rejects.toMatchObject({ reason });
-  await act(async () => pending[0].reject(new DaemonRequestError("daemon said so", code, params)));
+  await act(async () => pending[0].reject(new CodedError("daemon said so", code, params)));
   await outcome;
 });
 
@@ -493,13 +493,13 @@ it("closes on a change whose worktree a read finds gone, saying nothing, and tel
   const hook = mount<ChangeReader>(daemon, () => useChangeReader("p", () => gone++));
   const side: ChangeOrigin = { kind: "worktree", worktree: "w" };
   act(() => hook.current().open(item("a.ts"), side));
-  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  await act(async () => pending.splice(0)[0].reject(new CodedError("gone", "worktree_unavailable", { worktree: "w" })));
   expect(hook.current().subject).toBeUndefined();
   expect(gone).toBe(1);
 
   // Any other failure is shown in the viewer.
   act(() => hook.current().open(item("a.ts"), side));
-  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError("broken", "git_failed", { detail: "no object" })));
+  await act(async () => pending.splice(0)[0].reject(new CodedError("broken", "git_failed", { detail: "no object" })));
   expect(hook.current().subject?.content).toMatchObject({ state: "change", change: { unavailable: expect.anything() } });
   expect(gone).toBe(1);
 });
@@ -508,7 +508,7 @@ it("closes, saying nothing, when a change's bodies are asked of a worktree that 
   let gone = 0;
   const { hook, pending, loadBodies } = await openedChange(() => gone++);
   const outcome = expect(loadBodies()).rejects.toMatchObject({ reason: "superseded" });
-  await act(async () => pending[0].reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  await act(async () => pending[0].reject(new CodedError("gone", "worktree_unavailable", { worktree: "w" })));
   await outcome;
   expect(hook.current().subject).toBeUndefined();
   expect(gone).toBe(1);

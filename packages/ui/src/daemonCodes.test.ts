@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { DaemonRequestError } from "./daemon-client";
+import { CodedError } from "./errors/codedError";
 import { CODES, codeRecord, type CodeRecord, type MessageFacets } from "./errors/codes";
 import { messageCode, RECORD_NAMES } from "./errors/daemonMessage";
 import { noticeKind } from "./errors/errorPresentation";
@@ -154,7 +154,7 @@ describe.each(CLASSIFIED)("the daemon's failure %s", (code) => {
   it("is classified with a remedy, or is unexpected for a reason the registry gives", () => {
     const record = codeRecord(code)!;
     expect(record.recovery !== undefined || record.causeOnly === true || record.unexpected !== undefined, "recovery, causeOnly or unexpected").toBe(true);
-    expect(classifyError(new DaemonRequestError("text", code, {})).kind).toBe(record.unexpected === undefined ? "actionable" : "unexpected");
+    expect(classifyError(new CodedError("text", code, {})).kind).toBe(record.unexpected === undefined ? "actionable" : "unexpected");
   });
 });
 

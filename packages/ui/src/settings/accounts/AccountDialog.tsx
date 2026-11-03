@@ -68,7 +68,7 @@ export function AccountDialog({
     if (editing || renameDefault) return;
     let active = true;
     void request({ type: "list_dir", path: "~" }).then((event) => {
-      if (!active || event.type !== "dir_listing") return;
+      if (!active) return;
       setDirectoryListing({ home: event.path, paths: event.entries.map((entry) => entry.path) });
       setDirectoryFailure(undefined);
       setListingPending(false);

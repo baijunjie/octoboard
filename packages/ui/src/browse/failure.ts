@@ -1,4 +1,4 @@
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { daemonMessage, type RecordNames } from "../errors/daemonMessage";
 import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import type { Translate } from "../i18n/catalog";
@@ -62,7 +62,7 @@ export function browseFailure(
   /** The project's directory, shown for a path naming the directory itself. */
   root?: string,
 ): BrowseFailure {
-  if (!(err instanceof DaemonRequestError)) {
+  if (!(err instanceof CodedError)) {
     const unexpected = errorPresentation(err);
     return { kind: "failed", code: unexpected.code, message: unexpected };
   }
@@ -86,7 +86,7 @@ export function browseFailure(
   // The shaped params, not the raw ones: a structured render of the message must read them as the
   // plain text does.
   const message = daemonMessage(language, err.code, params, err.message, records);
-  return { kind: "failed", code: err.code, message: errorPresentation(new DaemonRequestError(message, err.code, params)) };
+  return { kind: "failed", code: err.code, message: errorPresentation(new CodedError(message, err.code, params)) };
 }
 
 /** `browseFailure` for a request about `project`, whose directory (home-abbreviated) it shows for a path naming the

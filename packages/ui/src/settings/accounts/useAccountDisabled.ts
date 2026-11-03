@@ -1,4 +1,4 @@
-import { accountDisabled } from "../../accounts/accountChoices";
+import { accountDisabled } from "../../accounts/choiceEntries";
 import type { Agent } from "../../protocol";
 import { useDaemonStore } from "../../store";
 

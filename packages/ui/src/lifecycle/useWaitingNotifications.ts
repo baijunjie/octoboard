@@ -1,9 +1,7 @@
 import { useEffect, useRef } from "react";
 
-import { useLatest } from "../components/hooks/useLatest";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
-import type { Console, Project } from "../protocol";
 import { sessionWithLocation } from "../sessions/sessionLabel";
 import { useWaitingIds } from "../store";
 import { useDaemon } from "../store";
@@ -27,24 +25,16 @@ import { useDaemon } from "../store";
  * absent, and with the permission declined or a call failing they are swallowed rather than
  * surfaced, since the tree's own raised-hand marker already carries the same information.
  *
- * It reads the sessions from the store itself, as the ids of the waiting ones, which are the same
- * array until a session starts or stops waiting: a status event that changes nothing about who
- * waits does not render the caller.
+ * It reads the sessions, consoles and projects from the store itself, the sessions as the ids of the
+ * waiting ones, which are the same array until a session starts or stops waiting: a status event that
+ * changes nothing about who waits does not render the caller.
  */
-export function useWaitingNotifications(
-  consoles: Map<string, Console>,
-  projects: Map<string, Project>,
-  ready: boolean,
-): void {
+export function useWaitingNotifications(ready: boolean): void {
   const { notifications, badge } = usePlatform();
   const { store } = useDaemon();
   const waitingList = useWaitingIds();
   const previousWaitingRef = useRef<Set<string> | undefined>(undefined);
   const lastBadgeCountRef = useRef<number | undefined>(undefined);
-  // `consoles`/`projects` only feed the notification body text, not the waiting/newly-waiting diff
-  // itself; reading them through a ref keeps them out of the effect's deps, so a console or project
-  // rename alone does not re-run the badge and notify pass for every session.
-  const locationsRef = useLatest({ consoles, projects });
 
   useEffect(() => {
     if ((!notifications && !badge) || !ready) return;
@@ -72,12 +62,14 @@ export function useWaitingNotifications(
 
     void (async () => {
       if (!(await notifications.ensurePermission())) return;
-      const { consoles: currentConsoles, projects: currentProjects } = locationsRef.current;
+      // Read when the text is made: the consoles and projects only feed it, not the waiting/newly-waiting
+      // diff, so a console or project rename alone does not re-run the badge and notify pass.
+      const { consoles, projects } = store.getState();
       for (const session of newlyWaiting) {
         try {
           await notifications.notify({
             title: t("notification.waiting.title"),
-            body: sessionWithLocation(t, session, currentConsoles, currentProjects),
+            body: sessionWithLocation(t, session, consoles, projects),
           });
         } catch {
           // Best-effort — see the function doc.

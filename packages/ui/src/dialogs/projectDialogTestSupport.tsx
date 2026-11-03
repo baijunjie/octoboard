@@ -47,7 +47,7 @@ export function render(
     },
     request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
+    showNotice: vi.fn(),
   });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

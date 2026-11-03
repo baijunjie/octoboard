@@ -1,4 +1,4 @@
-import { accountDisabled } from "../accounts/accountChoices";
+import { accountDisabled } from "../accounts/choiceEntries";
 import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";

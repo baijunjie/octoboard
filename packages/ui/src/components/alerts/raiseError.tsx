@@ -3,7 +3,7 @@ import { t } from "../../i18n/language";
 import { Message } from "../../i18n/react";
 import { appDataRecovery } from "../../errors/errorRecovery";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
-import { errorToast, type AlertOptions, type State, type ToastRequest } from "../../store";
+import { errorNotification, type AlertOptions, type State, type NotificationRequest } from "../../store";
 import { errorAlertParts } from "./errorAlertParts";
 import { errorAlerts, type ErrorAlertRequest } from "./errorAlerts";
 
@@ -13,7 +13,7 @@ const NO_RECORDS = { sessions: new Map(), consoles: new Map(), projects: new Map
  * about a session, the lines that name it ahead of the body. The daemon words its message as "this session" without
  * naming it, so which session the alert is about comes from the session's record or, when it is gone, from the name the
  * request carries. */
-export function errorAlertOf(request: ToastRequest, { sessions, consoles, projects }: Pick<State, "sessions" | "consoles" | "projects">): ErrorAlertRequest {
+export function errorAlertOf(request: NotificationRequest, { sessions, consoles, projects }: Pick<State, "sessions" | "consoles" | "projects">): ErrorAlertRequest {
   const { title, body, details, remedyInBody } = errorAlertParts(request);
   const session = request.session ? sessions.get(request.session) : undefined;
   const sessionName = session ? sessionDisplayTitle(t, session) : request.daemonTitle?.params.title;
@@ -45,7 +45,7 @@ export function errorAlertOf(request: ToastRequest, { sessions, consoles, projec
 /** Raises an error alert for `error`, for code that has no daemon to ask. It cannot name a session, which needs the
  * store's records: `Daemon.raiseError` is the route for code that has a daemon and may name one. */
 export function raiseError(error: unknown, alert: AlertOptions & { session?: undefined }): void {
-  errorAlerts.report(errorAlertOf(errorToast(error, alert), NO_RECORDS));
+  errorAlerts.report(errorAlertOf(errorNotification(error, alert), NO_RECORDS));
 }
 
 /** The catch handler of a request that raises its failure as an error alert, with no session to name:

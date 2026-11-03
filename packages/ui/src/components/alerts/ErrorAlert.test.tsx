@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import { errorAlerts } from "./errorAlerts";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { detailsButton, openDetails } from "./detailsTestSupport";
 import { AlertButton } from "./AlertButton";
 import { ErrorAlert } from "./ErrorAlert";
@@ -73,7 +73,7 @@ it("does not announce a failure that was there as its view opened", () => {
 });
 
 it("keeps the structured diagnostics of a failure behind the Alert's Details, and opens no error alert dialog for it", () => {
-  const error = new DaemonRequestError("Environment unavailable", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
+  const error = new CodedError("Environment unavailable", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
   const { container } = mount(<FailureAlert title="Could not read the file" announce={false} message={error} />);
   const alert = container.querySelector('[data-slot="alert-root"]');
   expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Could not read the file");
@@ -128,7 +128,7 @@ it("has no Details button when there is nothing more to say", () => {
   );
   expect(detailsButton(container)).toBeUndefined();
   expect(container.querySelectorAll("button")).toHaveLength(2);
-  const coded = new DaemonRequestError("raw", "git_failed", { detail: "fatal: not a git repository" });
+  const coded = new CodedError("raw", "git_failed", { detail: "fatal: not a git repository" });
   const { container: other } = mount(<FailureAlert announce={false} title="Could not read" message={coded} />);
   expect(openDetails(other).textContent).toContain("fatal: not a git repository");
 });
@@ -140,7 +140,7 @@ it("names the wrapper by id for a field it describes", () => {
 
 it("draws a danger Alert's recovery action solid and its Details soft, in the danger variants", () => {
   // A failure the application has no words for keeps its raw text behind Details.
-  const { container } = mount(<FailureAlert announce={false} title="Could not read" message={new DaemonRequestError("Permission denied", "unexpected_error", {})} onRetry={() => {}} />);
+  const { container } = mount(<FailureAlert announce={false} title="Could not read" message={new CodedError("Permission denied", "unexpected_error", {})} onRetry={() => {}} />);
   const buttons = [...container.querySelectorAll("button")];
   expect(buttons.map((button) => button.textContent)).toEqual(["Details", "Try again"]);
   const [details, retry] = buttons;
@@ -167,7 +167,7 @@ it("shows the remedy under the description, outside the announcement, and gives 
 });
 
 it("puts the raw message of an error with no catalog message behind Details and says the generic sentence", () => {
-  const { container } = mount(<FailureAlert announce={false} title="Could not read" message={new DaemonRequestError("database is locked", "internal_error", {})} />);
+  const { container } = mount(<FailureAlert announce={false} title="Could not read" message={new CodedError("database is locked", "internal_error", {})} />);
   const alert = container.querySelector('[data-slot="alert-root"]')!;
   expect(alert.querySelector('[data-slot="alert-description"]')?.textContent).toBe("Something unexpected went wrong.");
   expect(alert.textContent).not.toContain("database is locked");

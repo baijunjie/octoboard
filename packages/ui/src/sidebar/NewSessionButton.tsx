@@ -6,7 +6,7 @@ import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { isPrimaryModifier } from "../input/keys";
 import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
-import { RowIconButton } from "./rows";
+import { RowIconButton } from "../components/rows/RowIconButton";
 import { useNewSessionMode } from "./useNewSessionMode";
 
 /**

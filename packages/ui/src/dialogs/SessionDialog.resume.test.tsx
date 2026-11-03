@@ -3,7 +3,7 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Session } from "../protocol";
@@ -148,7 +148,7 @@ it.each([
 it("reports the daemon's refusal of the conversation in the error alert dialog and keeps the field as it was", async () => {
   const { daemon } = renderForResume();
   answerRequests(daemon, record("claude", null), () => Promise.reject(
-    new DaemonRequestError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: UUID }),
+    new CodedError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: UUID }),
   ));
   await chooseResume();
   typeResumeId(UUID);
@@ -156,7 +156,7 @@ it("reports the daemon's refusal of the conversation in the error alert dialog a
   await submit();
   const field = resumeField()!;
   // It comes after the submit, so it is the error alert dialog's, not a mark on the field.
-  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof DaemonRequestError && alert.error.code === "conversation_to_resume_not_found")).toBe(true);
+  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_to_resume_not_found")).toBe(true);
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(field.getAttribute("aria-invalid")).not.toBe("true");
   expect(resumeAlert()).toBeNull();
@@ -370,7 +370,7 @@ it.each(["conversation_in_session", "conversation_outside_project"])("asks the l
   let asked = 0;
   const { daemon } = renderForResume({}, record("claude", null), { sessions: new Map([[archived.id, archived]]) });
   answerRequests(daemon, async () => (asked++ === 0 ? record("claude", null) : heldBy("archived_session", archived.id)), (body) =>
-    body.type === "open_session" ? Promise.reject(new DaemonRequestError("plain", code, {})) : Promise.resolve({ type: "ack", id: null }));
+    body.type === "open_session" ? Promise.reject(new CodedError("plain", code, {})) : Promise.resolve({ type: "ack", id: null }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
@@ -428,7 +428,7 @@ it("moves focus to the Session ID field when the focused record fields go", asyn
 
 it("keeps the answer for a record when the daemon says the conversation is not there", async () => {
   const { daemon } = renderForResume();
-  answerRequests(daemon, record("claude", null), () => Promise.reject(new DaemonRequestError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/p", id: UUID })));
+  answerRequests(daemon, record("claude", null), () => Promise.reject(new CodedError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/p", id: UUID })));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
@@ -492,7 +492,7 @@ it("does not rename the reopened session to an empty name", async () => {
 it("toasts a rename that fails after the reopen, and still selects the session and closes", async () => {
   const { daemon, onOpened, onClose, onResume } = renderForResume({}, heldBy("archived_session", archived.id), { sessions: new Map([[archived.id, archived]]) });
   answerRequests(daemon, heldBy("archived_session", archived.id), (body) =>
-    body.type === "rename_session" ? Promise.reject(new DaemonRequestError("plain", "unknown_session", { session: "s-old" })) : Promise.resolve({ type: "ack", id: null }));
+    body.type === "rename_session" ? Promise.reject(new CodedError("plain", "unknown_session", { session: "s-old" })) : Promise.resolve({ type: "ack", id: null }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
@@ -523,12 +523,12 @@ it("resumes an interrupted session through the resume path, with name, agent and
 
 it("shows the daemon's reason in the dialog when resuming an interrupted session is rejected", async () => {
   const { onOpened, onClose, onResume } = renderForResume({}, heldBy("live_session", interrupted.id), { sessions: new Map([[interrupted.id, interrupted]]) });
-  onResume.mockRejectedValueOnce(new DaemonRequestError("plain", "unknown_session", { session: "s-int" }));
+  onResume.mockRejectedValueOnce(new CodedError("plain", "unknown_session", { session: "s-int" }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
   await submit("Resume");
-  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof DaemonRequestError && alert.error.code === "unknown_session")).toBe(true);
+  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "unknown_session")).toBe(true);
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(onOpened).not.toHaveBeenCalled();
   expect(onClose).not.toHaveBeenCalled();
@@ -591,13 +591,13 @@ it("says the agent that holds the conversation is no longer offered, and never o
 
 it("keeps the dialog open with the reason when the reopen is refused, without renaming or selecting", async () => {
   const { daemon, onOpened, onClose, onResume } = renderForResume({}, heldBy("archived_session", archived.id), { sessions: new Map([[archived.id, archived]]) });
-  onResume.mockRejectedValue(new DaemonRequestError("plain", "conversation_unresumable", { agent: "Claude Code", session: "s-old" }));
+  onResume.mockRejectedValue(new CodedError("plain", "conversation_unresumable", { agent: "Claude Code", session: "s-old" }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
   await submit("Reopen");
   // As any refused action of a dialog: the reason goes to the acknowledgement queue.
-  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof DaemonRequestError && alert.error.code === "conversation_unresumable")).toBe(true);
+  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_unresumable")).toBe(true);
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(requestsOf(daemon, "rename_session")).toEqual([]);
   expect(onOpened).not.toHaveBeenCalled();
@@ -643,18 +643,18 @@ it.each([
 it("reports the open-time refusal of a conversation held elsewhere in the error alert dialog", async () => {
   const { daemon } = renderForResume({}, record("claude", null), { sessions: new Map([[elsewhere.id, elsewhere]]), projects: new Map([[otherProject.id, otherProject]]) });
   answerRequests(daemon, record("claude", null), (body) =>
-    body.type === "open_session" ? Promise.reject(new DaemonRequestError("plain", "conversation_outside_project", { id: UUID, session: elsewhere.id })) : Promise.resolve({ type: "ack", id: null }));
+    body.type === "open_session" ? Promise.reject(new CodedError("plain", "conversation_outside_project", { id: UUID, session: elsewhere.id })) : Promise.resolve({ type: "ack", id: null }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
   await submit();
-  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof DaemonRequestError && alert.error.code === "conversation_outside_project")).toBe(true);
+  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_outside_project")).toBe(true);
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(resumeAlert()).toBeNull();
 });
 
 it("shows a failed lookup under the field with the daemon's reason, and holds Open back", async () => {
-  const { daemon } = renderForResume({}, () => Promise.reject(new DaemonRequestError("plain", "unknown_project", { id: "p-1" })));
+  const { daemon } = renderForResume({}, () => Promise.reject(new CodedError("plain", "unknown_project", { id: "p-1" })));
   await chooseResume();
   typeResumeId(UUID);
   await settle();

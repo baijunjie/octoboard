@@ -1,4 +1,4 @@
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import type { ProcessTree, SessionBranchItem, SessionBranchTarget } from "../protocol";
 import type { Daemon } from "../store";
 
@@ -60,6 +60,6 @@ export type Inspected = { items: SessionBranchItem[]; pending: boolean };
 const REMOVAL_REFUSALS = new Set(["project_directory_protected", "project_directory_shared", "project_directory_trash_failed"]);
 
 /** Whether `err` is a refusal of a project's removal with its folder (`REMOVAL_REFUSALS`). */
-export function isRemovalRefusal(err: unknown): err is DaemonRequestError {
-  return err instanceof DaemonRequestError && REMOVAL_REFUSALS.has(err.code);
+export function isRemovalRefusal(err: unknown): err is CodedError {
+  return err instanceof CodedError && REMOVAL_REFUSALS.has(err.code);
 }

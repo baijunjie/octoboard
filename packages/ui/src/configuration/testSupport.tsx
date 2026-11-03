@@ -2,7 +2,6 @@
 // whose replies the test gives, and a platform whose configuration-file capability is a stub; and
 // a reader of the import's lists of settings.
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
 import { ErrorAlerts } from "../shell/ErrorAlerts";
@@ -10,9 +9,10 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { ConfigurationFileCapability } from "../platform";
-import { PlatformProvider } from "../platform/react";
 import type { DocumentSettings, Event, RequestBody } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import type { State } from "../store";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 
 /** A document's settings with each switch off and no Claude compatibility choice, except what `carried` sets. */
 export function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
@@ -38,7 +38,7 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
 export interface Mounted {
   /** The bodies of the requests sent to the daemon, in order. */
   sent: () => RequestBody[];
-  /** The messages given to `toastNotice`. */
+  /** The messages given to `showNotice`. */
   notices: () => string[];
   closed: () => number;
   /** Awaited before a step whose focus the test asserts (see `trackMountRefocus`). */
@@ -54,33 +54,16 @@ export function mountDialog(
   state: Partial<State> = {},
 ): Mounted {
   const closed = vi.fn();
-  const daemon: Daemon = {
-    store: createStateStore(state),
-    request: vi.fn(reply),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
+  const request = vi.fn(reply);
+  const daemon = testDaemon({ state, request, raiseError: vi.fn(), showNotice: vi.fn() });
+  // Registered before the mount, so it runs after the unmount.
   onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
-  act(() =>
-    root.render(
-      <PlatformProvider value={{ kind: "browser", configurationFile }}>
-        <DaemonProvider value={daemon}>{dialog(closed)}<ErrorAlerts daemon={daemon} /></DaemonProvider>
-      </PlatformProvider>,
-    ),
-  );
+  mountHost(<>{dialog(closed)}<ErrorAlerts daemon={daemon} /></>, { daemon, platform: { kind: "browser", configurationFile } });
   return {
-    sent: () => vi.mocked(daemon.request).mock.calls.map(([body]) => body),
-    notices: () => vi.mocked(daemon.toastNotice).mock.calls.map(([message]) => message),
+    sent: () => request.mock.calls.map(([body]) => body),
+    notices: () => vi.mocked(daemon.showNotice).mock.calls.map(([message]) => message),
     closed: () => closed.mock.calls.length,
     pastMountRefocus: trackMountRefocus(),
   };

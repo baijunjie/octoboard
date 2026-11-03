@@ -1,9 +1,10 @@
 // The context the fixture daemon's domain modules share: the state they are built over, the shape of the replies they
 // give, and the small helpers more than one of them needs.
-import { DaemonRequestError } from "../daemon-client";
+import type { ReplyOf } from "../requests";
+import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { currentLanguage } from "../i18n/language";
-import type { Agent, Launch, LaunchChange, PerAgent, Event, RequestBody, Session } from "../protocol";
+import type { Agent, Event, Launch, LaunchChange, PerAgent, RequestBody, Session } from "../protocol";
 import { createStateStore } from "../store";
 import type { Fixture } from "./fixture";
 import { createGitReplies } from "./fixtureGit";
@@ -61,8 +62,14 @@ export function normalizeTags(tags: string[]): string[] {
 /** The store a fixture daemon holds. */
 export type FixtureStore = ReturnType<typeof createStateStore>;
 
+/** The reply of a request with nothing to return. */
+export type Ack = Extract<Event, { type: "ack" }>;
+
+/** A reply that never comes, for a scenario that holds a request pending. */
+export const neverReplied = (): Promise<never> => new Promise<never>(() => {});
+
 /** The reply to one kind of request: a value, or a promise of one that may never settle. A refusal is thrown (`fail`). */
-export type Handler<K extends RequestBody["type"]> = (body: Extract<RequestBody, { type: K }>) => Event | Promise<Event>;
+export type Handler<K extends RequestBody["type"]> = (body: Extract<RequestBody, { type: K }>) => ReplyOf<K> | Promise<ReplyOf<K>>;
 
 /** What a domain's module answers: a reply for each kind of request it knows. A request with no entry anywhere is
  * acknowledged. */
@@ -91,7 +98,7 @@ export interface FixtureContext {
 export function createFixtureContext(scenario: Fixture): FixtureContext {
   const store = createStateStore(scenario.state);
   const fail = ({ code, params, message }: FixtureError): never => {
-    throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
+    throw new CodedError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
   return {
     scenario,

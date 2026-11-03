@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { errorText } from "../errors/errorText";
 import { setLanguage } from "../i18n/language";
 import type { Event, RequestBody } from "../protocol";
@@ -184,7 +184,7 @@ it("words a periodic refresh that fails after a language change in the new langu
   await advance(AUTO_REFRESH_MS);
   expect(count("list_project_changes")).toBe(1);
   await act(async () =>
-    pending.splice(0).forEach((request) => request.reject(new DaemonRequestError("too big", "limit_exceeded", { limit: "patch_bytes", max: "1" }))),
+    pending.splice(0).forEach((request) => request.reject(new CodedError("too big", "limit_exceeded", { limit: "patch_bytes", max: "1" }))),
   );
   const current = list();
   expect(current?.state).toBe("error");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ChoiceEntry } from "../accounts/accountChoices";
+import type { ChoiceEntry } from "../accounts/choiceEntries";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { accountOption } from "./accountOptions";

@@ -1,5 +1,5 @@
-import { Info, CircleCheck, CloudDownload, type LucideIcon } from "lucide-react";
-import React, { useId } from "react";
+import { CircleCheck, CloudDownload } from "lucide-react";
+import React from "react";
 
 import { Button } from "../components/controls/Button";
 import { MarkLineBox } from "../components/status/MarkLineBox";
@@ -23,7 +23,7 @@ import {
   type ReviewState,
   type RowState,
 } from "./importPlan";
-import { CARD_CLASS, CARD_HEADER_CLASS, DirectoryChoiceField, FallbackLines, FallbackMark, Field, type Shown } from "./importParts";
+import { Card, CARD_HEADER_CLASS, CardTitle, DirectoryChoiceField, FallbackLines, FallbackMark, Field, InfoNote, STATUS_TONE, StatusGlyph, type StatusEntry, type Shown } from "./importParts";
 
 const CHOICE_LABEL: Record<RowState["choice"], PlainMessageKey> = {
   exported_path: "configuration.import.choice.exportedPath",
@@ -35,10 +35,10 @@ const CHOICE_LABEL: Record<RowState["choice"], PlainMessageKey> = {
 
 /** Where the daemon found the project on its own host, which is what its preselected choice follows. A project
  * found nowhere has no line: its name carries a warning mark instead. */
-const STATE: Record<OfferedChoice, { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
-  exported_path: { label: "configuration.import.project.state.exportedPath", icon: CircleCheck, tone: "text-success-soft-foreground" },
-  default_clone_dir: { label: "configuration.import.project.state.defaultCloneDir", icon: CircleCheck, tone: "text-success-soft-foreground" },
-  clone: { label: "configuration.import.project.state.clone", icon: CloudDownload, tone: "text-accent-soft-foreground" },
+const STATE: Record<OfferedChoice, StatusEntry> = {
+  exported_path: { label: "configuration.import.project.state.exportedPath", icon: CircleCheck, tone: STATUS_TONE.success },
+  default_clone_dir: { label: "configuration.import.project.state.defaultCloneDir", icon: CircleCheck, tone: STATUS_TONE.success },
+  clone: { label: "configuration.import.project.state.clone", icon: CloudDownload, tone: STATUS_TONE.accent },
 };
 
 const APPLY_ALL: {
@@ -105,7 +105,7 @@ function ProjectRow({
           </span>
           {state && (
             <span className="flex items-center gap-1.5 text-sm text-app-muted">
-              <state.icon aria-hidden="true" className={`size-3.5 shrink-0 ${state.tone}`} />
+              <StatusGlyph entry={state} size="size-3.5" />
               <Message id={state.label} />
             </span>
           )}
@@ -155,20 +155,17 @@ function ConsoleGroup({
   onReview: (review: ReviewState) => void;
 }): React.ReactElement {
   const t = useT();
-  const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className={CARD_CLASS}>
-      <div className={`flex flex-col gap-1.5 ${CARD_HEADER_CLASS}`}>
-        <div className="flex flex-wrap items-center gap-x-2">
-          <div className="flex min-w-0 items-start gap-1">
-            <h3 id={headingId} className="min-w-0 text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
-              {console.name}
-            </h3>
-            <FallbackMark subject={console.name} fallbacks={console.account_fallbacks} size="text-base" />
+    <Card
+      header={(headingId) => (
+        <div className={`flex flex-col gap-1.5 ${CARD_HEADER_CLASS}`}>
+          <div className="flex flex-wrap items-center gap-x-2">
+            <CardTitle id={headingId} name={console.name} fallbacks={console.account_fallbacks} className="min-w-0" />
+            <span className="text-sm text-app-muted">{t("configuration.import.console.projects", { count: console.projects.length })}</span>
           </div>
-          <span className="text-sm text-app-muted">{t("configuration.import.console.projects", { count: console.projects.length })}</span>
         </div>
-      </div>
+      )}
+    >
       {console.projects.length === 0 ? (
         <p className="px-4 py-3 text-sm text-app-muted">{t("configuration.import.console.noProjects")}</p>
       ) : (
@@ -187,7 +184,7 @@ function ConsoleGroup({
           })}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -243,10 +240,7 @@ export function ImportConsoles({
         <ConsoleGroup key={index} console={console} index={index} review={review} shown={shown} onReview={onReview} />
       ))}
       {cloning && (
-        <p className="flex items-start gap-2 text-sm">
-          <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
-          <span className="min-w-0">{t("configuration.import.review.cloneNote")}</span>
-        </p>
+        <InfoNote>{t("configuration.import.review.cloneNote")}</InfoNote>
       )}
     </>
   );

@@ -1,4 +1,4 @@
-import { consoleAccount } from "../accounts/accountChoices";
+import { consoleAccount } from "../accounts/accountInheritance";
 import { AGENT_SHORT_NAME, defaultAccountName, listedAgents } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";

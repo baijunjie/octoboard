@@ -10,8 +10,9 @@ import type { Agent } from "../../protocol";
 import type { QuotaReading } from "../../quota/useAccountQuota";
 import { loginStateOf } from "../../accounts/quotaFormat";
 import { useDaemonStore } from "../../store";
+import { afterFrames } from "../../components/focus/afterFrames";
 import { ringForAutomaticFocus } from "../../input/touchInput";
-import { accountLoginOf, loginIsActive } from "./AccountLogin";
+import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 
 /** Told, as the login dialog a Log in button opened closes, whether the login succeeded, and the cancel closing it
  * sent, if any. */
@@ -41,19 +42,16 @@ function useLoginFocusReturn(
   const [returning, setReturning] = useState<{ to: "button" | "fallback"; cancelling: boolean }>();
   useEffect(() => {
     if (!returning || returning.cancelling || (returning.to === "button" && active)) return;
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        setReturning(undefined);
-        const opener = button.current;
-        const target = returning.to === "button" && !succeeded && opener ? opener : fallback();
-        const focused = document.activeElement;
-        if (!target || focused === target || (focused !== document.body && !opener?.contains(focused))) return;
-        // The user did not ask for this move, so the destination shows its ring.
-        ringForAutomaticFocus();
-        target.focus();
-      });
+    return afterFrames(2, () => {
+      setReturning(undefined);
+      const opener = button.current;
+      const target = returning.to === "button" && !succeeded && opener ? opener : fallback();
+      const focused = document.activeElement;
+      if (!target || focused === target || (focused !== document.body && !opener?.contains(focused))) return;
+      // The user did not ask for this move, so the destination shows its ring.
+      ringForAutomaticFocus();
+      target.focus();
     });
-    return () => cancelAnimationFrame(frame);
   }, [returning, active, succeeded]);
   return (closedOnSuccess, cancelling) => {
     const next = { to: closedOnSuccess ? "fallback" : "button", cancelling: cancelling !== undefined } as const;

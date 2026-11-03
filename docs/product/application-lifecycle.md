@@ -156,7 +156,8 @@ WebSocket upgrade, passes two checks in turn:
 
 A dropped connection is retried automatically a couple of times with a short backoff. While that is happening a
 banner says so. Once the attempts are spent, the banner offers a Retry button; nothing retries forever on its own.
-Each new connection re-reads the whole state, so nothing has to be replayed by hand. A request still waiting for its
+Pressing Retry turns the banner back at once to saying it is reconnecting, without the button; a connection that
+fails again is retried automatically as before, and Retry is offered again once those attempts are spent. Each new connection re-reads the whole state, so nothing has to be replayed by hand. A request still waiting for its
 reply when the connection closes, or when it is reopened, is never sent again on the new connection: it fails, saying
 that the connection closed, or that it was reopened before the reply arrived.
 

@@ -10,7 +10,8 @@ import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { sessionColourHex } from "../sessions/sessionColours";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { IS_MAC } from "../input/keys";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
@@ -23,7 +24,7 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 // The clock's own timer would count as pending work in the marquee checks, which these tests do not use it for.
 vi.mock("../format/useNow", () => ({ useNow: () => 0 }));
 
-// Nor `matchMedia`, which `useFlip` asks about reduced motion.
+// Nor `matchMedia`, which `useListMotion` asks about reduced motion.
 window.matchMedia ??= ((query: string) => ({ matches: false, media: query })) as unknown as typeof window.matchMedia;
 
 const main = consoleOf("c-1", "Main");
@@ -54,20 +55,13 @@ const withTeams = [...sessions, lead, underLead, underFree];
 /** `stored` is what the store holds of the console's sessions, which a console session's focus mode's
  * project groups read themselves. */
 function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
-  const daemon: Daemon = {
-    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")] } }),
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const daemon = testDaemon({
+    state: { ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")] } },
+  });
   const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onQuickCreateSession: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSetLocked: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<DaemonProvider value={daemon}>{render(handlers)}</DaemonProvider>));
+  act(() => root.render(<TestHost daemon={daemon}>{render(handlers)}</TestHost>));
   const unmount = () => {
     // A held modifier outlives the view, so a test that leaves it down must not carry it on.
     act(() => void window.dispatchEvent(new Event("blur")));

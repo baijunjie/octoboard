@@ -1,5 +1,19 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
-import type { MessageParams } from "../protocol";
+import {
+  REQUEST_SUPERSEDED,
+  SESSION_BINDING_CHANGED,
+  SESSION_NOT_BOUND,
+  SESSION_NOT_RUNNING,
+  SESSION_REQUEST_ANSWERED,
+  SESSION_REQUEST_NOT_WAITING,
+  SOURCE_CHANGED,
+  TRUST_ANSWER_FAILED,
+  TRUST_NOT_CARRIED_OVER,
+  TRUST_NOT_WAITING,
+  WORKTREE_UNAVAILABLE,
+  pathLinkRefusedCause,
+  type MessageParams,
+} from "../protocol";
 import type { ErrorRecovery } from "./errorRecovery";
 
 /** Where a code comes from: the daemon declares it (`apps/daemon/src/protocol/codes.rs`), `daemon-client.ts` raises it
@@ -22,8 +36,8 @@ export interface MessageFacets {
 export interface CodeRecord extends MessageFacets {
   origin: CodeOrigin;
   /** The remedy the alert gives (`classifyError`). A code with none, nor `causeOnly` or `unexpected`, is not classified
-   * by its code: a failure shown where it is read (a quota reading, a models list, a login) or never raised by the
-   * window. */
+   * by its code: a failure shown where it is read (a quota reading, a models list, a login), or one the client raises
+   * itself and the alert words from its message (`unexpected_reply`). */
   recovery?: ErrorRecovery;
   /** Actionable with no remedy: the alert says why it was refused or failed, never what to do, and names the system's
    * own cause after the sentence. */
@@ -68,8 +82,10 @@ export interface CodeRecord extends MessageFacets {
   defaultAccountParams?: readonly string[];
   /** Params the UI supplies itself (Git, PATH, `~/`, Enter, product names), beneath what the daemon sends. */
   uiParams?: MessageParams;
-  /** The message's params under a variant `messageCode` words it as (`<code>.<variant>`), where they differ from the
-   * code's own. */
+  /** The variant of the code a message with `params` is worded as, `daemon.<code>.<variant>` (see `messageCode`), or
+   * nothing for the code's own message. Each variant it can name has its message in every catalog. */
+  variantOf?: (params: MessageParams) => string | undefined;
+  /** The message's params under a variant `variantOf` names, where they differ from the code's own. */
   variants?: Record<string, MessageFacets>;
 }
 
@@ -78,17 +94,17 @@ export interface CodeRecord extends MessageFacets {
 export const CODES = {
   account_being_removed: { origin: "daemon", causeOnly: true, nameParams: ["name"] },
   account_directory_protected: { origin: "daemon", causeOnly: true },
-  account_directory_shared: { origin: "daemon", causeOnly: true, variants: { account: { nameParams: ["name"] }, project: { nameParams: ["name"] } } },
+  account_directory_shared: { origin: "daemon", causeOnly: true, variants: { account: { nameParams: ["name"] }, project: { nameParams: ["name"] } }, variantOf: (params) => params.kind === "account" || params.kind === "default_account" || params.kind === "project" ? params.kind : undefined },
   // Removing an account with its directory, and a login refused because the account is being removed
   // (`causeOnly`): the alert says only why it was refused or failed, never what to do.
-  account_directory_trash_failed: { origin: "daemon", causeOnly: true, detailBlock: true },
+  account_directory_trash_failed: { origin: "daemon", causeOnly: true, detailBlock: true, variantOf: (params) => ["unanswered", "unreadable", "other_unlooked", "signing_in"].includes(params.cause) ? params.cause : undefined },
   account_disabled: { origin: "daemon", recovery: "accountDisabled", defaultAccountParams: ["account"], nameParams: ["account"] },
   account_has_running_sessions: { origin: "daemon", causeOnly: true, nameParams: ["name"] },
-  account_in_use: { origin: "daemon", recovery: "accountBusy", nameParams: ["name"], variants: { signingIn: { nameParams: ["name"] }, both: { nameParams: ["name"] } } },
+  account_in_use: { origin: "daemon", recovery: "accountBusy", nameParams: ["name"], variants: { signingIn: { nameParams: ["name"] }, both: { nameParams: ["name"] } }, variantOf: (params) => params.signing_in !== "true" ? undefined : /^[1-9]\d*$/.test(params.sessions ?? "") ? "both" : "signingIn" },
   account_name_taken: { origin: "daemon", recovery: "uniqueName", defaultAccountParams: ["name"], nameParams: ["name"] },
   account_not_signed_in: { origin: "daemon", recovery: "accountNotSignedIn", defaultAccountParams: ["account"], nameParams: ["account"] },
   account_order_invalid: { origin: "daemon", recovery: "refresh" },
-  account_quota_exhausted: { origin: "daemon", recovery: "quotaUsedUp", defaultAccountParams: ["account"], nameParams: ["account"], variants: { resets: { nameParams: ["account"] } } },
+  account_quota_exhausted: { origin: "daemon", recovery: "quotaUsedUp", defaultAccountParams: ["account"], nameParams: ["account"], variants: { resets: { nameParams: ["account"] } }, variantOf: (params) => /^\d+$/.test(params.resets_at ?? "") ? "resets" : undefined },
   account_sharing_failed: { origin: "daemon", recovery: "accountSharing", detailBlock: true, summaryForDetail: false, sharingItems: true, nameParams: ["name"] },
   account_sharing_in_progress: { origin: "daemon", recovery: "accountChanging", nameParams: ["name"] },
   account_sharing_repair_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, sharingItems: true, nameParams: ["name"] },
@@ -138,7 +154,7 @@ export const CODES = {
   // meets this.
   export_empty: { origin: "daemon", recovery: "exportSelection" },
   field_required: { origin: "daemon", unexpected: "the window always sends the fields a request needs", codeParams: ["field"] },
-  field_too_long: { origin: "daemon", unexpected: "the forms that send a project's name and description hold them to the daemon's limits", codeParams: ["field"] },
+  field_too_long: { origin: "daemon", unexpected: "the forms that send a project's name and description hold them to the daemon's limits", codeParams: ["field"], variantOf: (params) => params.field === "name" || params.field === "description" ? params.field : undefined },
   file_not_found: { origin: "daemon", recovery: "path", hostPathGone: true, codeParams: ["path"] },
   git_clone_failed: { origin: "daemon", recovery: "gitFailure", detailBlock: true, codeParams: ["cloneCommand"], uiParams: { git: "Git", cloneCommand: "git clone" } },
   git_failed: { origin: "daemon", recovery: "gitFailure", detailBlock: true, uiParams: { git: "Git" } },
@@ -167,8 +183,8 @@ export const CODES = {
   handoff_to_same_agent: { origin: "daemon", unexpected: "the handoff dialog never offers the session's own agent" },
   // The console dialog draws a picked image into a data URL scaled down to the limit, so only an imported
   // configuration carries an avatar that is not an image or is too large.
-  icon_not_an_image: { origin: "daemon", recovery: "avatarImage", variants: { import: { nameParams: ["console_name"] } } },
-  icon_too_large: { origin: "daemon", recovery: "avatarSize", variants: { import: { nameParams: ["console_name"] } } },
+  icon_not_an_image: { origin: "daemon", recovery: "avatarImage", variants: { import: { nameParams: ["console_name"] } }, variantOf: (params) => params.console_name ? "import" : undefined },
+  icon_too_large: { origin: "daemon", recovery: "avatarSize", variants: { import: { nameParams: ["console_name"] } }, variantOf: (params) => params.console_name ? "import" : undefined },
   import_accounts_missing: { origin: "daemon", recovery: "configuration" },
   import_choice_unavailable: { origin: "daemon", recovery: "configuration" },
   import_resolution_invalid: { origin: "daemon", recovery: "configuration" },
@@ -192,7 +208,7 @@ export const CODES = {
   message_acceptance_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   message_discarded_by_dialog: { origin: "daemon" },
   message_diverted_by_view: { origin: "daemon" },
-  message_not_sent: { origin: "daemon", recovery: "unsentMessage", failureNotice: true, alertTitle: true },
+  message_not_sent: { origin: "daemon", recovery: "unsentMessage", failureNotice: true, alertTitle: true, variantOf: (params) => params.submit_retry === "once" ? "retry" : undefined },
   // A relaunch that ends at once with a new model most likely does not take that model, and leaves the session not
   // running.
   model_change_did_not_come_up: { origin: "daemon", recovery: "modelChange" },
@@ -210,12 +226,12 @@ export const CODES = {
   no_repositories_found: { origin: "daemon", recovery: "path", codeParams: ["path"] },
   not_a_git_repository: { origin: "daemon", recovery: "repository", recordIds: ["project"], nameParams: ["project"] },
   not_on_a_branch: { origin: "daemon", recovery: "branch" },
-  outside_scope: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { open: { codeParams: ["path"] } } },
+  outside_scope: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { open: { codeParams: ["path"] } }, variantOf: (params) => params.action === "open" ? "open" : undefined },
   page_not_current: { origin: "daemon", recovery: "refresh" },
   path_already_exists: { origin: "daemon", recovery: "pathExists", codeParams: ["path"] },
   // A path link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is
   // none for the causes whose sentence says it all.
-  path_link_refused: { origin: "daemon", recovery: "none", detailBlock: true, variants: { ambiguous: { codeParams: ["path"] }, launchable: { codeParams: ["path"] }, not_private: { codeParams: ["path"] }, not_a_file_or_folder: { codeParams: ["path"] }, unreadable: { codeParams: ["path"] }, other: { codeParams: ["path"] } } },
+  path_link_refused: { origin: "daemon", recovery: "none", detailBlock: true, variants: { ambiguous: { codeParams: ["path"] }, launchable: { codeParams: ["path"] }, not_private: { codeParams: ["path"] }, not_a_file_or_folder: { codeParams: ["path"] }, unreadable: { codeParams: ["path"] }, other: { codeParams: ["path"] } }, variantOf: (params) => pathLinkRefusedCause(params.cause) },
   path_not_a_directory: { origin: "daemon", recovery: "path", hostPathGone: true, codeParams: ["path"] },
   path_not_absolute: { origin: "daemon", recovery: "path", recoveryLine: true, codeParams: ["path", "tilde"], uiParams: { tilde: "~/" } },
   path_not_found: { origin: "daemon", recovery: "path", hostPathGone: true, codeParams: ["path"] },
@@ -225,12 +241,12 @@ export const CODES = {
   project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"] },
   project_directory_protected: { origin: "daemon", recovery: "trash" },
   project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"] },
-  project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true },
+  project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true, variantOf: (params) => params.cause === "unanswered" || params.cause === "unreadable" ? params.cause : undefined },
   project_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },
   // A push refused because the project's previous one is still running, and says so.
   push_in_progress: { origin: "daemon", recovery: "none" },
   queued_messages_dropped: { origin: "daemon", recovery: "refreshMessages", failureNotice: true, alertTitle: true, recoveryLine: true },
-  queued_messages_lost: { origin: "daemon", recovery: "refreshMessages", recoveryLine: true, variants: { held: {} } },
+  queued_messages_lost: { origin: "daemon", recovery: "refreshMessages", recoveryLine: true, variants: { held: {} }, variantOf: (params) => params.fragment === "held" ? "held" : undefined },
   quick_create_owner_gone: { origin: "ui", recovery: "ownerGone", nameParams: ["name"] },
   quick_create_unavailable: { origin: "ui", recovery: "none" },
   quota_binary_not_found: { origin: "daemon", recoveryLine: true, codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH" } },
@@ -241,7 +257,7 @@ export const CODES = {
   quota_shell_environment_failed: { origin: "daemon", detailBlock: true },
   quota_timed_out: { origin: "daemon" },
   quota_unreadable_reply: { origin: "daemon" },
-  relocation_failed: { origin: "daemon", unexpected: "classified by its `cause`; one the window has no remedy for is unexpected", detailBlock: true, codeParams: ["path"], variants: { thread_record: { codeParams: ["path"] }, kept_staging: { codeParams: ["path", "kept_in"] } } },
+  relocation_failed: { origin: "daemon", unexpected: "classified by its `cause`; one the window has no remedy for is unexpected", detailBlock: true, codeParams: ["path"], variants: { thread_record: { codeParams: ["path"] }, kept_staging: { codeParams: ["path", "kept_in"] } }, variantOf: (params) => params.stage === "thread_record" || params.stage === "kept_staging" ? params.stage : undefined },
   repository_name_missing: { origin: "daemon", recovery: "path", codeParams: ["url"] },
   request_superseded: { origin: "daemon", unexpected: "a browse request given up for a newer one, which the window shows nothing for" },
   request_timed_out: { origin: "client", recovery: "connection" },
@@ -277,7 +293,7 @@ export const CODES = {
   session_waiting_for_user: { origin: "daemon", recovery: "trust", recoveryLine: true },
   session_working: { origin: "daemon", recovery: "wait" },
   sharing_messages_dropped: { origin: "daemon", recovery: "sharingLostMessages", failureNotice: true, alertTitle: true },
-  sharing_resume_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true, nameParams: ["name"], variants: { running: { nameParams: ["name"] } } },
+  sharing_resume_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true, nameParams: ["name"], variants: { running: { nameParams: ["name"] } }, variantOf: (params) => params.still_running === "true" ? "running" : undefined },
   sharing_session_did_not_stop: { origin: "daemon", recovery: "sharingStop", recordIds: ["session"], nameParams: ["session", "name"] },
   shell_environment_timeout: { origin: "daemon", recovery: "shell", detailBlock: true },
   source_changed: { origin: "daemon", recovery: "refresh", recoveryLine: true, codeParams: ["path"] },
@@ -294,7 +310,7 @@ export const CODES = {
   submit_retry_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailBlock: true, codeParams: ["enter"], uiParams: { enter: "Enter" } },
   // A switch whose relaunch ended at once leaves the session interrupted on the account it had, resumable as before.
   switch_did_not_come_up: { origin: "daemon", recovery: "switchRelaunch", recordIds: ["session"], nameParams: ["session"] },
-  terminal_input_lost: { origin: "daemon", recovery: "none", alertTitle: true, detailBlock: true, recoveryLine: true, recordIds: ["session", "shell_terminal"], variants: { session: { nameParams: ["session"] }, shell: { nameParams: ["shell_terminal"] } } },
+  terminal_input_lost: { origin: "daemon", recovery: "none", alertTitle: true, detailBlock: true, recoveryLine: true, recordIds: ["session", "shell_terminal"], variants: { session: { nameParams: ["session"] }, shell: { nameParams: ["shell_terminal"] } }, variantOf: (params) => params.session ? "session" : params.shell_terminal ? "shell" : undefined },
   // One remedy per application the host opens, so each names only the one that failed. `openExternal` is the
   // browser link the UI itself fails to open, raised as an explicit recovery, so no code maps to it.
   terminal_unavailable: { origin: "daemon", recovery: "openTerminal", detailBlock: true, noSummary: true },
@@ -308,6 +324,7 @@ export const CODES = {
   typing_blocked: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   typing_held: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   typing_lost: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true },
+  unexpected_reply: { origin: "client" },
   unknown_account: { origin: "daemon", recovery: "account", recordIds: ["account"], nameParams: ["account"] },
   unknown_branch: { origin: "daemon", recovery: "branch", codeParams: ["branch"] },
   unknown_commit: { origin: "daemon", recovery: "refresh", codeParams: ["commit"] },
@@ -318,10 +335,33 @@ export const CODES = {
   unknown_shell_terminal: { origin: "daemon", recovery: "refresh", recordIds: ["shell_terminal"], nameParams: ["shell_terminal"] },
   unreadable_request: { origin: "daemon", unexpected: "the window sends only requests of the shapes it knows", detailBlock: true },
   unshared_state_database: { origin: "daemon", codeParams: ["path"], nameParams: ["name"] },
-  unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } } },
+  unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } }, variantOf: (params) => params.file_type === "unmerged" ? "unmerged" : undefined },
   upstream_not_a_remote: { origin: "daemon", recovery: "gitFailure" },
   worktree_unavailable: { origin: "daemon", recovery: "branch" },
 } satisfies Record<string, CodeRecord>;
+
+/** A code the registry holds. */
+export type Code = keyof typeof CODES;
+
+// The codes `protocol.ts` names for the client to branch on, which that file cannot check as it imports nothing (its
+// two lists, typed as strings, are held to the registry by `codes.test.ts`).
+[
+  TRUST_NOT_WAITING,
+  TRUST_ANSWER_FAILED,
+  TRUST_NOT_CARRIED_OVER,
+  SESSION_REQUEST_NOT_WAITING,
+  SESSION_REQUEST_ANSWERED,
+  SESSION_NOT_BOUND,
+  SESSION_BINDING_CHANGED,
+  SESSION_NOT_RUNNING,
+  REQUEST_SUPERSEDED,
+  SOURCE_CHANGED,
+  WORKTREE_UNAVAILABLE,
+] satisfies readonly Code[];
+
+/** Every code by its own name, for logic that checks for one: `CODE.trust_answer_failed` fails to type check once the
+ * code is gone from the registry, where a string would go on comparing quietly. */
+export const CODE = Object.fromEntries(Object.keys(CODES).map((code) => [code, code])) as { readonly [C in Code]: C };
 
 /** The record of `code`, or nothing for a code the UI does not know (a daemon newer than this client). */
 export function codeRecord(code: string): CodeRecord | undefined {

@@ -32,6 +32,9 @@ parent render as before, and for most causes the lint reports nothing. In this c
   "run this, report a rejection, then always do that", call `settle` (`packages/ui/src/components/hooks/settle.ts`);
   move any other helper that needs `finally` to module level; build any such value into a local before the `try`.
 - `??=`: write the assignment out.
+- A ternary or logical test the compiler cannot lower: an `||` whose left side holds a ternary or logical inside a call
+  (`[a ? x : undefined, b && y].filter(Boolean).join(" ") || undefined`), or a destructuring with a computed key
+  (`const { [key]: _, ...rest } = obj`). Name the left side in a local first; copy the object and `delete` the key.
 - A `useMemo` or `useCallback` whose body reads more than its dependency list names ("Existing memoization could not be
   preserved"): resolve the values into locals above it and read only those inside.
 - An `eslint-disable` comment for `react-hooks/exhaustive-deps` or `react-hooks/rules-of-hooks` anywhere in the

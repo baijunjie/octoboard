@@ -1,12 +1,13 @@
 import type { Translate } from "../i18n/catalog";
-import type {
-  Account,
-  Agent,
-  AgentAvailability,
-  Console,
-  Launch,
-  Project,
-  Settings,
+import {
+  AGENTS,
+  type Account,
+  type Agent,
+  type AgentAvailability,
+  type Console,
+  type Launch,
+  type Project,
+  type Settings,
 } from "../protocol";
 
 /** Display labels for the three supported agents (see "Rows, names and keyboard focus" in
@@ -32,9 +33,7 @@ export const AGENT_INSTALL_URL: Record<Agent, string> = {
   grok: "https://docs.x.ai/build/overview",
 };
 
-export const AGENT_OPTIONS: { value: Agent; label: string }[] = (Object.keys(AGENT_LABEL) as Agent[]).map(
-  (value) => ({ value, label: AGENT_LABEL[value] }),
-);
+export const AGENT_OPTIONS: { value: Agent; label: string }[] = AGENTS.map((value) => ({ value, label: AGENT_LABEL[value] }));
 
 /** The agent's usual config directory, shown as the account form's placeholder. */
 export const AGENT_DEFAULT_CONFIG_DIR: Record<Agent, string> = {
@@ -83,13 +82,13 @@ export type NoAgentReason = "add" | "install";
  * rather than just one, so it reads correctly even so. */
 export function noAgentState(agentAvailability: Map<Agent, AgentAvailability>, added: Agent[] | null): NoAgentReason | undefined {
   if (pickableAgents(agentAvailability, added).length > 0) return undefined;
-  return AGENT_OPTIONS.some((option) => !isAgentUnavailable(agentAvailability, option.value)) ? "add" : "install";
+  return AGENTS.some((agent) => !isAgentUnavailable(agentAvailability, agent)) ? "add" : "install";
 }
 
 /** Every agent: the added ones in their order, then the others in the usual one. */
 export function agentsInListingOrder(added: Agent[] | null): Agent[] {
   const listed = listedAgents(added);
-  return [...listed, ...AGENT_OPTIONS.map((option) => option.value).filter((agent) => !listed.includes(agent))];
+  return [...listed, ...AGENTS.filter((agent) => !listed.includes(agent))];
 }
 
 /** The agents a dialog lists where an agent is chosen or configured: those that may be picked, in
@@ -181,7 +180,7 @@ export function projectSessionAgent(owner: Pick<Console, "default_agent" | "proj
 /** The agents Settings lists and an account may be set up for: the added ones in their order, or every agent while
  * the daemon has not decided the list (`added_agents` is `null`), which must not be read as "none added". */
 export function listedAgents(added: Agent[] | null): Agent[] {
-  return added ?? AGENT_OPTIONS.map((option) => option.value);
+  return added ?? [...AGENTS];
 }
 
 /** The options of a picker that is not about using an agent but about setting one up (an account
@@ -202,7 +201,7 @@ export function agentSetupOptions(
  * even with no account of its own; within an agent the accounts keep the order they are stored in. */
 export function accountsByAgent(
   accounts: Account[],
-  agents: Agent[] = AGENT_OPTIONS.map((option) => option.value),
+  agents: readonly Agent[] = AGENTS,
 ): { agent: Agent; accounts: Account[] }[] {
   return agents.map((agent) => ({ agent, accounts: accounts.filter((a) => a.agent === agent) }));
 }

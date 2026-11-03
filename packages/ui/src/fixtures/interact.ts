@@ -303,7 +303,7 @@ export interface Ui {
    * the tooltip that opens is not a status's (an expanded row, which draws no
    * marker, has none to hover), rather than leave whatever else was hovered up. The row's git badge
    * is a `role="presentation"` trigger as well, and the two are told apart by nothing but their
-   * order in the row: the badge comes before the marker (`Sidebar.tsx`), which `hoverGitBadge`
+   * order in the row: the badge comes before the marker (`ProjectNode.tsx`), which `hoverGitBadge`
    * avoids by matching the state glyph instead. */
   hoverStatusMarker: (host: Matcher) => Promise<void>;
   /** Moves the pointer onto the first control named `matcher` and leaves it there, as `hoverIndicator`

@@ -6,7 +6,7 @@ import { en } from "../i18n/messages/en";
 import { usePlatform } from "../platform/react";
 import { toAccelerator } from "../shortcuts/binding";
 import { useBinding } from "../shortcuts/store";
-import { useSerialPush } from "./useSerialPush";
+import { useSerialPush } from "../components/hooks/useSerialPush";
 
 /** The labels the shell's menu takes, every `menu.*` message; the shell reads each back under the
  * same key. */

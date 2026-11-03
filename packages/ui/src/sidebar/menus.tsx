@@ -1,6 +1,7 @@
 import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
-import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accounts/accountChoices";
+import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
+import type { QuotaReadings } from "../accounts/choiceEntries";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/menus/menuEntries";
 import { ExternalLinkIcon } from "../components/text/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/icons/RepositoryIcon";
@@ -273,7 +274,7 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * an archived session (listed in focus mode) and one never used offer deleting instead.
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
  * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
- * project session's row and a console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) —
+ * project session's row and a console session's row (`ConsoleSessionsSection` in `ConsoleView.tsx`) —
  * this is also where the user switches a console session's account. Focus mode is
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
  * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over.

@@ -1,4 +1,4 @@
-import { type Console, type Project, type Session, type Settings } from "../protocol";
+import { type Console, type Project, type Session } from "../protocol";
 import { runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitching, type ShownStatusKind } from "./sessionStatus";
 
 /** How soon a session wants a person: the ones that need someone to act or look come first (a raised
@@ -25,11 +25,6 @@ export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switchin
 function outcomeKind(session: Pick<Session, "has_conversation" | "prompt_on_launch">): "working" | "done" | "idle" {
   if (session.prompt_on_launch) return "working";
   return session.has_conversation ? "done" : "idle";
-}
-
-/** Whether the sidebar ranks sessions and projects by status (`Settings.sidebar_order_by_status`). */
-export function ordersByStatus(settings: Pick<Settings, "sidebar_order_by_status">): boolean {
-  return settings.sidebar_order_by_status;
 }
 
 function rankOf(session: Session, delegating: ReadonlySet<string>): number {
@@ -381,7 +376,7 @@ export function switchStrip(sessions: Session[], consoleId: string, delegating: 
 
 /** The sessions `include` picks, in the order the sidebar tree lists them: console by console, its
  * console sessions first (in the console sessions section's own order), then its projects'
- * sessions in the sidebar's own order; `byStatus` is the sidebar's `ordersByStatus`. */
+ * sessions in the sidebar's own order; `byStatus` is `Settings.sidebar_order_by_status`. */
 export function sessionsInTreeOrder(
   consoles: Console[],
   projects: Project[],

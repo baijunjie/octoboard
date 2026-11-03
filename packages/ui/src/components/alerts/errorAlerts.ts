@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 
 import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "../focus/modalFocus";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorPresentation } from "../../errors/errorPresentation";
 import { errorText } from "../../errors/errorText";
 import { classifyError, type ErrorClassification, type ErrorRecovery } from "../../errors/errorRecovery";
@@ -64,7 +64,7 @@ function viewOf(request: ErrorAlertRequest): { view: ErrorAlertView; signature: 
   const classification = classifications.find((failure) => failure.kind === "unexpected") ?? classifications[0];
   const metadata = failures.map(({ error: source }, index) => [
     classifications[index],
-    source instanceof DaemonRequestError && source.code !== "unexpected_error" ? [source.code, source.message, Object.entries(source.params).sort(([a], [b]) => a.localeCompare(b))] : errorText(errorPresentation(source)),
+    source instanceof CodedError && source.code !== "unexpected_error" ? [source.code, source.message, Object.entries(source.params).sort(([a], [b]) => a.localeCompare(b))] : errorText(errorPresentation(source)),
   ]);
   const signature = JSON.stringify([request.message, request.session, metadata]);
   // The one remedy of every failure the alert is about, if there is one (it can carry a button for it).

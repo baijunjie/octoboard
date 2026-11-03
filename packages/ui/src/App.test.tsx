@@ -41,7 +41,7 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_] }),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(),
+    raiseError: vi.fn(), showNotice: vi.fn(),
   });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>

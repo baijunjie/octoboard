@@ -3,12 +3,11 @@
 // same for both and live here. A project's accounts are the exception, three-state rather than a
 // string, and are held and diffed apart.
 
-import { AGENT_OPTIONS } from "./agents";
-import type { Agent, Launch, LaunchChange, PerAgent, ProjectAccount } from "../protocol";
+import { AGENTS, type Agent, type Launch, type LaunchChange, type LaunchSetting, type PerAgent, type ProjectAccount } from "../protocol";
 
 /** `value` for every agent. */
 function everyAgent<T>(value: (agent: Agent) => T): PerAgent<T> {
-  return Object.fromEntries(AGENT_OPTIONS.map(({ value: agent }) => [agent, value(agent)])) as PerAgent<T>;
+  return Object.fromEntries(AGENTS.map((agent) => [agent, value(agent)])) as PerAgent<T>;
 }
 
 /** What a dialog holds for each agent's account, taken from the stored record's `source`: `null`
@@ -34,7 +33,7 @@ function changedPerAgent<T, C>(
   change: (current: T, initial: T) => C | undefined,
 ): Partial<PerAgent<C>> | undefined {
   const changes: Partial<PerAgent<C>> = {};
-  for (const { value: agent } of AGENT_OPTIONS) {
+  for (const agent of AGENTS) {
     const changed = change(current[agent], initial[agent]);
     if (changed !== undefined) changes[agent] = changed;
   }
@@ -74,7 +73,7 @@ export function changedLaunch(
   mode: "create",
   current: PerAgent<Launch>,
   initial: PerAgent<Launch>,
-): Partial<PerAgent<{ model?: string; effort?: string }>> | undefined;
+): Partial<PerAgent<LaunchSetting>> | undefined;
 export function changedLaunch(
   mode: "update",
   current: PerAgent<Launch>,

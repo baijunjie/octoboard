@@ -63,14 +63,14 @@ const OPEN_DELAY = 250;
 const CLOSE_DELAY = 150;
 
 const request = vi.fn(() => Promise.resolve({} as Event));
-const toastNotice = vi.fn();
+const showNotice = vi.fn();
 const onOpenSettingsAt = vi.fn();
 const language = currentLanguage();
 
 beforeEach(() => {
   act(() => setLanguage("en"));
   request.mockClear();
-  toastNotice.mockClear();
+  showNotice.mockClear();
   onOpenSettingsAt.mockClear();
   overflowing.reports = [];
   // jsdom has no Web Animations, which the popover's exit waits for.
@@ -109,7 +109,7 @@ function mount(
     settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     accountQuotas: [quota("claude", null, "max"), quota("claude", "claude-work", "pro"), quota("codex", null, "plus")],
   });
-  const daemon = testDaemon({ store, request, toastNotice });
+  const daemon = testDaemon({ store, request, showNotice });
   const container = mountForTooltip(
     <DaemonProvider value={daemon}>
       <button type="button" id="before">before</button>
@@ -1268,7 +1268,7 @@ it("closes the panel when Redeem reset is pressed and asks for the confirmation 
   await act(async () => confirm.click());
   expect(request).toHaveBeenCalledWith({ type: "use_codex_reset_credit", account: null });
   // A use that worked keeps the dialog open to show the meters fill, with Done to leave it; no notice.
-  expect(toastNotice).not.toHaveBeenCalled();
+  expect(showNotice).not.toHaveBeenCalled();
   const done = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((candidate) => candidate.textContent === "Done")!;
   expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain("Usage of");
   await act(async () => done.click());
@@ -1317,7 +1317,7 @@ it.each(["nothing_to_reset", "no_credit"] as const)("hands focus to the rail but
   advance(CLOSE_DELAY);
   (document.activeElement as HTMLElement | null)?.blur();
   await act(async () => document.querySelector<HTMLButtonElement>('[role="alertdialog"] button[type=submit]')!.click());
-  expect(toastNotice).toHaveBeenCalled();
+  expect(showNotice).toHaveBeenCalled();
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   (document.activeElement as HTMLElement | null)?.blur();
   advance(100);

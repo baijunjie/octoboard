@@ -12,7 +12,7 @@ import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemon, useDaemonStore } from "../store";
 import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";
 import { archiveNeedsConfirmation, isUnusedSession } from "../sessions/order";
-import { RowIconButton } from "./rows";
+import { RowIconButton } from "../components/rows/RowIconButton";
 import { ShortcutTooltip } from "./sessionShortcuts";
 import type { SidebarHandlers } from "./types";
 

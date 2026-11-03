@@ -4,9 +4,10 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { PlatformAdapter } from "../../platform";
-import { PlatformProvider } from "../../platform/react";
 import type { AccountLogin } from "../../protocol";
-import { createStateStore, DaemonProvider, trackAccountLogin, type Daemon } from "../../store";
+import { trackAccountLogin } from "../../store";
+import { TestHost } from "../../test/TestHost";
+import { testDaemon } from "../../test/testDaemon";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { windowAttention } from "../../components/announce/windowTestSupport";
 import { AccountLoginAnnouncer, useOpenLoginPages } from "./AccountLogin";
@@ -24,8 +25,8 @@ function Opener(): null {
 
 function setup() {
   const open = vi.fn(() => Promise.resolve());
-  const store = createStateStore();
-  const daemon = { store } as Daemon;
+  const daemon = testDaemon();
+  const { store } = daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -33,9 +34,7 @@ function setup() {
     container.remove();
   });
   const mount = () => act(() => root.render(
-    <DaemonProvider value={daemon}>
-      <PlatformProvider value={{ links: { open } } as unknown as PlatformAdapter}><Opener /></PlatformProvider>
-    </DaemonProvider>,
+    <TestHost daemon={daemon} platform={{ links: { open } } as unknown as PlatformAdapter}><Opener /></TestHost>,
   ));
   const unmount = () => act(() => root.render(null));
   const set = (logins: AccountLogin[]) => act(() => store.setState({ accountLogins: logins }));

@@ -11,7 +11,7 @@ import { LabelledGroup } from "../components/form/LabelledGroup";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import type { Console, Event, ExportedConsoles } from "../protocol";
+import type { Console, ExportedConsoles } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
 import { fileFailure } from "./failureText";
@@ -46,7 +46,7 @@ export function ExportConfigurationDialog({
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
-  const { request, toastNotice } = useDaemon();
+  const { request, showNotice } = useDaemon();
   const { configurationFile } = usePlatform();
   const { busy, run } = useDialogAction(undefined, t("configuration.export.alertTitle"));
   const [consoles, setConsoles] = useState<ExportedConsoles>(inHand ? "one" : "all");
@@ -63,14 +63,14 @@ export function ExportConfigurationDialog({
   const submit = () => {
     if (!configurationFile || busy || nothing) return;
     void run(async () => {
-      const reply = (await request({
+      const reply = await request({
         type: "export_configuration",
         console: exported?.id,
         consoles,
         include_settings: includeSettings,
         include_accounts: includeAccounts,
         ...(pathsApply && { include_paths: pathsIncluded }),
-      })) as Extract<Event, { type: "configuration_exported" }>;
+      });
       // The daemon knows nothing of this client's shortcuts: a document with the settings gets them here.
       const file = reply.document.settings
         ? { ...reply.document, settings: { ...reply.document.settings, keyboard_shortcuts: shortcutOverrides.get() } }
@@ -82,7 +82,7 @@ export function ExportConfigurationDialog({
         throw fileFailure(t, err, "configuration.export.couldNotSave");
       }
       if (saved === undefined) return;
-      toastNotice(
+      showNotice(
         saved.kind === "saved" ? t("configuration.export.saved", { name: isolate(saved.name) }) : t("configuration.export.downloaded"),
         saved.kind === "saved" ? <Message id="configuration.export.saved" params={{ name: <InlineReference monospace wrap>{saved.name}</InlineReference> }} /> : undefined,
       );

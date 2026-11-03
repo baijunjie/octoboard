@@ -5,7 +5,7 @@ import React, { useId, useState } from "react";
 import { AGENT_LABEL } from "../agents/agents";
 import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
 import { InlineReference } from "../i18n/InlineReference";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { Message, useT } from "../i18n/react";
 import { TRUST_NOT_CARRIED_OVER, TRUST_NOT_WAITING, TRUST_REFUSED_CODES, type Agent } from "../protocol";
 import { abbreviateHome } from "../format/pathDisplay";
@@ -148,8 +148,8 @@ export function useTrustPromptDialogProps(
         trust_parent_dir: trustParentDir,
       });
     } catch (err) {
-      if (err instanceof DaemonRequestError && TRUST_REFUSED_CODES.includes(err.code)) throw err;
-      if (err instanceof DaemonRequestError && err.code === TRUST_NOT_WAITING) {
+      if (err instanceof CodedError && TRUST_REFUSED_CODES.includes(err.code)) throw err;
+      if (err instanceof CodedError && err.code === TRUST_NOT_WAITING) {
         // Nothing to tell for the plain go-ahead; but a folder the user asked to trust was not.
         if (trustParentDir) {
           raiseError(new ActionableError(t("dialog.trust.alreadyAnswered"), "session"), { title: t("dialog.trust.failedTitle"), keepTitle: true, session: prompt.session });
@@ -157,7 +157,7 @@ export function useTrustPromptDialogProps(
       } else {
         // The answer itself went through when only carrying the trust entry over failed, so that failure keeps its
         // code's own title, the one its session notice has too.
-        const answered = err instanceof DaemonRequestError && err.code === TRUST_NOT_CARRIED_OVER;
+        const answered = err instanceof CodedError && err.code === TRUST_NOT_CARRIED_OVER;
         raiseError(err, { title: t("dialog.trust.failedTitle"), keepTitle: !answered, session: prompt.session });
       }
     }

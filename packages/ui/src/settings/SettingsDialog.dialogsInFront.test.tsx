@@ -5,10 +5,12 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
-import { account, accountLogins, bus, settings } from "./accounts/agentAccountsSectionTestState";
-import { SettingsDialog, type SettingsSectionId } from "./SettingsDialog";
+import type { Daemon, State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { account, accountLogins, settings, startDaemon } from "./accounts/agentAccountsSectionTestState";
+import { SettingsDialog } from "./SettingsDialog";
+import type { SettingsSectionId } from "./sections";
 
-vi.mock("../store", async (importOriginal) => (await import("./accounts/agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/icons/AgentIcon", async (importOriginal) => (await import("./accounts/agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./accounts/agentAccountsSectionTestState")).FadeOverflowStandIn }));
 vi.mock("../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./accounts/agentAccountsSectionTestState")).MarkedPathStandIn }));
@@ -38,6 +40,9 @@ beforeEach(() => {
   });
 });
 
+/** The daemon the dialog under test was opened over. */
+let daemon: Daemon;
+
 /** Opens Settings on the Agent accounts section as a press on a control of another dialog does: that control goes in
  * the same update, so focus has nothing to stay on as Settings and the dialog in front of it mount. */
 function openSettings(navigation: { account?: string; addAgent?: boolean }, strict: boolean) {
@@ -52,11 +57,11 @@ function openSettings(navigation: { account?: string; addAgent?: boolean }, stri
     container.remove();
   });
   const section: SettingsSectionId = "accounts";
-  const dialog = <SettingsDialog navigation={{ nonce: 1, section, addAgent: navigation.addAgent ?? false, account: navigation.account }} onClose={() => {}} />;
+  daemon = startDaemon();
+  const dialog = <TestHost daemon={daemon}><SettingsDialog navigation={{ nonce: 1, section, addAgent: navigation.addAgent ?? false, account: navigation.account }} onClose={() => {}} /></TestHost>;
   act(() => {
     opener.remove();
     root.render(strict ? <StrictMode>{dialog}</StrictMode> : dialog);
-    bus.notify();
   });
 }
 
@@ -96,21 +101,20 @@ describe("closing the account settings dialog View in Settings opened", () => {
     framesAsTimers("virtual");
     openSettings({ account: "codex-work" }, false);
     await settleFrames();
-    settings.accounts = settings.accounts.filter((held) => held.id !== "codex-work");
-    notifyLater();
+    updateLater({ settings: { ...daemon.store.getState().settings, accounts: daemon.store.getState().settings.accounts.filter((held) => held.id !== "codex-work") } });
     await settleFrames();
     expect(dialogCount()).toBe(1);
     expect(document.activeElement).toBe(sectionTab());
   });
 });
 
-/** Tells the section the daemon's state changed the way a push does: outside any press, so React renders what follows
- * in a task of its own, which a frame may come before. */
-function notifyLater() {
+/** Puts `patch` to the store the way a push does: outside any press, so React renders what follows in a task of its
+ * own, which a frame may come before. */
+function updateLater(patch: Partial<State>) {
   const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
   globals.IS_REACT_ACT_ENVIRONMENT = false;
   try {
-    bus.notify();
+    daemon.store.setState(patch);
   } finally {
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   }
@@ -127,8 +131,7 @@ describe("closing the login dialog of a login found running as Settings opens", 
         await settleFrames();
         expect(dialogCount()).toBe(2);
         await pressButton("Cancel login");
-        accountLogins.length = 0;
-        act(() => bus.notify());
+        act(() => daemon.store.setState({ accountLogins: [] }));
         await settleFrames();
         expect(dialogCount()).toBe(1);
         expect(document.activeElement).toBe(sectionTab());
@@ -144,8 +147,7 @@ describe("closing the login dialog of a login found running as Settings opens", 
       openSettings({}, false);
       await settleFrames();
       expect(dialogCount()).toBe(2);
-      accountLogins.splice(0, 1, { ...running, status: outcome });
-      notifyLater();
+      updateLater({ accountLogins: [{ ...running, status: outcome }] });
       await settleFrames();
       expect(dialogCount()).toBe(1);
       expect(document.activeElement).toBe(sectionTab());

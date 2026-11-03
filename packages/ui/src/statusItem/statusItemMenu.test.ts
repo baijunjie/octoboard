@@ -76,6 +76,14 @@ describe("buildStatusItemMenu", () => {
     expect([...iconKeysOf(menu)]).not.toContain("status:working");
   });
 
+  it("orders each section on its own, so a waiting session bound to an idle owner stays where waiting sessions are ordered", () => {
+    const owner = inProject("l", "idle");
+    const bound = sessionOf("m", "c", "p", "m", "waiting_user", { bound_to: "l", started_at: NOW - MINUTE });
+    const older = sessionOf("x", "c", "p", "x", "waiting_user", { started_at: NOW - 60 * MINUTE });
+    const waiting = menuOf([older, bound, owner]).sections.find((section) => section.icon === "status:waiting_user");
+    expect(waiting?.items.map((item) => item.session)).toEqual(["m", "x"]);
+  });
+
   it("keeps a switching session out of the list even when its underlying status is eligible", () => {
     for (const status of ["waiting_user", "idle"] as const) {
       const switching = sessionOf("s", "c", "p", "s", status, { switching_account: true });

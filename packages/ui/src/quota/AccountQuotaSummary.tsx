@@ -4,7 +4,7 @@ import { DotStatusBadge } from "../components/status/DotStatusBadge";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { codedMessageNode, CodedFailureBody } from "../components/alerts/errorParts";
 import { StatusMark } from "../components/status/StatusMark";
-import { daemonMessage } from "../errors/daemonMessage";
+import { daemonMessage, NO_RECORDS } from "../errors/daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";
 import { formatRelativeTime, isJustNow } from "../format/relativeTime";
@@ -12,8 +12,6 @@ import { useNow } from "../format/useNow";
 import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
 import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, twoLayerWindows } from "../accounts/quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
-
-const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 
 /** Why a reading failed, in the current language with the technical literals of its message set
  * apart. None of the quota messages names a record, so none is given. `inMark` is for a popover: the

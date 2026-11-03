@@ -2,7 +2,7 @@ import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { accountDisabled, quotaSignedOut } from "../accounts/accountChoices";
+import { accountDisabled, quotaSignedOut } from "../accounts/choiceEntries";
 import { canSwitchTo } from "./accountSwitchBatch";
 import { AGENT_LABEL } from "../agents/agents";
 import { InlineReference } from "../i18n/InlineReference";

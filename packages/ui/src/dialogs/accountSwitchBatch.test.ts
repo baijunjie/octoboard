@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 
 import { ACCOUNT_SWITCH_CONCURRENCY, runAccountSwitchBatch } from "./accountSwitchBatch";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
@@ -202,7 +202,7 @@ it("keeps a session the daemon says is switching shown as such after a batch let
 it("reports the failures in one alert with the details of a failure that keeps a diagnostic apart", async () => {
   const store = storeOf([session("ok"), session("bad")]);
   await batch(store, ["ok", "bad"], "a-1", async (id) => {
-    if (id === "bad") throw new DaemonRequestError("No space left on device (os error 28)", "relocation_failed", { path: "/home/w/.claude", stage: "copy", detail: "No space left on device (os error 28)" });
+    if (id === "bad") throw new CodedError("No space left on device (os error 28)", "relocation_failed", { path: "/home/w/.claude", stage: "copy", detail: "No space left on device (os error 28)" });
   });
   const [alert] = errorAlerts.getSnapshot();
   expect(errorAlerts.getSnapshot()).toHaveLength(1);
@@ -212,7 +212,7 @@ it("reports the failures in one alert with the details of a failure that keeps a
 
 it("does not merge the alerts of two batches to different accounts", async () => {
   const store = storeOf([session("a")]);
-  const fail = async () => { throw new DaemonRequestError("Session is locked", "session_locked", {}); };
+  const fail = async () => { throw new CodedError("Session is locked", "session_locked", {}); };
   await runAccountSwitchBatch(store, ["a"], "a-1", { accountName: "Work", switchOne: fail });
   await runAccountSwitchBatch(store, ["a"], "a-2", { accountName: "Home", switchOne: fail });
   expect(errorAlerts.getSnapshot()).toHaveLength(2);
@@ -220,7 +220,7 @@ it("does not merge the alerts of two batches to different accounts", async () =>
 
 it("gives a failure with nothing raw to show no details, and an unexpected one its text as details", async () => {
   const store = storeOf([session("a")]);
-  await batch(store, ["a"], "a-1", async () => { throw new DaemonRequestError("Session is locked", "session_locked", {}); });
+  await batch(store, ["a"], "a-1", async () => { throw new CodedError("Session is locked", "session_locked", {}); });
   expect(errorAlerts.getSnapshot()[0].details).toBeFalsy();
   while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   await batch(store, ["a"], "a-1", async () => { throw new Error("Boom"); });
@@ -230,6 +230,6 @@ it("gives a failure with nothing raw to show no details, and an unexpected one i
 
 it("keeps the raw text of a failure the window has no sentence of its own for in the details", async () => {
   const store = storeOf([session("a")]);
-  await batch(store, ["a"], "a-1", async () => { throw new DaemonRequestError("database is locked", "internal_error", { detail: "database is locked" }); });
+  await batch(store, ["a"], "a-1", async () => { throw new CodedError("database is locked", "internal_error", { detail: "database is locked" }); });
   expect(errorAlerts.getSnapshot()[0].details).toBeTruthy();
 });

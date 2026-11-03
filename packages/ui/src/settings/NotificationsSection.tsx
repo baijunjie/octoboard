@@ -19,14 +19,12 @@ export function NotificationsSection(): React.ReactElement {
   const { status, request } = useNotificationPermission();
   useSectionRefocus([status]);
 
-  const open = async () => {
-    try {
-      await notifications?.openSystemSettings?.();
-    } catch (cause) {
-      const pane = t("settings.notifications.systemPane");
-      raiseError(new ActionableError(t("settings.notifications.openFailed", { notifications: pane }), "none", { cause }), { title: t("settings.notifications.openFailedTitle"), content: <Message id="settings.notifications.openFailed" params={{ notifications: <InlineReference dir="auto" wrap>{pane}</InlineReference> }} /> });
-    }
-  };
+  // A promise chain rather than `try`/`catch`, which the React Compiler leaves a function with uncompiled; started inside
+  // it so a synchronous throw from the platform reaches the same `catch`.
+  const open = () => Promise.resolve().then(() => notifications?.openSystemSettings?.()).catch((cause: unknown) => {
+    const pane = t("settings.notifications.systemPane");
+    raiseError(new ActionableError(t("settings.notifications.openFailed", { notifications: pane }), "none", { cause }), { title: t("settings.notifications.openFailedTitle"), content: <Message id="settings.notifications.openFailed" params={{ notifications: <InlineReference dir="auto" wrap>{pane}</InlineReference> }} /> });
+  });
 
   let state: React.ReactNode;
   if (!notifications) state = t("settings.notifications.unavailable");

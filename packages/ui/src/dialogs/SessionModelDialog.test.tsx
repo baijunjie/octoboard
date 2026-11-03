@@ -38,7 +38,7 @@ async function mount(session: Session, models: "pending" | "unavailable" | "empt
     },
     request: request as Daemon["request"],
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
+    showNotice: vi.fn(),
   });
   const { store } = daemon;
   const onClose = vi.fn();

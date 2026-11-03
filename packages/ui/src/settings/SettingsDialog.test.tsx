@@ -5,7 +5,8 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
-import { SettingsDialog, type SettingsSectionId } from "./SettingsDialog";
+import { SettingsDialog } from "./SettingsDialog";
+import type { SettingsNavigation } from "./sections";
 
 beforeEach(() => {
   const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -39,7 +40,7 @@ vi.mock("./AgentBehaviorSection", () => ({ AgentBehaviorSection: () => <p>Agent 
 vi.mock("./NotificationsSection", () => ({ NotificationsSection: () => <p>Notifications</p> }));
 vi.mock("./ConfigurationSection", () => ({ ConfigurationSection: () => <p>Configuration</p> }));
 
-function mount(first: { nonce: number; section: SettingsSectionId | undefined; addAgent: boolean }) {
+function mount(first: SettingsNavigation) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const show = (navigation: typeof first) => act(() => root.render(<SettingsDialog navigation={navigation} onClose={() => {}} />));

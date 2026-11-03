@@ -22,7 +22,7 @@ function fakeDaemon(initial: Partial<State> = {}): Daemon {
     state: initial,
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
+    showNotice: vi.fn(),
   });
 }
 

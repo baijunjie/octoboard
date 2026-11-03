@@ -6,7 +6,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { press } from "../components/alerts/detailsTestSupport";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { isolate } from "../i18n/isolate";
 import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
@@ -27,7 +27,7 @@ function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
     }
     return { type: "ack", id: null };
   });
-  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -120,7 +120,7 @@ it("shows why there is no list as a warning mark after the Model field's label, 
 const modelMark = (container: HTMLElement) => container.querySelector<HTMLElement>("button[data-status-mark][aria-label='Could not load the models']");
 
 it("retains request-refusal metadata for rich model descriptions in the mark's popover while keeping status announcements plain", async () => {
-  const failure = new DaemonRequestError("Plain model request failure", "unknown_account", { account: "missing-account" });
+  const failure = new CodedError("Plain model request failure", "unknown_account", { account: "missing-account" });
   const { toggle, exposedStatuses, wait, container } = mount(failure);
   toggle();
   await wait(PAST_FIRST_WRITE);
@@ -235,7 +235,7 @@ it.each([
     if (reload) return new Promise<never>(() => {});
     return { type: "agent_models", id: null, models: [], unavailable: { code: "agent-not-found", message: "Gone", params: {} } };
   });
-  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), toastNotice: vi.fn() });
+  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });

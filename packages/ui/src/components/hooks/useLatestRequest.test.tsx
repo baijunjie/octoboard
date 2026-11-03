@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createBrowseLane } from "../../browse/lane";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { useLatestRequest, type LatestRequest, type LatestRequestSend } from "./useLatestRequest";
@@ -57,7 +57,7 @@ function mount(onReconnect?: (last: { asked: boolean; lost: boolean }) => void) 
   };
 }
 
-const daemonError = (code: string) => new DaemonRequestError(code, code, {});
+const daemonError = (code: string) => new CodedError(code, code, {});
 
 it("takes the latest request's answer only, whichever answers last", async () => {
   const hook = mount();

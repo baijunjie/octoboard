@@ -2,7 +2,7 @@
 import { act, useState } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { isolate } from "../../i18n/isolate";
 import type { PlatformAdapter } from "../../platform";
@@ -473,7 +473,7 @@ it("hands focus to the row when the cut-short mark it held goes with the listing
 });
 
 it("offers no Try again for a failure that asking again cannot change", () => {
-  const container = render([failedFolder(new DaemonRequestError("outside", "invalid_path", {}))], openFailed);
+  const container = render([failedFolder(new CodedError("outside", "invalid_path", {}))], openFailed);
   pressMark(container.querySelector<HTMLButtonElement>("button[aria-label='Could not list this folder']")!);
   expect([...document.querySelectorAll('[role="dialog"] button')].some((button) => button.textContent === "Try again")).toBe(false);
 });

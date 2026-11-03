@@ -1,34 +1,24 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { DEFAULT_SETTINGS } from "../store";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 import { CloneDirSetting } from "./CloneDirSetting";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn((_body?: { type: string }) => Promise.resolve({}) as Promise<never>);
 
-vi.mock("../store", () => ({
-  useDaemon: () => ({ request, raiseError: () => {} }),
-  useDaemonStore: (selector: (state: { settings: { default_clone_dir: string }; homeDir: string }) => unknown) =>
-    selector({ settings: { default_clone_dir: "/home/dev/Projects" }, homeDir: "/home/dev" }),
-}));
-
 /** Mounts the field and returns its input, with the keys that bubbled past React's own listener on
  * the container to `<body>`, where a dialog portalled there would be waiting for Escape. */
 function mount() {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
   const bubbled: string[] = [];
   const record = (event: KeyboardEvent) => bubbled.push(event.key);
   document.body.addEventListener("keydown", record);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    document.body.removeEventListener("keydown", record);
-    container.remove();
-  });
-  act(() => root.render(<CloneDirSetting />));
+  onTestFinished(() => document.body.removeEventListener("keydown", record));
+  const container = mountHost(<CloneDirSetting />, { daemon: testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, default_clone_dir: "/home/dev/Projects" }, homeDir: "/home/dev" }, request }) });
   const input = container.querySelector("input")!;
   const press = (key: string) =>
     act(() => {

@@ -7,7 +7,7 @@ import { InlineReference } from "../i18n/InlineReference";
 import { codeRecord } from "../errors/codes";
 import { messageCode } from "../errors/daemonMessage";
 import { errorAlerts } from "../components/alerts/errorAlerts";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { hasCodeParams, hasShellTimeoutDetails } from "../errors/errorPresentation";
 import { isUncataloguedFailure } from "../errors/uncataloguedFailure";
 import { additionalRecovery, classifyError, type ErrorRecovery } from "../errors/errorRecovery";
@@ -21,7 +21,7 @@ import { sessionDisplayTitle } from "../sessions/sessionLabel";
 /** A session whose switch failed, and why. */
 export interface SwitchFailure {
   session: Session;
-  error: DaemonRequestError;
+  error: CodedError;
 }
 
 /** Whether the failure is unexpected and the application has no sentence of its own for it (see
@@ -76,7 +76,7 @@ function SessionDetails({ session, content }: { session: Session; content: (labe
 export function reportSwitchFailures(failures: SwitchFailure[], accountName: string): void {
   const count = failures.length;
   // A code's own remedy is said once for the code, and the failures without one share their kind's, once.
-  const specific = new Map<string, DaemonRequestError>();
+  const specific = new Map<string, CodedError>();
   const generic = new Set<ErrorRecovery>();
   for (const { error } of failures) {
     const classification = classifyError(error);

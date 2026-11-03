@@ -243,7 +243,7 @@ export interface StatusItemBarColours {
 }
 
 /** A line of a submenu before its bars are coloured: a window or a meter names its `agent`, whose colour
- * `withIcons` (`lifecycle/statusItemIcons.ts`) takes from the stylesheet; the agent itself is not sent. */
+ * `withIcons` (`statusItem/statusItemIcons.ts`) takes from the stylesheet; the agent itself is not sent. */
 export type StatusItemSubmenuDraftItem =
   | Exclude<StatusItemSubmenuItem, { kind: "window" | "meter" }>
   | ((StatusItemWindow | StatusItemMeter) & { agent: Agent });

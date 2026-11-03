@@ -10,8 +10,8 @@ message catalog. The routes and where each takes the title:
   (`packages/ui/src/components/alerts/raiseError.tsx`): for a failure about no session. They queue the alert directly.
 - `raiseError(error, { title, session?, recovery?, content? })` from `useDaemon()` (`Daemon.raiseError`), and anything
   handed it to call, as `openPathTarget` is: the route for a failure about a session, which only it can name from the
-  store's records, and for code whose tests inject the raiser. Its alert goes through `onToast` and is shown once
-  `Toasts` has mounted.
+  store's records, and for code whose tests inject the raiser. Its alert goes through `onNotification` and is shown
+  once `Toasts` has mounted.
 - `errorAlerts.report({ ... })` called directly: its `title`.
 - `useDialogAction(resetKey, errorTitle)` (`packages/ui/src/components/dialog/dialogHooks.ts`), and the `errorTitle` prop of
   `ConfirmDialog` and `RenameDialog`.
@@ -19,7 +19,7 @@ message catalog. The routes and where each takes the title:
 `title` is a required key of the first two routes' options, but `title: undefined` passes the type check, and
 `errorAlerts.report` takes it as optional: the alert is then titled with the generic "Error" (or "Unexpected error"),
 which says nothing about what failed. Leave it undefined only in the cases `AlertOptions`
-(`packages/ui/src/store/toasts.ts`) lists. Pass a title even where the failure usually carries a code with a
+(`packages/ui/src/store/notifications.ts`) lists. Pass a title even where the failure usually carries a code with a
 `daemon.<code>.alertTitle` of its own: that title wins only where the failure carries it, and the call site's covers
 every other failure the action can return.
 
@@ -36,7 +36,7 @@ record `noSummary: true` (`packages/ui/src/errors/codes.ts`) if it is raised onl
 Applies wherever code in `packages/ui` raises an error alert for a failure it detects or words itself — a lazy chunk
 that did not load, a refused precondition, a clipboard that refused. The alert classifies
 what it is given (`classifyError` in `packages/ui/src/errors/errorRecovery.ts`), and a string, a plain `Error`, or a
-`DaemonRequestError` whose code's record gives no remedy classifies as unexpected: the alert says the failure may be a
+`CodedError` whose code's record gives no remedy classifies as unexpected: the alert says the failure may be a
 bug and asks the user to file an Issue, however ordinary the cause. So raise such a failure as
 `new ActionableError(message, recovery, { cause, detail })`, from `packages/ui/src/errors/actionableError.ts`, or pass the
 `recovery` option of the route that raises it. Use the recovery whose remedy fits, or `"none"` where the alert's body

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import type { Event, RequestBody } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
@@ -14,7 +14,7 @@ import { useResponsibleBranches } from "./useBranchInspections";
 
 const DELAY_MS = 300;
 const detected = (agent: "claude" | "codex"): Event => ({ type: "agent_detected", id: null, agent });
-const connectionClosed = () => new DaemonRequestError("connection_closed", "connection_closed", {});
+const connectionClosed = () => new CodedError("connection_closed", "connection_closed", {});
 
 /** Renders `use` under a daemon whose requests the test answers itself, one pending request per call. */
 function mount<T>(use: (request: (body: RequestBody) => Promise<Event>) => T) {

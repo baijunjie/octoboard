@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { isolate } from "../../i18n/isolate";
 import type { Event, HistoryMessage, Session, SessionContext } from "../../protocol";
@@ -19,7 +19,7 @@ vi.mock("../../store", () => ({
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
   useSession: (id: string | null | undefined) => (id ? store.sessions.get(id) : undefined),
-  useErrorRecords: (select: (state: typeof store) => unknown) => select(store),
+  useDaemonStoreOrEmpty: (select: (state: typeof store) => unknown) => select(store),
 }));
 vi.mock("../../platform/react", () => ({ usePlatform: () => ({ links: undefined }) }));
 vi.mock("../../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
@@ -214,7 +214,7 @@ it("keeps focus in the view when Try again goes away under it, on the view while
 
 
 it("retains the daemon reason for rich rendering inside the Alert, which announces it once and opens no error alert dialog", async () => {
-  const failure = new DaemonRequestError("Session missing-session was not found.", "unknown_session", { session: "missing-session" });
+  const failure = new CodedError("Session missing-session was not found.", "unknown_session", { session: "missing-session" });
   const container = await mount(failure);
   expect(container.querySelector("code")?.textContent).toBe("missing-session");
   expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);

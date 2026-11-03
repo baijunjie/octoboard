@@ -2,7 +2,7 @@
 import { act } from "react";
 import { expect, it, onTestFinished } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { setLanguage } from "../i18n/language";
 import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../fixtures/builders";
 import { SESSION_REQUEST_NOT_WAITING } from "../protocol";
@@ -131,7 +131,7 @@ it.each([
   { label: "Start session", toasted: 1 },
   { label: "Refuse", toasted: 0 },
 ])("an answer given after the session stopped waiting: $label", async ({ label, toasted }) => {
-  const notWaiting = new DaemonRequestError("no longer waiting", SESSION_REQUEST_NOT_WAITING, { session: "s-1" });
+  const notWaiting = new CodedError("no longer waiting", SESSION_REQUEST_NOT_WAITING, { session: "s-1" });
   const dialog = mount(() => Promise.reject(notWaiting));
   await pressButton(label);
   const toasts = dialog.toasts();
@@ -146,7 +146,7 @@ it.each<{ label: string; params: Record<string, string>; subject: string }>([
   { label: "an error naming none", params: {}, subject: "t-1" },
 ])("an approval of a reopen that fails with $label toasts about the session brought back", async ({ params, subject }) => {
   const reopen: SessionRequest = { ...request, action: "reopen", target: "t-1", reopenedOwners: [] };
-  const failure = new DaemonRequestError("could not be resumed", "session_already_starting", params);
+  const failure = new CodedError("could not be resumed", "session_already_starting", params);
   const dialog = mountPendingQuestionDialog({ sessionRequests: [reopen] }, () => Promise.reject(failure));
   await pressButton("Reopen session");
   expect(dialog.toasts()).toEqual([[failure, { title: "Could not approve the request", keepTitle: true, session: subject }]]);
@@ -154,14 +154,14 @@ it.each<{ label: string; params: Record<string, string>; subject: string }>([
 
 it.each<"reopen" | "resume">(["reopen", "resume"])("an approval of a %s that finds the request no longer waiting toasts about the requester", async (action) => {
   const asked: SessionRequest = { ...request, action, target: "t-1", reopenedOwners: [] };
-  const failure = new DaemonRequestError("no longer waiting", SESSION_REQUEST_NOT_WAITING, { session: "t-9" });
+  const failure = new CodedError("no longer waiting", SESSION_REQUEST_NOT_WAITING, { session: "t-9" });
   const dialog = mountPendingQuestionDialog({ sessionRequests: [asked] }, () => Promise.reject(failure));
   await pressButton(action === "reopen" ? "Reopen session" : "Resume session");
   expect(dialog.toasts()).toEqual([[failure, { title: "Could not approve the request", keepTitle: true, session: "s-1" }]]);
 });
 
 it("an approval of a start that fails toasts about the requesting session", async () => {
-  const failure = new DaemonRequestError("could not start", "launch_failed", { session: "other" });
+  const failure = new CodedError("could not start", "launch_failed", { session: "other" });
   const dialog = mount(() => Promise.reject(failure));
   await pressButton("Start session");
   expect(dialog.toasts()).toEqual([[failure, { title: "Could not approve the request", keepTitle: true, session: "s-1" }]]);
@@ -616,7 +616,7 @@ it("a switch of a session that is archived turns the dialog into a failure modal
 });
 
 it("a refusal that fails keeps the dialog's failure title", async () => {
-  const failure = new DaemonRequestError("could not refuse", "launch_failed", { session: "other" });
+  const failure = new CodedError("could not refuse", "launch_failed", { session: "other" });
   const dialog = mount(() => Promise.reject(failure));
   await pressButton("Refuse");
   expect(dialog.toasts()).toEqual([[failure, { title: "Could not refuse the request", keepTitle: true, session: "s-1" }]]);

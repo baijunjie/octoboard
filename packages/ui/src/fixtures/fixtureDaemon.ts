@@ -1,17 +1,18 @@
-import { DaemonRequestError } from "../daemon-client";
+import { looseRequestSender } from "../requests";
+import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
 import type { Event, RequestBody } from "../protocol";
-import type { Daemon, ToastRequest } from "../store";
-import { broadcastToast, errorToast } from "../store/toasts";
+import type { Daemon, NotificationRequest } from "../store";
+import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, ToastFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies, GIT_REQUESTS } from "./fixtureGit";
 import { createAccountGuards, createAccountReplies } from "./fixtureAccounts";
 import { createConsoleReplies } from "./fixtureConsoles";
-import { createFixtureContext, mergeHandlers } from "./fixtureContext";
+import { createFixtureContext, mergeHandlers, neverReplied } from "./fixtureContext";
 import { createFileReplies, FILE_REQUESTS } from "./fixtureFiles";
 import { createProcessLedger, createProcessReplies } from "./fixtureProcesses";
 import { createProjectReplies } from "./fixtureProjects";
@@ -47,18 +48,18 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   const context = createFixtureContext(scenario);
   const { store, git, restored, fail, claudeCompatibilityChoices } = context;
   keepClaudeCompatibilityInEffect(context);
-  const toastListeners = new Set<(toast: ToastRequest) => void>();
-  const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
+  const toastListeners = new Set<(toast: NotificationRequest) => void>();
+  const emitToast = (toast: NotificationRequest) => toastListeners.forEach((listener) => listener(toast));
   let toastsRaised = false;
   let markToastsRaised!: () => void;
   const scenarioToastsRaised = new Promise<void>((resolve) => (markToastsRaised = resolve));
 
   /** The toast a fixture stands for, made by the code the real route uses. */
-  const scenarioToast = (fixture: ToastFixture): ToastRequest => {
+  const scenarioToast = (fixture: ToastFixture): NotificationRequest => {
     const worded = (message: string | ((t: Translate) => string)) => (typeof message === "function" ? message(t) : message);
     switch (fixture.kind) {
       case "broadcast":
-        return broadcastToast(fixture.event, store.getState(), currentLanguage());
+        return broadcastNotification(fixture.event, store.getState(), currentLanguage());
       case "notice":
         return { kind: "notice", message: worded(fixture.message) };
       case "raised": {
@@ -66,9 +67,9 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
         const fallback = worded(fixture.message);
         const { code, params = {} } = fixture;
         const error = code
-          ? new DaemonRequestError(daemonMessage(currentLanguage(), code, params, fallback, store.getState()), code, params)
+          ? new CodedError(daemonMessage(currentLanguage(), code, params, fallback, store.getState()), code, params)
           : new Error(fallback);
-        return errorToast(error, { title: worded(fixture.title), session: fixture.session, recovery: fixture.recovery });
+        return errorNotification(error, { title: worded(fixture.title), session: fixture.session, recovery: fixture.recovery });
       }
     }
   };
@@ -101,10 +102,10 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   return {
     store,
     scenarioToastsRaised,
-    request: async (body): Promise<Event> => {
+    request: looseRequestSender(async (body: RequestBody): Promise<Event> => {
       if (body.type === "list_project_branches") {
         const result = scenario.projectBranches?.[body.project];
-        if (result === "pending") return new Promise<Event>(() => {});
+        if (result === "pending") return neverReplied();
         if (result) return fail(result);
       }
       const fromGit = ("project" in body && typeof body.project === "string" ? restored.git.get(body.project) ?? gitReply : gitReply)(body);
@@ -113,11 +114,11 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
       if (fromConfiguration !== undefined) return fromConfiguration;
       const reply = replies[body.type] as ((body: RequestBody) => Event | Promise<Event>) | undefined;
       return reply ? reply(body) : { type: "ack", id: null };
-    },
+    }),
     // The request the real daemon raises, so the title and the raw text an action gives it reach the alert as they do there.
-    raiseError: (error, alert) => emitToast(errorToast(error, alert)),
-    toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
-    onToast: (listener) => {
+    raiseError: (error, alert) => emitToast(errorNotification(error, alert)),
+    showNotice: (message, content) => emitToast({ kind: "notice", message, content }),
+    onNotification: (listener) => {
       toastListeners.add(listener);
       // StrictMode subscribes, unsubscribes and subscribes again; by the time this fires only the
       // last subscription is left.

@@ -3,13 +3,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import type { RequestHandler } from "../../requests";
 import { isolate } from "../../i18n/isolate";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import type { PlatformAdapter } from "../../platform";
 import { RENDER_BUDGETS } from "../code/budgets";
 import { PREFERENCE_KEYS } from "../../preferences/preferenceKeys";
 import { ThemeProvider } from "../../preferences/theme";
-import type { Daemon } from "../../store";
 import type { ViewerSubject } from "../content";
 import { FileViewer } from "../FileViewer";
 import { markdownView } from "./markdownView";
@@ -82,7 +82,7 @@ const markdownFile = (path = "docs/README.md", text = SOURCE): ViewerSubject => 
 async function open(
   subject: ViewerSubject,
   links?: PlatformAdapter["links"],
-  extra?: { location?: Omit<MarkdownLocation, "path">; request?: Daemon["request"] },
+  extra?: { location?: Omit<MarkdownLocation, "path">; request?: RequestHandler },
 ): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -460,13 +460,14 @@ it("shows a project image and does not fetch one that leaves the project", async
       if (body.slot !== "document-image") throw new Error("slot");
       return {
         type: "project_file" as const,
+        id: null,
         project: body.project,
         worktree: null,
         path: body.path,
         source: { kind: "live" as const, root_id: "t", version: "1" },
         file: { size: 8, kind: "binary" as const, media_type: "image/png", text: null, data: png },
       };
-    }) as Daemon["request"],
+    }),
   });
   for (let i = 0; i < 20 && region().querySelector("img") === null; i += 1) {
     await act(() => new Promise((resolve) => setTimeout(resolve, 0)));

@@ -3,11 +3,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { AsideOwner } from "../layout/asideOwner";
 import type { Event, ProcessTree, RequestBody } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import type { ProcessPolling } from "./processPolling";
 import { useProcessPanel } from "./useProcessPanel";
 
@@ -18,12 +19,13 @@ const first = sessionOf("a", console_.id, project.id, "First", "idle");
 const second = sessionOf("b", console_.id, project.id, "Second", "idle");
 const tree = (id: string, session_id?: string): ProcessTree => ({ id, session_id, command: "dev", cwd: "/app", cwd_missing: false, kept: false, started_at: 0, process_count: 1, memory_bytes: 0, ports: [] });
 
-async function mount(request: (body: RequestBody) => Promise<Event>, initialSelection?: string) {
+async function mount(handler: (body: RequestBody) => Promise<Event>, initialSelection?: string) {
   vi.useFakeTimers();
-  const daemon = {
-    store: createStateStore({ projects: new Map([[project.id, project]]), sessions: new Map([[first.id, first], [second.id, second]]) }),
-    request: vi.fn(request), raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
-  } as unknown as Daemon;
+  const request = vi.fn(handler);
+  const daemon = testDaemon({
+    state: { projects: new Map([[project.id, project]]), sessions: new Map([[first.id, first], [second.id, second]]) },
+    request, raiseError: vi.fn(), showNotice: vi.fn(),
+  });
   let owner: AsideOwner = { kind: "project", project: project.id };
   let selected: string | undefined = initialSelection;
   let polling: ProcessPolling = "live";
@@ -32,11 +34,12 @@ async function mount(request: (body: RequestBody) => Promise<Event>, initialSele
   function Probe() { renders++; data = useProcessPanel(owner, selected, polling); return null; }
   const element = document.body.appendChild(document.createElement("div"));
   const root = createRoot(element);
-  const render = async () => act(async () => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
+  const render = async () => act(async () => root.render(<TestHost daemon={daemon}><Probe /></TestHost>));
   await render();
   onTestFinished(() => { act(() => root.unmount()); element.remove(); vi.useRealTimers(); });
   return {
     daemon,
+    request,
     data: () => data,
     renders: () => renders,
     select: async (id: string | undefined) => { selected = id; await render(); },
@@ -59,14 +62,14 @@ it("defaults to all project trees, follows sidebar changes, and preserves a manu
   expect(panel.data().trees).toHaveLength(3);
   await panel.select(first.id);
   expect(panel.data().sessionId).toBe(first.id);
-  expect(vi.mocked(panel.daemon.request).mock.calls).toHaveLength(1);
+  expect(panel.request.mock.calls).toHaveLength(1);
 });
 
 it("does not render again for an unchanged refresh failure, but shows changed diagnostics and clears a recovered warning", async () => {
   let failure: { message: string; code: string; params: Record<string, string>; stack: string } | undefined;
   const panel = await mount(async () => {
     if (failure) {
-      const error = new DaemonRequestError(failure.message, failure.code, { ...failure.params });
+      const error = new CodedError(failure.message, failure.code, { ...failure.params });
       error.stack = failure.stack;
       throw error;
     }
@@ -121,11 +124,11 @@ it("stops polling when inactive, resumes when active, and ignores late answers f
   await act(async () => finish({ type: "processes_listed", id: null, trees: [tree("stale", first.id)] }));
   expect(panel.data().trees?.map((item) => item.id)).toEqual(["console"]);
   await panel.polling("off");
-  const calls = vi.mocked(panel.daemon.request).mock.calls.length;
+  const calls = panel.request.mock.calls.length;
   await act(async () => void vi.advanceTimersByTime(9000));
-  expect(vi.mocked(panel.daemon.request).mock.calls).toHaveLength(calls);
+  expect(panel.request.mock.calls).toHaveLength(calls);
   await panel.polling("live");
-  expect(vi.mocked(panel.daemon.request).mock.calls).toHaveLength(calls + 1);
+  expect(panel.request.mock.calls).toHaveLength(calls + 1);
 });
 
 it("initializes the filter from an already selected session", async () => {
@@ -147,7 +150,7 @@ it("lists every session of a project it is told to show all of, though the selec
 it("polls every 15 seconds in the background and every 3 while live", async () => {
   const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [] }));
   await panel.polling("background");
-  const calls = () => vi.mocked(panel.daemon.request).mock.calls.length;
+  const calls = () => panel.request.mock.calls.length;
   const before = calls();
   await act(async () => void vi.advanceTimersByTime(14000));
   expect(calls()).toBe(before);
@@ -161,7 +164,7 @@ it("polls every 15 seconds in the background and every 3 while live", async () =
 
 it("pauses while the document is hidden and asks at once when it is shown again", async () => {
   const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [] }));
-  const calls = () => vi.mocked(panel.daemon.request).mock.calls.length;
+  const calls = () => panel.request.mock.calls.length;
   let hidden = true;
   vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
   onTestFinished(() => void vi.restoreAllMocks());

@@ -11,7 +11,7 @@ import { StatusMark } from "../../components/status/StatusMark";
 import { PaneFailure } from "../../components/alerts/PaneFailure";
 import { ROW_ICON_BUTTON_CLASS } from "../../components/controls/RowControls";
 import { useHasPainted } from "../../components/motion/useHasPainted";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { InlineReference } from "../../i18n/InlineReference";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
@@ -102,7 +102,7 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
   const t = useT();
   const { source, onRetry } = props;
   const diagnostic = source.state === "loaded" ? source.source.git_error ?? undefined : undefined;
-  const failure = useMemo(() => diagnostic === undefined ? undefined : new DaemonRequestError(diagnostic, "git_unavailable", { detail: diagnostic }), [diagnostic]);
+  const failure = useMemo(() => diagnostic === undefined ? undefined : new CodedError(diagnostic, "git_unavailable", { detail: diagnostic }), [diagnostic]);
   const painted = useHasPainted();
   if (source.state === "loading") return <LoadingState label={t("git.loading")} />;
   if (source.state === "error") return <PaneFailure title={t("git.error.source")} message={source.message} announce={painted} onRetry={onRetry} />;

@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import type { ProcessTree } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import { ProcessCommand, ProcessTreeDetails } from "./ProcessTreeDetails";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -16,8 +17,8 @@ const tree = (extra: Partial<ProcessTree> = {}): ProcessTree => ({
 async function render(element: React.ReactElement): Promise<HTMLElement> {
   const host = document.body.appendChild(document.createElement("div"));
   const root = createRoot(host);
-  const daemon = { store: createStateStore({}) } as unknown as Daemon;
-  await act(async () => root.render(<DaemonProvider value={daemon}>{element}</DaemonProvider>));
+  const daemon = testDaemon();
+  await act(async () => root.render(<TestHost daemon={daemon}>{element}</TestHost>));
   onTestFinished(() => { act(() => root.unmount()); host.remove(); });
   return host;
 }

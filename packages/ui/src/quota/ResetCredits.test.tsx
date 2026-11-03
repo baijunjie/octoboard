@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Event, RequestBody, ResetCredit, ResetCreditOutcome } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import type { Daemon } from "../store";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "./ResetCredits";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -47,22 +48,13 @@ const quotaOf = (reset_credits: AccountQuota["reset_credits"]): AccountQuota => 
 
 function fakeDaemon(quota: AccountQuota, reply: (body: RequestBody) => Promise<Event>) {
   const request = vi.fn(reply);
-  const toastNotice = vi.fn();
-  const store = createStateStore({ accountQuotas: [quota] });
-  const daemon = { store, request, toastNotice, raiseError: vi.fn(), onToast: () => () => {} } as unknown as Daemon;
-  return { daemon, request, toastNotice, store };
+  const showNotice = vi.fn();
+  const daemon = testDaemon({ state: { accountQuotas: [quota] }, request, showNotice, raiseError: vi.fn() });
+  const { store } = daemon;
+  return { daemon, request, showNotice, store };
 }
 
-function mount(daemon: Daemon, ui: React.ReactElement): HTMLElement {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() => root.render(<DaemonProvider value={daemon}>{ui}</DaemonProvider>));
-  return container;
-}
+const mount = (daemon: Daemon, ui: React.ReactElement) => mountHost(ui, { daemon });
 
 const press = (element: Element) => act(() => (element as HTMLElement).click());
 const used = (outcome: ResetCreditOutcome) => (_body: RequestBody) => Promise.resolve({ type: "reset_credit_used", id: null, outcome } as Event);
@@ -102,7 +94,7 @@ const dialogText = () => document.body.querySelector("[role=alertdialog]")?.text
 const submit = () => document.body.querySelector<HTMLButtonElement>("[role=alertdialog] footer > button:last-child, .alert-dialog__footer > button:last-child")!;
 
 it("names the credit, its expiry and what using it does, and uses it on confirmation, then offers Done", async () => {
-  const { daemon, request, toastNotice } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("reset"));
+  const { daemon, request, showNotice } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("reset"));
   const onClose = vi.fn();
   mount(daemon, <UseResetCreditDialog account={null} accountName="Codex Work" onClose={onClose} />);
   const text = dialogText();
@@ -118,7 +110,7 @@ it("names the credit, its expiry and what using it does, and uses it on confirma
   await flush();
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "use_codex_reset_credit", account: null });
   // A use that worked is told in the dialog, which stays open for the meters to fill; no notice, no closing yet.
-  expect(toastNotice).not.toHaveBeenCalled();
+  expect(showNotice).not.toHaveBeenCalled();
   expect(onClose).not.toHaveBeenCalled();
   expect(dialogText()).toContain("Usage reset");
   expect(dialogText()).toContain("Usage of");
@@ -326,12 +318,12 @@ it.each([
   ["nothing_to_reset", "does not need a reset right now."],
   ["no_credit", "has no usage limit resets available."],
 ] as const)("tells the outcome %s in a notice and closes", async (outcome, words) => {
-  const { daemon, toastNotice } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used(outcome));
+  const { daemon, showNotice } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used(outcome));
   const onClose = vi.fn();
   mount(daemon, <UseResetCreditDialog account={null} accountName="Codex Work" onClose={onClose} />);
   press(submit());
   await flush();
-  expect(toastNotice.mock.calls[0][0]).toContain(words);
+  expect(showNotice.mock.calls[0][0]).toContain(words);
   expect(onClose).toHaveBeenCalledOnce();
 });
 
@@ -388,12 +380,9 @@ it("hands focus on two frames after the dialog closed, only if it fell to the pa
 it("hands focus on to nothing once the surface that opened the dialog is gone", async () => {
   const { daemon } = fakeDaemon(quotaOf(undefined), used("reset"));
   const restore = vi.fn();
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => container.remove());
-  act(() => root.render(<DaemonProvider value={daemon}><ClosesOnPress restore={restore} /></DaemonProvider>));
+  const container = mount(daemon, <ClosesOnPress restore={restore} />);
   press(container.querySelector("button")!);
-  act(() => root.unmount());
+  container.render(null);
   await twoFrames();
   expect(restore).not.toHaveBeenCalled();
 });

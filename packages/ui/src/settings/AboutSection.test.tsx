@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { appConfig } from "../appConfig";
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";
-import { PlatformProvider } from "../platform/react";
+import { mountHost } from "../test/mountHost";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { AboutSection } from "./AboutSection";
 
@@ -16,24 +15,14 @@ import { AboutSection } from "./AboutSection";
 vi.mock("../about/ThirdPartyLicensesDialog", () => ({ ThirdPartyLicensesDialog: () => <p>Licenses dialog</p> }));
 
 function mount(platform: PlatformAdapter) {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() =>
-    root.render(
-      <PlatformProvider value={platform}>
-        <LanguageProvider>
-          <UpdatesProvider firstCheckDelayMs={null}>
-            <AboutSection />
-          </UpdatesProvider>
-        </LanguageProvider>
-      </PlatformProvider>,
-    ),
+  return mountHost(
+    <LanguageProvider>
+      <UpdatesProvider firstCheckDelayMs={null}>
+        <AboutSection />
+      </UpdatesProvider>
+    </LanguageProvider>,
+    { platform },
   );
-  return container;
 }
 
 it("names the application and links to its website, repository and issue tracker from the shared config", () => {

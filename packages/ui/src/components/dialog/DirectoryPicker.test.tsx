@@ -10,7 +10,7 @@ import { errorAlerts } from "../alerts/errorAlerts";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
 import { DirectoryPicker, pickerStart } from "./DirectoryPicker";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -289,7 +289,7 @@ it("keeps the user's navigation when the opening listing's walk up to an ancesto
   });
   await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" initialPath="/missing" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
   await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
-  await act(async () => failFirst(new DaemonRequestError("missing", "path_not_found", {})));
+  await act(async () => failFirst(new CodedError("missing", "path_not_found", {})));
   expect(request).toHaveBeenCalledTimes(3);
   await act(async () => answerGo({ type: "dir_listing", id: null, path: "/later", entries: [] }));
   expect((document.querySelector('[aria-label="Directory path"]') as HTMLInputElement).value).toBe("/later");

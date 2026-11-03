@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { ConfirmConsequences } from "../../components/dialog/ConfirmConsequences";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import { SESSION_BINDING_CHANGED, SESSION_NOT_BOUND } from "../../protocol";
@@ -42,7 +42,7 @@ export function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string;
         try {
           await request({ type: "release_session", session: session.id });
         } catch (err) {
-          const code = err instanceof DaemonRequestError ? err.code : undefined;
+          const code = err instanceof CodedError ? err.code : undefined;
           // Refused as changed while still bound (to another owner, which the dialog then names): the user
           // decides again. Once the store shows it unbound there is nothing left to decide.
           if (code === SESSION_NOT_BOUND || (code === SESSION_BINDING_CHANGED && !store.getState().sessions.get(sessionId)?.bound_to)) {

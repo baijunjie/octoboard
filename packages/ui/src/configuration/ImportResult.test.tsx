@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { isolate } from "../i18n/isolate";
-import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { detailsButton, openDetails, press } from "../components/alerts/detailsTestSupport";
@@ -10,7 +9,8 @@ import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { setLanguage } from "../i18n/language";
 import type { Event, ImportedProject } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 import type { Overrides } from "../shortcuts/store";
 import { ImportResult } from "./ImportResult";
 import { documentSettings, openTab, settingLinesOf } from "./testSupport";
@@ -31,17 +31,10 @@ const project = (index: number): ImportedProject => ({
 it("groups a count by the language of the application, not the browser's", () => {
   setLanguage("de");
   onTestFinished(() => setLanguage("en"));
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const consoles = [
     { name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: Array.from({ length: 1200 }, (_, i) => project(i)) },
   ];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} />);
   expect(container.textContent).toContain("1.200 projects created");
 });
 
@@ -50,26 +43,16 @@ const totals = (container: Element, label = "Totals for consoles and projects") 
   Array.from(container.querySelectorAll(`ul[aria-label="${label}"] > li`)).map((li) => li.textContent!.replace(/·$/, ""));
 
 it("says nothing failed once rather than listing zeros, and lists a failure when there is one, each total as a list item", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
+  const container = mountHost(null);
   const render = (status: "created" | "failed") =>
-    act(() =>
-      root.render(
-        <DaemonProvider value={daemon}>
-          <ImportResult
-            result={{
-              type: "configuration_imported",
-              id: null,
-              consoles: [{ name: "C", status, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: status === "failed" ? "not_attempted" : "created" }] }], settings_applied: null, settings_error: null, accounts: null,
-            }}
-          />
-        </DaemonProvider>,
-      ),
+    container.render(
+      <ImportResult
+        result={{
+          type: "configuration_imported",
+          id: null,
+          consoles: [{ name: "C", status, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: status === "failed" ? "not_attempted" : "created" }] }], settings_applied: null, settings_error: null, accounts: null,
+        }}
+      />,
     );
   render("created");
   expect(totals(container)).toEqual(["1 console created", "1 project created", "Nothing failed"]);
@@ -80,19 +63,12 @@ it("says nothing failed once rather than listing zeros, and lists a failure when
 });
 
 it("gives each console a card named by its heading with its own outcome, and a row for each project with its outcome as text", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const consoles = [
     { name: "Fine", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1), { ...project(2), status: "left_out" as const, via: null }] },
     { name: "Broken", status: "failed" as const, console: null, error: { code: "path_not_found", message: "no", params: { path: "/missing" } }, account_fallbacks: [], projects: [{ ...project(3), status: "not_attempted" as const, via: null }] },
     { name: "Empty", status: "created" as const, console: "c-3", error: null, account_fallbacks: [], projects: [] },
   ];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} />);
   expect(container.querySelector("table")).toBeNull();
   const cards = [...container.querySelectorAll("section")];
   expect(cards.map((card) => card.querySelector("h3")!.textContent)).toEqual(["Fine", "Broken", "Empty"]);
@@ -111,13 +87,6 @@ it("gives each console a card named by its heading with its own outcome, and a r
 });
 
 it("colours a row's Details by its line: the warning's beside a reached outcome, danger under a failure", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const failure = { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } };
   const accounts = {
     agents_added: [],
@@ -130,24 +99,17 @@ it("colours a row's Details by its line: the warning's beside a reached outcome,
       ],
     }],
   };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} />);
   const details = (name: string) => detailsButton([...container.querySelectorAll("li")].find((li) => li.textContent?.startsWith(name))!)!;
   expect(details("Work").className).toContain("alert-button--warning-soft");
   expect(details("Sandbox").className).toContain("button--danger-soft");
 });
 
 it("says nothing failed for the consoles and the accounts beside a failure to apply the settings", async () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
   const accounts = { agents_added: [], agents: [{ agent: "claude" as const, default_name_applied: false, accounts: [{ name: "Work", status: "created" as const, account: "a1", error: null, sharing_warning: null }] }] };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_error, settings_applied: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_error, settings_applied: null }} />);
   // The settings failure brings its tab forward; each other region's totals depend on its own failures alone.
   expect(container.textContent).toContain("The application settings could not be applied");
   expect(container.querySelector("[role=tab][aria-selected=true]")!.textContent).toBe("Application settings");
@@ -162,15 +124,8 @@ it("says nothing failed for the consoles and the accounts beside a failure to ap
 it("lists the totals as items of their own in every language, with the dot between them hidden from assistive technology", () => {
   setLanguage("zh-Hans");
   onTestFinished(() => setLanguage("en"));
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} />);
   expect(totals(container, "控制台和项目汇总")).toEqual(["已创建 1 个控制台", "已创建 1 个项目", "没有失败项"]);
   expect(container.querySelectorAll("ul[aria-label=控制台和项目汇总] [aria-hidden=true]")).toHaveLength(2);
 });
@@ -180,16 +135,9 @@ it("announces a failure to apply the settings once focus has settled, with its t
   onTestFinished(() => {
     vi.useRealTimers();
   });
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_error, settings_applied: null, accounts: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_error, settings_applied: null, accounts: null }} />);
   expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
   act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
   expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
@@ -201,9 +149,7 @@ it("announces a failure to apply the settings once focus has settled, with its t
 });
 
 it("opens no error alert for partial import failures: the result screen already shows them", async () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
+  const daemon = testDaemon();
   const result = {
     type: "configuration_imported" as const,
     id: null,
@@ -212,11 +158,7 @@ it("opens no error alert for partial import failures: the result screen already 
     consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Directory unavailable", params: { path: "/missing" } } }] }],
     settings_error: { code: "internal_error", message: "Settings unavailable", params: { detail: "Settings unavailable" } },
   };
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
+  const container = mountHost(<><ImportResult result={result} /><ErrorAlerts daemon={daemon} /></>, { daemon });
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(totals(container)).toEqual(["1 console created", "1 failed"]);
@@ -236,15 +178,9 @@ function settingLines(container: Element): ReturnType<typeof settingLinesOf> {
 }
 
 it("tells of each application setting that was applied, and lists the values of the git workflow, Claude compatibility and agent tags", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
+  const container = mountHost(null);
   const render = (carried: Partial<ImportedSettings>) =>
-    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} /></DaemonProvider>));
+    container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} />);
   render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false });
   expect(container.querySelector("section > h3")?.textContent).toBe("Application settings applied");
   expect(settingLines(container)).toEqual({
@@ -276,15 +212,9 @@ it("tells of each application setting that was applied, and lists the values of 
 });
 
 it("tells what came of the keyboard shortcuts in the settings card, and the ones left out under them", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
+  const container = mountHost(null);
   const render = (shortcuts: { applied: number; skipped: number; overrides: Overrides }) =>
-    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} shortcuts={shortcuts} /></DaemonProvider>));
+    container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} shortcuts={shortcuts} />);
   render({ applied: 2, skipped: 0, overrides: { lock: { code: "KeyK", primary: true, shift: true }, pin: { code: "KeyJ", primary: true, shift: true } } });
   const listed = settingLines(container)["Keyboard shortcuts"];
   expect(listed.badge).toBe("2 changes from the defaults");
@@ -297,18 +227,11 @@ it("tells what came of the keyboard shortcuts in the settings card, and the ones
 });
 
 it("marks a console and a project whose account fell back with a warning mark after the name, the sentence in its popover, and lists no section of them", async () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const consoles = [
     { name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [{ agent: "claude" as const, name: "Work" }], projects: [{ ...project(1), account_fallbacks: [{ agent: "codex" as const, name: "Personal" }] }, { ...project(2), status: "left_out" as const, via: null, account_fallbacks: [{ agent: "codex" as const, name: "Other" }] }] },
     { name: "Broken", status: "failed" as const, console: null, error: null, account_fallbacks: [{ agent: "claude" as const, name: "Gone" }], projects: [] },
   ];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} />);
   expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["C", "Broken"]);
   const marks = [...container.querySelectorAll("section button[data-status-mark]")].filter((button) => button.getAttribute("aria-label")!.startsWith("Accounts not set up for"));
   expect(marks.map((mark) => mark.getAttribute("aria-label"))).toEqual(["C", "P1", "P2", "Broken"].map((name) => `Accounts not set up for ${isolate(name)}`));
@@ -323,13 +246,6 @@ it("marks a console and a project whose account fell back with a warning mark af
 });
 
 it("writes a failed line's reason under its row, with the raw text behind Details and not in the row", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const result = {
     type: "configuration_imported" as const,
     id: null,
@@ -338,7 +254,7 @@ it("writes a failed line's reason under its row, with the raw text behind Detail
     accounts: null,
     consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } } }] }],
   };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={result} />);
   const row = container.querySelector("section li")!;
   // The row reads like the others: the glyph, then the word; the reason is a paragraph of its own under it.
   expect(row.querySelector("svg")).not.toBeNull();
@@ -350,20 +266,13 @@ it("writes a failed line's reason under its row, with the raw text behind Detail
 });
 
 it("shows tabs only for the regions that were imported", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   const tabs = () => Array.from(container.querySelectorAll("[role=tab]")).map((tab) => tab.textContent);
   const accounts = { agents_added: [], agents: [] };
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_applied: null, settings_error: null }} /></DaemonProvider>));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_applied: null, settings_error: null }} />);
   expect(tabs()).toEqual(["Consoles and projects", "Accounts"]);
   // Imported without the consoles, only the accounts are left: one panel, no tab bar.
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} /></DaemonProvider>));
+  container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} />);
   expect(tabs()).toEqual([]);
   expect(container.querySelector("section")).toBeNull();
 });

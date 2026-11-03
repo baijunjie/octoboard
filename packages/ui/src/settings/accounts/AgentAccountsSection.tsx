@@ -13,6 +13,7 @@ import { TitledControl } from "../../components/hint/TitledControl";
 import { InlineReference } from "../../i18n/InlineReference";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { canTakeFocus } from "../../components/focus/regionFocus";
+import { tryEachFrame } from "../../components/focus/tryEachFrame";
 import { useStickyHeadingFocus } from "../../components/scroll/stickyHeadingFocus";
 import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
@@ -21,7 +22,7 @@ import { ringForAutomaticFocus } from "../../input/touchInput";
 import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
 import { AccountSettingsDialog } from "./AccountSettingsDialog";
-import { accountLoginOf, loginIsActive } from "./AccountLogin";
+import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import type { ReturnLoginFocus } from "./AccountLoginButton";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AccountsTable, AccountTableRow, rowActionsTrigger } from "./AccountsTable";
@@ -31,7 +32,9 @@ import { AgentClaudeCompatibilitySetting } from "./AgentClaudeCompatibilitySetti
 import { AgentTagsSetting } from "./AgentTagsSetting";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { RemoveAccountDialog } from "./RemoveAccountDialog";
-import { AgentTabActions, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
+import { AgentTabActions, AgentTabMenu } from "./AgentMenus";
+import { RemoveAgentDialog } from "./RemoveAgentDialog";
+import { useAgentList } from "./useAgentList";
 import { useAccountOrder } from "./useAccountOrder";
 import { DaemonSwitchSetting } from "../DaemonSwitchSetting";
 import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
@@ -58,20 +61,16 @@ const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
  * user did not aim focus there, so the destination shows its ring.
  */
 function handFocusOnceClosed(find: () => HTMLElement | null | undefined): void {
-  let frames = 0;
-  const attempt = () => {
+  tryEachFrame(() => {
     const target = find();
-    if (!canTakeFocus(target)) {
-      if (frames++ < MAX_FRAMES_TO_WAIT_FOR_CLOSE) requestAnimationFrame(attempt);
-      return;
-    }
+    if (!canTakeFocus(target)) return false;
     ringForAutomaticFocus();
     target.focus();
     setTimeout(() => {
       if (document.activeElement !== target && canTakeFocus(target)) target.focus();
     }, 0);
-  };
-  requestAnimationFrame(attempt);
+    return true;
+  }, MAX_FRAMES_TO_WAIT_FOR_CLOSE);
 }
 
 /** An icon-only button for the end of the agent strip, named by `label`, which is also its tooltip: the strip carries

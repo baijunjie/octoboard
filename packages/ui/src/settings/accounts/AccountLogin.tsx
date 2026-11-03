@@ -7,28 +7,19 @@ import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import { useOptionalPlatform } from "../../platform/react";
 import type { AccountLogin, Agent } from "../../protocol";
-import { accountLoginKey, dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
+import { accountKey, accountLoginOf } from "../../accounts/accountRecords";
+import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
 
 /** How long a login that succeeded is kept, for its status region to be announced, before it clears itself: unbroken
  * time with the window attended, started over each time the user comes back, so it is not gone before they are back
  * to hear it. Longer than `AFTER_FOCUS_MOVE_DELAY_MS`, which the announcement waits first. */
 const SUCCESS_SHOWN_MS = 6000;
 
-/** The login of an account (`null` for an agent's default account), if one is running or has just ended. */
-export function accountLoginOf(logins: AccountLogin[], agent: Agent, account: string | null): AccountLogin | undefined {
-  return logins.find((login) => login.agent === agent && login.account === account);
-}
-
 /** The login of an account (`null` for an agent's default account) when it has succeeded, read from the store as it is
  * now: what the account's `AccountLoginAnnouncer` is given. */
 export function useSucceededAccountLogin(agent: Agent, account: string | null): AccountLogin | undefined {
   const login = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, account));
   return login?.status === "succeeded" ? login : undefined;
-}
-
-/** Whether the login has not ended: the CLI is running and the user may cancel it. */
-export function loginIsActive(login: AccountLogin | undefined): boolean {
-  return login !== undefined && (login.status === "starting" || login.status === "waiting");
 }
 
 /** Starts and cancels an account's login (`null` for an agent's default account); each rejects with the daemon's
@@ -70,7 +61,7 @@ export function useOpenLoginPages(): void {
       const url = login.authorization_url;
       if (!url || login.status !== "waiting") continue;
       // Read from the store, not from the render: the effect may run twice for one state.
-      if (!store.getState().loginsStartedHere.includes(accountLoginKey(login.agent, login.account))) continue;
+      if (!store.getState().loginsStartedHere.includes(accountKey(login.agent, login.account))) continue;
       trackAccountLogin(store, login.agent, login.account, false);
       if (login.opened_by_agent) continue;
       void platform?.links?.open(url).catch((cause: unknown) => reportExternalLinkFailure(t, url, cause));

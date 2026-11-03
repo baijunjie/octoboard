@@ -84,7 +84,7 @@ function mountApp(narrow = false) {
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects: [project], sessions }),
     request,
-    raiseError: vi.fn(), toastNotice: vi.fn(),
+    raiseError: vi.fn(), showNotice: vi.fn(),
   });
   mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>

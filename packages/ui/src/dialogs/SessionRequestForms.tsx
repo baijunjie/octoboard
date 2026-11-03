@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useState } from "react";
 
-import { accountDisabledUnavailable, handoffBlock, incompleteAccount, sharingChangeRuns, switchEntries, switchEntryBlock } from "../accounts/accountChoices";
+import { accountDisabledUnavailable, incompleteAccount, sharingChangeRuns } from "../accounts/choiceEntries";
+import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { PathText } from "../components/text/PathText";

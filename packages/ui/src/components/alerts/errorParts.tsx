@@ -1,6 +1,6 @@
 import React from "react";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { errorText } from "../../errors/errorText";
@@ -42,14 +42,14 @@ export function FailureBody({ error, summary }: { error: ErrorPresentation; summ
 
 /** `FailureBody` for a failure worded as `text` in the current language (see `codedMessageNode`). */
 export function CodedFailureBody({ failure, text }: { failure: { code: string; params: MessageParams }; text: string }): React.ReactElement {
-  return <FailureBody error={new DaemonRequestError(text, failure.code, failure.params)} summary={codedMessageNode(failure, text, "summary")} />;
+  return <FailureBody error={new CodedError(text, failure.code, failure.params)} summary={codedMessageNode(failure, text, "summary")} />;
 }
 
 /** A failure worded as `text` (in the current language), as a node: where its message sets some params
  * as code they are set as code, anywhere else it is the text itself. A failure the application has no
  * words for is its generic sentence, and `text`, which is then the raw message, goes to the `details`. */
 export function codedMessageNode(failure: { code: string; params: MessageParams }, text: string, part?: DaemonErrorPart): React.ReactNode {
-  const error = new DaemonRequestError(text, failure.code, failure.params);
+  const error = new CodedError(text, failure.code, failure.params);
   if (part === "details") return errorDetails(error) ?? null;
   if (part === "remedy") return errorRemedy(error) ?? null;
   if (isUncataloguedFailure(failure)) return <DaemonErrorMessage error={error} part={part} />;

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from "react";
 import { useStore } from "zustand/react";
 
-import { sameValue } from "./sameValue";
+import { sameValue } from "../values/sameValue";
 import type { Daemon } from "./connection";
 import { createStateStore, type State } from "./state";
 
@@ -9,12 +9,13 @@ const DaemonContext = createContext<Daemon | undefined>(undefined);
 
 export const DaemonProvider = DaemonContext.Provider;
 
-const EMPTY_ERROR_STORE = createStateStore({});
+const EMPTY_STORE = createStateStore({});
 
-/** Error acknowledgements also render before a daemon provider is available. */
-export function useErrorRecords<T>(selector: (state: State) => T): T {
+/** `useDaemonStore` for what also renders outside a `DaemonProvider` (the error alerts, which can come up before the
+ * daemon is reached): with no daemon, the selector reads an empty state that never changes. */
+export function useDaemonStoreOrEmpty<T>(selector: (state: State) => T): T {
   const daemon = useContext(DaemonContext);
-  return useStore(daemon?.store ?? EMPTY_ERROR_STORE, selector);
+  return useStore(daemon?.store ?? EMPTY_STORE, selector);
 }
 
 /** The requests and actions; they never change, so using this never re-renders. */

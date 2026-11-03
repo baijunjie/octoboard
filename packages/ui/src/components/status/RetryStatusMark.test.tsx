@@ -2,7 +2,7 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { mountForTooltip } from "../hint/tooltipTestSupport";
 import { RetryStatusMark } from "./RetryStatusMark";
 
@@ -35,7 +35,7 @@ it("says the caller's sentence, then the failure, and asks again from Try again,
 });
 
 it("offers no Try again for a failure asking again cannot mend", () => {
-  const container = mountForTooltip(<RetryStatusMark label="Could not list" error={new DaemonRequestError("bad path", "invalid_path", {})} onRetry={() => {}} />);
+  const container = mountForTooltip(<RetryStatusMark label="Could not list" error={new CodedError("bad path", "invalid_path", {})} onRetry={() => {}} />);
   press(container.querySelector("button")!);
   expect(dialog()).not.toBeNull();
   expect(tryAgain()).toBeUndefined();

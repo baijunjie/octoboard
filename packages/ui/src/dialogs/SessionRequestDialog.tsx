@@ -1,9 +1,9 @@
 import React, { useId, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { incompleteAccount } from "../accounts/accountChoices";
+import { incompleteAccount } from "../accounts/choiceEntries";
 import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { joinNodes } from "../i18n/joinPhrases";
@@ -42,10 +42,10 @@ function recordAccount(t: Translate, accounts: Account[], defaultNames: Settings
  * else the target, since the error comes from the target's resume; the requesting session for
  * everything else, including the request no longer waiting. */
 function failureSubject(request: SessionRequest, err: unknown): string {
-  if ((request.action !== "reopen" && request.action !== "resume") || (err instanceof DaemonRequestError && err.code === SESSION_REQUEST_NOT_WAITING)) {
+  if ((request.action !== "reopen" && request.action !== "resume") || (err instanceof CodedError && err.code === SESSION_REQUEST_NOT_WAITING)) {
     return request.session;
   }
-  return (err instanceof DaemonRequestError ? err.params.session : undefined) ?? request.target;
+  return (err instanceof CodedError ? err.params.session : undefined) ?? request.target;
 }
 
 /** What the dialog says: which session asks, and where it is, for a session of which agent where — a
@@ -248,9 +248,9 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
     try {
       await send({ type: "answer_session_request", request_id: request.requestId, approve, ...edits });
     } catch (err) {
-      if (err instanceof DaemonRequestError && err.code === SESSION_REQUEST_ANSWERED) return;
+      if (err instanceof CodedError && err.code === SESSION_REQUEST_ANSWERED) return;
       // Nothing was going to start for a refusal, so the session no longer waiting is no news.
-      if (!approve && err instanceof DaemonRequestError && err.code === SESSION_REQUEST_NOT_WAITING) return;
+      if (!approve && err instanceof CodedError && err.code === SESSION_REQUEST_NOT_WAITING) return;
       raiseError(err, { title: t(approve ? "dialog.sessionRequest.approveFailedTitle" : "dialog.sessionRequest.refuseFailedTitle"), keepTitle: true, session: failureSubject(request, err) });
     }
   };

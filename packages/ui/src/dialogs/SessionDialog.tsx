@@ -3,7 +3,7 @@ import React, { useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { TextTabStrip } from "../components/tabs/TextTabStrip";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { ActionableError } from "../errors/actionableError";
 import { isolate } from "../i18n/isolate";
 import type { MessageKey } from "../i18n/catalog";
@@ -215,7 +215,7 @@ export function SessionDialog({
         overrides,
         appearance,
       })).catch((err: unknown) => {
-        if (err instanceof DaemonRequestError && resuming && RESUME_REFUSALS.has(err.code)) {
+        if (err instanceof CodedError && resuming && RESUME_REFUSALS.has(err.code)) {
           // Anything but a conversation that is not there at all may mean the answer held is stale
           // (it was taken into a session, say), so the daemon is asked again.
           if (err.code !== "conversation_to_resume_not_found") resume.reask();

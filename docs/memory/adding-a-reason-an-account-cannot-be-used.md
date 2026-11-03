@@ -23,8 +23,8 @@ or starts the work anyway where nothing refuses it.
 - Daemon work that spends an account: starting usage windows automatically (`AccountQuotas::kick_allowed` in
   `apps/daemon/src/accounts/quotas/poll.rs`, which both the kick itself and the due mark an on-demand refresh leaves for
   the poller consult).
-- UI rules in `packages/ui/src/accounts/accountChoices.ts`: the choice groups, `avoidUnavailableAccount`,
-  `settledInitialChoice` and the switch-menu entries.
+- UI rules in `packages/ui/src/accounts/`: the choice groups and `isUsable` (`choiceEntries.ts`), `avoidUnavailableAccount` and
+  `settledInitialChoice` (`openingChoice.ts`) and the switch-menu entries (`switchEntries.ts`).
 - UI pickers and flows that use those rules: the new-session dialog (`useLaunchChoice`), quick create
   (`packages/ui/src/dialogs/openSessionRequest.ts`), the switch-account dialog and menu, and the default-account
   pickers of the console dialog (`ConsoleAccountsField.tsx`) and the project dialog. The last two were missed at

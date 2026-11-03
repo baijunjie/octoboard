@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import type { ChangeEntry, CommitChanges, Event, RequestBody, UpstreamInfo, WorktreeInfo } from "../../protocol";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
@@ -368,7 +368,7 @@ it("asks for a comparison that failed in the background again only once a later 
     const index = pending.findIndex((request) => request.body.type === "compare_project_branches");
     expect(index).not.toBe(-1);
     const [request] = pending.splice(index, 1);
-    await act(async () => request.reject(new DaemonRequestError("broken", "git_failed", {})));
+    await act(async () => request.reject(new CodedError("broken", "git_failed", {})));
   };
 
   // The branch moved and the comparison made again fails.
@@ -717,7 +717,7 @@ it("reads the worktrees again for a worktree found gone, the list still being re
   act(() => h.latest.git.view.onBranchChange("topic"));
   const index = pending.findIndex((request) => request.body.type === "list_project_changes");
   const [request] = pending.splice(index, 1);
-  await act(async () => request.reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  await act(async () => request.reject(new CodedError("gone", "worktree_unavailable", { worktree: "w" })));
   expect(h.latest.git.view.uncommitted).toMatchObject({ state: "listed", list: { state: "loading" } });
   expect(asked("get_project_source")).toHaveLength(1);
   // The branch may have gone with its worktree: the branches are read again with the worktrees.
@@ -746,7 +746,7 @@ it("closes an open uncommitted change, saying nothing, once its worktree is foun
   const index = pending.findIndex((request) => request.body.type === "read_project_change");
   expect(pending[index]?.body).toMatchObject({ worktree: "w" });
   const [read] = pending.splice(index, 1);
-  await act(async () => read.reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  await act(async () => read.reject(new CodedError("gone", "worktree_unavailable", { worktree: "w" })));
   expect(h.latest.git.viewer).toBeUndefined();
   expect(h.latest.browser.selectedChange).toBeUndefined();
 });

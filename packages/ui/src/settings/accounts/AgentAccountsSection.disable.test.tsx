@@ -2,13 +2,12 @@
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import type { Account, AccountQuota } from "../../protocol";
 import { accountQuotas, request, settings } from "./agentAccountsSectionTestState";
 import { mount, mountSettings, openDetailsOf, openSettingsOf, rowOf } from "./agentAccountsSectionTestSupport";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 
-vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
 vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
@@ -53,7 +52,7 @@ describe("turning an account off", () => {
 
   it("shows a refusal in an error alert and puts the switch back", async () => {
     const { container } = mount("Codex");
-    request.mockRejectedValueOnce(new DaemonRequestError("unknown", "unknown_account", { account: "codex-work" }));
+    request.mockRejectedValueOnce(new CodedError("unknown", "unknown_account", { account: "codex-work" }));
     await act(async () => disableSwitch(rowOf(container, "codex-work")).click());
     await act(async () => {});
     expect(errorAlerts.getSnapshot()).toHaveLength(1);
@@ -92,15 +91,13 @@ describe("turning an account off", () => {
 
     it("shows the login state and the Log in icon again once the account is turned on", () => {
       accountQuotas.push(signedOut("codex-work"));
-      const { container, render } = mount("Codex");
+      const { container, setAccount } = mount("Codex");
       expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Not logged in"]);
       expect(statusOf(rowOf(container, "codex-work")).querySelector('button[aria-label^="Log in"]')).not.toBeNull();
-      settings.accounts[1]!.disabled = true;
-      render();
+      setAccount("codex-work", { disabled: true });
       expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Disabled"]);
       expect(statusOf(rowOf(container, "codex-work")).querySelector('button[aria-label^="Log in"]')).toBeNull();
-      settings.accounts[1]!.disabled = false;
-      render();
+      setAccount("codex-work", { disabled: false });
       expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Not logged in"]);
     });
 

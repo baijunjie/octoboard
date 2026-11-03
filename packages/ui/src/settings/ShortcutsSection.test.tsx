@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";
-import { PlatformProvider } from "../platform/react";
+import { mountHost } from "../test/mountHost";
 import { eventKey, type Binding } from "../shortcuts/binding";
 import { bindingFor, restoreAllBindings, setBinding } from "../shortcuts/store";
 import { ShortcutsSection } from "./ShortcutsSection";
@@ -17,14 +16,7 @@ import { ShortcutsSection } from "./ShortcutsSection";
 const APP: PlatformAdapter = { kind: "tauri", windowChrome: { leftInset: () => 0, subscribe: () => () => {} }, appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} } };
 
 function mount(platform: PlatformAdapter = { kind: "browser" }) {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() => root.render(<PlatformProvider value={platform}><LanguageProvider><ShortcutsSection /></LanguageProvider></PlatformProvider>));
-  return container;
+  return mountHost(<LanguageProvider><ShortcutsSection /></LanguageProvider>, { platform });
 }
 
 afterEach(() => {

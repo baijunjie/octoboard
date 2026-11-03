@@ -7,7 +7,7 @@ import { LanguageProvider } from "../i18n/react";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { useBackgroundRunSync } from "../lifecycle/useBackgroundRunSync";
 import type { PlatformAdapter } from "../platform";
-import { PlatformProvider } from "../platform/react";
+import { mountHost } from "../test/mountHost";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { GeneralSection } from "./GeneralSection";
 
@@ -24,23 +24,13 @@ function Sync() {
 }
 
 function mount(platform: PlatformAdapter) {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() =>
-    root.render(
-      <PlatformProvider value={platform}>
-        <LanguageProvider>
-          <Sync />
-          <GeneralSection />
-        </LanguageProvider>
-      </PlatformProvider>,
-    ),
+  return mountHost(
+    <LanguageProvider>
+      <Sync />
+      <GeneralSection />
+    </LanguageProvider>,
+    { platform },
   );
-  return container;
 }
 
 beforeEach(() => {

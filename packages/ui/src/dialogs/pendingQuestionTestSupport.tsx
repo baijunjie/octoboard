@@ -33,8 +33,8 @@ export function mountPendingQuestionDialog(
     store: createStateStore(state),
     request: vi.fn(reply) as never,
     raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
+    showNotice: vi.fn(),
+    onNotification: () => () => {},
     // What the real one does, so a prompt answered from the dialog leaves the queue and the next
     // one comes up, as it would in the application.
     dismissTrustPrompt: (session) =>

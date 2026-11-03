@@ -31,7 +31,7 @@ import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useInterfaceLanguageSync } from "./lifecycle/useInterfaceLanguageSync";
-import { useStatusItemMenu } from "./lifecycle/useStatusItemMenu";
+import { useStatusItemMenu } from "./statusItem/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { sessionDisplayTitle } from "./sessions/sessionLabel";
 import { PANEL_ENTRIES } from "./panels/panelRegistry";
@@ -243,7 +243,7 @@ export function App(): React.ReactElement {
   // What the aside showed goes with its owner; focus that was inside it goes to the terminal.
   useEffect(() => refocusIfLost(focusTerminal), [ownerKey(asideOwner)]);
 
-  useWaitingNotifications(consoles, projects, hosts !== undefined);
+  useWaitingNotifications(hosts !== undefined);
   useStatusItemMenu({
     selectedSessionId,
     currentConsoleId: sidebarView.currentConsole?.id,

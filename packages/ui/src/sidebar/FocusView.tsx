@@ -16,17 +16,18 @@ import { hasVisibleContext, SessionContextLabel, SessionRelativeTime } from "../
 import { StatusIcon } from "../components/status/StatusIcon";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useListMotion } from "../components/motion/useListMotion";
+import { STICKY_HEADING_HEIGHT, StickySectionHeading } from "../components/rows/SectionHeading";
+import { NESTED_INSET_CLASS, RowLabel, TreeRow } from "../components/rows/TreeRow";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { isolate } from "../i18n/isolate";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { sessionAccountModelLine, sessionDisplayTitle, sessionRowName, statusLabel } from "../sessions/sessionLabel";
-import { sessionModelLabel } from "../sessions/sessionModel";
+import { sessionAccountModelLine, sessionDisplayTitle, statusLabel } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDelegatingIds, useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../store";
-import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionLaunch, useSessionShownStatus } from "../store";
+import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionShownStatus } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { CountBadge } from "../components/status/CountBadge";
 import { GitBadge } from "./GitBadge";
@@ -35,11 +36,11 @@ import { NewSessionButton } from "./NewSessionButton";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
-import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, ordersByStatus, switchStrip, type SwitchStripEntry } from "../sessions/order";
+import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "../sessions/order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
-import { NESTED_INSET_CLASS, LockButton, PinButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
+import { hasSessionMarks, PinButton, SessionMarkButtons } from "./MarkButtons";
+import { useSessionRowModel } from "./sessionRowModel";
 import type { SidebarHandlers } from "./types";
-import { useFlip } from "./useFlip";
 
 /** The top of either focus view: the back button that leaves focus mode, then whatever the view
  * puts after it. Both views are built from this header, the session cards and the archived list
@@ -128,7 +129,7 @@ export function ProjectFocusView({
   // `useShallow` is needed.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const includeConsoleSessions = projectFocusIncludeConsoleSessions.useValue();
-  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
+  const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
   const delegating = useDelegatingIds();
   const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), delegating, byStatus);
   const byId = new Map(sessions.map((session) => [session.id, session]));
@@ -235,11 +236,11 @@ export function ConsoleSessionFocusView({
 }): React.ReactElement {
   const t = useT();
   // The groups are ordered by how urgent their sessions are, which changes while the view is open.
-  const groupsRef = useFlip<HTMLDivElement>();
+  const groupsRef = useListMotion<HTMLDivElement>();
   // Only the group holding the selected session is told which one it is, so a selection moving
   // between two sessions renders those groups alone.
   const selectedProjectId = useSessionProjectId(selectedSessionId);
-  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
+  const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
   const delegating = useDelegatingIds();
   const groups = focusGroups(projects, sessions, consoleSession.id, delegating, byStatus);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
@@ -291,7 +292,7 @@ export function ConsoleSessionFocusView({
             // The padding covers the cards' shadow so the opaque sticky headings do not paint over it.
             <div ref={groupsRef} className="relative flex flex-col gap-2 pb-1.5">
               {groups.map(({ project }) => (
-                <div key={project.id} data-flip={project.id}>
+                <div key={project.id} data-list-motion={project.id}>
                   <FocusProjectGroup
                     handlers={handlers}
                     console={parentConsole}
@@ -348,31 +349,63 @@ function SwitchStrip({
       {entries.map(({ consoleSession, status }) => {
         const current = consoleSession.id === currentId;
         return (
-          <Button
+          <ConsoleSessionChip
             key={consoleSession.id}
-            data-list-motion={consoleSession.id}
-            size="xs"
-            variant="tertiary"
-            preventFocusOnPress
-            aria-label={t("session.status.named", { name: isolate(sessionDisplayTitle(t, consoleSession)), status: statusLabel(t, status) })}
-            aria-current={current ? "true" : undefined}
-            data-switch-current={current || undefined}
+            session={consoleSession}
+            ariaLabel={t("session.status.named", { name: isolate(sessionDisplayTitle(t, consoleSession)), status: statusLabel(t, status) })}
+            current={current}
             onPress={() => handlers.onSwitchConsoleSession(consoleSession)}
-            // Pill-shaped, so a chip reads as a tag rather than as one of the sidebar's buttons. The
-            // current one is marked by the selected card's border alone, so it keeps the tertiary
+            // The current one is marked by the selected card's border alone, so it keeps the tertiary
             // fill's hover and press feedback; the others have a transparent border so that nothing
             // shifts when it changes.
-            className="max-w-48 shrink-0 rounded-full border border-transparent font-medium data-switch-current:border-accent-soft-foreground"
-          >
-            <BindingBadge owner={consoleSession} decorative />
-            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, consoleSession)}>
-              {sessionDisplayTitle(t, consoleSession)}
-            </FadeOverflow>
-            <TopStatusMarker status={status} />
-          </Button>
+            className="max-w-48 shrink-0 border border-transparent data-switch-current:border-accent-soft-foreground"
+            trailing={<TopStatusMarker status={status} />}
+          />
         );
       })}
     </FadedScroller>
+  );
+}
+
+/** A console session as a pill button: its binding badge, its title fading out when cut, and a
+ * trailing marker. Pill-shaped on purpose, on the sidebar's tinted tertiary fill (`.sidebar-fills`): a
+ * chip reads as a tag, not as one of the sidebar's buttons. `current` marks the chip of the strip's
+ * current session. */
+function ConsoleSessionChip({
+  session,
+  ariaLabel,
+  current,
+  onPress,
+  className,
+  trailing,
+}: {
+  session: Session;
+  ariaLabel: string;
+  current?: boolean;
+  onPress: () => void;
+  className: string;
+  trailing: React.ReactNode;
+}): React.ReactElement {
+  const t = useT();
+  const title = sessionDisplayTitle(t, session);
+  return (
+    <Button
+      data-list-motion={session.id}
+      size="xs"
+      variant="tertiary"
+      preventFocusOnPress
+      aria-label={ariaLabel}
+      aria-current={current ? "true" : undefined}
+      data-switch-current={current || undefined}
+      onPress={onPress}
+      className={`rounded-full font-medium ${className}`}
+    >
+      <BindingBadge owner={session} decorative />
+      <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={title}>
+        {title}
+      </FadeOverflow>
+      {trailing}
+    </Button>
   );
 }
 
@@ -403,7 +436,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const boundHere = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return focusGroupRows(sessionsOf(index.byConsole, parentConsole.id), project, consoleSessionId, index.delegatingIds, ordersByStatus(s.settings));
+    return focusGroupRows(sessionsOf(index.byConsole, parentConsole.id), project, consoleSessionId, index.delegatingIds, s.settings.sidebar_order_by_status);
   });
   const sessions = useProjectSessions(project.id);
   const archived = boundArchivedSessions(sessions, consoleSessionId);
@@ -475,25 +508,15 @@ function BoundElsewhere({
       </p>
       <div ref={ownersRef} className="relative mt-1 flex flex-wrap gap-1">
         {owners.map(({ owner, count: bound }) => (
-          <Button
+          <ConsoleSessionChip
             key={owner.id}
-            data-list-motion={owner.id}
-            size="xs"
-            variant="tertiary"
-            preventFocusOnPress
-            aria-label={t("sidebar.focus.enterConsoleSession", { name: isolate(sessionDisplayTitle(t, owner)), count: bound })}
+            session={owner}
+            ariaLabel={t("sidebar.focus.enterConsoleSession", { name: isolate(sessionDisplayTitle(t, owner)), count: bound })}
             onPress={() => handlers.onFocus({ consoleSession: owner })}
-            // Pill-shaped on purpose, on the sidebar's tinted tertiary fill (`.sidebar-fills`): a chip
-            // reads as a tag, not as one of the sidebar's buttons.
-            className="min-w-0 max-w-full rounded-full font-medium"
-          >
-            <BindingBadge owner={owner} decorative />
-            {/* A name longer than the line is cut rather than pushed past the sidebar's edge. */}
-            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, owner)}>
-              {sessionDisplayTitle(t, owner)}
-            </FadeOverflow>
-            <CountBadge count={bound} />
-          </Button>
+            // A name longer than the line is cut rather than pushed past the sidebar's edge.
+            className="min-w-0 max-w-full"
+            trailing={<CountBadge count={bound} />}
+          />
         ))}
       </div>
     </div>
@@ -502,7 +525,7 @@ function BoundElsewhere({
 
 /** A focus mode's sessions as cards, in the order given, a session bound to a project session inset
  * under its owner. One flat list rather than a list nested inside the owner's card: the reorder
- * animation reads the list's direct children (`useFlip`), so a level of its own would leave a team
+ * animation reads the list's direct children (`useListMotion`), so a level of its own would leave a team
  * unanimated while its statuses change. The moving wrapper supplies an opaque base beneath the
  * card's translucent hover tint, so overlapping cards cannot show each other's text during a
  * reorder. The list's stacking context keeps the summary and archive from painting over cards
@@ -518,11 +541,11 @@ function SessionCards({
   selectedSessionId?: string;
   consoleOwner?: (session: Session) => Session | undefined;
 }): React.ReactElement {
-  const listRef = useFlip<HTMLDivElement>();
+  const listRef = useListMotion<HTMLDivElement>();
   return (
     <div ref={listRef} className="relative z-1 flex flex-col gap-2">
       {sessions.map(({ session, under }) => (
-        <div key={session.id} data-flip={session.id} className={`relative rounded-lg bg-(--panel-row) ${under ? `session-nested-card ${NESTED_INSET_CLASS}` : ""}`}>
+        <div key={session.id} data-list-motion={session.id} className={`relative rounded-lg bg-(--panel-row) ${under ? `session-nested-card ${NESTED_INSET_CLASS}` : ""}`}>
           <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} consoleOwner={consoleOwner?.(session)} />
         </div>
       ))}
@@ -544,7 +567,7 @@ function ArchivedList({
   onViewAll: () => void;
 }): React.ReactElement | null {
   const t = useT();
-  const listRef = useFlip<HTMLDivElement>();
+  const listRef = useListMotion<HTMLDivElement>();
   if (archived.length === 0) return null;
   const preview = archivePreviewSessions(archived);
   return (
@@ -552,12 +575,12 @@ function ArchivedList({
       <StickySectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</StickySectionHeading>
       <div ref={listRef} className="relative flex flex-col gap-0.5">
         {preview.map((session) => (
-          <div key={session.id} data-flip={session.id}>
+          <div key={session.id} data-list-motion={session.id}>
             <ArchivedRow handlers={handlers} session={session} selected={session.id === selectedSessionId} />
           </div>
         ))}
         {archived.length > preview.length && (
-          <div data-flip="view-all">
+          <div data-list-motion="view-all">
             <TreeRow ariaLabel={t("sidebar.archive.viewAll")} onActivate={onViewAll}>
               <List aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
               <RowLabel>
@@ -596,19 +619,13 @@ const SessionCard = memo(function SessionCard({
 }): React.ReactElement {
   const metadataId = useId();
   const t = useT();
-  const language = useCurrentLanguage();
-  const accounts = useDaemonStore((s) => s.settings.accounts);
-  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const hasBound = useHasBoundSessions(session.id);
   const status = useSessionShownStatus(session);
   const rowRef = useRef<HTMLDivElement>(null);
-  const launch = useSessionLaunch(session);
-  const modelLabel = sessionModelLabel(t, session.agent, launch);
-  const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
   // only through the row's name, where it comes last; the account is already in its first part.
-  const name = sessionRowName(t, language, session, { accounts, defaultNames, owners: [under ?? consoleOwner, under && consoleOwner], modelLabel, status });
-  const showPin = session.pinned && !own;
+  const { accounts, defaultNames, launch, modelLabel, name } = useSessionRowModel(session, [under ?? consoleOwner, under && consoleOwner], status);
+  const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   // A console session's card shows its own colour; a project session's shows its console owner's.
   const badgeOwner = own ? session : consoleOwner;
   return (
@@ -626,7 +643,7 @@ const SessionCard = memo(function SessionCard({
         <span className="flex-1" />
         {/* The controls reach 4px past the status line above and below so it keeps the agent line's
             height, leaving the card's top and bottom edges the same distance from their text. */}
-        <RowControls always className="-my-1" fixed={session.locked || showPin ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{showPin && <PinButton shortcut name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
+        <RowControls always className="-my-1" fixed={hasSessionMarks(session, own) ? <SessionMarkButtons handlers={handlers} session={session} hidePin={own} returnFocusTo={rowRef} /> : undefined}>
           <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} placement={own ? "focused" : undefined} />
         </RowControls>
       </RowIconLine>
@@ -668,17 +685,14 @@ function ArchivedRow({
 }): React.ReactElement {
   const metadataId = useId();
   const t = useT();
-  const language = useCurrentLanguage();
-  const accounts = useDaemonStore((s) => s.settings.accounts);
-  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const rowRef = useRef<HTMLDivElement>(null);
-  const launch = useSessionLaunch(session);
+  // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
+  const { accounts, defaultNames, launch, name } = useSessionRowModel(session, [], "archived");
   return (
     <TreeRow
       ref={rowRef}
       describedBy={session.ended_at != null ? metadataId : undefined}
-      // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
-      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [], modelLabel: sessionModelLabel(t, session.agent, launch), status: "archived" })}
+      ariaLabel={name}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >

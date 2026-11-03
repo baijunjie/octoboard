@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { raiseError } from "../components/alerts/raiseError";
 import { appConfig } from "../appConfig";
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { ActionableError } from "../errors/actionableError";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
@@ -97,11 +97,11 @@ it("reports an identical immediate failure again after acknowledgement and retry
 
 it("gives known disk and lock failures specific remedies without bug-report instructions", () => {
   mount();
-  act(() => errorAlerts.report({ message: "No space left on device (os error 28)", error: new DaemonRequestError("No space left on device (os error 28)", "internal_error", {}) }));
+  act(() => errorAlerts.report({ message: "No space left on device (os error 28)", error: new CodedError("No space left on device (os error 28)", "internal_error", {}) }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Free space on the disk");
   expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toContain("This may be a bug");
   act(() => errorAlerts.acknowledge());
-  act(() => errorAlerts.report({ message: "Session locked", error: new DaemonRequestError("Session locked", "session_locked", { session: "s1" }) }));
+  act(() => errorAlerts.report({ message: "Session locked", error: new CodedError("Session locked", "session_locked", { session: "s1" }) }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("choose Unlock");
 });
 
@@ -189,7 +189,7 @@ it("redacts the daemon's record names and home directory from the report", () =>
 
 it("leaves the alert's own words, session and body out of the report", () => {
   mount();
-  const error = new DaemonRequestError("raw", "unexpected_error", {});
+  const error = new CodedError("raw", "unexpected_error", {});
   error.stack = "Error: raw failure\n    at x (tauri://localhost/assets/a.js:1:2)";
   act(() => errorAlerts.report({ message: "Could not save Secret Plan", title: "Saving Secret Plan failed", session: "s-secret", content: <p>Body about Secret Plan</p>, error }));
   const prefilled = reportOf();
@@ -481,7 +481,7 @@ it("shows a failed account-switch batch as prose: the target once, a short reaso
   const sessions = ["one", "two"].map((id) => sessionOf(id, "c-1", "p-1", `Session ${id}`, "idle"));
   const store = createStateStore({ sessions: new Map(sessions.map((s) => [s.id, s])) });
   const switchOne = vi.fn(async () => {
-    throw new DaemonRequestError("No space left on device (os error 28)", "relocation_failed", { path: "/home/w/.claude", detail: "No space left on device (os error 28)" });
+    throw new CodedError("No space left on device (os error 28)", "relocation_failed", { path: "/home/w/.claude", detail: "No space left on device (os error 28)" });
   });
   mount();
   await act(async () => { await runAccountSwitchBatch(store, ["one", "two"], "a-1", { accountName: "Work", switchOne }); });
@@ -520,14 +520,14 @@ it.each([
   ["switch_did_not_come_up", "The session ended as soon as it was relaunched."],
   ["session_did_not_stop", "The session did not stop in time. It may still be running."],
 ])("keeps %s batch rows to the reason, with the session and account state already named", async (code, reason) => {
-  const { alert, visible } = await failedBatch({ a: new DaemonRequestError("raw", code, { session: "a" }) });
+  const { alert, visible } = await failedBatch({ a: new CodedError("raw", code, { session: "a" }) });
   expect(alert.querySelector("li")?.textContent).toBe(`Session a${reason}`);
   expect(visible.match(/stays on its current account/g)).toHaveLength(1);
 });
 
 it("says a code's own remedy once for the code, and not the kind's generic remedy for it", async () => {
-  const unreachable = () => new DaemonRequestError("raw", "config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" });
-  const { visible } = await failedBatch({ a: unreachable(), b: unreachable(), c: new DaemonRequestError("Session is locked", "session_locked", {}) });
+  const unreachable = () => new CodedError("raw", "config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" });
+  const { visible } = await failedBatch({ a: unreachable(), b: unreachable(), c: new CodedError("Session is locked", "session_locked", {}) });
   expect(visible.match(/Recreate it, or point the account at a different directory\./g)).toHaveLength(1);
   expect(visible).not.toContain("correct the path in the dialog");
   expect(visible.match(/Unlock/g)?.length).toBe(1);
@@ -545,7 +545,7 @@ it("gives an unexpected failure a short reason in its row and keeps its stack fo
 });
 
 it("words each stage of a failed conversation copy, and says where an older item is kept", async () => {
-  const stage = (stageName: string, extra: Record<string, string> = {}) => new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: stageName, detail: "disk full", ...extra });
+  const stage = (stageName: string, extra: Record<string, string> = {}) => new CodedError("raw", "relocation_failed", { path: "/t", stage: stageName, detail: "disk full", ...extra });
   const { visible } = await failedBatch({
     a: stage("thread_record"),
     b: stage("kept_staging", { kept_in: "/t/.octoboard-switch/x" }),
@@ -570,7 +570,7 @@ it("puts a wrapped error's message ahead of a stack that has only frames, and a 
   const { details } = await failedBatch({ a: jsc });
   expect(details!.textContent).toContain("Boom happened\nrunBatch@http://localhost/app.js:10:5");
   while (errorAlerts.getSnapshot().length) act(() => errorAlerts.acknowledge());
-  const coded = new DaemonRequestError("Something internal", "internal_error", { detail: "no sentence for this" });
+  const coded = new CodedError("Something internal", "internal_error", { detail: "no sentence for this" });
   const { details: codedDetails } = await failedBatch({ b: coded });
   expect(codedDetails?.textContent ?? "").not.toContain("@http");
 });
@@ -583,7 +583,7 @@ it("puts the message ahead of a stack whose first line only ends the same way as
 });
 
 it("shows no Error details at all when no session has any, rather than every stack together", async () => {
-  const unreachable = () => new DaemonRequestError("raw", "config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" });
+  const unreachable = () => new CodedError("raw", "config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" });
   const first = unreachable();
   first.stack = "frames only";
   const { details } = await failedBatch({ a: first, b: unreachable() });
@@ -591,7 +591,7 @@ it("shows no Error details at all when no session has any, rather than every sta
 });
 
 it("keeps a shell-environment failure's own remedy and shows its command only in the details", async () => {
-  const timeout = new DaemonRequestError("raw", "shell_environment_timeout", { shell: "/bin/zsh", command: "env", timeout: "5" });
+  const timeout = new CodedError("raw", "shell_environment_timeout", { shell: "/bin/zsh", command: "env", timeout: "5" });
   const { visible, details } = await failedBatch({ a: timeout });
   expect(visible).not.toContain("/bin/zsh");
   expect(details!.textContent).toContain("/bin/zsh -l -i -c 'env'");
@@ -608,7 +608,7 @@ it.each([
   ["not_restored", "copy it out of the folder named above"],
 ])("treats a conversation move that failed for %s as something to fix, not as a bug", async (cause, remedy) => {
   const stage = cause === "not_restored" ? "kept_staging" : cause === "symlink" ? "copy" : "thread_record";
-  const failure = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage, cause, detail: "the system's own words", kept_in: "/t/.octoboard-switch/x" });
+  const failure = new CodedError("raw", "relocation_failed", { path: "/t", stage, cause, detail: "the system's own words", kept_in: "/t/.octoboard-switch/x" });
   const { visible, details } = await failedBatch({ a: failure });
   expect(visible).toContain(remedy);
   expect(visible).not.toContain("Report issue");
@@ -617,16 +617,16 @@ it.each([
 });
 
 it("still treats a conversation move with cause other as unexpected, and an os error in its detail as the disk's", async () => {
-  const other = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "odd" });
+  const other = new CodedError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "odd" });
   expect((await failedBatch({ a: other })).visible).toContain("Report issue");
   while (errorAlerts.getSnapshot().length) act(() => errorAlerts.acknowledge());
-  const full = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "No space left on device (os error 28)" });
+  const full = new CodedError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "No space left on device (os error 28)" });
   const { visible } = await failedBatch({ b: full });
   expect(visible).toContain("Free space on the disk");
 });
 
 it("says both remedies when an older item is kept aside and the system also reported a full disk", async () => {
-  const failure = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: "kept_staging", cause: "not_restored", detail: "No space left on device (os error 28)", kept_in: "/t/.octoboard-switch/x" });
+  const failure = new CodedError("raw", "relocation_failed", { path: "/t", stage: "kept_staging", cause: "not_restored", detail: "No space left on device (os error 28)", kept_in: "/t/.octoboard-switch/x" });
   const { visible } = await failedBatch({ a: failure });
   expect(visible).toContain("copy it out of the folder named above");
   expect(visible).toContain("Free space on the disk");
@@ -635,9 +635,9 @@ it("says both remedies when an older item is kept aside and the system also repo
 });
 
 it.each([
-  { case: "an internal error", error: new DaemonRequestError("database is locked", "internal_error", { detail: "database is locked" }), sentence: "Something unexpected went wrong.", raw: "database is locked" },
-  { case: "a code the catalog lacks", error: new DaemonRequestError("a newer daemon's text", "a_newer_code", {}), sentence: "Something unexpected went wrong.", raw: "a newer daemon's text" },
-  { case: "a code whose sentence leaves its detail out", error: new DaemonRequestError("fallback", "git_failed", { detail: "fatal: bad object" }), sentence: "Git could not read this.", raw: "fatal: bad object" },
+  { case: "an internal error", error: new CodedError("database is locked", "internal_error", { detail: "database is locked" }), sentence: "Something unexpected went wrong.", raw: "database is locked" },
+  { case: "a code the catalog lacks", error: new CodedError("a newer daemon's text", "a_newer_code", {}), sentence: "Something unexpected went wrong.", raw: "a newer daemon's text" },
+  { case: "a code whose sentence leaves its detail out", error: new CodedError("fallback", "git_failed", { detail: "fatal: bad object" }), sentence: "Git could not read this.", raw: "fatal: bad object" },
 ])("says $case in the application's own words, the daemon's own text, not this window's stack, behind Error details", ({ error, sentence, raw }) => {
   mount();
   act(() => raiseError(error, { title: undefined }));
@@ -655,7 +655,7 @@ it.each([
 
 it("keeps the sentence of a failure the client raises itself, which is already the application's own words", () => {
   mount();
-  act(() => raiseError(new DaemonRequestError("The request timed out.", "request_timed_out", {}), { title: undefined }));
+  act(() => raiseError(new CodedError("The request timed out.", "request_timed_out", {}), { title: undefined }));
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("The request timed out.");
   expect(alert.textContent).not.toContain("Something unexpected went wrong.");
@@ -663,13 +663,13 @@ it("keeps the sentence of a failure the client raises itself, which is already t
 
 it("adds no remedy line of the failure's kind after a daemon message that says what to do itself", () => {
   mount();
-  act(() => raiseError(new DaemonRequestError("archived", "session_archived", { session: "s1" }), { title: undefined }));
+  act(() => raiseError(new CodedError("archived", "session_archived", { session: "s1" }), { title: undefined }));
   const text = document.querySelector('[role="alertdialog"]')?.textContent;
   expect(text).toContain("Reopen it first.");
   expect(text).not.toContain("Select the current session in the sidebar");
   act(() => errorAlerts.acknowledge());
   // A body of the caller's own says nothing of the daemon's remedy, so the kind's line stays.
-  act(() => raiseError(new DaemonRequestError("archived", "session_archived", { session: "s1" }), { title: undefined, content: <p>Archived.</p> }));
+  act(() => raiseError(new CodedError("archived", "session_archived", { session: "s1" }), { title: undefined, content: <p>Archived.</p> }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Select the current session in the sidebar");
 });
 

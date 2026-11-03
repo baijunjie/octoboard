@@ -43,6 +43,19 @@ type Stage =
  * dismissed: a browser reports the chosen file just after the focus returns. */
 const FOCUS_GRACE_MS = 500;
 
+/** Runs the platform's file picker: what it returns, or `undefined` once `failed` has been told why it threw; `settled`
+ * runs either way. A function of its own because the React Compiler skips whatever holds a `try` with a `finally`. */
+async function settleOpen<T>(open: () => Promise<T>, failed: (err: unknown) => void, settled: () => void): Promise<T | undefined> {
+  try {
+    return await open();
+  } catch (err) {
+    failed(err);
+    return undefined;
+  } finally {
+    settled();
+  }
+}
+
 /** The regions checked on opening a review: the application settings change how this machine behaves rather than add
  * something to it, so they start unchecked. */
 const DEFAULT_CHECKED: Record<Region, boolean> = { consoles: true, accounts: true, settings: false };
@@ -121,18 +134,18 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     const picker = ++pickerRef.current;
     waitingRef.current = true;
     setWaiting(true);
-    let opened;
-    try {
-      opened = await configurationFile.open();
-    } catch (err) {
-      if (picker === pickerRef.current) raiseError(fileFailure(t, err, "configuration.import.couldNotRead"), { title: t("configuration.import.alertTitle") });
-      return;
-    } finally {
-      if (picker === pickerRef.current) {
-        waitingRef.current = false;
-        setWaiting(false);
-      }
-    }
+    const opened = await settleOpen(
+      () => configurationFile.open(),
+      (err) => {
+        if (picker === pickerRef.current) raiseError(fileFailure(t, err, "configuration.import.couldNotRead"), { title: t("configuration.import.alertTitle") });
+      },
+      () => {
+        if (picker === pickerRef.current) {
+          waitingRef.current = false;
+          setWaiting(false);
+        }
+      },
+    );
     if (!opened || picker !== pickerRef.current) return;
     void run(async () => {
       let document: unknown;
@@ -147,7 +160,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         });
         return;
       }
-      const inspection = (await request({ type: "inspect_configuration", document })) as Inspection;
+      const inspection = await request({ type: "inspect_configuration", document });
       setReview(initialReview(inspection.consoles));
       setAccountReview(initialAccountReview(inspection.accounts));
       setChecked(DEFAULT_CHECKED);
@@ -172,7 +185,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       return;
     }
     void run(async () => {
-      const result = (await request({
+      const result = await request({
         type: "import_configuration",
         document: stage.document,
         resolutions: importingConsoles ? resolutionsOf(review) : [],
@@ -180,7 +193,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         // Absent means true, so only a refusal is spelled out.
         ...(inFile.includes("consoles") && !importingConsoles && { apply_consoles: false }),
         ...(creatingAccounts && { apply_accounts: true, account_resolutions: accountResolutionsOf(accounts, accountReview) }),
-      })) as Imported;
+      });
       // The daemon applied the settings it knows and echoed the shortcuts it passes through, which are this
       // client's own to apply: it does so only for what the daemon says it applied.
       const carried = shortcutsRecord(result.settings_applied?.keyboard_shortcuts);

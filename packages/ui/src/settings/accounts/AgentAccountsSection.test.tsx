@@ -7,15 +7,15 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { ErrorAlertBody } from "../../components/dialog/ErrorAlertBody";
-import { DaemonRequestError } from "../../daemon-client";
+import { CodedError } from "../../errors/codedError";
 import { currentLanguage, setLanguage, t } from "../../i18n/language";
 import type { Console, Project, Session } from "../../protocol";
+import { TestHost } from "../../test/TestHost";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
-import { account, availability, bus, consoles, projects, request, sectionEntry, sessions, settings } from "./agentAccountsSectionTestState";
+import { account, availability, consoles, projects, request, sectionEntry, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
 import { animate, buttonNamed, chooseItem, menuItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 
-vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
 vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
@@ -102,7 +102,7 @@ function queuedAlertText(): string {
   host.remove();
   return text;
 }
-const deniedWrite = () => new DaemonRequestError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
+const deniedWrite = () => new CodedError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
 
 it("words a denied save of the permission approval for the application's data folder, not for another folder to choose", async () => {
   const { container, change } = mount("Codex");
@@ -229,20 +229,19 @@ it("replaces a panel on a tab switch without any list motion", async () => {
 });
 
 it("drops the row of an account removed and adds the row of one added within the panel in view", async () => {
-  const { container, render } = mount();
+  const { container, setSettings, store } = mount();
   const rows = () => [...container.querySelectorAll("tbody > tr")].map((row) => row.getAttribute("data-account-row"));
   expect(rows()).toEqual(["default:claude", "claude-work"]);
   const removed = rowOf(container, "claude-work");
-  const work = settings.accounts[0]!;
-  settings.accounts = settings.accounts.filter((a) => a !== work);
-  await act(async () => render());
+  setSettings({ accounts: store.getState().settings.accounts.filter((a) => a.id !== "claude-work") });
+  await act(async () => {});
   expect(rows()).toEqual(["default:claude"]);
   expect(removed.isConnected).toBe(false);
   const visual = container.querySelector('[data-list-motion-ghost][data-account-row="claude-work"]')!;
   expect(visual.getAttribute("aria-hidden")).toBe("true");
   expect(visual.hasAttribute("inert")).toBe(true);
-  settings.accounts = [...settings.accounts, account("claude-home", "claude")];
-  await act(async () => render());
+  setSettings({ accounts: [...store.getState().settings.accounts, account("claude-home", "claude")] });
+  await act(async () => {});
   expect(rows()).toEqual(["default:claude", "claude-home"]);
 });
 
@@ -444,9 +443,9 @@ it("opens the Add agent dialog once when Settings asked for it, and takes the re
     act(() => root.unmount());
     container.remove();
   });
+  const daemon = startDaemon();
   const render = (pending: boolean) => act(() => {
-    root.render(<AccountsNavigationContext.Provider value={{ pending, consume, consumeAccount: () => {}, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
-    bus.notify();
+    root.render(<TestHost daemon={daemon}><AccountsNavigationContext.Provider value={{ pending, consume, consumeAccount: () => {}, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider></TestHost>);
   });
   render(true);
   expect(consume).toHaveBeenCalledOnce();
@@ -460,8 +459,7 @@ it("opens the Add agent dialog once when Settings asked for it, and takes the re
     second.remove();
   });
   act(() => {
-    secondRoot.render(<AccountsNavigationContext.Provider value={{ pending: false, consume, consumeAccount: () => {}, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
-    bus.notify();
+    secondRoot.render(<TestHost daemon={daemon}><AccountsNavigationContext.Provider value={{ pending: false, consume, consumeAccount: () => {}, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider></TestHost>);
   });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(consume).toHaveBeenCalledOnce();
@@ -474,9 +472,9 @@ it("closes its Add agent dialog when Settings asks for anything else", () => {
     act(() => root.unmount());
     container.remove();
   });
+  const daemon = startDaemon();
   const render = (value: { pending: boolean; dismissForms: number }) => act(() => {
-    root.render(<AccountsNavigationContext.Provider value={{ ...value, consume: () => {}, consumeAccount: () => {} }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
-    bus.notify();
+    root.render(<TestHost daemon={daemon}><AccountsNavigationContext.Provider value={{ ...value, consume: () => {}, consumeAccount: () => {} }}><AgentAccountsSection /></AccountsNavigationContext.Provider></TestHost>);
   });
   render({ pending: true, dismissForms: 0 });
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
@@ -507,15 +505,14 @@ it("shows the focus ring on the sharing switch even after a pointer press opened
 
 it("opens no settings for an account whose agent is not in the list, focusing the section's tab", async () => {
   settings.added_agents = ["claude", "grok"];
-  const { container, showSharingOf } = mount("Claude Code");
+  const { container, showSharingOf, setSettings } = mount("Claude Code");
   const entry = document.body.lastElementChild as HTMLElement;
   showSharingOf("codex-work");
   await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
   expect(document.activeElement).toBe(entry);
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   // The agent comes back into the list afterwards: nothing opens by itself.
-  settings.added_agents = ["claude", "codex", "grok"];
-  act(() => bus.notify());
+  setSettings({ added_agents: ["claude", "codex", "grok"] });
   selectTab(container, "Codex");
   await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -538,7 +535,7 @@ it("gives focus back to the row's actions button after its details or settings c
 });
 
 it("opens the details of an account from the first entry of its actions menu, read-only, gives focus back to the menu's button on closing, and closes with the account", async () => {
-  const { container, render } = mount("Codex");
+  const { container, setSettings, store } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
   const dialog = await openDetailsOf(container, "codex-work");
   expect(dialog.textContent).toContain("codex-work");
@@ -559,13 +556,12 @@ it("opens the details of an account from the first entry of its actions menu, re
   expect(document.activeElement).toBe(trigger);
   await openDetailsOf(container, "codex-work");
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-  settings.accounts = settings.accounts.filter((held) => held.id !== "codex-work");
-  render();
+  setSettings({ accounts: store.getState().settings.accounts.filter((held) => held.id !== "codex-work") });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it("opens the settings of an account from the second entry of its actions menu, with its name first and only its switches after, and closes with the account", async () => {
-  const { container, render } = mount("Codex");
+  const { container, setSettings, store } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
   const dialog = await openSettingsOf(container, "codex-work");
   expect(dialog.querySelector("h2")?.textContent).toBe("Account settings");
@@ -581,8 +577,7 @@ it("opens the settings of an account from the second entry of its actions menu, 
   expect(document.activeElement).toBe(trigger);
   await openSettingsOf(container, "codex-work");
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-  settings.accounts = settings.accounts.filter((held) => held.id !== "codex-work");
-  render();
+  setSettings({ accounts: store.getState().settings.accounts.filter((held) => held.id !== "codex-work") });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
@@ -738,7 +733,7 @@ it.each(["agent", "account"] as const)("puts focus on the section's entry once a
   const elsewhere = document.body.appendChild(document.createElement("button"));
   elsewhere.textContent = "General";
   onTestFinished(() => elsewhere.remove());
-  const { container } = mount();
+  const { container, setSettings, store } = mount();
   act(() => elsewhere.focus());
   // The confirmation keeps focus inside itself at once, as in a browser; jsdom's containment finds nothing in it to
   // focus and takes focus back only a frame later, too late for the menu to see its hand-back refused.
@@ -761,9 +756,8 @@ it.each(["agent", "account"] as const)("puts focus on the section's entry once a
   act(() => confirm.focus());
   await act(async () => confirm.click());
   expect(request).toHaveBeenCalledExactlyOnceWith(removed === "agent" ? { type: "remove_agent", agent: "grok" } : { type: "delete_account", account: "claude-work", trash_directory: false });
-  if (removed === "agent") settings.added_agents = ["claude", "codex"];
-  else settings.accounts = settings.accounts.filter((held) => held.id !== "claude-work");
-  act(() => bus.notify());
+  if (removed === "agent") setSettings({ added_agents: ["claude", "codex"] });
+  else setSettings({ accounts: store.getState().settings.accounts.filter((held) => held.id !== "claude-work") });
   await frames();
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(document.activeElement).toBe(sectionEntry.current);

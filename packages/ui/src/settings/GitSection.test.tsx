@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { act, useSyncExternalStore } from "react";
-import { createRoot } from "react-dom/client";
-import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { act } from "react";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { LanguageProvider } from "../i18n/react";
 import type { GitWorkflowSettings } from "../protocol";
+import { DEFAULT_SETTINGS, type Daemon } from "../store";
+import { mountHost } from "../test/mountHost";
+import { testDaemon } from "../test/testDaemon";
 import { GitSection } from "./GitSection";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 
@@ -15,43 +17,19 @@ vi.mock("./CloneDirSetting", () => ({ CloneDirSetting: () => <p>Clone directory<
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 const raiseError = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
-let autoPull = false;
-let gitWorkflow: GitWorkflowSettings = DEFAULT_GIT_WORKFLOW;
-
-const listeners = new Set<() => void>();
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-};
-const store = (next: GitWorkflowSettings) => {
-  gitWorkflow = next;
-  act(() => listeners.forEach((listener) => listener()));
-};
-
-vi.mock("../store", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../store")>()),
-  useDaemon: () => ({ request, raiseError }),
-  useDaemonStore: (selector: (state: { settings: { git_workflow: GitWorkflowSettings; auto_pull_repositories: boolean } }) => unknown) =>
-    useSyncExternalStore(subscribe, () => selector({ settings: { git_workflow: gitWorkflow, auto_pull_repositories: autoPull } })),
-}));
+let daemon: Daemon;
+/** Puts the store's git workflow to `next`, as a change from elsewhere does. */
+const store = (next: GitWorkflowSettings) => act(() => daemon.store.setState({ settings: { ...daemon.store.getState().settings, git_workflow: next } }));
 
 beforeEach(() => {
   request.mockClear();
   raiseError.mockClear();
   request.mockImplementation(() => Promise.resolve({}) as Promise<never>);
-  gitWorkflow = DEFAULT_GIT_WORKFLOW;
-  autoPull = false;
 });
 
-function mount() {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() => root.render(<LanguageProvider><GitSection /></LanguageProvider>));
-  return container;
+function mount({ gitWorkflow = DEFAULT_GIT_WORKFLOW, autoPull = false }: { gitWorkflow?: GitWorkflowSettings; autoPull?: boolean } = {}) {
+  daemon = testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, git_workflow: gitWorkflow, auto_pull_repositories: autoPull } }, request });
+  return mountHost(<LanguageProvider><GitSection /></LanguageProvider>, { daemon });
 }
 
 const toggle = (container: HTMLElement, name: string) =>
@@ -65,8 +43,7 @@ const choose = async (container: HTMLElement, name: string, option: string) => {
 };
 
 it("shows the daemon's values, every control named", () => {
-  gitWorkflow = { development: "branch", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true };
-  const container = mount();
+  const container = mount({ gitWorkflow: { development: "branch", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true } });
   expect(picker(container, "Where sessions develop")?.textContent).toContain("On a branch of its own");
   expect(toggle(container, "Squash commits before delivery").checked).toBe(false);
   expect(toggle(container, "Rebase before delivery").checked).toBe(true);
@@ -105,11 +82,10 @@ it("sends only the delivery when another is chosen", async () => {
 });
 
 it("describes the rule each development value gives, for the branch variant naming the shared directory", () => {
-  gitWorkflow = { ...DEFAULT_GIT_WORKFLOW, development: "branch" };
-  const container = mount();
+  const container = mount({ gitWorkflow: { ...DEFAULT_GIT_WORKFLOW, development: "branch" } });
   expect(container.textContent).toContain("shares that directory, so this suits one session at a time");
   expect(container.textContent).toContain("reaches only sessions begun after it");
-  act(() => store({ ...gitWorkflow, development: "in_place" }));
+  store({ ...DEFAULT_GIT_WORKFLOW, development: "in_place" });
   expect(container.textContent).toContain("directly on the current branch");
 });
 
@@ -120,15 +96,14 @@ it("says the revert gate takes effect at once and a project's own rules come fir
 });
 
 it("hides rebase and delivery on the current branch, keeps the revert gate, and brings them back with their values", async () => {
-  gitWorkflow = { ...DEFAULT_GIT_WORKFLOW, development: "in_place", delivery: "merge", revert_gate: true };
-  const container = mount();
+  const container = mount({ gitWorkflow: { ...DEFAULT_GIT_WORKFLOW, development: "in_place", delivery: "merge", revert_gate: true } });
   expect(picker(container, "Where sessions develop")).not.toBeNull();
   expect(toggle(container, "Revert gate").checked).toBe(true);
   expect(shown(container, "Squash commits before delivery")).toBe(false);
   expect(shown(container, "Rebase before delivery")).toBe(false);
   expect(shown(container, "Delivery")).toBe(false);
   request.mockImplementation(((message: { git_workflow: Partial<GitWorkflowSettings> }) => {
-    store({ ...gitWorkflow, ...message.git_workflow });
+    store({ ...daemon.store.getState().settings.git_workflow, ...message.git_workflow });
     return Promise.resolve({});
   }) as never);
   await choose(container, "Where sessions develop", "In a worktree of its own");
@@ -177,8 +152,7 @@ it.each([
   { name: "what turning it on does while it is off", on: false, shown: "Once this is on, a project's branch is pulled" },
   { name: "what is happening now while it is on", on: true, shown: "A project's branch is pulled" },
 ])("describes automatic pulling by $name", ({ on, shown }) => {
-  autoPull = on;
-  const container = mount();
+  const container = mount({ autoPull: on });
   expect(container.textContent).toContain(shown);
   expect(container.textContent?.includes("Once this is on, a project's branch is pulled")).toBe(!on);
 });

@@ -3,7 +3,7 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { DaemonRequestError } from "../daemon-client";
+import { CodedError } from "../errors/codedError";
 import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
 import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
@@ -183,7 +183,7 @@ it("shows no exported path for a project the export recorded by its directory na
 it("keeps the dialog on the file step, with the daemon's reason, for a document it refuses", async () => {
   const refuse = (body: RequestBody) =>
     body.type === "inspect_configuration"
-      ? Promise.reject(new DaemonRequestError("This is not a configuration file.", "configuration_not_recognised", {}))
+      ? Promise.reject(new CodedError("This is not a configuration file.", "configuration_not_recognised", {}))
       : reply(body);
   await reviewing({ reply: refuse });
   const acknowledgement = document.body.querySelector('[role="alertdialog"]')!;

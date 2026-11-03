@@ -1,16 +1,17 @@
-import { DaemonRequestError } from "../daemon-client";
-import { lacksSummary, hasTrustDiagnostic, referenceNameParams, leftBranchItems, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
+import { CodedError } from "./codedError";
+import { lacksSummary, hasTrustDiagnostic, referenceNameParams, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
+import { leftBranchItems } from "./branchCleanupItems";
 import { classifyError, namedSystemCause, type ErrorRecovery } from "./errorRecovery";
 import { globalParam, isMessageKey, type PlainMessageKey } from "../i18n/catalog";
 import type { MessageParams } from "../protocol";
-import { codeRecord, messageFacets } from "./codes";
+import { CODE, codeRecord, messageFacets } from "./codes";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
 
 /** Daemon codes and parameters remain available for rendering and recovery classification. */
-export type ErrorPresentation = string | DaemonRequestError;
+export type ErrorPresentation = string | CodedError;
 
 export function hasShellTimeoutDetails(error: { code: string; params: MessageParams }): boolean {
-  return error.code === "shell_environment_timeout" && ["shell", "command", "timeout"].every((name) => !!error.params[name]);
+  return error.code === CODE.shell_environment_timeout && ["shell", "command", "timeout"].every((name) => !!error.params[name]);
 }
 
 /** The sentence an uncatalogued failure opens with: a cause the system's text names (a full disk, a denied access, a
@@ -53,7 +54,7 @@ export function unwordedReason(code: string, params: MessageParams): string | un
     const reason = params.reason_code;
     return reason && reason !== code && isUncataloguedFailure({ code: reason, params }) ? params.reason ?? "" : undefined;
   }
-  if (code !== "trust_answer_failed" && code !== "trust_not_carried_over") return undefined;
+  if (code !== CODE.trust_answer_failed && code !== CODE.trust_not_carried_over) return undefined;
   return params.reason && !isMessageKey(`daemon.trust_reason.${params.reason_code}`) ? params.reason : undefined;
 }
 
@@ -61,8 +62,8 @@ export function unwordedReason(code: string, params: MessageParams): string | un
  * (`noSummary`) always has them, having no message to show, so it stays structured with no `detail` too. */
 export function hasCodeParams(error: { code: string; params: MessageParams }): boolean {
   if (lacksSummary(error.code)) return true;
-  if (error.code === "shell_environment_timeout") return !hasShellTimeoutDetails(error) && !!error.params.detail;
-  if (error.code === "session_has_running_sessions") return !!runningSessionIds(error.params);
+  if (error.code === CODE.shell_environment_timeout) return !hasShellTimeoutDetails(error) && !!error.params.detail;
+  if (error.code === CODE.session_has_running_sessions) return !!runningSessionIds(error.params);
   if (leftBranchItems(error.code, error.params)) return true;
   const params = withUiParams(error.code, error.params);
   const code = messageCode(error.code, params);
@@ -80,21 +81,21 @@ export function hasCodeParams(error: { code: string; params: MessageParams }): b
  * alert keeps, behind its "Error details". */
 export function noticeKind(code: string, params: MessageParams): "error" | "notice" {
   if (codeRecord(code)?.failureNotice) return "error";
-  return code === "trust_not_carried_over" && (hasTrustDiagnostic(code, params) || unwordedReason(code, params) !== undefined) ? "error" : "notice";
+  return code === CODE.trust_not_carried_over && (hasTrustDiagnostic(code, params) || unwordedReason(code, params) !== undefined) ? "error" : "notice";
 }
 
 /** A launch failure retains the nested cause code and params even when it has no special markup.
  * Other notices retain their own code at their caller. */
-export function noticeErrorPresentation(code: string, params: MessageParams, message: string): DaemonRequestError | undefined {
-  if (code !== "launch_failed") return undefined;
-  return new DaemonRequestError(message, params.reason_code ?? "", params);
+export function noticeErrorPresentation(code: string, params: MessageParams, message: string): CodedError | undefined {
+  if (code !== CODE.launch_failed) return undefined;
+  return new CodedError(message, params.reason_code ?? "", params);
 }
 
-export function errorPresentation(error: unknown): DaemonRequestError {
-  if (error instanceof DaemonRequestError) return error;
+export function errorPresentation(error: unknown): CodedError {
+  if (error instanceof CodedError) return error;
   const foreign = error && typeof error === "object" ? error as { message?: unknown; stack?: unknown } : undefined;
   const message = error instanceof Error ? error.message || error.name : typeof foreign?.message === "string" ? foreign.message : String(error);
-  const failure = new DaemonRequestError(message, "unexpected_error", {});
+  const failure = new CodedError(message, "unexpected_error", {});
   failure.cause = error;
   // The failure's stack is the one it came with, never the stack of this wrapping, which says nothing about it.
   failure.stack = typeof foreign?.stack === "string" ? foreign.stack : undefined;
