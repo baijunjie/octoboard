@@ -1,7 +1,7 @@
-import { FieldError, Label, TextArea, TextField } from "@heroui/react";
+import { Label, TextArea, TextField } from "@heroui/react";
 import React from "react";
 
-import { CodeToneContext } from "../../i18n/codeTone";
+import { FieldErrorMessage } from "./FieldErrorMessage";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 
 /** A labelled multi-line text field, in HeroUI's variant for a field on a surface, for free text
@@ -36,14 +36,10 @@ export function TextAreaInput({
       <Label>{label}</Label>
       <TextArea rows={rows} placeholder={placeholder} />
       <TextFieldDescription value={value} characterLimit={characterLimit} description={description} />
-      <FieldError>
-        <CodeToneContext.Provider value="danger">
-          <span role="alert">
-            {invalid ? errorMessage : null}
-            {invalid && characterLimit !== undefined && <TextLengthHint value={value} limit={characterLimit} />}
-          </span>
-        </CodeToneContext.Provider>
-      </FieldError>
+      <FieldErrorMessage>
+        {invalid ? errorMessage : null}
+        {invalid && characterLimit !== undefined && <TextLengthHint value={value} limit={characterLimit} />}
+      </FieldErrorMessage>
     </TextField>
   );
 }

@@ -6,7 +6,7 @@ import { Button } from "../components/controls/Button";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { FieldClearButton } from "../components/controls/FieldClearButton";
-import { openingFocus } from "../components/focus/regionFocus";
+import { openingFocus } from "../components/focus/modalFocus";
 import { Tag } from "../components/form/Tag";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useListMotion } from "../components/motion/useListMotion";

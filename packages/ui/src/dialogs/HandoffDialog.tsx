@@ -1,27 +1,26 @@
 import React, { useId, useRef, useState } from "react";
 
 import { raiseError } from "../components/alerts/raiseError";
-import { Button } from "../components/controls/Button";
-import { FailureBody } from "../components/alerts/errorParts";
 import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
-import { StatusMark } from "../components/status/StatusMark";
+import { RetryStatusMark } from "../components/status/RetryStatusMark";
 import { useHasPainted } from "../components/motion/useHasPainted";
-import { isHandoffAfterMove, retryCanHelp } from "../errors/errorRecovery";
+import { isHandoffAfterMove } from "../errors/errorRecovery";
 import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../preferences/theme";
 import { AgentAccountField } from "./AgentAccountField";
-import { Dialog, useDialogAction } from "../components/dialog/Dialog";
+import { Dialog } from "../components/dialog/Dialog";
+import { useDialogAction } from "../components/dialog/dialogHooks";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
-import { useResponsibleBranches } from "./useSessionBranches";
+import { useResponsibleBranches } from "./useBranchInspections";
 
 /**
  * Hands a session off to a new session of another agent (`hand_off_session`). The fields are the
@@ -172,18 +171,15 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
           <>
             {/* The check answers as a retry succeeds; focus the mark or its popover held goes to the dialog. */}
             {handOffFrom(`[data-status-mark-id="${markId}"]`)}
-            <StatusMark
+            <RetryStatusMark
               markId={markId}
               label={t("dialog.handOff.movesBranchesFailed.mark")}
-              actions={retryCanHelp(inspected.error) ? (close) => (
-                <Button size="sm" variant="secondary" preventFocusOnPress isPending={inspected.pending} onPress={() => { close(); inspected.retry(); }}>
-                  {t("error.tryAgain")}
-                </Button>
-              ) : undefined}
+              error={inspected.error}
+              onRetry={inspected.retry}
+              retrying={inspected.pending}
             >
               <p>{t("dialog.handOff.movesBranchesFailed")}</p>
-              <FailureBody error={inspected.error} />
-            </StatusMark>
+            </RetryStatusMark>
           </>
         )}
       </div>

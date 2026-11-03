@@ -5,7 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { focusAfterLoss } from "./regionFocus";
+import { focusAfterLoss } from "./modalFocus";
 import { useFocusVisibleProps } from "./useFocusVisibleProps";
 
 beforeEach(() => {

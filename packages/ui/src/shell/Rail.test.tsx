@@ -6,7 +6,8 @@ import { consoleOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { PlatformProvider } from "../platform/react";
 import type { Session, SessionStatus } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
 
@@ -33,7 +34,7 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false): HTMLButtonElemen
     const own = sessionOf(`s-${index}`, main.id, undefined, `Hub ${index}`, wire(status), { has_conversation: false, ...EXTRAS[status] });
     return status === "delegated" ? [own, sessionOf(`s-${index}-child`, main.id, undefined, `Child ${index}`, "working", { bound_to: own.id })] : [own];
   });
-  const daemon = { store: createStateStore({ sessions: new Map(sessions.map((session) => [session.id, session])) }) } as Daemon;
+  const daemon = testDaemon({ state: { sessions: new Map(sessions.map((session) => [session.id, session])) } });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>
       <DaemonProvider value={daemon}>

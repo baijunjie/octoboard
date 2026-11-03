@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import { MODAL_OPEN } from "../components/focus/regionFocus";
+import { MODAL_OPEN } from "../components/focus/selectors";
 import type { SwipeToward } from "./paneSwipe";
 
 /** How far a finger has to travel sideways before the move counts as a swipe. */

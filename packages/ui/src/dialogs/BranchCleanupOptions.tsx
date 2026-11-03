@@ -11,7 +11,8 @@ import type { ConsequenceLine } from "../components/dialog/ConfirmConsequences";
 import { ConfirmOption } from "../components/form/ConfirmOption";
 import { KeepFocusInDialog } from "../components/dialog/KeepFocusInDialog";
 import { OptionDetails } from "../components/form/OptionDetails";
-import { branchChoices, forcibleBranches, lockedWorktrees, useProjectRemovalBranches, type Inspected } from "./useSessionBranches";
+import { branchChoices, forcibleBranches, lockedWorktrees, type Inspected } from "./branchInspection";
+import { useProjectRemovalBranches } from "./useBranchInspections";
 
 /** `items` as rows of a cleanup list, in display form; `tagChanges` marks a worktree with
  * uncommitted changes where the group it is in does not say so already. */

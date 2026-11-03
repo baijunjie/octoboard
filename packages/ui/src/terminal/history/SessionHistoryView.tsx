@@ -171,7 +171,7 @@ function MessageList({ messages }: { messages: ConversationMessage[] }): React.R
   const region = useFadeRegion({ label: t("history.messages"), always: true });
   const fade = useScrollFade({ region, className: "min-h-0 flex-1 overflow-auto px-(--pane-inset) pt-4 pb-24" });
   return (
-    <div className={`flex min-h-0 flex-1 flex-col rounded-xl ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
+    <div className={`flex min-h-0 flex-1 flex-col rounded-xl ${region.insetRing}`}>
       <div {...fade}>
         <ol className="flex flex-col gap-4">
           {messages.map((message, index) => (

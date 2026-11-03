@@ -147,7 +147,7 @@ function FocusedButton(): React.ReactElement {
 export function SemanticColoursGallery(): React.ReactElement {
   const region = useFadeRegion({ label: "Semantic colours" });
   return (
-    <main className={`flex h-full min-h-0 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
+    <main className={`flex h-full min-h-0 flex-col ${region.insetRing}`}>
       <FadedScroller region={region} className="min-h-0 flex-1 p-6">
         <div className="mx-auto flex max-w-6xl flex-col gap-8">
           <h1 className="text-lg font-semibold">Semantic colours: tokens, components and surfaces</h1>

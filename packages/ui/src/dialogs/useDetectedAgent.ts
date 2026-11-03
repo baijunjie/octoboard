@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
+import { useLatestRequest } from "../components/hooks/useLatestRequest";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import { useT } from "../i18n/react";
 import type { Agent, Event, RequestBody } from "../protocol";
+import { shownError } from "./shownError";
 
 /** `idle`: nothing to ask about yet. `checking`: the answer for what is entered now is not in yet,
  * which includes the wait before it is asked. `ready`: the daemon has answered for it. `failed`:
@@ -15,6 +17,8 @@ export type Detection = { status: Exclude<DetectionStatus, "failed"> } | { statu
 
 /** What the form can ask the daemon about: a directory's agent, or a git remote's. */
 export type DetectionQuery = Extract<RequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>;
+
+const CHECKING: Detection = { status: "checking" };
 
 /**
  * Asks the daemon which agent the project the user is entering is set up for (`detect_directory_agent`
@@ -31,37 +35,35 @@ export function useDetectedAgent(
 ): Detection {
   const t = useT();
   const key = query ? JSON.stringify(query) : undefined;
-  const [answered, setAnswered] = useState<{ key: string; error?: ErrorPresentation }>();
-  const latest = useLatest({ request, query, onDetected, t });
+  const { value, send, reset, hold, asked, reconnects } = useLatestRequest<Detection>({
+    scope: key, initial: CHECKING,
+  });
+  const latest = useLatest({ request, query, onDetected, send, t });
 
   useEffect(() => {
-    // An answer held from an earlier run is no answer for this one, even for the same query: the
-    // user may have gone elsewhere and come back while a newer request is out.
-    setAnswered(undefined);
-    if (key === undefined) return;
-    let current = true;
+    // With nothing to ask, what was answered before is dropped, so coming back to the same entry starts checking again.
+    if (key === undefined) {
+      if (asked()) reset();
+      return;
+    }
+    // Whatever was asked or held before this run is no answer for it, even for the same query: the user may have
+    // gone elsewhere and come back within the delay, with a request for it still out.
+    reset();
+    hold(() => CHECKING, key);
     const timer = setTimeout(() => {
-      const { request, query, onDetected, t } = latest.current;
-      request(query!).then(
-        (event) => {
-          if (!current) return;
-          if (event.type !== "agent_detected") {
-            setAnswered({ key, error: t("dialog.project.detectFailed") });
-            return;
-          }
+      const { request, query, onDetected, send } = latest.current;
+      void send({
+        request: () => request(query!),
+        accept: (event) => {
+          if (event.type !== "agent_detected") return () => ({ status: "failed", error: latest.current.t("dialog.project.detectFailed") });
           onDetected(event.agent ?? "");
-          setAnswered({ key });
+          return () => ({ status: "ready" });
         },
-        (err: Error) => current && setAnswered({ key, error: errorPresentation(err) }),
-      );
+        failed: (failure, _held, t) => ({ status: "failed", error: shownError(failure, t) }),
+      });
     }, delayMs);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [key, delayMs]);
+    return () => clearTimeout(timer);
+  }, [key, delayMs, reconnects]);
 
-  if (key === undefined) return { status: "idle" };
-  if (answered?.key !== key) return { status: "checking" };
-  return answered.error === undefined ? { status: "ready" } : { status: "failed", error: answered.error };
+  return key === undefined ? { status: "idle" } : value;
 }

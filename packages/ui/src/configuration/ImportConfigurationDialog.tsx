@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { InlineReference } from "../i18n/InlineReference";
-import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
+import { Dialog } from "../components/dialog/Dialog";
+import { useDialogAction, useSubmitValidation } from "../components/dialog/dialogHooks";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";

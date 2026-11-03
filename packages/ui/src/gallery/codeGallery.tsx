@@ -30,7 +30,7 @@ const LONG_PATHS = ["/Users/dev/Projects/octoboard/packages/ui/src/components/In
 export function CodeGallery(): React.ReactElement {
   const region = useFadeRegion({ label: "Inline references, status badges, status marks and alert tones" });
   return (
-    <main className={`flex h-full min-h-0 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
+    <main className={`flex h-full min-h-0 flex-col ${region.insetRing}`}>
       <FadedScroller region={region} className="min-h-0 flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-6">
           <h1 className="text-lg font-semibold">Inline references, status badges, status marks and alert tones</h1>

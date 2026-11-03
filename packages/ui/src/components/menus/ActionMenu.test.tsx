@@ -10,7 +10,8 @@ import { errorAlerts } from "../alerts/errorAlerts";
 import { detailsButton } from "../alerts/detailsTestSupport";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
-import { ActionMenu, type ActionMenuEntry, type ActionMenuPanelContext } from "./ActionMenu";
+import { ActionMenu } from "./ActionMenu";
+import type { ActionMenuEntry, ActionMenuPanelContext } from "./menuEntries";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

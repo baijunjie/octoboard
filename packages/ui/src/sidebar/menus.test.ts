@@ -3,7 +3,7 @@ import { KeyRound, SquareActivity, SquareTerminal, Terminal } from "lucide-react
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/menus/ActionMenu";
+import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/menus/menuEntries";
 import { SessionRelativeTime } from "../components/status/SessionMetadata";
 import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
 import { format } from "../i18n/catalog";

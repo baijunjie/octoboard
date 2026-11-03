@@ -7,9 +7,10 @@ import { accountOf } from "../fixtures/builders";
 import { presence, stubListMotion } from "../components/motion/listMotionTestSupport";
 import { enter, leave, mountForTooltip, openTooltip, pointer, press as pressWith, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { currentLanguage, setLanguage } from "../i18n/language";
-import type { Account, AccountQuota, Agent, Availability, Session } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { MODAL_OPEN } from "../components/focus/regionFocus";
+import type { Account, AccountQuota, Agent, Availability, Event, Session } from "../protocol";
+import { createStateStore, DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
+import { MODAL_OPEN } from "../components/focus/selectors";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
@@ -61,7 +62,7 @@ const NOW = Date.UTC(2026, 9, 18, 12, 0, 0);
 const OPEN_DELAY = 250;
 const CLOSE_DELAY = 150;
 
-const request = vi.fn(() => Promise.resolve({}));
+const request = vi.fn(() => Promise.resolve({} as Event));
 const toastNotice = vi.fn();
 const onOpenSettingsAt = vi.fn();
 const language = currentLanguage();
@@ -108,7 +109,7 @@ function mount(
     settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     accountQuotas: [quota("claude", null, "max"), quota("claude", "claude-work", "pro"), quota("codex", null, "plus")],
   });
-  const daemon = { store, request, toastNotice } as unknown as Daemon;
+  const daemon = testDaemon({ store, request, toastNotice });
   const container = mountForTooltip(
     <DaemonProvider value={daemon}>
       <button type="button" id="before">before</button>
@@ -703,7 +704,7 @@ it("follows the selected session's actual agent and account, account switches an
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -749,7 +750,7 @@ it("opens on the tab of the agent whose quota the button shows, each time, and o
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -799,7 +800,7 @@ it("opens the shown agent's list scrolled to the selected session's account, wit
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -836,7 +837,7 @@ it("draws the button's window full, and says so, once its reset time passes whil
   used.windows = [{ ...used.windows[0]!, used_percent: 100, resets_at: NOW + 10 * MINUTE }];
   act(() => store.setState({ sessions: new Map([[session.id, session]]), accountQuotas: [used] }));
   act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -860,7 +861,7 @@ it("hides the mini bar for unread, failed, stale or unavailable quota instead of
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]), accountQuotas: [] }));
-  act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
+  act(() => root.render(<DaemonProvider value={testDaemon({ store, request })}>
     <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
   </DaemonProvider>));
   const fill = () => host.querySelector(CAPSULE);
@@ -888,7 +889,7 @@ it("keeps the mini bar of a session whose agent was removed", () => {
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
-  act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
+  act(() => root.render(<DaemonProvider value={testDaemon({ store, request })}>
     <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
   </DaemonProvider>));
   const fill = () => host.querySelector(CAPSULE);
@@ -948,7 +949,7 @@ function mountWithSession(accountId: string | null = "claude-work") {
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -1034,7 +1035,7 @@ it("lists a turned-off account only for the selected session that is still runni
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -1080,7 +1081,7 @@ it("drops the tab of an agent whose accounts are all turned off, bar the one the
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -1132,7 +1133,7 @@ function mountOnTurnedOff(status: Session["status"] = "idle") {
   const setStatus = (next: Session["status"]) => act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: next }]]) }));
   setStatus(status);
   act(() => root.render(
-    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <DaemonProvider value={testDaemon({ store, request })}>
       <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
     </DaemonProvider>,
   ));
@@ -1253,7 +1254,7 @@ it("shows an account's reset credit beside an action to use it, on its row only"
 
 it("closes the panel when Redeem reset is pressed and asks for the confirmation outside it, which uses the credit", async () => {
   request.mockImplementation(() => Promise.resolve({ type: "reset_credit_used", id: null, outcome: "reset" }));
-  onTestFinished(() => void request.mockImplementation(() => Promise.resolve({})));
+  onTestFinished(() => void request.mockImplementation(() => Promise.resolve({} as Event)));
   openCodexWithResetCredit();
   click(useResetButton());
   advance(CLOSE_DELAY);
@@ -1310,7 +1311,7 @@ it("returns focus to the rail button after a keyboard-opened panel raised the co
 
 it.each(["nothing_to_reset", "no_credit"] as const)("hands focus to the rail button when the confirmation closes itself on %s and focus fell to the page", async (outcome) => {
   request.mockImplementation(() => Promise.resolve({ type: "reset_credit_used", id: null, outcome }));
-  onTestFinished(() => void request.mockImplementation(() => Promise.resolve({})));
+  onTestFinished(() => void request.mockImplementation(() => Promise.resolve({} as Event)));
   const { button } = openCodexWithResetCredit();
   click(useResetButton());
   advance(CLOSE_DELAY);

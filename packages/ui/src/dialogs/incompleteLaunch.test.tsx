@@ -5,7 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Account, Agent, Session } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider, type Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { HandoffDialog } from "./HandoffDialog";
@@ -29,17 +30,21 @@ const project = projectOf("p-1", "c-1", "Search API");
 
 function render(accounts: Account[], ui: (daemon: Daemon) => React.ReactElement, sessions: Session[] = []) {
   const parent = consoleOn(accounts);
-  const store = createStateStore({
-    consoles: new Map([[parent.id, parent]]),
-    projects: new Map([[project.id, project]]),
-    sessions: new Map(sessions.map((session) => [session.id, session])),
-  });
-  store.setState({ settings: { ...store.getState().settings, accounts } });
   const request = vi.fn(async (body: { type: string }) => {
     if (body.type === "locate_conversation_to_resume") return { type: "conversation_located", id: null, location: { kind: "archived_session", session: "s-old" } };
     return body.type === "ack" ? { type: "ack", id: null } : { type: "session_opened", id: null, session: sessionOf("s-new", parent.id, undefined, "", "idle") };
   });
-  const daemon = { store, request, raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = testDaemon({
+    state: {
+      consoles: new Map([[parent.id, parent]]),
+      projects: new Map([[project.id, project]]),
+      sessions: new Map(sessions.map((session) => [session.id, session])),
+    },
+    request: request as Daemon["request"],
+    raiseError: vi.fn(),
+    toastNotice: vi.fn(),
+  });
+  daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts } });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{ui(daemon)}</DaemonProvider>));

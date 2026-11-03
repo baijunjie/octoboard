@@ -3,7 +3,7 @@ import { setInteractionModality } from "react-aria";
 import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/focus/refocusIfLost";
-import { MODAL_OPEN } from "../components/focus/regionFocus";
+import { MODAL_OPEN } from "../components/focus/selectors";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { matchesCommand } from "../shortcuts/store";

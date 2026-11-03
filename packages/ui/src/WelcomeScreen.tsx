@@ -62,7 +62,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
   );
 
   return (
-    <div className={`flex min-h-0 min-w-0 flex-1 ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
+    <div className={`flex min-h-0 min-w-0 flex-1 ${scrollRegion.insetRing}`}>
       <main
         {...scrollProps}
         role="main"

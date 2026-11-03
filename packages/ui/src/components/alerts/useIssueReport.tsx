@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { appConfig } from "../../appConfig";
 import { DiagnosticBlock } from "./DiagnosticBlock";
-import { ExternalLink } from "../text/ExternalLink";
+import { addressUnavailableContent, ExternalLink } from "../text/ExternalLink";
+import type { Translate } from "../../i18n/catalog";
 import { InlineReference } from "../../i18n/InlineReference";
 import { errorAlerts } from "./errorAlerts";
 import { diagnosticText } from "../../errors/errorText";
@@ -15,6 +16,21 @@ import { useErrorRecords } from "../../store";
 export const issueUrl = appConfig.issueUrl;
 
 const NO_NAMES: string[] = [];
+
+/** Raises the alert that names the Issue address for the user to open by hand, for an Issue page that did not open. */
+function reportIssueOpenFailure(t: Translate, cause: unknown): void {
+  // Not unexpected, so no diagnostics are worked out for it: what the system said is its "Error details",
+  // the message alone, since a stack of the UI's own code says nothing about why the browser did not open.
+  const reason = cause instanceof Error ? cause.message : diagnosticText(cause);
+  errorAlerts.report({
+    message: t("error.issue.openFailed"),
+    title: t("error.issue.openFailedTitle"),
+    error: cause,
+    recovery: "issueAddress",
+    content: addressUnavailableContent(t("error.issue.openFailed"), issueUrl),
+    details: reason ? <DiagnosticBlock>{reason}</DiagnosticBlock> : undefined,
+  }, { immediate: true });
+}
 
 /** What reporting a failure offers wherever one is shown: the sentence asking for the report (or, where the platform
  * cannot open links, naming the address to report at) and the Report issue link, which is absent where the address is
@@ -34,8 +50,6 @@ export function useIssueReport(failures: readonly ReportableFailure[] | undefine
   const t = useT();
   const platform = useOptionalPlatform();
   const language = useCurrentLanguage();
-  const reporting = useRef(false);
-  const [reportPending, setReportPending] = useState(false);
   const [version, setVersion] = useState<string>();
   const unexpected = failures !== undefined;
   useEffect(() => {
@@ -56,34 +70,10 @@ export function useIssueReport(failures: readonly ReportableFailure[] | undefine
     })
     : issueUrl;
   const manualIssue = !platform?.links && platform?.kind === "tauri";
-  const report = async () => {
-    if (reporting.current) return;
-    reporting.current = true;
-    setReportPending(true);
-    try {
-      if (!platform?.links) throw new Error("External links are unavailable.");
-      await platform.links.open(reportUrl);
-    } catch (cause) {
-      // Not unexpected, so no diagnostics are worked out for it: what the system said is its "Error details",
-      // the message alone, since a stack of the UI's own code says nothing about why the browser did not open.
-      const reason = cause instanceof Error ? cause.message : diagnosticText(cause);
-      errorAlerts.report({
-        message: t("error.issue.openFailed"),
-        title: t("error.issue.openFailedTitle"),
-        error: cause,
-        recovery: "issueAddress",
-        content: <div className="flex flex-col gap-4"><p>{t("error.issue.openFailed")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{issueUrl}</p></div>,
-        details: reason ? <DiagnosticBlock>{reason}</DiagnosticBlock> : undefined,
-      }, { immediate: true });
-    } finally {
-      reporting.current = false;
-      setReportPending(false);
-    }
-  };
   return {
     guidance: manualIssue
       ? <Message id={options.known ? "startup.report.manualGuidance" : "error.unexpected.manualReportGuidance"} params={{ address: <InlineReference monospace wrap>{issueUrl}</InlineReference> }} />
       : <Message id={options.known ? "startup.report.prefilledGuidance" : "error.unexpected.prefilledReportGuidance"} params={{ report: <InlineReference>{t("error.issue.report")}</InlineReference> }} />,
-    link: manualIssue ? null : <ExternalLink href={reportUrl} appearance="button" size={options.size} onOpen={platform?.links ? report : undefined} isPending={reportPending}>{t("error.issue.report")}</ExternalLink>,
+    link: manualIssue ? null : <ExternalLink href={reportUrl} appearance="button" size={options.size} onFailure={(cause) => reportIssueOpenFailure(t, cause)}>{t("error.issue.report")}</ExternalLink>,
   };
 }

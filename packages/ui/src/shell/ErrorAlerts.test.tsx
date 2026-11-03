@@ -9,7 +9,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { ActionableError } from "../errors/actionableError";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
-import { focusAfterLoss, setFocusAfterModalLoss } from "../components/focus/regionFocus";
+import { focusAfterLoss, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { Dialog } from "../components/dialog/Dialog";
@@ -18,7 +18,8 @@ import { OpensAnotherDialog } from "../components/dialog/nestedDialogTestSupport
 import { ErrorAlerts } from "./ErrorAlerts";
 import { issueUrl } from "../components/alerts/useIssueReport";
 import { TextInput } from "../components/form/TextInput";
-import { createStateStore, type Daemon } from "../store";
+import type { Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { reportDaemonExit } from "../lifecycle/exitFailure";
 import { issueReportUrl, recordNames } from "../errors/issueReport";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
@@ -174,11 +175,11 @@ const reportLink = () => [...document.querySelectorAll("a")].find((link) => link
 const reportOf = () => new URL(reportLink()!.getAttribute("href")!).searchParams;
 
 it("redacts the daemon's record names and home directory from the report", () => {
-  const store = createStateStore({
+  const daemon = testDaemon({ state: {
     homeDir: "/Users/alice",
     projects: new Map([["p", { name: "Zeta Project", path: "/Users/alice/zeta" }]]) as never,
-  });
-  mount(undefined, { kind: "browser" }, { store } as unknown as Daemon);
+  } });
+  mount(undefined, { kind: "browser" }, daemon);
   const error = new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
   act(() => errorAlerts.report({ message: error.message, error }));
   const prefilled = reportOf();

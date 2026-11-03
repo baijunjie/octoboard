@@ -20,6 +20,19 @@ export const TABBABLE = [
   .map((selector) => `${selector}:not([hidden]):not([tabindex="-1"])`)
   .join(",");
 
+/** What a region's focus lands on: its first control a keyboard can reach. A narrower list than `TABBABLE`, as a
+ * landing is a link, a button, a frame or an element that opts in with a `tabindex` (a form field does not count unless
+ * it does), and one marked `aria-disabled` is passed over. A report page's own frame counts, as the last thing in the
+ * aside; the connection banner's landing is its Retry, and it has none while it only says it is reconnecting. */
+export const FOCUSABLE =
+  'a[href], button:not([disabled]), iframe, [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])';
+
+/** A modal dialog or alert dialog; a toast is an `alertdialog` too, but a non-modal one. */
+export const MODAL_DIALOG = '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"])';
+
+/** A dialog or a menu is open: ordinary regions stay unavailable. */
+export const MODAL_OPEN = `${MODAL_DIALOG}, [role="menu"]`;
+
 function isShown(element: Element): boolean {
   if (typeof element.checkVisibility === "function") return element.checkVisibility({ visibilityProperty: true });
   for (let node: Element | null = element; node; node = node.parentElement) {

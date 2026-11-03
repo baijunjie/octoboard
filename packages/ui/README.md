@@ -17,6 +17,8 @@ scripts from this directory.
   the gallery").
 - `pnpm typecheck` — `tsc --noEmit`, including gallery, website-preview and test sources.
 - `pnpm typecheck:app` — typechecks the production application through `tsconfig.app.json`.
+- `pnpm compiler:bailouts` — lists the components and hooks the React Compiler leaves uncompiled (all of `src/`, or the
+  files given), exiting 1 when there are any.
 - `pnpm test` — `vitest run`: the unit tests beside the code, plus jsdom tests for stateful classes and components.
 - `pnpm test:app` — application tests, excluding the gallery, fixtures, website preview and WKWebView benchmark tests.
 - `pnpm build` — generates third-party license data, runs `typecheck:app` and the i18n catalog check (`vitest run

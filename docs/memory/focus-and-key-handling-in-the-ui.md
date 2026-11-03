@@ -104,7 +104,7 @@ tooltips close on turning inert, and a covered alert stays exposed to screen rea
 
 A modal of this kind also hands focus on when its last one closes with nowhere to return focus to — a control gone
 with the dialog that closed before it, or no focus ever given: call `focusAfterModalCloses` from
-`packages/ui/src/components/focus/regionFocus.ts` as the last one closes and `cancelFocusAfterModalCloses` as one comes up,
+`packages/ui/src/components/focus/modalFocus.ts` as the last one closes and `cancelFocusAfterModalCloses` as one comes up,
 as `packages/ui/src/components/alerts/errorAlerts.ts` and `PendingQuestionDialog` do, rather than a fallback of its own. Any other modal
 that can close with nowhere to return focus to does the same after trying the destinations of its own, as Settings
 closing with no dialog under it does (`packages/ui/src/settings/useSettingsDialog.ts`).
@@ -161,7 +161,7 @@ to a frame, and drops it if focus has moved by then. So:
 
 - Focus nothing at mount but the control the dialog opens on. A "put focus back if it fell to `<body>`" check that runs
   at mount, even one that only focuses the dialog element, silently cancels the first field's opening focus. That is why
-  `useRefocusIfLost` (`packages/ui/src/components/dialog/Dialog.tsx`) acts only when its dependencies change; a hook of your own
+  `useRefocusIfLost` (`packages/ui/src/components/dialog/dialogHooks.ts`) acts only when its dependencies change; a hook of your own
   of that kind compares its dependencies with the last ones it saw, never a "skip the first run" flag, which
   StrictMode's second mount run (the app runs in `StrictMode`) gets past.
 - Give the opening focus through react-aria's `autoFocus` (`Button`, `TextInput`, a react-aria field's own prop). A
@@ -230,7 +230,7 @@ leaves the window for another application.
 When the focused element is removed, WebKit and Chrome fire no `focusout` and focus falls to `<body>`. A dialog's
 Escape handling and Tab containment hang off focus being inside it, so both stop working. Whenever a dialog replaces
 content that can hold focus — a listing swapped for the next one, a queue moving on to its next item — put focus back
-with `useRefocusIfLost` from `packages/ui/src/components/dialog/Dialog.tsx`, or pass the shared `Dialog` a `resetKey` naming the
+with `useRefocusIfLost` from `packages/ui/src/components/dialog/dialogHooks.ts`, or pass the shared `Dialog` a `resetKey` naming the
 current item, which does it for you.
 
 No `blur` fires on that removal either, and closing a dialog unmounts the control holding focus, so a field that sends
@@ -249,7 +249,7 @@ the duration of its own action — the obvious way to keep a slow request from b
 press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
 that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
 When such an outside change can still land while focus is on a button (a quota reading arriving under an open
-dialog), hand focus on with `useFocusLeavingWhenDisabled` from `packages/ui/src/components/dialog/Dialog.tsx`, as the shared
+dialog), hand focus on with `useFocusLeavingWhenDisabled` from `packages/ui/src/components/dialog/dialogHooks.ts`, as the shared
 dialog footer and `ConfirmDialog` do, rather than testing `document.activeElement` against the control in an effect:
 WebKit has already blurred it to `<body>` by then. jsdom never blurs a disabled element, so the suite passes that
 test; a test reaches the WebKit case only by dispatching the `focusout` and reporting `<body>` as the active element

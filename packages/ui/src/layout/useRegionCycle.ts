@@ -1,7 +1,9 @@
 import { setInteractionModality } from "react-aria";
 import { useCallback, useEffect, useRef } from "react";
 
-import { focusOpenDialog, focusRegion, MODAL_OPEN, regionElements, type Region } from "../components/focus/regionFocus";
+import { focusOpenDialog } from "../components/focus/modalFocus";
+import { focusRegion, regionElements, type Region } from "../components/focus/regionFocus";
+import { MODAL_OPEN } from "../components/focus/selectors";
 import { useLatest } from "../components/hooks/useLatest";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The

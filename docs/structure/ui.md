@@ -21,6 +21,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 | `gallery.html`, `gallery-frame.html` | Entries of the gallery |
 | `website-preview.html`, `feature-preview.html`, `vite.preview.config.ts` | Entries and build of the website preview and the feature views (`pnpm build:preview` writes into `dist-preview/`; the site's `build-preview` passes `--outDir`) |
 | `packages/ui/scripts/gallery-sweep.mjs` | `pnpm gallery:sweep`: loads gallery scenarios in a headless browser and fails on any gallery failure; `gallery-chip-geometry.mjs` and `gallery-report-focus.mjs` are standalone Playwright checks run by hand |
+| `packages/ui/scripts/compiler-bailouts.mjs` | `pnpm compiler:bailouts`: lists the components and hooks the React Compiler leaves uncompiled, and exits 1 when there is any (run by hand; not part of `pnpm verify`) |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
 | `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`) and its providers (`TestHost`) |
@@ -64,8 +65,10 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `dialog/` (the
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/`, `focus/`, `announce/`, `panel/`, `host/`,
-  `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, polling, the latest-request hook).
-- `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry` and `RailProcessesEntry`),
+  `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, polling, the latest-request hook, `settle`, a
+  `try`/`finally` helper kept outside components because the React Compiler skips a function holding one).
+- `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
+  with its panels in `rail-quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
   host).
 - `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, console switching, session
@@ -95,8 +98,11 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
   code and diff renderer and its budgets) and `find/` (the find bar); `@pierre/diffs` is imported only inside it.
 - `src/quota/` — plan quota wording, meters, reset credits.
 - `src/settings/` — the settings modal and its sections; `accounts/` the Agent accounts section.
-- `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
-  archive and removal choices), on the `components/dialog/` toolkit.
+- `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust),
+  on the `components/dialog/` toolkit. `RequestedDialog.tsx` only routes a requested dialog to its component; the
+  archive, removal and restore confirmations are in `confirmations/`. The dialogs' daemon lookups (detected agent,
+  located conversation, agent models, session records, branch inspections) are built on `useLatestRequest`;
+  `branchInspection.ts` holds the pure part of a branch inspection and `useBranchInspections.ts` its hooks.
 - `src/process/` — the Processes panel and its data, and the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces).
 - `src/configuration/` — configuration export and import dialogs, and the list of plain switch settings.
@@ -173,14 +179,14 @@ New code uses these rather than a second implementation. None is enforced by a c
 | The loading line of a panel | `LoadingState` (`src/components/panel/LoadingState.tsx`) |
 | A failure's status mark with its Try again | `RetryStatusMark` (`src/components/status/RetryStatusMark.tsx`) |
 | Read something again now and then: pace, a pause while the document is hidden with a catch-up on return, reads the caller sends itself | `usePoll` (`src/components/hooks/usePoll.ts`), on `startPolling`; the browser's lists poll at `AUTO_REFRESH_MS` (`src/project-browser/autoRefresh.ts`) |
-| Ask the daemon for what a view shows and keep only the latest answer, scoped to what it is for, with the failure sorted out and a resend on reconnect | `useLatestRequest` (`src/components/hooks/useLatestRequest.ts`), as the project browser's lists and readers do |
+| Ask the daemon for what a view shows and keep only the latest answer, scoped to what it is for, with the failure sorted out and a resend on reconnect | `useLatestRequest` (`src/components/hooks/useLatestRequest.ts`), as the project browser's lists and readers and the dialogs' lookups (`src/dialogs/`) do |
 | Send a browse request | through a lane or a slot in `src/browse/budget.ts` (`listingLane`, `listLane`, `documentImageLane`, `BROWSE_SLOTS`), whose shares `budget.test.ts` keeps within the daemon's bound; a new kind of request takes its share from them |
 | Treat a failed browse request | `browseFailure` and `projectBrowseFailure` (`src/browse/failure.ts`) |
 | Open a dialog from a control outside its window | `createLauncher` (`src/components/hooks/createLauncher.ts`) |
 | Load a component lazily, with a way to load it again after a failed import | `retryableLazy` (`src/components/hooks/retryableLazy.ts`), not `React.lazy`, which keeps the rejection |
 | Poll a daemon answer that is shown or counted (process trees, the global process counts), publishing only a changed one | `usePolled` (`src/components/hooks/usePoll.ts`), under `useProcessTrees` and `useAllProcesses` at the paces in `src/process/processPolling.ts`, rather than a timer of its own |
 | A count in a small badge set in a row, or on a rail glyph | `CountBadge` (`src/components/status/CountBadge.tsx`) in a row; `CountedGlyph` (`src/shell/CountedGlyph.tsx`) on a rail glyph |
-| A rail entry's panel that opens status marks and Details popovers | tag them with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`), ask about them through `nestedPopovers` (`src/shell/nestedPopover.ts`), and close the panel under another modal with `CloseWhenCovered` (`src/shell/`) |
+| A rail entry whose button opens a popover panel | `RailPanelEntry` (`src/shell/RailPanelEntry.tsx`), which wires the popover; the status marks and Details popovers the panel opens are tagged with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`) and asked about through `nestedPopovers` (`src/shell/nestedPopover.ts`), and `CloseWhenCovered` (`src/shell/`) closes the panel under another modal |
 | Put a panel of the aside's owner (a project, or a console session) on screen | `showPanel` from `useProjectPanels` (`src/app/`); a jump from the global process list is `useProcessJump` |
 | Send focus into a panel the user opened deliberately | `landInPanel` (`src/panels/panelLanding.ts`), as `useFloatingPanel` and `useProcessJump` do |
 | Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/lifecycle/useSerialPush.ts`) |

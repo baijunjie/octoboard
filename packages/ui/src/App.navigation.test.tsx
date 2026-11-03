@@ -12,6 +12,7 @@ import type { PlatformAdapter, StatusItemCapability } from "./platform";
 import type { Project, RequestBody } from "./protocol";
 import { applyDaemonEvent, type Daemon } from "./store";
 import { IS_MAC } from "./input/keys";
+import { inputLabelled, type as typeInto } from "./test/dom";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -63,12 +64,9 @@ it("shows a console's last session and its aside again when the rail switches ba
 
 /** Types `value` into the open dialog's field labelled `label`. */
 function type(label: string, value: string) {
-  const input = Array.from(document.querySelectorAll<HTMLInputElement>("[role=dialog] input")).find((element) => element.labels?.[0]?.textContent === label);
+  const input = inputLabelled(label, document.querySelector("[role=dialog]")!);
   expect(input, label).toBeDefined();
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-    input!.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  typeInto(input, value);
 }
 
 const ops = consoleOf("c-ops", "Ops");

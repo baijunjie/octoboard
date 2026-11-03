@@ -4,9 +4,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 
-import { accountOf, type ConsoleExtra, consoleOf, projectOf } from "../fixtures/builders";
+import { type ConsoleExtra, consoleOf, projectOf } from "../fixtures/builders";
 import type { Account, Agent, AgentAvailability, Event, Project, RequestBody } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider } from "../store";
+import { buttons, click, inputLabelled, pickerNamed, type } from "../test/dom";
+import { testDaemon } from "../test/testDaemon";
+import { personal, work } from "./accountTestSupport";
 import { ProjectDialog } from "./ProjectDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
@@ -24,8 +27,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-export const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-work");
-export const personal: Account = accountOf("a-personal", "claude", "Personal", "/home/dev/.claude-personal");
+export { work, personal };
 
 export function render(
   editing?: Project,
@@ -35,22 +37,18 @@ export function render(
   added: Agent[] | null = null,
 ) {
   const pending: Pending[] = [];
-  const daemon: Daemon = {
-    store: createStateStore({
+  const daemon = testDaemon({
+    state: {
       consoles: new Map([["c-1", consoleOf("c-1", "Main", { accounts: { claude: accounts[0]?.id }, ...consoleOverride })]]),
       agentAvailability: new Map(
         (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
       ),
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
-    }),
+    },
     request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
     raiseError: vi.fn(),
     toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -64,18 +62,10 @@ export function render(
   return Object.assign(pending, { store: daemon.store });
 }
 
-export const input = (label: string) =>
-  Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).find((el) => el.labels?.[0]?.textContent === label)!;
-
-export function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
-  act(() => {
-    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")!.set!.call(el, value);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-}
+export { buttons, click, pickerNamed, type };
+export const input = (label: string) => inputLabelled(label);
 
 export const settle = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
-export const click = (el: HTMLElement | undefined) => act(async () => el?.click());
 export const answer = (request: Pending | undefined, agent: Agent | null) =>
   act(async () => request?.resolve({ type: "agent_detected", id: null, agent }));
 
@@ -84,12 +74,9 @@ export async function chooseSource(label: string) {
   await click(Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find((o) => o.textContent?.includes(label)));
 }
 
-export const buttons = () => Array.from(document.body.querySelectorAll("button"));
 export const buttonText = (text: string) => buttons().find((b) => b.textContent === text);
 /** The account picker, which is the one named for the agent's account. */
 export const accountPicker = () => buttons().find((b) => b.getAttribute("aria-label") === "Claude Code account" || b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.getAttribute("aria-label") === "Claude Code account"));
-export const pickerNamed = (name: string) =>
-  buttons().find((b) => b.getAttribute("aria-label") === name || b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name))!;
 export const sentOf = (pending: Pending[], type: string) => pending.find((p) => p.body.type === type)?.body;
 
 /** Fills in a directory whose agent is not detected, so the form is open and adds as inheriting. */

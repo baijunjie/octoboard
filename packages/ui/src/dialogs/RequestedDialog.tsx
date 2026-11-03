@@ -1,408 +1,43 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React from "react";
 
-import { ErrorAlert } from "../components/alerts/ErrorAlert";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
-import { errorDetails } from "../components/alerts/errorParts";
-import { useStableHandler } from "../components/hooks/useLatest";
-import { DaemonRequestError } from "../daemon-client";
-import { InlineReference } from "../i18n/InlineReference";
-import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
-import { Message, useT } from "../i18n/react";
-import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Console as ConsoleRecord, type Project, type Session } from "../protocol";
-import { sessionDisplayTitle } from "../sessions/sessionLabel";
-import { runsInBackground } from "../sessions/sessionStatus";
-import {
-  boundArchivedSessions,
-  boundSessionsArchivedWith,
-  compareSessions,
-  hasBoundSessions,
-  isUnusedSession,
-  ordersByStatus,
-} from "../sessions/order";
-import { useProjectProcesses } from "../process/useProjectProcesses";
-import { indexSessions } from "../sessions/sessionIndex";
-import { useDaemon, useDaemonStore } from "../store";
-import { ConfirmConsequences, ConsequenceLines, SessionList } from "../components/dialog/ConfirmConsequences";
-import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
-import { ConsoleDialog } from "./ConsoleDialog";
-import { HandoffDialog } from "./HandoffDialog";
-import type { DialogRequest } from "./dialogRequest";
-import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "../components/dialog/RenameDialog";
+import { PROJECT_NAME_LIMIT } from "../components/form/textLength";
+import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
+import { useT } from "../i18n/react";
+import type { Session } from "../protocol";
+import { useDaemon, useOwnerSessions, useSession } from "../store";
+import { ArchiveSessionDialog } from "./confirmations/ArchiveSessionDialog";
+import { DeleteArchivedDialog } from "./confirmations/DeleteArchivedDialog";
+import { DeleteConsoleDialog } from "./confirmations/DeleteConsoleDialog";
+import { DeleteProjectDialog } from "./confirmations/DeleteProjectDialog";
+import { DeleteSessionDialog } from "./confirmations/DeleteSessionDialog";
+import { RestoreProjectChangesDialog } from "./confirmations/RestoreProjectChangesDialog";
+import { UnbindSessionDialog } from "./confirmations/UnbindSessionDialog";
+import { ConsoleDialog } from "./ConsoleDialog";
+import type { DialogRequest } from "./dialogRequest";
+import { HandoffDialog } from "./HandoffDialog";
+import { ProjectDialog } from "./ProjectDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SessionModelDialog, type ModelEdits } from "./SessionModelDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
-import { useBranchCleanup, useProjectRemovalCleanup } from "./BranchCleanupOptions";
-import { KeepFocusInDialog } from "../components/dialog/KeepFocusInDialog";
-import { useSessionDeletionOptions } from "./useSessionDeletionOptions";
-import { StoppedRow, useProcessStopping } from "./ProcessStopOptions";
-import { isRemovalRefusal, useArchiveInspection, type SessionInspection } from "./useSessionBranches";
-import { PROJECT_NAME_LIMIT } from "../components/form/textLength";
 
-/** One topic of a sectioned confirmation (the archive's, the project removal's): a labelled group whose `<h3>` heading names it (the
- * dialog's own title is the `<h2>`), under a groove divider when `divided`, i.e. when another section is
- * shown above it. `shown` false renders nothing but keeps the wrapper mounted, so focus that was
- * inside when the section went away goes back to the dialog. */
-function ConfirmSection({ heading, shown, divided, children }: {
-  heading: string;
-  shown: boolean;
-  divided: boolean;
-  children: React.ReactNode;
-}): React.ReactElement {
-  const headingId = useId();
-  return (
-    <KeepFocusInDialog>
-      {shown && (
-        <div role="group" aria-labelledby={headingId} className={`flex min-w-0 flex-col gap-2 text-sm${divided ? " groove-t pt-3" : ""}`}>
-          <h3 id={headingId} className="font-semibold">{heading}</h3>
-          {children}
-        </div>
-      )}
-    </KeepFocusInDialog>
-  );
+/** The session dialog over the console's console sessions, read from the store: the owners it offers.
+ * The list is the same array until one of them changes. */
+function SessionDialogOverOwners(props: Omit<React.ComponentProps<typeof SessionDialog>, "sessions">): React.ReactElement {
+  const owners = useOwnerSessions(props.console.id);
+  return <SessionDialog {...props} sessions={owners} />;
 }
 
-/** The confirmation section of the project processes a removal stops, one `StoppedRow` each and the count. It is
- * shown when there are any, or when a list could not be read: then a warning Alert in its place says so, since the
- * processes are stopped all the same. */
-function ProjectProcessesSection({ processes, divided }: { processes: ReturnType<typeof useProjectProcesses>; divided: boolean }): React.ReactElement {
-  const t = useT();
-  const { trees, error } = processes;
-  return (
-    <ConfirmSection heading={t("dialog.projectProcesses.heading")} shown={trees.length > 0 || error !== undefined} divided={divided}>
-      {error && (
-        <ErrorAlert status="warning" title={t(trees.length > 0 ? "dialog.projectProcesses.listPartlyFailedTitle" : "dialog.projectProcesses.listFailedTitle")} details={errorDetails(error)} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}>
-          {t("dialog.projectProcesses.listFailed")}
-        </ErrorAlert>
-      )}
-      {trees.length > 0 && (
-        <>
-          <div className="flex min-w-0 flex-col gap-2">
-            {trees.map((tree) => <StoppedRow key={tree.id} tree={tree} />)}
-          </div>
-          {/* After a failed list the count would read as the total, while the warning says unlisted ones are stopped too. */}
-          {error === undefined && <ConsequenceLines lines={[{ key: "projectProcesses", text: t("dialog.projectProcesses.stopped", { count: trees.length }) }]} />}
-        </>
-      )}
-    </ConfirmSection>
-  );
-}
-
-/** Confirms deleting a console, which the daemon refuses while a session of it runs, so the one thing it lists is
- * what the deletion stops besides: the project processes of every project under the console. */
-function DeleteConsoleDialog({ console: target, onClose }: { console: ConsoleRecord; onClose: () => void }): React.ReactElement {
-  const t = useT();
-  const { request } = useDaemon();
-  const projects = useDaemonStore((s) => s.projects);
-  const projectProcesses = useProjectProcesses(Array.from(projects.values()).filter((project) => project.console_id === target.id).map((project) => project.id));
-  return (
-    <ConfirmDialog
-      title={t("dialog.deleteConsole.title")}
-      errorTitle={t("dialog.deleteConsole.failedTitle")}
-      subject={<Message id="dialog.deleteConsole.subject" params={{ name: <InlineReference dir="auto" wrap>{target.name}</InlineReference> }} />}
-      message={t("dialog.deleteConsole.message")}
-      extraControl={<ProjectProcessesSection processes={projectProcesses} divided={false} />}
-      confirmLabel={t("common.delete")}
-      waiting={projectProcesses.pending}
-      typeToConfirm={t("dialog.typeToConfirm.delete")}
-      destructive
-      onCancel={onClose}
-      onConfirm={async () => {
-        await request({ type: "delete_console", console: target.id });
-        onClose();
-      }}
-    />
-  );
-}
-
-/** Confirms removing a project. Its project processes are stopped with it, listed in a section of their own.
- * The folder stays on disk unless the user opts in to moving it to
- * the Trash, which the daemon does before removing the project and refuses (keeping the project)
- * when it cannot. With the folder go the worktrees outside it that the daemon lists and, where the
- * repository outlives the folder, the branches of the project's sessions, listed once the option is
- * chosen; a locked worktree only when the user also says so, with the branch it has checked out. */
-function DeleteProjectDialog({ project, running, onClose }: { project: Project; running: Session[]; onClose: () => void }): React.ReactElement {
-  const t = useT();
-  const { request } = useDaemon();
-  const [trash, setTrash] = useState(false);
-  const cleanup = useProjectRemovalCleanup(project.id, trash, setTrash);
-  const projectProcesses = useProjectProcesses([project.id]);
-  const showRunning = running.length > 0;
-  return (
-    <ConfirmDialog
-      title={t("dialog.removeProject.title")}
-      errorTitle={t("dialog.removeProject.failedTitle")}
-      subject={<Message id="dialog.removeProject.subject" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
-      message={t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}
-      confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
-      destructive
-      waiting={cleanup.pending || projectProcesses.pending}
-      extraControl={(busy) => (
-        <>
-          <ConfirmSection heading={t("dialog.removeProject.runningHeading", { count: running.length })} shown={showRunning} divided={false}>
-            <SessionList sessions={running} />
-          </ConfirmSection>
-          <ConfirmSection heading={t("dialog.removeProject.folderHeading")} shown divided={showRunning}>
-            {cleanup.extraControl(busy)}
-            <ConsequenceLines lines={cleanup.consequences} />
-          </ConfirmSection>
-          <ProjectProcessesSection processes={projectProcesses} divided />
-        </>
-      )}
-      onCancel={onClose}
-      onConfirm={async () => {
-        try {
-          await request({
-            type: "delete_project",
-            project: project.id,
-            stop_sessions: running.length > 0,
-            trash_directory: trash,
-            ...cleanup.choices,
-          });
-        } catch (err) {
-          // What goes along is asked again, and Confirm waits on it, so a retry carries out what is shown then.
-          if (trash && isRemovalRefusal(err)) cleanup.reinspect();
-          throw err;
-        }
-        onClose();
-      }}
-    />
-  );
-}
-
-/** Confirms archiving a session and every unarchived session under it, listing the bound branches
- * and worktrees git refuses to remove with the choice of forcing them, and the processes the
- * archive stops with the choice of keeping any of them running, each as a section of its own with
- * the consequences of its options right under them. */
-function ArchiveSessionDialog({ session, withIt, inspection, onClose }: {
-  session: Session;
-  withIt: Session[];
-  /** An inspection already made for this archive. */
-  inspection?: SessionInspection;
-  onClose: () => void;
-}): React.ReactElement {
-  const t = useT();
-  const { request } = useDaemon();
-  const inspected = useArchiveInspection([session.id, ...withIt.map((s) => s.id)], inspection);
-  const cleanup = useBranchCleanup(inspected);
-  const processes = useProcessStopping(inspected.processes);
-  const showBound = withIt.length > 0;
-  const showCleanup = cleanup.offered;
-  const showProcesses = inspected.processes.length > 0;
-  return (
-    <ConfirmDialog
-      title={t("dialog.archiveSession.title")}
-      subject={<Message id="dialog.archiveSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
-      message={t(runsInBackground(session) ? "dialog.archiveSession.messageBackground" : "dialog.archiveSession.message")}
-      // Nothing in it: the sections are in `extraControl`, bound sessions first. It stays defined for the warning icon.
-      consequences={null}
-      confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
-      destructive={cleanup.forcing}
-      waiting={cleanup.pending}
-      extraControl={(busy) => (
-        <>
-          <ConfirmSection heading={t("dialog.archiveSession.boundHeading", { count: withIt.length })} shown={showBound} divided={false}>
-            <SessionList sessions={withIt} />
-          </ConfirmSection>
-          <ConfirmSection heading={t("dialog.archiveSession.branchesHeading")} shown={showCleanup} divided={showBound}>
-            {cleanup.extraControl(busy)}
-            <ConsequenceLines lines={cleanup.consequences} />
-          </ConfirmSection>
-          <ConfirmSection heading={t("dialog.archiveSession.processesHeading")} shown={showProcesses} divided={showBound || showCleanup}>
-            {processes.extraControl(busy)}
-            <ConsequenceLines lines={processes.consequences} />
-          </ConfirmSection>
-        </>
-      )}
-      errorTitle={t("dialog.archiveSession.failedTitle")}
-      onCancel={onClose}
-      onConfirm={async () => {
-        await request({ type: "archive_session", session: session.id, ...cleanup.choices, ...processes.choices });
-        onClose();
-      }}
-    />
-  );
-}
-
-/** The confirmation of releasing a session from its owner, which only the session itself can undo.
- * Closes without a word when the binding is already gone: the session was deleted or released, or its owner
- * is gone, or the daemon refuses the release as `session_not_bound`. An archived session keeps its binding, but
- * the menu offers no Unbind on an archived row, so the dialog closes for it too. Any other refusal is shown
- * and the dialog stays, `session_binding_changed` included: the session is bound to another owner by then,
- * which the dialog reads live and so names. */
-function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string; onClose: () => void }): React.ReactElement | null {
-  const t = useT();
-  const { request, store } = useDaemon();
-  const session = useDaemonStore((s) => s.sessions.get(sessionId));
-  const owner = useDaemonStore((s) => (session?.bound_to ? s.sessions.get(session.bound_to) : undefined));
-  // The release itself clears the binding, which must not read as the session having gone.
-  const [releasing, setReleasing] = useState(false);
-  const gone = !releasing && (!session || !owner || session.status === "archived");
-  useEffect(() => {
-    if (gone) onClose();
-  }, [gone]);
-  if (!session || !owner) return null;
-  const ownerName = <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineReference>;
-  return (
-    <ConfirmDialog
-      title={t("dialog.unbindSession.title")}
-      subject={<Message id="dialog.unbindSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, owner: ownerName }} />}
-      message={t("dialog.unbindSession.answersToYou")}
-      consequences={<ConfirmConsequences lines={[{ key: "owner", text: t("dialog.unbindSession.consequence") }]} />}
-      confirmLabel={t("dialog.unbindSession.confirm")}
-      errorTitle={t("dialog.unbindSession.error")}
-      onCancel={onClose}
-      onConfirm={async () => {
-        setReleasing(true);
-        try {
-          await request({ type: "release_session", session: session.id });
-        } catch (err) {
-          const code = err instanceof DaemonRequestError ? err.code : undefined;
-          // Refused as changed while still bound (to another owner, which the dialog then names): the user
-          // decides again. Once the store shows it unbound there is nothing left to decide.
-          if (code === SESSION_NOT_BOUND || (code === SESSION_BINDING_CHANGED && !store.getState().sessions.get(sessionId)?.bound_to)) {
-            onClose();
-            return;
-          }
-          setReleasing(false);
-          throw err;
-        }
-        onClose();
-      }}
-    />
-  );
-}
-
-/** The daemon checks the unused state atomically before deleting and cleaning up native records. */
-function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClose: () => void }): null {
-  const t = useT();
-  const { request, raiseError } = useDaemon();
-  const close = useStableHandler(onClose);
-  const deletion = useRef<ReturnType<typeof request> | undefined>(undefined);
-  useEffect(() => {
-    let active = true;
-    // Reuse the request when Strict Mode reconnects this effect.
-    deletion.current ??= request({ type: "delete_session", session: sessionId, only_if_unused: true });
-    void deletion.current.then(() => {
-      if (active) close();
-    }, (err: unknown) => {
-      if (!active) return;
-      raiseError(err, { title: t("dialog.deleteSession.failedTitle"), session: sessionId });
-      close();
-    });
-    return () => { active = false; };
-  }, [sessionId, request, raiseError, close, t]);
-  return null;
-}
-
-/** The confirmation of a session's deletion, with the option of also moving the agent's own
- * records of it to the Trash. `withIt` are the archived sessions that go along. */
-function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; withIt: Session[]; onClose: () => void }): React.ReactElement {
-  const t = useT();
-  const { request } = useDaemon();
-  const { moveRecords, cleanup, lines, extraControl } = useSessionDeletionOptions([session.id, ...withIt.map((s) => s.id)]);
-  return (
-    <ConfirmDialog
-      title={t("dialog.deleteSession.title")}
-      errorTitle={t("dialog.deleteSession.failedTitle")}
-      subject={<Message id="dialog.deleteSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
-      message={t("dialog.deleteSession.message")}
-      consequences={(
-        <ConfirmConsequences
-          title={withIt.length > 0 ? t("dialog.deleteSession.bound", { count: withIt.length }) : undefined}
-          sessions={withIt.length > 0 ? withIt : undefined}
-          lines={lines(t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsLineBound" : "dialog.deleteSession.trashRecordsLine"))}
-        />
-      )}
-      confirmLabel={t(moveRecords || cleanup.forcing ? "dialog.deleteSession.confirmAll" : "common.delete")}
-      destructive
-      waiting={cleanup.pending}
-      extraControl={(busy) =>
-        extraControl(busy, {
-          label: t("dialog.deleteSession.trashRecords"),
-          hint: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsNoteBound" : "dialog.deleteSession.trashRecordsNote"),
-        })
-      }
-      onCancel={onClose}
-      onConfirm={async () => {
-        await request({ type: "delete_session", session: session.id, trash_agent_records: moveRecords, ...cleanup.choices });
-        onClose();
-      }}
-    />
-  );
-}
-
-/** The confirmation of deleting many archived sessions at once, with the option of also moving the
- * agent's own records of them to the Trash. `count` is how many the archive view lists, and
- * `withThem` counts the archived sessions that go along; both are what the store holds now, as the
- * daemon deletes whatever is archived in the scope when the deletion is confirmed. Once nothing is left to
- * delete — another window or client emptied the archive meanwhile — the confirmation closes by itself, unless it
- * is its own deletion that emptied it, which closes it once answered. */
-function DeleteArchivedDialog({
-  dialog,
-  count,
-  withThem,
-  targets,
-  onClose,
-}: {
-  dialog: Extract<DialogRequest, { kind: "delete-archived" }>;
-  count: number;
-  withThem: number;
-  targets: Session[];
-  onClose: () => void;
-}): React.ReactElement {
-  const t = useT();
-  const { request } = useDaemon();
-  const { moveRecords, cleanup, lines, extraControl } = useSessionDeletionOptions(targets.map((s) => s.id));
-  // Its own deletion empties the archive too, which must not read as another client having emptied it.
-  const [confirming, setConfirming] = useState(false);
-  const gone = count === 0 && !confirming;
-  useEffect(() => {
-    if (gone) onClose();
-  }, [gone]);
-  return (
-    <ConfirmDialog
-      title={t("dialog.deleteArchived.title")}
-      errorTitle={t("dialog.deleteArchived.failedTitle")}
-      message={t("dialog.deleteArchived.message", { count })}
-      consequences={(
-        <ConfirmConsequences
-          title={withThem > 0 ? t("dialog.deleteArchived.bound", { count: withThem }) : undefined}
-          lines={lines(t("dialog.deleteArchived.trashRecordsLine"))}
-        />
-      )}
-      confirmLabel={t("dialog.deleteArchived.confirm")}
-      destructive
-      waiting={cleanup.pending}
-      extraControl={(busy) => extraControl(busy, { label: t("dialog.deleteArchived.trashRecords"), hint: t("dialog.deleteArchived.trashRecordsNote") })}
-      onCancel={onClose}
-      onConfirm={async () => {
-        // Built outside the `try`: the React Compiler leaves a component with optional chaining inside one uncompiled.
-        const body = {
-          type: "delete_archived_sessions",
-          console: dialog.console.id,
-          project: dialog.project?.id,
-          console_session: dialog.consoleSession?.id,
-          trash_agent_records: moveRecords,
-          ...cleanup.choices,
-        } as const;
-        setConfirming(true);
-        try {
-          await request(body);
-        } catch (err) {
-          setConfirming(false);
-          throw err;
-        }
-        onClose();
-      }}
-    />
-  );
+/** Renders `children` with the session `requested` names as the store holds it now, `requested`
+ * itself once the store has dropped it. */
+function LiveSession({ requested, children }: { requested: Session; children: (session: Session) => React.ReactElement }): React.ReactElement {
+  return children(useSession(requested.id) ?? requested);
 }
 
 /** The dialog a sidebar menu asked for. `onClose` is called once the dialog is done or dismissed;
  * `onSessionOpened` receives the session a "new session" dialog started, or a handoff's receiving session. */
 export function RequestedDialog({
-  dialog: requestedDialog,
+  dialog,
   onClose,
   onSessionOpened,
   onSwitchAccounts,
@@ -423,12 +58,7 @@ export function RequestedDialog({
   onResumeSession: (sessionId: string) => Promise<void>;
 }): React.ReactElement {
   const t = useT();
-  const { request, toastNotice } = useDaemon();
-  const sessions = useDaemonStore((s) => s.sessions);
-  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
-  const dialog = "session" in requestedDialog && requestedDialog.kind !== "rename-session"
-    ? { ...requestedDialog, session: sessions.get(requestedDialog.session.id) ?? requestedDialog.session }
-    : requestedDialog;
+  const { request } = useDaemon();
 
   switch (dialog.kind) {
     case "new-console":
@@ -444,48 +74,17 @@ export function RequestedDialog({
     case "edit-project":
       return <ProjectDialog consoleId={dialog.project.console_id} project={dialog.project} onClose={onClose} />;
     case "restore-project-changes":
-      return (
-        <ConfirmDialog
-          title={t("dialog.restoreProjectChanges.title")}
-          errorTitle={t("dialog.restoreProjectChanges.failedTitle")}
-          subject={<Message id="dialog.restoreProjectChanges.subject" params={{ name: <InlineReference dir="auto" wrap>{dialog.project.name}</InlineReference> }} />}
-          message={t("dialog.restoreProjectChanges.message")}
-          confirmLabel={t("dialog.restoreProjectChanges.confirm")}
-          pendingLabel={t("dialog.restoreProjectChanges.pending")}
-          destructive
-          onCancel={onClose}
-          onConfirm={async () => {
-            await request({ type: "restore_project_changes", project: dialog.project.id });
-            toastNotice(t("sidebar.project.changesRestored"));
-            onClose();
-          }}
-        />
-      );
-    case "delete-project": {
-      // Read live: a session that starts or stops while the dialog is open joins or leaves the list.
-      const { delegatingIds } = indexSessions(sessions);
-      const running = Array.from(sessions.values())
-        .filter((s) => s.project_id === dialog.project.id && isLive(s.status))
-        .sort((a, b) => compareSessions(a, b, delegatingIds, byStatus));
-      return <DeleteProjectDialog project={dialog.project} running={running} onClose={onClose} />;
-    }
+      return <RestoreProjectChangesDialog project={dialog.project} onClose={onClose} />;
+    case "delete-project":
+      return <DeleteProjectDialog project={dialog.project} onClose={onClose} />;
     case "new-console-session":
-      return (
-        <SessionDialog
-          console={dialog.console}
-          sessions={Array.from(sessions.values())}
-          onClose={onClose}
-          onOpened={onSessionOpened}
-          onResume={onResumeSession}
-        />
-      );
+      return <SessionDialogOverOwners console={dialog.console} onClose={onClose} onOpened={onSessionOpened} onResume={onResumeSession} />;
     case "new-session":
       return (
-        <SessionDialog
+        <SessionDialogOverOwners
           console={dialog.console}
           project={dialog.project}
           binding={dialog.binding}
-          sessions={Array.from(sessions.values())}
           onClose={onClose}
           onOpened={onSessionOpened}
           onResume={onResumeSession}
@@ -523,54 +122,39 @@ export function RequestedDialog({
           onClose={onClose}
         />
       );
-    case "archive-session": {
-      // Read live: every unarchived session under this owner goes along, with running
-      // processes ended too. Sessions opened or bound while the dialog is open join the list, and
-      // the message follows background work starting or finishing in the session itself.
-      const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id, indexSessions(sessions).delegatingIds);
-      const session = sessions.get(dialog.session.id) ?? dialog.session;
-      return <ArchiveSessionDialog session={session} withIt={withIt} inspection={dialog.inspection} onClose={onClose} />;
-    }
+    case "archive-session":
+      return <ArchiveSessionDialog requested={dialog.session} inspection={dialog.inspection} onClose={onClose} />;
     case "switch-account":
       return (
-        <SwitchAccountDialog
-          session={dialog.session}
-          account={dialog.account}
-          accountName={dialog.accountName}
-          onClose={onClose}
-          onSwitchAccounts={onSwitchAccounts}
-        />
+        <LiveSession requested={dialog.session}>
+          {(session) => (
+            <SwitchAccountDialog
+              session={session}
+              account={dialog.account}
+              accountName={dialog.accountName}
+              onClose={onClose}
+              onSwitchAccounts={onSwitchAccounts}
+            />
+          )}
+        </LiveSession>
       );
     case "session-model":
-      return <SessionModelDialog session={dialog.session} onClose={onClose} onChangeModel={onChangeSessionModel} />;
+      return (
+        <LiveSession requested={dialog.session}>
+          {(session) => <SessionModelDialog session={session} onClose={onClose} onChangeModel={onChangeSessionModel} />}
+        </LiveSession>
+      );
     case "hand-off":
-      return <HandoffDialog session={dialog.session} onClose={onClose} onHandedOff={onSessionOpened} />;
+      return (
+        <LiveSession requested={dialog.session}>
+          {(session) => <HandoffDialog session={session} onClose={onClose} onHandedOff={onSessionOpened} />}
+        </LiveSession>
+      );
     case "unbind-session":
       return <UnbindSessionDialog sessionId={dialog.session.id} onClose={onClose} />;
-    case "delete-session": {
-      // An archived owner takes the archived sessions bound to it, and those bound to those, along.
-      const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
-      const unused = isUnusedSession(dialog.session, hasBoundSessions(sessions.values(), dialog.session.id));
-      return unused
-        ? <DeleteUnusedSession key={dialog.session.id} sessionId={dialog.session.id} onClose={onClose} />
-        : <DeleteSessionDialog session={dialog.session} withIt={withIt} onClose={onClose} />;
-    }
-    case "delete-archived": {
-      // All of a console's archived console sessions take their archived bound sessions with them;
-      // a project's archive, and a console session's own, do not reach any console session.
-      const consoleSessions = dialog.project || dialog.consoleSession
-        ? []
-        : Array.from(sessions.values()).filter((s) => s.console_id === dialog.console.id && s.role === "console" && s.status === "archived");
-      const withThem = consoleSessions.flatMap((owner) => boundArchivedSessions(Array.from(sessions.values()), owner.id)).length;
-      const all = Array.from(sessions.values());
-      const roots = dialog.project
-        ? all.filter((s) => s.project_id === dialog.project!.id && s.status === "archived")
-        : dialog.consoleSession
-          ? boundArchivedSessions(all, dialog.consoleSession.id)
-          : consoleSessions;
-      const targets = Array.from(new Map(roots.flatMap((s) => [s, ...boundArchivedSessions(all, s.id)]).map((s) => [s.id, s])).values());
-      return <DeleteArchivedDialog dialog={dialog} count={roots.length} withThem={withThem} targets={targets} onClose={onClose} />;
-    }
+    case "delete-session":
+      return <DeleteSessionDialog requested={dialog.session} onClose={onClose} />;
+    case "delete-archived":
+      return <DeleteArchivedDialog dialog={dialog} onClose={onClose} />;
   }
 }
-

@@ -3,7 +3,8 @@ import React, { useRef, useState } from "react";
 
 import { HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
 import { AnchoredTooltip } from "../../components/hint/AnchoredTooltip";
-import { ActionMenu, type ActionMenuEntry } from "../../components/menus/ActionMenu";
+import { ActionMenu } from "../../components/menus/ActionMenu";
+import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { t } from "../../i18n/language";
 import type { Daemon } from "../../store";
 

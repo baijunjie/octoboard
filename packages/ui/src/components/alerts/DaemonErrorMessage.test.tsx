@@ -14,9 +14,10 @@ import { format, isMessageKey } from "../../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation, hasCodeParams } from "../../errors/errorPresentation";
 import { ActionableError } from "../../errors/actionableError";
-import { useDialogAction } from "../dialog/Dialog";
+import { useDialogAction } from "../dialog/dialogHooks";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
 import { ErrorAlert } from "./ErrorAlert";
@@ -42,7 +43,7 @@ function mount(element: React.ReactNode): HTMLElement {
 }
 
 /** The whole message and, apart from it, its raw part, as the error alert dialog and a toast lay them out. */
-function mountApart(error: DaemonRequestError, daemon: Daemon = { store: createStateStore({}) } as Daemon): { body: Element; raw: Element } {
+function mountApart(error: DaemonRequestError, daemon: Daemon = testDaemon()): { body: Element; raw: Element } {
   const container = mount(
     <DaemonProvider value={daemon}>
       <section data-body><DaemonErrorMessage error={error} /></section>
@@ -106,7 +107,7 @@ it("says the generic sentence for an unfamiliar code, its own text only in the r
 it("sets the path of a conversation that was not found as code, not as quoted text, and does not repeat the ID", () => {
   const error = new DaemonRequestError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: "3f2b8c1e" });
   expect(errorPresentation(error)).toBe(error);
-  const daemon = { store: createStateStore({}) } as Daemon;
+  const daemon = testDaemon();
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("code"), (code) => code.textContent)).toEqual(["/Users/dev/.claude"]);
   // One element, so an alert's flex column cannot split the sentence into an item per literal.
@@ -115,7 +116,7 @@ it("sets the path of a conversation that was not found as code, not as quoted te
 });
 
 it("sets resolved project and session names in chips without changing their typeface", () => {
-  const daemon = { store: createStateStore({ sessions: new Map([["s1", { id: "s1", title: "Live title" } as import("../../protocol").Session]]) }) } as Daemon;
+  const daemon = testDaemon({ state: { sessions: new Map([["s1", { id: "s1", title: "Live title" } as import("../../protocol").Session]]) } });
   const error = new DaemonRequestError("plain", "conversation_in_session", { session: "s1" });
   expect(errorPresentation(error)).toBe(error);
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
@@ -127,7 +128,7 @@ it("sets resolved project and session names in chips without changing their type
 });
 
 it("keeps a failed launch's name and its nested failure's path as distinct chips", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
+  const daemon = testDaemon();
   const params = { title: "Draft", reason_code: "path_not_found", path: "/missing/project" };
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError("fallback", "launch_failed", params)} /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual(["Draft", "/missing/project"]);
@@ -137,7 +138,7 @@ it("keeps a failed launch's name and its nested failure's path as distinct chips
 
 it("renders structured running-session IDs as distinct live names, preserving commas and quote characters in titles", () => {
   const titles = ["Draft, review “notes”", "Second, “task”"];
-  const daemon = { store: createStateStore({ sessions: new Map(titles.map((title, index) => [`s${index}`, { id: `s${index}`, title } as import("../../protocol").Session])) }) } as Daemon;
+  const daemon = testDaemon({ state: { sessions: new Map(titles.map((title, index) => [`s${index}`, { id: `s${index}`, title } as import("../../protocol").Session])) } });
   const params = { count: "3", sessions: "old fallback", session_ids: JSON.stringify(["s0", "s1", "gone"]) };
   const error = new DaemonRequestError("plain fallback", "session_has_running_sessions", params);
   expect(errorPresentation(error)).toBe(error);
@@ -167,7 +168,7 @@ it("names each branch or worktree still there as code with its reason, a comma i
     { kind: "branch", name: "long", branch: "long", state: "failed", uncommitted: false, detail: "error: one\nhint: two" },
   ];
   const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "3", items: JSON.stringify(items) });
-  const daemon = { store: createStateStore({ homeDir: "/home/dev" }) } as Daemon;
+  const daemon = testDaemon({ state: { homeDir: "/home/dev" } });
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("p"), (lead) => lead.textContent)).toEqual(["Removing these failed:", "This worktree is locked:"]);
   const announced = (row: Element) => {
@@ -204,7 +205,7 @@ it("names each branch or worktree still there as code with its reason, a comma i
 });
 
 it("keeps a sharing repair's own reason behind Details when it names no entry, and lists the entries there once it does", () => {
-  const daemon = { store: createStateStore({ sessions: new Map([["s1", { id: "s1", title: "Hub" } as import("../../protocol").Session]]) }) } as Daemon;
+  const daemon = testDaemon({ state: { sessions: new Map([["s1", { id: "s1", title: "Hub" } as import("../../protocol").Session]]) } });
   const reason = "account `Work`'s links to the default configuration could not be checked: permission denied";
   const empty = new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" });
   const unnamed = mountApart(empty, daemon);
@@ -238,7 +239,7 @@ it("sets a worktree kept for a project folder that could not be checked apart, i
     { kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", uncommitted: false, detail: "error: refused", cause: null },
   ];
   const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "2", items: JSON.stringify(items) });
-  const daemon = { store: createStateStore({ homeDir: "/home/dev" }) } as Daemon;
+  const daemon = testDaemon({ state: { homeDir: "/home/dev" } });
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("p"), (line) => line.textContent)).toEqual([
     "Removing this failed:",
@@ -262,7 +263,7 @@ it("offers no Error details for a worktree kept for a project folder that could 
 it("leaves the line over the groups out when there is one group, whose lead says it all", () => {
   const items = [{ kind: "branch", name: "fix/a", branch: "fix/a", state: "unmerged", uncommitted: false, detail: null }];
   const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify(items) });
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  const container = mount(<DaemonProvider value={testDaemon()}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(container.textContent).not.toContain("still there");
   expect(container.querySelector("p")?.textContent).toBe("This branch is not merged:");
 });
@@ -277,7 +278,7 @@ it.each([
   { name: "a nested shell timeout", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "shell_environment_timeout", ...params }), summary: "Could not start Draft: A shell startup file is probably blocked", detail: "/bin/zsh -l -i -c 'env -0'" },
   { name: "a branch group", error: new DaemonRequestError("fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", detail: "error: refused" }]) }), summary: "Removing this failed:", detail: "error: refused" },
 ])("keeps $name in inline summary and external details without duplication", ({ error, summary, detail }) => {
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}>
+  const container = mount(<DaemonProvider value={testDaemon()}>
     <ErrorAlert title="Could not finish"><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
     <section><DaemonErrorMessage error={error} part="details" /></section>
   </DaemonProvider>);
@@ -303,7 +304,7 @@ it.each([
   const state = collection === "accounts" ? { settings: { accounts: entries } } : { [collection]: new Map(entries.map((entry) => [entry.id, entry])) };
   const store = createStateStore(state as Parameters<typeof createStateStore>[0]);
   const error = new DaemonRequestError("fallback", `unknown_${field}`, { [field]: "known" });
-  const container = mount(<DaemonProvider value={{ store } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  const container = mount(<DaemonProvider value={testDaemon({ store })}><DaemonErrorMessage error={error} /></DaemonProvider>);
   const chip = () => container.querySelector("[data-inline-reference]")!;
   expect(chip().textContent).toBe(title);
   expect(chip().getAttribute("dir")).toBe("auto");
@@ -457,7 +458,7 @@ describe("a failure to write the application's own data nested in another failur
   });
 
   it.each(["handoff_archive_failed", "handoff_move_failed"])("names the receiving session of %s by its title once the store holds it", (code) => {
-    const daemon = { store: createStateStore({ sessions: new Map([["s2", { id: "s2", title: "Received work" } as import("../../protocol").Session]]) }) } as Daemon;
+    const daemon = testDaemon({ state: { sessions: new Map([["s2", { id: "s2", title: "Received work" } as import("../../protocol").Session]]) } });
     const error = new DaemonRequestError("fallback", code, { receiving_session: "s2", ...nested, cause: "other" });
     const { body } = mountApart(error, daemon);
     expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Received work");
@@ -509,7 +510,7 @@ describe("a failed automatic account switch", () => {
   const params = { agent: "Codex", from: "Work", account: "Spare", reason_code: "path_not_found", path: "/missing/project" };
 
   it("says what happened, then why on a line of its own with the nested failure's own chips", () => {
-    const daemon = { store: createStateStore({}) } as Daemon;
+    const daemon = testDaemon();
     const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError("fallback", "account_switch_automatically_failed", params)} /></DaemonProvider>);
     expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(expect.arrayContaining(["Work", "Codex", "Spare"]));
     expect(container.querySelector("code")?.textContent).toBe("/missing/project");
@@ -620,7 +621,7 @@ it.each(["project", "console"])("preserves the held %s session's task and name a
   const store = createStateStore({ sessions: new Map([[session.id, session]]), projects: new Map([["owner", { id: "owner", name: "Owner" } as import("../../protocol").Project]]), consoles: new Map([["owner", { id: "owner", name: "Owner" } as import("../../protocol").Console]]) });
   const params = { session: session.id, [owner]: "owner" };
   const error = new DaemonRequestError("fallback", `conversation_held_in_${owner}`, params);
-  const container = mount(<DaemonProvider value={{ store } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  const container = mount(<DaemonProvider value={testDaemon({ store })}><DaemonErrorMessage error={error} /></DaemonProvider>);
   const chips = [...container.querySelectorAll("[data-inline-reference]")];
   expect(chips.map((chip) => chip.textContent)).toEqual(["Task / 任务｜" + session.title, "Owner"]);
   expect(chips.every((chip) => chip.getAttribute("dir") === "auto" && !/[\u2066-\u2069]/.test(chip.textContent ?? ""))).toBe(true);
@@ -706,7 +707,7 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
     { item: "conversation-id", left: "partly_moved", detail: "busy", sessions: ["s1", "gone"], cause: "busy" },
   ]) };
   const error = new DaemonRequestError("do not repeat the raw fallback", code, params);
-  const container = mount(<DaemonProvider value={{ store } as Daemon}>
+  const container = mount(<DaemonProvider value={testDaemon({ store })}>
     <ErrorAlert title="Could not finish"><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
     <section><DaemonErrorMessage error={error} part="details" /></section>
   </DaemonProvider>);
@@ -748,7 +749,7 @@ it("names the cause of a change that could not start when no entry is listed", (
 });
 
 it("joins a whole failure's reason and its guidance in the catalog, and points a cause with no line of its own at Details", () => {
-  const mountWith = (cause: string, detail: string | undefined) => mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}>
+  const mountWith = (cause: string, detail: string | undefined) => mount(<DaemonProvider value={testDaemon()}>
     <DaemonErrorMessage error={new DaemonRequestError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail, cause } as never)} />
   </DaemonProvider>);
   const busy = mountWith("busy", "x");
@@ -806,7 +807,7 @@ it.each([
   ["a sharing failure with no reason to give", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", cause: "other" }],
 ])("tells without rendering whether the details part of %s has anything", (_name, code, failureParams) => {
   const error = new DaemonRequestError("raw", code, failureParams as never);
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
+  const container = mount(<DaemonProvider value={testDaemon()}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
   expect(hasErrorDetails(error)).toBe(container.innerHTML !== "");
 });
 
@@ -823,7 +824,7 @@ it.each([
   ["a sharing failure", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" }],
 ])("tells without rendering whether the remedy part of %s has anything", (_name, code, failureParams) => {
   const error = new DaemonRequestError("raw", code, failureParams as never);
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} part="remedy" /></DaemonProvider>);
+  const container = mount(<DaemonProvider value={testDaemon()}><DaemonErrorMessage error={error} part="remedy" /></DaemonProvider>);
   expect(hasErrorRemedy(error)).toBe(container.innerHTML !== "");
 });
 

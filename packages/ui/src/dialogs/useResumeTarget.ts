@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { choiceKey, findEntry } from "../accounts/accountChoices";
 import { AGENT_LABEL } from "../agents/agents";
@@ -32,24 +33,24 @@ const FOUND_SESSION_MESSAGE = {
 
 /**
  * Says which session holds a conversation that is outside the project, and where: `undefined` for
- * a session the store does not have, or one whose project or console it does not have, which the
- * caller words generally instead. The names are isolated.
+ * no session, a session the store does not have, or one whose project or console it does not have,
+ * which the caller words generally instead. The names are isolated.
  */
-function useHeldElsewhere(): (sessionId: string | undefined) => DaemonRequestError | undefined {
+function useHeldElsewhere(sessionId: string | undefined): DaemonRequestError | undefined {
   const t = useT();
-  const sessions = useDaemonStore((s) => s.sessions);
-  const projects = useDaemonStore((s) => s.projects);
-  const consoles = useDaemonStore((s) => s.consoles);
-  return (sessionId) => {
-    const session = sessionId === undefined ? undefined : sessions.get(sessionId);
-    if (!session) return undefined;
-    if (session.project_id) {
-      const project = projects.get(session.project_id);
-      return project && new DaemonRequestError(t("dialog.session.resumeHeldInProject", { session: isolate(sessionDisplayTitle(t, session)), project: isolate(project.name) }), "conversation_held_in_project", { session: session.id, project: project.id });
-    }
-    const owner = consoles.get(session.console_id);
-    return owner && new DaemonRequestError(t("dialog.session.resumeHeldInConsole", { session: isolate(sessionDisplayTitle(t, session)), console: isolate(owner.name) }), "conversation_held_in_console", { session: session.id, console: owner.id });
-  };
+  const { session, project, owner } = useDaemonStore(useShallow((s) => {
+    const held = sessionId === undefined ? undefined : s.sessions.get(sessionId);
+    return {
+      session: held,
+      project: held?.project_id ? s.projects.get(held.project_id) : undefined,
+      owner: held ? s.consoles.get(held.console_id) : undefined,
+    };
+  }));
+  if (!session) return undefined;
+  if (session.project_id) {
+    return project && new DaemonRequestError(t("dialog.session.resumeHeldInProject", { session: isolate(sessionDisplayTitle(t, session)), project: isolate(project.name) }), "conversation_held_in_project", { session: session.id, project: project.id });
+  }
+  return owner && new DaemonRequestError(t("dialog.session.resumeHeldInConsole", { session: isolate(sessionDisplayTitle(t, session)), console: isolate(owner.name) }), "conversation_held_in_console", { session: session.id, console: owner.id });
 }
 
 /**
@@ -67,7 +68,7 @@ function useHeldElsewhere(): (sessionId: string | undefined) => DaemonRequestErr
  * there, or on what holds the conversation now that it is not. `reask` asks again for a caller that
  * learned the answer no longer holds.
  */
-export function useResumeTarget(project: Project | undefined, resumeId: string, resuming: boolean, sessions: Session[]): {
+export function useResumeTarget(project: Project | undefined, resumeId: string, resuming: boolean): {
   idProblem: "required" | "invalid" | undefined;
   target: ResumeTarget | undefined;
   looking: boolean;
@@ -79,7 +80,6 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   const t = useT();
   const { request } = useDaemon();
   const groups = useChoiceGroups();
-  const heldElsewhere = useHeldElsewhere();
   const [checkedMissing, setCheckedMissing] = useState<string>();
   const [reasked, setReasked] = useState(0);
 
@@ -87,7 +87,8 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   const lookup = useLocatedConversation(request, project?.id ?? "", resuming && idProblem === undefined ? resumeId : undefined, LOCATE_DELAY_MS, JSON.stringify([checkedMissing, reasked]));
   const located = lookup.status === "ready" ? lookup.location : undefined;
   const heldId = located?.kind === "archived_session" || located?.kind === "live_session" ? located.session : undefined;
-  const holder = useDaemonStore((s) => heldId === undefined ? undefined : s.sessions.get(heldId)) ?? sessions.find((s) => s.id === heldId);
+  const holder = useDaemonStore((s) => heldId === undefined ? undefined : s.sessions.get(heldId));
+  const heldElsewhere = useHeldElsewhere(located?.kind === "outside_project" ? located.session : undefined);
   const missing = heldId !== undefined && holder === undefined;
   if (missing && checkedMissing !== heldId) setCheckedMissing(heldId);
 
@@ -103,7 +104,7 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
 
   const notFound = located?.kind === "not_found";
   let problem: string | ErrorPresentation | undefined;
-  if (located?.kind === "outside_project") problem = heldElsewhere(located.session) ?? t("daemon.conversation_outside_project");
+  if (located?.kind === "outside_project") problem = heldElsewhere ?? t("daemon.conversation_outside_project");
   else if (located?.kind === "record" && !target) problem = t("dialog.session.resumeUnavailable");
   else if (lookup.status === "failed") problem = lookup.error;
 

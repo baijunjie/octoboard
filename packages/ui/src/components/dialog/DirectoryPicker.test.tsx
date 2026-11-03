@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import { DaemonProvider, type Daemon } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
 import { errorAlerts } from "../alerts/errorAlerts";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
@@ -16,16 +17,7 @@ import { DaemonRequestError } from "../../daemon-client";
 // Enter lists the path typed, which needs focus in the path field as the picker opens.
 it("opens with focus in the path field", async () => {
   act(() => setInteractionModality("pointer"));
-  const daemon: Daemon = {
-    store: createStateStore(),
-    request: vi.fn(async () => ({ type: "dir_listing", id: null, path: "/home", entries: [] })) as Daemon["request"],
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const daemon = testDaemon({ request: vi.fn(async () => ({ type: "dir_listing", id: null, path: "/home", entries: [] })) as Daemon["request"] });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -48,7 +40,7 @@ it("shows a listing failure in an Alert with its reason and Try again, and opens
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
   const request = vi.fn().mockRejectedValueOnce(new Error("Permission denied")).mockResolvedValue({ type: "dir_listing", id: null, path: "/home", entries: [] });
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -79,7 +71,7 @@ it("reports a failed Try again in the error alert dialog and leaves the first-li
   const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
   onTestFinished(() => report.mockRestore());
   const request = vi.fn().mockRejectedValue(new Error("Permission denied"));
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -107,7 +99,7 @@ it("reports a failed Go before any listing in the error alert dialog, and the fi
   const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
   onTestFinished(() => report.mockRestore());
   const request = vi.fn().mockRejectedValue(new Error("Permission denied"));
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -131,7 +123,7 @@ it("keeps Try again where it is, pending and focused, while its listing is out",
     .fn()
     .mockRejectedValueOnce(new Error("Permission denied"))
     .mockReturnValueOnce(new Promise((_, reject) => void (finish = reject)));
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -165,7 +157,7 @@ async function failLaterNavigation(navigate: () => void | Promise<void>) {
   const request = vi.fn()
     .mockResolvedValueOnce({ type: "dir_listing", id: null, path: "/home/me", entries })
     .mockRejectedValueOnce(new Error("Permission denied"));
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -200,7 +192,7 @@ it("reports a failed later navigation to the parent row in the error alert dialo
 
 async function mountListing(path: string, entries: unknown[]): Promise<HTMLElement> {
   const request = vi.fn(async () => ({ type: "dir_listing", id: null, path, entries }));
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request: request as Daemon["request"] });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -237,7 +229,7 @@ it("keeps the latest listing when an earlier one answers after it", async () => 
   const request = vi.fn()
     .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
     .mockResolvedValue({ type: "dir_listing", id: null, path: "/later", entries: [] });
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const onPick = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -260,7 +252,7 @@ it("takes an earlier listing that answers after a later one failed, which change
   const request = vi.fn()
     .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
     .mockRejectedValue(new Error("Permission denied"));
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -288,7 +280,7 @@ it("keeps the user's navigation when the opening listing's walk up to an ancesto
     .mockReturnValueOnce(new Promise((_, reject) => (failFirst = reject)))
     .mockReturnValueOnce(new Promise((resolve) => (answerGo = resolve)))
     .mockResolvedValue({ type: "dir_listing", id: null, path: "/", entries: [] });
-  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {

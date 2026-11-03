@@ -5,7 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createBrowseLane } from "../../browse/lane";
 import { DaemonRequestError } from "../../daemon-client";
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import { DaemonProvider } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
 import { useLatestRequest, type LatestRequest, type LatestRequestSend } from "./useLatestRequest";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -16,8 +17,8 @@ type Held = { state: "loading" } | { state: "loaded"; answer: string } | { state
 type Out = { resolve: (answer: string) => void; reject: (err: unknown) => void };
 
 function mount(onReconnect?: (last: { asked: boolean; lost: boolean }) => void) {
-  const store = createStateStore({ connectionState: "open", snapshotEpoch: 1 });
-  const daemon = { store, request: vi.fn() } as unknown as Daemon;
+  const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1 }, request: vi.fn() });
+  const { store } = daemon;
   let latest!: LatestRequest<Held>;
   let renders = 0;
   let scope = "a";
@@ -46,6 +47,7 @@ function mount(onReconnect?: (last: { asked: boolean; lost: boolean }) => void) 
     send,
     value: () => latest.value,
     latest: () => latest,
+    reconnects: () => latest.reconnects,
     renders: () => renders,
     scope: (next: string) => {
       scope = next;
@@ -119,6 +121,23 @@ it("keeps what is held through a lost request and tells the reconnect it was los
   expect(hook.value()).toEqual({ state: "lost" });
   hook.reconnect();
   expect(reconnects).toEqual([{ asked: false, lost: false }, { asked: true, lost: true }]);
+});
+
+it("counts the reconnects that found the latest request lost, for the caller to ask again", async () => {
+  const hook = mount();
+  hook.reconnect();
+  expect(hook.reconnects()).toBe(0);
+  act(() => void hook.send());
+  hook.reconnect();
+  // The request is still out, so it is not lost.
+  expect(hook.reconnects()).toBe(0);
+  await act(async () => hook.out[0]!.reject(daemonError("connection_closed")));
+  hook.reconnect();
+  expect(hook.reconnects()).toBe(1);
+  act(() => void hook.send());
+  await act(async () => hook.out[1]!.resolve("answer"));
+  hook.reconnect();
+  expect(hook.reconnects()).toBe(1);
 });
 
 it("takes a scope given as undefined for the scope undefined, and no scope for the current one", async () => {

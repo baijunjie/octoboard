@@ -204,7 +204,7 @@ export function Rail({
       // `inert` rather than `aria-hidden` and `tabindex`: it takes the whole subtree out of the focus
       // order and the accessibility tree at once, which `invisible` does only once the exit is over.
       inert={away}
-      className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none${onDemand ? ` ${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
+      className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none ${onDemand ? `${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
     >
       <div ref={consolesRef} className="relative flex min-h-0 flex-col items-center gap-1">
         {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for

@@ -605,7 +605,7 @@ mapping.
 - **Location and state change.** The project menu, Git, Switch branch: the submenu opens and takes focus while its
   branch list loads.
 - **Mechanism.** A `StatusAnnouncer` mounted with the submenu items, holding "Loading…" at the default 100 ms delay.
-  `packages/ui/src/components/menus/ActionMenu.tsx` (`LoadedMenuItems`); the caller is the project menu's async branch
+  `packages/ui/src/components/menus/MenuItems.tsx` (`LoadedMenuItems`); the caller is the project menu's async branch
   list in `packages/ui/src/sidebar/menus.tsx`. The visible disabled "Loading…" menu item is not `aria-hidden`. The
   popover contains the region, so it is exposed. The git request was stretched to 2 s by a clone-only wrapper to make
   the load observable; this is not natural latency.
@@ -860,7 +860,8 @@ mapping.
   separately open with Enter and close with Escape. The viewer's outer dialog is already open for the mark checks; quota
   is in the main window.
 - **Mechanism.** `packages/ui/src/components/status/StatusMark.tsx` (`StatusMark`, `PopoverMark`, `MarkButton`) and
-  `packages/ui/src/shell/RailQuotaEntry.tsx` (`RailQuotaEntry`, `QuotaPanel`) share
+  `packages/ui/src/shell/RailQuotaEntry.tsx` (`RailQuotaEntry`) with `packages/ui/src/shell/rail-quota/QuotaPanel.tsx`
+  (`QuotaPanel`) share
   `packages/ui/src/components/hint/hintPopover.tsx` (`PopoverHint`, `useHoverPopover`). E6 source wiring opens hover
   non-modally without a focus move, using a focusable `div` with `role="dialog"`, `aria-modal="false"` and
   `tabIndex={-1}`. A keyboard press mounts react-aria's modal `Dialog` and its focus scope; quota explicitly focuses the
@@ -1012,7 +1013,7 @@ mapping.
   read `Failure` when no conflict body is available. `packages/ui/src/viewer/viewerStates.tsx` (`Failure`) passes the
   first-paint delay and announcement flag to `packages/ui/src/components/alerts/PaneFailure.tsx` (`PaneFailure`), then
   `packages/ui/src/components/panel/EmptyPanel.tsx` (`EmptyPanel`) and
-  `packages/ui/src/components/announce/useAnnouncement.ts` (`useAnnouncement`). After the viewer delay, the heading and
+  `packages/ui/src/components/announce/useAlertAnnouncement.ts` (`useAlertAnnouncement`). After the viewer delay, the heading and
   reason are in a keyed `role="alert"` wrapper. The conflict kind remains in the viewer heading; no separate conflict
   notice announces it.
 - **ARIA wiring as rendered.** Native `AXGroup` with subrole `AXApplicationAlert`, containing the level-2 heading `Could
@@ -1030,7 +1031,7 @@ mapping.
 - **Date.** 2026-10-25.
 - **Reuse scope.** Covers this file-not-found read failure inside the conflicted viewer, with the viewer-opening focus
   move and delayed alert. It establishes neither other read failures nor a blanket match for every `PaneFailure` or
-  `useAnnouncement` caller.
+  `useAlertAnnouncement` caller.
 
 ### WARN-1 Deletion warning order and checked option descriptions
 
@@ -1038,7 +1039,8 @@ mapping.
   opening its Delete confirmation, the real daemon's branch inspection reported one uncommitted worktree and one locked
   worktree, and its agent-record inspection reported `present`. Tick the force-remove, locked-worktree and agent-record
   options, let the warning update settle, read each checkbox, then read through the warning.
-- **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`; `ConfirmWarning` no longer
+- **Mechanism.** `packages/ui/src/dialogs/confirmations/DeleteSessionDialog.tsx`
+  (`DeleteSessionDialog`; `ConfirmWarning` no longer
   exists) put the warning title, the bound-session list and then the consequence lines inside
   `TintedAlert` (a component since removed), under `Alert.Content`. The indicator is `aria-hidden`.
   `packages/ui/src/components/dialog/ConfirmDialog.tsx` (`ConfirmDialog`) keeps the options before that warning.
@@ -1149,7 +1151,8 @@ mapping.
   checked-out branches), and the agent-record inspection reported `present`. Tick the force-remove, locked-worktree and
   agent-record options, let the update settle, focus each checkbox anew, then read from Close through the body, the
   list and the consequences. No deletion was confirmed.
-- **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`, `ConfirmConsequences`),
+- **Mechanism.** `packages/ui/src/dialogs/confirmations/DeleteSessionDialog.tsx`
+  (`DeleteSessionDialog`, `ConfirmConsequences`),
   `packages/ui/src/components/dialog/ConfirmDialog.tsx` (`ConfirmDialog`) and
   `packages/ui/src/components/dialog/Dialog.tsx` (`Dialog`): a warning modal, the warning icon in its header, a plain
   title, the subject in the body's first sentence, and the session list and consequence paragraphs as plain body text
@@ -1235,7 +1238,8 @@ mapping.
   repository making the real worktree inspection fail (an earlier attempt with a renamed directory gave an empty
   successful lookup and is not evidence of the failure), read the settled ticked checkbox and the separate mark, and
   press the mark. Cancel the removal; the configuration and path were restored before cleanup.
-- **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteProjectDialog`, `ConfirmConsequences`),
+- **Mechanism.** `packages/ui/src/dialogs/confirmations/DeleteProjectDialog.tsx`
+  (`DeleteProjectDialog`, `ConfirmConsequences`),
   `packages/ui/src/components/dialog/ConfirmDialog.tsx`, `packages/ui/src/components/dialog/Dialog.tsx`,
   `packages/ui/src/components/form/ConfirmOption.tsx`, `packages/ui/src/dialogs/BranchCleanupOptions.tsx`
   (`useProjectRemovalCleanup`) and `packages/ui/src/components/status/StatusMark.tsx` (`StatusMark`): the warning mark
@@ -1478,7 +1482,7 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
   to the document, as what held it went with the crashed view.
 - **Mechanism.** `packages/ui/src/StartupScreen.tsx` (`StartupFailure`) passes `announce` and `announceDelayMs={0}` to
   `packages/ui/src/components/panel/EmptyPanel.tsx` (`EmptyPanel`), through
-  `packages/ui/src/components/announce/useAnnouncement.ts` (`useAnnouncement`): the heading and the first line are
+  `packages/ui/src/components/announce/useAlertAnnouncement.ts` (`useAlertAnnouncement`): the heading and the first line are
   inserted in a keyed `role="alert"` wrapper from a timer after the first paint, so the alert is a change to the page,
   as in ALERT-1's remount, rather than part of its first render.
 - **ARIA wiring, capture, environment, date.** Not recorded: this case has not been listened to.
@@ -1509,7 +1513,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `components/controls/CopyButton.tsx` | "Copied" | SA-G for the confirmation and the tooltip-driven clear, for a press made while the button has focus; no match for the 2 s automatic clear | Heard | Heard in the main window with focus kept. The 2000 ms branch without a tooltip, a repeat press and a failure were not heard. The copy button in the viewer dialog sets `preventFocusOnPress` (a pointer press does not move focus to it), carries its own "Path copied" text and sits in a dialog, so it is a candidate only for a keyboard press made while it has focus. |
 | `project-browser/git/GitView.tsx` | git loading, comparing, listing, spoken failures | SA-H for the first mount with focus kept; no match for the Changes-tab mount, replacement sequences or the failure sentences | Heard | Heard for the Changes loading at mount with focus on the panel toggle. The tab variant, which moves focus into the pane, captured no sentence, and the comparing and listing texts replacing one another in place were not heard. The failure sentences (`useSpokenFailures`) were not exercised. |
 | `project-browser/files/FilesPanel.tsx` | files loading | SA-H for the load when the Files panel is shown with focus kept; no match for the Files-tab mount or search loading | Candidate | Same hidden `div`, default delay and main window as the representative, but its own Files load finished too fast to sample, switching to the Files tab is the untested focus-move variant, and search-triggered loading was not recorded. |
-| `components/menus/ActionMenu.tsx`, `LoadedMenuItems` | menu loading, load failed | SA-I for the loading text; no match for load failed | Heard | Heard with the submenu focused and the git list stretched to 2 s; a visible "Loading…" item says the same word, so attribution is shared. The failure update was masked by an error alert. |
+| `components/menus/MenuItems.tsx`, `LoadedMenuItems` | menu loading, load failed | SA-I for the loading text; no match for load failed | Heard | Heard with the submenu focused and the git list stretched to 2 s; a visible "Loading…" item says the same word, so attribution is shared. The failure update was masked by an error alert. |
 | `viewer/code/CodeSurface.tsx` | expansion loading and note | SA-K and FOCUS-2 for the loading text and the focus after an expansion; no match for the outcome notes | Heard | Loading heard while the pressed button had focus, and focus restored to the surviving control or the code frame on E5. Notes, failure and capped outcomes were not exercised, nor the emptying of each text `READ_TIME_MS` after it was written (`clearAfterRead`). |
 | `components/form/AdvancedSection.tsx`, `AdvancedSection` | models loading, unavailable, failed | SA-M for loading and failed; no match for the unavailable text | Heard | Region mounted with each opening outside the folded body, heard for a fresh opening and two reopenings. The unavailable text was not heard separately. |
 | `terminal/shell/ShellTerminalPanel.tsx` | shell starting | none | none | Text can be present at the first render at default delay and clears as a terminal appears and takes focus, a write at a focus move; the starting status was not observed populated. |

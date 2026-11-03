@@ -6,6 +6,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { buttons, optionElements } from "../test/dom";
+import { testDaemon } from "../test/testDaemon";
 import { framesAsTimers, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionModelDialog } from "./SessionModelDialog";
 
@@ -17,11 +19,6 @@ const parentConsole = consoleOf("c-1", "Main");
 const project = projectOf("p-1", parentConsole.id, "Search API", { launch: { claude: { model: "opus", effort: "high" } } });
 
 async function mount(session: Session, models: "pending" | "unavailable" | "empty" | "listed" = "listed") {
-  const store = createStateStore({
-    consoles: new Map([[parentConsole.id, parentConsole]]),
-    projects: new Map([[project.id, project]]),
-    sessions: new Map([[session.id, session]]),
-  });
   const request = vi.fn(async (body: { type: string; agent?: string; account?: string | null }) => {
     if (body.type !== "list_agent_models") return { type: "ack", id: null };
     if (models === "pending") return new Promise<never>(() => {});
@@ -33,7 +30,17 @@ async function mount(session: Session, models: "pending" | "unavailable" | "empt
           { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
         ], unavailable: null }) };
   });
-  const daemon = { store, request, raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = testDaemon({
+    state: {
+      consoles: new Map([[parentConsole.id, parentConsole]]),
+      projects: new Map([[project.id, project]]),
+      sessions: new Map([[session.id, session]]),
+    },
+    request: request as Daemon["request"],
+    raiseError: vi.fn(),
+    toastNotice: vi.fn(),
+  });
+  const { store } = daemon;
   const onClose = vi.fn();
   const onChangeModel = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -49,9 +56,7 @@ async function mount(session: Session, models: "pending" | "unavailable" | "empt
   return { request, onClose, onChangeModel, store };
 }
 
-const buttons = () => Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"));
 const confirm = () => buttons().find((button) => button.textContent === "Change model")!;
-const options = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'));
 const picker = (name: string) => buttons().find((button) =>
   button.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name))!;
 
@@ -91,12 +96,12 @@ it("starts on what the session runs with, waits for a change, and sends only wha
   expect(confirm().disabled).toBe(true);
 
   await act(async () => picker("Model").click());
-  await act(async () => options().find((option) => option.textContent === "Sonnet")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "Sonnet")!.click());
   // Changed and changed back is no change.
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "high")!.click());
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "low")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "low")!.click());
   await act(async () => confirm().click());
 
   // The dialog hands the change on and closes at once; the request itself is the app's to send and report.
@@ -164,7 +169,7 @@ it("follows a change made to the session while it is open, for the fields the us
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
   const { onChangeModel, store } = await mount(session);
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "high")!.click());
 
   await setSession(store, session, { model: "sonnet", effort: "low" });
   expect(picker("Model").textContent).toContain("Sonnet");
@@ -178,7 +183,7 @@ it("recomputes what changed against the session's latest values", async () => {
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
   const { store } = await mount(session);
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "high")!.click());
   expect(confirm().disabled).toBe(false);
 
   // Another window made the same change: nothing is left to do.
@@ -193,7 +198,7 @@ it.each([
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
   const { onChangeModel, store } = await mount(session);
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "high")!.click());
   expect(confirm().disabled).toBe(false);
 
   await setSession(store, session, change);
@@ -208,9 +213,9 @@ it("follows the session again for a field picked back to the session's value", a
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
   const { onChangeModel, store } = await mount(session);
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "high")!.click());
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "low")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "low")!.click());
 
   await setSession(store, session, { effort: "high" });
   expect(picker("Reasoning effort").textContent).toContain("high");
@@ -226,7 +231,7 @@ it("turns into a failure modal when the session is archived while the dialog is 
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
   const { onChangeModel, onClose, store } = await mount(session);
   await act(async () => picker("Reasoning effort").click());
-  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  await act(async () => optionElements().find((option) => option.textContent === "high")!.click());
 
   await setSession(store, session, { status: "archived" });
   expect(failureModal()?.textContent).toContain("Cannot change the model");

@@ -1,7 +1,7 @@
 import { LogIn } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { ICON_TRIGGER_BASE_CLASS, ICON_TRIGGER_CLASS } from "../../components/menus/ActionMenu";
+import { ICON_TRIGGER_BASE_CLASS, ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
 import { Button } from "../../components/controls/Button";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { isolate } from "../../i18n/isolate";

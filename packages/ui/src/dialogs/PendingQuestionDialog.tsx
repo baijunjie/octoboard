@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState } from "react";
 
-import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "../components/focus/regionFocus";
+import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "../components/focus/modalFocus";
 import { useDaemonStore } from "../store";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useSessionRequestDialogProps } from "./SessionRequestDialog";

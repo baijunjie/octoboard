@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { MODAL_OPEN } from "../components/focus/regionFocus";
+import { MODAL_OPEN } from "../components/focus/selectors";
 import { nestedPopovers } from "./nestedPopover";
 
 /** Closes the panel it is rendered in when a modal is opened by something other than a press here

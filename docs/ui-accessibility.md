@@ -655,7 +655,7 @@ covers Settings), ring it as focus the user did not aim, and take it back once i
 no dialog under it, goes to the selected session's terminal, else to the control that opened it while that is still
 there, even one that never took focus (the press it ended on is recorded by `usePressedControl` in
 `packages/ui/src/components/`), else to the window's fallback (`focusAfterModalCloses` in
-`packages/ui/src/components/focus/regionFocus.ts`). Closing over another dialog, focus the restore left on `<body>` goes
+`packages/ui/src/components/focus/modalFocus.ts`). Closing over another dialog, focus the restore left on `<body>` goes
 to the control in that dialog that opened Settings, else the control that dialog opens on. A return to the control that
 opened a dialog is a restore, not a hand-off: its ring follows the input that closed the dialog.
 
@@ -1196,7 +1196,7 @@ that form available after acknowledgement, with its values and retry action inta
 where it was; where that is gone, or the dialog under the alert never had focus (the alert came in the same moment as
 the press that opened it), focus goes where that dialog's own opening focus goes — never to the page (see "The error
 alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens on is marked for this with
-`openingFocus` (`packages/ui/src/components/focus/regionFocus.ts`), which `Button` and `TextInput` set from their
+`openingFocus` (`packages/ui/src/components/focus/modalFocus.ts`), which `Button` and `TextInput` set from their
 `autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself. A pending question (a
 trust prompt, a session request) that closes with nowhere to return focus to lands the same way, and so does Settings
 closing with no opener left to return to.

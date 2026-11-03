@@ -2,7 +2,7 @@ import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { TextTabStrip } from "../components/tabs/TextTabStrip";
 import { DaemonRequestError } from "../daemon-client";
 import { ActionableError } from "../errors/actionableError";
 import { isolate } from "../i18n/isolate";
@@ -16,7 +16,8 @@ import { liveConsoleSessions } from "../sessions/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../preferences/theme";
 import { AgentAccountField } from "./AgentAccountField";
-import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
+import { Dialog } from "../components/dialog/Dialog";
+import { useDialogAction, useSubmitValidation } from "../components/dialog/dialogHooks";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { ResumeConversationFields } from "./ResumeConversationFields";
@@ -115,7 +116,6 @@ export function SessionDialog({
 }): React.ReactElement {
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
-  const tabScrollLabels = useTabScrollLabels();
   const { request } = useDaemon();
   const [title, setTitle] = useState("");
   const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
@@ -137,7 +137,7 @@ export function SessionDialog({
   // The daemon is asked once the ID is valid; where the conversation is held settles what the
   // submit does (resume a session, go to one, or open one on an agent's record) and on which
   // agent and account.
-  const resume = useResumeTarget(project, resumeId, resuming, sessions);
+  const resume = useResumeTarget(project, resumeId, resuming);
   const { target } = resume;
   const record = target?.kind === "record" ? target : undefined;
 
@@ -300,19 +300,7 @@ export function SessionDialog({
           setSwitched(true);
           setConversation(key as Conversation);
         }} className="gap-4">
-          <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
-            <Tabs.List aria-label={t("dialog.session.conversation")} className="w-max min-w-0 p-1.5">
-              {/* Hovered labels take the foreground colour for clear feedback. */}
-              <Tabs.Tab id="new" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground">
-                {t("dialog.session.conversationNew")}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-              <Tabs.Tab id="resume" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground">
-                {t("dialog.session.conversationResume")}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-            </Tabs.List>
-          </Tabs.ListContainer>
+          <TextTabStrip label={t("dialog.session.conversation")} tabs={[{ id: "new", label: t("dialog.session.conversationNew") }, { id: "resume", label: t("dialog.session.conversationResume") }]} />
           {/* The New tab holds the fields of a new conversation. The Resume tab holds its Session
               ID, then the fields that what the lookup found calls for. Only the selected tab's
               panel is mounted, so what the form remembers lives in this dialog's state; only

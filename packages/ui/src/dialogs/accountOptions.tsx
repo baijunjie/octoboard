@@ -23,3 +23,12 @@ export function accountOption(t: Translate, entry: ChoiceEntry, now: number, isD
 export function markDisabledPickable<O extends { value: string; label: string }>(t: Translate, option: O, disabled: boolean): O | (O & ReturnType<typeof accountDisabledPickable>) {
   return disabled ? { ...option, ...accountDisabledPickable(t) } : option;
 }
+
+/** The options of a picker that keeps a turned-off account selectable (a console's or a project's account): a turned-off
+ * account (`off`) is left out, but for those whose `value` is one of `kept` (the account picked now, and the one saved
+ * when the dialog opened, so the user can pick it back), which stay marked (`markDisabledPickable`). */
+export function offeredAccountOptions(t: Translate, entries: { value: string; label: string; off: boolean }[], ...kept: string[]): Option<string>[] {
+  return entries
+    .filter(({ value, off }) => !off || kept.includes(value))
+    .map(({ value, label, off }) => markDisabledPickable(t, { value, label }, off));
+}

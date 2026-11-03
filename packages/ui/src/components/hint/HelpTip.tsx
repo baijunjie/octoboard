@@ -4,6 +4,9 @@ import React from "react";
 import { Button } from "../controls/Button";
 import { Hint } from "./Hint";
 
+/** The size, colour and hit area of the "?" beside a title, for another icon-only control that sits there. */
+export const HELP_TIP_BUTTON_CLASS = "shrink-0 -my-0.5 rounded-full text-app-muted";
+
 /** A small muted "?" that carries an explanation, to take a line of explanatory text out of a row. It is an
  * icon-only control, so it is a tab stop (see "The help tip" in `docs/product/labels-and-tooltips.md`), and it
  * opens the explanation in a popover (`Hint` of kind `popover`), as a status mark does, so the explanation can
@@ -21,7 +24,7 @@ export function HelpTip({ label, children }: { label: string; children: React.Re
       kind="popover"
       label={label}
       trigger={({ onMouseHoverChange: _, expanded: __, popupId: ___, ...wiring }) => (
-        <Button {...wiring} isIconOnly size="xs" variant="ghost" aria-label={label} className="shrink-0 -my-0.5 rounded-full text-app-muted">
+        <Button {...wiring} isIconOnly size="xs" variant="ghost" aria-label={label} className={HELP_TIP_BUTTON_CLASS}>
           <CircleHelp className="size-3.5" aria-hidden />
         </Button>
       )}

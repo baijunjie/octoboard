@@ -5,7 +5,8 @@ import { useFocusVisible } from "react-aria";
 
 import { Button } from "../../components/controls/Button";
 import type { ViewedFile } from "../../viewer/viewedFile";
-import { ActionMenu, type ActionMenuEntry } from "../../components/menus/ActionMenu";
+import { ActionMenu } from "../../components/menus/ActionMenu";
+import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { afterCollectionFocus } from "../../components/focus/afterCollectionFocus";
 import { CenteredEmptyPanel } from "../../components/panel/EmptyPanel";
 import { LoadingState } from "../../components/panel/LoadingState";
@@ -18,7 +19,7 @@ import { focusFellToPage } from "../../components/focus/regionFocus";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/RowControls";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { INACTIVE_VEIL_CLASS } from "../../components/status/inactiveVeil";
-import { useTabScrollLabels } from "../../components/tabs/tabScrollLabels";
+import { LocalizedTabListContainer } from "../../components/tabs/LocalizedTabListContainer";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { useLatest, useStableHandler } from "../../components/hooks/useLatest";
 import { useListMotion } from "../../components/motion/useListMotion";
@@ -67,7 +68,6 @@ export function ShellTerminalPanel({
 }): React.ReactElement {
   const t = useT();
   const daemon = useDaemon();
-  const tabScrollLabels = useTabScrollLabels();
   const [fadesIn] = useState(switching);
   const terminals = useProjectShellTerminals(project.id);
   const starting = useShellTerminalStarting(project.id);
@@ -264,11 +264,10 @@ export function ShellTerminalPanel({
           <PanelHeader title={t("panel.terminal.name")} />
           <div className="flex min-h-11 min-w-0 items-center groove-b px-[calc(var(--pane-inset)-6px)]">
             {terminals.length > 0 && (
-              <Tabs.ListContainer
+              <LocalizedTabListContainer
                 // HeroUI lays its scroll buttons over the strip's ends, which here would cover a
                 // tab's close mark: reserve space only at an edge that has a scroll button.
-                className="min-w-0 flex-initial rounded-none bg-transparent has-[>:is([data-left-scroll=true],[data-left-right-scroll=true])]:ps-6 has-[>:is([data-right-scroll=true],[data-left-right-scroll=true])]:pe-6"
-                render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+                className="min-w-0 flex-initial rounded-none bg-transparent has-[>:is([data-left-scroll=true],[data-left-right-scroll=true])]:ps-6 has-[>:is([data-right-scroll=true],[data-left-right-scroll=true])]:pe-6">
                 {/* The scroller clips outside this padding; leave room for the focus ring and its offset.
                     Positioned, so a departing tab's visual stays in the strip's scroll. */}
                 <Tabs.List ref={stripRef} aria-label={t("shellTerminal.tabs")} className="relative w-max min-w-0 gap-1 p-1.5">
@@ -289,7 +288,7 @@ export function ShellTerminalPanel({
                     </Tabs.Tab>
                   ))}
                 </Tabs.List>
-              </Tabs.ListContainer>
+              </LocalizedTabListContainer>
             )}
             <RowIconGroup className="ms-auto px-1.5">
               {newTerminalButton}

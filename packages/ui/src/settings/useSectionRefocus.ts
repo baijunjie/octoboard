@@ -1,6 +1,6 @@
 import { createContext, useContext, type DependencyList } from "react";
 
-import { useRefocusIfLost } from "../components/dialog/Dialog";
+import { useRefocusIfLost } from "../components/dialog/dialogHooks";
 
 /** Where `SettingsDialog` wants keyboard focus back when a control inside a section unmounts under
  * it. */

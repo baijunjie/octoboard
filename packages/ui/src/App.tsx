@@ -17,7 +17,7 @@ import { BareTitleBar, TitleBar } from "./shell/TitleBar";
 import { Toasts } from "./shell/Toasts";
 import { useFirstConsoleHandoff } from "./shell/useFirstConsoleHandoff";
 import { useStableHandler } from "./components/hooks/useLatest";
-import { focusAfterLoss, setFocusAfterModalLoss } from "./components/focus/regionFocus";
+import { focusAfterLoss, setFocusAfterModalLoss } from "./components/focus/modalFocus";
 import { ConfirmDialog } from "./components/dialog/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQuestionDialog";

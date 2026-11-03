@@ -1,7 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
 
 import { createPersistedPreference } from "../preferences/persistedPreference";
-import { MIN_TWO_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
 
@@ -23,9 +22,6 @@ export const NARROW_TERMINAL_FLOOR = 398;
 /** The aside's floor below the `docked` breakpoint while the Terminal panel is in its column: a
  * narrow Shell header reserves room for a normal tab, its focus ring and every action. */
 export const NARROW_TERMINAL_PANEL_ASIDE_MIN = 336;
-
-/** A two-column floating group plus the rail left clear beside it. */
-export const MOBILE_ASIDE_MIN = MIN_TWO_COLUMN_ASIDE_WIDTH;
 
 /** The terminal's floor in a window narrower than the `docked` breakpoint or not. */
 function terminalFloor(narrow: boolean): number {

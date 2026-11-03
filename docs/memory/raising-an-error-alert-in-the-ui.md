@@ -13,7 +13,7 @@ message catalog. The routes and where each takes the title:
   store's records, and for code whose tests inject the raiser. Its alert goes through `onToast` and is shown once
   `Toasts` has mounted.
 - `errorAlerts.report({ ... })` called directly: its `title`.
-- `useDialogAction(resetKey, errorTitle)` (`packages/ui/src/components/dialog/Dialog.tsx`), and the `errorTitle` prop of
+- `useDialogAction(resetKey, errorTitle)` (`packages/ui/src/components/dialog/dialogHooks.ts`), and the `errorTitle` prop of
   `ConfirmDialog` and `RenameDialog`.
 
 `title` is a required key of the first two routes' options, but `title: undefined` passes the type check, and

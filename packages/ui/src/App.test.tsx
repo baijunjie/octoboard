@@ -6,7 +6,8 @@ import { App } from "./App";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
-import { createStateStore, DaemonProvider, type Daemon } from "./store";
+import { DaemonProvider, type Daemon } from "./store";
+import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -37,12 +38,11 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   document.documentElement.style.setProperty("--breakpoint-phone", "782px");
   const console_ = consoleOf("c-main", "Main");
-  const daemon: Daemon = {
-    store: createStateStore(snapshotState({ consoles: [console_] })),
+  const daemon = testDaemon({
+    state: snapshotState({ consoles: [console_] }),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
-    dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
-  };
+    raiseError: vi.fn(), toastNotice: vi.fn(),
+  });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>
       <ThemeProvider>

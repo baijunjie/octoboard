@@ -1,7 +1,8 @@
 import { Copy, FolderOpen, SquareArrowOutUpRight, SquareTerminal } from "lucide-react";
 import React, { createContext, useContext } from "react";
 
-import { ActionMenu, type ActionMenuEntry } from "../components/menus/ActionMenu";
+import { ActionMenu } from "../components/menus/ActionMenu";
+import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import { RowControls } from "../components/controls/RowControls";
 import { useCopyPath } from "../components/host/useCopyPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";

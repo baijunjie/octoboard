@@ -4,7 +4,7 @@ import type { ConsequenceLine } from "../components/dialog/ConfirmConsequences";
 import { KeepFocusInDialog } from "../components/dialog/KeepFocusInDialog";
 import { ConfirmOption } from "../components/form/ConfirmOption";
 import { useBranchCleanup } from "./BranchCleanupOptions";
-import { useSessionBranches } from "./useSessionBranches";
+import { useSessionBranches } from "./useBranchInspections";
 import { useSessionRecords } from "./useSessionRecords";
 
 /** The option of also moving the agent's own records to the Trash, which a completed inspection

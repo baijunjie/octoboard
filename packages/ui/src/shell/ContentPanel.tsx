@@ -23,7 +23,7 @@ import React from "react";
 export function ContentPanel({ children, bare = false, startsAtEdge = false }: { children: React.ReactNode; bare?: boolean; startsAtEdge?: boolean }): React.ReactElement {
   return (
     <div
-      className={`flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel ${bare ? "flex-col" : `rounded-ss-xl shadow-(--panel-shadow)${startsAtEdge ? " max-phone:rounded-ss-none" : ""}`}`}
+      className={`flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel ${bare ? "flex-col" : `rounded-ss-xl shadow-(--panel-shadow) ${startsAtEdge ? "max-phone:rounded-ss-none" : ""}`}`}
     >
       {children}
     </div>

@@ -6,7 +6,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import type { Agent, AgentAvailability } from "./protocol";
-import { createStateStore, DaemonProvider, type Daemon, type State } from "./store";
+import { DaemonProvider, type State } from "./store";
+import { testDaemon } from "./test/testDaemon";
 import { WelcomeScreen } from "./WelcomeScreen";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -15,16 +16,7 @@ import { WelcomeScreen } from "./WelcomeScreen";
 const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", configurationFile: { save: vi.fn(), open: vi.fn() } };
 
 function mount(onOpenDialog = vi.fn(), state: Partial<State> = {}, platform: PlatformAdapter = { kind: "browser" }): HTMLElement {
-  const daemon: Daemon = {
-    store: createStateStore(state),
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const daemon = testDaemon({ state, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {

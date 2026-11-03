@@ -6,7 +6,9 @@ import { vi } from "vitest";
 import type { Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
 import { type ConsoleExtra, consoleOf, type ProjectExtra, projectOf, sessionOf } from "../fixtures/builders";
-import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import { DaemonProvider, type Daemon, type State } from "../store";
+import { buttons, optionElements, pickerNamed } from "../test/dom";
+import { testDaemon } from "../test/testDaemon";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
 
@@ -16,16 +18,12 @@ export const parentConsole = consoleOf("c-1", "Main");
 export const project = projectOf("p-1", parentConsole.id, "Search API");
 
 function fakeDaemon(initial: Partial<State> = {}): Daemon {
-  return {
-    store: createStateStore(initial),
+  return testDaemon({
+    state: initial,
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     raiseError: vi.fn(),
     toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
 }
 
 /** Renders the dialog and returns its container, root and daemon, so a test can query the rendered
@@ -64,12 +62,6 @@ export function renderDialog(
 
 export const hub1 = sessionOf("s-hub-1", parentConsole.id, undefined, "Hub", "idle", { colour: "teal", started_at: 100 });
 
-export const buttons = () => Array.from(document.body.querySelectorAll("button"));
-export const optionElements = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'));
+export { buttons, optionElements, pickerNamed };
 
 export const choose: NewSessionBinding = { kind: "choose" };
-
-export const pickerNamed = (name: string) => buttons().find((button) =>
-  button.getAttribute("aria-label") === name ||
-  button.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name),
-)!;

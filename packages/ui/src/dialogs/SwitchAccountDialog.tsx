@@ -1,5 +1,6 @@
 import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { accountDisabled, quotaSignedOut } from "../accounts/accountChoices";
 import { canSwitchTo } from "./accountSwitchBatch";
@@ -40,7 +41,6 @@ export function SwitchAccountDialog({
 }): React.ReactElement {
   const t = useT();
   const { store } = useDaemon();
-  const sessions = useDaemonStore((s) => s.sessions);
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
@@ -61,7 +61,7 @@ export function SwitchAccountDialog({
       ? Array.from(all.values()).filter(eligible)
       : sessionWithDescendants(all.values(), all.get(session.id) ?? session).filter(eligible)
   );
-  const counts = { session: targetsIn(sessions, "session").length, console: targetsIn(sessions, "console").length };
+  const counts = useDaemonStore(useShallow((s) => ({ session: targetsIn(s.sessions, "session").length, console: targetsIn(s.sessions, "console").length })));
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
   const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineReference>;
   const several = scope === "console" || counts.session > 1;

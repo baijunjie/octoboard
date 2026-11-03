@@ -5,7 +5,7 @@ import React, { useId } from "react";
 import { Button } from "../controls/Button";
 import { DiagnosticLayoutContext } from "../alerts/DiagnosticBlock";
 import { TitledControl } from "../hint/TitledControl";
-import { useAnnouncement } from "../announce/useAnnouncement";
+import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
 
 const WRAPPED_TALL = { wrap: true, tall: true };
 
@@ -109,7 +109,7 @@ export function EmptyPanel({
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
-  const announcement = useAnnouncement(announce, announceKey, announceDelayMs);
+  const announcement = useAlertAnnouncement(announce, announceKey, announceDelayMs);
   if (compact) {
     // A `span` rather than a `p`: inside a button only phrasing content is valid.
     const row = (

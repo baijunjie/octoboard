@@ -141,19 +141,15 @@ async function runOnceRejecting(inFlight: Set<string>, key: string, action: () =
 }
 
 /** Runs `work` with `sessionId` counted as resuming, for the terminal's loading state, until it
- * settles. A failure goes to `onError` first and is then passed on. */
+ * settles. */
 async function whileResuming(
   setResumingIds: Dispatch<SetStateAction<ReadonlySet<string>>>,
   sessionId: string,
   work: () => Promise<unknown>,
-  onError?: (err: unknown) => void,
 ): Promise<void> {
   setResumingIds((ids) => new Set(ids).add(sessionId));
   try {
     await work();
-  } catch (err) {
-    onError?.(err);
-    throw err;
   } finally {
     setResumingIds((ids) => {
       const next = new Set(ids);

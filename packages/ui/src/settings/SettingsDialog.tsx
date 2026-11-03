@@ -3,7 +3,7 @@ import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settin
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/hint/TitledControl";
-import { openingFocus } from "../components/focus/regionFocus";
+import { openingFocus } from "../components/focus/modalFocus";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
 import { dialogAround } from "../components/dialog/dialogElement";

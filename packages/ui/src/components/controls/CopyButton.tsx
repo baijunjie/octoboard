@@ -2,13 +2,10 @@ import { Check, Copy } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "./Button";
-import { ActionableError } from "../../errors/actionableError";
 import { useT } from "../../i18n/react";
-import { usePlatform } from "../../platform/react";
-import { copyText } from "../host/copyText";
+import { useCopyWithNotice } from "../host/useCopyWithNotice";
 import { StatusAnnouncer } from "../announce/StatusAnnouncer";
 import { TitledControl } from "../hint/TitledControl";
-import { raiseError } from "../alerts/raiseError";
 
 /** How long the copied state outlasts the tooltip's close, so the tooltip's exit animation (100 ms)
  * is over before the text and icon go back, and the user never sees them flip while it fades. */
@@ -52,7 +49,7 @@ export function CopyButton({
   children?: React.ReactNode;
 } & Omit<React.ComponentProps<typeof Button>, "children" | "onPress" | "isIconOnly">): React.ReactElement {
   const t = useT();
-  const { clipboard } = usePlatform();
+  const copyWithNotice = useCopyWithNotice();
   const [copied, setCopied] = useState(false);
   // Whether the check has been shown, so the copy glyph fades in on the way back but not on mount.
   const [everCopied, setEverCopied] = useState(false);
@@ -66,15 +63,16 @@ export function CopyButton({
   const iconOnly = children === undefined || children === null || children === false;
 
   const copy = () => {
-    copyText(text, { clipboard, anchor: buttonRef.current }).then(
-      () => {
+    copyWithNotice(text, {
+      failed: failedText,
+      anchor: buttonRef.current,
+      onCopied: () => {
         clearTimeout(resetTimer.current);
         setCopied(true);
         setEverCopied(true);
         if (!tooltipOpen.current) resetTimer.current = setTimeout(() => setCopied(false), COPIED_HOLD_MS);
       },
-      (cause: unknown) => raiseError(new ActionableError(failedText, "clipboard", { cause }), { title: t("common.copyFailedTitle") }),
-    );
+    });
   };
 
   const onTooltipOpenChange = (isOpen: boolean) => {

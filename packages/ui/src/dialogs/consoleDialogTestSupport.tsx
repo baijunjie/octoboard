@@ -3,17 +3,19 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
-import { accountOf, consoleOf } from "../fixtures/builders";
+import { consoleOf } from "../fixtures/builders";
 import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { createStateStore, DaemonProvider } from "../store";
+import { buttons, click, inputLabelled, type as typeInto } from "../test/dom";
+import { testDaemon } from "../test/testDaemon";
+import { personal, work } from "./accountTestSupport";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-export const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-work");
-export const personal: Account = accountOf("a-personal", "claude", "Personal", "/home/dev/.claude-personal");
+export { work, personal };
 
 export const MODELS: AgentModel[] = [
   { id: "alpha", name: "Alpha", efforts: ["low", "high"] },
@@ -44,21 +46,17 @@ export function render(
   added: Agent[] | null = null,
 ) {
   const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack", id: null } as Event)));
-  const daemon: Daemon = {
-    store: createStateStore({
+  const daemon = testDaemon({
+    state: {
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
       agentAvailability: new Map(
         (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
       ),
-    }),
+    },
     request,
     raiseError: vi.fn(),
     toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
   lastStore = daemon.store;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -76,8 +74,7 @@ export function render(
   return request;
 }
 
-export const buttons = () => Array.from(document.body.querySelectorAll("button"));
-export const click = (el: Element | null | undefined) => act(async () => (el as HTMLElement | undefined)?.click());
+export { buttons, click };
 export const clickButton = (text: string | ((b: HTMLButtonElement) => boolean)) =>
   click(buttons().find((b) => (typeof text === "string" ? b.textContent === text : text(b))));
 export const choose = (option: string) =>
@@ -88,15 +85,7 @@ export const sent = (request: ReturnType<typeof render>) =>
   request.mock.calls.map((call) => call[0]).filter((body) => body.type !== "list_agent_models" && body.type !== "refresh_account_quotas");
 export const asked = (request: ReturnType<typeof render>) => request.mock.calls.map((call) => call[0]).filter((body) => body.type === "list_agent_models");
 
-export function type(label: string, value: string) {
-  const input = Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).find(
-    (el) => el.labels?.[0]?.textContent === label,
-  )!;
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-}
+export const type = (label: string, value: string) => typeInto(inputLabelled(label), value);
 
 /** Opens the Advanced section. The model picker is the first launch setting, the effort the second. */
 export async function openAdvanced() {

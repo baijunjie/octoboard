@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { noAgentState, pickableAgents } from "../agents/agents";
-import { FOCUSABLE } from "../components/focus/regionFocus";
+import { FOCUSABLE } from "../components/focus/selectors";
 import { useStableHandler } from "../components/hooks/useLatest";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console } from "../protocol";
@@ -32,6 +32,14 @@ export function useDialogRouting({
   // `create_console` is answered with a bare ack, so the console this window just created is
   // recognised as the one that was not there when its dialog opened, and the sidebar switches to it.
   const consolesBeforeNew = useRef<Set<string> | undefined>(undefined);
+  // The wait after the dialog has closed before the marker above is dropped, if no console has appeared by then.
+  const forgetTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(forgetTimer.current), []);
+  // The new console's broadcast can trail the ack that closed the dialog by a moment.
+  const forgetSoon = () => {
+    clearTimeout(forgetTimer.current);
+    if (consolesBeforeNew.current) forgetTimer.current = setTimeout(() => (consolesBeforeNew.current = undefined), 2000);
+  };
   // The control last pressed in the sidebar's open drawer, or in a menu it opened. A tap does not
   // move focus to what it presses, so a dialog it opens would otherwise give focus back, as it
   // closes, to whatever held it before: the terminal behind the drawer.
@@ -67,7 +75,9 @@ export function useDialogRouting({
     const { agentAvailability, settings } = store.getState();
     if ((dialog.kind === "new-session" || dialog.kind === "new-console-session") && noAgentState(agentAvailability, settings.added_agents)) return;
     if (dialog.kind === "hand-off" && !pickableAgents(agentAvailability, settings.added_agents).some((agent) => agent !== dialog.session.agent)) return;
+    clearTimeout(forgetTimer.current);
     if (dialog.kind === "new-console") consolesBeforeNew.current = new Set(consoles.keys());
+    else forgetSoon();
     focusDrawerTrigger();
     setDialogRequest(dialog);
   };
@@ -82,8 +92,7 @@ export function useDialogRouting({
   }, [consoleList]);
   const closeDialog = () => {
     setDialogRequest(undefined);
-    // The new console's broadcast can trail the ack that closed the dialog by a moment.
-    if (consolesBeforeNew.current) setTimeout(() => (consolesBeforeNew.current = undefined), 2000);
+    forgetSoon();
   };
 
   const openConsoleSession = (console_: Console) => openDialog({ kind: "new-console-session", console: console_ });

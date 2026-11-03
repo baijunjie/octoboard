@@ -6,7 +6,7 @@ import { Button } from "../controls/Button";
 import { EmptyPanel } from "../panel/EmptyPanel";
 import { FailureAlert } from "../alerts/FailureAlert";
 import { PathText } from "../text/PathText";
-import { openingFocus } from "../focus/regionFocus";
+import { openingFocus } from "../focus/modalFocus";
 import { useStickyHeadingFocus } from "../scroll/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { StatusBadge } from "../status/StatusBadge";
@@ -19,7 +19,8 @@ import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { DirEntry, Event } from "../../protocol";
 import { abbreviateHome, isAbsoluteOrHomePath } from "../../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../../store";
-import { Dialog, useRefocusIfLost } from "./Dialog";
+import { Dialog } from "./Dialog";
+import { useRefocusIfLost } from "./dialogHooks";
 import { useTrimmedField } from "../form/useTrimmedField";
 import { raiseError } from "../alerts/raiseError";
 
@@ -85,7 +86,8 @@ export function DirectoryPicker({
   // older answer arriving after it is still taken. The opening listing's walk up to an ancestor
   // keeps the opening listing's number, so it never takes the place of the user's own navigation.
   const loads = useRef({ asked: 0, taken: 0 });
-  const load = async (targetPath: string, initial = false, call = ++loads.current.asked) => {
+  const load = async (targetPath: string, initial = false, openingCall?: number): Promise<void> => {
+    const call = openingCall ?? ++loads.current.asked;
     const take = () => {
       if (call < loads.current.taken) return false;
       loads.current.taken = call;
@@ -144,12 +146,6 @@ export function DirectoryPicker({
   // stable place to put focus back, so Tab carries on from the entries.
   useRefocusIfLost(() => listRef.current, [entries]);
 
-  const parentOf = (p: string): string => {
-    const segments = p.split("/").filter(Boolean);
-    segments.pop();
-    return "/" + segments.join("/");
-  };
-
   // The path field can be edited without re-listing (see above), so it can name a directory that
   // was never actually resolved — picking it would hand back something the user never saw listed.
   const canSelect = !!resolvedPath && path === resolvedPath;
@@ -193,7 +189,7 @@ export function DirectoryPicker({
           listRef={listRef}
           entries={entries}
           showParent={!!resolvedPath && resolvedPath !== "/"}
-          onOpen={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : key)}
+          onOpen={(key) => void load(key === PARENT_KEY ? ancestorOf(resolvedPath ?? "/") : key)}
         />
       )}
     </Dialog>

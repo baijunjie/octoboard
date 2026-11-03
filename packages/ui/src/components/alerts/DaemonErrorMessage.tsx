@@ -1,8 +1,8 @@
 import React, { useId } from "react";
 
 import { DaemonRequestError } from "../../daemon-client";
-import { daemonParams, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, furtherKey, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../../errors/daemonMessage";
-import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../../errors/errorPresentation";
+import { daemonParams, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchName, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow, type LeftBranchItem } from "../../errors/daemonMessage";
+import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { ActionableError } from "../../errors/actionableError";
 import { errorText, unexpectedFailureDiagnostic } from "../../errors/errorText";
@@ -10,11 +10,11 @@ import { globalParam, isMessageKey, type MessageKey } from "../../i18n/catalog";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { MessageParams } from "../../protocol";
-import { codeRecord } from "../../errors/codes";
 import { sessionTask } from "../../sessions/sessionLabel";
 import { useErrorRecords } from "../../store";
 import { BranchGroups } from "./BranchGroups";
 import { DiagnosticBlock } from "./DiagnosticBlock";
+import { daemonErrorParts } from "./daemonErrorParts";
 import { hasErrorDetails, hasErrorRemedy } from "./errorPartPresence";
 import { InlineReference } from "../../i18n/InlineReference";
 import { SharingCauseSummary, SharingDetails, SharingFailureReason } from "./SharingFailure";
@@ -97,11 +97,12 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const shellTerminals = useErrorRecords((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS));
   const accounts = useErrorRecords((s) => (error.code === "unknown_account" ? s.settings.accounts : undefined));
   const id = `daemon.${richMessageCode(error.code, error.params)}`;
+  const parts = daemonErrorParts(error);
   // An `ActionableError`'s `detail` is raw text of its own, whatever the catalog says of its code.
-  const actionableRaw = error instanceof ActionableError && error.detail ? <DiagnosticBlock>{error.detail}</DiagnosticBlock> : null;
+  const actionableRaw = parts.actionableDetail ? <DiagnosticBlock>{parts.actionableDetail}</DiagnosticBlock> : null;
   const summaryless = lacksSummary(error.code);
-  if (!summaryless && !isMessageKey(id)) return part === undefined || part === "summary" ? <>{error.message}</> : part === "details" || part === "raw" ? actionableRaw : null;
-  const left = leftBranchItems(error.code, error.params);
+  if (!parts.worded) return part === undefined || part === "summary" ? <>{error.message}</> : part === "details" || part === "raw" ? actionableRaw : null;
+  const left = parts.left;
   if (left) return <LeftBranches count={left.length} items={left} part={part} />;
   const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts }, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
   if (error.code === "conversation_held_in_project" || error.code === "conversation_held_in_console") {
@@ -120,11 +121,8 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   if (running) {
     params.sessions = joinNodes(language, running, (id, key) => <InlineReference key={key} dir={sessions.has(id) ? "auto" : "ltr"} monospace={!sessions.has(id)} wrap>{sessions.get(id)?.title ?? id}</InlineReference>);
   }
-  const nested = codeRecord(error.code)?.nested && error.params.reason_code && error.params.reason_code !== error.code
-    ? new DaemonRequestError(String(params.reason ?? ""), error.params.reason_code, error.params)
-    : undefined;
-  const structuredNested = nested && (hasCodeParams(nested) || hasShellTimeoutDetails(nested));
-  if (structuredNested) params.reason = <DaemonErrorMessage error={nested} part="summary" />;
+  const structuredNested = parts.nested && new DaemonRequestError(parts.nested.message, parts.nested.code, parts.nested.params);
+  if (structuredNested) params.reason = <DaemonErrorMessage error={structuredNested} part="summary" />;
   const trustReasonId = `daemon.trust_reason.${error.params.reason_code}`;
   if ((error.code === "trust_answer_failed" || error.code === "trust_not_carried_over") && isMessageKey(trustReasonId)) {
     params.reason = <Message id={trustReasonId} params={{ ...params } as never} />;
@@ -133,36 +131,33 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const trustReason = `daemon.trust_reason.${error.params.reason_code}.summary`;
   if (trustDiagnostic && isMessageKey(trustReason)) params.reason = <Message id={trustReason} params={{} as never} />;
   // A cause the application has no words for is said as a generic reason, its own text being raw.
-  const unworded = unwordedReason(error.code, error.params);
-  if (unworded !== undefined) params.reason = <Message id={nested ? uncataloguedSummaryKey(nested) : "daemon.trust_reason.unexpected"} />;
+  const unworded = parts.unworded;
+  if (unworded) params.reason = <Message id={unworded.summary} />;
   // A sharing failure says why, and what to do about each cause, ahead of the raw text in Details (a
   // disclosure, or the alert's popover), and the raw entries and the system's own reason follow it,
   // whether it names entries or only says why the change could not start (the failure's `detail`, or a
   // repair's own message). A cause with no line of its own points at the raw reason, which is only
   // useful where the raw reason is folded away, so Details leaves that pointer out.
-  const sharing = sharingFailureItems(error.code, error.params);
-  const sharingReason = sharingRawReason(error);
-  const sharingFailure = sharingReason !== undefined;
-  const rawReason = sharingReason?.raw;
+  const sharing = parts.sharing?.items;
+  const rawReason = parts.sharing?.raw;
   const pointedAt = part === "details" ? undefined : rawReason;
   const reasonLines = sharing
     ? <SharingCauseSummary items={sharing} />
-    : sharingFailure && hasSharingReason(error.params.cause, pointedAt)
+    : parts.sharing && (parts.sharing.hasReasonLine || !!pointedAt)
       ? <span className="block"><SharingFailureReason cause={error.params.cause} detail={pointedAt} /></span>
       : null;
-  const sharingRaw = sharing || (sharingFailure && rawReason) ? <SharingDetails items={sharing ?? []} detail={rawReason} /> : null;
+  const sharingRaw = sharing || (parts.sharing && rawReason) ? <SharingDetails items={sharing ?? []} detail={rawReason} /> : null;
   // Verbatim diagnostic output (a push's hook checks) can run to hundreds of lines: it wraps and scrolls inside the block.
-  const diagnostic = !sharingFailure && (codeRecord(error.code)?.detailBlock || trustDiagnostic) && error.params.detail ? <DiagnosticBlock wrap tall>{error.params.detail}</DiagnosticBlock> : null;
-  const unwordedRaw = unworded ? <DiagnosticBlock>{unworded}</DiagnosticBlock> : null;
-  const recoveryId = `daemon.${messageCode(error.code, error.params)}.recovery`;
-  const recovery = codeRecord(error.code)?.recoveryLine && isMessageKey(recoveryId) ? <span className="block"><Message id={recoveryId} params={params as never} /></span> : null;
+  const diagnostic = parts.diagnostic ? <DiagnosticBlock wrap tall>{parts.diagnostic}</DiagnosticBlock> : null;
+  const unwordedRaw = unworded ? <DiagnosticBlock>{unworded.raw}</DiagnosticBlock> : null;
+  const recovery = parts.recovery ? <span className="block"><Message id={parts.recovery} params={params as never} /></span> : null;
   // The application's own further explanation, which leads Details, ahead of the raw text.
-  const furtherId = furtherKey(error.code, error.params);
+  const furtherId = parts.further;
   const further = furtherId ? <span className="block"><Message id={furtherId} params={params as never} /></span> : null;
   // The nested cause's recovery is the failure's own, a launch failure having none of its own.
-  const remedy = recovery ?? (structuredNested && codeRecord(error.code)?.nested === "failureAndRemedy" && hasErrorRemedy(nested) ? <DaemonErrorMessage error={nested} part="remedy" /> : null);
-  const nestedFurther = structuredNested ? <DaemonErrorMessage error={nested} part="further" /> : null;
-  const nestedRaw = structuredNested ? <DaemonErrorMessage error={nested} part="raw" /> : null;
+  const remedy = recovery ?? (parts.nestedRemedy && structuredNested && hasErrorRemedy(structuredNested) ? <DaemonErrorMessage error={structuredNested} part="remedy" /> : null);
+  const nestedFurther = structuredNested ? <DaemonErrorMessage error={structuredNested} part="further" /> : null;
+  const nestedRaw = structuredNested ? <DaemonErrorMessage error={structuredNested} part="raw" /> : null;
   const explanation = <>{further}{reasonLines}{nestedFurther}</>;
   const raw = <>{actionableRaw}{sharingRaw}{diagnostic}{unwordedRaw}{nestedRaw}</>;
   if (part === "details") return <>{explanation}{raw}</>;

@@ -42,8 +42,8 @@ The consequences take one of two shapes, and each dialog keeps the shape it has:
 
 - **Topic sections** — archiving a session, removing a project, deleting a console. The user had these rebuilt from
   one pooled consequences block because it read as disorganised, so never fold them back into one. Each topic (the
-  sessions taken along or ended, the branches and worktrees, the folder, the processes) is a `ConfirmSection` in
-  `packages/ui/src/dialogs/RequestedDialog.tsx`, rendered from `extraControl`: an `<h3>`-headed labelled group with a
+  sessions taken along or ended, the branches and worktrees, the folder, the processes) is a `ConfirmSection`
+  (`packages/ui/src/dialogs/confirmations/ConfirmSection.tsx`), rendered from `extraControl`: an `<h3>`-headed labelled group with a
   groove above it only when another section is shown above it, holding that topic's options and, right under them, its
   own consequence lines (`ConsequenceLines`). A sectioned dialog that is not `destructive` until an option is ticked
   (the archive) still passes `consequences={null}`, which keeps the warning icon.
@@ -92,7 +92,7 @@ once the submit has passed it — a daemon refusal about that same field's value
 instead, as the "Where an error is shown" section of `docs/ui-accessibility.md` sets out.
 
 Compute each field's message on every render from the current value and pass it through `useSubmitValidation`
-(`packages/ui/src/components/dialog/Dialog.tsx`): `shown(message)` holds it back until `attempt(...messages)` has gated a
+(`packages/ui/src/components/dialog/dialogHooks.ts`): `shown(message)` holds it back until `attempt(...messages)` has gated a
 submit, so no field is marked before the user has tried to submit, and from then on the message follows what is
 typed. Gate the submit on what `attempt` answers rather than re-checking the values there.
 
@@ -103,8 +103,9 @@ both, a field assembled anywhere else has to:
   controlled `isInvalid` to the browser's own constraint validation (`setCustomValidity`); the browser then refuses
   the `<form>` submit before the dialog's `onSubmit` runs, and since the mark only ever appears from that handler,
   the dialog locks itself out of submitting at all.
-- Put the `role="alert"` that announces the message on an element of your own inside `FieldError`, not on
-  `FieldError`. react-aria passes a component's props through `filterDOMProps`, which keeps only `id`, the
+- Render the message through `FieldErrorMessage` (`packages/ui/src/components/form/FieldErrorMessage.tsx`), which
+  puts the announcing `role="alert"` on an element of its own inside HeroUI's `FieldError`; never give `role` to
+  `FieldError` itself. react-aria passes a component's props through `filterDOMProps`, which keeps only `id`, the
   `aria-label` / `aria-labelledby` / `aria-describedby` / `aria-details` family, link props, `dir` / `lang` /
   `hidden` / `inert` / `translate`, the global events and `data-*`; anything else — `role` among them — is dropped
   without a warning, and a message that appears only on submit is then never announced at all.

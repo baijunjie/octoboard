@@ -1,5 +1,5 @@
 import type { Console, Project, Session } from "../protocol";
-import type { SessionInspection } from "./useSessionBranches";
+import type { SessionInspection } from "./branchInspection";
 
 /** How a new session is bound to a console session, by where the dialog was opened from: the user
  * `choose`s one of the console's console sessions or none (the full project list); the session is

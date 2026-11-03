@@ -1,7 +1,7 @@
 import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accounts/accountChoices";
-import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/menus/ActionMenu";
+import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/menus/menuEntries";
 import { ExternalLinkIcon } from "../components/text/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/icons/RepositoryIcon";
 import { repositoryLink } from "../git/repositoryLink";

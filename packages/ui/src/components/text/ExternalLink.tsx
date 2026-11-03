@@ -7,6 +7,7 @@ import { useT } from "../../i18n/react";
 import { useOptionalPlatform } from "../../platform/react";
 import { ExternalLinkIcon } from "./ExternalLinkIcon";
 import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
+import { settle } from "../hooks/settle";
 import { raiseError } from "../alerts/raiseError";
 
 export { ExternalLinkIcon } from "./ExternalLinkIcon";
@@ -17,16 +18,23 @@ type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onCli
   /** The button appearance's size, `sm` beside small buttons. */
   size?: "sm";
   onOpen?: (href: string) => void | Promise<void>;
+  /** Takes the failure to open the link in place of the default alert, which names the address for the user to open by hand. */
+  onFailure?: (cause: unknown) => void;
   isPending?: boolean;
 };
 
+/** The body of an alert about an address that could not be opened: `message` and the address as plain text to copy. */
+export function addressUnavailableContent(message: string, address: string): React.ReactElement {
+  return <div className="flex flex-col gap-4"><p>{message}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{address}</p></div>;
+}
+
 /** Native menu and terminal links share the anchor's visible failure and manual destination. */
 export function reportExternalLinkFailure(t: Translate, href: string, cause: unknown): void {
-  raiseError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), { title: t("externalLink.unavailableTitle"), content: <div className="flex flex-col gap-4"><p>{t("externalLink.unavailable")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{href}</p></div> });
+  raiseError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), { title: t("externalLink.unavailableTitle"), content: addressUnavailableContent(t("externalLink.unavailable"), href) });
 }
 
 /** A browser destination stays a real anchor while native shells open it outside the application. */
-export function ExternalLink({ href, appearance = "text", size, onOpen, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
+export function ExternalLink({ href, appearance = "text", size, onOpen, onFailure, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
   const t = useT();
   const platform = useOptionalPlatform();
   const focus = useFocusVisibleProps();
@@ -46,16 +54,12 @@ export function ExternalLink({ href, appearance = "text", size, onOpen, isPendin
     if (opening.current || busy) return;
     opening.current = true;
     setPending(true);
-    try {
-      if (onOpen) await onOpen(address);
-      else if (platform?.links) await platform.links.open(address);
-      else throw new Error(t("externalLink.unavailable"));
-    } catch (cause) {
-      reportExternalLinkFailure(t, address, cause);
-    } finally {
+    const links = platform?.links;
+    const open = onOpen ? () => onOpen(address) : links ? () => links.open(address) : () => Promise.reject(new Error(t("externalLink.unavailable")));
+    await settle(open, onFailure ?? ((cause) => reportExternalLinkFailure(t, address, cause)), () => {
       opening.current = false;
       setPending(false);
-    }
+    });
   };
   const label = <>{children}<ExternalLinkIcon className={appearance === "button" ? "size-3.5" : "ms-1 size-[0.85em]"} /></>;
   return (

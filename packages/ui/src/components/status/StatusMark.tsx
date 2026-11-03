@@ -204,7 +204,7 @@ function PopoverMark({
 function MarkBody({ popupId, children }: { popupId: string; children: React.ReactNode }): React.ReactElement {
   const region = useFadeRegion({ labelledBy: popupId });
   return (
-    <div className={`-m-0.5 flex min-h-0 flex-col rounded-sm ${region.focused ? "ring-2 ring-focus" : ""}`}>
+    <div className={`-m-0.5 flex min-h-0 flex-col rounded-sm ${region.ring}`}>
       <FadedScroller region={region} className="flex min-h-0 flex-col gap-2 p-0.5 [overflow-wrap:anywhere]">
         {children}
       </FadedScroller>

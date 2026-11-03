@@ -3,7 +3,7 @@ import { buttonVariants } from "@heroui/styles";
 import React from "react";
 
 import { StatusAnnouncer } from "../announce/StatusAnnouncer";
-import { useTabScrollLabels } from "../tabs/tabScrollLabels";
+import { TextTabStrip } from "../tabs/TextTabStrip";
 import { useT } from "../../i18n/react";
 
 /** The collapsed Advanced section of a dialog, folded away by default as what is inside is rarely
@@ -63,20 +63,10 @@ export type AdvancedTab = { id: string; label: string; content: React.ReactNode 
  * the section folds away, as the section's body stays mounted. */
 export function AdvancedTabs({ tabs }: { tabs: AdvancedTab[] }): React.ReactElement {
   const t = useT();
-  const tabScrollLabels = useTabScrollLabels();
   return (
     <div className="rounded-xl border border-separator p-4">
       <Tabs defaultSelectedKey={tabs[0]?.id} className="gap-4">
-        <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
-          <Tabs.List aria-label={t("dialog.agentSettings.advanced")} className="w-max min-w-0 p-1.5">
-            {tabs.map((tab) => (
-              <Tabs.Tab key={tab.id} id={tab.id} className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground">
-                {tab.label}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
+        <TextTabStrip label={t("dialog.agentSettings.advanced")} tabs={tabs} />
         {tabs.map((tab) => (
           <Tabs.Panel key={tab.id} id={tab.id} className="mt-0 flex flex-col gap-4 p-0">{tab.content}</Tabs.Panel>
         ))}

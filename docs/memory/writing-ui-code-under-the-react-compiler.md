@@ -18,7 +18,7 @@ function, which it calls when the menu opens and mounts its content, so that fun
 `store.getState()` itself. Where module state has to stay as it is, put
 `"use no memo"` at the top of the component or hook, with a comment saying what it reads.
 
-## A lint-clean component can still be left uncompiled: check the compiler's own log
+## A lint-clean component can still be left uncompiled: run `pnpm compiler:bailouts` on what you changed
 
 When the compiler cannot compile a component or hook it skips the whole function, which then re-renders with every
 parent render as before, and for most causes the lint reports nothing. In this codebase these were the causes:
@@ -28,8 +28,9 @@ parent render as before, and for most causes the lint reports nothing. In this c
   is set in a layout effect, so a reader during render or in a descendant's layout effect in the same commit still
   sees the previous one.
 - A `try` anywhere in the function, nested callbacks included, that has a `finally`, has no `catch`, or holds a
-  conditional, logical or optional-chaining expression (`?:`, `&&`, `||`, `??`, `?.`) inside the `try`/`catch`. Move
-  a helper that needs `finally` to module level; build any such value into a local before the `try`.
+  conditional, logical or optional-chaining expression (`?:`, `&&`, `||`, `??`, `?.`) inside the `try`/`catch`. For
+  "run this, report a rejection, then always do that", call `settle` (`packages/ui/src/components/hooks/settle.ts`);
+  move any other helper that needs `finally` to module level; build any such value into a local before the `try`.
 - `??=`: write the assignment out.
 - A `useMemo` or `useCallback` whose body reads more than its dependency list names ("Existing memoization could not be
   preserved"): resolve the values into locals above it and read only those inside.
@@ -44,11 +45,11 @@ parent render as before, and for most causes the lint reports nothing. In this c
   leaves the caller uncompiled, so such code goes into a hook whose handlers are each wrapped in `useStableHandler`
   (as `packages/ui/src/terminal/shell/useShellTabFocus.ts` is).
 
-To see what did not compile, give the compiler a `logger` — temporarily as
-`reactCompilerPreset({ logger: { logEvent(filename, event) { … } } })` in `packages/ui/vite.config.ts`, then build —
-and look for `CompileError` events in the files you changed; or, without a build, run `@babel/core`'s `transformSync`
-from `packages/ui` over just those files with `babel-plugin-react-compiler` and the same `logger` (parser plugins
-`typescript` and `jsx`). A few functions elsewhere are left uncompiled on purpose, each with a comment saying so.
+So after changing a component or hook, run `pnpm compiler:bailouts <files>` from `packages/ui` over the files you
+changed, and leave none of your functions in its list; it prints each skipped function's line and the compiler's
+reason. Nothing else runs it — `pnpm verify` does not — and with no files it checks all of `src/`, where functions
+outside your change may already be listed, so its exit status over the whole tree says nothing about your change. A
+function left uncompiled on purpose carries `"use no memo"` with a comment saying why, and is not listed.
 
 ## Whatever every row of a list takes must keep its identity across daemon events
 

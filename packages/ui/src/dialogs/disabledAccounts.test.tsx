@@ -6,7 +6,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { accountOf, sessionOf } from "../fixtures/builders";
 import type { Account, AccountQuota, Settings } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { createStateStore, DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 
@@ -21,7 +22,7 @@ const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fet
 function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = []) {
   const store = createStateStore({ accountQuotas });
   store.setState({ settings: { ...store.getState().settings, ...settings } });
-  const daemon = { store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = testDaemon({ store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{ui}</DaemonProvider>));

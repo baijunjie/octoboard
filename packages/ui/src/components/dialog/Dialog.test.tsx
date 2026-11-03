@@ -3,28 +3,17 @@ import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import { DaemonProvider } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
 import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
 import { ActionableError } from "../../errors/actionableError";
 import { DaemonRequestError } from "../../daemon-client";
-import { Dialog, useDialogAction } from "./Dialog";
+import { Dialog } from "./Dialog";
+import { useDialogAction } from "./dialogHooks";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
 import { TextInput } from "../form/TextInput";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-function fakeDaemon(): Daemon {
-  return {
-    store: createStateStore({}),
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
-}
 
 /** Renders the frame's own footer — the case `submitLabel` covers — and hands the two buttons to
  * `check`, found by their labels rather than by their type, since `busy` changes the submit button's
@@ -39,7 +28,7 @@ function withFooter(
   try {
     act(() => {
       root.render(
-        <DaemonProvider value={fakeDaemon()}>
+        <DaemonProvider value={testDaemon()}>
           <Dialog title="Rename" onClose={() => {}} submitLabel="Save" onSubmit={() => {}} {...props}>
             <span>body</span>
           </Dialog>
@@ -68,7 +57,7 @@ function withTogglableSubmit(
   const root = createRoot(container);
   const show = (submitDisabled: boolean) => act(() => {
     root.render(
-      <DaemonProvider value={fakeDaemon()}>
+      <DaemonProvider value={testDaemon()}>
         <Dialog title="Hand off" onClose={() => {}} submitLabel="Save" submitDisabled={submitDisabled} autoFocusSubmit onSubmit={() => {}}>
           <span>body</span>
         </Dialog>
@@ -145,7 +134,7 @@ it.each([{ strict: false }, { strict: true }])(
       container.remove();
     });
     const dialog = (
-      <DaemonProvider value={fakeDaemon()}>
+      <DaemonProvider value={testDaemon()}>
         <Dialog title="Rename" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}>
           <TextInput label="Name" value="" onChange={() => {}} autoFocus />
         </Dialog>
@@ -242,7 +231,7 @@ const clearance = () => document.documentElement.style.getPropertyValue("--dialo
 
 const render = (root: Root, element: React.ReactElement) =>
   act(() => {
-    root.render(<DaemonProvider value={fakeDaemon()}>{element}</DaemonProvider>);
+    root.render(<DaemonProvider value={testDaemon()}>{element}</DaemonProvider>);
   });
 
 /** Mounts `element` with each footer measuring the horizontal extent `extent` gives for its dialog
@@ -600,7 +589,7 @@ async function withScroller(sizes: { scrollHeight: number; clientHeight: number 
   try {
     act(() => {
       root.render(
-        <DaemonProvider value={fakeDaemon()}>
+        <DaemonProvider value={testDaemon()}>
           <Dialog title="Long" onClose={() => {}} footer={null}>
             <span>body</span>
           </Dialog>
@@ -693,7 +682,7 @@ it("eases the dialog's height when its content changes it, but not for its first
     delete (Element.prototype as Partial<Element>).animate;
   });
   act(() => root.render(
-    <DaemonProvider value={fakeDaemon()}>
+    <DaemonProvider value={testDaemon()}>
       <Dialog title="Rename" onClose={() => {}} footer={null}><span>body</span></Dialog>
     </DaemonProvider>,
   ));
@@ -786,7 +775,7 @@ it("turns into a failure modal in place: danger icon, title, explanation, detail
   };
   const render = (withFailure: boolean) => act(() => {
     root.render(
-      <DaemonProvider value={fakeDaemon()}>
+      <DaemonProvider value={testDaemon()}>
         <Dialog title="Rename" onClose={onClose} submitLabel="Save" onSubmit={() => {}} failure={withFailure ? failure : undefined}>
           <span>body</span>
         </Dialog>
@@ -825,7 +814,7 @@ it("sets the foreground colour on the body of every frame, so prose does not inh
     try {
       act(() => {
         root.render(
-          <DaemonProvider value={fakeDaemon()}>
+          <DaemonProvider value={testDaemon()}>
             <Dialog title="Notice" onClose={() => {}} footer={null} {...props}>
               <span>body</span>
             </Dialog>

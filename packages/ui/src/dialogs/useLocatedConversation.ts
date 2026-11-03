@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
+import { useLatestRequest } from "../components/hooks/useLatestRequest";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import { useT } from "../i18n/react";
 import type { ConversationLocation, Event, RequestBody } from "../protocol";
+import { shownError } from "./shownError";
 
 /** `idle`: nothing to ask about. `pending`: the answer for the ID entered now is not in yet, which
  * includes the wait before it is asked. `ready`: the daemon has answered, with `location`. `failed`:
@@ -13,7 +15,7 @@ export type ConversationLookup =
   | { status: "ready"; location: ConversationLocation }
   | { status: "failed"; error: ErrorPresentation };
 
-type Answer = { key: string; location?: ConversationLocation; error?: ErrorPresentation };
+const PENDING: ConversationLookup = { status: "pending" };
 
 /**
  * Asks the daemon where the conversation `id` is held (`locate_conversation_to_resume`, for
@@ -31,36 +33,37 @@ export function useLocatedConversation(
 ): ConversationLookup {
   const t = useT();
   const key = id === undefined ? undefined : JSON.stringify([project, id, refreshKey]);
-  const [answered, setAnswered] = useState<Answer>();
-  const latest = useLatest({ request, project, id, t });
+  const { value, send, reset, hold, asked, reconnects } = useLatestRequest<ConversationLookup>({
+    scope: key, initial: PENDING,
+  });
+  const latest = useLatest({ request, project, id, send, t });
 
   useEffect(() => {
-    // An answer held from an earlier run is no answer for this one, even for the same ID: the
-    // conversation may have been recorded, or archived, since it was asked.
-    setAnswered(undefined);
-    if (key === undefined) return;
-    let current = true;
+    // With nothing to ask, what was answered before is dropped, so coming back to the same entry starts pending.
+    if (key === undefined) {
+      if (asked()) reset();
+      return;
+    }
+    // Whatever was asked or held before this run is no answer for it, even for the same ID: the conversation may
+    // have been recorded, or archived, since it was asked.
+    reset();
+    hold(() => PENDING, key);
     const timer = setTimeout(() => {
-      const { request, project, id, t } = latest.current;
-      request({ type: "locate_conversation_to_resume", project, agent_session_id: id! }).then(
-        (event) => {
-          if (!current) return;
-          setAnswered(
+      const { request, project, id, send } = latest.current;
+      void send({
+        request: () => request({ type: "locate_conversation_to_resume", project, agent_session_id: id! }),
+        accept: (event) => {
+          const lookup: ConversationLookup =
             event.type === "conversation_located"
-              ? { key, location: event.location }
-              : { key, error: t("dialog.session.resumeLookupFailed") },
-          );
+              ? { status: "ready", location: event.location }
+              : { status: "failed", error: latest.current.t("dialog.session.resumeLookupFailed") };
+          return () => lookup;
         },
-        (err: Error) => current && setAnswered({ key, error: errorPresentation(err) }),
-      );
+        failed: (failure, _held, t) => ({ status: "failed", error: shownError(failure, t) }),
+      });
     }, delayMs);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [key, delayMs]);
+    return () => clearTimeout(timer);
+  }, [key, delayMs, reconnects]);
 
-  if (key === undefined) return { status: "idle" };
-  if (answered?.key !== key) return { status: "pending" };
-  return answered.location ? { status: "ready", location: answered.location } : { status: "failed", error: answered.error! };
+  return key === undefined ? { status: "idle" } : value;
 }

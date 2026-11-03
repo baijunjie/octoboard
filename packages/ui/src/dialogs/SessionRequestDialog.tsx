@@ -244,8 +244,8 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
   // the user's attention stays with the requesting session, which carries on, and the session is
   // not one the user asked to open.
   const answer = async (approve: boolean): Promise<void> => {
+    const edits = approve && isChangeRequest(request) ? form?.edits : undefined;
     try {
-      const edits = approve && isChangeRequest(request) ? form?.edits : undefined;
       await send({ type: "answer_session_request", request_id: request.requestId, approve, ...edits });
     } catch (err) {
       if (err instanceof DaemonRequestError && err.code === SESSION_REQUEST_ANSWERED) return;

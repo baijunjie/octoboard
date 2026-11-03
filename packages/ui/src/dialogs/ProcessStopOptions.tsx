@@ -1,5 +1,6 @@
 import { Checkbox, Label } from "@heroui/react";
 import React, { useId, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "../process/ProcessTreeDetails";
 import { useT } from "../i18n/react";
@@ -69,10 +70,12 @@ export function useProcessStopping(processes: ProcessTree[]): {
   extraControl: (busy: boolean) => React.ReactNode;
 } {
   const t = useT();
-  const sessions = useDaemonStore((s) => s.sessions);
+  const alwaysIds = useDaemonStore(useShallow((s) => processes
+    .filter((tree) => tree.session_id !== undefined && s.sessions.get(tree.session_id)?.role === "console")
+    .map((tree) => tree.id)));
   const [keptIds, setKeptIds] = useState<ReadonlySet<string>>(new Set());
-  const always = processes.filter((tree) => tree.session_id !== undefined && sessions.get(tree.session_id)?.role === "console");
-  const keepable = processes.filter((tree) => !always.includes(tree));
+  const always = processes.filter((tree) => alwaysIds.includes(tree.id));
+  const keepable = processes.filter((tree) => !alwaysIds.includes(tree.id));
   const kept = keepable.filter((tree) => keptIds.has(tree.id));
   const stopped = processes.length - kept.length;
   return {

@@ -9,21 +9,14 @@ import { daemonMessage } from "../errors/daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errors/errorPresentation";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { createStateStore, DaemonProvider, errorToast, type Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { Toasts } from "./Toasts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const daemon: Daemon = {
-  store: createStateStore({}),
-  request: vi.fn(),
-  raiseError: vi.fn(),
-  toastNotice: vi.fn(),
-  onToast: () => () => {},
-  dismissTrustPrompt: () => {},
-  reconnect: () => {},
-} as unknown as Daemon;
+const daemon = testDaemon({ request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
 
 class FakeResizeObserver {
   observe(): void {}

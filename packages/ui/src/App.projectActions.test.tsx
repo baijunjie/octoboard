@@ -18,7 +18,8 @@ import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { PlatformAdapter } from "./platform";
 import type { Project } from "./protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "./store";
+import { DaemonProvider, type Daemon } from "./store";
+import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { FileViewer } from "./viewer/FileViewer";
 
@@ -71,12 +72,11 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   const console_ = consoleOf("c-actions", "Main");
   const projects = [projectOf("p-actions", console_.id, "Website"), projectOf("p-other", console_.id, "API")];
   const sessions = withSession ? [sessionOf("s-archive", console_.id, "p-actions", "Fix bug", "idle")] : [];
-  const daemon: Daemon = {
-    store: createStateStore(snapshotState({ consoles: [console_], projects, sessions })),
+  const daemon = testDaemon({
+    state: snapshotState({ consoles: [console_], projects, sessions }),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
-    dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
-  };
+    raiseError: vi.fn(), toastNotice: vi.fn(),
+  });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser", clipboard, links }}>
       <ThemeProvider><DaemonProvider value={daemon}><App /><ErrorAlerts daemon={daemon} /></DaemonProvider></ThemeProvider>

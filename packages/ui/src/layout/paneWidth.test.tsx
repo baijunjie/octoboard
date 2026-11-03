@@ -5,10 +5,10 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished } from "vitest";
 
-import { MIN_PANEL_COLUMN_WIDTH } from "./panelColumnWidth";
+import { MIN_PANEL_COLUMN_WIDTH, MIN_TWO_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
 import { PaneResizeHandle } from "./PaneResizeHandle";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
-import { MOBILE_ASIDE_MIN, usePaneWidth, type DockedPanes, type PaneWidth } from "./paneWidth";
+import { usePaneWidth, type DockedPanes, type PaneWidth } from "./paneWidth";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -105,12 +105,12 @@ it("caps a floating pane to the viewport and restores the saved width when widen
 it("sets the phone breakpoint to the rail and the minimum two-column floating group", () => {
   const style = readFileSync(join(import.meta.dirname, "../style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const token = (name: string) => Number(new RegExp(`--${name}:\\s*([\\d.]+)px`).exec(style)?.[1]);
-  expect(MOBILE_ASIDE_MIN).toBe(2 * MIN_PANEL_COLUMN_WIDTH + token("panel-stack-gap") + token("panel-grip-gap") + token("peek-gap"));
-  expect(token("breakpoint-phone")).toBe(token("rail-width") + MOBILE_ASIDE_MIN);
+  expect(MIN_TWO_COLUMN_ASIDE_WIDTH).toBe(2 * MIN_PANEL_COLUMN_WIDTH + token("panel-stack-gap") + token("panel-grip-gap") + token("peek-gap"));
+  expect(token("breakpoint-phone")).toBe(token("rail-width") + MIN_TWO_COLUMN_ASIDE_WIDTH);
 });
 
 it("sets the docked breakpoint to the rail and the minimum widths of all three panes", () => {
   const style = readFileSync(join(import.meta.dirname, "../style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const token = (name: string) => Number(new RegExp(`--${name}:\\s*([\\d.]+)px`).exec(style)?.[1]);
-  expect(token("breakpoint-docked")).toBe(token("rail-width") + 280 + 520 + MOBILE_ASIDE_MIN);
+  expect(token("breakpoint-docked")).toBe(token("rail-width") + 280 + 520 + MIN_TWO_COLUMN_ASIDE_WIDTH);
 });

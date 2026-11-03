@@ -9,6 +9,7 @@ import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { Account, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import type { NewSessionRequest } from "./dialogRequest";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./useQuickCreateSession";
@@ -26,16 +27,12 @@ const raised = () => errorAlerts.getSnapshot().map((alert) => alert.error);
 
 function mount(initial: Partial<State> = {}) {
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
-  const daemon: Daemon = {
-    store: createStateStore(initial),
+  const daemon = testDaemon({
+    state: initial,
     request: vi.fn(async () => ({ type: "session_opened", id: null, session: sessionOf("s-new", parent.id, project.id, "", "idle") })) as Daemon["request"],
     raiseError: vi.fn(),
     toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
   const onOpened = vi.fn();
   let quickCreate!: (target: NewSessionRequest) => void;
   function Host({ consoleId }: { consoleId: string }) {

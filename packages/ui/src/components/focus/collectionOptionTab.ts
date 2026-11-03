@@ -1,6 +1,6 @@
 import { useMemo, type Ref, type RefCallback } from "react";
 import { mergeRefs } from "react-aria";
-import { isTabbable, TABBABLE } from "./tabbable";
+import { isTabbable, TABBABLE } from "./selectors";
 
 function onKeyDown(event: KeyboardEvent): void {
   if (event.key !== "Tab" || !event.altKey || event.ctrlKey || event.metaKey) return;

@@ -1,29 +1,17 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, onTestFinished } from "vitest";
 
 import { errorAlerts } from "../alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
+import { DaemonProvider } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-function fakeDaemon(): Daemon {
-  return {
-    store: createStateStore({}),
-    request: vi.fn(),
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
-}
 
 /** Renders a confirmation and takes it down when the test finishes. */
 function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean; subject?: React.ReactNode; message?: string }): void {
@@ -35,7 +23,7 @@ function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; de
   });
   act(() => {
     root.render(
-      <DaemonProvider value={fakeDaemon()}>
+      <DaemonProvider value={testDaemon()}>
         <ConfirmDialog title="Archive" message="Archive it?" confirmLabel="Archive" errorTitle="Could not archive" onConfirm={async () => {}} {...props}
           onCancel={() => {}} />
       </DaemonProvider>,
@@ -97,7 +85,7 @@ it("puts focus on Confirm of a confirmation raised over another dialog without a
     act(() => root.unmount());
     container.remove();
   });
-  act(() => root.render(<DaemonProvider value={fakeDaemon()}><Stacked /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={testDaemon()}><Stacked /></DaemonProvider>));
   await settleFrames();
   const name = document.querySelector('input[aria-label="Name"]')!;
   name.dispatchEvent(Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "translate" }));

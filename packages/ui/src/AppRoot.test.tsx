@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AppRoot } from "./AppRoot";
-import { createStateStore, type Daemon } from "./store";
+import { testDaemon } from "./test/testDaemon";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -34,15 +34,15 @@ it("shows its children under the providers", async () => {
 });
 
 it("gives the crash page the daemon, which is outside the error boundary", async () => {
-  const store = createStateStore({
+  const daemon = testDaemon({ state: {
     homeDir: "/Users/alice",
     projects: new Map([["p", { name: "Zeta Project", path: "/Users/alice/zeta" }]]) as never,
-  });
+  } });
   function Crashing(): React.ReactElement {
     throw new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
   }
   const container = await mount(
-    <AppRoot platform={{ kind: "browser" }} daemon={{ store } as unknown as Daemon} nativeSync={false}>
+    <AppRoot platform={{ kind: "browser" }} daemon={daemon} nativeSync={false}>
       <Crashing />
     </AppRoot>,
   );

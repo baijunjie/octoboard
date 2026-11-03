@@ -11,7 +11,8 @@ import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import type { Project } from "./protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "./store";
+import { DaemonProvider, type Daemon } from "./store";
+import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,12 +77,10 @@ function mountApp() {
   const console_ = consoleOf("c-max", "Main");
   const project = projectOf("p-site", console_.id, "Website");
   const sessions = [sessionOf("s-site", console_.id, project.id, "Fix header", "idle"), sessionOf("s-console", console_.id, undefined, "Plan release", "idle"), sessionOf("s-old", console_.id, project.id, "Old work", "archived")];
-  const daemon: Daemon = {
-    store: createStateStore(snapshotState({ consoles: [console_], projects: [project], sessions })),
+  const daemon = testDaemon({
+    state: snapshotState({ consoles: [console_], projects: [project], sessions }),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
-    dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
-  };
+  });
   return mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>
       <ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider>

@@ -7,12 +7,13 @@ import { AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, lis
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { StatusBadge } from "../components/status/StatusBadge";
+import { HELP_TIP_BUTTON_CLASS } from "../components/hint/HelpTip";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
 import type { Agent, PerAgent } from "../protocol";
 import { useDaemonStore } from "../store";
-import { markDisabledPickable } from "./accountOptions";
+import { offeredAccountOptions } from "./accountOptions";
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { OptionSelect } from "../components/form/OptionSelect";
 
@@ -71,14 +72,13 @@ export function ConsoleAccountsField({
       label={label}
       description={description}
       help={
-        // The size, colour and hit area of the "?" beside a title (`HelpTip`).
         <TitledControl title={t("dialog.console.manageAccounts")}>
           <Button
             isIconOnly
             size="xs"
             variant="ghost"
             aria-label={t("dialog.console.manageAccounts")}
-            className="shrink-0 -my-0.5 rounded-full text-app-muted"
+            className={HELP_TIP_BUTTON_CLASS}
             ref={manageRef}
             onPress={() => {
               if (manageRef.current) onManageAccounts(manageRef.current);
@@ -93,7 +93,7 @@ export function ConsoleAccountsField({
         {rows.map(({ agent, entries, picked }) => {
           const marked = !isAgentPickable(agentAvailability, addedAgents, agent);
           const kept = storedAccount(saved[agent], agent, accounts);
-          const offered = entries.filter((entry) => !entry.disabled || entry.account === picked || entry.account === kept);
+          const offered = offeredAccountOptions(t, entries.map((entry) => ({ value: entry.key, label: entry.name, off: entry.disabled })), choiceKey({ agent, account: picked }), choiceKey({ agent, account: kept }));
           const nameId = `${idPrefix}-${agent}`;
           return (
           // The same two columns as the Default agent pickers above: the agent's name where the first
@@ -111,7 +111,7 @@ export function ConsoleAccountsField({
                   describedBy={marked ? nameId : undefined}
                   // A turned-off account is hidden, but for the one the console pinned when the field opened (or pins
                   // now), which stays, marked.
-                  options={offered.map((entry) => markDisabledPickable(t, { value: entry.key, label: entry.name }, entry.disabled))}
+                  options={offered}
                   value={choiceKey({ agent, account: picked })}
                   onChange={(key) => {
                     const entry = findEntry(groups, key);

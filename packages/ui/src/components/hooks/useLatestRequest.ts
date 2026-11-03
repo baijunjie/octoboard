@@ -22,7 +22,9 @@ export interface LatestRequestSend<V, R> {
   lane?: BrowseLane;
   /** The slot the request claims, for a lane that lets a request replacing another in its slot go past it. */
   slot?: string;
-  /** What is held while the request is out: unchanged when left out. */
+  /** What is held while the request is out: unchanged when left out. It is put in place when the request is sent, so
+   * a caller that waits before sending holds its pending value itself as the scope changes (`hold`), or a value still
+   * held for a scope the user came back to shows meanwhile. */
   pending?: (held: V) => V;
   /** The change the reply makes to what is held, or nothing when the reply does not answer this request (another
    * shape, project or subject). Returning `held` itself publishes nothing. */
@@ -64,6 +66,11 @@ export interface LatestRequest<V> {
   reset: () => void;
   /** Whether any request has been sent. */
   asked: () => boolean;
+  /** How many times the connection came back after losing the latest request: a caller whose effect sends the
+   * request names it among the effect's dependencies, to ask again, since the daemon keeps nothing from an earlier
+   * connection. A caller that neither does so, nor maps `disconnected`, keeps what it held while the request was out
+   * (a "checking" state, say) for good. */
+  reconnects: number;
   /** Whether the latest request is out, for a poll to wait for it. */
   busy: () => boolean;
   /** When the latest request was sent (`Date.now()`), for a poll to count from. */
@@ -137,9 +144,10 @@ function sendLatest<V, R>(requests: LatestRequests<V>, request: LatestRequestSen
  * A rejection is sorted out by `browseFailure` (`projectBrowseFailure` with `project`), worded in the language of the
  * latest render: one given up for a newer request in its slot is dropped; one whose source changed while it was read
  * is sent again up to `CHANGED_RETRIES` times, and then shown as `changed`; one lost with the connection keeps what
- * is held (`disconnected`) and is reported to `onReconnect`; any other is shown (`failed`). Each request says what is
- * held meanwhile (`pending`), so whether a refresh blanks the value, keeps it, or marks it as refreshing, and whether
- * a failure survives a background refresh, is the caller's rule.
+ * is held (`disconnected`), is reported to `onReconnect` once the connection is back and counted in `reconnects`; any
+ * other is shown (`failed`). Each request says what is held meanwhile (`pending`), so whether a refresh blanks the
+ * value, keeps it, or marks it as refreshing, and whether a failure survives a background refresh, is the caller's
+ * rule.
  */
 export function useLatestRequest<V>({ scope, initial, project, onReconnect }: LatestRequestOptions<V>): LatestRequest<V> {
   const t = useT();
@@ -187,10 +195,12 @@ export function useLatestRequest<V>({ scope, initial, project, onReconnect }: La
     setHeld(s.held);
   };
 
+  const [reconnects, setReconnects] = useState(0);
   const firstEpoch = useRef(snapshotEpoch);
   useEffect(() => {
     if (snapshotEpoch === firstEpoch.current) return;
     const { asked, lost } = live.current;
+    if (lost) setReconnects((n) => n + 1);
     reconnected.current?.({ asked, lost });
   }, [snapshotEpoch, reconnected]);
 
@@ -207,6 +217,7 @@ export function useLatestRequest<V>({ scope, initial, project, onReconnect }: La
     send,
     hold,
     reset,
+    reconnects,
     asked: () => live.current.asked,
     busy: () => live.current.out,
     sentAt: () => live.current.sentAt,

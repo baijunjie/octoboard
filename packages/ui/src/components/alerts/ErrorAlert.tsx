@@ -4,7 +4,7 @@ import React from "react";
 import { AlertStatusContext } from "./AlertButton";
 import { AlertFrame, type AlertStatus } from "./AlertFrame";
 import { DetailsButton } from "./DetailsButton";
-import { useAnnouncement } from "../announce/useAnnouncement";
+import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
 
 export type { AlertStatus };
 
@@ -66,7 +66,7 @@ export function ErrorAlert({
   children?: React.ReactNode;
   className?: string;
 }): React.ReactElement {
-  const announcement = useAnnouncement(announce, announceKey, announceDelayMs);
+  const announcement = useAlertAnnouncement(announce, announceKey, announceDelayMs);
   return (
     <div id={id} className={`min-w-0 shrink-0 text-start ${className}`}>
       <AlertFrame status={status} className="flex-wrap">

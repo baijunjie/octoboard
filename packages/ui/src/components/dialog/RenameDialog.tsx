@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 
 import { useT } from "../../i18n/react";
-import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
+import { Dialog } from "./Dialog";
+import { useDialogAction, useSubmitValidation } from "./dialogHooks";
 import { TextInput } from "../form/TextInput";
 import { exceedsTextLimit } from "../form/textLength";
 

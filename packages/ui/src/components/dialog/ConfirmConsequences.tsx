@@ -4,7 +4,7 @@ import { FadeOverflow } from "../text/FadeOverflow";
 import { SessionAgentIcon } from "../icons/SessionAgentIcon";
 import { StatusIcon } from "../status/StatusIcon";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
-import { useAnnouncement } from "../announce/useAnnouncement";
+import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
 import { useListMotion } from "../motion/useListMotion";
 import { useT } from "../../i18n/react";
 import type { Session } from "../../protocol";
@@ -63,7 +63,7 @@ export function ConsequenceLines({ lines }: { lines: ConsequenceLine[] }): React
  * `announceTitle` speaks it once as the consequences appear, after the move of focus or the state change that brought
  * them (`ErrorAlert`'s `announceDelayMs`). */
 export function ConfirmConsequences({ title, titleId, announceTitle = false, sessions, lines = [] }: { title?: string; titleId?: string; announceTitle?: boolean; sessions?: Session[]; lines?: ConsequenceLine[] }): React.ReactElement | null {
-  const announcement = useAnnouncement(announceTitle, undefined, announceTitle ? AFTER_FOCUS_MOVE_DELAY_MS : undefined);
+  const announcement = useAlertAnnouncement(announceTitle, undefined, announceTitle ? AFTER_FOCUS_MOVE_DELAY_MS : undefined);
   if (!title && lines.length === 0) return null;
   return (
     <div className="flex min-w-0 flex-col gap-2 text-sm">

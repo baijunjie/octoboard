@@ -1,5 +1,5 @@
 import { Toast, toast, type ToastContentValue } from "@heroui/react";
-import React, { useCallback, useEffect, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect } from "react";
 import type { QueuedToast } from "react-aria-components";
 
 import { CodeToneContext } from "../i18n/codeTone";
@@ -13,6 +13,7 @@ import { sessionLocationContent } from "../sessions/sessionCopy";
 import { useDaemon, type ToastRequest } from "../store";
 import { TOAST_BREAKPOINT } from "../components/dialog/toastGeometry";
 import { TitledControl } from "../components/hint/TitledControl";
+import { useMediaQuery } from "../components/hooks/breakpoint";
 import { useLatest } from "../components/hooks/useLatest";
 
 /** How long a notice stays before it dismisses itself. */
@@ -21,14 +22,6 @@ const NOTICE_DURATION_MS = 5000;
 /** Matches a window at least as wide as HeroUI's toast breakpoint (its `sm:`); the narrow window is
  * the one it does not match. */
 const WIDE_QUERY = `(min-width: ${TOAST_BREAKPOINT}px)`;
-
-function subscribeNarrow(onChange: () => void): () => void {
-  const query = window.matchMedia(WIDE_QUERY);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-const isNarrow = () => !window.matchMedia(WIDE_QUERY).matches;
 
 /** The toasts on screen, by what makes two of them identical (kind, message, session), to the
  * queue's key for each. Module-level because the queue is: the stack unmounts and remounts when
@@ -137,7 +130,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
     }
   }, [focusTerminalRef]);
 
-  const narrow = useSyncExternalStore(subscribeNarrow, isNarrow);
+  const narrow = !useMediaQuery(() => WIDE_QUERY);
 
   return (
     <Toast.Provider ref={keepFocus} hotkey={[]} placement={narrow ? "top" : "bottom end"}>

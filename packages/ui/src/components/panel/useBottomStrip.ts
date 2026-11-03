@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 
-import { focusOpenDialog } from "../focus/regionFocus";
+import { focusOpenDialog } from "../focus/modalFocus";
 import { useFocusHandoff } from "../focus/useFocusHandoff";
 
 /**

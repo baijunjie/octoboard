@@ -3,11 +3,12 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../controls/Button";
 import { InlineReference } from "../../i18n/InlineReference";
-import { openingFocus } from "../focus/regionFocus";
+import { openingFocus } from "../focus/modalFocus";
 import type { AcknowledgementView } from "../alerts/errorAlerts";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { ErrorRecovery } from "../../errors/errorRecovery";
-import { Dialog, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
+import { Dialog } from "./Dialog";
+import { useDialogAction, useFocusLeavingWhenDisabled } from "./dialogHooks";
 import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "../form/useTrimmedField";
 
@@ -125,7 +126,11 @@ export function ConfirmDialog({
   // Confirm held while the dialog is open (a refusal that arrives under it) hands its focus to Cancel,
   // or to the dialog when there is none.
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = { get current() { return dialogAround(confirmRef) ?? null; } };
+  const dialogRef = useRef<HTMLElement | null>(null);
+  // After every render, since the dialog's element is not known until its content is in the page.
+  useLayoutEffect(() => {
+    dialogRef.current = dialogAround(confirmRef) ?? null;
+  });
   const fallbackRef = hideCancel ? dialogRef : cancelRef;
   useFocusLeavingWhenDisabled(confirmRef, !confirmed, fallbackRef);
   const opensOnConfirm = !destructive && !unprompted && word === undefined;

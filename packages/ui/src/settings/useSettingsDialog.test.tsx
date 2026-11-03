@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { setFocusAfterModalLoss } from "../components/focus/regionFocus";
+import { setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { PlatformProvider } from "../platform/react";
 import { useSettingsDialog } from "./useSettingsDialog";
 

@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, onTestFinished,
 
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
-import { createStateStore, type Daemon, DaemonProvider } from "../store";
+import { DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import type { Location } from "./history";
 import { type Navigation, useNavigationHistory } from "./useNavigationHistory";
 
@@ -23,7 +24,7 @@ interface Harness {
   backButton: () => HTMLButtonElement;
 }
 
-const daemon = () => ({ store: createStateStore() }) as Daemon;
+const daemon = () => testDaemon();
 
 let root: Root | undefined;
 let container: HTMLElement | undefined;

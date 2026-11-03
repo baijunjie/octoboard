@@ -2,7 +2,8 @@ import { ArrowLeft, ArrowRight, Trash2 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 
 import { AGENT_LABEL, listedAgents } from "../../agents/agents";
-import { ActionMenu, type ActionMenuEntry } from "../../components/menus/ActionMenu";
+import { ActionMenu } from "../../components/menus/ActionMenu";
+import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { InlineReference } from "../../i18n/InlineReference";
 import { movedAgent } from "../../components/tabs/tabDrag";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";

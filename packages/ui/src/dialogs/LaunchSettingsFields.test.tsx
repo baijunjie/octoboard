@@ -8,7 +8,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { press } from "../components/alerts/detailsTestSupport";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider, type Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { LaunchMatrix } from "./ConsoleLaunchFields";
 import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } from "./LaunchSettingsFields";
 
@@ -26,7 +27,7 @@ function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
     }
     return { type: "ack", id: null };
   });
-  const daemon = { store: createStateStore({}), request, raiseError: vi.fn(), toastNotice: vi.fn() } as unknown as Daemon;
+  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), toastNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -234,7 +235,7 @@ it.each([
     if (reload) return new Promise<never>(() => {});
     return { type: "agent_models", id: null, models: [], unavailable: { code: "agent-not-found", message: "Gone", params: {} } };
   });
-  const daemon = { store: createStateStore({}), request, raiseError: vi.fn(), toastNotice: vi.fn() } as unknown as Daemon;
+  const daemon = testDaemon({ request: request as Daemon["request"], raiseError: vi.fn(), toastNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });

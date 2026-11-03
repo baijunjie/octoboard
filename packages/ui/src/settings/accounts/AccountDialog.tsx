@@ -7,7 +7,8 @@ import { errorPresentation, type ErrorPresentation } from "../../errors/errorPre
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL, defaultAccountName, listedAgents } from "../../agents/agents";
 import { agentIconSetupOptions } from "../../components/icons/AgentIcon";
 import { TILDE_PARAMS } from "../../components/text/literalParams";
-import { Dialog, useDialogAction, useRefocusIfLost, useSubmitValidation } from "../../components/dialog/Dialog";
+import { Dialog } from "../../components/dialog/Dialog";
+import { useDialogAction, useRefocusIfLost, useSubmitValidation } from "../../components/dialog/dialogHooks";
 import { useDirectoryBrowse } from "../../components/dialog/DirectoryPicker";
 import { OptionSelect } from "../../components/form/OptionSelect";
 import { TextInput } from "../../components/form/TextInput";

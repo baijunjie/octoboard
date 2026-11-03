@@ -1,5 +1,5 @@
 import type { Session } from "../protocol";
-import { MODAL_OPEN } from "../components/focus/regionFocus";
+import { MODAL_OPEN } from "../components/focus/selectors";
 import { usePlatform } from "../platform/react";
 import { matchesCommand } from "../shortcuts/store";
 import { useWindowShortcut } from "../shortcuts/useWindowShortcut";

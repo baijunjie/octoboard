@@ -30,6 +30,12 @@ export interface AsideLayout {
   floatingKind?: string;
 }
 
+/** Where a floating card is in its rise: in place, below it, or below it waiting a painted frame to
+ * rise without a transition back down first. */
+function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "preparing" {
+  return preparing ? "preparing" : shown ? "shown" : "away";
+}
+
 /**
  * The aside, the pane at the end side: a column of panel cards (`panels/PanelStack.tsx`), each
  * rounded, edged and shadowed by itself. The pane has no surface of its own: it pads the cards by
@@ -68,12 +74,6 @@ export interface AsideLayout {
  * this document no pointer events of its own (a report page's sandboxed frame) wires the same
  * `peek` callbacks onto that element too.
  */
-/** Where a floating card is in its rise: in place, below it, or below it waiting a painted frame to
- * rise without a transition back down first. */
-function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "preparing" {
-  return preparing ? "preparing" : shown ? "shown" : "away";
-}
-
 export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLayout; children?: React.ReactNode | ((peek: PanePeek | undefined) => React.ReactNode); resizeHandle?: React.ReactNode }): React.ReactElement | null {
   const { width, minWidth = 320, peek: hoverPeek, folded = false, overlay = false, floatingKind, keepMounted = false } = layout;
   // A panel floating over the terminal fades in as it comes, again for another panel in its place,

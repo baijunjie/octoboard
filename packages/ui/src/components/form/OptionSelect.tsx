@@ -1,8 +1,8 @@
-import { Description, FieldError, Label, ListBox, Select } from "@heroui/react";
+import { Description, Label, ListBox, Select } from "@heroui/react";
 import React, { useId, useRef } from "react";
 import { ButtonContext } from "react-aria-components";
 
-import { CodeToneContext } from "../../i18n/codeTone";
+import { FieldErrorMessage } from "./FieldErrorMessage";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { FieldClearButton } from "../controls/FieldClearButton";
 import { useHandOffAfterRemoval } from "../focus/HandOffOnUnmount";
@@ -337,13 +337,7 @@ export function OptionSelect<T extends string>({
       </Select.Popover>
       {description && <Description id={descriptionId}>{description}</Description>}
       {errorMessage !== undefined && (
-        // Renders nothing while the field is valid; the alert is on an element of its own because react-aria drops a
-        // `role` given to the error itself (see `TextInput`).
-        <FieldError>
-          <CodeToneContext.Provider value="danger">
-            <span role="alert">{invalid ? errorMessage : null}</span>
-          </CodeToneContext.Provider>
-        </FieldError>
+        <FieldErrorMessage>{invalid ? errorMessage : null}</FieldErrorMessage>
       )}
     </Select>
   );

@@ -10,7 +10,8 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider, type Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
@@ -30,20 +31,16 @@ function mount(
   accounts: Account[] = [],
   callbacks: { projects?: Project[]; onClose?: () => void; request?: Daemon["request"]; onSwitchAccounts?: (sessionIds: string[], account: string | null, accountName: string) => void; strict?: boolean } = {},
 ): { container: HTMLElement; daemon: Daemon } {
-  const daemon: Daemon = {
-    store: createStateStore({
+  const daemon = testDaemon({
+    state: {
       sessions: new Map(sessions.map((s) => [s.id, s])),
       projects: new Map((callbacks.projects ?? []).map((p) => [p.id, p])),
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
-    }),
-    request: vi.fn(callbacks.request) as never,
+    },
+    request: vi.fn(callbacks.request ?? (async () => ({ type: "ack", id: null }))) as never,
     raiseError: vi.fn(),
     toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
   const content = <DaemonProvider value={daemon}>
     <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onResumeSession={async () => {}} onSwitchAccounts={callbacks.onSwitchAccounts ?? (() => {})} onChangeSessionModel={() => {}} />
   </DaemonProvider>;

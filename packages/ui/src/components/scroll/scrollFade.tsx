@@ -148,12 +148,22 @@ type RegionProps = React.DOMAttributes<Element> & {
   "data-focus-visible"?: true;
 };
 
+const RING = "ring-2 ring-focus";
+const INSET_RING = "ring-2 ring-focus ring-inset";
+const OVERLAY_RING = "after:pointer-events-none after:absolute after:inset-0 after:z-10 after:ring-2 after:ring-focus after:ring-inset";
+
 export interface FadeRegion {
   /** The scroller overflows, so it is the focusable region `props` make it (always, with `always`). */
   overflows: boolean;
   /** The scroller has keyboard focus that should show a ring; the caller draws it on the element
    * around the scroller. */
   focused: boolean;
+  /** The classes that draw the focus ring while `focused`, empty otherwise: `ring` around the element, `insetRing`
+   * inside it for one that spans its container, `overlayRing` on the element's `::after` for one whose content would
+   * cover a ring of its own (the element is then positioned). */
+  ring: string;
+  insetRing: string;
+  overlayRing: string;
   props: RegionProps;
   className: string;
   onVisibilityChange?: (visibility: ScrollShadowVisibility) => void;
@@ -164,7 +174,7 @@ export interface FadeRegion {
  * `useScrollFade` to take as their `region`. A scroller nothing else on the screen would scroll
  * needs it, or the fade at its edge says there is more where the keyboard cannot go.
  *
- * The caller draws the focus ring, on the element around the scroller and from `focused`: the fade
+ * The caller draws the focus ring, on the element around the scroller and from `ring`, `insetRing` or `overlayRing`: the fade
  * is a mask that clips by the scroller's border box, so a ring on the scroller itself is cut off.
  * Which element that is differs at every site, and a scroller that spans the window needs the ring
  * inset, so it stays the caller's to place.
@@ -182,9 +192,13 @@ export function useFadeRegion(
   const [overflows, setOverflows] = useState(false);
   const focus = useFocusVisibleProps();
   const active = always || overflows;
+  const focused = active && Boolean(focus["data-focus-visible"]);
   return {
     overflows,
-    focused: active && Boolean(focus["data-focus-visible"]),
+    focused,
+    ring: focused ? RING : "",
+    insetRing: focused ? INSET_RING : "",
+    overlayRing: focused ? OVERLAY_RING : "",
     props: active
       ? {
         ...focus,

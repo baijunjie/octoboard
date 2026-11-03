@@ -1,7 +1,7 @@
 import { Button as HeroButton } from "@heroui/react";
 import React from "react";
 
-import { openingFocus } from "../focus/regionFocus";
+import { openingFocus } from "../focus/modalFocus";
 
 export type ButtonProps = Omit<React.ComponentProps<typeof HeroButton>, "size"> & {
   size?: "xs" | "sm" | "md" | "lg";

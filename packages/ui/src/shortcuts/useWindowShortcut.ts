@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { MODAL_OPEN } from "../components/focus/regionFocus";
+import { MODAL_OPEN } from "../components/focus/selectors";
 import { useLatest } from "../components/hooks/useLatest";
 
 /**

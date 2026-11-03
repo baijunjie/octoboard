@@ -24,8 +24,7 @@ function readName(name: string): string {
 }
 
 /** The fill for a name: a hash of the whole name as it is read (FNV-1a, then mixed so short names
- * spread over the fills), so the same name always gets the same fill — on the rail and in the
- * dialog's preview while it is typed — and consoles whose names start alike still tend to differ. */
+ * spread over the fills), so the same name always gets the same fill, and consoles whose names start alike still tend to differ. */
 export function avatarFill(name: string): (typeof FILLS)[number] {
   let hash = 0x811c9dc5;
   for (const char of readName(name)) hash = Math.imul(hash ^ char.codePointAt(0)!, 0x01000193);

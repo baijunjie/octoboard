@@ -7,7 +7,8 @@ import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
 import type { Account } from "./protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "./store";
+import { DaemonProvider, type Daemon } from "./store";
+import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { IS_MAC } from "./input/keys";
 
@@ -46,14 +47,12 @@ function mountWith(incomplete: boolean) {
     projects: [projectOf("p-1", console_.id, "Search API")],
     sessions: [sessionOf("s-1", console_.id, undefined, "Half session", "interrupted", { account_id: "a-half" })],
   });
-  const store = createStateStore(state);
-  store.setState({ settings: { ...store.getState().settings, accounts: [account(incomplete)] } });
-  const daemon: Daemon = {
-    store,
+  const daemon = testDaemon({
+    state,
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
-    dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
-  };
+    raiseError: vi.fn(), toastNotice: vi.fn(),
+  });
+  daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts: [account(incomplete)] } });
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>
       <ThemeProvider>

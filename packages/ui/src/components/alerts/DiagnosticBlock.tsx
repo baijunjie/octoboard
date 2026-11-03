@@ -41,7 +41,7 @@ export function DiagnosticBlock({ children, labelledBy, tall: tallProp, wrap: wr
     );
   }
   return (
-    <Surface variant="secondary" className={`min-w-0 max-w-full rounded-md ${region.focused ? "ring-2 ring-focus" : ""}`}>
+    <Surface variant="secondary" className={`min-w-0 max-w-full rounded-md ${region.ring}`}>
       <FadedScroller
         dir="ltr"
         orientation={tall ? "vertical" : "horizontal"}

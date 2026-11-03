@@ -5,7 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { ProcessJump } from "../process/processJump";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { useProcessJump } from "./useProcessJump";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -19,7 +20,7 @@ async function mount(asideFloats = false) {
   const switchConsole = vi.fn();
   const openProjectPanel = vi.fn();
   const showPanel = vi.fn();
-  const daemon = { store: createStateStore({ consoles: new Map([[first.id, first], [second.id, second]]), projects: new Map([[project.id, project]]), sessions: new Map([[hub.id, hub]]) }) } as unknown as Daemon;
+  const daemon = testDaemon({ state: { consoles: new Map([[first.id, first], [second.id, second]]), projects: new Map([[project.id, project]]), sessions: new Map([[hub.id, hub]]) } });
   let jump!: (target: ProcessJump) => boolean;
   function Probe() { jump = useProcessJump({ asideFloats, switchConsole, openProjectPanel, showPanel }); return null; }
   const element = document.body.appendChild(document.createElement("div"));

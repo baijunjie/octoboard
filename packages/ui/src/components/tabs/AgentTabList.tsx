@@ -11,7 +11,7 @@ import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { beginTabDrag, DRAG_THRESHOLD } from "./tabDrag";
 import { useLatest, useStableHandler } from "../hooks/useLatest";
 import { DURATION, releaseListMotion, useListMotion } from "../motion/useListMotion";
-import { useTabScrollLabels } from "./tabScrollLabels";
+import { LocalizedTabListContainer } from "./LocalizedTabListContainer";
 
 /** How long after keyboard focus arrives to wait for the scroll that reveals the tab to begin, and how long a
  * scroll has to be quiet before it counts as over. A tooltip is closed by a scroll under it, so one opened
@@ -64,7 +64,6 @@ export function AgentTabList({
   spanning?: boolean;
   tabActions?: (agent: Agent) => React.ReactNode;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, "children">): React.ReactElement {
-  const tabScrollLabels = useTabScrollLabels();
   const [elements] = useState(() => new Map<Agent, HTMLElement>());
   const listRef = useListMotion<HTMLDivElement>({ contentWidth: true });
   const latest = useLatest({ agents, onReorder });
@@ -81,7 +80,7 @@ export function AgentTabList({
   const overlay = useRef<HTMLDivElement>(null);
   // The tabs are made by the collection a render after the strip, and this follows their arrival and departure.
   const [, setTabsVersion] = useState(0);
-  const tabsChanged = useCallback(() => setTabsVersion((version) => version + 1), []);
+  const tabsChanged = () => setTabsVersion((version) => version + 1);
   // The agent whose control holds keyboard focus, or last did before something took it away without the user
   // choosing another place.
   const heldFocus = useRef<Agent | undefined>(undefined);
@@ -96,13 +95,12 @@ export function AgentTabList({
     overlay.current?.querySelector<HTMLElement>(`[data-tab-actions="${agent}"] button:not([hidden])`)?.focus();
   }, [order]);
   return (
-    <Tabs.ListContainer
+    <LocalizedTabListContainer
       {...container}
       data-trailing-control={trailing ? "" : undefined}
       className={`min-w-0 max-w-full ${trailing ? trailingWidth : spanning ? "" : "w-max self-start"} ${container.className ?? ""}`}
-      render={(props) => (
-        <div {...props}>
-          {tabScrollLabels(props.children)}
+      after={(
+        <>
           {tabActions && (
             <div ref={overlay} className="pointer-events-none absolute inset-0 z-2">
               {agents.map((agent) => {
@@ -132,7 +130,7 @@ export function AgentTabList({
             </div>
           )}
           {trailing && <div className="absolute inset-y-0 end-0 z-3 flex items-center">{trailing}</div>}
-        </div>
+        </>
       )}
     >
       {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
@@ -141,7 +139,7 @@ export function AgentTabList({
           <AgentTab key={agent} agent={agent} tabRef={tabRef?.(agent)} notInstalledTip={notInstalledTip?.(agent)} elements={elements} onDragStart={onReorder && dragStart} onElementChange={tabsChanged} reserve={tabActions !== undefined} />
         ))}
       </Tabs.List>
-    </Tabs.ListContainer>
+    </LocalizedTabListContainer>
   );
 }
 

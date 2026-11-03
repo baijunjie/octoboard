@@ -32,7 +32,7 @@ export function StartupScreen({ message }: { message: React.ReactNode }): React.
             title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top.
             The ring is drawn on the wrapper around the scroller, inset because the scroller spans the
             window. */}
-        <main className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
+        <main className={`flex min-h-0 flex-1 flex-col ${region.insetRing}`}>
           <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
             <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8">
               <div className="w-full min-w-0 max-w-xl">{message}</div>
@@ -82,7 +82,7 @@ export function StartupFailure({ failure, action, diagnostic, known }: {
 }
 
 /** The heading of a startup screen's message, centred over the rest of it, which starts at the edge. */
-export function StartupHeading({ children }: { children: React.ReactNode }): React.ReactElement {
+function StartupHeading({ children }: { children: React.ReactNode }): React.ReactElement {
   return <h1 className="text-center text-xl font-semibold text-foreground">{children}</h1>;
 }
 

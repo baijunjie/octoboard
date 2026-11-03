@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
+import { useLatestRequest } from "../components/hooks/useLatestRequest";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import { useT } from "../i18n/react";
 import type { Agent, AgentModel, Event, ModelsUnavailable, RequestBody } from "../protocol";
+import { shownError } from "./shownError";
 
 /** `idle`: not asked, as nothing needs the list yet. `loading`: the answer for the agent and account
  * the form shows now is not in yet. `ready`: the daemon has answered for them, with a list or with
@@ -17,9 +19,9 @@ export interface AgentModels {
   error?: ErrorPresentation;
 }
 
-type Answer = Pick<AgentModels, "models" | "unavailable" | "error"> & { key: string };
-
 const NONE: Pick<AgentModels, "models" | "unavailable"> = { models: [], unavailable: null };
+const LOADING: AgentModels = { status: "loading", ...NONE };
+const IDLE: AgentModels = { status: "idle", ...NONE };
 
 /**
  * Asks the daemon which models `agent` offers under `account` (an account id, `null` for the default
@@ -35,32 +37,28 @@ export function useAgentModels(
 ): AgentModels {
   const t = useT();
   const key = enabled ? JSON.stringify([agent, account]) : undefined;
-  const [answered, setAnswered] = useState<Answer>();
-  const latest = useLatest({ request, agent, account, t });
+  const { value, send, reconnects } = useLatestRequest<AgentModels>({
+    scope: key, initial: LOADING,
+  });
+  const latest = useLatest({ request, agent, account, send, t });
 
   useEffect(() => {
-    // An answer is kept across the section being collapsed and opened again: the `key` check below
-    // already refuses it for any other question.
+    // An answer is kept across the section being collapsed and opened again: the scope the answer is
+    // held for already refuses it for any other question.
     if (key === undefined) return;
-    let current = true;
-    const { request, agent, account, t } = latest.current;
-    request({ type: "list_agent_models", agent, ...(account && { account }) }).then(
-      (event) => {
-        if (!current) return;
-        setAnswered(
+    const { request, agent, account, send } = latest.current;
+    void send({
+      request: () => request({ type: "list_agent_models", agent, ...(account && { account }) }),
+      accept: (event) => {
+        const answer: AgentModels =
           event.type === "agent_models"
-            ? { key, models: event.models, unavailable: event.unavailable }
-            : { key, ...NONE, error: t("dialog.agentSettings.modelsUnexpected") },
-        );
+            ? { status: "ready", models: event.models, unavailable: event.unavailable }
+            : { status: "failed", ...NONE, error: latest.current.t("dialog.agentSettings.modelsUnexpected") };
+        return () => answer;
       },
-      (err: unknown) => current && setAnswered({ key, ...NONE, error: errorPresentation(err) }),
-    );
-    return () => {
-      current = false;
-    };
-  }, [key]);
+      failed: (failure, _held, t) => ({ status: "failed", ...NONE, error: shownError(failure, t) }),
+    });
+  }, [key, reconnects]);
 
-  if (key === undefined) return { status: "idle", ...NONE };
-  if (answered?.key !== key) return { status: "loading", ...NONE };
-  return { status: answered.error === undefined ? "ready" : "failed", models: answered.models, unavailable: answered.unavailable, error: answered.error };
+  return key === undefined ? IDLE : value;
 }

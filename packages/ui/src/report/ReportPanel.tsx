@@ -8,7 +8,7 @@ import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { RetryStatusMark } from "../components/status/RetryStatusMark";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
-import { handFocusToRegionStart } from "../components/focus/regionFocus";
+import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";

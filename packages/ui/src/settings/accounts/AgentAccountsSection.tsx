@@ -4,7 +4,9 @@ import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings, Trash2, UserPlu
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../../agents/agents";
-import { ICON_TRIGGER_CLASS, takeMenuFocusToRestore, type ActionMenuEntry } from "../../components/menus/ActionMenu";
+import { ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
+import { takeMenuFocusToRestore } from "../../components/focus/menuFocus";
+import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { AgentTabList } from "../../components/tabs/AgentTabList";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
 import { TitledControl } from "../../components/hint/TitledControl";
@@ -20,7 +22,7 @@ import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
 import { AccountSettingsDialog } from "./AccountSettingsDialog";
 import { accountLoginOf, loginIsActive } from "./AccountLogin";
-import { type ReturnLoginFocus } from "./AccountLoginButton";
+import type { ReturnLoginFocus } from "./AccountLoginButton";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AccountsTable, AccountTableRow, rowActionsTrigger } from "./AccountsTable";
 import { AddAgentDialog } from "./AddAgentDialog";

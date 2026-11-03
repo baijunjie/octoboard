@@ -6,21 +6,13 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 import type { ConnectionState } from "../daemon-client";
 import { Dialog } from "../components/dialog/Dialog";
 import { useRegionCycle } from "../layout/useRegionCycle";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { ConnectionBanner } from "./ConnectionBanner";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const daemon: Daemon = {
-  store: createStateStore({}),
-  request: vi.fn(),
-  raiseError: vi.fn(),
-  toastNotice: vi.fn(),
-  onToast: () => () => {},
-  dismissTrustPrompt: () => {},
-  reconnect: () => {},
-  terminalUrl: () => "",
-};
+const daemon = testDaemon({ request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn() });
 
 // The banner measures itself with one as it appears, and jsdom has none of its own.
 class FakeResizeObserver {

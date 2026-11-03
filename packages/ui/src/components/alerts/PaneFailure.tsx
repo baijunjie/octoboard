@@ -54,7 +54,7 @@ export function PaneFailure({
   // fall inside the fade band.
   const region = useFadeRegion({ labelledBy: headingId });
   return (
-    <div ref={ref} className={`flex min-h-0 min-w-0 flex-1 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
+    <div ref={ref} className={`flex min-h-0 min-w-0 flex-1 flex-col ${region.insetRing}`}>
       <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col justify-center-safe">
         <EmptyPanel
           headingId={headingId}

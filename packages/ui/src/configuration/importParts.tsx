@@ -7,7 +7,7 @@ import { TILDE_PARAMS } from "../components/text/literalParams";
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { StatusMark } from "../components/status/StatusMark";
 import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
-import { useSubmitValidation } from "../components/dialog/Dialog";
+import { useSubmitValidation } from "../components/dialog/dialogHooks";
 import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { TextInput } from "../components/form/TextInput";
 import { isolate } from "../i18n/isolate";

@@ -17,6 +17,7 @@
     "licenses:generate": "node scripts/generate-licenses.mjs",
     "build": "node scripts/generate-licenses.mjs && pnpm typecheck:app && vitest run src/i18n && vite build",
     "build:preview": "vite build --config vite.preview.config.ts",
+    "compiler:bailouts": "node scripts/compiler-bailouts.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",

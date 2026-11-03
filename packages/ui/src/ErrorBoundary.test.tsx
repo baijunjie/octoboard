@@ -9,7 +9,8 @@ import { errorAlerts } from "./components/alerts/errorAlerts";
 import { t } from "./i18n/language";
 import type { ExitCapability, PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
-import { createStateStore, DaemonProvider, type Daemon } from "./store";
+import { DaemonProvider, type Daemon } from "./store";
+import { testDaemon } from "./test/testDaemon";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -134,14 +135,14 @@ it("keeps the report guidance, naming the address, where the platform cannot ope
 });
 
 it("removes the names of the user's records from the report, reading them from the daemon around the boundary", async () => {
-  const store = createStateStore({
+  const daemon = testDaemon({ state: {
     homeDir: "/Users/alice",
     projects: new Map([["p", { name: "Zeta Project", path: "/Users/alice/zeta" }]]) as never,
-  });
+  } });
   function CrashingOnProject(): React.ReactElement {
     throw new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
   }
-  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingOnProject, { kind: "browser" }, { store } as unknown as Daemon);
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingOnProject, { kind: "browser" }, daemon);
   const prefilled = new URL(container.querySelector<HTMLAnchorElement>("a[data-external-link]")!.href).searchParams;
   expect(`${prefilled.get("title")}${prefilled.get("body")}`).not.toMatch(/Zeta|alice/);
 });

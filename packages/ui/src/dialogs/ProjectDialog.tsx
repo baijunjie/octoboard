@@ -19,10 +19,11 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { markDisabledPickable } from "./accountOptions";
+import { offeredAccountOptions } from "./accountOptions";
 import { AdvancedSection, AdvancedTabs } from "../components/form/AdvancedSection";
 import { AgentAccountField } from "./AgentAccountField";
-import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
+import { Dialog } from "../components/dialog/Dialog";
+import { useDialogAction, useSubmitValidation } from "../components/dialog/dialogHooks";
 import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { GitWorkflowField } from "./GitWorkflowField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
@@ -369,13 +370,16 @@ export function ProjectDialog({
                   },
                   // A turned-off account is hidden, but for the one the project pinned when the dialog opened (or
                   // pins now), which stays, marked.
-                  ...orderedAccounts(agent, accounts, accountOrder).map((account) => ({
-                    choice: account ? { kind: "account", id: account.id } as const : { kind: "default" } as const,
-                    label: account?.name ?? defaultAccountName(t, defaultNames, agent),
-                    off: accountDisabled(accounts, disabledDefaults, agent, account?.id ?? null),
-                  }))
-                    .filter(({ choice, off }) => !off || accountValue(choice) === accountValue(picked) || accountValue(choice) === accountValue(saved))
-                    .map(({ choice, label, off }) => markDisabledPickable(t, { value: accountValue(choice), label }, off)),
+                  ...offeredAccountOptions(
+                    t,
+                    orderedAccounts(agent, accounts, accountOrder).map((account) => ({
+                      value: accountValue(account ? { kind: "account", id: account.id } : { kind: "default" }),
+                      label: account?.name ?? defaultAccountName(t, defaultNames, agent),
+                      off: accountDisabled(accounts, disabledDefaults, agent, account?.id ?? null),
+                    })),
+                    accountValue(picked),
+                    accountValue(saved),
+                  ),
                 ],
                 value: accountValue(picked),
                 onChange: (value) => setAccountFields({ ...accountFields, [agent]: accountOfValue(value) }),

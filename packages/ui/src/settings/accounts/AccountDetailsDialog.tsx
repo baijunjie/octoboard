@@ -5,7 +5,7 @@ import { HelpTip } from "../../components/hint/HelpTip";
 import { InlineReference } from "../../i18n/InlineReference";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { MarkedPath } from "../../components/text/MarkedPath";
-import { focusOpenDialog } from "../../components/focus/regionFocus";
+import { focusOpenDialog } from "../../components/focus/modalFocus";
 import { Dialog } from "../../components/dialog/Dialog";
 import { Message, useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";

@@ -10,7 +10,7 @@ import {
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { StatusBadge } from "../components/status/StatusBadge";
-import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
@@ -55,7 +55,6 @@ export function ConsoleLaunchFields({
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
-  const tabScrollLabels = useTabScrollLabels();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
@@ -84,7 +83,7 @@ export function ConsoleLaunchFields({
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
       <div ref={rootRef} {...focusHandoff} className="rounded-xl border border-separator p-4">
         <Tabs selectedKey={agent} onSelectionChange={(key) => setPicked(key as Agent)} className="gap-4">
-          <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+          <LocalizedTabListContainer className="w-max max-w-full self-start">
             {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
             <Tabs.List ref={tabsRef} aria-label={t("dialog.console.launchAgent")} className="relative w-max min-w-0 p-1.5">
               {listed.map((option) => {
@@ -99,7 +98,7 @@ export function ConsoleLaunchFields({
                 );
               })}
             </Tabs.List>
-          </Tabs.ListContainer>
+          </LocalizedTabListContainer>
           {listed.map((option) => (
             <Tabs.Panel key={option} id={option} className="mt-0 p-0">
               <LaunchMatrix

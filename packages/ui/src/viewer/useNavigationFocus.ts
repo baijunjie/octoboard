@@ -2,7 +2,7 @@ import type React from "react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import { useRefocusIfLost } from "../components/dialog/Dialog";
+import { useRefocusIfLost } from "../components/dialog/dialogHooks";
 import { arrowNavigation } from "./arrowKeys";
 import type { ViewerContent } from "./content";
 import type { ViewerNavigation } from "./viewerNavigation";

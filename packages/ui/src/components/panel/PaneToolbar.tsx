@@ -4,5 +4,5 @@ import type React from "react";
  * file-name filter of the Files and Changes panels, the session filter of the Processes panel. One padding, one
  * gap and one divider, so a field is the same distance from the header and the content in every panel. */
 export function PaneToolbar({ className, ...rest }: React.ComponentProps<"div">): React.ReactElement {
-  return <div className={`flex shrink-0 items-center gap-2 groove-b px-(--pane-inset) py-2${className ? ` ${className}` : ""}`} {...rest} />;
+  return <div className={`flex shrink-0 items-center gap-2 groove-b px-(--pane-inset) py-2 ${className ?? ""}`} {...rest} />;
 }

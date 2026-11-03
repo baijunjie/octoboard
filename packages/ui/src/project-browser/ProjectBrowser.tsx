@@ -6,8 +6,8 @@ import { Button } from "../components/controls/Button";
 import { StatusMark } from "../components/status/StatusMark";
 import { handFocusOff } from "../components/focus/handFocusOff";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
-import { handFocusToRegionStart } from "../components/focus/regionFocus";
-import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { handFocusToRegionStart } from "../components/focus/modalFocus";
+import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
 import { TitledControl } from "../components/hint/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -66,7 +66,6 @@ export function ProjectBrowser({
 }): React.ReactElement {
   const t = useT();
   const [fadesIn] = useState(switching);
-  const tabScrollLabels = useTabScrollLabels();
   const browser = useProjectBrowserState(project.id);
   const mode = browser.mode;
 
@@ -149,13 +148,13 @@ export function ProjectBrowser({
               </div>
             }
           >
-            <Tabs.ListContainer className="shrink-0 rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+            <LocalizedTabListContainer className="shrink-0 rounded-none bg-transparent">
               {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
               <Tabs.List aria-label={t("browser.modes")} className="w-max min-w-0 p-1.5">
                 <Tabs.Tab id="files" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground">{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
                 <Tabs.Tab id="changes" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground">{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
-            </Tabs.ListContainer>
+            </LocalizedTabListContainer>
           </PanelHeader>
           <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} incomplete={mode === "files" && files.searchIncomplete} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
           {mode === "files" ? <Tabs.Panel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">

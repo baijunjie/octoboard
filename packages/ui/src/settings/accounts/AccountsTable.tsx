@@ -3,7 +3,8 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL } from "../../agents/agents";
 import { useListMotion } from "../../components/motion/useListMotion";
-import { ActionMenu, type ActionMenuEntry } from "../../components/menus/ActionMenu";
+import { ActionMenu } from "../../components/menus/ActionMenu";
+import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { HelpTip } from "../../components/hint/HelpTip";
 import { DotStatusBadge } from "../../components/status/DotStatusBadge";

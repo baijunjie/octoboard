@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, createElement } from "react";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
@@ -10,8 +10,17 @@ import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { setLanguage } from "../i18n/language";
 import { POLL_MS } from "../process/processPolling";
 import type { ProcessCount } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider, type Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { RailProcessesEntry } from "./RailProcessesEntry";
+
+// The entry hands its rows to the panel entry as the content it renders, so the panel entry renders again only when
+// the entry's rows (or another of its props) change.
+const panelRenders = vi.hoisted(() => ({ count: 0 }));
+vi.mock("./RailPanelEntry", async (original) => {
+  const module = await original<typeof import("./RailPanelEntry")>();
+  return { ...module, RailPanelEntry: (props: Parameters<typeof module.RailPanelEntry>[0]) => (panelRenders.count++, createElement(module.RailPanelEntry, props)) };
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,14 +47,14 @@ async function mount(initial: ProcessCount[]) {
     if (answer.failing) throw new Error("offline");
     return body.type === "list_all_processes" ? { type: "all_processes_listed", id: null, counts: answer.counts } : { type: "unexpected", id: null };
   });
-  const daemon = {
-    store: createStateStore({ consoles: new Map([[main.id, main]]), projects: new Map([[project.id, project]]), sessions: new Map([[hub.id, hub]]) }),
-    request, toastNotice: vi.fn(),
-  } as unknown as Daemon;
+  const daemon = testDaemon({
+    state: { consoles: new Map([[main.id, main]]), projects: new Map([[project.id, project]]), sessions: new Map([[hub.id, hub]]) },
+    request: request as unknown as Daemon["request"], toastNotice: vi.fn(),
+  });
   const container = mountForTooltip(<DaemonProvider value={daemon}><nav><RailProcessesEntry onOpen={onOpen} /><button id="next">Next</button><span id="elsewhere"><DetailsButton>Elsewhere</DetailsButton></span></nav></DaemonProvider>);
   await act(async () => {});
   const advance = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
-  return { container, onOpen, request, answer, advance };
+  return { container, onOpen, request, answer, advance, daemon };
 }
 
 const panel = () => document.querySelector<HTMLElement>('[role="dialog"]');
@@ -336,4 +345,16 @@ it("closes at once when a status mark's popover opened elsewhere on the page com
   await advance(0);
   expect(railPanel()).toBeNull();
   elsewhere.remove();
+});
+
+it("does not render again for a change to a session it names that alters nothing it shows", async () => {
+  const { container, daemon } = await mount(COUNTS);
+  const before = panelRenders.count;
+  act(() => daemon.store.setState((state) => ({ sessions: new Map(state.sessions).set(hub.id, { ...hub, status: "working" }) })));
+  act(() => daemon.store.setState((state) => ({ sessions: new Map(state.sessions).set("other", sessionOf("other", main.id, undefined, "Other", "idle")) })));
+  expect(panelRenders.count).toBe(before);
+  act(() => daemon.store.setState((state) => ({ sessions: new Map(state.sessions).set(hub.id, { ...hub, title: "Renamed" }) })));
+  expect(panelRenders.count).toBeGreaterThan(before);
+  press(button(container), "touch");
+  expect(panel()!.textContent).toContain("Renamed");
 });

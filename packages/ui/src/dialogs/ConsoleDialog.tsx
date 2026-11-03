@@ -7,7 +7,7 @@ import {
   selectableAgent,
 } from "../agents/agents";
 import { imageToAvatar } from "./avatarImage";
-import { focusOpenDialog } from "../components/focus/regionFocus";
+import { focusOpenDialog } from "../components/focus/modalFocus";
 import { AgentIcon, agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console } from "../protocol";
@@ -16,7 +16,8 @@ import { useDaemon, useDaemonStore } from "../store";
 import { AvatarField } from "./AvatarField";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { type ConsoleAgentSettings, ConsoleLaunchFields } from "./ConsoleLaunchFields";
-import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
+import { Dialog } from "../components/dialog/Dialog";
+import { useDialogAction, useSubmitValidation } from "../components/dialog/dialogHooks";
 import { GroupRow, GroupRows } from "../components/form/GroupRows";
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { OptionSelect } from "../components/form/OptionSelect";
@@ -78,16 +79,14 @@ export function ConsoleDialog({
   // While a picked image is being read, saving would send the old avatar.
   const [decoding, setDecoding] = useState(false);
 
-  const chooseImage = async (file: File) => {
+  const chooseImage = (file: File) => {
     setDecoding(true);
-    try {
-      setIcon(await imageToAvatar(file));
-    } catch {
-      // The avatar's own failure is not a field's: it opens the error alert dialog, as a failed submit does.
-      raiseError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"), { title: t("dialog.console.avatarFailedTitle") });
-    } finally {
-      setDecoding(false);
-    }
+    imageToAvatar(file)
+      .then(setIcon, () => {
+        // The avatar's own failure is not a field's: it opens the error alert dialog, as a failed submit does.
+        raiseError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"), { title: t("dialog.console.avatarFailedTitle") });
+      })
+      .finally(() => setDecoding(false));
   };
 
   const { shown, attempt } = useSubmitValidation();
@@ -150,7 +149,7 @@ export function ConsoleDialog({
           <div className="mt-2.25 sm:mt-1.75">
             <AvatarField
               icon={icon}
-              onPick={(file) => void chooseImage(file)}
+              onPick={chooseImage}
               onRemove={() => setIcon(null)}
               isDisabled={busy}
               isPending={decoding}

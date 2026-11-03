@@ -91,13 +91,13 @@ function ReadOnlyTag({ tag, tone = "accent", wrap = false, motionKey }: ReadOnly
 
 /** A removable tag's label fades and runs as a marquee when clipped. The remove button overlays
  * its text end on hover or keyboard focus, widening short tags only while the button is visible. */
-function RemovableTag({ tag, removeTitle, motionKey = `tag:${tag}` }: RemovableTagProps): React.ReactElement {
+function RemovableTag({ tag, removeTitle, motionKey }: RemovableTagProps): React.ReactElement {
   const t = useT();
   const dir = tagDirection(tag, textDirection(useCurrentLanguage()));
   return (
     <HeroUITag
       id={tag}
-      data-list-motion={motionKey}
+      data-list-motion={motionKey ?? `tag:${tag}`}
       dir={dir}
       textValue={tag}
       data-marquee-scope

@@ -8,7 +8,7 @@ import { CANNOT_HOVER } from "../input/touchInput";
 import { minWidthQuery, useIsNarrow, useMediaQuery } from "../components/hooks/breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
-import { MODAL_OPEN } from "../components/focus/regionFocus";
+import { MODAL_OPEN } from "../components/focus/selectors";
 
 /** The two panes that float in on hover. */
 type Pane = "sidebar" | "aside";

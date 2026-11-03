@@ -11,6 +11,8 @@ import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import { buttons } from "../test/dom";
+import { testDaemon } from "../test/testDaemon";
 import { HandoffDialog } from "./HandoffDialog";
 
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
@@ -31,12 +33,10 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     projects: new Map([[project.id, project]]),
     sessions,
   };
-  const store = createStateStore(initial);
-  store.setState({
-    settings: { ...store.getState().settings, added_agents: added, ...settings },
-    accountQuotas,
-    agentAvailability: new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state, default_account_dir: null } as AgentAvailability])),
-  });
+  const defaults = createStateStore().getState();
+  initial.settings = { ...defaults.settings, added_agents: added, ...settings };
+  initial.accountQuotas = accountQuotas;
+  initial.agentAvailability = new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state, default_account_dir: null } as AgentAvailability]));
   let inspections = 0;
   const request = vi.fn(async (body: { type: string }) => {
     if (body.type === "inspect_session_branches" && branches === "failTwice" && ++inspections <= 2) throw new Error("git failed");
@@ -47,7 +47,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     if (body.type === "hand_off_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
     return { type: "ack", id: null };
   });
-  const daemon = { store, request, raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = testDaemon({ state: initial, request: request as unknown as Daemon["request"], raiseError: vi.fn() });
   const onClose = vi.fn();
   const onHandedOff = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -60,7 +60,6 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
   return { request, onClose, onHandedOff, raiseError: daemon.raiseError };
 }
 
-const buttons = () => Array.from(document.body.querySelectorAll("button"));
 const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 const elapse = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 

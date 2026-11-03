@@ -130,7 +130,7 @@ function InlineFormula({ html }: { html: string }): React.ReactElement {
     className: "[unicode-bidi:isolate] inline-block max-w-full overflow-auto align-middle",
   });
   return (
-    <span className={region.focused ? "ring-2 ring-focus" : undefined}>
+    <span className={region.ring || undefined}>
       <span dir="ltr" {...fade} dangerouslySetInnerHTML={{ __html: html }} />
     </span>
   );
@@ -146,7 +146,7 @@ function FormulaRegion({ html }: { html: string }): React.ReactElement {
     className: "max-w-full overflow-auto rounded-sm",
   });
   return (
-    <div className={`my-3 rounded-sm ${region.focused ? "ring-2 ring-focus" : ""}`}>
+    <div className={`my-3 rounded-sm ${region.ring}`}>
       <div dir="ltr" {...fade} dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
