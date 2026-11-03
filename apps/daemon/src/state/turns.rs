@@ -56,7 +56,7 @@ pub(super) struct TurnState {
     /// (`hooks::turn_key`): while the agent is working, its current turn's.
     key: Option<String>,
     /// How many turn starts of this session carried the agent telling itself that background work
-    /// finished (`hooks::is_task_notification`). Only ever moves on, like `ends`.
+    /// finished ([`is_task_notification`]). Only ever moves on, like `ends`.
     completion_notices: u64,
     /// The session's last report, its own or synthesised, accepted for its owner since a turn of
     /// its last opened: what an owner is told of a child idle after it
@@ -141,7 +141,7 @@ impl AppState {
             turn.last_report = None;
             turn.opened = next_number();
         }
-        if prompt.is_some_and(crate::hooks::is_task_notification) {
+        if prompt.is_some_and(is_task_notification) {
             turn.completion_notices += 1;
         }
         turn.last_event_at = now_millis();
@@ -437,6 +437,13 @@ impl AppState {
             TurnClose::OwesReport
         }
     }
+}
+
+/// Whether a submitted prompt is the agent reporting finished background work to itself rather
+/// than a prompt anyone sent it. It lives here, below the hooks that also read it, because a
+/// turn's bookkeeping counts these turns.
+pub fn is_task_notification(prompt: &str) -> bool {
+    prompt.contains("<task-notification>")
 }
 
 #[cfg(test)]

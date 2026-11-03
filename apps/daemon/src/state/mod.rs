@@ -67,7 +67,7 @@ pub use git_status::GitCheckClaim;
 pub use live::Running;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
-pub use turns::{LastReport, TurnClose};
+pub use turns::{is_task_notification, LastReport, TurnClose};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};

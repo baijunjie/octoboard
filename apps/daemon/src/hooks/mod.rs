@@ -157,7 +157,8 @@ pub fn background_tasks_change(
         "StopFailure" => Some(BackgroundTasksChange::Replace(Vec::new())),
         "UserPromptSubmit" => {
             let prompt = submitted_prompt(agent, payload)?;
-            is_task_notification(prompt).then(|| BackgroundTasksChange::Finished(task_ids(prompt)))
+            crate::state::is_task_notification(prompt)
+                .then(|| BackgroundTasksChange::Finished(task_ids(prompt)))
         }
         _ => None,
     }
@@ -181,17 +182,12 @@ fn background_task(entry: &Value) -> Option<BackgroundTask> {
     })
 }
 
-/// Whether a submitted prompt is the agent reporting finished background work to itself rather
-/// than a prompt anyone sent it.
-pub fn is_task_notification(prompt: &str) -> bool {
-    prompt.contains("<task-notification>")
-}
-
 /// Whether a submitted prompt is one the agent sent itself rather than one sent from its input
 /// box: a completion notice ([`is_task_notification`]), or the report a subagent resumed with
 /// `SendMessage` hands back, which Claude Code (2.1.316) submits as `Another Claude session sent a
 /// message:` followed by an `<agent-message from="…">` block.
 pub fn is_self_sent(prompt: &str) -> bool {
+    use crate::state::is_task_notification;
     is_task_notification(prompt) || prompt.contains("<agent-message from=")
 }
 
