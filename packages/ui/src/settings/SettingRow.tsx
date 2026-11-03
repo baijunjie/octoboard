@@ -56,7 +56,14 @@ export function SettingRow({
   );
 }
 
-/** An on/off switch named by `label`, which the setting shows itself. */
+/** What a switch's `onChange` may hand back: the save it started, while which further presses are ignored. */
+type SwitchChange = (value: boolean) => void | Promise<unknown>;
+
+/** An on/off switch named by `label`, which the setting shows itself. It shows `isSelected`, the value the setting
+ * holds, never a value of its own set on press. When `onChange` returns the save it started, a press while that save is
+ * unanswered is ignored. The pending save is held in a ref rather than shown: a shown value would be cleared by the
+ * reply, which can arrive before the broadcast that updates `isSelected`, so the switch would briefly show the old
+ * value again. */
 export function SettingSwitch({
   label,
   isSelected,
@@ -67,7 +74,7 @@ export function SettingSwitch({
 }: {
   label: string;
   isSelected: boolean;
-  onChange: (value: boolean) => void;
+  onChange: SwitchChange;
   /** The ids of the notes that describe the switch. */
   describedBy?: string;
   /** The switch cannot be changed now: for a reason `describedBy` gives, or only for as long as an operation it
@@ -79,6 +86,16 @@ export function SettingSwitch({
   opensFocused?: boolean;
 }): React.ReactElement {
   const root = useRef<HTMLDivElement>(null);
+  const saving = useRef(false);
+  const change = (value: boolean) => {
+    if (isUnavailable || saving.current) return;
+    const save = onChange(value);
+    if (!save) return;
+    saving.current = true;
+    // The owner reports a failure; this only frees the switch once the save settles either way.
+    const release = () => { saving.current = false; };
+    void save.then(release, release);
+  };
   // The library puts `isReadOnly` on the input as `aria-readonly` and leaves out `aria-disabled`, which says it is
   // unavailable rather than merely fixed.
   useEffect(() => {
@@ -99,7 +116,7 @@ export function SettingSwitch({
       aria-describedby={describedBy}
       isReadOnly={isUnavailable}
       isSelected={isSelected}
-      onChange={(value) => { if (!isUnavailable) onChange(value); }}
+      onChange={change}
       className={isUnavailable ? "opacity-(--disabled-opacity)" : undefined}
     >
       <Switch.Content>
@@ -124,7 +141,7 @@ export function SwitchSettingRow({
   help?: React.ReactNode;
   description: React.ReactNode;
   isSelected: boolean;
-  onChange: (value: boolean) => void;
+  onChange: SwitchChange;
   motionKey?: string;
 }): React.ReactElement {
   return (

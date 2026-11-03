@@ -8,6 +8,7 @@ import { handFocusOff } from "../components/focus/handFocusOff";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
+import { TEXT_TAB_BASE_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
 import { TitledControl } from "../components/hint/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -149,10 +150,9 @@ export function ProjectBrowser({
             }
           >
             <LocalizedTabListContainer className="shrink-0 rounded-none bg-transparent">
-              {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
-              <Tabs.List aria-label={t("browser.modes")} className="w-max min-w-0 p-1.5">
-                <Tabs.Tab id="files" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground">{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="changes" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground">{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
+              <Tabs.List aria-label={t("browser.modes")} className={TEXT_TAB_LIST_CLASS}>
+                <Tabs.Tab id="files" className={`h-6 px-1.5 ${TEXT_TAB_BASE_CLASS}`}>{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="changes" className={`h-6 px-1.5 ${TEXT_TAB_BASE_CLASS}`}>{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </LocalizedTabListContainer>
           </PanelHeader>

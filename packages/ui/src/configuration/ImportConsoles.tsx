@@ -23,7 +23,7 @@ import {
   type ReviewState,
   type RowState,
 } from "./importPlan";
-import { Card, CARD_HEADER_CLASS, CardTitle, DirectoryChoiceField, FallbackLines, FallbackMark, Field, InfoNote, STATUS_TONE, StatusGlyph, type StatusEntry, type Shown } from "./importParts";
+import { Card, CARD_HEADER_CLASS, CardRows, CardTitle, DirectoryChoiceField, EmptyLine, FallbackLines, FallbackMark, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
 
 const CHOICE_LABEL: Record<RowState["choice"], PlainMessageKey> = {
   exported_path: "configuration.import.choice.exportedPath",
@@ -81,13 +81,11 @@ function ProjectRow({
     fields.push([t("configuration.import.project.field.place"), target ?? ""]);
   }
   return (
-    <li className="@container flex flex-col gap-2 groove-b px-4 py-3 last:border-b-0">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-        <div className="flex min-w-40 flex-1 flex-col gap-0.5">
+    <ReviewRow
+      lead={
+        <>
           <span className="flex items-start gap-1">
-            <span className="min-w-0 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">
-              {project.name}
-            </span>
+            <ItemName>{project.name}</ItemName>
             {!state && (
               // A project not found that also has account fallbacks is still one point: one mark, naming both.
               <MarkLineBox size="text-sm">
@@ -109,23 +107,24 @@ function ProjectRow({
               <Message id={state.label} />
             </span>
           )}
-        </div>
-        <div className="w-full @md:w-56">
-          <OptionSelect
-            hideLabel
-            label={t("configuration.import.project.choice", { project: isolate(project.name) })}
-            options={choicesFor(project).map((choice) => ({ value: choice, label: t(CHOICE_LABEL[choice]) }))}
-            value={row.choice}
-            onChange={(choice) => onChange({ ...row, choice })}
-          />
-        </div>
-      </div>
+        </>
+      }
+      control={
+        <OptionSelect
+          hideLabel
+          label={t("configuration.import.project.choice", { project: isolate(project.name) })}
+          options={choicesFor(project).map((choice) => ({ value: choice, label: t(CHOICE_LABEL[choice]) }))}
+          value={row.choice}
+          onChange={(choice) => onChange({ ...row, choice })}
+        />
+      }
+    >
       {fields.length > 0 && (
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+        <FieldList>
           {fields.map(([label, value]) => (
             <Field key={label} label={label} value={value} />
           ))}
-        </dl>
+        </FieldList>
       )}
       {row.choice === "directory" && (
         <DirectoryChoiceField
@@ -137,7 +136,7 @@ function ProjectRow({
           problem={problem}
         />
       )}
-    </li>
+    </ReviewRow>
   );
 }
 
@@ -167,9 +166,9 @@ function ConsoleGroup({
       )}
     >
       {console.projects.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-app-muted">{t("configuration.import.console.noProjects")}</p>
+        <EmptyLine>{t("configuration.import.console.noProjects")}</EmptyLine>
       ) : (
-        <ul className="flex flex-col">
+        <CardRows>
           {console.projects.map((project, p) => {
             const row = review[index][p];
             return (
@@ -182,7 +181,7 @@ function ConsoleGroup({
               />
             );
           })}
-        </ul>
+        </CardRows>
       )}
     </Card>
   );
@@ -240,7 +239,7 @@ export function ImportConsoles({
         <ConsoleGroup key={index} console={console} index={index} review={review} shown={shown} onReview={onReview} />
       ))}
       {cloning && (
-        <InfoNote>{t("configuration.import.review.cloneNote")}</InfoNote>
+        <ToneLine>{t("configuration.import.review.cloneNote")}</ToneLine>
       )}
     </>
   );

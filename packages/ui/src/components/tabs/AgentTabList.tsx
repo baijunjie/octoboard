@@ -12,6 +12,7 @@ import { beginTabDrag, DRAG_THRESHOLD } from "./tabDrag";
 import { useLatest, useStableHandler } from "../hooks/useLatest";
 import { DURATION, releaseListMotion, useListMotion } from "../motion/useListMotion";
 import { LocalizedTabListContainer } from "./LocalizedTabListContainer";
+import { TEXT_TAB_CLASS, TEXT_TAB_LIST_CLASS } from "./textTabClasses";
 
 /** How long after keyboard focus arrives to wait for the scroll that reveals the tab to begin, and how long a
  * scroll has to be quiet before it counts as over. A tooltip is closed by a scroll under it, so one opened
@@ -134,7 +135,7 @@ export function AgentTabList({
       )}
     >
       {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
-      <Tabs.List ref={listRef} aria-label={label} className="relative w-max min-w-0 p-1.5">
+      <Tabs.List ref={listRef} aria-label={label} className={`relative ${TEXT_TAB_LIST_CLASS}`}>
         {agents.map((agent) => (
           <AgentTab key={agent} agent={agent} tabRef={tabRef?.(agent)} notInstalledTip={notInstalledTip?.(agent)} elements={elements} onDragStart={onReorder && dragStart} onElementChange={tabsChanged} reserve={tabActions !== undefined} />
         ))}
@@ -252,7 +253,7 @@ function AgentTab({ agent, tabRef, notInstalledTip, elements, onDragStart, onEle
         setHasFocus(false);
         setFocusCount((count) => count + 1);
       }}
-      className={`w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground ${reserve ? "pe-9" : ""}`}
+      className={`gap-2 ${TEXT_TAB_CLASS} ${reserve ? "pe-9" : ""}`}
     >
       <AgentIcon agent={agent} />
       {AGENT_LABEL[agent]}

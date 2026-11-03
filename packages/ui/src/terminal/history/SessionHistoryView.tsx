@@ -99,20 +99,25 @@ export function SessionHistoryView({
         // The record's state, not a failed load: reading it again would not change the answer, so it
         // is an empty state rather than a failure. Spoken by the status region above, with its
         // remedy, so it is silent here.
-        <div className="flex flex-1 items-center justify-center-safe">
+        <HistoryEmpty>
           <EmptyPanel icon={FileQuestion} message={t("history.unavailable")} description={t("history.unavailable.description")} remedy={t("history.unavailable.remedy")} silent />
-        </div>
+        </HistoryEmpty>
       )}
       {history.state === "loaded" &&
         (messages.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center-safe">
+          <HistoryEmpty>
             <EmptyPanel icon={MessageSquareOff} message={t("history.empty")} silent />
-          </div>
+          </HistoryEmpty>
         ) : (
           <MessageList messages={messages} />
         ))}
     </section>
   );
+}
+
+/** An empty state centred in the space the history leaves. */
+function HistoryEmpty({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <div className="flex flex-1 items-center justify-center-safe">{children}</div>;
 }
 
 /** The "Reports to" line under the heading: the owner as a link that shows it as selecting it in the

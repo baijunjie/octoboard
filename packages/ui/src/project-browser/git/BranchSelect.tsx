@@ -12,7 +12,7 @@ import { Message, useT } from "../../i18n/react";
 import type { BranchInfo } from "../../protocol";
 import { displayWirePath } from "../../format/wirePath";
 import { BranchOriginBadge } from "./BranchOriginBadge";
-import { shortCommit } from "./shortCommit";
+import { CommitIdLabel } from "./CommitIdLabel";
 
 /** Every option in a branch selector is one line of this height, which is what lets a repository's
  * thousands of branches be listed virtualized. */
@@ -99,9 +99,7 @@ export function BranchSelect({
                     {branchName}
                   </FadeOverflow>
                   {branch.origin && <BranchOriginBadge origin={branch.origin} selectedSessionId={selectedSessionId} />}
-                  <span dir="ltr" className="shrink-0 font-mono text-xs text-app-muted">
-                    {shortCommit(branch.commit)}
-                  </span>
+                  <CommitIdLabel commit={branch.commit} />
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
               );

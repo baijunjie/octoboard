@@ -74,7 +74,7 @@ it("preserves URL text and repeated separators while allowing paths to wrap", ()
 
 it("preserves diagnostic lines and supports wrapping or a full-width scrollable trace", () => {
   const text = "first line\n    second line";
-  const container = mount(<><CodeBlock>{text}</CodeBlock><CodeBlock dir="ltr" wrap={false} className="text-xs">{text}</CodeBlock></>);
+  const container = mount(<><CodeBlock>{text}</CodeBlock><CodeBlock dir="ltr" wrap={false}>{text}</CodeBlock></>);
   const [wrapped, trace] = Array.from(container.querySelectorAll("pre"));
   expect(wrapped.getAttribute("dir")).toBe("auto");
   expect(wrapped.classList.contains("whitespace-pre-wrap")).toBe(true);
@@ -83,7 +83,6 @@ it("preserves diagnostic lines and supports wrapping or a full-width scrollable 
   expect(trace.classList.contains("min-w-full")).toBe(true);
   expect(trace.classList.contains("w-max")).toBe(true);
   expect(trace.classList.contains("whitespace-pre")).toBe(true);
-  expect(trace.classList.contains("text-xs")).toBe(true);
   for (const pre of [wrapped, trace]) {
     expect(pre.textContent).toBe(text);
     expect(pre.querySelector("code")?.classList.contains("w-full")).toBe(true);

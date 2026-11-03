@@ -37,6 +37,7 @@ import { RemoveAgentDialog } from "./RemoveAgentDialog";
 import { useAgentList } from "./useAgentList";
 import { useAccountOrder } from "./useAccountOrder";
 import { DaemonSwitchSetting } from "../DaemonSwitchSetting";
+import { SettingsLead } from "../SettingsLead";
 import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
 
 /** The agent strip's height, the `p-1.5` clearance around its tabs and its 1px rule included. The strip is given
@@ -227,9 +228,9 @@ export function AgentAccountsSection(): React.ReactElement {
 
   return (
     <>
-      <p className="pb-2 text-sm text-app-muted">
+      <SettingsLead>
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
-      </p>
+      </SettingsLead>
       <DaemonSwitchSetting field="auto_select_account" />
       <DaemonSwitchSetting field="auto_switch_on_usage_limit" />
       <DaemonSwitchSetting field="auto_start_quota_windows" />

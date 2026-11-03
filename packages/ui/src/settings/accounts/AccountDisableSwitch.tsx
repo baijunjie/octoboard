@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React from "react";
 
 import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
@@ -25,14 +25,9 @@ export function AccountDisableSwitch({ agent, account, name, label = "settings.a
   const t = useT();
   const disabled = useAccountDisabled(agent, account);
   const { request } = useDaemon();
-  const asking = useRef(false);
-  const change = (disable: boolean) => {
-    if (asking.current) return;
-    asking.current = true;
-    void request({ type: "set_account_disabled", agent, account, disabled: disable })
-      .catch(alertAppDataFailure(t(disable ? "settings.accounts.disableFailedTitle" : "settings.accounts.enableFailedTitle")))
-      .finally(() => { asking.current = false; });
-  };
+  const change = (disable: boolean) =>
+    request({ type: "set_account_disabled", agent, account, disabled: disable })
+      .catch(alertAppDataFailure(t(disable ? "settings.accounts.disableFailedTitle" : "settings.accounts.enableFailedTitle")));
   return (
     <SettingSwitch label={t(label, { name: isolate(name) })} isSelected={disabled} onChange={change} />
   );

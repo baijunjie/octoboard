@@ -142,7 +142,7 @@ it("splits the rows into Repository, Development and Protection under h3 heading
   }));
   expect(groups.map((group) => group.heading)).toEqual(["Repository", "Development", "Protection"]);
   expect(groups.every((group) => group.labelled)).toBe(true);
-  expect(Array.from(container.querySelectorAll("h3")).every((heading) => heading.hasAttribute("data-sticky-heading"))).toBe(true);
+  expect(Array.from(container.querySelectorAll("h3")).every((heading) => heading.closest("[data-sticky-heading]") !== null)).toBe(true);
   expect(groups[0].has).toEqual(["Clone directory"]);
   expect(groups[1].has).toEqual(["Where sessions develop", "Squash commits before delivery", "Rebase before delivery", "Delivery"]);
   expect(groups[2].has).toEqual(["Revert gate"]);

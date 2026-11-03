@@ -57,7 +57,7 @@ export function EmptyPanel({
   /** The full panel's heading level: the level of the heading naming whatever the panel stands in
    * for, so the two read as one thing in the view's outline rather than the panel opening a section
    * of its own. The default suits a pane's own title and a dialog's, both `h2`; the sidebar's
-   * `SectionHeading` is an `h3`, so a panel inside one of those sections passes 3, and a panel that
+   * `StickyHeading` is an `h3`, so a panel inside one of those sections passes 3, and a panel that
    * is the whole page (a startup failure) passes 1. A compact row has no heading. */
   headingLevel?: 1 | 2 | 3;
   /** The full panel's heading's id, for an owner that names something after the heading. */

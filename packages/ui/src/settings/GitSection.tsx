@@ -28,7 +28,7 @@ export function GitSection(): React.ReactElement {
   const handoff = useFocusHandoff(() => listRef.current?.querySelector("button")?.focus());
 
   const change = (changes: GitWorkflowSettingsChanges) =>
-    void request({ type: "update_settings", git_workflow: changes }).catch(alertAppDataFailure(t("settings.saveFailedTitle")));
+    request({ type: "update_settings", git_workflow: changes }).catch(alertAppDataFailure(t("settings.saveFailedTitle")));
 
   return (
     <>

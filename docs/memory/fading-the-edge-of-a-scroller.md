@@ -42,8 +42,8 @@ Which API a site takes follows from its scroller:
   every focus move unless exempted: under either API, the sticky element spreads the props of
   `useStickyHeadingFocus` (`packages/ui/src/components/scroll/stickyHeadingFocus.ts`). Under `FadedScroller` they also mark
   it `data-sticky-heading`, which is how that scroller finds the heading to place its top fade by, so a sticky element
-  built without them leaves that fade in the wrong place as well. `StickySectionHeading` in
-  `packages/ui/src/components/rows/SectionHeading.tsx` already does, so a heading built from it needs nothing more. The overlay fades
+  built without them leaves that fade in the wrong place as well. Every variant of `StickyHeading` in
+  `packages/ui/src/components/scroll/StickyHeading.tsx` already does, so a heading built from it needs nothing more. The overlay fades
   default to the side panes' colour; on any other surface, pass `stickySurface` (both APIs take it).
 
 Surfaces with a pinned heading or row use overlay fades (the "What both views show" section of

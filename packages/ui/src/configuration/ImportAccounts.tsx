@@ -14,7 +14,7 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, InspectedAccount, InspectedAccounts } from "../protocol";
 import { useFailureNode } from "./failureText";
 import { accountChoicesFor, directoryProblem, hasNameProblem, withAccountRow, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
-import { AgentList, Card, CardHeading, DirectoryChoiceField, Field, InfoNote, STATUS_TONE, StatusGlyph, type StatusEntry, type Shown } from "./importParts";
+import { AgentList, Card, CardHeading, CardRows, DirectoryChoiceField, EmptyLine, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
 
 const CHOICE_LABEL: Record<AccountRowState["choice"], PlainMessageKey> = {
   create: "configuration.import.accounts.choice.create",
@@ -49,12 +49,12 @@ function AccountRow({
   // An account used as it is has no directory to place, and one given another directory shows that one below.
   const showsFileDirectory = account.status !== "existing" && row.choice !== "directory";
   return (
-    <li className="@container flex flex-col gap-2 groove-b px-4 py-3 last:border-b-0">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-        <div className="flex min-w-40 flex-1 flex-col gap-0.5">
+    <ReviewRow
+      lead={
+        <>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="flex items-start gap-1">
-              <span className="min-w-0 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">{account.name}</span>
+              <ItemName>{account.name}</ItemName>
               {!settled && (
                 <MarkLineBox size="text-sm">
                   <UnusableMark account={account} />
@@ -70,23 +70,24 @@ function AccountRow({
               <span className="min-w-0 [overflow-wrap:anywhere]" dir="auto">{t(settled.label)}</span>
             </span>
           )}
-        </div>
-        {choices.length > 0 && (
-          <div className="w-full @md:w-56">
-            <OptionSelect
-              hideLabel
-              label={t("configuration.import.accounts.choice.label", { account: isolate(account.name) })}
-              options={choices.map((choice) => ({ value: choice, label: t(CHOICE_LABEL[choice]) }))}
-              value={row.choice}
-              onChange={(choice) => onChange({ ...row, choice })}
-            />
-          </div>
-        )}
-      </div>
+        </>
+      }
+      control={
+        choices.length > 0 && (
+          <OptionSelect
+            hideLabel
+            label={t("configuration.import.accounts.choice.label", { account: isolate(account.name) })}
+            options={choices.map((choice) => ({ value: choice, label: t(CHOICE_LABEL[choice]) }))}
+            value={row.choice}
+            onChange={(choice) => onChange({ ...row, choice })}
+          />
+        )
+      }
+    >
       {showsFileDirectory && (
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+        <FieldList>
           <Field label={t("configuration.import.accounts.field.directory")} value={account.directory} />
-        </dl>
+        </FieldList>
       )}
       {row.choice === "directory" && (
         <DirectoryChoiceField
@@ -98,7 +99,7 @@ function AccountRow({
           problem={problem}
         />
       )}
-    </li>
+    </ReviewRow>
   );
 }
 
@@ -180,7 +181,7 @@ export function ImportAccounts({
           onRow={(i, row) => onReview(withAccountRow(review, a, i, row))}
         />
       ))}
-      <InfoNote>{t("configuration.import.accounts.note")}</InfoNote>
+      <ToneLine>{t("configuration.import.accounts.note")}</ToneLine>
     </>
   );
 }
@@ -202,9 +203,9 @@ function AgentCard({
   return (
     <Card header={(headingId) => <CardHeading id={headingId}>{AGENT_LABEL[agent]}</CardHeading>}>
       {accounts.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-app-muted">{t("configuration.import.accounts.none")}</p>
+        <EmptyLine>{t("configuration.import.accounts.none")}</EmptyLine>
       ) : (
-        <ul className="flex flex-col">
+        <CardRows>
           {accounts.map((account, i) => (
             <AccountRow
               key={i}
@@ -215,7 +216,7 @@ function AgentCard({
               onChange={(row) => onRow(i, row)}
             />
           ))}
-        </ul>
+        </CardRows>
       )}
     </Card>
   );

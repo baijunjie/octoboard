@@ -134,6 +134,25 @@ directory itself. A path that only shares its first characters with the home dir
 the full path. When the daemon cannot determine its home directory, every path is shown in full: the home it
 settles on (`HOME` when absolute, else the user's entry in the system user database) is the filesystem root.
 
+## How switches save
+
+A row's switch whose value the daemon holds saves when it is turned, on its own: in General, **Order the sidebar by
+status** and **Automatically delete archived sessions whose conversation is gone**; in Git, **Automatically pull
+repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
+**Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
+automatically**; and the five of Agent behavior. The switch always shows the value the daemon has stored, which every
+window shares: it moves when that value changes, not on the press itself. A press made while the save started by the
+previous press is still unanswered is ignored. Nothing marks that wait — the switch does not look unavailable — and it
+keeps showing the stored value meanwhile. A failed save is shown in an error alert saying the setting could not be
+saved, the switch keeping its position (see "The error alert" in `docs/product/error-alerts.md`).
+
+Other switches in Settings save by rules of their own: an account's Disable switch (see "Turning an account off" in
+`docs/product/agent-accounts.md`), each agent's Claude compatibility switch, which is unavailable while its save is
+unanswered (see "Claude compatibility" in `docs/product/per-agent-settings.md`), the sharing switch of an account's
+settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), and **Keep running in
+the background**, a choice the client keeps itself rather than the daemon (see "Closing the window" in
+`docs/product/application-lifecycle.md`).
+
 ## General
 
 Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, an **Order the sidebar

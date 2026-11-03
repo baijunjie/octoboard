@@ -13,6 +13,7 @@ import { collectionIndex, emptyCollectionIndex } from "../collectionIndex";
 import { ChangeListLayout, CHANGE_SCROLL_CLASS } from "./changeListLayout";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { RowActions } from "../RowActions";
+import { CommitIdLabel } from "./CommitIdLabel";
 import { shortCommit } from "./shortCommit";
 import { BrowserListMotion, useBrowserListMotion } from "../useBrowserListMotion";
 import { DirectoryRow, ExpandChevron, ROW_CLASS, ROW_HEIGHT, RowContent } from "../treeRow";
@@ -196,7 +197,7 @@ function CommitRow({ commit, count, isExpanded }: { commit: CommitRef; count: nu
   const language = useCurrentLanguage();
   return (
     <RowContent chevron={<ExpandChevron isExpanded={isExpanded} />}>
-      <span dir="ltr" className="shrink-0 font-mono text-xs text-app-muted">{shortCommit(commit.commit)}</span>
+      <CommitIdLabel commit={commit.commit} />
       {commit.subject !== "" ? (
         <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 font-medium" titleWhenClipped={commit.subject}>
           {commit.subject}

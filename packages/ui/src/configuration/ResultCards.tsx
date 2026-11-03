@@ -1,10 +1,10 @@
-import { CircleAlert, CircleCheck, CircleDot, CircleMinus, CircleSlash, TriangleAlert } from "lucide-react";
+import { CircleAlert, CircleCheck, CircleDot, CircleMinus, CircleSlash } from "lucide-react";
 import React from "react";
 
 import { AlertStatusContext } from "../components/alerts/AlertButton";
 import { useT } from "../i18n/react";
 import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus } from "../protocol";
-import { Card, CARD_HEADER_CLASS, CardTitle, FailureReason, FallbackMark, STATUS_TONE, StatusGlyph, type StatusEntry } from "./importParts";
+import { Card, CARD_HEADER_CLASS, CardTitle, FailureReason, FallbackMark, ItemName, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
 
 type Status = ImportStatus | AccountOutcome;
 
@@ -66,11 +66,6 @@ export function ResultCard({
   );
 }
 
-/** The rows of a card, each divided from the next. */
-export function ResultRows({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <ul className="flex flex-col">{children}</ul>;
-}
-
 /**
  * One project's or account's row: its name (with its fallback mark) and outcome on a line that wraps the outcome under
  * the name when there is no room, what there is to say about the outcome under it, then the reason when it failed and
@@ -97,7 +92,7 @@ export function ResultRow({
     <li className="flex flex-col gap-1.5 groove-b px-4 py-3 last:border-b-0">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
         <span className="flex min-w-40 flex-1 items-start gap-1">
-          <span className="min-w-0 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">{name}</span>
+          <ItemName>{name}</ItemName>
           <FallbackMark subject={name} fallbacks={fallbacks ?? []} size="text-sm" />
         </span>
         <Outcome status={status} />
@@ -105,16 +100,13 @@ export function ResultRow({
       {detail && <p className="text-sm text-app-muted [overflow-wrap:anywhere]" dir="auto">{detail}</p>}
       {failure && <FailureReason failure={failure} />}
       {warning && (
-        <div className="flex items-start gap-2 text-sm">
-          <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-soft-foreground" />
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <p dir="auto">{warning.text}</p>
-            {/* Outside an Alert, Details defaults to danger; under a warning it takes the warning's colour. */}
-            <AlertStatusContext.Provider value="warning">
-              <FailureReason failure={warning.failure} withoutSummary />
-            </AlertStatusContext.Provider>
-          </div>
-        </div>
+        <ToneLine tone="warning" stacked>
+          <p dir="auto">{warning.text}</p>
+          {/* Outside an Alert, Details defaults to danger; under a warning it takes the warning's colour. */}
+          <AlertStatusContext.Provider value="warning">
+            <FailureReason failure={warning.failure} withoutSummary />
+          </AlertStatusContext.Provider>
+        </ToneLine>
       )}
     </li>
   );

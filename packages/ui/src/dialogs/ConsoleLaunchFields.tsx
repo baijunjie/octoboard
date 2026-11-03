@@ -11,6 +11,7 @@ import { AgentIcon } from "../components/icons/AgentIcon";
 import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
+import { TEXT_TAB_CLASS, TEXT_TAB_CONTAINER_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
@@ -83,13 +84,13 @@ export function ConsoleLaunchFields({
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
       <div ref={rootRef} {...focusHandoff} className="rounded-xl border border-separator p-4">
         <Tabs selectedKey={agent} onSelectionChange={(key) => setPicked(key as Agent)} className="gap-4">
-          <LocalizedTabListContainer className="w-max max-w-full self-start">
+          <LocalizedTabListContainer className={TEXT_TAB_CONTAINER_CLASS}>
             {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
-            <Tabs.List ref={tabsRef} aria-label={t("dialog.console.launchAgent")} className="relative w-max min-w-0 p-1.5">
+            <Tabs.List ref={tabsRef} aria-label={t("dialog.console.launchAgent")} className={`relative ${TEXT_TAB_LIST_CLASS}`}>
               {listed.map((option) => {
                 const badge = agentChoiceBadge(t, agentAvailability, addedAgents, option);
                 return (
-                  <Tabs.Tab key={option} id={option} data-list-motion={option} className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground">
+                  <Tabs.Tab key={option} id={option} data-list-motion={option} className={`gap-2 ${TEXT_TAB_CLASS}`}>
                     <AgentIcon agent={option} />
                     {AGENT_LABEL[option]}
                     {badge && <StatusBadge>{badge}</StatusBadge>}

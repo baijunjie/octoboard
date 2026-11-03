@@ -1,9 +1,9 @@
-import { SearchField, Surface } from "@heroui/react";
+import { SearchField } from "@heroui/react";
 import { ChevronDown, ChevronRight, ScrollText, SearchX } from "lucide-react";
 import React, { useDeferredValue, useEffect, useId, useState } from "react";
 
 import { FieldClearButton } from "../components/controls/FieldClearButton";
-import { CodeBlock } from "../components/text/CodeBlock";
+import { SurfaceCodeBlock } from "../components/text/CodeBlock";
 import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PaneFailure } from "../components/alerts/PaneFailure";
@@ -36,9 +36,7 @@ function PackageRow({ entry, texts }: { entry: LicensedPackage; texts: readonly 
           <div className="mt-2 flex min-w-0 flex-col gap-2">
             {entry.texts.length === 0 && <p className="text-sm text-app-muted">{t("settings.about.thirdParty.noText")}</p>}
             {entry.texts.map((index) => (
-              <Surface key={index} variant="secondary" className="min-w-0 max-w-full rounded-md">
-                <CodeBlock dir="ltr" className="[&>.app-code]:rounded-none [&>.app-code]:bg-transparent">{texts[index] ?? ""}</CodeBlock>
-              </Surface>
+              <SurfaceCodeBlock key={index}>{texts[index] ?? ""}</SurfaceCodeBlock>
             ))}
           </div>
         )}

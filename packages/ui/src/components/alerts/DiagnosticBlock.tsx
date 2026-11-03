@@ -2,7 +2,7 @@ import { Surface } from "@heroui/react";
 import { createContext, useContext, type ReactElement } from "react";
 
 import { useT } from "../../i18n/react";
-import { CodeBlock } from "../text/CodeBlock";
+import { CODE_SURFACE_CLASS, CodeBlock, SurfaceCodeBlock } from "../text/CodeBlock";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 
 /** The id of the summary of the disclosure a block stands in, which names the block's region unless it is given its own
@@ -34,21 +34,17 @@ export function DiagnosticBlock({ children, labelledBy, tall: tallProp, wrap: wr
   const labelId = labelledBy ?? disclosure;
   const region = useFadeRegion(labelId ? { labelledBy: labelId } : { label: t("error.diagnostics") });
   if (wrap && !tall) {
-    return (
-      <Surface variant="secondary" className="min-w-0 max-w-full rounded-md">
-        <CodeBlock dir="ltr" className="[&>.app-code]:rounded-none [&>.app-code]:bg-transparent">{children}</CodeBlock>
-      </Surface>
-    );
+    return <SurfaceCodeBlock>{children}</SurfaceCodeBlock>;
   }
   return (
-    <Surface variant="secondary" className={`min-w-0 max-w-full rounded-md ${region.ring}`}>
+    <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} ${region.ring}`}>
       <FadedScroller
         dir="ltr"
         orientation={tall ? "vertical" : "horizontal"}
         region={region}
         className={`min-w-0 max-w-full rounded-md ${tall ? `max-h-[40vh] ${wrap ? "overflow-x-hidden overflow-y-auto" : "overflow-auto"}` : "overflow-x-auto overflow-y-hidden"}`}
       >
-        <CodeBlock dir="ltr" wrap={wrap} className="[&>.app-code]:rounded-none [&>.app-code]:bg-transparent">{children}</CodeBlock>
+        <CodeBlock dir="ltr" wrap={wrap} flush>{children}</CodeBlock>
       </FadedScroller>
     </Surface>
   );

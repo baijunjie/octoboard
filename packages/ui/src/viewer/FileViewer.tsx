@@ -4,6 +4,7 @@ import { ChangeLineCounts } from "../components/status/ChangeLineCounts";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { FileTypeIcon } from "../components/icons/FileTypeIcon";
 import { PlainMarkedPath } from "../components/text/MarkedPath";
+import { PagerButton } from "../components/controls/PagerButton";
 import { RowIconGroup } from "../components/controls/RowControls";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { Dialog } from "../components/dialog/Dialog";
@@ -19,7 +20,6 @@ import {
   CopyPathButton,
   DetailItem,
   HostPathButtons,
-  NavigationButton,
   renamedFromPath,
   RenamedFrom,
   TitleStatusBadge,
@@ -89,19 +89,21 @@ export function FileViewer({
 
   const navigationControls = navigation ? (
     <RowIconGroup>
-      <NavigationButton
+      <PagerButton
         ref={previousRef}
         label={t("viewer.previous")}
-        onPress={navigation.onPrevious}
-        icon="previous"
+        direction="previous"
+        isDisabled={!navigation.onPrevious}
+        onPress={() => navigation.onPrevious?.()}
         onFocus={() => focusNavigation("previous")}
         onBlur={(event) => blurNavigation("previous", event)}
       />
-      <NavigationButton
+      <PagerButton
         ref={nextRef}
         label={t("viewer.next")}
-        onPress={navigation.onNext}
-        icon="next"
+        direction="next"
+        isDisabled={!navigation.onNext}
+        onPress={() => navigation.onNext?.()}
         onFocus={() => focusNavigation("next")}
         onBlur={(event) => blurNavigation("next", event)}
       />

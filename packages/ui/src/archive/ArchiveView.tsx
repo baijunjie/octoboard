@@ -5,6 +5,7 @@ import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "reac
 import { Button } from "../components/controls/Button";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { InlineReference } from "../i18n/InlineReference";
 import { PaneTitle } from "../components/panel/PaneTitle";
@@ -189,10 +190,8 @@ export function ArchiveView({
         }
       }}
     >
-      {/* The title is the same `PaneTitle` (a small line over a heading) as the sidebar's focus-mode
-          header, which has the same height (`--pane-header-height`), so their bottom lines run on as
-          one line. Where it is lives in the top bar's breadcrumb. */}
-      <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b px-2 ps-4">
+      {/* Where the archive is lives in the top bar's breadcrumb, so the heading names only what it lists; only a clipped heading's tooltip names the place too. */}
+      <header className={`${PANE_HEADER_FRAME_CLASS} gap-1 px-2 ps-4`}>
         <PaneTitle
           heading={t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
           headingTitle={<Message id={project ? "archive.title.project" : boundTo ? "archive.title.boundSessions" : "archive.title.consoleSessions"} params={{ name: <InlineReference dir="auto" wrap>{project ? project.name : boundTo ? sessionDisplayTitle(t, boundTo) : owner.name}</InlineReference> }} />}

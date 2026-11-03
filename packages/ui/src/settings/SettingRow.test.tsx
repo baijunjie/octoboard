@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { SettingRow, SettingSwitch } from "./SettingRow";
 
@@ -37,4 +37,29 @@ it("marks a switch the dialog around it opens on, and no other switch", () => {
   const input = container.querySelector("input")!;
   expect(input.hasAttribute("data-opening-focus")).toBe(true);
   expect(mount(<SettingSwitch label="Share" isSelected={false} onChange={() => {}} />).querySelector("input")!.hasAttribute("data-opening-focus")).toBe(false);
+});
+
+it("ignores a press while the save the switch's last press started is unanswered, and takes one again once it settles", async () => {
+  const saves: { settle: () => void; fail: (error: Error) => void }[] = [];
+  const onChange = vi.fn(() => new Promise<void>((settle, fail) => { saves.push({ settle, fail }); }));
+  const input = mount(<SettingSwitch label="Share" isSelected={false} onChange={onChange} />).querySelector("input")!;
+  act(() => input.click());
+  act(() => input.click());
+  expect(onChange).toHaveBeenCalledTimes(1);
+  // The guard is not shown: the switch stays as available as before.
+  expect(input.hasAttribute("aria-disabled")).toBe(false);
+  await act(async () => saves[0]!.fail(new Error("refused")));
+  act(() => input.click());
+  expect(onChange).toHaveBeenCalledTimes(2);
+  await act(async () => saves[1]!.settle());
+  act(() => input.click());
+  expect(onChange).toHaveBeenCalledTimes(3);
+});
+
+it("takes every press when the change starts no save", () => {
+  const onChange = vi.fn();
+  const input = mount(<SettingSwitch label="Share" isSelected={false} onChange={onChange} />).querySelector("input")!;
+  act(() => input.click());
+  act(() => input.click());
+  expect(onChange).toHaveBeenCalledTimes(2);
 });

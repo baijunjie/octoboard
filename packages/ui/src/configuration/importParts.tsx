@@ -1,4 +1,4 @@
-import { Info, type LucideIcon } from "lucide-react";
+import { Info, TriangleAlert, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents/agents";
@@ -61,13 +61,57 @@ export function CardTitle({ id, name, fallbacks, className }: { id: string; name
   );
 }
 
-/** A note under the cards, marked by an information glyph. */
-export function InfoNote({ children }: { children: React.ReactNode }): React.ReactElement {
+/** A line marked by a glyph that gives its tone: a note (information, the circled `i`) by default, or a warning (the
+ * triangle). `stacked` lays its body out as a column of blocks (a sentence and what goes with it) instead of running
+ * text. */
+export function ToneLine({ tone = "info", stacked = false, children }: { tone?: "info" | "warning"; stacked?: boolean; children: React.ReactNode }): React.ReactElement {
+  const Glyph = tone === "info" ? Info : TriangleAlert;
+  const glyph = <Glyph aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${tone === "info" ? "text-accent-soft-foreground" : "text-warning-soft-foreground"}`} />;
   return (
-    <p className="flex items-start gap-2 text-sm">
-      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
-      <span className="min-w-0">{children}</span>
-    </p>
+    // A line of running text is a paragraph; a stacked one holds blocks, which a paragraph cannot.
+    stacked ? (
+      <div className="flex items-start gap-2 text-sm">
+        {glyph}
+        <div className="flex min-w-0 flex-col gap-1.5">{children}</div>
+      </div>
+    ) : (
+      <p className="flex items-start gap-2 text-sm">
+        {glyph}
+        <span className="min-w-0">{children}</span>
+      </p>
+    )
+  );
+}
+
+/** The line a card shows in place of its rows when it has none. */
+export function EmptyLine({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <p className="px-4 py-3 text-sm text-app-muted">{children}</p>;
+}
+
+/** The name of a project or an account in a row, wrapping anywhere so a long one cannot widen the row. */
+export function ItemName({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <span className="min-w-0 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">{children}</span>;
+}
+
+/** The rows of a card, each divided from the next. */
+export function CardRows({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <ul className="flex flex-col">{children}</ul>;
+}
+
+/**
+ * One row of the review: `lead` (the name and what is known of the item) at the start, the `control` that decides
+ * what to do with it, when it has one, at the end (under the lead where the row is narrow), and what the choice calls
+ * for under both as `children`.
+ */
+export function ReviewRow({ lead, control, children }: { lead: React.ReactNode; control?: React.ReactNode; children?: React.ReactNode }): React.ReactElement {
+  return (
+    <li className="@container flex flex-col gap-2 groove-b px-4 py-3 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+        <div className="flex min-w-40 flex-1 flex-col gap-0.5">{lead}</div>
+        {control && <div className="w-full @md:w-56">{control}</div>}
+      </div>
+      {children}
+    </li>
   );
 }
 
@@ -105,6 +149,11 @@ export function Field({ label, value }: { label: string; value: string }): React
       <dd className="min-w-0 font-mono [overflow-wrap:anywhere]" dir="ltr">{value}</dd>
     </>
   );
+}
+
+/** The `Field`s of a row, as the `dl` that lays them out in two columns. */
+export function FieldList({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">{children}</dl>;
 }
 
 /** The agents of a list as references in a sentence, joined as the language joins a list. */

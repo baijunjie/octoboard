@@ -14,6 +14,7 @@ import { appDataRecovery } from "../errors/errorRecovery";
 import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
+import { SettingsLead } from "./SettingsLead";
 import { useSectionRefocus } from "./useSectionRefocus";
 
 /** The folders under which Octoboard presses every agent's trust confirmation for every project —
@@ -34,9 +35,9 @@ export function TrustedFoldersSection(): React.ReactElement {
   useSectionRefocus([directories, removedCount]);
   return (
     <>
-      <p className="pb-2 text-sm text-app-muted">
+      <SettingsLead>
         <Message id="settings.trusted.description" />
-      </p>
+      </SettingsLead>
       {directories.length === 0 ? (
         <div className="groove-t py-2">
           {/* `-ms-2` cancels the `ps-2` that `EmptyPanel`'s compact row carries for the sidebar rows

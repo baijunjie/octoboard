@@ -11,10 +11,10 @@ import type { DirectoryChoiceKind } from "../protocol";
 import type { Overrides } from "../shortcuts/store";
 import { useFailureNode } from "./failureText";
 import { accountsOutcomeOf, outcomeOf } from "./importPlan";
-import { AgentList, InfoNote, SettingLine } from "./importParts";
+import { AgentList, CardRows, EmptyLine, SettingLine, ToneLine } from "./importParts";
 import { shortcutValues } from "./importValues";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
-import { ResultCard, ResultRow, ResultRows } from "./ResultCards";
+import { ResultCard, ResultRow } from "./ResultCards";
 import { SettingsCard } from "./SettingsCard";
 
 export type Imported = ReplyOf<"import_configuration">;
@@ -99,9 +99,9 @@ export function ImportResult({
       {result.consoles.map((console, index) => (
         <ResultCard key={index} name={console.name} fallbacks={console.account_fallbacks} status={console.status} failure={console.error}>
           {console.projects.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-app-muted">{t("configuration.import.console.noProjects")}</p>
+            <EmptyLine>{t("configuration.import.console.noProjects")}</EmptyLine>
           ) : (
-            <ResultRows>
+            <CardRows>
               {console.projects.map((project, p) => (
                 <ResultRow
                   key={p}
@@ -118,7 +118,7 @@ export function ImportResult({
                   failure={project.status === "failed" ? project.error : undefined}
                 />
               ))}
-            </ResultRows>
+            </CardRows>
           )}
         </ResultCard>
       ))}
@@ -129,7 +129,7 @@ export function ImportResult({
       <RegionTotals label={t("configuration.import.result.totals.accounts")} items={accountsTotals} />
       {accounts.agents.filter((agent) => agent.accounts.length > 0).map((agent) => (
         <ResultCard key={agent.agent} name={AGENT_LABEL[agent.agent]}>
-          <ResultRows>
+          <CardRows>
             {agent.accounts.map((account, i) => (
               <ResultRow
                 key={i}
@@ -139,7 +139,7 @@ export function ImportResult({
                 warning={account.sharing_warning ? { text: t("configuration.import.result.sharingWarning.text"), failure: account.sharing_warning } : undefined}
               />
             ))}
-          </ResultRows>
+          </CardRows>
         </ResultCard>
       ))}
       {accounts.agents_added.length > 0 && (
@@ -153,7 +153,7 @@ export function ImportResult({
         </p>
       ))}
       {accountsOutcome && accountsOutcome.created > 0 && (
-        <InfoNote>{t("configuration.import.result.accounts.loginNote")}</InfoNote>
+        <ToneLine>{t("configuration.import.result.accounts.loginNote")}</ToneLine>
       )}
     </>
   );

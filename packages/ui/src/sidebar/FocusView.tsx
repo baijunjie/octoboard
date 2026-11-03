@@ -7,6 +7,7 @@ import { ActionMenu } from "../components/menus/ActionMenu";
 import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { InlineReference } from "../i18n/InlineReference";
@@ -16,7 +17,7 @@ import { hasVisibleContext, SessionContextLabel, SessionRelativeTime } from "../
 import { StatusIcon } from "../components/status/StatusIcon";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useListMotion } from "../components/motion/useListMotion";
-import { STICKY_HEADING_HEIGHT, StickySectionHeading } from "../components/rows/SectionHeading";
+import { STICKY_HEADING_HEIGHT, StickyHeading } from "../components/scroll/StickyHeading";
 import { NESTED_INSET_CLASS, RowLabel, TreeRow } from "../components/rows/TreeRow";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { FadedScroller } from "../components/scroll/scrollFade";
@@ -60,7 +61,7 @@ function FocusHeader({
     // A row or card below sits in the scroll area (`--row-fill-inset`), then inside its own padding (a
     // card's border and padding add up to `--row-content-inset`), so the end padding matches that and
     // this header's trailing menus line up with the menu on a row or card. The start stays put.
-    <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b ps-(--row-fill-inset) pe-(--pane-inset)">
+    <div ref={ref} className={`${PANE_HEADER_FRAME_CLASS} gap-1 ps-(--row-fill-inset) pe-(--pane-inset)`}>
       <TitledControl title={t("sidebar.focus.exit")} placement="bottom">
         <Button
           isIconOnly
@@ -164,9 +165,10 @@ export function ProjectFocusView({
           />
         </RowIconGroup>
       </FocusHeader>
-      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
+      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT.list} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
         <section>
-          <StickySectionHeading
+          <StickyHeading
+            variant="list"
             action={elsewhere && (
               <span className="contents" {...switchFocus}>
                 {/* Switch sends hover props to its hidden input; this trigger covers the visible control without adding a tab stop.
@@ -190,7 +192,7 @@ export function ProjectFocusView({
             )}
           >
             {t("sidebar.focus.sessions", { count: live.length })}
-          </StickySectionHeading>
+          </StickyHeading>
           {live.length === 0 ? (
             <EmptyPanel
               compact
@@ -277,9 +279,9 @@ export function ConsoleSessionFocusView({
           <SessionCard handlers={handlers} session={consoleSession} selected={consoleSession.id === selectedSessionId} own />
         </div>
       </div>
-      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
+      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT.list} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
         <section>
-          <StickySectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</StickySectionHeading>
+          <StickyHeading variant="list">{t("sidebar.focus.sessions", { count: liveCount })}</StickyHeading>
           {projects.length === 0 ? (
             // The header's "+" is disabled with no project to open a session in, so say why here.
             <EmptyPanel
@@ -574,7 +576,7 @@ function ArchivedList({
   const preview = archivePreviewSessions(archived);
   return (
     <section>
-      <StickySectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</StickySectionHeading>
+      <StickyHeading variant="list">{t("sidebar.focus.archived", { count: archived.length })}</StickyHeading>
       <div ref={listRef} className="relative flex flex-col gap-0.5">
         {preview.map((session) => (
           <div key={session.id} data-list-motion={session.id}>

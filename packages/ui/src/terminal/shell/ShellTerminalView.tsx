@@ -10,7 +10,7 @@ import { useDaemon } from "../../store";
 import { TerminalController, type TerminalControllerOptions } from "../TerminalController";
 import { TerminalCover } from "../TerminalCover";
 import { TerminalEditMenu } from "../TerminalEditMenu";
-import { TerminalNoticeBar } from "../TerminalNoticeBar";
+import { TerminalNoticeBar, TerminalNoticeSlot } from "../TerminalNoticeBar";
 import { TerminalSurface } from "../TerminalSurface";
 import { useTerminalController } from "../useTerminalController";
 import { useTerminalReconnect } from "../useTerminalReconnect";
@@ -162,11 +162,11 @@ export function ShellTerminalView({
           twice, and its button stays reachable. */}
       {shown && <StatusAnnouncer text={trouble ? troubleText : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
       {shown && <StatusAnnouncer text={!running ? t("shellTerminal.exited") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+      <TerminalNoticeSlot>
         {shown && !running && (
           <TerminalNoticeBar sentence={t("shellTerminal.exited")} action={t("shellTerminal.close")} variant="secondary" onPress={onClose} />
         )}
-      </div>
+      </TerminalNoticeSlot>
     </TerminalSurface>
   );
 }

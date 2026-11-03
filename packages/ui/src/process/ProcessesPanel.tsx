@@ -15,6 +15,7 @@ import { IconToggle } from "../components/controls/IconToggle";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "./ProcessTreeDetails";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
+import { StickyHeading } from "../components/scroll/StickyHeading";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
@@ -264,10 +265,7 @@ function ProcessCategory({ title, note, children }: { title: string; note: strin
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="flex min-w-0 shrink-0 flex-col gap-2">
-      <div data-sticky-heading="" className="sticky top-0 z-3 -mx-(--pane-inset) flex shrink-0 flex-col gap-1 bg-panel-sidebar px-(--pane-inset) py-3">
-        <h3 id={headingId} className="text-sm font-semibold">{title}</h3>
-        <p className={NOTE_CLASS}>{note}</p>
-      </div>
+      <StickyHeading variant="category" id={headingId} note={note}>{title}</StickyHeading>
       {children}
     </section>
   );

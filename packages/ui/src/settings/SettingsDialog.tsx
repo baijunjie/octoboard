@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { TitledControl } from "../components/hint/TitledControl";
 import { openingFocus } from "../components/focus/modalFocus";
 import { FadedScroller } from "../components/scroll/scrollFade";
+import { STICKY_HEADING_HEIGHT } from "../components/scroll/StickyHeading";
 import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { tryEachFrame } from "../components/focus/tryEachFrame";
@@ -21,7 +22,6 @@ import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { PermissionsSection } from "./PermissionsSection";
-import { SETTINGS_GROUP_HEADING_HEIGHT } from "./SettingsGroup";
 import { ShortcutsSection } from "./ShortcutsSection";
 import { SETTINGS_SECTION_IDS, type SettingsNavigation, type SettingsSectionId } from "./sections";
 import { SettingsFocusContext } from "./useSectionRefocus";
@@ -38,13 +38,13 @@ interface Section {
 /** What each section of `SETTINGS_SECTION_IDS` shows; a section missing here does not compile. */
 const SECTIONS: Record<SettingsSectionId, Section> = {
   general: { label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
-  git: { label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
+  git: { label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   accounts: { label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
   "agent-permissions": { label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
   "trusted-folders": { label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   permissions: { label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
   notifications: { label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
-  shortcuts: { label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
+  shortcuts: { label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   configuration: { label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
   about: { label: "settings.section.about", Icon: Info, Content: AboutSection },
 };

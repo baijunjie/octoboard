@@ -105,7 +105,9 @@ So write what follows an `await request(...)` to be correct under either order:
 - A control that shows a value the daemon holds, such as a switch bound to a setting, shows the store's value. Do not
   show a local value that is set on press and cleared when the request settles. When the reply arrives before the
   broadcast, the control briefly shows the old value again, and then the new one. To stop a second press while the
-  first is unanswered, ignore that press; use a ref, not a value that is shown.
+  first is unanswered, ignore that press; use a ref, not a value that is shown. A switch in Settings gets both from
+  `SettingSwitch` or `SwitchSettingRow`, the entry points the "Shared entry points" section of `docs/structure/ui.md`
+  names, when its `onChange` returns the save; it holds no ref of its own.
 - That does not hold for a control whose every edit sends the whole value it shows, such as a list of tags saved on
   each change: the user's next edit is built on what is shown, so showing the store's value while a save is
   unanswered drops what that save added, and such edits cannot be ignored. Keep a local value, the list last sent,

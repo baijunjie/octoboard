@@ -1,8 +1,8 @@
 import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
-import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
+import { PagerButton } from "../components/controls/PagerButton";
 import { PaneFailure } from "../components/alerts/PaneFailure";
 import { raiseError } from "../components/alerts/raiseError";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -11,10 +11,8 @@ import { StatusBadge } from "../components/status/StatusBadge";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { PanelHeader } from "../components/panel/PanelHeader";
-import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { TitledControl } from "../components/hint/TitledControl";
-import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { usePlatform } from "../platform/react";
@@ -183,9 +181,7 @@ export function ReportPanel({
       return (
         <>
           <PanelHeader title={t("panel.report.name")} />
-          <div className="flex min-h-0 flex-1 flex-col justify-center-safe">
-            <EmptyPanel icon={FileText} message={t("report.empty")} />
-          </div>
+          <CenteredEmptyPanel icon={FileText} message={t("report.empty")} />
         </>
       );
     }
@@ -209,39 +205,25 @@ export function ReportPanel({
           is a list of numbered pages, which neither reads as nor behaves like this. */}
         <PanelHeader title={t("panel.report.name")} titleMark={listingFailureMark || undefined}>
           <div className="flex shrink-0 items-center gap-1 text-xs text-app-muted">
-            <TitledControl title={t("report.previous")}>
-              <Button
-                isIconOnly
-                size="xs"
-                variant="ghost"
-                className={ROW_ICON_BUTTON_CLASS}
-                aria-label={t("report.previous")}
-                preventFocusOnPress
-                isDisabled={displayIndex === 0}
-                onPress={() => goTo(displayIndex - 1)}
-              >
-                <ChevronLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-              </Button>
-            </TitledControl>
+            <PagerButton
+              label={t("report.previous")}
+              direction="previous"
+              preventFocusOnPress
+              isDisabled={displayIndex === 0}
+              onPress={() => goTo(displayIndex - 1)}
+            />
             {/* The page count is a range written with `/`, which reads left to right whatever the
               interface direction is: mirrored, "1 / 12" would say page 12 of 1. */}
             <span dir="ltr" className="whitespace-nowrap">
               {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
             </span>
-            <TitledControl title={t("report.next")}>
-              <Button
-                isIconOnly
-                size="xs"
-                variant="ghost"
-                className={ROW_ICON_BUTTON_CLASS}
-                aria-label={t("report.next")}
-                preventFocusOnPress
-                isDisabled={displayIndex === sessionPages.length - 1}
-                onPress={() => goTo(displayIndex + 1)}
-              >
-                <ChevronRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-              </Button>
-            </TitledControl>
+            <PagerButton
+              label={t("report.next")}
+              direction="next"
+              preventFocusOnPress
+              isDisabled={displayIndex === sessionPages.length - 1}
+              onPress={() => goTo(displayIndex + 1)}
+            />
           </div>
         </PanelHeader>
         {/* The timestamp's width is whatever the user's locale makes of it, so it is the element

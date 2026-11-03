@@ -6,13 +6,14 @@ import { noAgentState } from "../agents/agents";
 import { tagVocabulary } from "../components/form/tagVocabulary";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { handFocusOff } from "../components/focus/handFocusOff";
 import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { RowIconGroup } from "../components/controls/RowControls";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { RowIconButton } from "../components/rows/RowIconButton";
 import { RowLabel } from "../components/rows/TreeRow";
-import { StickySectionHeading } from "../components/rows/SectionHeading";
+import { StickyHeading } from "../components/scroll/StickyHeading";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
@@ -40,7 +41,7 @@ export function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
     // the end padding matches that and this menu lines up with the rows' menus.
-    <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 groove-b px-(--pane-inset)">
+    <div ref={headerRef} className={`${PANE_HEADER_FRAME_CLASS} gap-2 px-(--pane-inset)`}>
       <RowLabel title={current.name}>
         <span className="text-base font-semibold">{current.name}</span>
       </RowLabel>
@@ -131,7 +132,8 @@ export function ConsoleBody({
     <>
       <ConsoleSessionsSection handlers={handlers} console={thisConsole} selectedSessionId={selectedSessionId} />
       <section className="flow-root">
-        <StickySectionHeading
+        <StickyHeading
+          variant="list"
           inline={projects.length > 0 && isFiltering(filter) && <ProjectFilterSummary filter={filter} />}
           action={
             projects.length > 0 && (
@@ -160,7 +162,7 @@ export function ConsoleBody({
           }
         >
           {t("sidebar.projects.headingWithCount", { count: ordered.length })}
-        </StickySectionHeading>
+        </StickyHeading>
         {/* The modal filter popover hides the surrounding sidebar from assistive technology;
           React Aria keeps a mounted live announcer and its ancestors exposed. */}
         <div data-live-announcer="true">
@@ -254,9 +256,9 @@ function ConsoleSessionsSection({
 
   return (
     <section className="flow-root">
-      <StickySectionHeading>
+      <StickyHeading variant="list">
         {t("sidebar.consoleSessions.headingWithCount", { count: live.length })}
-      </StickySectionHeading>
+      </StickyHeading>
       {/* Not the glyph the rows below carry: this row is the one in the section that offers nothing to
           press, and the console header's `+` is disabled. The bot says an agent is waiting to be added;
           the crossed-out bot says none is installed. Both are ordinary absences, so neither is a warning. */}

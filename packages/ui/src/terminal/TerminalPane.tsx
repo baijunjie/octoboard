@@ -19,7 +19,7 @@ import { SessionHistoryView } from "./history/SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalSurface } from "./TerminalSurface";
 import { TerminalCover } from "./TerminalCover";
-import { TerminalNoticeBar } from "./TerminalNoticeBar";
+import { TerminalNoticeBar, TerminalNoticeSlot } from "./TerminalNoticeBar";
 import { useTerminalController } from "./useTerminalController";
 import { useTerminalReconnect } from "./useTerminalReconnect";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
@@ -428,7 +428,7 @@ export function TerminalPane({
           pane never opens on a session without a process); the visible sentence is hidden from assistive
           technology so nothing is said twice, and the button stays reachable. */}
       <StatusAnnouncer text={barSaid} />
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+      <TerminalNoticeSlot>
         {noProcessBar && (
           <TerminalNoticeBar
             ref={barRef}
@@ -438,7 +438,7 @@ export function TerminalPane({
             onPress={() => onResume(noProcessBar.sessionId)}
           />
         )}
-      </div>
+      </TerminalNoticeSlot>
     </TerminalSurface>
   );
 }

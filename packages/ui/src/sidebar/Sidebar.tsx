@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { FadedScroller } from "../components/scroll/scrollFade";
-import { STICKY_HEADING_HEIGHT } from "../components/rows/SectionHeading";
+import { STICKY_HEADING_HEIGHT } from "../components/scroll/StickyHeading";
 import type { Console, Project, Session } from "../protocol";
 import type { PaneWidth } from "../layout/paneWidth";
 import type { DockPhase } from "../layout/paneDockMotion";
@@ -199,7 +199,7 @@ export function Sidebar({
     content = (
       <>
         <ConsoleHeader handlers={handlers} current={shownConsole} />
-        <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
+        <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT.list} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
           <ConsoleBody
             key={shownConsole.id}
             handlers={handlers}

@@ -22,6 +22,10 @@ export interface PanelFrame {
 const PanelFrameContext = createContext<PanelFrame | undefined>(undefined);
 export const PanelFrameProvider = PanelFrameContext.Provider;
 
+/** A header slot that scrolls: it fades its edges, and the padding and negative margin keep a focus ring inside the
+ * clip; the slot drops its fade while a control inside it shows a focus ring. */
+const SCROLLING_SLOT_CLASS = "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none";
+
 /**
  * The header every panel's content starts with, laid out as the header of the sidebar's floating
  * card is (the same height, `--pane-header-height-floating`, inset, gap, title size and weight, and
@@ -77,16 +81,16 @@ export function PanelHeader({
       {prioritizeChildren ? (
         <div className={compact ? "grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,max-content)] items-center gap-2" : "grid grid-cols-[minmax(0,max-content)_max-content] items-center gap-2"}>
           {heading}
-          <FadedScroller orientation="horizontal" fade={compact} className={compact ? "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none" : "contents"}>{children}</FadedScroller>
+          <FadedScroller orientation="horizontal" fade={compact} className={compact ? SCROLLING_SLOT_CLASS : "contents"}>{children}</FadedScroller>
         </div>
       ) : (
         <div className={compact ? "flex min-w-0 items-center gap-2" : "contents"}>
           {heading}
-          {children && <FadedScroller orientation="horizontal" fade={compact} className={compact ? "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none" : "contents"}>{children}</FadedScroller>}
+          {children && <FadedScroller orientation="horizontal" fade={compact} className={compact ? SCROLLING_SLOT_CLASS : "contents"}>{children}</FadedScroller>}
         </div>
       )}
       {actions && (
-        <FadedScroller orientation="horizontal" fade={prioritizeChildren || compact} className={prioritizeChildren || compact ? "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none" : "contents"}>
+        <FadedScroller orientation="horizontal" fade={prioritizeChildren || compact} className={prioritizeChildren || compact ? SCROLLING_SLOT_CLASS : "contents"}>
           <RowIconGroup className={prioritizeChildren || compact ? "w-max" : "ms-auto"}>{actions}</RowIconGroup>
         </FadedScroller>
       )}

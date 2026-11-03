@@ -12,6 +12,7 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import type { MacosPermissionKind } from "../platform";
 import { usePlatform } from "../platform/react";
 import { SettingRow } from "./SettingRow";
+import { LeadRows, SettingsLead } from "./SettingsLead";
 import { useMacosPermissions } from "./useMacosPermissions";
 import { useSectionRefocus } from "./useSectionRefocus";
 import { raiseError } from "../components/alerts/raiseError";
@@ -177,11 +178,8 @@ export function PermissionsSection(): React.ReactElement {
 
     return (
       <>
-        <p className="pb-2 text-sm text-app-muted"><Message id="settings.permissions.lead" /></p>
-        {/* `SettingRow` rules between its rows but not above the first, and the lead paragraph above would
-            otherwise run straight into a description in the same muted text, here several lines of it.
-            The wrapper draws that rule. */}
-        <div className="groove-t">
+        <SettingsLead><Message id="settings.permissions.lead" /></SettingsLead>
+        <LeadRows>
           {rows.map(({ kind, label, systemPane, description, granted, stateKey, restart }) => (
             <SettingRow
               compact
@@ -217,7 +215,7 @@ export function PermissionsSection(): React.ReactElement {
               ))}
             </SettingRow>
           ))}
-        </div>
+        </LeadRows>
       </>
     );
   };

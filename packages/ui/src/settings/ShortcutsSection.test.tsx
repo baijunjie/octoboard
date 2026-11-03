@@ -43,7 +43,7 @@ it("lists only the commands this client has, and says the fixed ones cannot be c
   expect(button(browser, "Change the shortcut for Next region of the window")).toBeNull();
   const headings = Array.from(browser.querySelectorAll("h3"));
   expect(headings.length).toBeGreaterThan(0);
-  expect(headings.every((heading) => heading.hasAttribute("data-sticky-heading") && heading.closest("section")?.getAttribute("aria-labelledby") === heading.id)).toBe(true);
+  expect(headings.every((heading) => heading.closest("[data-sticky-heading]") !== null && heading.closest("section")?.getAttribute("aria-labelledby") === heading.id)).toBe(true);
 });
 
 it("lists the desktop app's own commands and the native menu's fixed keys there", () => {

@@ -76,10 +76,11 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 
 - `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `dialog/` (the
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
-  popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/`, `focus/`, `announce/`, `panel/`, `host/`,
-  `rows/` (the tree row, its icon and mark buttons, section headings, the hover-actions class), `hooks/` (breakpoints,
-  `createLauncher`, `retryableLazy`, polling, the latest-request hook, `useLatest` and `useRenderLatest`, `useSerialPush`, `settle`, a `try`/`finally`
-  helper kept outside components because the React Compiler skips a function holding one).
+  popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/` (the faded scroller and the sticky section
+  heading), `focus/`, `announce/`, `panel/`, `host/`, `rows/` (the tree row, its icon and mark buttons, the
+  hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, polling, the latest-request hook,
+  `useLatest` and `useRenderLatest`, `useSerialPush`, `settle`, a `try`/`finally` helper kept outside components
+  because the React Compiler skips a function holding one).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
   with its panels in `src/quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
@@ -204,14 +205,21 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A failure carrying a daemon or client code | `CodedError` (`src/errors/codedError.ts`) |
 | Whether an account switch holds a session, the daemon's or one this window queued | `holdsAccountSwitch` (`src/sessions/sessionStatus.ts`), or `useAccountSwitchHeld` in a component; never `Session.switching_account` alone, as the store keeps the daemon's record as sent |
 | Keep unchanged data by identity when a reducer rebuilds it | `sameValue` (`src/values/sameValue.ts`), as the `settings_updated` reducer does |
-| A tree row in a list, with its icon and mark buttons and the heading above a section | `TreeRow`, `RowIconButton`, `RowMarkButton`, `SectionHeading` and `HOVER_ACTIONS_CLASS` in `src/components/rows/`; a list that animates its reordering uses `useListMotion` (`src/components/motion/`), not a row-level FLIP |
+| A tree row in a list, with its icon and mark buttons | `TreeRow`, `RowIconButton`, `RowMarkButton` and `HOVER_ACTIONS_CLASS` in `src/components/rows/`; a list that animates its reordering uses `useListMotion` (`src/components/motion/`), not a row-level FLIP |
+| A section heading that pins while its section scrolls (sidebar row groups, Settings section groups, a side pane's categories with a note) | `StickyHeading` with `variant` `list`, `group` or `category`, and `STICKY_HEADING_HEIGHT` for the scroller that pins it (`src/components/scroll/StickyHeading.tsx`); a plain section heading over a scroller goes through it, as `SettingsGroup` and the Processes panel do. The exception is the virtualized Git change list, whose foldable section headings are positioned by the virtualizer (`ChangeSectionHeading`, `src/project-browser/git/changeSectionHeading.tsx`). A pinned row or strip that is not a heading (the `DirectoryPicker`'s parent-directory row, the agent strip in `src/settings/accounts/AgentAccountsSection.tsx`) calls `useStickyHeadingFocus` (`src/components/scroll/stickyHeadingFocus.ts`) directly |
+| A strip of text tabs | the class constants in `src/components/tabs/textTabClasses.ts`, shared by every such strip (`TextTabStrip`, `RegionTabs`, `AgentTabList`, the console launch fields, the project browser) |
+| The frame of the sidebar's console and focus headers and the archive header | `PANE_HEADER_FRAME_CLASS` (`src/components/panel/paneHeaderFrame.ts`) |
+| A previous / next pager button | `PagerButton` (`src/components/controls/PagerButton.tsx`) |
+| A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
+| A settings section's lead paragraph and the rows under it | `SettingsLead` and `LeadRows` (`src/settings/SettingsLead.tsx`) |
+| An on/off switch in Settings that saves | `SettingSwitch` or `SwitchSettingRow` (`src/settings/SettingRow.tsx`); the `onChange` returns the save so the switch ignores presses until it settles |
 | Pin and lock buttons of a session row; its derived state | `PinButton`, `LockButton` and `SessionMarkButtons` (`src/sidebar/MarkButtons.tsx`); `sessionRowModel` (`src/sessions/sessionRowModel.ts`) with the `useSessionRowModel` hook (`src/sidebar/`) |
 | An account's record, login or key among the daemon's lists | `accountRecordOf`, `accountLoginOf`, `loginIsActive` and `accountKey` (`src/accounts/accountRecords.ts`) |
 | Retry a focus move across frames until its target exists, or run after a few frames | `tryEachFrame` and `afterFrames` (`src/components/focus/`) |
 | The Git workflow items a setting offers | `GIT_WORKFLOW_ITEMS` and `GIT_WORKFLOW_ITEM_KEYS` (`src/git/gitWorkflow.ts`) |
 | A test that mounts a component under the app's providers | `mountHost` (`src/test/mountHost.tsx`) over `testDaemon` (the real store, requests rejected unless the test gives a handler); the container it returns has `render(ui)` to render again under the same host |
 | A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts` |
-| An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalSurface`, `TerminalCover` and `TerminalNoticeBar` (`src/terminal/`), shared by the session pane and shell terminals |
+| An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalSurface`, `TerminalCover` and `TerminalNoticeBar` in its `TerminalNoticeSlot` (`src/terminal/`), shared by the session pane and shell terminals |
 | The loading line of a panel | `LoadingState` (`src/components/panel/LoadingState.tsx`) |
 | A failure's status mark with its Try again | `RetryStatusMark` (`src/components/status/RetryStatusMark.tsx`) |
 | Read something again now and then: pace, a pause while the document is hidden with a catch-up on return, reads the caller sends itself | `usePoll` (`src/components/hooks/usePoll.ts`), on `startPolling`; the browser's lists poll at `AUTO_REFRESH_MS` (`src/project-browser/autoRefresh.ts`) |

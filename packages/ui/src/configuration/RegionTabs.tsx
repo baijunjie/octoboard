@@ -5,6 +5,7 @@ import { useFocusVisible } from "react-aria";
 
 import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
 import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
+import { TEXT_TAB_CLASS, TEXT_TAB_CONTAINER_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 
@@ -49,9 +50,9 @@ export function RegionTabs({
   const current = regions.some((region) => region.id === selected) ? selected : regions[0].id;
   return (
     <Tabs selectedKey={current} onSelectionChange={(key) => onSelect(key as Region)} className="gap-4">
-      <LocalizedTabListContainer className="w-max max-w-full self-start">
+      <LocalizedTabListContainer className={TEXT_TAB_CONTAINER_CLASS}>
         {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
-        <Tabs.List ref={listRef} aria-label={label} className="relative w-max min-w-0 p-1.5">
+        <Tabs.List ref={listRef} aria-label={label} className={`relative ${TEXT_TAB_LIST_CLASS}`}>
           {regions.map((region) => (
             <RegionTab key={region.id} region={region} />
           ))}
@@ -88,8 +89,7 @@ function RegionTab({ region }: { region: RegionPanel }): React.ReactElement {
       onHoverChange={setHovered}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      // Hovered labels take the foreground colour for clear feedback.
-      className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground"
+      className={`gap-2 ${TEXT_TAB_CLASS}`}
     >
       {region.label}
       {region.attention && (

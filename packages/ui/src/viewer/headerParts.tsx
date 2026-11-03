@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FolderOpen, SquareArrowOutUpRight } from "lucide-react";
+import { FolderOpen, SquareArrowOutUpRight } from "lucide-react";
 import React from "react";
 
 import { Button } from "../components/controls/Button";
@@ -14,42 +14,6 @@ import { displayWirePath } from "../format/wirePath";
 import { ChangeStatusBadge } from "./ChangeStatusBadge";
 import type { ViewerChange } from "./content";
 import type { StatusKey } from "./statusMarks";
-
-export function NavigationButton({
-  ref,
-  label,
-  onPress,
-  icon,
-  onFocus,
-  onBlur,
-}: {
-  ref: React.Ref<HTMLButtonElement>;
-  label: string;
-  onPress: (() => void) | undefined;
-  icon: "previous" | "next";
-  onFocus: () => void;
-  onBlur: (event: React.FocusEvent) => void;
-}): React.ReactElement {
-  const Icon = icon === "previous" ? ChevronLeft : ChevronRight;
-  return (
-    <TitledControl title={label}>
-      <Button
-        ref={ref}
-        isIconOnly
-        size="xs"
-        variant="ghost"
-        className={ROW_ICON_BUTTON_CLASS}
-        aria-label={label}
-        isDisabled={!onPress}
-        onPress={onPress}
-        onFocus={onFocus}
-        onBlur={onBlur}
-      >
-        <Icon aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-      </Button>
-    </TitledControl>
-  );
-}
 
 /** Copy path leads the view controls at the detail row's end, an icon button that
  * takes no focus from a press, as the view controls do. */

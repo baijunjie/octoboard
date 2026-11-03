@@ -33,3 +33,9 @@ export function TerminalNoticeBar({
     </Surface>
   );
 }
+
+/** Where the notice bar floats over a terminal: along its bottom edge, centred. The slot stays mounted
+ * while the bar comes and goes, and lets pointer events through to the terminal around the bar. */
+export function TerminalNoticeSlot({ children }: { children?: React.ReactNode }): React.ReactElement {
+  return <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">{children}</div>;
+}
