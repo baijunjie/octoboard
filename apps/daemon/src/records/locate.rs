@@ -155,10 +155,12 @@ impl Locator {
         rollout_branch(head, self.index(Agent::Codex, root).records.get(agent_id)?)
     }
 
-    /// The first rollout of Codex thread `agent_id` in the account at `root`, the file the thread's
-    /// name alone gives, when it is on disk.
+    /// The first rollout of Codex thread `agent_id`, for reading its opening prompt. The account's
+    /// records root may be shared through a link; links below it are still skipped. This read-only
+    /// lookup does not populate the account index used for destructive record discovery.
     pub fn first_rollout(&mut self, root: &Path, agent_id: &str) -> Option<PathBuf> {
-        self.index(Agent::Codex, root)
+        let records = records_dir(Agent::Codex, root).canonicalize().ok()?;
+        self.index_at(Agent::Codex, &records)
             .records
             .get(agent_id)?
             .iter()

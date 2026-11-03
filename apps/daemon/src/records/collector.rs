@@ -1340,6 +1340,69 @@ mod tests {
         }
     }
 
+    /// A shared records root can be linked even though destructive record discovery never
+    /// follows links. The hook still names the head, and its first prompt must not rename the
+    /// conversation after a revert, including one whose incorrect title was already saved.
+    #[test]
+    fn a_reverted_codex_thread_keeps_its_opening_title_in_linked_records() {
+        const ID: &str = "019a0000-0000-7000-8000-000000000001";
+        let (state, directory) = crate::test_support::app_state("record-collector-linked-title");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let shared = directory.join("shared");
+        let chain = crate::test_support::codex_chain(&shared, ID, false);
+        let root = directory.join("account");
+        std::fs::create_dir_all(&root).unwrap();
+        std::os::unix::fs::symlink(shared.join("sessions"), root.join("sessions")).unwrap();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":root.to_string_lossy(),
+            "record_titles":{"named":null,"prompt":"head prompt"}}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+        crate::records::on_hook(
+            &state,
+            "s",
+            &json!({
+                "session_id":ID,
+                "transcript_path":root.join(chain.head.strip_prefix(&shared).unwrap())
+            }),
+        );
+
+        collect(&state, &mut Cursors::default());
+
+        assert_eq!(
+            state
+                .session_record("s")
+                .unwrap()
+                .record_titles
+                .prompt
+                .as_deref(),
+            Some("first prompt")
+        );
+        let mut locator = Locator::default();
+        assert!(locator.first_rollout(&root, ID).is_some());
+        assert!(
+            crate::records::locate::record_paths(&state.record_hints, &mut locator, &[], &session)
+                .is_empty(),
+            "reading a title must not make linked records removable"
+        );
+
+        let year = shared.join("sessions/2026");
+        let outside = directory.join("outside");
+        std::fs::rename(&year, &outside).unwrap();
+        std::os::unix::fs::symlink(&outside, &year).unwrap();
+        assert!(
+            Locator::default().first_rollout(&root, ID).is_none(),
+            "links below the records root are not traversed"
+        );
+    }
+
     #[test]
     fn claudes_last_main_transcript_turn_names_the_model_and_effort() {
         let capture = include_str!("../../testdata/observed_claude.jsonl");
