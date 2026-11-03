@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AGENT_INSTALL_URL } from "../../agents/agents";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
-import type { Agent, AgentAvailability, RequestBody } from "../../protocol";
+import type { Agent, AgentAvailability, ClientRequestBody } from "../../protocol";
 import { mountHost } from "../../test/mountHost";
 import { testDaemon } from "../../test/testDaemon";
 import { AddAgentDialog } from "./AddAgentDialog";
@@ -17,7 +17,7 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 function render(
   availability: Partial<Record<Agent, AgentAvailability["availability"]>>,
   added: Agent[] | null,
-  request: (body: RequestBody) => Promise<unknown> = () => Promise.resolve({ type: "ack", id: null }),
+  request: (body: ClientRequestBody) => Promise<unknown> = () => Promise.resolve({ type: "ack", id: null }),
   onClose = () => {},
 ) {
   const handler = vi.fn(request);

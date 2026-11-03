@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { CodedError } from "../../errors/codedError";
-import type { ChangeEntry, CommitChanges, Event, RequestBody, UpstreamInfo, WorktreeInfo } from "../../protocol";
+import type { ChangeEntry, CommitChanges, Event, ClientRequestBody, UpstreamInfo, WorktreeInfo } from "../../protocol";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { useProjectBrowserState } from "../browserState";
@@ -15,7 +15,7 @@ import { useGitReview } from "./useGitReview";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Pending = { body: RequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
+type Pending = { body: ClientRequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
 const pending: Pending[] = [];
 const roots: Root[] = [];
 
@@ -30,7 +30,7 @@ const daemon = testDaemon({
 });
 
 /** Answers the request of `type` still out with what `reply` makes of it. */
-async function answer(type: RequestBody["type"], reply: (body: RequestBody) => Event): Promise<RequestBody> {
+async function answer(type: ClientRequestBody["type"], reply: (body: ClientRequestBody) => Event): Promise<ClientRequestBody> {
   const index = pending.findIndex((request) => request.body.type === type);
   expect(index, `a ${type} request out among ${pending.map((p) => p.body.type).join(", ")}`).not.toBe(-1);
   const [request] = pending.splice(index, 1);
@@ -38,12 +38,12 @@ async function answer(type: RequestBody["type"], reply: (body: RequestBody) => E
   return request.body;
 }
 
-const asked = (type: RequestBody["type"]) => pending.filter((request) => request.body.type === type).map((request) => request.body);
+const asked = (type: ClientRequestBody["type"]) => pending.filter((request) => request.body.type === type).map((request) => request.body);
 
 type Tree = { id: string; branch: string | null; main?: boolean };
 /** `responsible` is the session working on the branch; none when the daemon names no one. */
 type Made = { name: string; commit?: string; responsible?: string; upstream?: UpstreamInfo };
-type Replies = Partial<Record<RequestBody["type"], (body: RequestBody) => Event>>;
+type Replies = Partial<Record<ClientRequestBody["type"], (body: ClientRequestBody) => Event>>;
 
 const worktreeInfo = (w: Tree): WorktreeInfo => ({ id: w.id, root: `/${w.id}`, main: w.main ?? false, head: "c1", branch: w.branch, scope_present: true });
 const source = (id: string, worktrees: Tree[], own = "m"): Replies => ({
@@ -166,7 +166,7 @@ function harness(id: string) {
     const replies: Replies = Object.assign({}, ...parts);
     for (let pass = 0; pass < 4; pass++) {
       for (const [type, reply] of Object.entries(replies)) {
-        while (pending.some((request) => request.body.type === type)) await answer(type as RequestBody["type"], reply);
+        while (pending.some((request) => request.body.type === type)) await answer(type as ClientRequestBody["type"], reply);
       }
     }
   };

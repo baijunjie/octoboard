@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { accountOf } from "../../fixtures/builders";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
-import type { Account, Agent, AgentAvailability, RequestBody } from "../../protocol";
+import type { Account, Agent, AgentAvailability, ClientRequestBody } from "../../protocol";
 import { mountHost } from "../../test/mountHost";
 import { testDaemon } from "../../test/testDaemon";
 import { AccountDialog } from "./AccountDialog";
@@ -19,13 +19,13 @@ const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-w
 
 function render(
   editing: Account | undefined,
-  request: (body: RequestBody) => Promise<unknown>,
+  request: (body: ClientRequestBody) => Promise<unknown>,
   agentAvailability = new Map<Agent, AgentAvailability>(),
   addedAgents: Agent[] | null = null,
   renameDefault = false,
   options: { accounts?: Account[]; listDirectory?: () => Promise<unknown> } = {},
 ) {
-  const handler = vi.fn((body: RequestBody) => body.type === "list_dir"
+  const handler = vi.fn((body: ClientRequestBody) => body.type === "list_dir"
     ? options.listDirectory?.() ?? Promise.resolve({ type: "dir_listing", path: "/home/dev", entries: [] })
     : request(body));
   const daemon = testDaemon({

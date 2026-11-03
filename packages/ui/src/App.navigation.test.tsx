@@ -9,7 +9,7 @@ import { byLabel, deliver, fakeDaemon, mountApp, pressElement, pressMenuItem, ra
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import type { PlatformAdapter, StatusItemCapability } from "./platform";
-import type { Project, RequestBody } from "./protocol";
+import type { Project, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, type Daemon } from "./store";
 import { IS_MAC } from "./input/keys";
 import { inputLabelled, type as typeInto } from "./test/dom";
@@ -33,7 +33,7 @@ const fix = sessionOf("s-fix", main.id, site.id, "Fix header", "idle");
 const triage = sessionOf("s-triage", second.id, undefined, "Triage", "idle");
 
 /** The two consoles, Main current, mounted at the docked width. */
-function mountTwoConsoles(answer?: (daemon: () => Daemon, body: RequestBody) => unknown, platform?: PlatformAdapter) {
+function mountTwoConsoles(answer?: (daemon: () => Daemon, body: ClientRequestBody) => unknown, platform?: PlatformAdapter) {
   stubWindow();
   const daemon: Daemon = fakeDaemon(snapshotState({ consoles: [main, second], projects: [site], sessions: [fix, triage] }), answer && ((body) => answer(() => daemon, body)));
   mountApp(daemon, { platform });

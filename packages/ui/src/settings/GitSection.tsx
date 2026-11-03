@@ -16,7 +16,7 @@ import { SettingsGroup } from "./SettingsGroup";
 import { alertAppDataFailure } from "../components/alerts/raiseError";
 
 /** The Git settings, in three groups: the repository (where clones go, whether branches are pulled), development (see
- * `Settings.git_workflow` in protocol.ts: where a project session develops, then how it merges and delivers finished
+ * `Settings.git_workflow` in protocol.generated.ts: where a project session develops, then how it merges and delivers finished
  * work) and protection (the revert gate). Each workflow change sends only its own item. A project may hold its own
  * value for any of the workflow items, which the project dialog sets. */
 export function GitSection(): React.ReactElement {

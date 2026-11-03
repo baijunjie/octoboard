@@ -3,7 +3,11 @@
 // same for both and live here. A project's accounts are the exception, three-state rather than a
 // string, and are held and diffed apart.
 
-import { AGENTS, type Agent, type Launch, type LaunchChange, type LaunchSetting, type PerAgent, type ProjectAccount } from "../protocol";
+import type { Agent, ClientRequestBody, Launch, LaunchChange, PerAgent, ProjectAccount } from "../protocol";
+import { AGENTS } from "./agents";
+
+/** One agent's model and reasoning effort in a new record: a field left out, or blank, is the agent's own default. */
+type LaunchSetting = NonNullable<NonNullable<Extract<ClientRequestBody, { type: "create_console" }>["launch"]>[Agent]>;
 
 /** `value` for every agent. */
 function everyAgent<T>(value: (agent: Agent) => T): PerAgent<T> {

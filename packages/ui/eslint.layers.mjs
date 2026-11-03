@@ -17,8 +17,17 @@ const ALERT_FRAME = {
   group: ["**/AlertFrame"],
   message: "AlertFrame draws an Alert with no title; use ErrorAlert, FailureAlert or ChoiceWarning.",
 };
-const uiImports = (patterns = [], { alerts = true } = {}) =>
-  ["error", alerts ? { paths: ALERT_PATHS, patterns: [ALERT_FRAME, ...patterns] } : { patterns }];
+// The generated wire types are read through protocol.ts, the one file that imports them, so that the UI has one door to
+// the wire and a type added there (the two `Client*` unions) is never bypassed. The rule sees import declarations only,
+// not a type written as `import("…/protocol.generated").X`.
+const GENERATED_PROTOCOL = {
+  group: ["**/protocol.generated"],
+  message: "Import the wire types from protocol, which re-exports protocol.generated.",
+};
+const uiImports = (patterns = [], { alerts = true, generated = true } = {}) => {
+  const all = generated ? [GENERATED_PROTOCOL, ...patterns] : patterns;
+  return ["error", alerts ? { paths: ALERT_PATHS, patterns: [ALERT_FRAME, ...all] } : { patterns: all }];
+};
 
 const UI_SRC = "packages/ui/src";
 const UI_TESTS = ["**/*.test.{ts,tsx}", "**/*{TestSupport,testSupport,TestState}.{ts,tsx}"];
@@ -55,7 +64,7 @@ const APP_MESSAGE = "app/ holds App's own hooks and logic: only App.tsx and the 
 const APP_ROOT_IMPORT = { regex: "^\\./app(?:/|$)", message: APP_MESSAGE, caseSensitive: true };
 const PRODUCTION_MESSAGE = "Production code does not import fixtures/ or gallery/: they are the runtime of the gallery and the website preview.";
 const GALLERY_MESSAGE = "gallery/ is the dev-only gallery: the website preview and fixtures/ depend on nothing in it.";
-const PROTOCOL_MESSAGE = "protocol.ts imports nothing: apps/web type-checks it, and everything it imports, under its own options.";
+const PROTOCOL_MESSAGE = "protocol.ts imports only protocol.generated: apps/web type-checks it, and everything it imports, under its own options.";
 const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:fixtures|gallery)(?:/|$)", message: PRODUCTION_MESSAGE };
 const notIntoApp = (depth) => ({ ...notInto(depth, ["app"], APP_MESSAGE), caseSensitive: true });
 
@@ -109,9 +118,9 @@ export default [
   },
   {
     // apps/web type-checks protocol.ts (through @octoboard/ui/agent-marks) under its own stricter compiler options, so
-    // nothing protocol.ts imports may pull more of the UI into that check.
+    // nothing protocol.ts imports but the generated wire types may pull more of the UI into that check.
     files: [`${UI_SRC}/protocol.ts`],
-    rules: { "no-restricted-imports": uiImports([{ regex: "^\\.\\.?/", message: PROTOCOL_MESSAGE }]) },
+    rules: { "no-restricted-imports": uiImports([{ regex: "^\\.\\.?/(?!protocol\\.generated$)", message: PROTOCOL_MESSAGE }], { generated: false }) },
   },
   {
     // App.tsx is the one root file that may import app/, and is production code like the rest.
@@ -132,7 +141,7 @@ export default [
   ...layer("accounts", ["i18n", "agents", "sessions", "format"], "accounts/ imports, outside itself, only i18n/, agents/, sessions/, format/ and protocol.", ["protocol"]),
   ...layer("errors", ["i18n", "agents", "sessions", "accounts", "format"], "errors/ imports, outside itself, only i18n/, agents/, sessions/, accounts/, format/, protocol and appConfig.", ["protocol", "appConfig"]),
   ...layer("browse", ["i18n", "errors", "format"], "browse/ imports, outside itself, only i18n/, errors/, format/ and protocol.", ["protocol"]),
-  ...layer("store", ["values", "i18n", "errors", "accounts", "sessions", "preferences", "git"], "store/ imports, outside itself, only values/, i18n/, errors/, accounts/, sessions/, preferences/, git/, protocol, requests, daemon and daemon-client.", ["protocol", "requests", "daemon", "daemon-client"]),
+  ...layer("store", ["values", "i18n", "agents", "errors", "accounts", "sessions", "preferences", "git"], "store/ imports, outside itself, only values/, i18n/, agents/, errors/, accounts/, sessions/, preferences/, git/, protocol, requests, daemon and daemon-client.", ["protocol", "requests", "daemon", "daemon-client"]),
   ...layer("i18n", ["preferences"], "i18n/ imports, outside itself, only preferences/ and appConfig.", ["appConfig"]),
   ...layer("shortcuts", ["i18n", "preferences", "input", "components"], "shortcuts/ imports, outside itself, only i18n/, preferences/, input/ and components/.", []),
   // Self-contained features: they use the leaf layer and import no other feature directory.

@@ -5,7 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
-import { AGENTS, type Agent, type AgentAvailability, type Session } from "../protocol";
+import { type Agent, type AgentAvailability, type Session } from "../protocol";
+import { AGENTS } from "../agents/agents";
 import type { NewSessionBinding } from "./dialogRequest";
 import { accountOf, type ProjectExtra, sessionOf } from "../fixtures/builders";
 import { DaemonProvider } from "../store";

@@ -3,7 +3,7 @@ import { CODE, codeRecord } from "./codes";
 import { messageCode, withUiParams } from "./daemonMessage";
 import type { ErrorPresentation } from "./errorPresentation";
 import { isMessageKey } from "../i18n/catalog";
-import type { MessageParams } from "../protocol";
+import type { MessageParams } from "./codedError";
 
 /** Whether the application has no message of its own for `error`, so the only words it has are the
  * daemon's raw text: a code the catalog lacks, or `internal_error` / `unexpected_error`, whose

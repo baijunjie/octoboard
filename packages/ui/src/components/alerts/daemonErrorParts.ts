@@ -1,13 +1,12 @@
 import { ActionableError } from "../../errors/actionableError";
 import { leftBranchItems, type LeftBranchItem } from "../../errors/branchCleanupItems";
-import { CodedError } from "../../errors/codedError";
+import { CodedError, type MessageParams } from "../../errors/codedError";
 import { codeRecord } from "../../errors/codes";
 import { furtherKey, hasRichMessage, hasTrustDiagnostic, messageCode } from "../../errors/daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason } from "../../errors/errorPresentation";
 import { sharingFailureItems, sharingRawReason, sharingReasonKey, type SharingFailureItem } from "../../errors/sharingFailure";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { isMessageKey, type MessageKey, type PlainMessageKey } from "../../i18n/catalog";
-import type { MessageParams } from "../../protocol";
 
 type Failure = { code: string; params: MessageParams; message: string };
 

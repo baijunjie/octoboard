@@ -3,7 +3,7 @@ import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 import type { Daemon, NotificationRequest } from "../store";
 import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, ToastFixture } from "./fixture";
@@ -103,7 +103,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   return {
     store,
     scenarioToastsRaised,
-    request: looseRequestSender(async (body: RequestBody): Promise<Event> => {
+    request: looseRequestSender(async (body: ClientRequestBody): Promise<Event> => {
       if (body.type === "list_project_branches") {
         const result = scenario.projectBranches?.[body.project];
         if (result === "pending") return neverReplied();
@@ -113,7 +113,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
       if (fromGit !== undefined) return fromGit;
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
-      const reply = replies[body.type] as ((body: RequestBody) => Event | Promise<Event>) | undefined;
+      const reply = replies[body.type] as ((body: ClientRequestBody) => Event | Promise<Event>) | undefined;
       return reply ? reply(body) : { type: "ack", id: null };
     }),
     showNotice: (message, content) => emitToast({ kind: "notice", message, content }),

@@ -6,7 +6,8 @@ import { daemonMessage, daemonParams, messageCode, richMessageCode } from "./dae
 import { CATALOGS } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, type Console, type Project, type Session, type ShellTerminal } from "../protocol";
+import { type Console, type Project, type Session, type ShellTerminal } from "../protocol";
+import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 
 const records = {
   consoles: new Map([["c1", { id: "c1", name: "Work" } as Console]]),

@@ -2,7 +2,8 @@ import { accountDisabled } from "../accounts/choiceEntries";
 import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { isLive, type Account, type AccountQuota, type Agent, type AgentAvailability, type Session, type Settings } from "../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Session, type Settings } from "../protocol";
+import { isLive } from "../sessions/sessionStatus";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { usageBarSummary, usageBarWindows, type QuotaBar } from "../accounts/quotaFormat";
 

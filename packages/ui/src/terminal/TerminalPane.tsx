@@ -10,7 +10,8 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announ
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
-import { hasNoProcess, isLive, type Session } from "../protocol";
+import { type Session } from "../protocol";
+import { hasNoProcess, isLive } from "../sessions/sessionStatus";
 import { useAccountSwitchHeld, useDaemon } from "../store";
 import type { ViewedFile } from "../viewer/viewedFile";
 import type { TerminalController } from "./TerminalController";

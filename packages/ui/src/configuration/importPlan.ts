@@ -2,7 +2,7 @@ import type {
   AccountFallback,
   AccountResolution,
   Agent,
-  ImportChoiceKind,
+  DirectoryChoiceKind,
   ImportedAccounts,
   ImportedConsole,
   InspectedAccount,
@@ -25,7 +25,7 @@ export type Inspection = ReplyOf<"inspect_configuration">;
 
 /** The choices a project's offers can name: the three directories the daemon works out. The fourth,
  * a directory the user points at, is never offered, and leaving the project out is no directory. */
-export type OfferedChoice = Exclude<ImportChoiceKind, "directory">;
+export type OfferedChoice = Exclude<DirectoryChoiceKind, "directory">;
 
 const OFFERED_CHOICES: readonly OfferedChoice[] = ["exported_path", "default_clone_dir", "clone"];
 

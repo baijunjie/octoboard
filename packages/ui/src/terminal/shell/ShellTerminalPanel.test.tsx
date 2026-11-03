@@ -12,7 +12,7 @@ import { presence, stubListMotion } from "../../components/motion/listMotionTest
 import { isolate } from "../../i18n/isolate";
 import { PanelFrameProvider, type PanelFrame } from "../../components/panel/PanelHeader";
 import { PlatformProvider } from "../../platform/react";
-import type { Event, Project, RequestBody, ShellTerminal } from "../../protocol";
+import type { Event, Project, ClientRequestBody, ShellTerminal } from "../../protocol";
 import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { ShellTerminalPanel } from "./ShellTerminalPanel";
@@ -55,7 +55,7 @@ afterEach(() => {
 function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, frame }: { holdCreate?: Promise<void>; eventFirst?: boolean; frame?: PanelFrame } = {}) {
   const store = createStateStore({ shellTerminals: new Map(terminals.map((terminal) => [terminal.id, terminal])) });
   const broadcast = () => applyDaemonEvent(store, { type: "shell_terminal_upserted", shell_terminal: shell("new", 99, { title: "newer" }) });
-  const request = vi.fn(async (body: RequestBody): Promise<Event> => {
+  const request = vi.fn(async (body: ClientRequestBody): Promise<Event> => {
     if (body.type === "create_shell_terminal") {
       await holdCreate;
       if (eventFirst) broadcast();
@@ -280,7 +280,7 @@ it("keeps a record the broadcast brought when the reply names the same terminal"
 it("joins the earlier start still pending when the later one has already settled", async () => {
   const store = createStateStore({});
   const holds: Array<(reply: Event) => void> = [];
-  const request = vi.fn((body: RequestBody) => new Promise<Event>((resolve) => {
+  const request = vi.fn((body: ClientRequestBody) => new Promise<Event>((resolve) => {
     if (body.type === "create_shell_terminal") holds.push(resolve);
   }));
   const daemon = testDaemon({ store, request });
@@ -409,7 +409,7 @@ it("leaves focus where the user put it after the tab that held it has gone", asy
 
 /** Has the daemon end a terminal as it answers its close, as it does for one already idle at the prompt. */
 function closesAtOnce(panel: ReturnType<typeof mount>) {
-  panel.request.mockImplementation(async (body: RequestBody): Promise<Event> => {
+  panel.request.mockImplementation(async (body: ClientRequestBody): Promise<Event> => {
     if (body.type === "close_shell_terminal") remove(panel, body.shell_terminal);
     return { type: "ack", id: null } as Event;
   });
@@ -482,7 +482,7 @@ it("hands nothing on when the close of a busy tab is declined", async () => {
 // shown terminal that held it when the close mark was pressed.
 it("leaves focus where the confirmation put it back, with no ring, when the daemon refuses a busy tab's close", async () => {
   const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
-  panel.request.mockImplementation(async (body: RequestBody): Promise<Event> => {
+  panel.request.mockImplementation(async (body: ClientRequestBody): Promise<Event> => {
     if (body.type === "close_shell_terminal") throw new Error("refused");
     return { type: "ack", id: null } as Event;
   });

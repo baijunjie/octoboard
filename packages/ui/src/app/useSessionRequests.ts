@@ -7,7 +7,7 @@ import type { ModelEdits } from "../dialogs/SessionModelDialog";
 import { modelChangeRecovery } from "../errors/errorRecovery";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import { ALREADY_RUNNING_CODES } from "../protocol";
+import { ALREADY_RUNNING_CODES } from "../errors/codes";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { raiseError } from "../components/alerts/raiseError";
 import { useDaemon, type AlertOptions } from "../store";

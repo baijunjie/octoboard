@@ -46,7 +46,7 @@ the same change:
   from a table keyed by it (`SOURCE_CAUSE_RECOVERY`), each remedy an `ErrorRecovery` of its own. Map it there, never
   with an explicit `recovery` at the call sites: every route that raises the code then gets it, the easily missed ones
   too (opening a terminal path link reads through the same browse requests). Put the vocabulary in
-  `packages/ui/src/protocol.ts` as a closed type with a normaliser that decides what a `cause` the window does not know
+  `packages/ui/src/errors/causes.ts` as a closed type with a normaliser that decides what a `cause` the window does not know
   and an error with no `cause` each become (as `SourceUnavailableCause` and `sourceUnavailableCause` do), key the table
   by that type, and read the param through the normaliser there and in every other place that reads it (a view, the
   gallery fixtures): written by hand in each place, those two defaults drift apart, and a new cause is not caught by the

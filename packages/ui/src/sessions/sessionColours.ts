@@ -39,7 +39,8 @@ import type { ConsoleSessionColour } from "../protocol";
 export type ColourTheme = "light" | "dark";
 
 /** What each colour is, in OKLCH: the hue angle, and the lightness and the most chroma it is given
- * in each appearance; the gamut may allow less. */
+ * in each appearance; the gamut may allow less. Its order is the palette's (`CONSOLE_SESSION_COLOURS`), which the
+ * colour picker lists. */
 const COLOURS: Record<ConsoleSessionColour, { hue: number; light: [number, number]; dark: [number, number] }> = {
   red: { hue: 25, light: [0.637, 0.237], dark: [0.704, 0.191] },
   orange: { hue: 50, light: [0.705, 0.213], dark: [0.75, 0.183] },
@@ -58,6 +59,11 @@ const COLOURS: Record<ConsoleSessionColour, { hue: number; light: [number, numbe
   brown: { hue: 55, light: [0.52, 0.085], dark: [0.65, 0.09] },
   gray: { hue: 262, light: [0.6, 0.02], dark: [0.7, 0.02] },
 };
+
+/** Every console session colour (`Session.colour`), in the palette's order: the hues around the colour wheel, then the
+ * muted ones. Assigned on creation and changed afterwards only by the user; the ids are never shown, the user sees the
+ * colour, not a name. */
+export const CONSOLE_SESSION_COLOURS: readonly ConsoleSessionColour[] = Object.keys(COLOURS) as ConsoleSessionColour[];
 
 /** Linear-light sRGB channels of an OKLCH colour (Björn Ottosson's OKLab matrices). */
 function linearRgb(lightness: number, chroma: number, hue: number): [number, number, number] {

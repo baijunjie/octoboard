@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { CodedError } from "../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { AsideOwner } from "../layout/asideOwner";
-import type { Event, ProcessTree, RequestBody } from "../protocol";
+import type { Event, ProcessTree, ClientRequestBody } from "../protocol";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import type { ProcessPolling } from "./processPolling";
@@ -19,7 +19,7 @@ const first = sessionOf("a", console_.id, project.id, "First", "idle");
 const second = sessionOf("b", console_.id, project.id, "Second", "idle");
 const tree = (id: string, session_id?: string): ProcessTree => ({ id, session_id, command: "dev", cwd: "/app", cwd_missing: false, kept: false, started_at: 0, process_count: 1, memory_bytes: 0, ports: [] });
 
-async function mount(handler: (body: RequestBody) => Promise<Event>, initialSelection?: string) {
+async function mount(handler: (body: ClientRequestBody) => Promise<Event>, initialSelection?: string) {
   vi.useFakeTimers();
   const request = vi.fn(handler);
   const daemon = testDaemon({

@@ -3,7 +3,8 @@ import { act } from "react";
 import { expect, it } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
-import { AGENTS, type AgentAvailability } from "../protocol";
+import { type AgentAvailability } from "../protocol";
+import { AGENTS } from "../agents/agents";
 import { presence, stubListMotion } from "../components/motion/listMotionTestSupport";
 import { listing, lastStore, render, buttons, click, clickButton, choose, sent, type, openAdvanced, clickTab, nameOf, groupPicker, picker, tabNames } from "./consoleDialogTestSupport";
 

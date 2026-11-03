@@ -8,7 +8,9 @@ import type { Language } from "../i18n/languages";
 import { leftBranchesText, leftBranchGroups, leftBranchItems } from "./branchCleanupItems";
 import { CODE, codeRecord, messageFacets } from "./codes";
 import { sharingFailureItems, sharingItemsText, sharingReasonKey } from "./sharingFailure";
-import { DEFAULT_ACCOUNT_NAME, type Console, type MessageParams, type Project, type QuotaWindow, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type Console, type Project, type QuotaWindow, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type MessageParams } from "./codedError";
+import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
 export const RECORD_NAMES: Record<string, (state: RecordNames, id: string) => string | undefined> = {

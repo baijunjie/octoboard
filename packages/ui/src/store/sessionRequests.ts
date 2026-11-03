@@ -1,4 +1,11 @@
-import { SESSION_REQUEST_ACTIONS, type Agent, type Event, type Role } from "../protocol";
+import type { Agent, Event, Role, SessionRequestAction } from "../protocol";
+
+/** What approving a `session_request` does, every value this client knows. A request with a value it does not know is
+ * not offered, and the daemon's timeout ends the call. Written as a record's keys so the type check fails while one is
+ * missing. */
+const SESSION_REQUEST_ACTIONS: readonly string[] = Object.keys({
+  start: true, reopen: true, resume: true, resume_record: true, switch: true, handoff: true,
+} satisfies Record<SessionRequestAction, true>);
 
 /** What every session request says, whatever an approval does. */
 interface SessionRequestBase {
@@ -75,7 +82,7 @@ export function sessionRequestOf(event: Extract<Event, { type: "session_request"
     requestedAt: event.requested_at,
   };
   // The wire carries what a newer daemon may add, which the type does not know.
-  if (!(SESSION_REQUEST_ACTIONS as readonly string[]).includes(event.action)) return undefined;
+  if (!SESSION_REQUEST_ACTIONS.includes(event.action)) return undefined;
   const { action } = event;
   switch (action) {
     case "reopen":

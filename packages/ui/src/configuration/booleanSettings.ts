@@ -5,7 +5,7 @@ import type { DocumentSettings } from "../protocol";
  * cannot be listed below. */
 export type BooleanField = { [K in keyof DocumentSettings]-?: DocumentSettings[K] extends boolean ? K : never }[keyof DocumentSettings];
 
-/** One application setting that is a switch: its field (see `Settings.<field>` in protocol.ts for what it
+/** One application setting that is a switch: its field (see `Settings.<field>` in protocol.generated.ts for what it
  * does), the name and the two descriptions the settings page gives it, the help tip some carry and what
  * turning it on means in the import cards. The keys are listed, not derived: their prefixes are irregular. */
 export interface BooleanSetting {

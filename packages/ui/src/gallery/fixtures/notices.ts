@@ -1,5 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENTS, DEFAULT_ACCOUNT_NAME, type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
+import { type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
+import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
+import { AGENTS } from "../../agents/agents";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState, broadcastErrorToast, sessionNoticeToast } from "../../fixtures/builders";

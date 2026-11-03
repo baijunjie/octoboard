@@ -3,7 +3,8 @@ import { useCallback } from "react";
 import { CodedError } from "../errors/codedError";
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import { listProcesses, type ProcessTarget } from "./processes";
-import { SESSION_NOT_RUNNING, type ProcessTree } from "../protocol";
+import { type ProcessTree } from "../protocol";
+import { CODE } from "../errors/codes";
 import { useDaemon } from "../store";
 import { usePolled } from "../components/hooks/usePoll";
 import { pollPace, type ProcessPolling } from "./processPolling";
@@ -26,7 +27,8 @@ export function useProcessTrees(target: ProcessTarget | undefined, polling: Proc
     try {
       return await listProcesses(request, JSON.parse(key) as ProcessTarget);
     } catch (err) {
-      if (err instanceof CodedError && err.code === SESSION_NOT_RUNNING) return [];
+      // The session ended meanwhile: it has no process left to show, so the list reads as empty.
+      if (err instanceof CodedError && err.code === CODE.session_not_running) return [];
       throw err;
     }
   }, [request]);

@@ -6,7 +6,8 @@ import type { ReactNode } from "react";
 import type { HostPath } from "../components/host/useHostPathActions";
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
-import type { FileContent, LineStats, MessageParams } from "../protocol";
+import type { FileContent, LineStats } from "../protocol";
+import type { MessageParams } from "../errors/codedError";
 import { joinedPatch, saysNothingChanged } from "./code/patch";
 import type { StatusKey } from "./statusMarks";
 

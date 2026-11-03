@@ -7,7 +7,7 @@ import { currentLanguage, t } from "../i18n/language";
 import type { State, NotificationRequest } from "../store";
 import { broadcastNotification } from "../store/notifications";
 
-import type { Agent, RequestBody } from "../protocol";
+import type { Agent, ClientRequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import type { Fixture } from "./fixture";
@@ -515,7 +515,7 @@ describe("the fixture daemon's session locks", () => {
     const child = sessionOf("child", console_.id, project.id, "Child", "archived", { bound_to: lead.id, locked: true });
     const other = sessionOf("other", console_.id, project.id, "Other", "archived");
     const daemon = createFixtureDaemon({ state: snapshotState({ consoles: [console_], projects: [project], sessions: [other, owner, lead, child] }) });
-    const requests: RequestBody[] = [
+    const requests: ClientRequestBody[] = [
       { type: "delete_session", session: owner.id },
       { type: "delete_session", session: child.id },
       { type: "delete_archived_sessions", console: console_.id },
@@ -876,7 +876,7 @@ describe("the fixture daemon's console saving", () => {
   const daemon = () => createFixtureDaemon({ state: snapshotState({ consoles: [owner] }) });
 
   it("keeps what a created console is given, the instructions trimmed and a blank one as none", async () => {
-    const created = async (body: Extract<RequestBody, { type: "create_console" }>) => {
+    const created = async (body: Extract<ClientRequestBody, { type: "create_console" }>) => {
       const d = daemon();
       await d.request(body);
       return Array.from(d.store.getState().consoles.values()).find((c) => c.id !== owner.id);
@@ -2095,7 +2095,7 @@ describe("the fixture daemon's configuration export", () => {
         },
       }),
     });
-    const exported = async (request: Partial<Extract<RequestBody, { type: "export_configuration" }>> = {}) =>
+    const exported = async (request: Partial<Extract<ClientRequestBody, { type: "export_configuration" }>> = {}) =>
       ((await daemon.request({ type: "export_configuration", ...request })) as { document: ReturnType<typeof exportedDocument> }).document;
 
     it("settles the regions an absent field leaves open as the daemon does", async () => {

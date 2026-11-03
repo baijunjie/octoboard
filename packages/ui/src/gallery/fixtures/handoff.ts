@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENTS } from "../../protocol";
+import { AGENTS } from "../../agents/agents";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";

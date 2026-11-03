@@ -6,16 +6,9 @@ import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/importPlan";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
-import {
-  AGENTS,
-  DEFAULT_ACCOUNT_NAME,
-  type DocumentSettings,
-  type ImportedAccount,
-  type ImportedAccounts,
-  type InspectedAccount,
-  type InspectedAccounts,
-  type InspectedSettings,
-} from "../../protocol";
+import { type DocumentSettings, type ImportedAccount, type ImportedAccounts, type InspectedAccount, type InspectedAccounts, type InspectedSettings } from "../../protocol";
+import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
+import { AGENTS } from "../../agents/agents";
 import type { Ui, Step } from "../../fixtures/interact";
 import type { ConfigurationFixture } from "../../fixtures/fixture";
 import type { FixtureError } from "../../fixtures/sampleFiles";

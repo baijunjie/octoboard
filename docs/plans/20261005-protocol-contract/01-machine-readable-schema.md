@@ -8,7 +8,7 @@
 
 - [ ] The schema and its place in the repository.
 - [ ] The way it is produced from, or checked against, the daemon's types.
-- [ ] The web client's types switched over to it.
+- [x] The web client's types switched over to it.
 
 ## Implementation plan
 
@@ -22,13 +22,14 @@
 
 ## Progress
 
-The drift check is delivered; the machine-readable schema for native clients is not.
+The drift check and the web client's switch to the generated types are delivered; the machine-readable schema for
+native clients is not.
 
 - **Delivered**: the daemon renders every wire type reachable from its requests and events as TypeScript with `ts-rs`
   (a dev-dependency, derived only under `cfg(test)`) into `packages/ui/src/protocol.generated.ts`, which is committed. A
-  daemon test fails when the file is stale, and `packages/ui/src/protocol.contract.ts` makes `tsc` fail when a type of
-  `protocol.ts` differs from its generated counterpart, optional key and `null` included; the terminal stream's control
-  frames are covered too. Both run under `pnpm verify` for a change to either side.
+  daemon test fails when the file is stale; the terminal stream's control frames are covered too. The web client reads
+  its wire types from that file: `packages/ui/src/protocol.ts` re-exports it and adds only the two unions a client
+  sends with, the UI's own rules about wire values live in the layers that own them, and an ESLint rule keeps
+  `protocol.ts` the one importer of the generated file.
 - **Remaining**: the schema in `contracts/` for the Swift and Kotlin clients (the generated file is TypeScript and
-  carries Rust doc comments, not a language-neutral description); the web client importing the generated types instead
-  of mirroring them (`protocol.ts` would keep its helpers and constants); and keeping `PROTOCOL.md` consistent with it.
+  carries Rust doc comments, not a language-neutral description); and keeping `PROTOCOL.md` consistent with it.

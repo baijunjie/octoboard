@@ -13,7 +13,7 @@ export type GitBranchPhrase =
  * independent of `ahead`/`behind`, which the badge's words append as their own phrases. The plain
  * (`gitBadgeAriaLabel`) and the rich (`gitBadgeContent`) wording share this choice and differ only in how
  * the branch is drawn.
- * `branch` is `null` for two different reasons (see `GitStatus.branch` in `protocol.ts`): a
+ * `branch` is `null` for two different reasons (see `GitStatus.branch` in `protocol.generated.ts`): a
  * freshly-`git init`'d repository with no commit yet, or a failed read. `error` tells the two
  * apart, since only a failed read sets it, and the badge's failure mark already says that the
  * check failed — so this returns `undefined` for a failed read rather than a second, emptier

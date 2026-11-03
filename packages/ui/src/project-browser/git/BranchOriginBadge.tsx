@@ -4,7 +4,7 @@ import { InlineReference } from "../../i18n/InlineReference";
 import { IndicatorTooltip } from "../../components/hint/IndicatorTooltip";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
-import type { BranchOrigin } from "../../protocol";
+import type { BranchOriginInfo } from "../../protocol";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useDaemonStore } from "../../store";
 
@@ -29,7 +29,7 @@ import { useDaemonStore } from "../../store";
  * is no tab stop. A screen-reader user has it in the option's name, which includes the ring's, but a
  * sighted keyboard-only user has no route to the session's name.
  */
-export function BranchOriginBadge({ origin, selectedSessionId }: { origin: BranchOrigin; selectedSessionId: string | undefined }): React.ReactElement {
+export function BranchOriginBadge({ origin, selectedSessionId }: { origin: BranchOriginInfo; selectedSessionId: string | undefined }): React.ReactElement {
   const t = useT();
   // Before the first snapshot the store holds no sessions at all, which says nothing about this one.
   const gone = useDaemonStore((s) => s.hosts !== undefined && !s.sessions.has(origin.responsible_session));

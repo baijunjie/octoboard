@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CodedError } from "../errors/codedError";
 import { errorText } from "../errors/errorText";
 import { setLanguage } from "../i18n/language";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { AUTO_REFRESH_MS } from "./autoRefresh";
@@ -16,7 +16,7 @@ import { useChangeList, type ChangeList } from "./git/useChangeList";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Pending = { body: RequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
+type Pending = { body: ClientRequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
 
 let pending: Pending[] = [];
 let roots: Root[] = [];
@@ -54,7 +54,7 @@ function mount(use: () => (() => void) | undefined) {
 
 /** The three hooks that read a list on the browser's behalf every `AUTO_REFRESH_MS`, each with the
  * request it sends. */
-const hooks: { name: string; type: RequestBody["type"]; use: () => (() => void) | undefined }[] = [
+const hooks: { name: string; type: ClientRequestBody["type"]; use: () => (() => void) | undefined }[] = [
   {
     name: "useChangeList",
     type: "list_project_changes",

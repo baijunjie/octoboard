@@ -7,7 +7,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnounce
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { SavedConfigurationFile } from "../platform";
-import type { ConfigurationDocument, Event, RequestBody } from "../protocol";
+import type { ConfigurationDocument, Event, ClientRequestBody } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
 import { ExportConfigurationDialog, exportFileName } from "./ExportConfigurationDialog";
 import { documentSettings, mountDialog, press } from "./testSupport";
@@ -16,7 +16,7 @@ import { documentSettings, mountDialog, press } from "./testSupport";
 
 const main = consoleOf("c-main", "Main");
 const DOCUMENT: ConfigurationDocument = { format: "octoboard-configuration", version: 1, exported_by: null, settings: null, consoles: [] };
-const exported = (_body: RequestBody): Promise<Event> => Promise.resolve({ type: "configuration_exported", id: null, document: DOCUMENT });
+const exported = (_body: ClientRequestBody): Promise<Event> => Promise.resolve({ type: "configuration_exported", id: null, document: DOCUMENT });
 
 type Save = (name: string, text: string) => Promise<SavedConfigurationFile | undefined>;
 

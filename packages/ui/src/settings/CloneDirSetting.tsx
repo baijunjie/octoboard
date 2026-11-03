@@ -15,7 +15,7 @@ import { SettingRow } from "./SettingRow";
 import { alertAppDataFailure } from "../components/alerts/raiseError";
 
 /** The directory a `git` association clones into when none is named (see `Settings.default_clone_dir`
- * in protocol.ts). The text is sent when the field loses focus, other than to its directory picker,
+ * in protocol.generated.ts). The text is sent when the field loses focus, other than to its directory picker,
  * or Enter is pressed, and a directory picked with Browse is sent at once; blanking the field goes
  * back to the built-in default. Escape is the one way out that sends nothing: it closes Settings
  * from under the field, which takes the input away without its ever losing focus, so what was typed

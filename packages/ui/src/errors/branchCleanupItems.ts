@@ -2,8 +2,25 @@ import { abbreviateHome } from "../format/pathDisplay";
 import { format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
-import { isKeptForItsFolder, isProjectFolderUnknown, isProtectedFolder, type MessageParams, type SessionBranchCause, type SessionBranchState } from "../protocol";
+import { type SessionBranchCause, type SessionBranchState } from "../protocol";
+import { type MessageParams } from "./codedError";
 import { CODE } from "./codes";
+
+/** Whether `item` is a worktree kept because whether it is or holds another project's folder could not be told. */
+export function isProjectFolderUnknown(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+  return item.state === "failed" && item.cause === "project_folder_unknown";
+}
+
+/** Whether `item` is a worktree kept because it is the home folder, the root of a disk or a folder holding Octoboard's
+ * data. */
+export function isProtectedFolder(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+  return item.state === "failed" && item.cause === "protected_folder";
+}
+
+/** Whether `item` is a worktree kept for what its folder is or may be, which the UI words itself. */
+export function isKeptForItsFolder(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+  return isProjectFolderUnknown(item) || isProtectedFolder(item);
+}
 
 /** One bound branch or worktree a `session_branches_not_removed` alert names: `name` is its path or
  * branch name as text, `state` why it is still there, `uncommitted` whether a worktree has

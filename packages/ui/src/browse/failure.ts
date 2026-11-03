@@ -1,9 +1,9 @@
-import { CodedError } from "../errors/codedError";
+import { CodedError, type MessageParams } from "../errors/codedError";
 import { daemonMessage, type RecordNames } from "../errors/daemonMessage";
 import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import type { Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
-import { REQUEST_SUPERSEDED, SOURCE_CHANGED, type MessageParams } from "../protocol";
+import { CODE } from "../errors/codes";
 import { formatFileSize } from "../format/fileSize";
 import { abbreviateHome } from "../format/pathDisplay";
 import { displayWirePath } from "../format/wirePath";
@@ -67,8 +67,8 @@ export function browseFailure(
     return { kind: "failed", code: unexpected.code, message: unexpected };
   }
   if (err.code === CONNECTION_CLOSED) return { kind: "disconnected" };
-  if (err.code === REQUEST_SUPERSEDED) return { kind: "superseded" };
-  if (err.code === SOURCE_CHANGED) return { kind: "changed" };
+  if (err.code === CODE.request_superseded) return { kind: "superseded" };
+  if (err.code === CODE.source_changed) return { kind: "changed" };
   const params = shownParams(language, err.params, root);
   if (err.code === "limit_exceeded" && err.params.limit === "file_bytes") {
     return {

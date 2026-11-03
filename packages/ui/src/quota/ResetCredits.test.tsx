@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { currentLanguage, setLanguage } from "../i18n/language";
-import type { AccountQuota, Event, RequestBody, ResetCredit, ResetCreditOutcome } from "../protocol";
+import type { AccountQuota, Event, ClientRequestBody, ResetCredit, ResetCreditOutcome } from "../protocol";
 import type { Daemon } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
@@ -46,7 +46,7 @@ const quotaOf = (reset_credits: AccountQuota["reset_credits"]): AccountQuota => 
   reset_credits,
 });
 
-function fakeDaemon(quota: AccountQuota, reply: (body: RequestBody) => Promise<Event>) {
+function fakeDaemon(quota: AccountQuota, reply: (body: ClientRequestBody) => Promise<Event>) {
   const request = vi.fn(reply);
   const showNotice = vi.fn();
   const daemon = testDaemon({ state: { accountQuotas: [quota] }, request, showNotice });
@@ -57,7 +57,7 @@ function fakeDaemon(quota: AccountQuota, reply: (body: RequestBody) => Promise<E
 const mount = (daemon: Daemon, ui: React.ReactElement) => mountHost(ui, { daemon });
 
 const press = (element: Element) => act(() => (element as HTMLElement).click());
-const used = (outcome: ResetCreditOutcome) => (_body: RequestBody) => Promise.resolve({ type: "reset_credit_used", id: null, outcome } as Event);
+const used = (outcome: ResetCreditOutcome) => (_body: ClientRequestBody) => Promise.resolve({ type: "reset_credit_used", id: null, outcome } as Event);
 const flush = () => act(async () => { await Promise.resolve(); });
 
 it("shows the count and when the first credit expires, beside an action that asks to use it", () => {

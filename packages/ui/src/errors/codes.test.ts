@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { ALREADY_RUNNING_CODES, TRUST_REFUSED_CODES } from "../protocol";
 import { codeRecord, messageFacets } from "./codes";
 
 describe("codeRecord", () => {
-  it("knows every code the protocol lists for the client to branch on", () => {
-    for (const code of [...ALREADY_RUNNING_CODES, ...TRUST_REFUSED_CODES]) expect(codeRecord(code), code).toBeDefined();
-  });
-
   it("knows no code the UI has nothing to say about, and no inherited property", () => {
     expect(codeRecord("a_code_from_a_newer_daemon")).toBeUndefined();
     expect(codeRecord("constructor")).toBeUndefined();

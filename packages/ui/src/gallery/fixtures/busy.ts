@@ -1,4 +1,5 @@
-import { AGENTS, type Project, type Session, type SessionStatus } from "../../protocol";
+import { type Project, type Session, type SessionStatus } from "../../protocol";
+import { AGENTS } from "../../agents/agents";
 import type { Scenario } from "../scenario";
 import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 

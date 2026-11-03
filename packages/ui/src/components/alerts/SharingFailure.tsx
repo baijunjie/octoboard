@@ -1,10 +1,9 @@
 import React, { useId } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, sharingReasonKey, sharingItemLabel, type SharingFailureItem } from "../../errors/sharingFailure";
+import { sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, sharingReasonKey, sharingItemLabel, type SharingEntryCause, type SharingFailureItem } from "../../errors/sharingFailure";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import type { SharingEntryCause } from "../../protocol";
 import { useDaemonStoreOrEmpty } from "../../store";
 import { DiagnosticBlock } from "./DiagnosticBlock";
 import { InlineReference } from "../../i18n/InlineReference";

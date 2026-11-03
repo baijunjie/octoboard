@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENT_LABEL } from "../../agents/agents";
-import { AGENTS, type Session, type SessionContext } from "../../protocol";
+import { AGENT_LABEL, AGENTS } from "../../agents/agents";
+import { type Session, type SessionContext } from "../../protocol";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { accountOf, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";

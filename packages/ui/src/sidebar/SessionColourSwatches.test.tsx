@@ -4,7 +4,8 @@ import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { mountForTooltip } from "../components/hint/tooltipTestSupport";
-import { CONSOLE_SESSION_COLOURS, type ConsoleSessionColour } from "../protocol";
+import { type ConsoleSessionColour } from "../protocol";
+import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { ThemeProvider } from "../preferences/theme";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 

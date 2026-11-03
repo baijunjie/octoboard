@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENT_LABEL } from "../../agents/agents";
+import { AGENT_LABEL, AGENTS } from "../../agents/agents";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
-import { AGENTS, type AccountLogin, type AccountSharing, type Agent, type AgentAvailability } from "../../protocol";
+import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability } from "../../protocol";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";

@@ -9,7 +9,7 @@ import { mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import type { Event, ProcessTree, RequestBody, Session } from "../protocol";
+import type { Event, ProcessTree, ClientRequestBody, Session } from "../protocol";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { ProcessesPanel } from "./ProcessesPanel";
@@ -32,7 +32,7 @@ const tree = (id: string, extra: Partial<ProcessTree> = {}): ProcessTree => ({
 });
 
 /** Mounts the panel over a store holding `sessions`, with the daemon answering `request`. */
-async function mount(scope: ProcessesScope, request: (body: RequestBody) => Promise<Event>, sessions: Session[] = [running, second]) {
+async function mount(scope: ProcessesScope, request: (body: ClientRequestBody) => Promise<Event>, sessions: Session[] = [running, second]) {
   vi.useFakeTimers({ now: NOW });
   onTestFinished(() => {
     vi.useRealTimers();
@@ -70,7 +70,7 @@ async function confirmWithPointer() {
   await act(async () => void document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true })));
   await act(async () => void submit.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 })));
 }
-const sent = (request: ReturnType<typeof vi.fn<(body: RequestBody) => Promise<Event>>>, type: string) => request.mock.calls.map(([body]) => body).filter((body) => body.type === type);
+const sent = (request: ReturnType<typeof vi.fn<(body: ClientRequestBody) => Promise<Event>>>, type: string) => request.mock.calls.map(([body]) => body).filter((body) => body.type === type);
 
 it("lists a session's trees with their command, working directory, ports, memory, age and process count", async () => {
   await mount({ session: running }, async () => ({

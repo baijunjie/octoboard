@@ -1,6 +1,6 @@
 import React, { useId } from "react";
 
-import { CodedError } from "../../errors/codedError";
+import { CodedError, type MessageParams } from "../../errors/codedError";
 import { daemonParams, NO_RECORDS, hasTrustDiagnostic, richMessageCode, lacksSummary, runningSessionIds, hasRefusedQuotaWindow } from "../../errors/daemonMessage";
 import { leftBranchDetail, leftBranchGroups, leftBranchName, type LeftBranchItem } from "../../errors/branchCleanupItems";
 import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, type ErrorPresentation } from "../../errors/errorPresentation";
@@ -10,7 +10,6 @@ import { errorText, unexpectedFailureDiagnostic } from "../../errors/errorText";
 import { globalParam, isMessageKey, type MessageKey } from "../../i18n/catalog";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import type { MessageParams } from "../../protocol";
 import { sessionTask } from "../../sessions/sessionLabel";
 import { useDaemonStoreOrEmpty } from "../../store";
 import { BranchGroups } from "./BranchGroups";

@@ -6,7 +6,8 @@ import { settledInitialChoice } from "./openingChoice";
 import { accountOf } from "../fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
-import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type QuotaWindow } from "../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type QuotaWindow } from "../protocol";
+import { AGENTS } from "../agents/agents";
 
 export const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(

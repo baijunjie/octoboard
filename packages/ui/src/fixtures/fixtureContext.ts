@@ -4,7 +4,8 @@ import type { ReplyOf } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { currentLanguage } from "../i18n/language";
-import { AGENTS, type Agent, type Event, type Launch, type LaunchChange, type PerAgent, type RequestBody, type Session } from "../protocol";
+import { type Agent, type Event, type Launch, type LaunchChange, type PerAgent, type ClientRequestBody, type Session } from "../protocol";
+import { AGENTS } from "../agents/agents";
 import { createStateStore } from "../store";
 import type { Fixture } from "./fixture";
 import { createGitReplies } from "./fixtureGit";
@@ -68,11 +69,11 @@ export type Ack = Extract<Event, { type: "ack" }>;
 export const neverReplied = (): Promise<never> => new Promise<never>(() => {});
 
 /** The reply to one kind of request: a value, or a promise of one that may never settle. A refusal is thrown (`fail`). */
-export type Handler<K extends RequestBody["type"]> = (body: Extract<RequestBody, { type: K }>) => ReplyOf<K> | Promise<ReplyOf<K>>;
+export type Handler<K extends ClientRequestBody["type"]> = (body: Extract<ClientRequestBody, { type: K }>) => ReplyOf<K> | Promise<ReplyOf<K>>;
 
 /** What a domain's module answers: a reply for each kind of request it knows. A request with no entry anywhere is
  * acknowledged. */
-export type Handlers = { [K in RequestBody["type"]]?: Handler<K> };
+export type Handlers = { [K in ClientRequestBody["type"]]?: Handler<K> };
 
 /** What the domain modules of the fixture daemon share: the scenario, the store the window reads, and the state more
  * than one domain reads or writes. */

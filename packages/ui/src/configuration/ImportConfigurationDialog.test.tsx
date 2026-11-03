@@ -9,7 +9,7 @@ import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { ConfigurationFileError } from "../platform";
-import type { Event, GitWorkflowSettings, RequestBody } from "../protocol";
+import type { Event, GitWorkflowSettings, ClientRequestBody } from "../protocol";
 import { bindingFor, shortcutOverrides } from "../shortcuts/store";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import { mountDialog, openTab, press, settingLinesOf } from "./testSupport";
@@ -20,7 +20,7 @@ const DOCUMENT = { format: "octoboard-configuration", version: 1, settings: { au
 
 /** A daemon that inspects as `REVIEW` and imports as `MIXED_RESULT`, unless a test
  * says otherwise. */
-function reply(body: RequestBody): Promise<Event> {
+function reply(body: ClientRequestBody): Promise<Event> {
   if (body.type === "inspect_configuration") return Promise.resolve({ type: "configuration_inspected", ...REVIEW });
   if (body.type === "import_configuration") return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT });
   return Promise.reject(new Error(`unexpected ${body.type}`));
@@ -161,7 +161,7 @@ it("shows a row for every project with where it was found and the labelled paths
 });
 
 it("names only the missing project in its mark when no account of it is missing", async () => {
-  const plain = (body: RequestBody): Promise<Event> =>
+  const plain = (body: ClientRequestBody): Promise<Event> =>
     body.type === "inspect_configuration"
       ? Promise.resolve({ type: "configuration_inspected", ...REVIEW, consoles: REVIEW.consoles.map((c) => ({ ...c, projects: c.projects.map((p) => ({ ...p, account_fallbacks: [] })) })) })
       : reply(body);
@@ -171,7 +171,7 @@ it("names only the missing project in its mark when no account of it is missing"
 });
 
 it("shows no exported path for a project the export recorded by its directory name alone, and still says where it was found", async () => {
-  const bare = (body: RequestBody): Promise<Event> =>
+  const bare = (body: ClientRequestBody): Promise<Event> =>
     body.type === "inspect_configuration"
       ? Promise.resolve({ type: "configuration_inspected", ...REVIEW, consoles: REVIEW.consoles.map((c) => ({ ...c, projects: c.projects.map((p) => ({ ...p, path: p.name.toLowerCase().replace(/\s+/g, "-") })) })) })
       : reply(body);
@@ -181,7 +181,7 @@ it("shows no exported path for a project the export recorded by its directory na
 });
 
 it("keeps the dialog on the file step, with the daemon's reason, for a document it refuses", async () => {
-  const refuse = (body: RequestBody) =>
+  const refuse = (body: ClientRequestBody) =>
     body.type === "inspect_configuration"
       ? Promise.reject(new CodedError("This is not a configuration file.", "configuration_not_recognised", {}))
       : reply(body);
@@ -254,7 +254,7 @@ it("applies the application settings only once they are included", async () => {
 const LOCK = { code: "KeyK", primary: true, shift: true };
 /** A daemon that, when asked for the settings, applies them and echoes the document's keyboard shortcuts as they came
  * (or as `echo` has it, where given); asked for no settings, it reports none applied. */
-const echoing = (settings: Record<string, unknown> = {}) => (body: RequestBody): Promise<Event> => {
+const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
   if (body.type !== "import_configuration") return reply(body);
   const carried = (body.document as { settings?: { keyboard_shortcuts?: unknown } }).settings?.keyboard_shortcuts;
   const applied = { ...MIXED_RESULT.settings_applied!, ...(carried !== undefined && carried !== null && { keyboard_shortcuts: carried as never }), ...settings };
@@ -319,7 +319,7 @@ it("puts every shortcut back to its default when the document carries an empty s
 
 it("leaves this device's keyboard shortcuts alone when the settings could not be applied", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  const failing = (body: RequestBody): Promise<Event> =>
+  const failing = (body: ClientRequestBody): Promise<Event> =>
     body.type === "import_configuration"
       ? Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: null, settings_error: { code: "import_settings_missing", params: {}, message: "no settings" } as never })
       : reply(body);
@@ -432,7 +432,7 @@ describe("the git workflow settings", () => {
   const FILE: GitWorkflowSettings = { development: "in_place", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true };
   const inspecting = (git_workflow: GitWorkflowSettings, current: typeof FILE) => {
     const settings = { ...REVIEW.settings!, git_workflow, current_git_workflow: current };
-    return (body: RequestBody) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings }) : reply(body));
+    return (body: ClientRequestBody) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings }) : reply(body));
   };
 
   it("lists the items that applying would change, each with what it is now", async () => {
@@ -465,7 +465,7 @@ describe("the git workflow settings", () => {
 });
 
 describe("the Claude compatibility and agent tags", () => {
-  const inspecting = (settings: Partial<NonNullable<typeof REVIEW.settings>>) => (body: RequestBody) =>
+  const inspecting = (settings: Partial<NonNullable<typeof REVIEW.settings>>) => (body: ClientRequestBody) =>
     body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings: { ...REVIEW.settings!, ...settings } }) : reply(body);
 
   it("list the agents applying would change, each with what it is now", async () => {

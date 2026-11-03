@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import type { Agent, RequestBody } from "../protocol";
+import type { Agent, ClientRequestBody } from "../protocol";
 import type { RequestSender } from "../requests";
 import { shownError } from "./shownError";
 
@@ -16,7 +16,7 @@ export type DetectionStatus = "idle" | "checking" | "ready" | "failed";
 export type Detection = { status: Exclude<DetectionStatus, "failed"> } | { status: "failed"; error: ErrorPresentation };
 
 /** What the form can ask the daemon about: a directory's agent, or a git remote's. */
-export type DetectionQuery = Extract<RequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>;
+export type DetectionQuery = Extract<ClientRequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>;
 
 const CHECKING: Detection = { status: "checking" };
 

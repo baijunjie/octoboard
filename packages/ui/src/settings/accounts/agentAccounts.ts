@@ -1,4 +1,5 @@
-import { DEFAULT_ACCOUNT_NAME, type Account, type Agent } from "../../protocol";
+import { type Account, type Agent } from "../../protocol";
+import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
 
 export function nextConfigDir(base: string, occupied: string[], home: string): string {
   const normalize = (path: string) => path.trim().replace(/^~(?=\/|$)/, () => home).replace(/\/+$/, "");

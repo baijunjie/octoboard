@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type Settings } from "../../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type Settings } from "../../protocol";
+import { AGENTS } from "../../agents/agents";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../../fixtures/interact";
 import { accountOf, SAMPLE, accountSharingOf, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";

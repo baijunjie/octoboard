@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENTS, type Agent, type AgentAvailability } from "../../protocol";
+import { type Agent, type AgentAvailability } from "../../protocol";
+import { AGENTS } from "../../agents/agents";
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 

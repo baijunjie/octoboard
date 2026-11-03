@@ -14,13 +14,13 @@ import type {
   DocumentAccounts,
   DocumentConsole,
   DocumentProject,
-  DocumentProjectAccount,
+  ProjectAccountRef,
   DocumentSettings,
   Event,
   PerAgent,
   Project,
   ProjectAccount,
-  RequestBody,
+  ClientRequestBody,
 } from "../protocol";
 import type { State } from "../store";
 import { refuseUnfillable } from "./banner";
@@ -35,7 +35,7 @@ const directoryName = (path: string): string => path.split("/").filter(Boolean).
 const isClonableRemote = (url: string): boolean =>
   /^(https?|ssh|git|git\+ssh|ssh\+git):\/\/\S/i.test(url) || /^[^\s/:]+:(?![:/]{1,2})\S/.test(url);
 
-type ExportRequest = Extract<RequestBody, { type: "export_configuration" }>;
+type ExportRequest = Extract<ClientRequestBody, { type: "export_configuration" }>;
 
 /** The regions an export holds, settled as the daemon settles them: `consoles` absent is `one` when a console is named
  * and `all` otherwise, the settings are in exactly when every console is unless said, and the accounts only when asked. */
@@ -117,7 +117,7 @@ export function exportedDocument(
     const account = state.settings.accounts.find((candidate) => candidate.id === id && candidate.agent === agent);
     return account ? { name: account.name } : null;
   };
-  const projectAccount = (agent: Agent, reference: ProjectAccount): DocumentProjectAccount => {
+  const projectAccount = (agent: Agent, reference: ProjectAccount): ProjectAccountRef => {
     if (reference.kind !== "account") return reference;
     const account = accountName(agent, reference.id);
     return account ? { kind: "account", ...account } : { kind: "inherit" };
@@ -188,7 +188,7 @@ export function exportedDocument(
  * settings reported without being asked for or asked for and not reported. A console that could not be created is not looked into, since
  * its projects are all not tried whatever was asked. `undefined` where the two agree. */
 export function importDisagreement(
-  request: Extract<RequestBody, { type: "import_configuration" }>,
+  request: Extract<ClientRequestBody, { type: "import_configuration" }>,
   result: Omit<Extract<Event, { type: "configuration_imported" }>, "type">,
 ): string | undefined {
   // Without `apply_consoles` the daemon creates no console or project and reads no resolution.
@@ -236,7 +236,7 @@ export function importDisagreement(
  * the settings: it does not apply them itself, so it hands them back as they came, for the client to apply. A document
  * without them, or a result that reports no settings applied (none asked for, or a `settings_error`), echoes nothing. */
 export function withShortcutsEcho(
-  request: Extract<RequestBody, { type: "import_configuration" }>,
+  request: Extract<ClientRequestBody, { type: "import_configuration" }>,
   result: Omit<Extract<Event, { type: "configuration_imported" }>, "type">,
 ): Omit<Extract<Event, { type: "configuration_imported" }>, "type"> {
   const carried = (request.document as { settings?: { keyboard_shortcuts?: unknown } | null } | null)?.settings?.keyboard_shortcuts;
@@ -251,7 +251,7 @@ export function createConfigurationReplies(
   getState: () => State,
   fail: (error: FixtureError) => never,
   claudeCompatibilityChoices: () => Partial<Record<Agent, boolean>>,
-): (body: RequestBody) => Event | Promise<Event> | undefined {
+): (body: ClientRequestBody) => Event | Promise<Event> | undefined {
   return (body) => {
     switch (body.type) {
       case "export_configuration": {

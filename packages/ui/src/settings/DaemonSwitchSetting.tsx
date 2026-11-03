@@ -8,7 +8,7 @@ import { booleanSetting, type BooleanField } from "../configuration/booleanSetti
 import { SwitchSettingRow } from "./SettingRow";
 
 /** A setting that is one on/off switch the daemon holds (`BOOLEAN_SETTINGS` lists each with its copy; see
- * `Settings.<field>` in protocol.ts for what it does). The row's control never unmounts on its own, so this
+ * `Settings.<field>` in protocol.generated.ts for what it does). The row's control never unmounts on its own, so this
  * needs no `useSectionRefocus`. */
 export function DaemonSwitchSetting({ field }: { field: BooleanField }): React.ReactElement {
   const t = useT();

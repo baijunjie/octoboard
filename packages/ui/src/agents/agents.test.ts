@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { accountOf } from "../fixtures/builders";
-import { accountsByAgent, agentChoiceBadge, agentPickerOptions, defaultAccountName, listedPickerAgents, noAgentState, projectSessionAgent, selectableAgent } from "./agents";
+import { accountsByAgent, agentChoiceBadge, agentPickerOptions, defaultAccountName, listedPickerAgents, noAgentState, projectSessionAgent, selectableAgent, AGENTS } from "./agents";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
-import { AGENTS, type Account, type Agent, type AgentAvailability } from "../protocol";
+import { type Account, type Agent, type AgentAvailability } from "../protocol";
 
 // Real English messages rather than a stub, so a wording change that breaks a placeholder is
 // caught here too.

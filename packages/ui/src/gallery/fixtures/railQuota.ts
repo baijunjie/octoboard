@@ -1,6 +1,6 @@
-import { AGENT_LABEL } from "../../agents/agents";
+import { AGENT_LABEL, AGENTS } from "../../agents/agents";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { AGENTS, type Account, type Agent, type AgentAvailability, type AccountQuota, type Settings } from "../../protocol";
+import { type Account, type Agent, type AgentAvailability, type AccountQuota, type Settings } from "../../protocol";
 import { describing, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";

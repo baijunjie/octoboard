@@ -1,8 +1,9 @@
 // What the fixture daemon answers for the agent accounts: their creation and removal, sharing, sign-in, the default
 // account's name and the use of a Codex reset credit, and the refusals a session gets on an account.
 import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
-import { AGENT_LABEL } from "../agents/agents";
-import { AGENTS, DEFAULT_ACCOUNT_NAME, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type RequestBody, type SharingCause } from "../protocol";
+import { AGENT_LABEL, AGENTS } from "../agents/agents";
+import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type SharingCause } from "../protocol";
+import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../accounts/quotaFormat";
 import { applyDaemonEvent } from "../store";
@@ -182,7 +183,7 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
   /** The `inspect_account_trash` requests answered so far, which a list of answers is read by. */
   let trashInspections = 0;
 
-  const changeAccount = (body: Extract<RequestBody, { type: "create_account" | "update_account" }>): Ack => {
+  const changeAccount = (body: Extract<ClientRequestBody, { type: "create_account" | "update_account" }>): Ack => {
     const current = store.getState();
     const editing = body.type === "update_account" ? current.settings.accounts.find((account) => account.id === body.account) : undefined;
     if (body.type === "update_account" && !editing) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });

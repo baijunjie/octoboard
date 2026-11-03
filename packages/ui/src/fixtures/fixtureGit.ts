@@ -8,7 +8,7 @@
 // rest of the fixture daemon for that reason. Where the daemon would fill a field and the fixture
 // carries nothing to fill it from, the reply is refused rather than sent unfilled; where a
 // signature could have settled it instead, the factory that builds the change does.
-import type { ChangeSide, ContentSource, Event, FileContent, RequestBody, SideRead, SideRef, SideVersion } from "../protocol";
+import type { ChangeSide, ContentSource, Event, FileContent, ClientRequestBody, SideRead, SideRef, SideVersion } from "../protocol";
 import { refuseUnfillable } from "./banner";
 import { text } from "./builders";
 import { EMPTY_TREE, listedCommits, type FixtureGit } from "./changeFixtures";
@@ -31,7 +31,7 @@ export const GIT_REQUESTS = [
   "read_project_commit_change",
   "read_project_commit_change_bodies",
 ] as const;
-type GitRequest = Extract<RequestBody, { type: (typeof GIT_REQUESTS)[number] }>;
+type GitRequest = Extract<ClientRequestBody, { type: (typeof GIT_REQUESTS)[number] }>;
 const gitRequestTypes: ReadonlySet<string> = new Set(GIT_REQUESTS);
 
 /** How many lines a text holds: its newlines, and one more when the last line is unterminated. It
@@ -162,7 +162,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
     });
   /** The whole bodies behind a change's patch, for expanding the lines it collapsed. */
   const readBodies = async (
-    body: Extract<RequestBody, { type: "read_project_change_bodies" | "read_project_comparison_change_bodies" | "read_project_commit_change_bodies" }>,
+    body: Extract<ClientRequestBody, { type: "read_project_change_bodies" | "read_project_comparison_change_bodies" | "read_project_commit_change_bodies" }>,
   ): Promise<Event> => {
     /** Where the request reads: what a refusal names it by, the changes it can name, and, for a
      * worktree's, the section the change must be in (a comparison's and a commit's are all committed). */
@@ -241,7 +241,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
   };
 
   /** The reply to a Git-mode request, or `undefined` where the request is not one of them. */
-  return (request: RequestBody): Event | Promise<Event> | undefined => {
+  return (request: ClientRequestBody): Event | Promise<Event> | undefined => {
     if (!gitRequestTypes.has(request.type)) return undefined;
     const body = request as GitRequest;
     switch (body.type) {
@@ -418,7 +418,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         return readBodies(body);
       default: {
         const unanswered: never = body;
-        throw new Error(`fixtureGit: ${(unanswered as RequestBody).type} is in GIT_REQUESTS and has no reply`);
+        throw new Error(`fixtureGit: ${(unanswered as ClientRequestBody).type} is in GIT_REQUESTS and has no reply`);
       }
     }
   };

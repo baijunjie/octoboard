@@ -10,7 +10,8 @@ import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { MessageKey, Translate } from "../i18n/catalog";
-import { SESSION_REQUEST_ANSWERED, SESSION_REQUEST_NOT_WAITING, type Account, type Agent, type SessionRequestAction, type Settings } from "../protocol";
+import { type Account, type Agent, type SessionRequestAction, type Settings } from "../protocol";
+import { CODE } from "../errors/codes";
 import { sessionAccount, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
 import { raiseError } from "../components/alerts/raiseError";
@@ -43,7 +44,7 @@ function recordAccount(t: Translate, accounts: Account[], defaultNames: Settings
  * else the target, since the error comes from the target's resume; the requesting session for
  * everything else, including the request no longer waiting. */
 function failureSubject(request: SessionRequest, err: unknown): string {
-  if ((request.action !== "reopen" && request.action !== "resume") || (err instanceof CodedError && err.code === SESSION_REQUEST_NOT_WAITING)) {
+  if ((request.action !== "reopen" && request.action !== "resume") || (err instanceof CodedError && err.code === CODE.session_request_not_waiting)) {
     return request.session;
   }
   return (err instanceof CodedError ? err.params.session : undefined) ?? request.target;
@@ -249,9 +250,10 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
     try {
       await send({ type: "answer_session_request", request_id: request.requestId, approve, ...edits });
     } catch (err) {
-      if (err instanceof CodedError && err.code === SESSION_REQUEST_ANSWERED) return;
+      // Answered already, here or from another client: nothing is wrong.
+      if (err instanceof CodedError && err.code === CODE.session_request_answered) return;
       // Nothing was going to start for a refusal, so the session no longer waiting is no news.
-      if (!approve && err instanceof CodedError && err.code === SESSION_REQUEST_NOT_WAITING) return;
+      if (!approve && err instanceof CodedError && err.code === CODE.session_request_not_waiting) return;
       raiseError(err, { title: t(approve ? "dialog.sessionRequest.approveFailedTitle" : "dialog.sessionRequest.refuseFailedTitle"), keepTitle: true, session: failureSubject(request, err) });
     }
   };

@@ -1,5 +1,5 @@
 import { leftBranchDetail } from "../../errors/branchCleanupItems";
-import type { MessageParams } from "../../protocol";
+import type { MessageParams } from "../../errors/codedError";
 import { daemonErrorParts } from "./daemonErrorParts";
 
 // What `DaemonErrorMessage` has to show for each of its parts, answered without rendering from the same `daemonErrorParts`

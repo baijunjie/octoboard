@@ -36,7 +36,6 @@ export const UI_DISK_TESTS = [
   "src/layout/paneWidth.test.tsx",
   "src/components/text/InlineReference.test.tsx",
   "src/components/form/AdvancedSection.test.tsx",
-  "src/protocol.contract.test.ts",
   "scripts/gallery-sweep.test.mjs",
 ];
 

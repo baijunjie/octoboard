@@ -4,7 +4,7 @@ import { listLane } from "../../browse/budget";
 import { usePoll } from "../../components/hooks/usePoll";
 import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
-import { WORKTREE_UNAVAILABLE } from "../../protocol";
+import { CODE } from "../../errors/codes";
 import { useDaemon } from "../../store";
 import { sameValue } from "../../values/sameValue";
 import { AUTO_REFRESH_CATCH_UP_MS, AUTO_REFRESH_MS } from "../autoRefresh";
@@ -68,7 +68,7 @@ export function useChangeList(
       // Left as it is; the reconnect asks again.
       disconnected: (list) => (list.state === "loading" ? list : { ...list, refreshing: false }),
       failed: (failure, _held, t) => {
-        const unavailable = failure.kind === "failed" && failure.code === WORKTREE_UNAVAILABLE;
+        const unavailable = failure.kind === "failed" && failure.code === CODE.worktree_unavailable;
         const message = failure.kind === "failed" ? failure.message : t("git.error.changing");
         return { state: "error", message, unavailable, refreshing: false };
       },

@@ -3,7 +3,8 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { DEFAULT_ACCOUNT_NAME, type Event, type InspectedAccount, type InspectedAccounts, type RequestBody } from "../protocol";
+import { type Event, type InspectedAccount, type InspectedAccounts, type ClientRequestBody } from "../protocol";
+import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { setLanguage } from "../i18n/language";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
@@ -59,7 +60,7 @@ const CONSOLES: Inspection["consoles"] = [
 
 const IMPORTED: Event = { type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error: null, accounts: null };
 
-function mount(inspection: Omit<Inspection, "type">, sent?: (body: RequestBody) => Event) {
+function mount(inspection: Omit<Inspection, "type">, sent?: (body: ClientRequestBody) => Event) {
   const mounted = mountDialog(
     (onClose) => <ImportConfigurationDialog onClose={onClose} />,
     (body) => Promise.resolve(body.type === "inspect_configuration" ? { type: "configuration_inspected", ...inspection } : (sent?.(body) ?? IMPORTED)),

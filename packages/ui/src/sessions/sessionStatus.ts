@@ -81,3 +81,20 @@ export const SUMMARY_STATUSES = ["waiting_user", "paused", "done", "idle"] as co
 export function isSummaryStatus(status: ShownStatusKind): boolean {
   return SUMMARY_STATUSES.some((kind) => kind === status);
 }
+
+/** Statuses meaning the session has a running process or is about to: `starting` is one whose agent
+ * is still being launched, so it has no terminal to attach to yet. The complement of
+ * `NO_PROCESS_STATUSES`. */
+export const LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user", "dormant", "idle"]);
+
+/** Statuses meaning no process is running for this session — both are resumable via
+ * `resume_session`. */
+export const NO_PROCESS_STATUSES: ReadonlySet<SessionStatus> = new Set(["interrupted", "archived"]);
+
+export function isLive(status: SessionStatus): boolean {
+  return LIVE_STATUSES.has(status);
+}
+
+export function hasNoProcess(status: SessionStatus): boolean {
+  return NO_PROCESS_STATUSES.has(status);
+}

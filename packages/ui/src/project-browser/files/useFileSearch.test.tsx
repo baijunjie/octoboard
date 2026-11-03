@@ -3,7 +3,7 @@ import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
-import type { Event, RequestBody } from "../../protocol";
+import type { Event, ClientRequestBody } from "../../protocol";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { useFileSearch, type FileSearch } from "./useFileSearch";
@@ -48,7 +48,7 @@ it("repeats the search at once when ignored files are included, and tells which 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   let result!: FileSearch;
-  const request = vi.fn(async (body: RequestBody & { include_ignored?: boolean }): Promise<Event> => ({
+  const request = vi.fn(async (body: ClientRequestBody & { include_ignored?: boolean }): Promise<Event> => ({
     type: "project_file_matches",
     id: null,
     project: "all-files",

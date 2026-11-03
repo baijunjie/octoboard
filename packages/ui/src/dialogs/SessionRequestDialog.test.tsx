@@ -5,7 +5,7 @@ import { expect, it, onTestFinished } from "vitest";
 import { CodedError } from "../errors/codedError";
 import { setLanguage } from "../i18n/language";
 import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../fixtures/builders";
-import { SESSION_REQUEST_NOT_WAITING } from "../protocol";
+import { CODE } from "../errors/codes";
 import type { SessionRequest, TrustPrompt } from "../store";
 import { press } from "../components/alerts/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
@@ -131,7 +131,7 @@ it.each([
   { label: "Start session", toasted: 1 },
   { label: "Refuse", toasted: 0 },
 ])("an answer given after the session stopped waiting: $label", async ({ label, toasted }) => {
-  const notWaiting = new CodedError("no longer waiting", SESSION_REQUEST_NOT_WAITING, { session: "s-1" });
+  const notWaiting = new CodedError("no longer waiting", CODE.session_request_not_waiting, { session: "s-1" });
   const dialog = mount(() => Promise.reject(notWaiting));
   await pressButton(label);
   const alerts = dialog.alerts();
@@ -154,7 +154,7 @@ it.each<{ label: string; params: Record<string, string>; subject: string }>([
 
 it.each<"reopen" | "resume">(["reopen", "resume"])("an approval of a %s that finds the request no longer waiting toasts about the requester", async (action) => {
   const asked: SessionRequest = { ...request, action, target: "t-1", reopenedOwners: [] };
-  const failure = new CodedError("no longer waiting", SESSION_REQUEST_NOT_WAITING, { session: "t-9" });
+  const failure = new CodedError("no longer waiting", CODE.session_request_not_waiting, { session: "t-9" });
   const dialog = mountPendingQuestionDialog({ sessionRequests: [asked] }, () => Promise.reject(failure));
   await pressButton(action === "reopen" ? "Reopen session" : "Resume session");
   expect(dialog.alerts()).toEqual([{ error: failure, title: "Could not approve the request", session: "s-1" }]);

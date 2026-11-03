@@ -1,6 +1,5 @@
 import type { Translate } from "../i18n/catalog";
 import {
-  AGENTS,
   type Account,
   type Agent,
   type AgentAvailability,
@@ -9,6 +8,10 @@ import {
   type Project,
   type Settings,
 } from "../protocol";
+
+/** Every agent, in the order the window lists them by default. Written as a record's keys so the type check fails while
+ * an agent is missing. */
+export const AGENTS: readonly Agent[] = Object.keys({ claude: true, codex: true, grok: true } satisfies Record<Agent, true>) as Agent[];
 
 /** Display labels for the three supported agents (see "Rows, names and keyboard focus" in
  * docs/product/sidebar.md). */

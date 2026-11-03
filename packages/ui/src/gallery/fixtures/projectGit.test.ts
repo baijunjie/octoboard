@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CodedError } from "../../errors/codedError";
-import type { ChangeEntry, ChangeSide, Event, RequestBody, SideRead, SideVersion } from "../../protocol";
+import type { ChangeEntry, ChangeSide, Event, ClientRequestBody, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/code/patch";
 import { FixtureUnfillableError } from "../../fixtures/banner";
 import { createFixtureDaemon } from "../../fixtures/fixtureDaemon";
@@ -567,7 +567,7 @@ describe("the sample repository's changes", () => {
       const daemon = sampleDaemon(git);
       /** Asks the repository for a read and checks the reply is the one that was aimed at: the type
        * wanted, or the very error staged for it; a refusal, or any other error, fails. */
-      const ask = (at: string, request: RequestBody, reply: Event["type"], error: string | undefined, then?: (event: Event) => void) => {
+      const ask = (at: string, request: ClientRequestBody, reply: Event["type"], error: string | undefined, then?: (event: Event) => void) => {
         asked.push(
           daemon.request(request).then(
             (event) => {

@@ -1,7 +1,7 @@
 // The request-to-reply contract of the daemon connection, shared by the client that enforces it and by everything
 // that stands in for the daemon.
 
-import type { Event, RequestBody } from "./protocol";
+import type { Event, ClientRequestBody } from "./protocol";
 
 /** The reply each request is answered with when it succeeds; a failure is an `error` for any of them. A request with
  * nothing to return is answered with `ack`; `answer_session_request` with the session it started, or `ack` when it
@@ -96,15 +96,15 @@ export const REPLY_TYPES = {
   read_project_commit_change: "project_commit_change",
   read_project_commit_change_bodies: "project_commit_change_bodies",
   shutdown: "ack",
-} as const satisfies Record<RequestBody["type"], Event["type"] | readonly Event["type"][]>;
+} as const satisfies Record<ClientRequestBody["type"], Event["type"] | readonly Event["type"][]>;
 
 type ReplyTypes = typeof REPLY_TYPES;
 
 /** A request's `type`. */
-export type RequestType = RequestBody["type"];
+export type RequestType = ClientRequestBody["type"];
 
 /** Each request type's request. */
-type RequestsByType = { [K in RequestType]: Extract<RequestBody, { type: K }> };
+type RequestsByType = { [K in RequestType]: Extract<ClientRequestBody, { type: K }> };
 
 /** The request of `type`. An indexed type rather than an `Extract`, so a call infers `type` from the body. */
 export type RequestOf<T extends RequestType> = RequestsByType[T];
@@ -119,7 +119,7 @@ export type ReplyOf<T extends RequestType> = Extract<Event, { type: Named<ReplyT
 export type RequestSender = <T extends RequestType>(body: RequestsByType[T] & { type: T }) => Promise<ReplyOf<T>>;
 
 /** A request handler typed as a plain union: what `looseRequestSender` turns into a `RequestSender`. */
-export type RequestHandler = (body: RequestBody) => Promise<Event>;
+export type RequestHandler = (body: ClientRequestBody) => Promise<Event>;
 
 /** A `RequestSender` over a handler that answers requests from somewhere other than the daemon (the fixture daemon, the
  * website preview, a test's stand-in), which narrows a request by its `type` as a plain union. Nothing checks that it

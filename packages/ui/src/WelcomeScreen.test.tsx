@@ -5,7 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
-import { AGENTS, type Agent, type AgentAvailability } from "./protocol";
+import { type Agent, type AgentAvailability } from "./protocol";
+import { AGENTS } from "./agents/agents";
 import { DaemonProvider, type State } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { WelcomeScreen } from "./WelcomeScreen";

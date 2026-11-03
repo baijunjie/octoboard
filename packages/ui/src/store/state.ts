@@ -2,22 +2,8 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import {
-  AGENTS,
-  type AccountLogin,
-  type AccountQuota,
-  type AccountSharing,
-  type Agent,
-  type AgentAvailability,
-  type Console,
-  type GitStatus,
-  type Host,
-  type Page,
-  type Project,
-  type Session,
-  type Settings,
-  type ShellTerminal,
-} from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type Console, type GitStatus, type Host, type Page, type Project, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { AGENTS } from "../agents/agents";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A session waiting at its agent's folder-trust confirmation for the user's say-so. */
@@ -42,7 +28,7 @@ export interface State {
   /** Keyed by the id of the session that pushed them (a console session, or a project session),
    * oldest first, as `page_list` delivers them. Absent for a session whose pages have not been
    * (re-)listed yet — distinct from an empty array, which means they have and there genuinely are
-   * none. Pages are deliberately left out of `snapshot` (see `protocol.ts`), so this map starts
+   * none. Pages are deliberately left out of `snapshot` (see `page_list` in apps/daemon/PROTOCOL.md), so this map starts
    * empty and is filled only by `list_pages` requests: the report panel's, and for a project
    * session the window's own, to know whether its Report panel has anything to show
    * (`report/useProjectReportSession.ts`). */
@@ -71,7 +57,7 @@ export interface State {
   sessionRequests: SessionRequest[];
   /** Keyed by project id. Absent for a project the daemon has not reported on yet, or that is not
    * a git repository at all. Dropped when its project is deleted — the daemon sends no deletion
-   * event for a `GitStatus` (see `protocol.ts`), so the client has to drop it itself. */
+   * event for a `GitStatus`, so the client has to drop it itself. */
   gitStatuses: Map<string, GitStatus>;
   /** The app-wide settings the daemon stores, as the last `snapshot` or `settings_updated` said. */
   settings: Settings;

@@ -1,6 +1,5 @@
-import { CodedError } from "./codedError";
+import { CodedError, type MessageParams } from "./codedError";
 import type { ErrorRecovery } from "./errorRecovery";
-import type { MessageParams } from "../protocol";
 
 /** A local failure whose user remedy is known without inspecting its translated message. Its message is the
  * application's own words; `detail` is the raw text it carries (what the system said), which is never part of the

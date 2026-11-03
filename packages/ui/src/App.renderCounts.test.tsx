@@ -14,7 +14,7 @@ import { isolate } from "./i18n/isolate";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
-import type { Event, RequestBody } from "./protocol";
+import type { Event, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./preferences/theme";
 
@@ -95,7 +95,7 @@ function mountApp() {
   renders.clear();
   vi.useFakeTimers({ now: Date.UTC(2026, 9, 28, 12) });
   stubWindow();
-  const daemon: Daemon = fakeDaemon(snapshotState({ consoles: [main, second], projects: [site, api], sessions: [fix, plan, old, elsewhere] }), (body: RequestBody) =>
+  const daemon: Daemon = fakeDaemon(snapshotState({ consoles: [main, second], projects: [site, api], sessions: [fix, plan, old, elsewhere] }), (body: ClientRequestBody) =>
     body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null });
   let stacks!: ReturnType<typeof usePanelStacks>;
   function StackReset() { stacks = usePanelStacks(); return null; }

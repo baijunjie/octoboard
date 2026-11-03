@@ -1,5 +1,6 @@
 // What the fixture daemon answers for the consoles: creating one, saving its settings and deleting it.
-import { isLive, type Console, type RequestBody } from "../protocol";
+import { type Console, type ClientRequestBody } from "../protocol";
+import { isLive } from "../sessions/sessionStatus";
 import { consoleOf } from "./builders";
 import { HOME, trimmedOrNull, changedPerAgent, changedLaunch, type FixtureContext, type Handlers } from "./fixtureContext";
 
@@ -8,7 +9,7 @@ import { HOME, trimmedOrNull, changedPerAgent, changedLaunch, type FixtureContex
  * `update_console` that leaves a field out leaves it alone, and one that names it as `null`
  * clears it, as `update_console` of `coordinator/consoles.rs` does. Account and model references
  * are taken as given, not checked against the settings or an agent's list. */
-function consoleFields(current: Console, body: Extract<RequestBody, { type: "create_console" | "update_console" }>): Partial<Console> {
+function consoleFields(current: Console, body: Extract<ClientRequestBody, { type: "create_console" | "update_console" }>): Partial<Console> {
   const fields: Partial<Console> = {};
   if (body.name !== undefined) fields.name = body.name.trim();
   if (body.default_agent !== undefined) fields.default_agent = body.default_agent;

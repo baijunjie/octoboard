@@ -17,7 +17,7 @@ import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useStableHandler } from "../../components/hooks/useLatest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
-import type { ScopeCause } from "../../protocol";
+import type { ScopeCause } from "../../errors/causes";
 import { retryCanHelp } from "../../errors/errorRecovery";
 import type { PlainMessageKey, Translate } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";

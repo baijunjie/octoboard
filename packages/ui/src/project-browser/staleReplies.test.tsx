@@ -5,7 +5,7 @@ import { afterEach, expect, it } from "vitest";
 
 import { CodedError } from "../errors/codedError";
 import { isolate } from "../i18n/isolate";
-import type { BrowseEntry, ChangeGroup, Event, FileContent, RequestBody } from "../protocol";
+import type { BrowseEntry, ChangeGroup, Event, FileContent, ClientRequestBody } from "../protocol";
 import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { changeItem, type ChangeItem } from "./git/changes";
@@ -22,7 +22,7 @@ import { useFileReader, type FileReader } from "./files/useFileReader";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** A daemon whose replies the test hands out itself, in whatever order it likes. */
-type Pending = { body: RequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
+type Pending = { body: ClientRequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
 
 /** Every request any test left unanswered and every root it mounted, settled and unmounted after
  * each test: the listings' window-wide limit is module state, and a listing still out would count

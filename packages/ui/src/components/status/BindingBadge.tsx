@@ -17,7 +17,7 @@ import { sessionDisplayTitle } from "../../sessions/sessionLabel";
  * folds the fact into), since the badge carries no information its tooltip does not: colour alone
  * never distinguishes two owners for a user who cannot tell the colours apart. A console session
  * normally has a `colour` (assigned on creation, changed only by the user), but a `Session` carries
- * `colour?: ConsoleSessionColour | null` (`protocol.ts`), so one built without it is reachable from
+ * `colour: ConsoleSessionColour | null` (`protocol.generated.ts`), so one without it is reachable from
  * a fixture or a future caller; drawn with none, nothing renders.
  *
  * It has no touch popover (`touchPopover={false}`): wherever it is not decorative it sits in a session's

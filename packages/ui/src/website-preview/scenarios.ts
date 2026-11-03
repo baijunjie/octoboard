@@ -1,5 +1,6 @@
 import type { Language } from "../i18n/languages";
-import { AGENTS, type Agent, type AgentAvailability, type Session } from "../protocol";
+import { type Agent, type AgentAvailability, type Session } from "../protocol";
+import { AGENTS } from "../agents/agents";
 import type { State } from "../store";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";

@@ -1,5 +1,6 @@
 // What the fixture daemon answers for the processes the Processes panel lists and the confirmations stop or keep.
-import { isLive, type ProcessCount, type ProcessTree } from "../protocol";
+import { type ProcessCount, type ProcessTree } from "../protocol";
+import { isLive } from "../sessions/sessionStatus";
 import { neverReplied, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** How long after its first `list_processes` (or, for the rail's list, its first `list_all_processes`) the fixture

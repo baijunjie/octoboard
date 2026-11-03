@@ -10,12 +10,13 @@
 
 // What `apps/web` imports from `@octoboard/ui` outside the preview inputs below: the modules its `exports` map
 // names (`i18n/matchLanguage.ts`, `i18n/languages.ts`, `components/icons/agentMarks.ts`) and what they import
-// (`protocol.ts`, for the `Agent` type).
+// (`protocol.ts`, for the `Agent` type, and the generated types it re-exports).
 export const WEB_IMPORTS_FROM_UI = [
   "packages/ui/src/i18n/matchLanguage.ts",
   "packages/ui/src/i18n/languages.ts",
   "packages/ui/src/components/icons/agentMarks.ts",
   "packages/ui/src/protocol.ts",
+  "packages/ui/src/protocol.generated.ts",
 ];
 
 // The inputs of the preview build `apps/web` takes from `packages/ui`.
@@ -47,8 +48,8 @@ export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 // machine-wide heavy-step lock.
 export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 
-// `protocol.generated.ts` is written by a daemon test from the Rust types (`protocol/bindings.rs`) and checked
-// against `protocol.ts` by the UI's type check (`protocol.contract.ts`).
+// `protocol.generated.ts` is written by a daemon test from the Rust types (`protocol/bindings.rs`) and re-exported
+// by `protocol.ts`, through which the UI reads it.
 export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol/", "packages/ui/src/protocol.ts", "packages/ui/src/protocol.generated.ts"];
 
 // Files a test of another package reads from disk. Found by searching for `include_str!`,
@@ -96,7 +97,7 @@ export const RULES = [
 
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },
-  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step across the daemon, the UI and the desktop shell: the UI's types are checked against the generated ones, the daemon writes those from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
+  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step across the daemon, the UI and the desktop shell: the UI reads the generated types, which the daemon writes from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
   { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },

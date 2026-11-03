@@ -1,13 +1,13 @@
 import { expect, it, vi } from "vitest";
 
-import type { Event, RequestBody } from "../../protocol";
+import type { Event, ClientRequestBody } from "../../protocol";
 import { looseRequestSender } from "../../requests";
 import { readDocumentImage } from "./documentImageReads";
 
 function daemon() {
   const sent: { path: string; slot?: string; answer: (event: Event) => void }[] = [];
   const request = vi.fn(
-    (body: RequestBody) =>
+    (body: ClientRequestBody) =>
       new Promise<Event>((resolve) => {
         const { path, slot } = body as { path: string; slot?: string };
         sent.push({ path, slot, answer: resolve });

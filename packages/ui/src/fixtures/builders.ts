@@ -2,7 +2,9 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
-import { AGENTS, type Account, type AccountQuota, type MessageParams, type AccountSharing, type Agent, type Console, type FileContent, type Launch, type GitStatus, type Host, type Page, type PerAgent, type ProcessTree, type Project, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type FileContent, type Launch, type GitStatus, type Host, type Page, type PerAgent, type ProcessTree, type Project, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { type MessageParams } from "../errors/codedError";
+import { AGENTS } from "../agents/agents";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { ToastFixture } from "./fixture";
 

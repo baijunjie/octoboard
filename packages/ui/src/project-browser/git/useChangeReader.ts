@@ -21,7 +21,7 @@ import type {
   SideRef,
   SideVersion,
 } from "../../protocol";
-import { WORKTREE_UNAVAILABLE } from "../../protocol";
+import { CODE } from "../../errors/codes";
 import type { ReplyOf } from "../../requests";
 import { useDaemon, type Daemon } from "../../store";
 import {
@@ -57,7 +57,7 @@ export type ChangeOrigin =
 
 /** Whether `err` says the worktree an uncommitted change from `origin` is read from is gone. */
 function isWorktreeGone(err: unknown, origin: ChangeOrigin): boolean {
-  return origin.kind === "worktree" && err instanceof CodedError && err.code === WORKTREE_UNAVAILABLE;
+  return origin.kind === "worktree" && err instanceof CodedError && err.code === CODE.worktree_unavailable;
 }
 
 function sameOrigin(a: ChangeOrigin, b: ChangeOrigin): boolean {

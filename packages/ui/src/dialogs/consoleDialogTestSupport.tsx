@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
-import { AGENTS, type Account, type Agent, type AgentAvailability, type AgentModel, type Console, type Event, type ModelsUnavailable, type RequestBody } from "../protocol";
+import { type Account, type Agent, type AgentAvailability, type AgentModel, type Console, type Event, type ModelsUnavailable, type ClientRequestBody } from "../protocol";
+import { AGENTS } from "../agents/agents";
 import { createStateStore, DaemonProvider } from "../store";
 import { buttons, click, inputLabelled, type as typeInto } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
@@ -24,7 +25,7 @@ export const MODELS: AgentModel[] = [
 ];
 
 /** The reply to a `list_agent_models` request: `models` as listed, or why there are none. */
-export const listing = (body: RequestBody, models: AgentModel[], unavailable: ModelsUnavailable | null = null): Event => ({
+export const listing = (body: ClientRequestBody, models: AgentModel[], unavailable: ModelsUnavailable | null = null): Event => ({
   type: "agent_models",
   id: null,
   agent: (body as { agent: "claude" }).agent,
@@ -41,11 +42,11 @@ export let lastStore: ReturnType<typeof createStateStore>;
 export function render(
   editing?: Console,
   accounts: Account[] = [],
-  respond?: (body: RequestBody) => Promise<Event>,
+  respond?: (body: ClientRequestBody) => Promise<Event>,
   availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {},
   added: Agent[] | null = null,
 ) {
-  const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack", id: null } as Event)));
+  const request = vi.fn((body: ClientRequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack", id: null } as Event)));
   const daemon = testDaemon({
     state: {
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },

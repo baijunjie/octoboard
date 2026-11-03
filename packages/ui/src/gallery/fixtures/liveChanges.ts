@@ -1,4 +1,5 @@
-import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type ShellTerminal } from "../../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type ShellTerminal } from "../../protocol";
+import { AGENTS } from "../../agents/agents";
 import { accountQuotaOf } from "../../accounts/accountQuotaOf";
 import type { Step } from "../../fixtures/interact";
 import type { LiveChange } from "../scenario";

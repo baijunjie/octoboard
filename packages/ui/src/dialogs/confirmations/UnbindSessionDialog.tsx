@@ -5,7 +5,7 @@ import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { CodedError } from "../../errors/codedError";
 import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
-import { SESSION_BINDING_CHANGED, SESSION_NOT_BOUND } from "../../protocol";
+import { CODE } from "../../errors/codes";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useDaemon, useDaemonStore } from "../../store";
 
@@ -45,7 +45,7 @@ export function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string;
           const code = err instanceof CodedError ? err.code : undefined;
           // Refused as changed while still bound (to another owner, which the dialog then names): the user
           // decides again. Once the store shows it unbound there is nothing left to decide.
-          if (code === SESSION_NOT_BOUND || (code === SESSION_BINDING_CHANGED && !store.getState().sessions.get(sessionId)?.bound_to)) {
+          if (code === CODE.session_not_bound || (code === CODE.session_binding_changed && !store.getState().sessions.get(sessionId)?.bound_to)) {
             onClose();
             return;
           }

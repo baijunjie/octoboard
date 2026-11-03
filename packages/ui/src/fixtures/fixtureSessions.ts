@@ -1,7 +1,8 @@
 // What the fixture daemon answers for the sessions: opening, resuming, archiving and deleting them, handing one off,
 // switching its account or model, and the small changes to one (pin, lock, colour, title).
 import { AGENT_LABEL, isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
-import { CONSOLE_SESSION_COLOURS, type Agent, type ConsoleSessionColour, type Session, type SessionRecordsPresence } from "../protocol";
+import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence } from "../protocol";
+import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { applyDaemonEvent } from "../store";
 import type { AccountGuards } from "./fixtureAccounts";
 import type { ProcessLedger } from "./fixtureProcesses";
@@ -37,8 +38,8 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
     const used = new Set([...store.getState().sessions.values()].filter((session) => session.console_id === consoleId && session.role === "console" && session.status !== "archived").map((session) => session.colour));
     return CONSOLE_SESSION_COLOURS.find((colour) => !used.has(colour)) ?? CONSOLE_SESSION_COLOURS[0];
   };
-  const recordsPresence = (ids: string[]): SessionRecordsPresence => {
-    let presence: SessionRecordsPresence = "absent";
+  const recordsPresence = (ids: string[]): SessionRecordPresence => {
+    let presence: SessionRecordPresence = "absent";
     for (const id of ids) {
       const item = store.getState().sessions.has(id) ? scenario.sessionRecords?.[id] ?? "unknown" : "unknown";
       if (item === "present") return "present";

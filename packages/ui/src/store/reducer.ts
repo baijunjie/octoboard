@@ -2,7 +2,8 @@ import type { ConnectionState } from "../daemon-client";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountKey, loginIsActive } from "../accounts/accountRecords";
 import { sameValue } from "../values/sameValue";
-import { TRUST_ANSWER_FAILED, type AccountLogin, type AccountQuota, type AccountSharing, type Event, type Project, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Event, type Project, type ShellTerminal } from "../protocol";
+import { CODE } from "../errors/codes";
 import type { State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
 
@@ -116,7 +117,7 @@ export function reducer(state: State, action: Action): State {
             projects: keepSame(state.projects, event.projects, (p) => p.id),
             sessions: keepSame(state.sessions, event.sessions, (s) => s.id),
             // A snapshot means either first connect or a lag recovery, and carries no pages either
-            // way (see `Page` in protocol.ts). Cleared rather than kept, because a console session
+            // way (see `page_list` in apps/daemon/PROTOCOL.md). Cleared rather than kept, because a console session
             // that was deleted while this client was behind would otherwise go on holding its
             // pages forever — nothing else ever removes an entry for a session the snapshot no
             // longer lists.
@@ -232,7 +233,7 @@ export function reducer(state: State, action: Action): State {
           // Octoboard could not press the session's confirmation: it is left for the person to answer
           // in the terminal, which the notice says, so a prompt still queued for it would ask about
           // something no go-ahead can do any more.
-          if (event.code !== TRUST_ANSWER_FAILED) return state;
+          if (event.code !== CODE.trust_answer_failed) return state;
           const trustPrompts = state.trustPrompts.filter((p) => p.session !== event.session);
           return trustPrompts.length === state.trustPrompts.length ? state : { ...state, trustPrompts };
         }

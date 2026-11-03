@@ -1,9 +1,8 @@
-import { CodedError } from "./codedError";
+import { CodedError, type MessageParams } from "./codedError";
 import { lacksSummary, hasTrustDiagnostic, referenceNameParams, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
 import { leftBranchItems } from "./branchCleanupItems";
 import { classifyError, namedSystemCause, type ErrorRecovery } from "./errorRecovery";
 import { globalParam, isMessageKey, type PlainMessageKey } from "../i18n/catalog";
-import type { MessageParams } from "../protocol";
 import { CODE, codeRecord, messageFacets } from "./codes";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
 

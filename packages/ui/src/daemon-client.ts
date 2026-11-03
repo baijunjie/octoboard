@@ -1,6 +1,6 @@
 import { CodedError } from "./errors/codedError";
 import { t } from "./i18n/language";
-import type { Event, Request } from "./protocol";
+import type { ClientRequest, Event } from "./protocol";
 import { REPLY_TYPES, type RequestSender, type RequestType } from "./requests";
 
 type Listener = (event: Event) => void;
@@ -234,7 +234,7 @@ export class DaemonClient {
    * as `unexpected_reply`. */
   readonly request: RequestSender = (body) => {
     const id = String(++this.lastRequestId);
-    const payload: Request = { ...body, id };
+    const payload: ClientRequest = { ...body, id };
     const json = JSON.stringify(payload);
     return new Promise((resolve, reject) => {
       const settle = (event: Event) => {

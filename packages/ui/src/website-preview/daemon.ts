@@ -2,7 +2,7 @@ import { looseRequestSender } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { BROWSE_REQUESTS, createFixtureDaemon } from "../fixtures/fixtureDaemon";
 import type { Fixture } from "../fixtures/fixture";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 import type { Daemon } from "../store";
 import { previewRepositories } from "./repositories";
 
@@ -26,7 +26,7 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
   );
   return {
     ...daemon,
-    request: looseRequestSender(async (body: RequestBody): Promise<Event> => {
+    request: looseRequestSender(async (body: ClientRequestBody): Promise<Event> => {
       if (!BROWSE_REQUESTS.has(body.type)) return daemon.request(body);
       if (!("project" in body) || typeof body.project !== "string")
         throw new Error("Browse request needs a project");

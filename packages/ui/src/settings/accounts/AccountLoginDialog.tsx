@@ -9,7 +9,7 @@ import { errorRemedy, rawErrorDetails } from "../../components/alerts/errorParts
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { InlineReference } from "../../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
-import { CodedError } from "../../errors/codedError";
+import { CodedError, type CodedMessage } from "../../errors/codedError";
 import { daemonMessage, NO_RECORDS } from "../../errors/daemonMessage";
 import { RecoveryGuidance } from "../../components/alerts/ErrorGuidance";
 import { uncataloguedSummaryKey } from "../../errors/errorPresentation";
@@ -19,7 +19,7 @@ import { Dialog } from "../../components/dialog/Dialog";
 import { useIssueReport } from "../../components/alerts/useIssueReport";
 import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import type { AccountLogin, Agent, CodedMessage } from "../../protocol";
+import type { AccountLogin, Agent } from "../../protocol";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";

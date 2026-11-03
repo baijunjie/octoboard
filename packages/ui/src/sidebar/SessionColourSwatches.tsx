@@ -2,8 +2,8 @@ import { ColorSwatchPicker } from "@heroui/react";
 import { ListBoxContext, parseColor } from "react-aria-components";
 import React from "react";
 
-import { CONSOLE_SESSION_COLOURS, type ConsoleSessionColour } from "../protocol";
-import { sessionColourHex } from "../sessions/sessionColours";
+import { type ConsoleSessionColour } from "../protocol";
+import { sessionColourHex, CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { useOctoboardTheme } from "../preferences/theme";
 
 /** How many swatches a row holds; `grid-cols-8` below. */

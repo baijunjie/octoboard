@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 import type { RequestSender } from "../requests";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
@@ -19,8 +19,8 @@ const connectionClosed = () => new CodedError("connection_closed", "connection_c
 
 /** Renders `use` under a daemon whose requests the test answers itself, one pending request per call. */
 function mount<T>(use: (request: RequestSender) => T) {
-  const out: { body: RequestBody; resolve: (event: Event) => void; reject: (err: unknown) => void }[] = [];
-  const request = vi.fn((body: RequestBody) => new Promise<Event>((resolve, reject) => void out.push({ body, resolve, reject })));
+  const out: { body: ClientRequestBody; resolve: (event: Event) => void; reject: (err: unknown) => void }[] = [];
+  const request = vi.fn((body: ClientRequestBody) => new Promise<Event>((resolve, reject) => void out.push({ body, resolve, reject })));
   const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1 }, request: request as never });
   let result!: T;
   const rendered: T[] = [];

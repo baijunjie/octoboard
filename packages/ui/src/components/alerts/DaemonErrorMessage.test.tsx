@@ -152,7 +152,7 @@ it("renders structured running-session IDs as distinct live names, preserving co
 
 it("does not try to parse old or malformed running-session lists out of quoted title text", () => {
   const params = { count: "2", sessions: "“One, task”, “Other”" };
-  for (const extra of [{}, { session_ids: "not JSON" }, { session_ids: '["s0",5]' }, { session_ids: "[]" }] as import("../../protocol").MessageParams[]) {
+  for (const extra of [{}, { session_ids: "not JSON" }, { session_ids: '["s0",5]' }, { session_ids: "[]" }] as import("../../errors/codedError").MessageParams[]) {
     const error = new CodedError("old daemon fallback", "session_has_running_sessions", { ...params, ...extra });
     expect(errorPresentation(error)).toBe(error);
     const container = mount(<DaemonErrorMessage error={error} />);

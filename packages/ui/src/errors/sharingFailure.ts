@@ -1,8 +1,13 @@
 import { format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
-import type { AccountSharing, MessageParams, SharingEntryCause, SharingLeft } from "../protocol";
+import type { AccountSharing, SharingCause, SharingLeft } from "../protocol";
+import type { MessageParams } from "./codedError";
 import { CODE, codeRecord } from "./codes";
+
+/** Why an entry could not be brought in line: every `SharingCause` but `default_moved`, which only a change as a whole
+ * fails with. An unknown one reads as `other`. */
+export type SharingEntryCause = Exclude<SharingCause, "default_moved">;
 
 /** What a sharing change can leave an entry as, every value of `SharingLeft`. */
 const SHARING_LEFT = Object.keys({ unchanged: 0, backed_up: 0, partly_moved: 0, linked: 0, absent: 0 } satisfies Record<SharingLeft, 0>) as SharingLeft[];

@@ -1,7 +1,7 @@
 // What the fixture daemon answers for the application's settings: the preferences the daemon stores, the agents the user
 // has added, the approval choices and the trusted folders.
-import { AGENT_LABEL } from "../agents/agents";
-import { AGENTS, type Agent, type RequestBody } from "../protocol";
+import { AGENT_LABEL, AGENTS } from "../agents/agents";
+import { type Agent, type ClientRequestBody } from "../protocol";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { SAMPLE_MODELS } from "./agentModels";
 import { effectiveClaudeCompatibility } from "./builders";
@@ -23,7 +23,7 @@ export function keepClaudeCompatibilityInEffect({ store, claudeCompatibilityChoi
 
 /** The replies about settings. */
 export function createSettingsReplies({ scenario, store, fail, claudeCompatibilityChoices }: FixtureContext): Handlers {
-  const changeAgentList = (body: Extract<RequestBody, { type: "remove_agent" | "reorder_agents" }>): Ack => {
+  const changeAgentList = (body: Extract<ClientRequestBody, { type: "remove_agent" | "reorder_agents" }>): Ack => {
     if (scenario.agentListError) return fail(scenario.agentListError);
     const current = store.getState();
     const added = current.settings.added_agents;

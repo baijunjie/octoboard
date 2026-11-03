@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
-import type { AccountQuota, Event, RequestBody } from "../protocol";
+import type { AccountQuota, Event, ClientRequestBody } from "../protocol";
 import type { PlatformAdapter, StatusItemCapability } from "../platform";
 import type { State } from "../store";
 import { TestHost } from "../test/TestHost";
@@ -24,7 +24,7 @@ function Host({ selectedSessionId, currentConsoleId }: { selectedSessionId?: str
   return null;
 }
 
-function mount(statusItem: StatusItemCapability, request: (body: RequestBody) => Promise<Event>, initial: Partial<State> = {}) {
+function mount(statusItem: StatusItemCapability, request: (body: ClientRequestBody) => Promise<Event>, initial: Partial<State> = {}) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {

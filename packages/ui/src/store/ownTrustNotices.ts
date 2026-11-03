@@ -1,5 +1,5 @@
 import type { Event } from "../protocol";
-import { TRUST_FAILURE_CODES } from "../protocol";
+import { TRUST_FAILURE_CODES } from "../errors/codes";
 
 type SessionNotice = Extract<Event, { type: "session_notice" }>;
 

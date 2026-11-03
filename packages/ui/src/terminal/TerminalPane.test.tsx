@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { PlatformAdapter } from "../platform";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 import { setAccountSwitchesQueued, type Daemon, type State } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
@@ -71,7 +71,7 @@ const { FakeController } = vi.hoisted(() => {
   return { FakeController };
 });
 vi.mock("./TerminalController", () => ({ TerminalController: FakeController }));
-const request = vi.fn(async (body: RequestBody): Promise<Event> => (body.type === "read_session_history" ? { type: "session_history", id: null, session: "", messages: [] } : { type: "ack", id: null }));
+const request = vi.fn(async (body: ClientRequestBody): Promise<Event> => (body.type === "read_session_history" ? { type: "session_history", id: null, session: "", messages: [] } : { type: "ack", id: null }));
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 
 // One daemon for every render of a test: the pane re-attaches when `terminalUrl` changes identity.

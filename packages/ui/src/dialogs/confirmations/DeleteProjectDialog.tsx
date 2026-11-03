@@ -5,7 +5,8 @@ import { ConsequenceLines, SessionList } from "../../components/dialog/ConfirmCo
 import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import { useProjectProcesses } from "../../process/useProjectProcesses";
-import { isLive, type Project } from "../../protocol";
+import { type Project } from "../../protocol";
+import { isLive } from "../../sessions/sessionStatus";
 import { compareSessions } from "../../sessions/order";
 import { useDaemon, useDaemonStore, useDelegatingIds, useProjectSessions, useQueuedAccountSwitches } from "../../store";
 import { useProjectRemovalCleanup } from "../BranchCleanupOptions";

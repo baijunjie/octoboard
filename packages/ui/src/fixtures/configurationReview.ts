@@ -6,7 +6,8 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import { effectiveClaudeCompatibility } from "./builders";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
-import { AGENTS, type AccountFallback, type Agent, type GitWorkflowSettings, type InspectedProject } from "../protocol";
+import { type AccountFallback, type Agent, type GitWorkflowSettings, type InspectedProject } from "../protocol";
+import { AGENTS } from "../agents/agents";
 
 /** A reference to an account this machine has none by that name of. The inspection lists it whether or not the document's
  * own accounts would create one of that name: the review decides from the accounts and the user's choices whether it

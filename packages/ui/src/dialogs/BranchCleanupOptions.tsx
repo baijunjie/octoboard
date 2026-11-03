@@ -4,7 +4,8 @@ import { BranchGroups, type BranchGroup, type BranchRow } from "../components/al
 import { StatusMark } from "../components/status/StatusMark";
 import { Message, useT } from "../i18n/react";
 import { abbreviateHome } from "../format/pathDisplay";
-import { isProjectFolderUnknown, type SessionBranchItem } from "../protocol";
+import { type SessionBranchItem } from "../protocol";
+import { isProjectFolderUnknown } from "../errors/branchCleanupItems";
 import { useDaemonStore } from "../store";
 import { displayWirePath } from "../format/wirePath";
 import type { ConsequenceLine } from "../components/dialog/ConfirmConsequences";

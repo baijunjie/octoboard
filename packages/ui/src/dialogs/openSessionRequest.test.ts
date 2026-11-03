@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import { AGENTS, type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project } from "../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project } from "../protocol";
+import { AGENTS } from "../agents/agents";
 import { translatorFor, type Translate } from "../i18n/catalog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { defaultOpenSessionRequest, openSessionRequest, quickCreateUnavailable } from "./openSessionRequest";

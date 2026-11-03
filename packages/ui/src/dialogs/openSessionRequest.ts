@@ -1,10 +1,10 @@
 import { choiceGroups, type AccountChoice } from "../accounts/choiceEntries";
 import { settledInitialChoice } from "../accounts/openingChoice";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, RequestBody, Settings } from "../protocol";
+import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ClientRequestBody, Settings } from "../protocol";
 import type { NewSessionBinding, NewSessionRequest } from "./dialogRequest";
 
-export type OpenSessionRequest = Extract<RequestBody, { type: "open_session" }>;
+export type OpenSessionRequest = Extract<ClientRequestBody, { type: "open_session" }>;
 
 /** The `open_session` request for what the session dialog settled: `choice` is its agent and
  * account, `ownerId` the console session the session reports to, `overrides` the model and effort

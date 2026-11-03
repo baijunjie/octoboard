@@ -2,8 +2,8 @@ import { parseColor } from "react-aria-components";
 import { expect, it } from "vitest";
 
 import { LANGUAGES } from "../i18n/languages";
-import { CONSOLE_SESSION_COLOURS, type ConsoleSessionColour } from "../protocol";
-import { sessionColourHex, sessionColourVars } from "./sessionColours";
+import { type ConsoleSessionColour } from "../protocol";
+import { sessionColourHex, sessionColourVars, CONSOLE_SESSION_COLOURS } from "./sessionColours";
 
 /** The colour names react-aria gives to more than one colour of the palette, by language and
  * appearance. Its Arabic strings name violet and fuchsia alike, and its Korean ones give one word to

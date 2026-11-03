@@ -37,8 +37,9 @@ sync hooks, updates — shared by `main.tsx`, the gallery frame and the website 
 page's address), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch);
 `requests.ts` (the request-to-reply contract: `REPLY_TYPES` names the reply each request is answered with, `ReplyOf`
 and `RequestSender` type a request's result from it, and `looseRequestSender` adapts a stand-in for the daemon);
-`protocol.ts` (hand-written TypeScript mirror of the wire protocol) checked against `protocol.generated.ts` (written by
-the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts` (facts from `config/app.json`);
+`protocol.ts` (the one door to the wire types: it re-exports `protocol.generated.ts`, which the daemon's
+`protocol::bindings` test writes from the Rust types, and adds the unions `ClientRequest` and `ClientRequestBody` a
+client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/app.json`);
 `style.css` (Tailwind theme and the design tokens).
 
 ### Pure domain layers (bottom)
@@ -51,15 +52,17 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/i18n/` — languages, the typed English catalog and translated ones (`messages/`), lookup, the React side; every
   user-facing string goes through it, and `languages.ts` is also the language list the website derives from.
 - `src/format/` — small pure formatting helpers (paths, relative time, sizes, `Reason`).
-- `src/agents/` — agent names, install pages, model and effort picker rules, per-agent launch settings.
+- `src/agents/` — agent names (`agents.ts` holds the `AGENTS` list), install pages, model and effort picker rules, per-agent launch settings.
 - `src/git/` — git workflow settings and git-badge wording, repository host links.
-- `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, status derivation, colours, filtering, waiting).
-- `src/accounts/` — pure account rules: order, quota of an account, quota formatting, how an account is found among the
+- `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, status derivation — `sessionStatus.ts` holds the live and no-process status sets — colours, filtering, waiting).
+- `src/accounts/` — pure account rules: order, quota of an account, quota formatting, the default account's name
+  (`defaultAccount.ts`), how an account is found among the
   records (`accountRecords.ts`), and the account picker split by concern (`choiceEntries.ts`, `accountInheritance.ts`,
   `accountRanking.ts`, `openingChoice.ts`, `switchEntries.ts`).
 - `src/errors/` — turning a failure into words: `codedError.ts` (`CodedError`, the failure carrying a daemon or client
   code), `codes.ts` (the one record per error code, with `Code` and `CODE`), daemon wording (`daemonMessage.ts`, with
-  `sharingFailure.ts` and `branchCleanupItems.ts` for the two items-bearing messages), the shared `ErrorPresentation`,
+  `sharingFailure.ts` and `branchCleanupItems.ts` for the two items-bearing messages, and the folder rules the latter
+  applies), `causes.ts` (parsers for the structured causes a daemon failure carries), the shared `ErrorPresentation`,
   recovery classification, issue-report address.
 - `src/browse/` — browse requests to the daemon: `budget.ts` (the window's shares of the daemon's bound of outstanding
   browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
@@ -140,11 +143,12 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 tests and test-support files are exempt). A layer imports only the directories and root files its block names, so the exact allowed set is in the config;
 the shape is:
 
-- `protocol` imports nothing else below `src/`, and neither do `values/` and `preferences/`; `platform/` imports only
-  `protocol`. Each other pure layer imports only layers beneath it: `input/` only the `platform/` barrel; `i18n/` only
+- `protocol` imports only `protocol.generated`, and nothing but `protocol` imports that file (`GENERATED_PROTOCOL` in
+  `eslint.layers.mjs`; the rule sees import declarations, not `import("…")` type expressions);
+  `values/` and `preferences/` import nothing else below `src/`; `platform/` imports only `protocol`. Each other pure layer imports only layers beneath it: `input/` only the `platform/` barrel; `i18n/` only
   `preferences/` and `appConfig`; `format/` only `i18n/`; `agents/` and `git/` only `i18n/` and `protocol`; `sessions/`
   adds `agents/`; `accounts/` adds `sessions/` and `format/`; `errors/` adds `accounts/` and `appConfig`; `browse/`
-  imports `i18n/`, `errors/`, `format/` and `protocol`; `store/` imports `values/`, `i18n/`, `errors/`, `accounts/`,
+  imports `i18n/`, `errors/`, `format/` and `protocol`; `store/` imports `values/`, `i18n/`, `agents/`, `errors/`, `accounts/`,
   `sessions/`, `preferences/`, `git/`, `protocol`, `requests`, `daemon` and `daemon-client`. `errors/` and `browse/`
   do not import `daemon-client`: its `CodedError` lives in `errors/codedError.ts`, and the codes it raises are records in
   `errors/codes.ts`.
@@ -162,8 +166,7 @@ the shape is:
   has a title.
 
 Other checks that hold structure: `src/errorModulesCycle.test.ts` (the error modules do not import each other in a
-cycle), `src/protocol.contract.ts` (type check) with `src/protocol.contract.test.ts` (every generated protocol type is
-asserted), `src/daemonCodes.test.ts` (the registry in `errors/codes.ts` matches the codes the daemon declares and the
+cycle), `src/daemonCodes.test.ts` (the registry in `errors/codes.ts` matches the codes the daemon declares and the
 catalogs), `src/i18n/catalog.test.ts` (placeholders and plural categories of every catalog), `src/appConfig.test.ts`
 (copies of `config/app.json` elsewhere), `src/cssDependencies.test.ts` (every package a stylesheet names is a production
 dependency).
@@ -178,7 +181,9 @@ dependency).
   message fails type checking).
 - A new daemon error code needs its record in `errors/codes.ts` in the same change.
 - A new request names its reply in `REPLY_TYPES` in `requests.ts`; the type check fails until it does.
-- A new protocol type is added to `protocol.ts` by hand; the contract check fails until it matches the generated types.
+- A new wire type is added in the daemon's Rust types (`apps/daemon/src/protocol/`) and `protocol.generated.ts` is
+  regenerated; it is never written by hand in the UI. A rule of the UI about a wire value (a predicate, a list of
+  codes, a parser of a cause) goes in the layer that owns it, not in `protocol.ts`.
 - A new UI state worth seeing is a scenario under `src/gallery/fixtures/`; data used by both the gallery and the website
   preview or application tests belongs in `src/fixtures/`.
 - Tests sit beside the code (`*.test.ts(x)`); application tests take their data from `src/fixtures/`, not from gallery

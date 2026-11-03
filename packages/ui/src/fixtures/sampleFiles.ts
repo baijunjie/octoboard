@@ -1,6 +1,7 @@
 // The files the fixture daemon serves for a project's browser (`fixtureFiles.ts`): the sample project every
 // project shows unless its fixture gives other files, and the errors a path can be answered with.
-import type { MessageParams, SourceUnavailableCause } from "../protocol";
+import type { MessageParams } from "../errors/codedError";
+import type { SourceUnavailableCause } from "../errors/causes";
 import { IMAGES } from "./viewerImages";
 
 /** The daemon error a request for a fixture path is answered with. */

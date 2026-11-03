@@ -2,7 +2,9 @@ import type { ErrorRecovery } from "../errors/errorRecovery";
 import type { Translate } from "../i18n/catalog";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordsPresence } from "../protocol";
+import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence } from "../protocol";
+import type { MessageParams } from "../errors/codedError";
+import type { PathLinkRefusedCause } from "../errors/causes";
 import type { State } from "../store";
 import type { NotifiedBroadcast } from "../store/notifications";
 import type { FixtureGit } from "./changeFixtures";
@@ -188,7 +190,7 @@ export interface Fixture {
   /** Native session-file inspection per session. Unlisted or missing sessions are unknown;
    * has_conversation does not establish whether files exist. Aggregate presence is present if
    * any inspected session has files, otherwise unknown if any cannot be established. */
-  sessionRecords?: Record<string, SessionRecordsPresence>;
+  sessionRecords?: Record<string, SessionRecordPresence>;
   /** What `read_session_history` answers per archived session: the messages its record holds (none
    * for an empty history), `"unavailable"` for a record that is missing or unreadable, or `"pending"`
    * for a read that is never answered, or a daemon error refusing the request. A session not listed has

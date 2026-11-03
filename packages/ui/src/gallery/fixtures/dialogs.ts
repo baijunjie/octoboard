@@ -1,6 +1,8 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../../git/gitWorkflow";
-import { AGENTS, type Agent, type AgentAvailability, type Console, type RelocationCause, type Settings } from "../../protocol";
+import { type Agent, type AgentAvailability, type Console, type Settings } from "../../protocol";
+import { AGENTS } from "../../agents/agents";
+import { type RelocationCause } from "../../errors/causes";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";

@@ -2,7 +2,8 @@
 // it, the branch switch and the restore that change its files, and its shell terminals.
 import type { ReplyOf } from "../requests";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
-import { scopeCause, type ProjectAccount, type Project, type RequestBody, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
+import { type ProjectAccount, type Project, type ClientRequestBody, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges } from "../protocol";
+import { scopeCause, type SourceUnavailableCause } from "../errors/causes";
 import { createGitReplies } from "./fixtureGit";
 import { refuseUnfillable } from "./banner";
 import { projectOf } from "./builders";
@@ -26,7 +27,7 @@ const SCOPE_UNAVAILABLE: Record<SourceUnavailableCause, string> = {
 const PERMISSION_DENIED_DETAIL = "Permission denied (os error 13)";
 
 /** Mutable project account and launch settings on top of the project they change, retaining absent-versus-cleared values. */
-function projectFields(current: Pick<Project, "accounts" | "launch">, body: Extract<RequestBody, { type: "add_project" | "update_project" }>): Partial<Project> & Pick<Project, "accounts" | "launch"> {
+function projectFields(current: Pick<Project, "accounts" | "launch">, body: Extract<ClientRequestBody, { type: "add_project" | "update_project" }>): Partial<Project> & Pick<Project, "accounts" | "launch"> {
   return {
     ...(body.default_agent !== undefined && { default_agent: body.default_agent }),
     accounts: changedPerAgent(current.accounts, body.accounts, (_, account): ProjectAccount => account ?? { kind: "inherit" }),
@@ -52,11 +53,11 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
     return { type: "ack", id: null };
   };
 
-  const openPath = (body: Extract<RequestBody, { type: "open_project_path" | "reveal_project_path" }>): Ack => {
+  const openPath = (body: Extract<ClientRequestBody, { type: "open_project_path" | "reveal_project_path" }>): Ack => {
     return projectAction(body.project, scenario.projectPathActionError);
   };
 
-  const detectAgent = (body: Extract<RequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>): ReplyOf<"detect_directory_agent"> | Promise<never> => {
+  const detectAgent = (body: Extract<ClientRequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>): ReplyOf<"detect_directory_agent"> | Promise<never> => {
     const detected = scenario.detections?.[body.type === "probe_git_remote" ? body.remote_url : body.path];
     if (detected === "pending") return neverReplied();
     if (detected && "code" in detected) return fail(detected);

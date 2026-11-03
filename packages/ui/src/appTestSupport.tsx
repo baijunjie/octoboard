@@ -12,7 +12,7 @@ import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
-import type { Event, RequestBody } from "./protocol";
+import type { Event, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon, type State } from "./store";
 import { ThemeProvider } from "./preferences/theme";
 import { testDaemon } from "./test/testDaemon";
@@ -41,10 +41,10 @@ export function stubWindow(width = 1400): void {
 }
 
 /** A daemon whose store starts at `state` and whose requests `answer` replies to: an ack by default. */
-export function fakeDaemon(state: Partial<State>, answer: (body: RequestBody) => unknown = () => ({ type: "ack", id: null })): Daemon {
+export function fakeDaemon(state: Partial<State>, answer: (body: ClientRequestBody) => unknown = () => ({ type: "ack", id: null })): Daemon {
   return testDaemon({
     state,
-    request: vi.fn(async (body: RequestBody) => answer(body)) as Daemon["request"],
+    request: vi.fn(async (body: ClientRequestBody) => answer(body)) as Daemon["request"],
     showNotice: vi.fn(), reconnect: vi.fn(),
   });
 }

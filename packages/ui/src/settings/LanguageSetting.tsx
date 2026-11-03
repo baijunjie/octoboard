@@ -12,7 +12,7 @@ const OPTIONS = LANGUAGES.map((language) => ({ value: language, label: LANGUAGE_
 
 /** The language of the UI: one of the offered languages, each named in itself so a user can find
  * theirs whatever the current language is. A pick is also reported to the daemon, which tells sessions
- * the user's language (see `Settings.interface_language` in protocol.ts). */
+ * the user's language (see `Settings.interface_language` in protocol.generated.ts). */
 export function LanguageSetting(): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();

@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 import { press } from "../components/alerts/detailsTestSupport";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { work, personal, MODELS, listing, render, click, clickButton, choose, sent, asked, openAdvanced, clickTab, groupPicker, pickerNamed, clearButton, stored, optionTexts } from "./consoleDialogTestSupport";
@@ -42,7 +42,7 @@ it("asks under the account that is settled, and again when the account or the ag
 });
 
 it("ignores a late answer for an agent the form has moved off", async () => {
-  const replies: { body: RequestBody; resolve: (event: Event) => void }[] = [];
+  const replies: { body: ClientRequestBody; resolve: (event: Event) => void }[] = [];
   render(undefined, [], (body) => new Promise((resolve) => replies.push({ body, resolve })));
   await openAdvanced();
   await clickTab("Codex");

@@ -3,10 +3,10 @@ import { expect, it, vi } from "vitest";
 
 import { looseRequestSender } from "../requests";
 import { keepProcesses, listProcesses, stopProcesses } from "./processes";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 
 function daemon(reply: Event) {
-  const request = vi.fn(async (_body: RequestBody) => reply);
+  const request = vi.fn(async (_body: ClientRequestBody) => reply);
   return Object.assign(looseRequestSender(request), { calls: () => request.mock.calls.map(([body]) => body) });
 }
 

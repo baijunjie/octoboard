@@ -9,7 +9,7 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { ConfigurationFileCapability } from "../platform";
-import type { DocumentSettings, Event, RequestBody } from "../protocol";
+import type { DocumentSettings, Event, ClientRequestBody } from "../protocol";
 import type { State } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
@@ -37,7 +37,7 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
 
 export interface Mounted {
   /** The bodies of the requests sent to the daemon, in order. */
-  sent: () => RequestBody[];
+  sent: () => ClientRequestBody[];
   /** The messages given to `showNotice`. */
   notices: () => string[];
   closed: () => number;
@@ -49,7 +49,7 @@ export interface Mounted {
  * whose configuration-file capability is `configurationFile`. Taken down when the test finishes. */
 export function mountDialog(
   dialog: (onClose: () => void) => React.ReactElement,
-  reply: (body: RequestBody) => Promise<Event>,
+  reply: (body: ClientRequestBody) => Promise<Event>,
   configurationFile: ConfigurationFileCapability,
   state: Partial<State> = {},
 ): Mounted {

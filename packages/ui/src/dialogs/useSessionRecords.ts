@@ -2,14 +2,14 @@ import { useEffect } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
-import type { SessionRecordsPresence } from "../protocol";
+import type { SessionRecordPresence } from "../protocol";
 import { useDaemon } from "../store";
 
 /** Checks the native records of the whole deletion scope for the confirmation's cleanup option. */
-export function useSessionRecords(sessionIds: string[]): SessionRecordsPresence {
+export function useSessionRecords(sessionIds: string[]): SessionRecordPresence {
   const { request } = useDaemon();
   const key = JSON.stringify([...sessionIds].sort());
-  const { value, send, reconnects } = useLatestRequest<SessionRecordsPresence>({
+  const { value, send, reconnects } = useLatestRequest<SessionRecordPresence>({
     scope: key, initial: "unknown",
   });
   const latest = useLatest({ request, send });

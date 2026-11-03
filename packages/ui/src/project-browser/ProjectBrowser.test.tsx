@@ -7,7 +7,7 @@ import { press as pressMark } from "../components/alerts/detailsTestSupport";
 import { isolate } from "../i18n/isolate";
 import { CodedError } from "../errors/codedError";
 import { PlatformProvider } from "../platform/react";
-import type { Event, GitStatus, Project, RequestBody } from "../protocol";
+import type { Event, GitStatus, Project, ClientRequestBody } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { useProjectBrowserState } from "./browserState";
@@ -18,7 +18,7 @@ vi.mock("../viewer/FileViewer", () => ({ FileViewer: () => null }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Pending = { body: RequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
+type Pending = { body: ClientRequestBody; resolve: (event: Event) => void; reject: (err: Error) => void };
 const pending: Pending[] = [];
 const roots: Root[] = [];
 
@@ -40,7 +40,7 @@ const daemon = testDaemon({
 });
 
 /** Answers the request of `type` still out with `event`. */
-async function answer(type: RequestBody["type"], event: Event): Promise<void> {
+async function answer(type: ClientRequestBody["type"], event: Event): Promise<void> {
   const index = pending.findIndex((request) => request.body.type === type);
   expect(index, `a ${type} request out among ${pending.map((p) => p.body.type).join(", ")}`).not.toBe(-1);
   const [request] = pending.splice(index, 1);

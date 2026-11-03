@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 
 import { type ConsoleExtra, consoleOf, projectOf } from "../fixtures/builders";
-import type { Account, Agent, AgentAvailability, Event, Project, RequestBody } from "../protocol";
+import type { Account, Agent, AgentAvailability, Event, Project, ClientRequestBody } from "../protocol";
 import { DaemonProvider } from "../store";
 import { buttons, click, inputLabelled, pickerNamed, type } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
@@ -17,7 +17,7 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** A daemon whose replies the test hands out itself, in whatever order it likes. */
-export type Pending = { body: RequestBody; resolve: (event: Event) => void; reject: (error: Error) => void };
+export type Pending = { body: ClientRequestBody; resolve: (event: Event) => void; reject: (error: Error) => void };
 export const roots: Root[] = [];
 
 beforeEach(() => vi.useFakeTimers());

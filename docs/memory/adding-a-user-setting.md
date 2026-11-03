@@ -37,8 +37,9 @@ application setting that is not machine-local is added, in the same change, to:
 - `InspectedSettings` in `apps/daemon/src/protocol/configuration.rs`, with the document's value and the current one,
   filled by the import inspection in `apps/daemon/src/config_document/import/mod.rs`, and the
   `coordinator::settings::update_settings` call there that applies the document's settings;
-- the window: for a setting that is a switch, the field and its `current_` counterpart in `DocumentSettings` and
-  `InspectedSettings` in `packages/ui/src/protocol.ts`, and its entry in `COPY` in
+- the window: its fields in `DocumentSettings` and `InspectedSettings` come from regenerating
+  `packages/ui/src/protocol.generated.ts` after the Rust change (`docs/structure/daemon.md`, "Where new code goes"),
+  never written by hand in the UI. For a setting that is a switch, add its entry in `COPY` in
   `packages/ui/src/configuration/booleanSettings.ts` (which the type check then demands): its settings-page label and
   on / off descriptions, an optional help tip, and a `configuration.import.settings.consequence.<name>` message saying
   what turning it on then does, added to `packages/ui/src/i18n/messages/en.ts` and `zh-Hans.ts`. The import review, the

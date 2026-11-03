@@ -1,19 +1,6 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
-import {
-  REQUEST_SUPERSEDED,
-  SESSION_BINDING_CHANGED,
-  SESSION_NOT_BOUND,
-  SESSION_NOT_RUNNING,
-  SESSION_REQUEST_ANSWERED,
-  SESSION_REQUEST_NOT_WAITING,
-  SOURCE_CHANGED,
-  TRUST_ANSWER_FAILED,
-  TRUST_NOT_CARRIED_OVER,
-  TRUST_NOT_WAITING,
-  WORKTREE_UNAVAILABLE,
-  pathLinkRefusedCause,
-  type MessageParams,
-} from "../protocol";
+import type { MessageParams } from "./codedError";
+import { pathLinkRefusedCause } from "./causes";
 import type { ErrorRecovery } from "./errorRecovery";
 
 /** Where a code comes from: the daemon declares it (`apps/daemon/src/protocol/codes.rs`), `daemon-client.ts` raises it
@@ -345,21 +332,24 @@ export const CODES = {
 /** A code the registry holds. */
 export type Code = keyof typeof CODES;
 
-// The codes `protocol.ts` names for the client to branch on, which that file cannot check as it imports nothing (its
-// two lists, typed as strings, are held to the registry by `codes.test.ts`).
-[
-  TRUST_NOT_WAITING,
-  TRUST_ANSWER_FAILED,
-  TRUST_NOT_CARRIED_OVER,
-  SESSION_REQUEST_NOT_WAITING,
-  SESSION_REQUEST_ANSWERED,
-  SESSION_NOT_BOUND,
-  SESSION_BINDING_CHANGED,
-  SESSION_NOT_RUNNING,
-  REQUEST_SUPERSEDED,
-  SOURCE_CHANGED,
-  WORKTREE_UNAVAILABLE,
-] satisfies readonly Code[];
+// The codes the client branches on as a group; a single one is named by `CODE`.
+
+/** Codes meaning a launch was refused because the session was already running or already being
+ * started. A double click produces them and is not worth showing. */
+export const ALREADY_RUNNING_CODES: readonly string[] = ["session_already_running", "session_already_starting"] satisfies Code[];
+
+/** Codes meaning no parent directory can be offered to trust, or it could not be checked in time:
+ * nothing was answered, and the dialog stays open. */
+export const TRUST_REFUSED_CODES: readonly string[] = [
+  "trust_directory_too_broad",
+  "trust_path_not_absolute",
+  "trust_home_unknown",
+  "trust_directory_unreachable",
+] satisfies Code[];
+
+/** The codes a failed `confirm_trust` can be answered with that the daemon also broadcasts as a `session_notice`
+ * of the same code. */
+export const TRUST_FAILURE_CODES: ReadonlySet<string> = new Set<Code>(["trust_answer_failed", "trust_not_carried_over"]);
 
 /** Every code by its own name, for logic that checks for one: `CODE.trust_answer_failed` fails to type check once the
  * code is gone from the registry, where a string would go on comparing quietly. */

@@ -7,7 +7,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnounce
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { ReplyOf } from "../requests";
-import type { ImportChoiceKind } from "../protocol";
+import type { DirectoryChoiceKind } from "../protocol";
 import type { Overrides } from "../shortcuts/store";
 import { useFailureNode } from "./failureText";
 import { accountsOutcomeOf, outcomeOf } from "./importPlan";
@@ -19,7 +19,7 @@ import { SettingsCard } from "./SettingsCard";
 
 export type Imported = ReplyOf<"import_configuration">;
 
-const VIA_LABEL: Record<ImportChoiceKind, PlainMessageKey> = {
+const VIA_LABEL: Record<DirectoryChoiceKind, PlainMessageKey> = {
   exported_path: "configuration.import.result.via.exportedPath",
   default_clone_dir: "configuration.import.result.via.defaultCloneDir",
   clone: "configuration.import.result.via.clone",

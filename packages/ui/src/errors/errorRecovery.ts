@@ -1,4 +1,5 @@
-import { isKeptForItsFolder, pathLinkRefusedCause, relocationCause, sourceUnavailableCause, storeWriteCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, type StoreWriteCause } from "../protocol";
+import { isKeptForItsFolder } from "./branchCleanupItems";
+import { pathLinkRefusedCause, relocationCause, sourceUnavailableCause, storeWriteCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, type StoreWriteCause } from "./causes";
 import { ActionableError } from "./actionableError";
 import { CODE, codeRecord } from "./codes";
 import { CodedError } from "./codedError";

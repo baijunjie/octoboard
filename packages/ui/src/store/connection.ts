@@ -7,7 +7,7 @@ import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { daemonWsUrl, type DaemonAddress } from "../daemon";
 import { currentLanguage } from "../i18n/language";
-import type { Event, RequestBody } from "../protocol";
+import type { Event, ClientRequestBody } from "../protocol";
 import { createOwnTrustNotices } from "./ownTrustNotices";
 import { reducer, type Action } from "./reducer";
 import { createStateStore, type State } from "./state";
@@ -78,7 +78,7 @@ export function createDaemon(address: DaemonAddress): Daemon {
   // A failure's message is worded here, in the language and with the names of the moment it
   // arrives, so every caller shows `err.message` as it always did.
   const request: RequestSender = (body) => {
-    const plain: RequestBody = body;
+    const plain: ClientRequestBody = body;
     const settleTrust = plain.type === "confirm_trust" ? ownTrustNotices.begin(plain.session) : undefined;
     const reply = client.request(body);
     return reply.then(

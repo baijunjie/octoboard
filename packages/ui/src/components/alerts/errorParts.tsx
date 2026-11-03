@@ -1,11 +1,10 @@
 import React from "react";
 
-import { CodedError } from "../../errors/codedError";
+import { CodedError, type MessageParams } from "../../errors/codedError";
 import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { errorText } from "../../errors/errorText";
 import { isolate } from "../../i18n/isolate";
-import type { MessageParams } from "../../protocol";
 import { DaemonErrorMessage, type DaemonErrorPart } from "./DaemonErrorMessage";
 import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
 
