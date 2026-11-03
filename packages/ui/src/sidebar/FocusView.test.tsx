@@ -86,7 +86,7 @@ it("a project's focus mode lists only its unbound sessions, its archived parent 
   expect(labels.some((l) => l.includes("An old bound spike"))).toBe(true);
   expect(text()).toContain("2 sessions in this project are under console sessions");
   expect(text().indexOf("2 sessions in this project")).toBeLessThan(text().indexOf("Archived (1)"));
-  expect(Array.from(container.querySelectorAll(".badge__label")).map((badge) => badge.textContent)).toEqual(["1", "1"]);
+  expect(Array.from(container.querySelectorAll('button[aria-label^="Enter focus mode for "] [data-slot="chip"][aria-hidden="true"]')).map((badge) => badge.textContent)).toEqual(["1", "1"]);
 
   const hub2Link = container.querySelector<HTMLElement>(`button[aria-label="Enter focus mode for ${isolate("Hub 2")}, 1 session under it"]`);
   act(() => hub2Link?.click());

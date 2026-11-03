@@ -46,9 +46,9 @@ product docs name for parts of the window:
   inside localized wording (see "What follows the language" in `docs/product/language.md`) and a name the user typed all
   read in the direction of their own text inside right-to-left prose — one the sentence sets as code reads left to right
   — and the quotation marks, parentheses and full stop the sentence puts around them stay where the sentence puts them.
-- The rail's waiting count carries its badge at the hand glyph's top left rather than its top right, and so does the
-  rail's Processes button at its glyph's, so the badge points into the content panel and the overflow pill stays clear
-  of the window's edge, the rail being down the window's right edge (see "The rail" in
+- The rail's waiting count carries its badge at the button's top left rather than its top right, and so does the
+  rail's Processes button, so the badge points into the content panel and the overflow pill stays clear of the window's
+  edge, the rail being down the window's right edge (see "The rail" in
   `docs/product/window-layout.md`).
 - The rail's Account usage indicator fills its capsules from the right (see "The selected session's quota indicator" in
   `docs/product/account-quotas.md`).
@@ -67,8 +67,8 @@ product docs name for parts of the window:
 
 - **The macOS window buttons** — close, minimise and zoom stay at the window's top left, and the top bar keeps its clear
   space for them there (see "The top bar" in `docs/product/window-layout.md`).
-- **The notifications bell's dot**, a mark on the glyph itself rather than a decoration of the layout: it stays at the
-  glyph's top right, unlike the waiting count's and the Processes button's badges above it on the rail.
+- **The notifications bell's badge** stays at the button's top right, unlike the waiting count's and the Processes
+  button's badges above it on the rail.
 - **Notation read in a fixed order**: a keyboard shortcut's key caps, wherever they are shown (see "How a combination is
   written and matched" in `docs/product/keyboard-shortcuts.md`), stay in the order the shortcut is written in; the
   report panel's position reads "current / total", so "1 / 12" is page 1 of 12 (see "Paging through the history" in

@@ -292,16 +292,17 @@ The rail runs from under the top bar to the window's bottom (or the connection b
   the only sign there are more (see "The edge that hides content fades" in `docs/product/scrolling-surfaces.md`); New
   console stays below them.
 - **At the bottom**, top to bottom:
-  - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge at its top right,
-    its top left under a right-to-left language (see `docs/product/right-to-left-layout.md`), shown only while at least
-    one is (99+ beyond 99); pressing it goes to the next waiting session (see "The raised hand" in
+  - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge at the button's
+    top right, its top left under a right-to-left language (see `docs/product/right-to-left-layout.md`), shown only while
+    at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The raised hand" in
     `docs/product/session-statuses.md`);
   - **Processes**, the Processes panel's glyph with the number of background process trees running across every
     project and console session in a badge placed as the waiting count's, shown only while at least one is (99+ beyond
     99); its popover lists where they run, each row leading to the Processes panel that lists them (see
     `docs/product/processes-on-the-rail.md`);
-  - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
-    still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
+  - **Turn on notifications**, a bell with a small circular badge at the button's top right, shown only in a browser
+    whose answer to notifications is still undecided; pressing it asks the browser (see "Notifications" in
+    `docs/product/settings.md`);
   - **Account usage**, a gauge with a small quota indicator for the selected session's account (see "The selected
     session's quota indicator" in `docs/product/account-quotas.md`), whose floating panel shows the available agents'
     accounts and their quotas (see `docs/product/account-quota-panel.md`);

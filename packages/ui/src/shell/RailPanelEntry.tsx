@@ -21,7 +21,7 @@ interface RailPanelState {
  * from it count as part of the panel. `triggerLabel` names the button, `label` the popover. The button draws `glyph`
  * and takes its ref in `triggerRef`; `onHoverChange` hears the mouse come to and leave it, with whether the popover is
  * open. `yieldsEscape` adds to what the panel leaves Escape to: its own popovers already do. */
-export function RailPanelEntry({ owner, label, triggerId, triggerLabel, triggerRef, triggerClassName, glyph, onHoverChange, onOpenChange, yieldsEscape, children }: {
+export function RailPanelEntry({ owner, label, triggerId, triggerLabel, triggerRef, triggerClassName, glyph, badge, onHoverChange, onOpenChange, yieldsEscape, children }: {
   owner: string;
   label: string;
   triggerId?: string;
@@ -29,6 +29,7 @@ export function RailPanelEntry({ owner, label, triggerId, triggerLabel, triggerR
   triggerRef: React.Ref<HTMLButtonElement>;
   triggerClassName?: string;
   glyph: React.ReactNode;
+  badge?: React.ReactNode;
   onHoverChange?: (hovered: boolean, expanded: boolean) => void;
   onOpenChange: (open: boolean) => void;
   yieldsEscape?: (target: Element | null) => boolean;
@@ -54,6 +55,7 @@ export function RailPanelEntry({ owner, label, triggerId, triggerLabel, triggerR
       onOpenChange={onOpenChange}
       trigger={({ ref, onHoverStart: _start, onHoverEnd: _end, preventFocusOnPress: _prevent, onMouseHoverChange, ...wiring }) => (
         <ChromeButton
+          badge={badge}
           id={triggerId}
           label={triggerLabel}
           className={triggerClassName}

@@ -97,7 +97,7 @@ export const layoutScenarios: Scenario[] = [
     category: "normal",
     title: "More than 99 raised hands",
     description:
-      "The rail's waiting count at its limit: a hundred and five sessions waiting in one console, so the count shows its overflow label and the glyph is cut out around the wider pill.",
+      "The rail's orange waiting count at its limit: a hundred and five sessions waiting in one console, so the count shows 99+ in a wider pill with the component's default border at the button's outer top-right corner (top-left in right-to-left layouts).",
     state: snapshotState({
       consoles: [main],
       projects: [website],

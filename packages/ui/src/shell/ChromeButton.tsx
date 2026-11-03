@@ -1,3 +1,4 @@
+import { Badge } from "@heroui/react";
 import React from "react";
 import type { PressEvent } from "react-aria";
 
@@ -23,6 +24,7 @@ export function ChromeButton({
   label,
   onPress,
   children,
+  badge,
   isDisabled,
   onMouseHoverChange,
   expanded,
@@ -42,6 +44,7 @@ export function ChromeButton({
   /** Called with the press, so a caller can tell a keyboard activation from a pointer's. */
   onPress: (event: PressEvent) => void;
   children: React.ReactNode;
+  badge?: React.ReactNode;
   isDisabled?: boolean;
   /** For a button that shows or hides a region: whether the region is shown, as `aria-expanded`;
    * `controls` is the region's id, which `data-pane-toggle` carries too: `aria-controls` is for
@@ -72,7 +75,7 @@ export function ChromeButton({
   /** Layout classes for the button, beside its fills. */
   className?: string;
 }): React.ReactElement {
-  return (
+  const control = (
     <TitledControl title={noTooltip ? "" : label} placement={tooltipPlacement}>
       <Button
         id={id}
@@ -96,4 +99,5 @@ export function ChromeButton({
       </Button>
     </TitledControl>
   );
+  return badge ? <Badge.Anchor>{control}{badge}</Badge.Anchor> : control;
 }

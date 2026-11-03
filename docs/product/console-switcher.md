@@ -12,9 +12,9 @@ pressing it with the mouse leaves keyboard focus where it was. A console created
 console or the welcome screen's (see `docs/product/welcome-screen.md`) — becomes the current one as soon as it appears;
 one created from another client is only added to the rail.
 
-An avatar carries a **14 px circular badge** at its bottom end corner summarising the console's sessions, its
-console sessions included. Only sessions whose shown status is **waiting for the user**, **paused**, **done** or **awaiting
-instructions** can supply the badge, in that priority order, with the most recently started session breaking a tie
+An avatar's button carries a **16 px circular badge** at its bottom end corner summarising the console's sessions,
+its console sessions included. Only sessions whose shown status is **waiting for the user**, **paused**, **done** or
+**awaiting instructions** can supply the badge, in that priority order, with the most recently started session breaking a tie
 (see "The top status" in `docs/product/session-statuses.md`). With none in these four states, the avatar has no badge,
 even while other sessions are running. Starting and switching-account sessions are excluded by their shown status.
 Pinning, project grouping and the sidebar's choice to order by status or date do not affect the choice.

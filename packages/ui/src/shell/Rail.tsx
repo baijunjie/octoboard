@@ -1,3 +1,4 @@
+import { Badge } from "@heroui/react";
 import { Hand, Plus, Settings } from "lucide-react";
 import React, { memo, useRef } from "react";
 
@@ -11,7 +12,7 @@ import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
 import type { OpenSettings } from "../settings/settingsLauncher";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { RailProcessesEntry } from "./RailProcessesEntry";
-import { CountedGlyph } from "./CountedGlyph";
+import { RailCountBadge } from "./RailCountBadge";
 import type { ProcessJump } from "../process/processJump";
 import { useArchivedOwnerSessions, useConsoleStatus } from "../store";
 import { ActionMenu } from "../components/menus/ActionMenu";
@@ -44,11 +45,6 @@ const ON_DEMAND_AWAY = `max-phone:opacity-0 max-phone:invisible ${PHONE_SLIDE_AW
 export function focusNewConsole(): void {
   document.getElementById(NEW_CONSOLE_ID)?.focus();
 }
-
-/** The activity badge on a 28px avatar: 14px at the bottom end corner, leaving a 2px ring.
- * Under right-to-left the corner, and so the hole, is on the left. */
-const AVATAR_CUT_OUT =
-  "[mask-image:radial-gradient(circle_at_24px_24px,transparent_9px,black_9.5px)] rtl:[mask-image:radial-gradient(circle_at_4px_24px,transparent_9px,black_9.5px)]";
 
 /** One console on the rail: its avatar, marked with what is going on in it, and the current one on a
  * tile of its own. The tooltip says what the accessible name says, the console's name with the
@@ -91,31 +87,31 @@ const ConsoleTile = memo(function ConsoleTile({
   ) : thisConsole.name;
   return (
     <div ref={tileRef} data-list-motion={thisConsole.id} className="flex">
-      <TitledControl title={tooltip} placement="end" focusOnly={hoverOpensSidebar}>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={label}
-          // The markup tooltip repeats the name, which TitledControl only detects for plain text.
-          aria-describedby=""
-          aria-current={current ? "true" : undefined}
-          // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
-          // up while the pointer is on an avatar, which lies outside the card and its gap. Without it
-          // the card slides away from under a pointer resting here.
-          data-sidebar-peek-keep=""
-          preventFocusOnPress
-          onPress={onSelect}
-          onHoverStart={(event) => event.pointerType === "mouse" && onHoverChange(true)}
-          onHoverEnd={(event) => event.pointerType === "mouse" && onHoverChange(false)}
-          className={`size-9 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
-        >
-          <span className="relative flex">
-            <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className={`size-7 ${status ? AVATAR_CUT_OUT : ""}`} />
-            <AvatarStatusBadge status={status} className="absolute -end-0.75 -bottom-0.75" />
-          </span>
-        </Button>
-      </TitledControl>
+      <Badge.Anchor>
+        <TitledControl title={tooltip} placement="end" focusOnly={hoverOpensSidebar}>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={label}
+            // The markup tooltip repeats the name, which TitledControl only detects for plain text.
+            aria-describedby=""
+            aria-current={current ? "true" : undefined}
+            // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
+            // up while the pointer is on an avatar, which lies outside the card and its gap. Without it
+            // the card slides away from under a pointer resting here.
+            data-sidebar-peek-keep=""
+            preventFocusOnPress
+            onPress={onSelect}
+            onHoverStart={(event) => event.pointerType === "mouse" && onHoverChange(true)}
+            onHoverEnd={(event) => event.pointerType === "mouse" && onHoverChange(false)}
+            className={`size-9 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
+          >
+            <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-7" />
+          </Button>
+        </TitledControl>
+        <AvatarStatusBadge status={status} />
+      </Badge.Anchor>
       <ActionMenu
         className="hidden"
         label={t("sidebar.console.actions", { name: isolate(thisConsole.name) })}
@@ -209,7 +205,7 @@ export function Rail({
       <div ref={consolesRef} className="relative flex min-h-0 flex-col items-center gap-1">
         {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for
             one, which leaves the fade as the only thing saying there are more. */}
-        <FadedScroller hideScrollBar className="relative flex min-h-0 flex-col items-center gap-1 overscroll-contain py-0.5">
+        <FadedScroller hideScrollBar className="relative flex min-h-0 flex-col items-center gap-1 overscroll-contain px-1 py-0.5">
           {consoles.map((c) => (
             <ConsoleTile
               key={c.id}
@@ -230,10 +226,9 @@ export function Rail({
       </div>
       <div className="mt-auto flex shrink-0 flex-col items-center gap-1">
         {waitingCount > 0 && (
-          <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end">
-            <CountedGlyph count={waitingCount} overflowLabel={t("rail.waitingBadgeOverflow")} color="warning">
-              <Hand aria-hidden="true" className="size-4 text-warning-soft-foreground" />
-            </CountedGlyph>
+          <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end"
+            badge={<RailCountBadge count={waitingCount} overflowLabel={t("rail.waitingBadgeOverflow")} color="warning" />}>
+            <Hand aria-hidden="true" className="size-4 text-warning-soft-foreground" />
           </ChromeButton>
         )}
         <RailProcessesEntry onOpen={onOpenProcesses} />

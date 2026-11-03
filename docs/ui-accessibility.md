@@ -99,11 +99,14 @@ A status label such as "Not added", "Not installed" or "Logged in", and any othe
 account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's change
 status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
 `InlineReference`. It is the shared `StatusBadge`, the only small badge component for a status; a bare count after a
-row's name (the rail processes panel's rows, a Focus view chip's count) is the shared `CountBadge` instead: solid
-accent on a row drawn bare until hovered or pressed (a ghost button), whose opaque grey hover and pressed fills would
-swallow a neutral tint; neutral on a chip that carries its own fill at rest. The accent one is HeroUI's own solid
-pair, as on the rail's glyph badges, so its text is not held to the 4.5:1 below, and like them it drops HeroUI's ring
-in the background's colour (`border-0`), which only separates a badge overlapping its anchor.
+row's name (the rail processes panel's rows, a Focus view chip's count) uses `CountBadge`, which reuses the default
+small bordered `StatusBadge`: green (`success`) in the processes list and neutral in a Focus view chip.
+
+Rail counts, notification dots and console avatar markers use HeroUI `Badge` with its default typography, sizing,
+border and colours, selected through its semantic props. Neither `Badge` nor `Badge.Anchor` has a style override.
+The anchor wraps the complete control, with the decorative badge beside the button so it does not inherit the
+button's pressed scale or descendant icon styles. The badges are inert, so they do not intercept interaction with
+the control underneath. Process counts are green (`success`); waiting counts are orange (`warning`).
 `StatusBadge` takes a semantic colour —
 `default` (neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and
 one of two variants:
@@ -2186,7 +2189,7 @@ indicator is a fixed right-pointing chevron, while react-aria opens the submenu 
 
 **A badge or overlay placed with physical offsets needs an `rtl:` twin.** Tailwind's logical utilities mirror
 themselves, but a hand-placed decoration — and any mask cut for it — does not: give each one its mirrored counterpart,
-as `packages/ui/src/shell/CountedGlyph.tsx` does for a rail count and its hole. Where a library offers only physical
+as `packages/ui/src/shell/RailCountBadge.tsx` does for a rail count. Where a library offers only physical
 placements, pick the placement from the language (`textDirection(useCurrentLanguage())`).
 
 Verify a direction change by rendering it, not by reading it: the gallery serves every scenario under `ar`, and a

@@ -9,7 +9,7 @@ import { useAllProcesses } from "../process/useAllProcesses";
 import type { ProcessCount } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemonStoreEqual } from "../store";
-import { CountedGlyph } from "./CountedGlyph";
+import { RailCountBadge } from "./RailCountBadge";
 import { nestedPopovers } from "./nestedPopover";
 import { PANEL_ATTRIBUTE, ProcessCounts, type ProcessRow } from "../process/ProcessCounts";
 import { RailPanelEntry } from "./RailPanelEntry";
@@ -105,11 +105,8 @@ function RunningProcesses({ counts, error, onOpenChange, onOpen }: {
         triggerId={TRIGGER_ID}
         triggerLabel={t("rail.processes", { count })}
         triggerRef={trigger}
-        glyph={
-          <CountedGlyph count={count} overflowLabel={t("rail.countBadgeOverflow")} color="accent">
-            <SquareActivity aria-hidden="true" className="size-4" />
-          </CountedGlyph>
-        }
+        glyph={<SquareActivity aria-hidden="true" className="size-4" />}
+        badge={<RailCountBadge count={count} overflowLabel={t("rail.countBadgeOverflow")} color="success" />}
         onOpenChange={(isOpen) => {
           onOpenChange(isOpen);
           if (isOpen) jumping.current = false;

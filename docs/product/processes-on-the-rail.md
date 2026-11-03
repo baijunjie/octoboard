@@ -24,9 +24,9 @@ between session processes and project processes, or between kept trees and trees
 ## The button
 
 The button's glyph is the Processes panel's (a square with a pulse line across it), with the count in an
-accent-coloured badge at its top right — its top left under a right-to-left language, as the waiting count's (see "What
-is mirrored" in `docs/product/right-to-left-layout.md`) — reading **99+** beyond 99. It is there only while at least one
-tree is counted: not while none is, and not before the first count has come in.
+green badge at the button's top right — its top left under a right-to-left language, as the waiting count's
+(see "What is mirrored" in `docs/product/right-to-left-layout.md`) — reading **99+** beyond 99. It is there only while at
+least one tree is counted: not while none is, and not before the first count has come in.
 
 It has no tooltip (see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`). Its name for
 assistive technology says how many processes are running and that pressing it shows where they run.
@@ -60,7 +60,7 @@ One row per project that has trees counted, then one per console session that ha
   `docs/product/session-titles.md`) — on one line, and beneath it, smaller and muted, **the name of its console**; each
   fades out where it is cut, with the whole name as its tooltip (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`);
-- **its count**, in a small accent-coloured badge, as the button's;
+- **its count**, in a small bordered green status badge;
 - a **chevron** pointing to the reading direction's end, mirrored under a right-to-left language.
 
 Its name for assistive technology says the name, its console, how many processes are running there, and that pressing

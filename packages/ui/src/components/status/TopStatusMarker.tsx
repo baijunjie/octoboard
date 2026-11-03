@@ -1,6 +1,9 @@
+import { Badge } from "@heroui/react";
 import { Check, Hand, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
+import { textDirection } from "../../i18n/languages";
+import { useCurrentLanguage } from "../../i18n/react";
 import { type ShownStatusKind } from "../../sessions/sessionStatus";
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedViewBox } from "./opticalCentring";
 import { StatusIcon } from "./StatusIcon";
@@ -29,36 +32,29 @@ export function TopStatusMarker({ status }: { status: ShownStatusKind | undefine
   return <StatusIcon status={status} decorative withTooltip touchPopover={false} small />;
 }
 
-/** A decorative 14px badge for the console's waiting, paused, done or awaiting-instructions summary.
- * The avatar supplies its tooltip and accessible name. */
-export function AvatarStatusBadge({ status, className = "" }: { status: ShownStatusKind | undefined; className?: string }): React.ReactElement | null {
-  const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;
+/** A decorative console summary; the avatar supplies its tooltip and accessible name. */
+export function AvatarStatusBadge({ status }: { status: ShownStatusKind | undefined }): React.ReactElement | null {
+  const rtl = textDirection(useCurrentLanguage()) === "rtl";
+  let icon: React.ReactElement;
   switch (status) {
     case "waiting_user":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-warning text-warning-foreground`}>
-          <Hand strokeWidth={2.5} viewBox={shiftedViewBox(HAND_SHIFT)} className="size-2.5 origin-[70%_90%] motion-safe:animate-status-wave" />
-        </span>
-      );
+      icon = <Hand strokeWidth={2.5} viewBox={shiftedViewBox(HAND_SHIFT)} size={10} className="motion-safe:animate-status-wave" />;
+      break;
     case "idle":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <MessageCircleMore strokeWidth={2.5} viewBox={shiftedViewBox(BUBBLE_SHIFT)} className="size-2.5" />
-        </span>
-      );
+      icon = <MessageCircleMore strokeWidth={2.5} viewBox={shiftedViewBox(BUBBLE_SHIFT)} size={10} />;
+      break;
     case "paused":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <Pause strokeWidth={2.5} className="size-2.5" />
-        </span>
-      );
+      icon = <Pause strokeWidth={2.5} size={10} />;
+      break;
     case "done":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <Check strokeWidth={2.5} className="size-2.5" />
-        </span>
-      );
+      icon = <Check strokeWidth={2.5} size={10} />;
+      break;
     default:
       return null;
   }
+  return (
+    <Badge inert aria-hidden="true" color={status === "waiting_user" ? "warning" : "success"} variant="primary" size="sm" placement={rtl ? "bottom-left" : "bottom-right"}>
+      {icon}
+    </Badge>
+  );
 }

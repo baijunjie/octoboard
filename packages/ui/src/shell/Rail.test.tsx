@@ -103,7 +103,7 @@ it.each<{ statuses: Case[] }>([[], ["archived"], ["working"], ["starting"], ["do
   settle();
   expect(openTooltip()?.textContent).toBe("Main");
   expect(avatar.getAttribute("aria-label")).toBe("Main");
-  expect(avatar.querySelector("span.relative")!.children).toHaveLength(1);
+  expect(avatar.closest('[data-slot="badge-anchor"]')!.children).toHaveLength(1);
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
 
   leave(avatar);
@@ -120,23 +120,24 @@ const EVERY_STATUS: Array<[Case, string]> = [
 
 it.each(EVERY_STATUS)("marks an avatar whose top status is %s with a badge, and names the status", (status, words) => {
   const avatar = avatarOf([status]);
-  const badge = avatar.querySelector("span.relative")!.lastElementChild!;
+  const badge = avatar.closest('[data-slot="badge-anchor"]')!.lastElementChild!;
   expect(badge.getAttribute("aria-hidden")).toBe("true");
-  expect(badge.className).toContain("size-3.5");
+  expect(badge.classList.contains("badge")).toBe(true);
+  expect(badge.classList.contains("badge--bottom-right")).toBe(true);
   expect(avatar.getAttribute("aria-label")).toBe(`${isolate("Main")}, ${words}`);
 });
 
 it("gives the badge no tooltip or name of its own", () => {
   const settle = withFakeTimers();
   const avatar = avatarOf(["waiting_user"]);
-  const badge = avatar.querySelector("span.relative")!.lastElementChild!;
+  const badge = avatar.closest('[data-slot="badge-anchor"]')!.lastElementChild!;
 
-  enter(badge);
+  enter(avatar);
   settle();
   // Only one tooltip is open at a time, so what shows is whose it is: the avatar's, not the badge's.
   expect(openTooltip()?.textContent).toBe("Main, Waiting for you");
   expect(badge.hasAttribute("aria-label")).toBe(false);
-  leave(badge);
+  leave(avatar);
   settle();
   expect(vi.getTimerCount()).toBe(0);
 });
