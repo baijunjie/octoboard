@@ -39,7 +39,9 @@ const THEMES = { light: CODE_THEMES.light.name, dark: CODE_THEMES.dark.name } as
 /** The renderer's shadow root shares the application's monospace stack and its frame's fill, and
  * paints the find bar's matches (a highlight rule has to be in the shadow root's own stylesheet). */
 function readingCss(theme: "light" | "dark"): string {
-  return `:host { --diffs-bg: ${CODE_THEMES[theme].background}; --diffs-font-family: var(--font-mono); }${findHighlightCss}`;
+  // The palette's line-number colour keeps separator labels readable on the lighter dark surface.
+  const numbers = theme === "dark" ? `--diffs-fg-number-override: ${CODE_THEMES.dark.numberForeground};` : "";
+  return `:host { ${numbers} --diffs-bg: ${CODE_THEMES[theme].background}; --diffs-font-family: var(--font-mono); }${findHighlightCss}`;
 }
 
 const FLUSH_TOP_CSS = "[data-code], [data-diff-type=\"split\"] { padding-top: 0 !important; }";

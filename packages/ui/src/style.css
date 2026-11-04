@@ -118,7 +118,7 @@
 
 /* How thick the pieces of a groove and the hairline of a panel card are, which a display's density
    decides. A 1x display cannot draw half a pixel, so a groove's two lines would blend into one
-   pixel of a single colour: there its dark line takes the whole 1px, the light one has none, and
+   pixel of a single colour: there its first line takes the whole 1px, the second has none, and
    the hairline is 1px. Declared once here so no utility restates the condition. The half pixels
    line up only at exactly 2x: at 3x or a zoomed page the middle device pixel blends, which is
    accepted. */
@@ -596,7 +596,7 @@ html {
   --panel-hairline: oklch(1 0 0 / 0.12);
   --grip-hover: oklch(0.45 0.006 286);
   --groove-dark: oklch(0 0 0 / 0.2);
-  --groove-light: oklch(1 0 0 / 0.14);
+  --groove-light: oklch(1 0 0 / 0.24);
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
@@ -618,7 +618,7 @@ html {
   --floating-fill-hover: oklch(0.365 0.006 286);
   --floating-edge: oklch(0.36 0.006 286);
   --floating-secondary: oklch(0.23 0.006 286);
-  --overlay-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.08), 0 1px 3px oklch(0 0 0 / 0.3), 0 8px 24px -4px oklch(0 0 0 / 0.45);
+  --overlay-shadow: 0 0 0 1px oklch(1 0 0 / 0.14), 0 1px 3px oklch(0 0 0 / 0.3), 0 8px 24px -4px oklch(0 0 0 / 0.45);
 }
 
 /* An interactive card on `--panel-row` (a focus-mode session card) takes the card fills where a row's hover and
@@ -671,6 +671,15 @@ html {
   --default-hover: var(--control-fill-hover);
   --default-soft: var(--control-fill);
   --default-soft-hover: var(--control-fill-hover);
+}
+
+/* On a 1x display the groove has room for only one line. In dark it takes the light edge rather
+   than the dark one, which would sink into the surface. */
+@media (max-resolution: 1.99dppx) {
+  .dark,
+  [data-theme="dark"] {
+    --groove-dark: var(--groove-light);
+  }
 }
 
 /* HeroUI's `--separator`, the 1px line its own components divide their parts with (the action

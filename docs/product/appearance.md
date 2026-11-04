@@ -40,10 +40,10 @@ Everything the window shows follows the chosen appearance, including:
   browser it is an opaque colour of the appearance's own (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`).
 - **Code in a project pane's file viewer**, highlighted in a high-contrast colour scheme of its own for each appearance,
-  every colour of which meets 4.5:1 against the code's background. That background is the colour scheme's own: white in
-  the light appearance, near-black in the dark one. What sets the reading area apart from the surrounding dialog — white
-  in light, lighter than the reading area in dark — is a narrow band of its own round the area, not the area's fill. The
-  background fills the whole code area, including space beyond the text, and a file shown as plain text sits on it too;
+  every colour of which meets 4.5:1 against the code's background. The reading background is white in the light
+  appearance; in the dark appearance it is a lighter dark surface that sets the content apart from the dimmed window
+  behind the dialog. A light outer edge frames the dialog in the dark appearance. The reading background fills the
+  whole code area, including space beyond the text, and a file shown as plain text sits on it too;
   a file shown as an image sits on a checkerboard drawn in the appearance's colours (see "What it shows" in
   `docs/product/file-viewer.md`). A diff there (see "Opening a change" in
   `docs/product/project-pane-git-change-viewer.md`) is highlighted in the same scheme, with added and removed lines

@@ -22,7 +22,7 @@
     --tw-prose-quotes: currentColor;
     --tw-prose-code: currentColor;
     /* The accent text token every other link takes (`--tint-accent-fg`): 4.5:1 on the code background of each
-       appearance (7.33:1 light, 9.19:1 dark), and links are underlined, so colour is not what marks them. */
+       appearance, and links are underlined, so colour is not what marks them. */
     --tw-prose-links: var(--tint-accent-fg);
     --tw-prose-counters: currentColor;
     --tw-prose-bullets: currentColor;
