@@ -163,7 +163,7 @@ test("installed hook dispatch resolves the current worktree and passes the pushe
     assert.match(readFileSync(marker, "utf8"), /linked\/scripts\/hooks\/pre-push.mjs/);
     assert.equal(invoke(["pre-commit"]).status, 0);
     assert.match(readFileSync(marker, "utf8"), /scripts\/hooks\/format-staged.mjs/);
-    // hook.sh dispatches only pre-commit and pre-push; any other hook name passes without running anything,
+    // hook.sh dispatches only pre-commit, commit-msg and pre-push; any other hook name passes without running anything,
     // even outside a work tree.
     rmSync(marker);
     const reference = path.join(root, ".git/hooks/reference-transaction");
@@ -181,7 +181,7 @@ test("installed hook dispatch resolves the current worktree and passes the pushe
   });
 });
 
-test("installer installs pre-commit and pre-push, refuses external hooks, configured hook paths and arguments before writing", () => {
+test("installer installs pre-commit, commit-msg and pre-push, refuses external hooks, configured hook paths and arguments before writing", () => {
   fixture(({ root, git }) => {
     mkdirSync(path.join(root, ".githooks"));
     for (const name of ["install.sh", "hook.sh"]) {
@@ -201,12 +201,12 @@ test("installer installs pre-commit and pre-push, refuses external hooks, config
       const old = invoke([flag]);
       assert.equal(old.status, 1);
       assert.match(old.stderr, /takes no arguments/);
-      for (const name of ["pre-commit", "pre-push"]) assert.equal(existsSync(path.join(hooks, name)), false, flag);
+      for (const name of ["pre-commit", "commit-msg", "pre-push"]) assert.equal(existsSync(path.join(hooks, name)), false, flag);
     }
     // A core.hooksPath injected for one process tree does not count.
     const injected = invoke([], { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "external-hooks" });
     assert.equal(injected.status, 0, injected.stderr);
-    for (const name of ["pre-commit", "pre-push"]) {
+    for (const name of ["pre-commit", "commit-msg", "pre-push"]) {
       assert.match(readFileSync(path.join(hooks, name), "utf8"), /^# octoboard repository hook entry/m);
     }
 

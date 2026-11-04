@@ -34,7 +34,7 @@ How the repository is built, checked and released, outside the code of any one e
 |---|---|
 | `scripts/lib/git.mjs`, `scripts/lib/env.mjs` | The one way repository scripts run `git` (and other commands), and the shared env-file reader |
 | `scripts/verify.mjs`, [`scripts/verify/`](../../scripts/verify/README.md) | `pnpm verify`: selects and runs the checks a change calls for |
-| `scripts/hooks/pre-push.mjs`, `scripts/hooks/format-staged.mjs` | The two hook stages, with their tests beside them (see the hooks' README; the pre-push stage takes its baseline from `remoteTargetBase` in `scripts/verify/changes.mjs`); `scripts/pre-push.mjs` and `scripts/format-staged.mjs` are forwarding stubs for hook copies installed before the move |
+| `scripts/hooks/` | The staged formatter (`format-staged.mjs`), AI attribution check (`commit-msg.mjs`) and push verifier (`pre-push.mjs`), with their tests beside them (see the hooks' README; the pre-push stage takes its baseline from `remoteTargetBase` in `scripts/verify/changes.mjs`); `scripts/pre-push.mjs` and `scripts/format-staged.mjs` are forwarding stubs for hook copies installed before the move |
 | `scripts/cargo.mjs` | `pnpm test:rust`, `pnpm clippy:rust` and the Linux CI `cargo check`: both crates in one cargo invocation, without needing the daemon sidecar (the one place that empties `bundle.externalBin`) |
 | `scripts/sync-identity.mjs` | Generates the required literal author fields in `LICENSE` and `Cargo.toml` from `config/app.json`, or checks them without writing |
 | [`.githooks/`](../../.githooks/README.md) | The hook entry point and its installers for the commit and push hooks |
