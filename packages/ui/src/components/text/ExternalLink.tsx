@@ -33,11 +33,10 @@ export function reportExternalLinkFailure(t: Translate, href: string, cause: unk
   raiseError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), { title: t("externalLink.unavailableTitle"), content: addressUnavailableContent(t("externalLink.unavailable"), href) });
 }
 
-/** A browser destination stays a real anchor while native shells open it outside the application. */
-export function ExternalLink({ href, appearance = "text", size, onOpen, onFailure, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
+/** Opens an external address without prescribing how its link is drawn. */
+export function useExternalLinkAction({ href, onOpen, onFailure, isPending = false }: Pick<Props, "href" | "onOpen" | "onFailure" | "isPending">) {
   const t = useT();
   const platform = useOptionalPlatform();
-  const focus = useFocusVisibleProps();
   const opening = useRef(false);
   const [pending, setPending] = useState(false);
   let address: string | undefined;
@@ -47,11 +46,10 @@ export function ExternalLink({ href, appearance = "text", size, onOpen, onFailur
   } catch {
     // Invalid destinations remain readable rather than becoming an executable or relative URL.
   }
-  if (!address) return <span>{children}</span>;
   const busy = isPending || pending;
   const intercepted = !!onOpen || !!platform?.links || platform?.kind === "tauri";
   const activate = async () => {
-    if (opening.current || busy) return;
+    if (!address || opening.current || busy) return;
     opening.current = true;
     setPending(true);
     const links = platform?.links;
@@ -61,31 +59,45 @@ export function ExternalLink({ href, appearance = "text", size, onOpen, onFailur
       setPending(false);
     });
   };
+  return {
+    address,
+    busy,
+    onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (busy || opening.current) { event.preventDefault(); return; }
+      if (!intercepted) return;
+      event.preventDefault();
+      void activate();
+    },
+    onAuxClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (busy || opening.current) { event.preventDefault(); return; }
+      if (!intercepted || event.button !== 1) return;
+      event.preventDefault();
+      void activate();
+    },
+  };
+}
+
+/** A browser destination stays a real anchor while native shells open it outside the application. */
+export function ExternalLink({ href, appearance = "text", size, onOpen, onFailure, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
+  const t = useT();
+  const focus = useFocusVisibleProps();
+  const action = useExternalLinkAction({ href, onOpen, onFailure, isPending });
+  if (!action.address) return <span>{children}</span>;
   const label = <>{children}<ExternalLinkIcon className={appearance === "button" ? "size-3.5" : "ms-1 size-[0.85em]"} /></>;
   return (
     <a
       {...props}
       {...focus}
-      href={address}
+      href={action.address}
       target="_blank"
       rel="noopener noreferrer"
       aria-description={props["aria-description"] ?? t("common.opensExternally")}
-      aria-disabled={busy || undefined}
-      aria-busy={busy || undefined}
+      aria-disabled={action.busy || undefined}
+      aria-busy={action.busy || undefined}
       data-external-link=""
       className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? buttonVariants({ variant: "secondary", size }) : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
-      onClick={(event) => {
-        if (busy || opening.current) { event.preventDefault(); return; }
-        if (!intercepted) return;
-        event.preventDefault();
-        void activate();
-      }}
-      onAuxClick={(event) => {
-        if (busy || opening.current) { event.preventDefault(); return; }
-        if (!intercepted || event.button !== 1) return;
-        event.preventDefault();
-        void activate();
-      }}
+      onClick={action.onClick}
+      onAuxClick={action.onAuxClick}
     >
       {label}
     </a>

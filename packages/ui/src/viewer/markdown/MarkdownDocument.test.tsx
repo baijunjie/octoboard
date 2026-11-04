@@ -55,6 +55,17 @@ it("gives two embedded documents' footnotes ids that do not clash", async () => 
   expect(ids(first).filter((id) => ids(second).includes(id))).toEqual([]);
 });
 
+it("scopes authored HTML ids and their links to each embedded document", async () => {
+  const html = '<p id="note">Note</p>\n<p><a href="#note">Jump</a></p>';
+  const first = await render(html, true);
+  const second = await render(html, true);
+  const firstId = first.querySelector("p[id]")!.id;
+  const secondId = second.querySelector("p[id]")!.id;
+  expect(firstId).not.toBe(secondId);
+  expect(first.querySelector("a")?.getAttribute("href")).toBe(`#${firstId}`);
+  expect(second.querySelector("a")?.getAttribute("href")).toBe(`#${secondId}`);
+});
+
 it("points each embedded footnote reference at the footnotes heading of its own document", async () => {
   const note = "Text[^1]\n\n[^1]: Note";
   const first = await render(note, true);

@@ -7,8 +7,10 @@ Markdown file, and after the application restarts. A file opened at a line opens
 the terminal" in `docs/product/file-viewer.md`).
 
 **What the document shows.** Headings, paragraphs, lists — GFM task lists among them, whose boxes show the state the
-text records and cannot be ticked — quotes, horizontal rules, tables, inline code, links, images, diagrams, formulas and
-fenced code. A fenced block is highlighted the way the source view highlights code, by the grammar its info word names
+text records and cannot be ticked — quotes, horizontal rules, tables, inline code, links, images, diagrams, formulas,
+fenced code and safe HTML formatting. HTML paragraphs retain their left, centre, right or justified alignment, and
+images retain their authored dimensions within the document's width. Preformatted HTML text stays preformatted.
+A fenced block is highlighted the way the source view highlights code, by the grammar its info word names
 (a file extension such as `ts` as readily as a grammar's own name), and it wraps rather than scrolling sideways; a block
 whose grammar is not one the viewer knows is shown as plain text, and so are the blocks past the document's budget for
 highlighting them, in a document that holds a great many of them or very long ones. A fence whose info word is exactly
@@ -64,15 +66,17 @@ document.
 - A block with no strong directional character at all — a list of version numbers, a heading of numerals — is given no
   direction of its own and reads the way the document around it does.
 - **Inline code, a fenced block, a diagram and a formula always read left to right.** An inline formula is isolated
-  inside its paragraph, so it does not reorder the words around it. Text the file holds as raw HTML, which comes out
-  with no block of its own, reads the way the document does.
+  inside its paragraph, so it does not reorder the words around it. HTML headings, paragraphs, lists, quotes and
+  tables follow the same block-direction rules.
 - **The document as a whole** takes the direction of the first strong character of its whole text, and only where it
   holds none does it follow the window's direction.
 
-**Nothing in the file runs or reaches outside the project.** Raw HTML is shown as text and never run. The text does not
-use the network and does not read a path outside the project. Beyond the file itself, what is loaded for the document is
-the diagram library and the formula library, each the first time one is drawn, and a project file read the same way the
-viewer reads a file opened for itself.
+**HTML is cleaned before it is shown.** Scripts, event handlers, styles, embedded frames and objects, inline SVG,
+and other executable or unsafe markup are removed. Authored application classes and native tooltip titles are removed
+too. Allowed formatting and text stay in the document. HTML links and images follow the same address rules and budgets
+as their Markdown equivalents; secondary image sources cannot bypass those rules. Authored HTML ids are scoped, with
+links to them kept within the document. No file path outside the project is read. The document may load HTTP(S) images
+as described under **Images**, and loads the diagram and formula libraries on first use.
 
 **Addresses.** A relative image or link is resolved against the document's own path: `.` and `..` are applied, and a
 query is dropped. A path that would leave the project is not read and is not followed. So is an address that does not
@@ -82,8 +86,10 @@ backslash or that cannot be decoded.
 
 **Links.** An absolute `http:`, `https:` or `mailto:` address is a link only when the window can hand it to the user's
 own browser or mail client — to a new tab, in the UI opened in a browser. Following it does not move the viewer. It
-carries a trailing external-link icon and that address as its tooltip; its accessible description says it opens
-externally. One with no text of its own reads as the address.
+carries that address as its tooltip; its accessible description says it opens externally. Document links, including
+image links, have no external-link icon. One with no text of its own reads as the address. While opening is pending,
+repeated activations do not open another destination; a failed opening reports the failure and gives the address to
+open by hand.
 
 A relative link that resolves to a project file opens that file in the viewer, replacing the file that was open. There
 is no way back to the previous document from the link itself. The link carries the path within the project as its
@@ -102,14 +108,16 @@ from the terminal" in `docs/product/file-viewer.md`.
 is not taken. A heading that already has an id keeps it. A heading whose text yields no id is `section`, and a later one
 stays distinct on that basis.
 
-**Images.** An address that is not a project file, an absolute image address included, is not a link and is never
-fetched: the reader sees its alt text, with no notice and no read. A relative image that stays inside the project is
-shown, in the formats the viewer already shows as images (see "What it shows" in `docs/product/file-viewer.md`), no
-wider than the document. An SVG is shown as an image, so its scripts never run and nothing it refers to is fetched, as
-for an SVG opened for itself. Its alt text is its accessible name. Until the read has answered, the alt text is what is
-shown. Images are read one at a time across the window, whatever document they belong to, in the order they ask, so a
-later image keeps showing its alt text while earlier reads are out. An image that goes — its document closed, or its
-address changed — gives up its read, whether the read is still waiting or already out.
+**Images.** A relative image that stays inside the project is shown in the formats the viewer already shows as images
+(see "What it shows" in `docs/product/file-viewer.md`). An absolute HTTP(S) image loads directly in the browser, lazily,
+without sending a referrer. Other addresses stay their alt text, with no notice and no request. Images are no wider
+than the document; an SVG is shown as an image, so its scripts never run and nothing it refers to is fetched. Its alt
+text is its accessible name. A remote image that fails to load is replaced by its alt text and the image failure mark.
+
+Until a project image's read has answered, the alt text is shown. Project images are read one at a time across the
+window, whatever document they belong to, in the order they ask, so a later image keeps showing its alt text while
+earlier reads are out. An image that goes — its document closed, or its address changed — gives up its project read,
+whether the read is still waiting or already out. Remote loads do not use that read queue.
 
 **Diagrams.** A fence whose info word is exactly `mermaid` is a diagram, in both light and dark, using the same ink and
 paper as highlighted code (see "What follows the choice" in `docs/product/appearance.md`). Its accessible name is the
@@ -135,7 +143,7 @@ than the line, so that side can be scrolled from the keyboard. While it fits, it
 **When one cannot be drawn.** Until a diagram or a formula has been drawn, its source is what is shown, with no notice.
 One that cannot be drawn shows its source with a failure notice at that spot (see "Notices and stand-ins" in
 `docs/product/file-viewer.md`), and the rest of the document stays. A diagram or a formula past either of its limits
-below, and a project image past the count, are shown as source — or, for the image, as its alt text — with a note at
+below, and an image past the count, are shown as source — or, for the image, as its alt text — with a note at
 that spot. That note is part of the first paint and is not announced on its own.
 
 The budget is per document:
@@ -144,8 +152,9 @@ The budget is per document:
   either limit the source is shown with the note that the document is large.
 - At most 80 formulas, each at most 2,000 characters. A formula over that length does not consume one of the 80. Past
   either limit, the same notice and the source.
-- At most 30 project images, each at most 4 MiB, the most a file read delivers (see "Errors" in
-  `docs/product/project-pane.md`). An address that is not a project file does not consume one of the 30. Over the count:
+- At most 30 images, shared by HTML and Markdown, and by project files and HTTP(S) addresses. An address that is
+  refused does not consume one of the 30. Project images are each at most 4 MiB, the most a file read delivers (see
+  "Errors" in `docs/product/project-pane.md`); that byte limit does not apply to browser-loaded remote images. Over the count:
   the alt text and a note that the document is large, part of the first paint and not announced on its own. A reply
   larger than 4 MiB is not shown: the alt text and a note that the image is large, announced once, because it appears
   after the read. A read that fails — which is also what a file larger than 4 MiB does, since the read does not deliver

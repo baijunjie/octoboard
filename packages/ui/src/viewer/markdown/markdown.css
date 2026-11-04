@@ -58,6 +58,13 @@
     overflow-wrap: break-word;
   }
 
+  /* HTML badge rows and centered logos use inline images, as they do on GitHub. */
+  .markdown-prose img:where(:not(.not-prose, .not-prose *)) {
+    display: inline-block;
+    vertical-align: middle;
+    margin-block: 0;
+  }
+
   /* A loose item's paragraph may read the other way; its box stays with the list's markers. */
   .markdown-prose .task-list-item:dir(ltr) > input,
   .markdown-prose .task-list-item:dir(ltr) > p > input {

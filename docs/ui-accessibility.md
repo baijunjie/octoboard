@@ -1646,10 +1646,12 @@ to a separate external action is a plain chip. Do not make both the reference an
 appearances retain a visible keyboard focus ring, and a pending open keeps the label and icon visible while preventing
 repeated activation. Callers may not remove the icon or substitute arbitrary local colours, padding or typography.
 
-Native menu items that open a browser use the same external-link indicator within their menu primitive. Links rendered
-from Markdown retain the document's text and title, with the external indicator added to outbound destinations and the
-document renderer's measured link palette. Relative paths and document fragments keep their file-viewer navigation. Raw
-terminal output and foreign renderer markup retain their renderer's content model.
+Native menu items that open a browser use the same external-link indicator within their menu primitive. Markdown links
+use the document's own anchors and measured link palette, with no added external-link icon for either text or images.
+Image links have no text underline. Outbound links share the application's opening and failure handling without its
+link component's visual additions; their destination title and accessible description still explain where they open.
+Relative paths and document fragments keep their file-viewer navigation. Raw terminal output and foreign renderer
+markup retain their renderer's content model.
 
 ### A visual heading is a heading element
 

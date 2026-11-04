@@ -11,12 +11,12 @@ import { resolveProjectAddress } from "./projectAddress";
 type Read = { path: string; url?: string; failed?: boolean; tooLarge?: boolean };
 
 /**
- * An image the document names. Only a path that resolves to a project file is read, in the
+ * An image the document names. A path that resolves to a project file is read, in the
  * window's lane for document images, never the viewer's slot, so it does not cancel the document's
  * own read; the read is let go of when the image goes, with its document or its path. The bytes
  * are shown as a `data:` URL the way a file opened as an image is, which does not run a script or
- * fetch anything further. Anything else — an address outside the project, an absolute
- * one, a path that resolves to nothing — is the description alone and is never requested.
+ * fetch anything further. HTTP(S) images load directly in the browser, with no referrer, and
+ * never through the daemon. Other addresses stay their description and are never requested.
  *
  * While the read is out, the description is what is shown, so there is no empty gap. A read that
  * fails, or a file that is not an image, says so once it has failed. One past the byte cap, or a
@@ -25,12 +25,16 @@ type Read = { path: string; url?: string; failed?: boolean; tooLarge?: boolean }
 export function DocumentImage({
   src,
   alt,
+  width,
+  height,
   documentPath,
   project,
   overBudget,
 }: {
   src?: string;
   alt?: string;
+  width?: number | string;
+  height?: number | string;
   documentPath: string;
   project?: string;
   overBudget: boolean;
@@ -39,7 +43,9 @@ export function DocumentImage({
   const { request } = useDaemon();
   const address = resolveProjectAddress(documentPath, src);
   const path = address.kind === "file" ? address.path : undefined;
+  const remote = address.kind === "external" && /^https?:/.test(address.href) ? address.href : undefined;
   const [read, setRead] = useState<Read>();
+  const [failedRemote, setFailedRemote] = useState<string>();
   useEffect(() => {
     if (!project || !path || overBudget) return;
     let live = true;
@@ -64,7 +70,21 @@ export function DocumentImage({
   }, [project, path, overBudget, request]);
 
   const current = read?.path === path ? read : undefined;
-  if (current?.url) return <img src={current.url} alt={alt ?? ""} onError={() => setRead({ path: current.path, failed: true })} className="max-w-full h-auto" />;
+  const remoteFailed = !!remote && failedRemote === remote;
+  const url = !overBudget ? current?.url ?? (remoteFailed ? undefined : remote) : undefined;
+  if (url) return (
+    <img
+      src={url}
+      alt={alt ?? ""}
+      width={width}
+      height={height}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
+      onError={() => remote ? setFailedRemote(remote) : current && setRead({ path: current.path, failed: true })}
+      className="max-w-full h-auto"
+    />
+  );
 
   const description = alt ? <span>{alt}</span> : null;
   // The count is known as the document is drawn, so that notice is part of the content. A read
@@ -77,12 +97,12 @@ export function DocumentImage({
       </>
     );
   }
-  if (!current?.failed && !current?.tooLarge) return <>{description}</>;
-  const sentence = current.tooLarge ? t("viewer.markdown.imageTooLarge") : t("viewer.markdown.imageFailed");
+  if (!remoteFailed && !current?.failed && !current?.tooLarge) return <>{description}</>;
+  const sentence = current?.tooLarge ? t("viewer.markdown.imageTooLarge") : t("viewer.markdown.imageFailed");
   return (
     <>
       {description}
-      <SpotNotice tone={current.tooLarge ? "explained" : "failed"} speak>
+      <SpotNotice tone={current?.tooLarge ? "explained" : "failed"} speak>
         {sentence}
       </SpotNotice>
     </>

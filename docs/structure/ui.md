@@ -112,7 +112,7 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
   branch); at its root, the browser's per-project state (`browserState.ts` over saved preferences and window-lifetime
   selections) and the list helpers the two modes share.
 - `src/viewer/` — the read-only file viewer modal (the shell at its root), and the app's Markdown and code rendering
-  library, which `terminal/history/` uses too: `markdown/` (documents, Mermaid, formulas, fenced code), `code/` (the
+  library, which `terminal/history/` uses too: `markdown/` (documents, sanitized HTML, images, Mermaid, formulas, fenced code), `code/` (the
   code and diff renderer and its budgets) and `find/` (the find bar); `@pierre/diffs` is imported only inside it.
 - `src/quota/` — plan quota wording, meters, reset credits, and the rail's quota panels (`RailQuotaBars`, `QuotaPanel`,
   `AgentPanel`, `QuotaAccount`).
@@ -229,6 +229,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | The frame of the sidebar's console and focus headers and the archive header | `PANE_HEADER_FRAME_CLASS` (`src/components/panel/paneHeaderFrame.ts`) |
 | A previous / next pager button | `PagerButton` (`src/components/controls/PagerButton.tsx`) |
 | A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
+| Open an external address with the platform adapter and shared failure handling | `ExternalLink` (`src/components/text/ExternalLink.tsx`) for application links; `useExternalLinkAction` from the same module for document-owned link markup |
 | A settings section's lead paragraph and the rows under it | `SettingsLead` and `LeadRows` (`src/settings/SettingsLead.tsx`) |
 | An on/off switch in Settings that saves | `SettingSwitch` or `SwitchSettingRow` (`src/settings/SettingRow.tsx`); the `onChange` returns the save so the switch ignores presses until it settles |
 | Pin and lock buttons of a session row; its derived state | `PinButton`, `LockButton` and `SessionMarkButtons` (`src/sidebar/MarkButtons.tsx`); `sessionRowModel` (`src/sessions/sessionRowModel.ts`) with the `useSessionRowModel` hook (`src/sidebar/`) |

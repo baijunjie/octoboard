@@ -148,11 +148,11 @@ it("switches to the source and back, and stores the choice", async () => {
   expect(localStorage.getItem(PREFERENCE_KEYS.markdownView)).toBe("document");
 });
 
-it("keeps the document inert: no raw HTML runs, no image is fetched, no script element exists", async () => {
+it("sanitizes raw HTML while allowing HTTP images", async () => {
   await open(markdownFile());
-  expect(region().querySelector("script, img, iframe")).toBeNull();
-  expect(region().textContent).toContain("<script>window.__pwned = true</script>");
-  expect(region().textContent).toContain("remote picture");
+  expect(region().querySelector("script, iframe, [onerror]")).toBeNull();
+  expect(region().querySelectorAll("img")).toHaveLength(2);
+  expect(region().textContent).not.toContain("window.__pwned");
   expect((window as { __pwned?: boolean }).__pwned).toBeUndefined();
 });
 
@@ -262,7 +262,7 @@ it("words the footnotes in the app's language and follows them within the docume
   const click = new MouseEvent("click", { bubbles: true, cancelable: true });
   act(() => void reference.dispatchEvent(click));
   expect(click.defaultPrevented).toBe(true);
-  expect(document.activeElement?.id).toBe("user-content-fn-1");
+  expect(document.activeElement?.id).toBe(reference.getAttribute("href")!.slice(1));
   expect(scrolled).toHaveBeenCalled();
 });
 
@@ -273,7 +273,7 @@ it("keeps the reference link in the Tab order after following a footnote back", 
   const back = region().querySelector<HTMLAnchorElement>("a[data-footnote-backref]")!;
   act(() => void back.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
   const reference = document.activeElement as HTMLElement;
-  expect(reference.id).toBe("user-content-fnref-1");
+  expect(reference.id).toBe(back.getAttribute("href")!.slice(1));
   expect(reference.tabIndex).toBe(0);
 });
 
@@ -365,10 +365,10 @@ it("takes the app's direction for the frame of a document with no strong charact
 });
 
 it("gives headings distinct ids and does not take one a footnote already has", async () => {
-  await open(markdownFile("docs/notes.md", "# Title\n\n# Title\n\n# user-content-fn-1\n\nA claim[^1].\n\n[^1]: The proof.\n"));
-  expect([...region().querySelectorAll("h1")].map((heading) => heading.id)).toEqual(["title", "title-1", "user-content-fn-1-1"]);
-  expect(region().querySelector("li")?.id).toBe("user-content-fn-1");
-  expect(region().querySelector("h2.sr-only")?.id).toBe("footnote-label");
+  await open(markdownFile("docs/notes.md", "# Title\n\n# Title\n\n# user-content-user-content-fn-1\n\nA claim[^1].\n\n[^1]: The proof.\n"));
+  expect([...region().querySelectorAll("h1")].map((heading) => heading.id)).toEqual(["title", "title-1", "user-content-user-content-fn-1-1"]);
+  expect(region().querySelector("li")?.id).toBe("user-content-user-content-fn-1");
+  expect(region().querySelector("h2.sr-only")?.id).toBe("user-content-footnote-label");
 });
 
 it("names a heading with no slug section, and keeps the next one on that name", async () => {
@@ -469,14 +469,14 @@ it("shows a project image and does not fetch one that leaves the project", async
       };
     }),
   });
-  for (let i = 0; i < 20 && region().querySelector("img") === null; i += 1) {
+  for (let i = 0; i < 20 && region().querySelector('img[alt="chart"]') === null; i += 1) {
     await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   }
-  const image = region().querySelector("img");
+  const image = region().querySelector('img[alt="chart"]');
   expect(image?.getAttribute("alt")).toBe("chart");
   expect(image?.getAttribute("src")?.startsWith("data:image/png")).toBe(true);
   expect(requested).toEqual(["docs/pic.png"]);
-  expect(region().querySelectorAll("img")).toHaveLength(1);
+  expect(region().querySelectorAll("img")).toHaveLength(2);
   expect(region().textContent).toContain("secret");
-  expect(region().textContent).toContain("web");
+  expect(region().querySelector('img[alt="web"]')?.getAttribute("src")).toBe("https://example.com/a.png");
 });

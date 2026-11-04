@@ -224,8 +224,8 @@ pnpm build:app --bundles app
 // A fenced block far taller than the viewer, to be scrolled within the document's own frame.
 const LONG_FENCE = Array.from({ length: 200 }, (_, i) => `export const entry${i} = { id: ${i}, label: "Entry ${i}" };`).join("\n");
 
-// Prose, lists, tables, fences, footnotes and right-to-left passages, plus inert markup: raw HTML,
-// a remote image and a script link. No relative link: this text is also shown from paths where the
+// Prose, lists, tables, fences, footnotes and right-to-left passages, plus sanitized HTML,
+// an unavailable remote image and a script link. No relative link: this text is also shown from paths where the
 // target would not be a subject.
 const GUIDE = `# Viewer guide
 
@@ -336,10 +336,10 @@ A claim with a named footnote[^source].
 
 ## Inert
 
-![A remote picture that must not load](https://example.com/tracker.png)
+![An unavailable remote picture](https://example.invalid/tracker.png)
 
 <script>window.__viewerPwned = "markdown-script";</script>
-<img src="https://example.com/raw.png" onerror="window.__viewerPwned = 'markdown-onerror'">
+<img src="https://example.invalid/raw.png" onerror="window.__viewerPwned = 'markdown-onerror'">
 `;
 
 // A document in Arabic, which reads from the right as a whole, with the blocks that may read
@@ -1004,6 +1004,8 @@ x = y
 
 ![The missing figure](missing.png)
 
+A remote figure that could not be loaded: <img src="https://example.invalid/missing.png" alt="The unavailable remote figure" width="120" />.
+
 A linked figure that is missing: [![The linked figure](missing-linked.png)](./other.md) is a link to the other note.
 
 See [the other note](./other.md#kept) and [the heading below](#kept-aside).
@@ -1058,6 +1060,25 @@ What the link from the first note opens this file on.
 `;
 
 const NORMAL_NOTES = `# A project note
+
+<p align="center"><img src="https://raw.githubusercontent.com/baijunjie/octoboard/main/assets/branding/logo-brand-h.png" alt="Octoboard — The Programming Terminator" width="640" /></p>
+
+<p align="center">Programming ends here. Power to rival the Terminator.</p>
+
+<p align="center">
+  <a href="https://github.com/baijunjie/octoboard/releases"><img src="https://img.shields.io/badge/version-v0.1.0--beta.1-orange?style=plastic" alt="Version v0.1.0-beta.1" /></a>
+  <a href="https://octoboard.dev/"><img src="https://img.shields.io/badge/platform-macOS-lightgrey?style=plastic" alt="Platform: macOS" /></a>
+  <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/built_with-Tauri_2-orange?style=plastic" alt="Built with Tauri 2" /></a>
+  <a href="https://github.com/baijunjie/octoboard/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=plastic" alt="License: MIT" /></a>
+</p>
+
+Read the [project website](https://octoboard.dev/) for more.
+
+<details>
+<summary>Release checklist</summary>
+<p>The document can include <strong>HTML formatting</strong> beside Markdown.</p>
+<table><thead><tr><th>Platform</th><th>Status</th></tr></thead><tbody><tr><td>macOS</td><td>Beta</td></tr></tbody></table>
+</details>
 
 \`\`\`mermaid
 flowchart LR
@@ -1271,7 +1292,7 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-document-errors", group: GROUP, category: "exceptional",
     title: "Document rendering failures",
-    description: "A document with an invalid diagram, unfinished formulas, a missing image and a missing image that is also a link. Scroll to compare the failures and retained source: each is a danger-coloured circled \"!\" mark at its spot, a button (a tab stop) that opens the sentence in a popover when tapped, activated from the keyboard or rested on with the mouse, and does nothing for a mouse click. A block that failed (the diagram, a formula on its own line) has its mark before the source it keeps; one inside a line of text (the unfinished inline formula, the missing images) has it in the sentence, right after the link where the image is a link. Successful content provides context for each failure.",
+    description: "A document with an invalid diagram, unfinished formulas, missing local and remote images and a missing image that is also a link. Scroll to compare the failures and retained source: each is a danger-coloured circled \"!\" mark at its spot, a button (a tab stop) that opens the sentence in a popover when tapped, activated from the keyboard or rested on with the mouse, and does nothing for a mouse click. A block that failed (the diagram, a formula on its own line) has its mark before the source it keeps; one inside a line of text (the unfinished inline formula, the missing images) has it in the sentence, right after the link where the image is a link. Successful content provides context for each failure.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: async () => [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))] },
   },
@@ -1321,7 +1342,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rendered document",
-    description: "Rendered diagrams and formulas, a project image, mixed text directions and links between documents. Outbound web links carry an external-link icon, while local document links remain internal. The named diagram is Request flow; the second uses the translated Diagram label. Follow the other-note link to its Kept heading or the local link to Kept aside.",
+    description: "A centred remote logo and clickable badges share a README-style header; badges stay on one line where space permits and wrap on narrow screens. The badges and the project website text link follow the document style without appended external-link icons. Expand Release checklist to see HTML formatting and a table. Scroll down for rendered diagrams and formulas, a local project image, mixed text directions and links between documents. The named diagram is Request flow; the second uses the translated Diagram label. Follow the other-note link to its Kept heading or the local link to Kept aside. Remote images need a network connection.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: documentSubjects },
   },

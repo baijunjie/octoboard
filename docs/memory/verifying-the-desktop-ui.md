@@ -207,12 +207,14 @@ reports the refusal to the embedder: the `securitypolicyviolation` event fires o
 frame's document never sees it. Instrument the window — a listener there is both the only way to observe a page
 attempting to leave and a standing health signal for the window's own policy.
 
-## A network-level probe of this window needs its positive control from outside the app
+## Give a network-level probe a positive control the window actually permits
 
-While the window ships a restrictive CSP (`default-src 'none'`), every channel a probe would normally use as its
-positive control — a `fetch`, an `<img>`, an `<iframe>`, a WebSocket — is refused before any name is resolved, so a
-capture that comes back empty says nothing about whether the app can reach the network. Generate the control outside
-the app: Safari's lookups leave through the same WebKit networking path.
+Before interpreting an empty network capture as proof of isolation, check both the window's content security policy
+and its native content rules against the probe's resource type. Use an HTTP(S) image in the main document as the
+positive control, and confirm its request reaches the observer; a report frame's image is restricted separately, so
+it cannot serve as that control. See "What a page may contain, and what it cannot do" in
+`docs/product/report-panel.md`. A fetch, frame or socket refused by policy establishes no network baseline. Where a
+permitted control cannot be generated inside the app, generate one in Safari through the same WebKit networking path.
 
 ## Prove that no key reached the terminal against an agent that echoes every byte
 

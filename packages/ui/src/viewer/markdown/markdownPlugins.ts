@@ -1,5 +1,6 @@
 import GithubSlugger, { slug as githubSlug } from "github-slugger";
 
+import { classNamesOf, codeChild, fenceOf, textOf as hastText } from "./documentNodes";
 import { RENDER_BUDGETS } from "../code/budgets";
 import { resolveProjectAddress } from "./projectAddress";
 
@@ -65,87 +66,73 @@ function revertInlineDollars(node: MdNode, source: string): void {
   }
 }
 
-/**
- * Marks diagrams, formulas and project images past the document's budget (`RENDER_BUDGETS`). An
- * over-size diagram or formula does not take a place in the count. An image counts only when it
- * resolves to a project file; one that cannot be read is its description and costs nothing.
- * `$$...$$` inside a paragraph is still a display formula: the parser calls it inline, and the
- * marker length is what decides.
- */
-function budgetRenderings(tree: MdNode, source: string, documentPath: string): void {
-  let diagrams = 0;
-  let formulas = 0;
-  let images = 0;
-  const visit = (node: MdNode) => {
-    if (node.type === "code" && node.lang === "mermaid") {
-      const length = node.value?.length ?? 0;
-      if (length > RENDER_BUDGETS.documentDiagramChars || diagrams >= RENDER_BUDGETS.documentDiagrams) {
-        mark(node, { dataOverBudget: true });
-      } else diagrams += 1;
-    }
-    if (node.type === "inlineMath" || node.type === "math") {
-      const length = node.value?.length ?? 0;
-      const properties: Record<string, unknown> = {};
-      if (node.type === "inlineMath" && (sliceOf(source, node)?.startsWith("$$") ?? false)) properties.dataDisplay = true;
-      if (length > RENDER_BUDGETS.documentFormulaChars || formulas >= RENDER_BUDGETS.documentFormulas) properties.dataOverBudget = true;
-      else formulas += 1;
-      if (Object.keys(properties).length > 0) mark(node, properties);
-    }
-    if (node.type === "image" && resolveProjectAddress(documentPath, node.url ?? undefined).kind === "file") {
-      if (images >= RENDER_BUDGETS.documentImages) mark(node, { dataOverBudget: true });
-      else images += 1;
-    }
-    node.children?.forEach(visit);
-  };
-  visit(tree);
-}
-
-/**
- * Reverts inline dollars GitHub would not draw, then applies the document's render budget.
- * Called with the source before it is placed in the plugin list, so this returns the plugin.
- * Unified calls each list entry to obtain the transformer. Returning the transformer itself
- * would run it once at setup, with no tree, and never on the document. `limitFences` and
- * `headingIds` are the plugins themselves and are passed uncalled.
- */
-export function prepareMarkdown(source: string, documentPath: string) {
+/** Keeps GitHub's literal-dollar rules before converting the Markdown tree to HTML. */
+export function prepareMarkdown(source: string) {
   return function prepare() {
     return (tree: MdNode) => {
       revertInlineDollars(tree, source);
-      budgetRenderings(tree, source, documentPath);
+      const visit = (node: MdNode) => {
+        if (node.type === "inlineMath" && (sliceOf(source, node)?.startsWith("$$") ?? false)) {
+          mark(node, { dataDisplay: true });
+        }
+        node.children?.forEach(visit);
+      };
+      visit(tree);
     };
   };
 }
 
 /**
- * Marks the fenced blocks past the document's highlighting budget as plain. A `mermaid` fence is
- * not highlighted at all, so it takes no place in that budget; it is drawn as a diagram, or as its
- * source when it is past the diagram budget. Only a block that stays highlighted counts, so one
- * over-size block does not turn the later, small ones plain.
+ * Counts renderings after HTML has been parsed and sanitized, so raw HTML and Markdown share
+ * the same limits. An oversized item does not consume a place a later small item could use.
  */
-export function limitFences() {
-  return (tree: MdNode) => {
-    let blocks = 0;
-    let chars = 0;
-    const visit = (node: MdNode) => {
-      if (node.type === "code" && node.lang !== "mermaid") {
-        const length = node.value?.length ?? 0;
-        if (blocks + 1 > RENDER_BUDGETS.documentFences || chars + length > RENDER_BUDGETS.documentFenceChars) {
-          mark(node, { dataPlain: true });
-        } else {
-          blocks += 1;
-          chars += length;
+export function limitRenderings(documentPath: string) {
+  return () => (tree: HastNode) => {
+    let diagrams = 0;
+    let formulas = 0;
+    let images = 0;
+    let fences = 0;
+    let fenceChars = 0;
+    const visit = (node: HastNode, parent?: HastNode) => {
+      if (node.type === "element") {
+        const props = node.properties ??= {};
+        if (node.tagName === "code" && parent?.tagName !== "pre" && classNamesOf(node).includes("math-inline")) {
+          const length = hastText(node).replace(/\n$/, "").length;
+          if (length > RENDER_BUDGETS.documentFormulaChars || formulas >= RENDER_BUDGETS.documentFormulas) props.dataOverBudget = true;
+          else formulas += 1;
+        }
+        if (node.tagName === "pre") {
+          const code = codeChild(node);
+          if (code) {
+            const properties = code.properties ??= {};
+            const fence = fenceOf(node);
+            const length = fence.text.length;
+            if (classNamesOf(code).includes("math-display")) {
+              if (length > RENDER_BUDGETS.documentFormulaChars || formulas >= RENDER_BUDGETS.documentFormulas) properties.dataOverBudget = true;
+              else formulas += 1;
+            } else if (fence.language === "mermaid") {
+              if (length > RENDER_BUDGETS.documentDiagramChars || diagrams >= RENDER_BUDGETS.documentDiagrams) properties.dataOverBudget = true;
+              else diagrams += 1;
+            } else if (fences >= RENDER_BUDGETS.documentFences || fenceChars + length > RENDER_BUDGETS.documentFenceChars) {
+              properties.dataPlain = true;
+            } else {
+              fences += 1;
+              fenceChars += length;
+            }
+          }
+        }
+        if (node.tagName === "img") {
+          const address = resolveProjectAddress(documentPath, typeof props.src === "string" ? props.src : undefined);
+          if (address.kind === "file" || (address.kind === "external" && /^https?:/.test(address.href))) {
+            if (images >= RENDER_BUDGETS.documentImages) props.dataOverBudget = true;
+            else images += 1;
+          }
         }
       }
-      node.children?.forEach(visit);
+      node.children?.forEach((child) => visit(child, node));
     };
     visit(tree);
   };
-}
-
-function hastText(node: HastNode): string {
-  if (node.type === "text") return node.value ?? "";
-  if (node.type !== "element") return "";
-  return (node.children ?? []).map(hastText).join("");
 }
 
 /**

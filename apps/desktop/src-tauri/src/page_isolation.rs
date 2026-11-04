@@ -1,13 +1,14 @@
 //! A second barrier under the report panel's sanitizer: the window's webview is created with a
-//! WebKit content rule list that blocks every `http(s)` request. A page in the panel is
-//! model-authored HTML, and the UI strips everything from it that could reach the network
+//! WebKit content rule list that blocks `http(s)` requests except image loads. A page in the panel
+//! is model-authored HTML, and the UI strips everything from it that could reach the network
 //! (`packages/ui/src/report/pageBridge.js`). `<link rel="preconnect">` and `rel="dns-prefetch"` are
 //! channels no content security policy governs in WebKit, so this list is what keeps them, and any
-//! other `http(s)` load, closed if the sanitizer ever misses one. It does not cover WebRTC: ICE
-//! traffic is not a request a content rule sees, and what backs the sanitizer up there is the
+//! other non-image `http(s)` load, closed if the sanitizer ever misses one. Report images are
+//! separately restricted to `data:` by the frame's content security policy. It does not cover WebRTC:
+//! ICE traffic is not a request a content rule sees, and what backs the sanitizer up there is the
 //! page's nonce-only `script-src`, under which no script of the page's own runs. The application
-//! itself never needs the web: it loads `tauri://` assets and reaches the daemon over
-//! `ws://127.0.0.1` and `ipc://`, none of which the rule matches.
+//! loads remote images in Markdown documents; its assets use `tauri://` and its daemon connection
+//! uses `ws://127.0.0.1` and `ipc://`, none of which the rule matches.
 //!
 //! Everything here is public WebKit API (`WKContentRuleList`), so it stays within the App Store's
 //! rules.
@@ -24,13 +25,17 @@ use crate::diagnostics::diagnostic;
 
 const RULE_LIST_IDENTIFIER: &str = "octoboard-no-web";
 
-/// Every `http(s)` URL is blocked. A dev build loads its UI from the Vite dev server over plain
-/// `http`, so there `localhost` is let through again; a release build has no such exception.
+/// HTTP(S) images are allowed for Markdown documents; other web requests remain blocked. A dev
+/// build also loads its UI from the Vite dev server, so it allows `localhost` for those resources.
 #[cfg(not(debug_assertions))]
-const RULES: &str = r#"[{"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}}]"#;
+const RULES: &str = r#"[
+    {"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}},
+    {"trigger":{"url-filter":"^https?://","resource-type":["image"]},"action":{"type":"ignore-previous-rules"}}
+]"#;
 #[cfg(debug_assertions)]
 const RULES: &str = r#"[
     {"trigger":{"url-filter":"^https?://"},"action":{"type":"block"}},
+    {"trigger":{"url-filter":"^https?://","resource-type":["image"]},"action":{"type":"ignore-previous-rules"}},
     {"trigger":{"url-filter":"^https?://localhost[:/]"},"action":{"type":"ignore-previous-rules"}}
 ]"#;
 

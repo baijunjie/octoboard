@@ -195,10 +195,12 @@ frame to an external URL either.
 **A page has no route to the network.** No `fetch`, `XMLHttpRequest`, WebSocket, `sendBeacon` or
 WebRTC, since no script of the page's own runs, and no connection opened or name looked up ahead of
 time by `<link rel="preconnect">` or `rel="dns-prefetch"`, since no `<link>` is kept. In the macOS
-application the window adds a second barrier underneath: it blocks every `http` and `https` request
-its web view would make — the application's own window loads nothing over the web — so a link or
-load the cleaning missed still goes nowhere. If that block cannot be set up at launch, the window
-opens without it and pages rely on the cleaning alone.
+application the window adds a second barrier underneath: it blocks non-image `http` and `https`
+requests. HTTP(S) images are allowed for Markdown documents elsewhere in the window; a report
+page's own content security policy restricts its images to `data:` URLs, so report images still
+cannot load from the network. Development builds also allow the local development server's
+resources. If the window's block cannot be set up at launch, the window opens without it; the
+page's cleaning, sandbox and content security policy still apply.
 
 Each page is rendered in a sandboxed frame of its own, with no access to the application around it or
 to any other page, and on a light surface whatever the window's appearance is — see "A report page
