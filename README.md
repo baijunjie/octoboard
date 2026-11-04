@@ -6,37 +6,67 @@
 
 <p align="center">Programming ends here. Power to rival the Terminator.</p>
 
-Octoboard is a local, open source command center for coding agents. It runs on your own machine and is built
-for products spanning multiple projects or repositories, each with its own development rules and tools.
+**Your agents. Your accounts. One workspace.**
 
-A feature can touch server-side services, administration tools, merchant operations tools, staff operations
-tools, and customer-facing apps. Developing them all in one agent session mixes their contexts and can miss
-project-specific instructions. Separate sessions preserve that context, but leave you relaying tasks and results.
-Octoboard brings two goals together:
+Octoboard is a local, open source development workspace for **Claude Code**, **Codex**, and **Grok Build**.
+Bring your existing agents and accounts together, switch accounts while keeping the conversation, and hand tasks
+between providers. Work on one project or choose an agent to coordinate work across several projects.
 
-- **Agent management across projects.** A coordinating agent breaks down requests, assigns tasks, tracks
-  dependencies, and brings project reports together.
-- **Quality in every project.** Each project runs an independent native session in its own directory, keeping
-  its instructions, Skills, hooks, and tools. Open any conversation to review the work, add context, or steer it.
+[Website](https://octoboard.dev/) · [Interactive preview](https://octoboard.dev/#product-preview) ·
+[Releases](https://github.com/baijunjie/octoboard/releases)
 
-Choose **Claude Code**, **Codex**, or **Grok Build** independently for the coordinator and each project. Each
-keeps its own toolchain, while Octoboard passes tasks, relevant context, and reports between sessions. Individual
-steps within a project can also be delegated to an agent from another provider when needed.
+[![Octoboard workspace showing a coordinator and project sessions](assets/branding/workspace-preview.png)](https://octoboard.dev/#product-preview)
 
-Octoboard stores its application data locally and does not upload your code or conversations to servers operated
-by its developer. Your configured agents and tools may send data to their providers, and collaboration may share
-task information with multiple providers. See the [privacy policy](https://octoboard.dev/privacy/) for details.
+*Actual application UI with sample data. Try the project overview, focus mode, and code review on the website.*
 
-The full introduction is on [octoboard.dev](https://octoboard.dev).
+## Features
 
-**Status: early development.** The macOS app, for Apple silicon and Intel Macs on macOS 11 or later, is still in
-development. Only the first prototype features are in place, and the details are still being refined.
+### Accounts and usage
 
-In the desktop app, the window, the daemon, and the projects share one machine. Linux is planned as a server
-form: the daemon would run on a headless machine you own, with the interface opened in a browser on another
-machine. There is no Linux desktop app planned. The server form is designed for one person accessing their own
-daemon; multiple users sharing one daemon are outside this design. Server deployment and remote host support
-are planned and are not available yet.
+- **Manage multiple accounts.** View sign-in status, usage, and reset times in one place. Enable automatic account
+  selection to choose an available account for a new session based on its status and reset times.
+- **Switch accounts and continue.** Move a session to another account of the same agent while keeping its conversation
+  and task context.
+- **Recover from usage limits.** Enable automatic account switching to continue interrupted work on another available
+  account of the same agent. If none is available, wait until a fresh usage reading confirms quota recovery to resume.
+
+### Context and continuity
+
+- **Watch context usage.** See context size and window usage when reported by the agent, and pass the next stage to a
+  fresh session before the conversation gets too long.
+- **Keep earlier conversations available.** Revisit or resume an old session while the original agent still has its
+  conversation record, including to ask about earlier decisions.
+- **Hand work to another provider.** Give the next agent a handoff record of the task, current progress, and remaining
+  work so it can take over.
+
+### Agents and projects
+
+- **Coordinate across projects.** A coordinating agent assigns work, follows dependencies, and brings reports together.
+  Choose the agent for the coordinator and each project independently.
+- **Keep each project's setup.** Each project runs an independent native session in its own directory, loading its
+  instructions, Skills, Hooks, and MCP configuration through the chosen agent's own mechanisms.
+- **Follow the work and step in.** See who is working and who needs your input. Open any assigned project session to
+  add context or steer the work, and browse project files and Git diffs to review the changes.
+
+For example, a meal deal promotion can span an order API, an administration console, and customer apps. Give the goal
+to a coordinator, let each project agent work with its own context, and follow their progress from one workspace.
+
+## Getting started
+
+**Octoboard is an early prototype, still in development.** Features and workflows are still being refined.
+
+1. Install and configure the coding-agent CLIs you want to use: Claude Code, Codex, or Grok Build.
+2. Check the [macOS releases](https://github.com/baijunjie/octoboard/releases) for an available build, or use the
+   [development setup](#develop) below to run from source.
+3. Add an existing project folder without moving your code. The default account uses your existing CLI configuration;
+   additional accounts use separate configurations with optional sharing of supported settings.
+4. Open a project session with your chosen agent and account. For work spanning projects, open a console session and
+   ask its agent to coordinate the relevant projects.
+
+Octoboard is free under the MIT License. Agents and model services use your own accounts and follow the subscriptions
+or billing terms of the providers you choose. If your agent supports a self-hosted model, you can keep that setup.
+
+## Platform support
 
 | Form | Status |
 |---|---|
@@ -46,6 +76,36 @@ are planned and are not available yet.
 | iOS app | Planned |
 | Android app | Planned |
 
+The desktop window, daemon, and projects currently share one machine. Linux is planned as a server for one person
+accessing their own daemon through a browser; there is no Linux desktop app planned. Server deployment and running
+project agents on remote hosts are not available yet. Multiple users sharing one daemon are outside this design.
+
+## FAQ
+
+**Do I need to configure my projects again?**
+
+Add the folders you already use. Your agent still loads its project instructions and tools. See
+[Launching agents](docs/product/launching-agents.md) for how the existing CLI setup is used.
+
+**Where do my code and conversations go?**
+
+Octoboard stores its application data locally and does not upload your code or conversations to servers operated by
+its developer. Your configured agents and tools may send data to their providers, and collaboration may share task
+information with multiple providers. See the [privacy policy](https://octoboard.dev/privacy/) for details.
+
+**Can parallel sessions conflict?**
+
+Sessions share the project folder by default, so simultaneous edits to the same file can conflict. For parallel work,
+ask the agents to use separate Git worktrees and review the changes before merging.
+
+**Can I return to the original CLI?**
+
+Yes. Project files stay in their original folders. While the original agent still has a conversation record, you can
+resume it through that agent's CLI. With an additional account, launch the CLI using that account's configuration
+directory.
+
+More questions about collaboration and setup are answered on [the website](https://octoboard.dev/#questions).
+
 ## Develop
 
 You need macOS, Node.js with pnpm, a Rust toolchain, and the agent CLIs you want to use. Octoboard launches the agents
@@ -53,7 +113,7 @@ from your shell environment; those agents are yours, including one you point at 
 is configured is in [Launching agents](docs/product/launching-agents.md).
 
 ```sh
-pnpm install                                   # Install the workspace (and, in the main checkout, the git hooks).
+pnpm install                                  # Install the workspace (and, in the main checkout, the git hooks).
 pnpm --filter @octoboard/desktop build:daemon  # Build the daemon sidecar once (and again after daemon changes).
 pnpm --filter @octoboard/desktop tauri dev     # Start the UI dev server and open the desktop window on it.
 ```
@@ -76,6 +136,9 @@ Where to read next: the [documentation index](docs/README.md) answers which doc 
 [architecture](docs/architecture.md) explains why it is built this way.
 
 ## This is an AI-native project
+
+Octoboard is built around the belief that developers can spend their time on requirements, decisions, testing, and
+product outcomes while AI handles implementation. Quality is judged through thorough testing against real needs.
 
 Every line of code in this repository is written by AI. Humans set the direction, review the result, and decide
 what gets built — they do not hand-write the code.
