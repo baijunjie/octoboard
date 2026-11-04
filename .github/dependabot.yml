@@ -1,9 +1,9 @@
-# Proposes updates to the actions the workflows use. They are pinned to full commit SHAs with the version in a
-# trailing comment, and an update moves both.
+# Automatic version update PRs are disabled; action versions are maintained manually.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    open-pull-requests-limit: 0
     schedule:
       interval: monthly
     groups:
