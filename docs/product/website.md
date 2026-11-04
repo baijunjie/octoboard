@@ -30,15 +30,16 @@ The site has a homepage and a privacy page. Paths below are relative to the site
 - Other languages: `/<locale>/` and `/<locale>/privacy/`.
 - Simplified Chinese uses the route prefix `zh`, with the language identified as `zh-Hans` in page metadata.
   Traditional Chinese uses `zh-Hant` for both.
+- Portuguese uses `pt` for both its route prefix and page language.
 
 All 17 languages have complete website translations, including navigation, all 16 feature cards, preview
 controls, the illustrative workflow, the developer's motivation, questions and answers, privacy text, client
 error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian,
-Japanese, Korean, Brazilian Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
+Japanese, Korean, Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
 Chinese. This coverage is specific to the website; the application's translation coverage is described in
 `docs/product/language.md`, "What is translated so far".
-The application fragments in the feature wall use the application's translations: their controls and labels are
-currently available in English and Simplified Chinese, with English fallback in the other website languages.
+The application fragments in the feature wall use the application's translations: their controls and labels follow
+the website's language in all 17 languages.
 
 English is the default. On a normal site page that opens in English, the site checks the remembered language after
 the app mounts. If there is no remembered language, it matches the browser's preferred languages to the supported

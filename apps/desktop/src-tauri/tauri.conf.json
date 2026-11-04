@@ -37,8 +37,23 @@
     ],
     "externalBin": ["binaries/octoboardd"],
     "resources": {
+      "generated-localizations/ar.lproj/InfoPlist.strings": "ar.lproj/InfoPlist.strings",
+      "generated-localizations/de.lproj/InfoPlist.strings": "de.lproj/InfoPlist.strings",
       "generated-localizations/en.lproj/InfoPlist.strings": "en.lproj/InfoPlist.strings",
-      "generated-localizations/zh-Hans.lproj/InfoPlist.strings": "zh-Hans.lproj/InfoPlist.strings"
+      "generated-localizations/es.lproj/InfoPlist.strings": "es.lproj/InfoPlist.strings",
+      "generated-localizations/fr.lproj/InfoPlist.strings": "fr.lproj/InfoPlist.strings",
+      "generated-localizations/hi.lproj/InfoPlist.strings": "hi.lproj/InfoPlist.strings",
+      "generated-localizations/id.lproj/InfoPlist.strings": "id.lproj/InfoPlist.strings",
+      "generated-localizations/it.lproj/InfoPlist.strings": "it.lproj/InfoPlist.strings",
+      "generated-localizations/ja.lproj/InfoPlist.strings": "ja.lproj/InfoPlist.strings",
+      "generated-localizations/ko.lproj/InfoPlist.strings": "ko.lproj/InfoPlist.strings",
+      "generated-localizations/pt.lproj/InfoPlist.strings": "pt.lproj/InfoPlist.strings",
+      "generated-localizations/ru.lproj/InfoPlist.strings": "ru.lproj/InfoPlist.strings",
+      "generated-localizations/th.lproj/InfoPlist.strings": "th.lproj/InfoPlist.strings",
+      "generated-localizations/tr.lproj/InfoPlist.strings": "tr.lproj/InfoPlist.strings",
+      "generated-localizations/vi.lproj/InfoPlist.strings": "vi.lproj/InfoPlist.strings",
+      "generated-localizations/zh-Hans.lproj/InfoPlist.strings": "zh-Hans.lproj/InfoPlist.strings",
+      "generated-localizations/zh-Hant.lproj/InfoPlist.strings": "zh-Hant.lproj/InfoPlist.strings"
     },
     "macOS": {
       "minimumSystemVersion": "11.0",

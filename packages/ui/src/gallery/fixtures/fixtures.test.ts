@@ -12,7 +12,7 @@ import { listedCommits } from "../../fixtures/changeFixtures";
 import { SAMPLE_GIT } from "../../fixtures/sampleGit";
 import { NEVER_PUSHED_GIT, RANKING_TASK, UNPUSHED_GIT } from "./projectGit";
 import { viewerScenarios } from "./viewer";
-import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
+import { DEFAULT_WIDTH, MIN_HEIGHT, type Scenario } from "../scenario";
 
 /** The arguments of a step that hold a value (a status) and not a name to look for, by position: a
  * value can spell the same as a message, and would be flagged for it. */
@@ -20,19 +20,29 @@ const VALUE_ARGUMENTS: Partial<Record<keyof Ui, number[]>> = { hoverChangeStatus
 
 /** Every scenario's steps, run against a `Ui` that presses nothing and records the names it was
  * given to look for, in `language`. Only `t`, `session` and `changeRow` are real. `key` and `type`
- * take text, `hoverCalloutStatus` a title and `daemonEvents` events, so they record nothing. */
-async function matchersOf(language: Language): Promise<{ id: string; matcher: Matcher }[]> {
+ * take text, `hoverCalloutStatus` a title and `daemonEvents` events, so they record nothing.
+ * Strings produced by `t` already use the current catalog: a translated label such as Italian
+ * "Aggiungi account" can also fit an English frame ("{agent} account"), so that heuristic applies
+ * only to names the scenario did not translate. */
+async function matchersOf(language: Language, scenarios: Pick<Scenario, "id" | "steps">[] = SCENARIOS): Promise<{ id: string; matcher: Matcher; translated: boolean }[]> {
   const real = createUi({} as Document, language);
-  const matchers: { id: string; matcher: Matcher }[] = [];
-  for (const scenario of SCENARIOS) {
+  const matchers: { id: string; matcher: Matcher; translated: boolean }[] = [];
+  for (const scenario of scenarios) {
+    const translations = new Set<string>();
+    const t: Ui["t"] = (key, ...args) => {
+      const text = real.t(key, ...args);
+      translations.add(text);
+      return text;
+    };
     const recording = new Proxy(real, {
       get(target, property: keyof Ui) {
-        if (property === "t" || property === "session" || property === "changeRow") return target[property];
+        if (property === "t") return t;
+        if (property === "session" || property === "changeRow") return target[property];
         return async (...args: unknown[]) => {
           if (property === "key" || property === "type" || property === "hoverCalloutStatus" || property === "daemonEvents") return;
           args.forEach((arg, index) => {
             if (VALUE_ARGUMENTS[property]?.includes(index)) return;
-            if (typeof arg === "string" || typeof arg === "function") matchers.push({ id: scenario.id, matcher: arg as Matcher });
+            if (typeof arg === "string" || typeof arg === "function") matchers.push({ id: scenario.id, matcher: arg as Matcher, translated: typeof arg === "string" && translations.has(arg) });
           });
         };
       },
@@ -223,7 +233,7 @@ describe("gallery scenarios", () => {
     "name a control by the window's language in %s, never by English copy",
     async (language) => {
       const isEnglishCopy = englishCopyIn(language);
-      const found = (await matchersOf(language)).filter(({ matcher }) => isEnglishCopy(matcher));
+      const found = (await matchersOf(language)).filter(({ matcher, translated }) => !translated && isEnglishCopy(matcher));
       expect(found.map(({ id, matcher }) => `${id}: ${String(matcher)}`)).toEqual([]);
     },
   );
@@ -237,6 +247,37 @@ describe("gallery scenarios", () => {
       expect(found.map(({ id, matcher }) => `${id}: ${String(matcher)}`)).toEqual([]);
     },
   );
+
+  it("name a control check still catches raw English alongside English-shaped translations", async () => {
+    const language = "it";
+    const recorded = await matchersOf(language, [{
+      id: "copy-probes",
+      steps: [async (ui) => {
+        await ui.press(ui.t("settings.accounts.add"));
+        await ui.press(ui.t("sidebar.project.actions", { name: "Even with upstream" }));
+        await ui.press("Add account");
+        await ui.press("Show all 27 unmodified lines");
+        await ui.press((name) => name.startsWith("Show whole file"));
+      }],
+    }]);
+    const isEnglishCopy = englishCopyIn(language);
+    expect(recorded.slice(0, 2).every(({ matcher, translated }) => translated && isEnglishCopy(matcher))).toBe(true);
+    expect(recorded.filter(({ matcher, translated }) => !translated && isEnglishCopy(matcher)).map(({ matcher }) => matcher)).toEqual(recorded.slice(2).map(({ matcher }) => matcher));
+  });
+
+  it.each(Object.keys(CATALOGS) as Language[])("name a control by the rail's translated console label in %s without matching similarly named sessions", async (language) => {
+    const recorded = await matchersOf(language);
+    const t = createUi({} as Document, language).t;
+    for (const [id, description, name] of [["collapsed-project-activity", "Main console avatar", "Main"], ["layout-history", "avatar(Operations)", "Operations"]]) {
+      const matcher = recorded.find((item) => item.id === id && String(item.matcher) === description)!.matcher;
+      expect(typeof matcher).toBe("function");
+      if (typeof matcher !== "function") throw new Error(`No console matcher for ${id}`);
+      expect(matcher(t("session.status.named", { name, status: t("session.status.idle") }))).toBe(true);
+      expect(matcher(name)).toBe(true);
+      expect(matcher(`${name} hub`)).toBe(false);
+      expect(matcher(t("session.status.named", { name: `${name} 2`, status: t("session.status.idle") }))).toBe(false);
+    }
+  });
 
   it("tell a matcher that spells the English separator out from one that takes any punctuation, as the check above relies on", () => {
     const zhPairs = separatorPairs("zh-Hans");

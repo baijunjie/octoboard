@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "{appName}에서 실행 중인 프로그램이 다른 응용 프로그램을 제어하려고 합니다.",
+  "NSCameraUsageDescription": "{appName}에서 실행 중인 프로그램이 카메라를 사용하려고 합니다.",
+  "NSMicrophoneUsageDescription": "{appName}에서 실행 중인 프로그램이 마이크를 사용하려고 합니다.",
+  "NSBluetoothAlwaysUsageDescription": "{appName}에서 실행 중인 프로그램이 Bluetooth를 사용하려고 합니다.",
+  "NSContactsUsageDescription": "{appName}에서 실행 중인 프로그램이 연락처에 접근하려고 합니다.",
+  "NSCalendarsUsageDescription": "{appName}에서 실행 중인 프로그램이 캘린더에 접근하려고 합니다.",
+  "NSRemindersUsageDescription": "{appName}에서 실행 중인 프로그램이 미리 알림에 접근하려고 합니다.",
+  "NSPhotoLibraryUsageDescription": "{appName}에서 실행 중인 프로그램이 사진에 접근하려고 합니다.",
+  "NSLocationWhenInUseUsageDescription": "{appName}에서 실행 중인 프로그램이 위치 정보에 접근하려고 합니다.",
+  "NSLocationUsageDescription": "{appName}에서 실행 중인 프로그램이 위치 정보에 접근하려고 합니다.",
+  "NSDocumentsFolderUsageDescription": "{appName}에서 실행 중인 프로그램이 문서 폴더의 파일에 접근하려고 합니다.",
+  "NSDownloadsFolderUsageDescription": "{appName}에서 실행 중인 프로그램이 다운로드 폴더의 파일에 접근하려고 합니다.",
+  "NSDesktopFolderUsageDescription": "{appName}에서 실행 중인 프로그램이 데스크탑의 파일에 접근하려고 합니다.",
+  "NSRemovableVolumesUsageDescription": "{appName}에서 실행 중인 프로그램이 제거 가능한 볼륨의 파일에 접근하려고 합니다.",
+  "NSNetworkVolumesUsageDescription": "{appName}에서 실행 중인 프로그램이 네트워크 볼륨의 파일에 접근하려고 합니다."
+}

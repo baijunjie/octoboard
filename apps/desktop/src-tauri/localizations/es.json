@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "Un programa que se ejecuta en {appName} quiere controlar otras aplicaciones.",
+  "NSCameraUsageDescription": "Un programa que se ejecuta en {appName} quiere usar la cámara.",
+  "NSMicrophoneUsageDescription": "Un programa que se ejecuta en {appName} quiere usar el micrófono.",
+  "NSBluetoothAlwaysUsageDescription": "Un programa que se ejecuta en {appName} quiere usar Bluetooth.",
+  "NSContactsUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a tus contactos.",
+  "NSCalendarsUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a tus calendarios.",
+  "NSRemindersUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a tus recordatorios.",
+  "NSPhotoLibraryUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a tus fotos.",
+  "NSLocationWhenInUseUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a tu ubicación.",
+  "NSLocationUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a tu ubicación.",
+  "NSDocumentsFolderUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a los archivos de tu carpeta Documentos.",
+  "NSDownloadsFolderUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a los archivos de tu carpeta Descargas.",
+  "NSDesktopFolderUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a los archivos de tu escritorio.",
+  "NSRemovableVolumesUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a los archivos de un volumen extraíble.",
+  "NSNetworkVolumesUsageDescription": "Un programa que se ejecuta en {appName} quiere acceder a los archivos de un volumen de red."
+}

@@ -48,5 +48,5 @@ export interface ProviderPresentation<Id extends string = string, Messages exten
    * registry there checks the merged records against it). The code's words are among `messages`, under the code
    * itself. */
   readonly codes?: Readonly<Record<string, object>>;
-  readonly messages: { readonly en: Messages; readonly "zh-Hans": Messages };
+  readonly messages: { readonly en: Messages; readonly "zh-Hans": Messages; readonly [language: string]: Messages | undefined };
 }

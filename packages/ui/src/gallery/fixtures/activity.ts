@@ -147,7 +147,10 @@ export const activityScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),
       (ui) => ui.wait(500),
-      (ui) => ui.focusControl(describing("Main console avatar", (label) => label.startsWith(console_.name) && /^\p{P}/u.test(label.slice(console_.name.length)))),
+      (ui) => {
+        const prefix = ui.t("session.status.named", { name: console_.name, status: "\0" }).split("\0")[0];
+        return ui.focusControl(describing("Main console avatar", (label) => label === console_.name || label.startsWith(prefix)));
+      },
       (ui) => ui.wait(500),
     ],
   },

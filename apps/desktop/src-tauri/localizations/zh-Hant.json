@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "在 {appName} 中執行的程式想要控制其他應用程式。",
+  "NSCameraUsageDescription": "在 {appName} 中執行的程式想要使用相機。",
+  "NSMicrophoneUsageDescription": "在 {appName} 中執行的程式想要使用麥克風。",
+  "NSBluetoothAlwaysUsageDescription": "在 {appName} 中執行的程式想要使用藍牙。",
+  "NSContactsUsageDescription": "在 {appName} 中執行的程式想要取用你的聯絡人。",
+  "NSCalendarsUsageDescription": "在 {appName} 中執行的程式想要取用你的行事曆。",
+  "NSRemindersUsageDescription": "在 {appName} 中執行的程式想要取用你的提醒事項。",
+  "NSPhotoLibraryUsageDescription": "在 {appName} 中執行的程式想要取用你的照片。",
+  "NSLocationWhenInUseUsageDescription": "在 {appName} 中執行的程式想要取用你的位置。",
+  "NSLocationUsageDescription": "在 {appName} 中執行的程式想要取用你的位置。",
+  "NSDocumentsFolderUsageDescription": "在 {appName} 中執行的程式想要取用「文件」檔案夾中的檔案。",
+  "NSDownloadsFolderUsageDescription": "在 {appName} 中執行的程式想要取用「下載項目」檔案夾中的檔案。",
+  "NSDesktopFolderUsageDescription": "在 {appName} 中執行的程式想要取用桌面上的檔案。",
+  "NSRemovableVolumesUsageDescription": "在 {appName} 中執行的程式想要取用卸除式卷宗上的檔案。",
+  "NSNetworkVolumesUsageDescription": "在 {appName} 中執行的程式想要取用網路卷宗上的檔案。"
+}

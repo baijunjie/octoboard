@@ -91,9 +91,9 @@ refusing the request without asking:
 - files in the Documents and Downloads folders and on the Desktop, and files on removable and network volumes.
 
 The prompt's explanation is, for each, a neutral sentence saying that a program running in Octoboard would like the
-access named; it cannot name the program, which Octoboard does not know. These explanations are available in
-English and Simplified Chinese. macOS selects their language from the application's native resources using its
-system language choice, independently of the language selected in Octoboard's window; English is the fallback
-for an explanation without a matching translation. Octoboard never raises these prompts itself, they have no row in
-Settings' Permissions section, and a grant or refusal is changed in System Settings' Privacy & Security alone.
-Whether a notarized release build raises these prompts as described has not been confirmed yet.
+access named; it cannot name the program, which Octoboard does not know. These explanations are available in all 17
+languages listed in "The offered languages" in `docs/product/language.md`. macOS selects their language from the
+application's native resources using its system language choice, independently of the language selected in Octoboard's
+window; English is the fallback for an explanation without a matching translation. Octoboard never raises these prompts
+itself, they have no row in Settings' Permissions section, and a grant or refusal is changed in System Settings' Privacy
+& Security alone. Whether a notarized release build raises these prompts as described has not been confirmed yet.

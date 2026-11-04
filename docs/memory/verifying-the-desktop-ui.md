@@ -90,17 +90,6 @@ update in the running gallery. Record which source tree the result covers and ke
 ends. If source changes during verification, retain the run as intermediate evidence and verify the final tree after
 it is stable; do not certify it from a sweep that spanned edits.
 
-## Only `zh-Hans` shows translated copy; the other 15 languages render English
-
-Applies to any check whose subject is translated text: reading a screen under another language, a gallery scenario's
-step that names a control, a test that asserts on what a surface says. Only `en` and `zh-Hans` have catalogs
-(`CATALOGS` in `packages/ui/src/i18n/catalog.ts`; `docs/product/language.md`, section "What is translated so far"), so
-each of the other 15 offered languages renders English word for word. Anything resting on English copy — a name written
-out as English text, a label that never reached the catalog, a layout that only fits English — passes under every one of
-them, so a sweep across languages is no broader than a run in English. Make such a check `zh-Hans`, and expect no
-language to show text longer than English's, since none of the longer-worded ones is translated. Text direction is not a
-catalog's (`textDirection` in `packages/ui/src/i18n/languages.ts`), so `ar` still settles mirroring.
-
 ## A fixture daemon answers as fully as the real one, or the gallery shows a state no daemon sends
 
 Applies whenever a daemon reply gains a field the UI draws from, and whenever a gallery scenario still shows the old

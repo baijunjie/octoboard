@@ -12,7 +12,7 @@ translated before the application ships.
 
 ## Key design decisions
 
-- **17 languages**: ar, de, en, es, fr, hi, id, it, ja, ko, pt-BR, ru, th, tr, vi, zh-Hans, zh-Hant. The desktop
+- **17 languages**: ar, de, en, es, fr, hi, id, it, ja, ko, pt, ru, th, tr, vi, zh-Hans, zh-Hant. The desktop
   application and the website use this same list.
 - **en is the base language and the fallback**: when the system language maps to none of the 17, the UI is English.
   The fallback is named on its own, never taken as the list's first entry.
@@ -34,7 +34,7 @@ translated before the application ships.
   - Chinese with only a region gets the script that region conventionally uses: TW / HK / MO → Hant, CN / SG → Hans;
     other regions get none.
   - A script conflict never matches (zh-Hant never lands on zh-Hans); when either side has no script, the language
-    alone decides, so pt-PT and a bare `pt` map to pt-BR.
+    alone decides, so pt-PT and pt-BR map to pt.
   - A language that maps to nothing is dropped, and the UI falls back to English.
 - **Plurals follow CLDR**: every message with a count gives every plural category each language requires.
 - **ar mirrors the whole UI**: directional icons (forward, back, external-link arrows) point the mirrored way; an
@@ -62,4 +62,5 @@ translated before the application ships.
 2. Daemon messages as codes (closed)
 3. Native menu in the current language (closed)
 4. Translations and right-to-left (closed)
-6. [Remaining translations](06-remaining-translations.md)
+6. Remaining translations (closed)
+7. [Final confirmation](07-final-confirmation.md)

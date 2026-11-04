@@ -10,6 +10,8 @@ import { Message } from "./react";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const bare = (text: string) => text.replace(/[\u2068\u2069]/g, "");
+
 it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich and their plain companion usable (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
@@ -24,11 +26,11 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
     ["settings.cloneDir.description.gitUrl", ["Git"]],
     ["git.unavailable", ["Git"]],
     ["git.notARepository", ["Git"]],
-    ["settings.permissions.screenRecording.refused", ["macOS", language === "zh-Hans" ? "系统设置" : "System Settings"]],
-    ["settings.permissions.accessibility.refused", ["Octoboard", language === "zh-Hans" ? "系统设置" : "System Settings"]],
+    ["settings.permissions.screenRecording.refused", ["macOS", globalParam("systemSettings", language)]],
+    ["settings.permissions.accessibility.refused", ["Octoboard", globalParam("systemSettings", language)]],
   ] as const) {
     act(() => root.render(<Message id={id} />));
-    expect(container.textContent).toBe(format(language, id));
+    expect(container.textContent).toBe(bare(format(language, id)));
     expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent).sort()).toEqual([...expected].sort());
     for (const chip of container.querySelectorAll("[data-inline-reference]")) {
       expect(chip.getAttribute("dir")).toBe("auto");
@@ -42,7 +44,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
     for (const count of [1, 3]) {
       act(() => root.render(<Message id={id} params={{ count }} />));
       expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Git"]);
-      expect(container.textContent).toBe(format(language, id, { count }));
+      expect(container.textContent).toBe(bare(format(language, id, { count })));
     }
   }
   act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineReference monospace wrap>?port=</InlineReference>, key: <InlineReference monospace wrap>?key=</InlineReference> }} />));
@@ -50,7 +52,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   const name = "مراجعة/中文/Work";
   act(() => root.render(<Message id="dialog.session.ownerFixed" params={{ name: <InlineReference dir="auto" wrap>{name}</InlineReference> }} />));
   expect(container.querySelector("[data-inline-reference]")?.textContent).toBe(name);
-  expect(container.textContent).toBe(format(language, "dialog.session.ownerFixed", { name }));
+  expect(container.textContent).toBe(bare(format(language, "dialog.session.ownerFixed", { name })));
   // A caller can supply its own product-name presentation instead of a referenced product chip.
   act(() => root.render(<Message id="app.quit.title" params={{ appName: globalParam("appName") } as never} />));
   expect(container.querySelector("[data-inline-reference]")).toBeNull();

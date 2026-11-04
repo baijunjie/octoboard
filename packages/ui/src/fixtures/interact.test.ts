@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createUi, stuckExit, type Matcher } from "./interact";
 import { format } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { IS_MAC } from "../input/keys";
 
 beforeEach(() => vi.useFakeTimers());
@@ -164,6 +165,34 @@ it("changeRow names a change row by its file and status in the window's language
   expect(matches(chinese, translatedSelected)).toBe(true);
   expect(matches(chinese, translatedFromSelected)).toBe(true);
   expect(matches(chinese, "new-name.ts, renamed, from src/old-name.ts")).toBe(false);
+});
+
+it.each(["session", "change", "actions"] as const)("press finds an Arabic %s with an isolated LTR name", async (kind) => {
+  const ui = createUi(document, "ar");
+  const name = kind === "change" ? "new-name.ts" : "Rework the result ranking";
+  const label = (value: string): string => kind === "session"
+    ? format("ar", "sidebar.session.ariaLabel", { title: isolate(value), agent: isolate("Codex"), status: format("ar", "session.status.idle") })
+    : kind === "change"
+      ? format("ar", "git.row.detail.selected", {
+        name: isolate(value), status: format("ar", "git.status.renamed"),
+        detail: format("ar", "git.row.from", { path: isolate("src/old-name.ts") }),
+      })
+      : format("ar", "sidebar.session.actions", { title: isolate(value) });
+  const targetLabel = label(name);
+  expect(targetLabel).toContain("\u2068");
+  expect(targetLabel).toContain("\u2069");
+  const pressed: string[] = [];
+  for (const value of [`${name} 2`, name]) {
+    const button = document.createElement("button");
+    button.setAttribute("aria-label", label(value));
+    button.addEventListener("click", () => pressed.push(value));
+    document.body.append(button);
+  }
+  const matcher = kind === "session" ? ui.session(name) : kind === "change" ? ui.changeRow(name, "renamed") : ui.t("sidebar.session.actions", { title: isolate(name) });
+  const done = ui.press(matcher).then(() => undefined, (error: unknown) => error);
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(await done).toBeUndefined();
+  expect(pressed).toEqual([name]);
 });
 
 it("a matcher from the helpers says what it looks for when a step fails", () => {

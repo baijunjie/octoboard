@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "{appName} içinde çalışan bir program diğer uygulamaları denetlemek istiyor.",
+  "NSCameraUsageDescription": "{appName} içinde çalışan bir program kamerayı kullanmak istiyor.",
+  "NSMicrophoneUsageDescription": "{appName} içinde çalışan bir program mikrofonu kullanmak istiyor.",
+  "NSBluetoothAlwaysUsageDescription": "{appName} içinde çalışan bir program Bluetooth kullanmak istiyor.",
+  "NSContactsUsageDescription": "{appName} içinde çalışan bir program kişilerinize erişmek istiyor.",
+  "NSCalendarsUsageDescription": "{appName} içinde çalışan bir program takvimlerinize erişmek istiyor.",
+  "NSRemindersUsageDescription": "{appName} içinde çalışan bir program anımsatıcılarınıza erişmek istiyor.",
+  "NSPhotoLibraryUsageDescription": "{appName} içinde çalışan bir program fotoğraflarınıza erişmek istiyor.",
+  "NSLocationWhenInUseUsageDescription": "{appName} içinde çalışan bir program konumunuza erişmek istiyor.",
+  "NSLocationUsageDescription": "{appName} içinde çalışan bir program konumunuza erişmek istiyor.",
+  "NSDocumentsFolderUsageDescription": "{appName} içinde çalışan bir program Belgeler klasörünüzdeki dosyalara erişmek istiyor.",
+  "NSDownloadsFolderUsageDescription": "{appName} içinde çalışan bir program İndirilenler klasörünüzdeki dosyalara erişmek istiyor.",
+  "NSDesktopFolderUsageDescription": "{appName} içinde çalışan bir program Masaüstünüzdeki dosyalara erişmek istiyor.",
+  "NSRemovableVolumesUsageDescription": "{appName} içinde çalışan bir program çıkarılabilir bir disk bölümündeki dosyalara erişmek istiyor.",
+  "NSNetworkVolumesUsageDescription": "{appName} içinde çalışan bir program ağ disk bölümündeki dosyalara erişmek istiyor."
+}

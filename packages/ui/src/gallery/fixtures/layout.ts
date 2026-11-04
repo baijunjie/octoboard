@@ -1,4 +1,4 @@
-import { describing, type Matcher } from "../../fixtures/interact";
+import { describing, type Matcher, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
@@ -62,12 +62,12 @@ const quitBusyState = snapshotState({
   sessions: [sessionOf("s-web-1", main.id, website.id, "Fix the summary layout", "working"), sessionOf("s-web-2", main.id, website.id, "Update the dependencies", "idle")],
   shellTerminals: quitShells,
 });
-/** The rail's button for a console: its accessible name is the console's whole name, alone or
- * followed by punctuation and what is going on in it, whichever language writes that. A name
- * followed by a letter or a space is another control's ("Operations hub" is a session, not the
- * console "Operations"); one followed by punctuation of its own is not told apart. */
-const avatar = (name: string): Matcher =>
-  describing(`avatar(${name})`, (label) => label === name || (label.startsWith(name) && /^\p{P}/u.test(label.slice(name.length))));
+/** The rail names a console on its own or through the translated status sentence. Matching the
+ * whole name and its sentence prefix keeps a similarly named session out. */
+const avatar = (ui: Ui, name: string): Matcher => {
+  const prefix = ui.t("session.status.named", { name, status: "\0" }).split("\0")[0];
+  return describing(`avatar(${name})`, (label) => label === name || label.startsWith(prefix));
+};
 
 export const layoutScenarios: Scenario[] = [
   {
@@ -115,7 +115,7 @@ export const layoutScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.press(ui.session("Fix the summary layout")),
-      (ui) => ui.press(avatar(operations.name)),
+      (ui) => ui.press(avatar(ui, operations.name)),
       (ui) => ui.press(ui.session("Roll back the last deploy")),
       (ui) => ui.press(ui.t("titleBar.back")),
     ],

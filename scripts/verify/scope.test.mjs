@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
-  ALL_PACKAGES, DAEMON_READS_UI, DESKTOP_CONTRACT, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_DAEMON, UI_READS_ELSEWHERE,
+  ALL_PACKAGES, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_DAEMON, UI_READS_ELSEWHERE,
   UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
@@ -70,7 +70,10 @@ const CASES = [
   ["scripts/verify/lock.mjs", ["verify", "ui"]],
   ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "daemon"]],
   ["apps/daemon/src/providers/claude.rs", ["verify", "ui", "daemon"]],
-  ["apps/desktop/src-tauri/Info.template.plist", ["verify", "ui", "native"]],
+  ["apps/desktop/src-tauri/Info.template.plist", ["verify", "ui", "desktop", "native"]],
+  ["apps/desktop/src-tauri/localizations/", ["verify", "desktop", "native"]],
+  ["apps/desktop/src-tauri/localizations/ja.json", ["verify", "desktop", "native"]],
+  ["apps/desktop/src-tauri/tauri.conf.json", ["verify", "desktop", "native"]],
   ["LICENSE", ["verify", "ui"]],
   ["apps/web/site.config.ts", ["web"]],
   ["packages/ui/src/test/failedFilesReporter.ts", ["verify", "ui"]],
@@ -127,12 +130,12 @@ test("the menu keys select the shell only when the caller reports a change to th
 });
 
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
-  const lists = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI];
+  const lists = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI];
   for (const file of lists.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);
 });
 
 test("every path the relations name still exists", () => {
-  for (const file of [MENU_KEYS_FILE, ...[WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI].flat()]) {
+  for (const file of [MENU_KEYS_FILE, ...[WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI].flat()]) {
     assert.ok(existsSync(path.join(root, file)), file);
   }
 });

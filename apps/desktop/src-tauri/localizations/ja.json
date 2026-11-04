@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "{appName}で実行中のプログラムがほかのアプリケーションを制御しようとしています。",
+  "NSCameraUsageDescription": "{appName}で実行中のプログラムがカメラを使用しようとしています。",
+  "NSMicrophoneUsageDescription": "{appName}で実行中のプログラムがマイクを使用しようとしています。",
+  "NSBluetoothAlwaysUsageDescription": "{appName}で実行中のプログラムがBluetoothを使用しようとしています。",
+  "NSContactsUsageDescription": "{appName}で実行中のプログラムが連絡先にアクセスしようとしています。",
+  "NSCalendarsUsageDescription": "{appName}で実行中のプログラムがカレンダーにアクセスしようとしています。",
+  "NSRemindersUsageDescription": "{appName}で実行中のプログラムがリマインダーにアクセスしようとしています。",
+  "NSPhotoLibraryUsageDescription": "{appName}で実行中のプログラムが写真にアクセスしようとしています。",
+  "NSLocationWhenInUseUsageDescription": "{appName}で実行中のプログラムが位置情報にアクセスしようとしています。",
+  "NSLocationUsageDescription": "{appName}で実行中のプログラムが位置情報にアクセスしようとしています。",
+  "NSDocumentsFolderUsageDescription": "{appName}で実行中のプログラムが「書類」フォルダ内のファイルにアクセスしようとしています。",
+  "NSDownloadsFolderUsageDescription": "{appName}で実行中のプログラムが「ダウンロード」フォルダ内のファイルにアクセスしようとしています。",
+  "NSDesktopFolderUsageDescription": "{appName}で実行中のプログラムがデスクトップ上のファイルにアクセスしようとしています。",
+  "NSRemovableVolumesUsageDescription": "{appName}で実行中のプログラムがリムーバブルボリューム上のファイルにアクセスしようとしています。",
+  "NSNetworkVolumesUsageDescription": "{appName}で実行中のプログラムがネットワークボリューム上のファイルにアクセスしようとしています。"
+}

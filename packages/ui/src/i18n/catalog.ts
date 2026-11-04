@@ -1,8 +1,24 @@
 import { appConfig } from "../appConfig";
 import { PROVIDER_PARAMS } from "../providers/registry";
+import { FALLBACK_LANGUAGE, textDirection, type Language } from "./languages";
+import { isolate } from "./isolate";
+import { ar } from "./messages/ar";
+import { de } from "./messages/de";
 import { en } from "./messages/en";
+import { es } from "./messages/es";
+import { fr } from "./messages/fr";
+import { hi } from "./messages/hi";
+import { id } from "./messages/id";
+import { it } from "./messages/it";
+import { ja } from "./messages/ja";
+import { ko } from "./messages/ko";
+import { pt } from "./messages/pt";
+import { ru } from "./messages/ru";
+import { th } from "./messages/th";
+import { tr } from "./messages/tr";
+import { vi } from "./messages/vi";
 import { zhHans } from "./messages/zh-Hans";
-import { FALLBACK_LANGUAGE, type Language } from "./languages";
+import { zhHant } from "./messages/zh-Hant";
 
 /** The CLDR plural categories; which of them a language needs is what `Intl.PluralRules` reports. */
 export type PluralCategory = "zero" | "one" | "two" | "few" | "many" | "other";
@@ -80,8 +96,23 @@ export type Translation<C extends PluralCategory> = {
  * English. A catalog is typed `Translation<...>` with the plural categories its language needs, so
  * a missing message or category fails type checking; `catalog.test.ts` checks the rest. */
 export const CATALOGS: Partial<Record<Language, Partial<Record<MessageKey, Message>>>> = {
+  "ar": ar,
+  "de": de,
   en,
+  "es": es,
+  "fr": fr,
+  "hi": hi,
+  "id": id,
+  "it": it,
+  "ja": ja,
+  "ko": ko,
+  "pt": pt,
+  "ru": ru,
+  "th": th,
+  "tr": tr,
+  "vi": vi,
   "zh-Hans": zhHans,
+  "zh-Hant": zhHant,
 };
 
 const pluralRules = new Map<Language, Intl.PluralRules>();
@@ -119,7 +150,9 @@ export function format(language: Language, key: MessageKey, params?: Record<stri
       if (index % 2 === 0) return part;
       const value = params?.[part] ?? globalParam(part, language);
       if (value === undefined) return `{${part}}`;
-      return typeof value === "number" ? value.toLocaleString(language) : value;
+      const text = typeof value === "number" ? value.toLocaleString(language) : value;
+      // Global brand names also enter plain native labels, without a caller to isolate them.
+      return textDirection(language) === "rtl" && Object.hasOwn(GLOBAL_PARAMS, part) ? isolate(text) : text;
     })
     .join("");
 }

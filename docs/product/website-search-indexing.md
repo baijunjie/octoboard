@@ -23,9 +23,8 @@ root, so a browser opening it shows its entries as a table.
 Each HTML homepage and privacy page, in every language, has an absolute canonical URL with a trailing slash, and
 hreflang alternates for the HTML versions, also with trailing slashes. `x-default` is again the
 unprefixed English URL of that page. Those alternates use the same BCP-47 tags as the sitemap, and the
-HTML page adds two tags that repeat an existing URL: `zh` is the Simplified Chinese page, the same URL
-as `zh-Hans`, and `pt` is the Brazilian Portuguese page, the same URL as `pt-BR`. The sitemap does not
-include `zh` or `pt`.
+HTML page adds one tag that repeats an existing URL: `zh` is the Simplified Chinese page, the same URL as `zh-Hans`.
+The sitemap does not include `zh`. Portuguese uses `pt` in both the HTML alternates and the sitemap.
 
 Open Graph locale is `language_TERRITORY`. The current page uses `og:locale`; every other language uses
 `og:locale:alternate`. The values are `ar_AR`, `de_DE`, `en_US`, `es_ES`, `fr_FR`, `hi_IN`, `id_ID`,

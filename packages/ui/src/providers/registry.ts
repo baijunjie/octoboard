@@ -17,7 +17,7 @@ const MODULES: readonly ProviderPresentation[] = [
 
 type UnionToIntersection<U> = (U extends unknown ? (variable: U) => void : never) extends (merged: infer I) => void ? I : never;
 
-type BuiltInMessages<Language extends keyof ProviderPresentation["messages"]> = UnionToIntersection<(typeof BUILT_IN)[number]["messages"][Language]>;
+type BuiltInMessages<Language extends keyof (typeof BUILT_IN)[number]["messages"]> = UnionToIntersection<(typeof BUILT_IN)[number]["messages"][Language]>;
 
 /** The presentation module of the provider `id`, or `undefined` for an id with none (a provider the daemon serves that
  * this build does not know). */
@@ -58,12 +58,27 @@ export function settingReferences(id: string, setting: string): Readonly<Record<
 /** The brand-name placeholders the modules declare (`params`), for the catalog to offer every message. */
 export const PROVIDER_PARAMS = Object.assign({}, ...MODULES.map((module) => module.params)) as UnionToIntersection<NonNullable<(typeof BUILT_IN)[number]["params"]>>;
 
-function mergedMessages<Language extends keyof ProviderPresentation["messages"]>(language: Language): BuiltInMessages<Language> {
-  return Object.assign({}, ...MODULES.map((module) => module.messages[language]));
+function mergedMessages<Language extends keyof (typeof BUILT_IN)[number]["messages"]>(language: Language): BuiltInMessages<Language> {
+  return Object.assign({}, ...MODULES.map((module) => module.messages[language] ?? module.messages.en));
 }
 
 /** Every module's messages in one language, for the catalog of that language to spread in. */
 export const PROVIDER_MESSAGES = {
+  "ar": mergedMessages("ar"),
+  "de": mergedMessages("de"),
   en: mergedMessages("en"),
+  "es": mergedMessages("es"),
+  "fr": mergedMessages("fr"),
+  "hi": mergedMessages("hi"),
+  "id": mergedMessages("id"),
+  "it": mergedMessages("it"),
+  "ja": mergedMessages("ja"),
+  "ko": mergedMessages("ko"),
+  "pt": mergedMessages("pt"),
+  "ru": mergedMessages("ru"),
+  "th": mergedMessages("th"),
+  "tr": mergedMessages("tr"),
+  "vi": mergedMessages("vi"),
   "zh-Hans": mergedMessages("zh-Hans"),
+  "zh-Hant": mergedMessages("zh-Hant"),
 } as const;

@@ -251,7 +251,7 @@ A section headed "The user's language", in a project session's role description 
 file, while the daemon holds a language that is not English, in any region (see "The language the daemon holds" in
 `docs/product/language.md`). Nothing is added while the daemon holds no language, or for English: sessions then follow
 the language the user writes in. The section names the language in English followed by its tag, such as "Simplified
-Chinese (zh-Hans)" or "Brazilian Portuguese (pt-BR)", says the user set Octoboard's interface to it, and tells the
+Chinese (zh-Hans)" or "Portuguese (pt)", says the user set Octoboard's interface to it, and tells the
 session:
 
 - to talk to the user in it: its replies, its questions, the reports and pages meant for the user, and the titles it

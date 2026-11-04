@@ -577,11 +577,11 @@ mod tests {
         }
 
         let options = RoleOptions {
-            user_language: Some("pt-BR"),
+            user_language: Some("pt"),
             ..ask
         };
         let text = console_session_instructions(Some("Be brief."), &options);
-        assert!(text.contains("interface to Brazilian Portuguese (pt-BR)."));
+        assert!(text.contains("interface to Portuguese (pt)."));
         let language = text.find("## The user's language").expect("a section");
         assert!(text.find("## Asking the user").unwrap() < language);
         assert!(language < text.find("## The user's instructions").unwrap());

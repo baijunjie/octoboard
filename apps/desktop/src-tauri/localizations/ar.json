@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ التحكم في تطبيقات أخرى.",
+  "NSCameraUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ استخدام الكاميرا.",
+  "NSMicrophoneUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ استخدام الميكروفون.",
+  "NSBluetoothAlwaysUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ استخدام Bluetooth.",
+  "NSContactsUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى جهات اتصالك.",
+  "NSCalendarsUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى تقويماتك.",
+  "NSRemindersUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى تذكيراتك.",
+  "NSPhotoLibraryUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى صورك.",
+  "NSLocationWhenInUseUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى موقعك.",
+  "NSLocationUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى موقعك.",
+  "NSDocumentsFolderUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى الملفات في مجلد المستندات.",
+  "NSDownloadsFolderUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى الملفات في مجلد التنزيلات.",
+  "NSDesktopFolderUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى الملفات على سطح المكتب.",
+  "NSRemovableVolumesUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى الملفات على وحدة تخزين قابلة للإزالة.",
+  "NSNetworkVolumesUsageDescription": "يريد برنامج يعمل في ⁨{appName}⁩ الوصول إلى الملفات على وحدة تخزين شبكية."
+}

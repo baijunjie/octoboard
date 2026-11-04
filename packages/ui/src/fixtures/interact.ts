@@ -173,7 +173,7 @@ const TOOLTIP_SHOW_MS = 500;
  * controls cannot be driven into.
  */
 export interface Ui {
-  /** The catalog's message in the window's language, for naming a control. */
+  /** The catalog's message in the window's language, without bidi isolates, for naming a control. */
   t: <K extends MessageKey>(key: K, ...args: MessageArgs<K>) => string;
   /** The sidebar row of the session titled exactly `title` (so "Hub" is not "Hub 2"), not its
    * actions menu — a console session's row included, since it is an ordinary session row. */
@@ -762,7 +762,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       (item) => item.lastElementChild?.textContent?.trim() === title,
     );
 
-  const t: Ui["t"] = translatorFor(language);
+  const translate = translatorFor(language);
+  const t: Ui["t"] = (key, ...args) => withoutIsolates(translate(key, ...args));
 
   return {
     t,
@@ -1145,7 +1146,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
           let trigger: HTMLElement | undefined;
           if (row === undefined) {
             const named = Array.from(doc.querySelectorAll<HTMLElement>("[data-region=sidebar] [role=img]")).find(
-              (element) => element.getAttribute("aria-label") === sentence,
+              (element) => nameOf(element) === sentence,
             );
             // Found, so waiting would not change it: the badge is a plain box, with no trigger.
             if (named && !named.matches(TOOLTIP_TRIGGER)) throw new Error("The git badge in focus mode's header carries no tooltip to hover");

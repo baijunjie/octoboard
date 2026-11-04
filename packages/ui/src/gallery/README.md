@@ -149,9 +149,9 @@ Playwright is a devDependency of `packages/ui`, so `pnpm install` is everything 
 browser: run `pnpm exec playwright install chromium` from `packages/ui` once, or point `--chromium <path>` /
 `OCTOBOARD_CHROMIUM` (or `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT`) at an existing one.
 
-A sweep loads English unless `--lang` names more; `--lang all` sweeps every language with a catalog (`en`, `zh-Hans`). A
-translation is held where it is written: each catalog is typed `Translation<...>`, so a missing message or plural
-category fails type checking, `src/i18n/catalog.test.ts` checks the placeholders and plural categories of every catalog,
+A sweep loads English unless `--lang` names more; `--lang all` sweeps every language registered in the served app's catalog
+registry. A translation is held where it is written: each catalog is typed `Translation<...>`, so a missing message or
+plural category fails type checking, `src/i18n/catalog.test.ts` checks the placeholders and plural categories of every catalog,
 and `fixtures/fixtures.test.ts` fails a step that names a control in English copy or with the English separator, which
 would find nothing in another language. The one check that runs only for English is the archived session's Reopen in
 `history-loaded`, which needs the real pointer; the name Reopen carries in each language is held by

@@ -61,6 +61,8 @@ export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protoc
 export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
 // A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's Info.plist template.
 export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.template.plist"];
+// Desktop script tests read the native permission catalogs, template and bundle resource mappings.
+export const DESKTOP_READS_NATIVE = ["apps/desktop/src-tauri/localizations/", "apps/desktop/src-tauri/Info.template.plist", "apps/desktop/src-tauri/tauri.conf.json"];
 // A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
 export const UI_READS_ELSEWHERE = ["LICENSE"];
 // UI tests (`daemonCodes.test.ts`, `fixtureProviders.test.ts`) read the provider modules' sources, where each provider
@@ -109,6 +111,7 @@ export const RULES = [
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },
   { match: UI_READS_DAEMON, consumers: ["verify", "ui", "daemon"], why: "a UI test reads them" },
   { match: UI_READS_NATIVE, consumers: ["verify", "ui", "native"], why: "a UI test reads it" },
+  { match: DESKTOP_READS_NATIVE, consumers: ["verify", "desktop", "native"], why: "desktop script tests read the native permission catalogs, template and bundle resource mappings" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
   { match: ["apps/daemon/src/adapter/claude/compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },

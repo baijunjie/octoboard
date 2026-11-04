@@ -2,13 +2,32 @@ import { expect, it } from "vitest";
 
 import { CATALOGS, format, messageText, splitPlaceholders, type Message, type MessageKey } from "./catalog";
 import { appConfig } from "../appConfig";
-import type { Language } from "./languages";
+import { LANGUAGES, type Language } from "./languages";
 import { en } from "./messages/en";
 
-it("fills placeholders, selects the plural form and falls back to English", () => {
+it("fills placeholders and selects the plural form", () => {
   expect(format("en", "rail.waiting", { count: 1 })).toBe("1 session is waiting for you. Go to the next one.");
   expect(format("en", "menu.about")).toBe(`About ${appConfig.name}`);
-  expect(format("de", "rail.waiting", { count: 2 })).toBe("2 sessions are waiting for you. Go to the next one.");
+});
+
+it("isolates global brand names in plain RTL messages without putting controls in the catalog", () => {
+  expect(messageText("ar", "menu.quit")).not.toMatch(/[\u2068\u2069]/);
+  expect(format("ar", "menu.quit")).toContain(`\u2068${appConfig.name}\u2069`);
+});
+
+it("uses English plural rules when a catalog or message is unavailable", () => {
+  const french = CATALOGS.fr;
+  const registered = Object.hasOwn(CATALOGS, "fr");
+  try {
+    // French treats zero as singular; the English fallback must use its own plural rules.
+    CATALOGS.fr = undefined;
+    expect(format("fr", "rail.waiting", { count: 0 })).toBe("0 sessions are waiting for you. Go to the next one.");
+    CATALOGS.fr = { ...french, "rail.waiting": undefined };
+    expect(format("fr", "rail.waiting", { count: 0 })).toBe("0 sessions are waiting for you. Go to the next one.");
+  } finally {
+    if (registered) CATALOGS.fr = french;
+    else delete CATALOGS.fr;
+  }
 });
 
 it.each([0, 1, 2, 73866303])("localizes context size units for a total of %i", (count) => {
@@ -16,7 +35,21 @@ it.each([0, 1, 2, 73866303])("localizes context size units for a total of %i", (
   const params = { count, tokens };
   expect(format("en", "session.context.heading", params)).toBe(`Context ${tokens} ${count === 1 ? "token" : "tokens"}`);
   expect(format("zh-Hans", "session.context.heading", params)).toBe(`上下文 ${tokens} 个 token`);
-  expect(format("ar", "session.context.heading", params)).toBe(`Context ${tokens} ${count === 1 ? "token" : "tokens"}`);
+});
+
+it("registers a complete catalog for every offered language", () => {
+  expect(Object.keys(CATALOGS).sort()).toEqual([...LANGUAGES].sort());
+  const keys = Object.keys(en).sort();
+  for (const [language, catalog] of Object.entries(CATALOGS)) {
+    expect(Object.keys(catalog).sort(), language).toEqual(keys);
+    for (const [key, message] of Object.entries(catalog)) {
+      for (const form of formsOf(message)) {
+        // The separator is intentionally empty in languages with no space after a sentence.
+        if (key === "common.sentenceSeparator") continue;
+        expect(form.trim().length, `${language} ${key}`).toBeGreaterThan(0);
+      }
+    }
+  }
 });
 
 const translated = Object.entries(CATALOGS).filter(([language]) => language !== "en") as [

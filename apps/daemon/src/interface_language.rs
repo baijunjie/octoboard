@@ -17,7 +17,7 @@ const LANGUAGES: &[(&str, &str)] = &[
     ("it", "Italian"),
     ("ja", "Japanese"),
     ("ko", "Korean"),
-    ("pt-BR", "Brazilian Portuguese"),
+    ("pt", "Portuguese"),
     ("ru", "Russian"),
     ("th", "Thai"),
     ("tr", "Turkish"),
@@ -61,16 +61,15 @@ mod tests {
             display_name("zh-Hant").as_deref(),
             Some("Traditional Chinese (zh-Hant)")
         );
-        assert_eq!(
-            display_name("pt-BR").as_deref(),
-            Some("Brazilian Portuguese (pt-BR)")
-        );
+        assert_eq!(display_name("pt").as_deref(), Some("Portuguese (pt)"));
         assert_eq!(display_name("ja").as_deref(), Some("Japanese (ja)"));
     }
 
     #[test]
     fn a_tag_the_interface_does_not_offer_has_no_name() {
-        for tag in ["", "xx", "zh", "pt", "ZH-Hans", "zh-hans", "en-GB", " ja"] {
+        for tag in [
+            "", "xx", "zh", "pt-BR", "ZH-Hans", "zh-hans", "en-GB", " ja",
+        ] {
             assert_eq!(display_name(tag), None, "{tag:?}");
         }
     }

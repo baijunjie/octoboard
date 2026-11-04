@@ -4,8 +4,10 @@ import { PROVIDER_MESSAGES } from "../../providers/registry";
  * The English catalog: every message the UI shows, and the base every other language is translated
  * from and falls back to. A key names where the message is used (`area.what`); `{name}` is a
  * placeholder, and a message that depends on a count gives its plural forms by CLDR category.
- * `{appName}` is the one placeholder every message can use without a caller passing it: it is
- * filled globally from `config/app.json`.
+ * Product-name placeholders are filled globally without a caller passing them; `{appName}` comes
+ * from `config/app.json`.
+ * An `{age}` is already a complete localized relative-time phrase, including words such as
+ * "ago"; the surrounding message must not add those words again.
  *
  * Web UI is sentence case and uses no contractions. The macOS application menu is Title Case,
  * matching Apple's own menu items. A command in the window takes a trailing ellipsis only when it
@@ -1108,6 +1110,7 @@ export const en = {
   "session.context.limit": "Limit",
   "session.context.title": "Context window",
   "session.context.amount": "{tokens} / {limit}",
+  // Unlike quota percentages, this value already includes its localized percent sign.
   "session.context.used": "{percent} used",
   "session.context.left": "{tokens} left",
   "session.context.entry": "{label}: {value}",

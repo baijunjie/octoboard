@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "Program yang berjalan di {appName} ingin mengontrol aplikasi lain.",
+  "NSCameraUsageDescription": "Program yang berjalan di {appName} ingin menggunakan kamera.",
+  "NSMicrophoneUsageDescription": "Program yang berjalan di {appName} ingin menggunakan mikrofon.",
+  "NSBluetoothAlwaysUsageDescription": "Program yang berjalan di {appName} ingin menggunakan Bluetooth.",
+  "NSContactsUsageDescription": "Program yang berjalan di {appName} ingin mengakses kontak Anda.",
+  "NSCalendarsUsageDescription": "Program yang berjalan di {appName} ingin mengakses kalender Anda.",
+  "NSRemindersUsageDescription": "Program yang berjalan di {appName} ingin mengakses pengingat Anda.",
+  "NSPhotoLibraryUsageDescription": "Program yang berjalan di {appName} ingin mengakses foto Anda.",
+  "NSLocationWhenInUseUsageDescription": "Program yang berjalan di {appName} ingin mengakses lokasi Anda.",
+  "NSLocationUsageDescription": "Program yang berjalan di {appName} ingin mengakses lokasi Anda.",
+  "NSDocumentsFolderUsageDescription": "Program yang berjalan di {appName} ingin mengakses file di folder Dokumen Anda.",
+  "NSDownloadsFolderUsageDescription": "Program yang berjalan di {appName} ingin mengakses file di folder Unduhan Anda.",
+  "NSDesktopFolderUsageDescription": "Program yang berjalan di {appName} ingin mengakses file di Desktop Anda.",
+  "NSRemovableVolumesUsageDescription": "Program yang berjalan di {appName} ingin mengakses file di volume yang dapat dilepas.",
+  "NSNetworkVolumesUsageDescription": "Program yang berjalan di {appName} ingin mengakses file di volume jaringan."
+}

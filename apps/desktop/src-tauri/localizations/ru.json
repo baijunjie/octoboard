@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "Программа, работающая в {appName}, хочет управлять другими приложениями.",
+  "NSCameraUsageDescription": "Программа, работающая в {appName}, хочет использовать камеру.",
+  "NSMicrophoneUsageDescription": "Программа, работающая в {appName}, хочет использовать микрофон.",
+  "NSBluetoothAlwaysUsageDescription": "Программа, работающая в {appName}, хочет использовать Bluetooth.",
+  "NSContactsUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к вашим контактам.",
+  "NSCalendarsUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к вашим календарям.",
+  "NSRemindersUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к вашим напоминаниям.",
+  "NSPhotoLibraryUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к вашим фото.",
+  "NSLocationWhenInUseUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к вашей геопозиции.",
+  "NSLocationUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к вашей геопозиции.",
+  "NSDocumentsFolderUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к файлам в вашей папке «Документы».",
+  "NSDownloadsFolderUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к файлам в вашей папке «Загрузки».",
+  "NSDesktopFolderUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к файлам на вашем Рабочем столе.",
+  "NSRemovableVolumesUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к файлам на съемном томе.",
+  "NSNetworkVolumesUsageDescription": "Программа, работающая в {appName}, хочет получить доступ к файлам на сетевом томе."
+}

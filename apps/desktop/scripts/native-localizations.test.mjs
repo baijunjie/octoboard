@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -8,8 +8,15 @@ import { execFileSync } from "node:child_process";
 import { generateNativeLocalizations } from "./native-localizations.mjs";
 
 const read = (file) => readFileSync(new URL(file, import.meta.url), "utf8");
-const catalogs = Object.fromEntries(["en", "zh-Hans"].map((language) => [language, JSON.parse(read(`../src-tauri/localizations/${language}.json`))]));
+const catalogs = Object.fromEntries(readdirSync(new URL("../src-tauri/localizations/", import.meta.url)).filter((file) => file.endsWith(".json")).sort().map((file) => [file.slice(0, -5), JSON.parse(read(`../src-tauri/localizations/${file}`))]));
 const basePlist = read("../src-tauri/Info.template.plist");
+
+test("provides a native permission catalog for every offered bundle language", () => {
+  const array = /<key>CFBundleLocalizations<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(basePlist)?.[1] ?? "";
+  const languages = [...array.matchAll(/<string>([^<]+)<\/string>/g)].map((match) => match[1]);
+  assert.ok(languages.length > 0);
+  assert.deepEqual(Object.keys(catalogs).sort(), languages.sort());
+});
 
 test("generates all native purposes with the configured identity and valid bundle resources", () => {
   const outputDir = mkdtempSync(path.join(tmpdir(), "native-localizations-"));
@@ -19,7 +26,7 @@ test("generates all native purposes with the configured identity and valid bundl
     assert.equal(Object.keys(catalogs.en).length, 15);
     const config = JSON.parse(read("../src-tauri/tauri.conf.json"));
     assert.equal(config.bundle.macOS.infoPlist, "Info.plist");
-    for (const language of ["en", "zh-Hans"]) {
+    for (const language of Object.keys(catalogs)) {
       const resource = `${language}.lproj/InfoPlist.strings`;
       assert.equal(config.bundle.resources[`generated-localizations/${resource}`], resource);
       const file = path.join(outputDir, resource);
@@ -62,6 +69,11 @@ test("the CLI writes the same permission plist for Tauri dev embedding and bundl
       writeFileSync(path.join(desktop, `src-tauri/localizations/${language}.json`), JSON.stringify(catalog));
     }
     execFileSync(process.execPath, [script]);
+    for (const language of Object.keys(catalogs)) {
+      const generated = readFileSync(path.join(desktop, `src-tauri/generated-localizations/${language}.lproj/InfoPlist.strings`), "utf8");
+      assert.equal(generated.split("\n").filter(Boolean).length, 15);
+      assert.ok(!generated.includes("{appName}"));
+    }
     const developmentPlist = path.join(desktop, "src-tauri/Info.plist");
     const config = JSON.parse(read("../src-tauri/tauri.conf.json"));
     assert.equal(path.join(desktop, "src-tauri", config.bundle.macOS.infoPlist), developmentPlist);

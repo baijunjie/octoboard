@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "Ein in {appName} ausgeführtes Programm möchte andere Anwendungen steuern.",
+  "NSCameraUsageDescription": "Ein in {appName} ausgeführtes Programm möchte die Kamera verwenden.",
+  "NSMicrophoneUsageDescription": "Ein in {appName} ausgeführtes Programm möchte das Mikrofon verwenden.",
+  "NSBluetoothAlwaysUsageDescription": "Ein in {appName} ausgeführtes Programm möchte Bluetooth verwenden.",
+  "NSContactsUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf deine Kontakte zugreifen.",
+  "NSCalendarsUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf deine Kalender zugreifen.",
+  "NSRemindersUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf deine Erinnerungen zugreifen.",
+  "NSPhotoLibraryUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf deine Fotos zugreifen.",
+  "NSLocationWhenInUseUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf deinen Standort zugreifen.",
+  "NSLocationUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf deinen Standort zugreifen.",
+  "NSDocumentsFolderUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf Dateien in deinem Ordner „Dokumente“ zugreifen.",
+  "NSDownloadsFolderUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf Dateien in deinem Ordner „Downloads“ zugreifen.",
+  "NSDesktopFolderUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf Dateien auf deinem Schreibtisch zugreifen.",
+  "NSRemovableVolumesUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf Dateien auf einem Wechselvolume zugreifen.",
+  "NSNetworkVolumesUsageDescription": "Ein in {appName} ausgeführtes Programm möchte auf Dateien auf einem Netzwerkvolume zugreifen."
+}

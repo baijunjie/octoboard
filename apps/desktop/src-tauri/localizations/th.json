@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการควบคุมแอปพลิเคชันอื่น",
+  "NSCameraUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการใช้กล้อง",
+  "NSMicrophoneUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการใช้ไมโครโฟน",
+  "NSBluetoothAlwaysUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการใช้ Bluetooth",
+  "NSContactsUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงรายชื่อ",
+  "NSCalendarsUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงปฏิทิน",
+  "NSRemindersUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงรายการเตือนความจำ",
+  "NSPhotoLibraryUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงรูปภาพ",
+  "NSLocationWhenInUseUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงตำแหน่งที่ตั้ง",
+  "NSLocationUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงตำแหน่งที่ตั้ง",
+  "NSDocumentsFolderUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงไฟล์ในโฟลเดอร์เอกสาร",
+  "NSDownloadsFolderUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงไฟล์ในโฟลเดอร์รายการดาวน์โหลด",
+  "NSDesktopFolderUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงไฟล์บนเดสก์ท็อป",
+  "NSRemovableVolumesUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงไฟล์บนดิสก์โวลุ่มแบบถอดได้",
+  "NSNetworkVolumesUsageDescription": "โปรแกรมที่ทำงานใน {appName} ต้องการเข้าถึงไฟล์บนดิสก์โวลุ่มเครือข่าย"
+}

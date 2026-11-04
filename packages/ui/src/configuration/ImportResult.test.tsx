@@ -35,7 +35,7 @@ it("groups a count by the language of the application, not the browser's", () =>
     { name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: Array.from({ length: 1200 }, (_, i) => project(i)) },
   ];
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} />);
-  expect(container.textContent).toContain("1.200 projects created");
+  expect(container.textContent).toContain("1.200 Projekte erstellt");
 });
 
 /** The items of a region's totals line, without the dot drawn between them. */

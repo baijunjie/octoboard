@@ -4,7 +4,7 @@
 
 Octoboard offers 17 languages, identified by these language tags:
 
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt-BR`, `ru`, `th`, `tr`, `vi`, `zh-Hans`, `zh-Hant`
+`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`, `vi`, `zh-Hans`, `zh-Hant`
 
 The list is ordered **alphabetically by tag**, not by each language's name. That order is the order of the options in
 Settings, and it breaks ties when a system language matches more than one entry (see "How the system's languages map
@@ -60,7 +60,7 @@ Some consequences:
 |---|---|
 | `en-GB` | `en` |
 | `fr-CA` | `fr` |
-| `pt-PT`, `pt` | `pt-BR` |
+| `pt-BR`, `pt-PT`, `pt` | `pt` |
 | `zh-TW`, `zh-HK`, `zh-MO`, `zh-Hant` | `zh-Hant` |
 | `zh-CN`, `zh-SG`, `zh`, `zh-Hans` | `zh-Hans` |
 | `nl` only | `en` (nothing maps) |
@@ -156,13 +156,9 @@ window's own language.
 
 ## What is translated so far
 
-**English and Simplified Chinese (`zh-Hans`) are complete**: under either, all the text listed in "What follows the
-language" above — the UI's own text, the notifications it composes, the daemon's errors and notices, the macOS
-application menu and the menu bar icon's menu — is in that language.
+**All 17 offered languages are complete**: under each, all the text listed in "What follows the language" above —
+the UI's own text, the notifications it composes, the daemon's errors and notices, the macOS application menu and the
+menu bar icon's menu — is in that language. Arabic combines translated text with the mirrored window.
 
-**The other 15 languages have no translations yet.** Choosing one, or the first launch picking one, shows that text in
-English, while the numbers and dates the UI formats, the document's language and the writing direction still follow the
-choice. Under Arabic, therefore, the window is fully mirrored but its text is English.
-
-Status: not implemented — translations into `ar`, `de`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt-BR`, `ru`,
-`th`, `tr`, `vi` and `zh-Hant`.
+English remains the fallback for a missing translation; a daemon report the UI has no wording for is shown in the
+daemon's own English, as described above.

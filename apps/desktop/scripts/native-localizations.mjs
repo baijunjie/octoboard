@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -32,6 +32,7 @@ export function generateNativeLocalizations({ appName, catalogs, outputDir, base
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const { name } = json(path.join(desktopDir, "../../config/app.json"));
-  const catalogs = Object.fromEntries(["en", "zh-Hans"].map((language) => [language, json(path.join(desktopDir, `src-tauri/localizations/${language}.json`))]));
+  const catalogDir = path.join(desktopDir, "src-tauri/localizations");
+  const catalogs = Object.fromEntries(readdirSync(catalogDir).filter((file) => file.endsWith(".json")).sort().map((file) => [file.slice(0, -5), json(path.join(catalogDir, file))]));
   generateNativeLocalizations({ appName: name, catalogs, outputDir: path.join(desktopDir, "src-tauri/generated-localizations"), basePlist: readFileSync(path.join(desktopDir, "src-tauri/Info.template.plist"), "utf8"), infoPlistPath: path.join(desktopDir, "src-tauri/Info.plist") });
 }

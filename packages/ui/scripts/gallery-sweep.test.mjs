@@ -87,17 +87,20 @@ test("without --lang only English is swept, and --lang names or --lang all widen
   expect(automatic.output).toContain("1 scenario x en x light = 1 load");
   const all = await run("normal", ["--lang", "all"]);
   expect(all).toMatchObject({ code: 0 });
-  expect(all.output).toContain("1 scenario x en, zh-Hans x light = 2 loads");
+  expect(all.output).toContain("1 scenario x en, fr, zh-Hans x light = 3 loads");
   const named = await run("normal", ["--lang", "zh-Hans"]);
   expect(named.output).toContain("1 scenario x zh-Hans x light = 1 load");
+  const elsewhereAll = await run("normal", ["--url", "http://localhost:1", "--lang", "all"]);
+  expect(elsewhereAll).toMatchObject({ code: 0 });
+  expect(elsewhereAll.output).toContain("1 scenario x en, fr, zh-Hans x light = 3 loads");
   const elsewhere = await run("normal", ["--url", "http://localhost:1"]);
   expect(elsewhere.output).toContain("1 scenario x en x light = 1 load");
 }, 40_000);
 
 test("a language the app does not offer stops the sweep", async () => {
-  const result = await run("normal", ["--lang", "fr"]);
+  const result = await run("normal", ["--lang", "unknown"]);
   expect(result.code).toBe(2);
-  expect(result.output).toContain("--lang names no such language: fr");
+  expect(result.output).toContain("--lang names no such language: unknown");
 });
 
 test("--width loads each scenario at every width named, and rejects a width that is no pixel count", async () => {

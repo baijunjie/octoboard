@@ -1,0 +1,17 @@
+{
+  "NSAppleEventsUsageDescription": "Một chương trình đang chạy trong {appName} muốn điều khiển các ứng dụng khác.",
+  "NSCameraUsageDescription": "Một chương trình đang chạy trong {appName} muốn sử dụng camera.",
+  "NSMicrophoneUsageDescription": "Một chương trình đang chạy trong {appName} muốn sử dụng micrô.",
+  "NSBluetoothAlwaysUsageDescription": "Một chương trình đang chạy trong {appName} muốn sử dụng Bluetooth.",
+  "NSContactsUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập danh bạ của bạn.",
+  "NSCalendarsUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập lịch của bạn.",
+  "NSRemindersUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập lời nhắc của bạn.",
+  "NSPhotoLibraryUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập ảnh của bạn.",
+  "NSLocationWhenInUseUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập vị trí của bạn.",
+  "NSLocationUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập vị trí của bạn.",
+  "NSDocumentsFolderUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập các tệp trong thư mục Tài liệu của bạn.",
+  "NSDownloadsFolderUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập các tệp trong thư mục Tải về của bạn.",
+  "NSDesktopFolderUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập các tệp trên Màn hình nền của bạn.",
+  "NSRemovableVolumesUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập các tệp trên ổ đĩa tháo rời.",
+  "NSNetworkVolumesUsageDescription": "Một chương trình đang chạy trong {appName} muốn truy cập các tệp trên ổ đĩa mạng."
+}

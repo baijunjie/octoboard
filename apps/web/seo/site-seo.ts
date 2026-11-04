@@ -33,7 +33,7 @@ const SITE_LOCALES: Record<Language, { code: string; ogLocale: string }> = {
   it: { code: "it", ogLocale: "it_IT" },
   ja: { code: "ja", ogLocale: "ja_JP" },
   ko: { code: "ko", ogLocale: "ko_KR" },
-  "pt-BR": { code: "pt-BR", ogLocale: "pt_BR" },
+  pt: { code: "pt", ogLocale: "pt_BR" },
   ru: { code: "ru", ogLocale: "ru_RU" },
   th: { code: "th", ogLocale: "th_TH" },
   tr: { code: "tr", ogLocale: "tr_TR" },

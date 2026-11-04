@@ -33,9 +33,6 @@ const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
  * the English separator), so the gallery verifies English unless asked for more. */
 const DEFAULT_LANGUAGES = ["en"];
 
-/** Every language the app has a catalog for, which `--lang all` sweeps. */
-const LANGUAGES_WITH_CATALOGS = ["en", "zh-Hans"];
-
 const USAGE = `Usage: pnpm gallery:sweep [options] [scenario ...]
 
 Loads gallery scenarios in a headless browser, runs their steps and fails on any gallery failure banner.
@@ -45,7 +42,7 @@ say otherwise.
   scenario              An id, or a pattern with * as a wildcard ("git-*"). Repeatable.
   --group <title>       Only the scenarios of the group whose title contains this text (case-insensitive).
   --lang <list>         Comma-separated languages, each one the app offers, or "all" for every language
-                        with a catalog (${LANGUAGES_WITH_CATALOGS.join(", ")}). Default: ${DEFAULT_LANGUAGES.join(", ")}.
+                        with a catalog in the served app. Default: ${DEFAULT_LANGUAGES.join(", ")}.
   --theme <name>        light (default), dark or both. A scenario's steps do not depend on the theme, so
                         light settles a step that no longer runs; dark when asked for.
   --width <list>        Comma-separated window widths in pixels to load each scenario at, as the page's width
@@ -127,7 +124,7 @@ function parse() {
     console.log(USAGE);
     process.exit(0);
   }
-  const languages = values.lang === undefined ? DEFAULT_LANGUAGES : values.lang.trim() === "all" ? LANGUAGES_WITH_CATALOGS : [...new Set(values.lang.split(",").map((s) => s.trim()).filter(Boolean))];
+  const languages = values.lang === undefined ? DEFAULT_LANGUAGES : values.lang.trim() === "all" ? "all" : [...new Set(values.lang.split(",").map((s) => s.trim()).filter(Boolean))];
   if (languages.length === 0) throw new SetupError("--lang names no language");
   const theme = values.theme ?? "light";
   if (!["light", "dark", "both"].includes(theme)) throw new SetupError(`--theme is light, dark or both, not "${theme}"`);
@@ -311,9 +308,11 @@ async function readGallery(browser, origin) {
       page.evaluate(async () => {
         const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
         const { LANGUAGES } = await import("/src/i18n/languages.ts");
+        const { CATALOGS } = await import("/src/i18n/catalog.ts");
         return {
           scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, width: s.width, minWidth: s.minWidth, height: s.height, live: (s.liveChanges ?? []).map((change) => change.id) })),
           languages: [...LANGUAGES],
+          catalogLanguages: Object.keys(CATALOGS),
         };
       }),
       "reading the scenarios",
@@ -520,6 +519,7 @@ async function main() {
     const gallery = await readGallery(browser, origin).catch((error) => {
       throw new SetupError(`Could not load the gallery from ${origin}: ${firstLine(error)}`);
     });
+    if (options.languages === "all") options.languages = gallery.catalogLanguages;
     checkLanguages(options.languages, gallery.languages);
     const scenarios = select(gallery.scenarios, options);
     if (options.list) {
