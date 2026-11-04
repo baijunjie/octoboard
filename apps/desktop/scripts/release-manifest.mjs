@@ -88,7 +88,7 @@ export function planManifestWrites(version, current) {
 export const PLATFORMS = ["darwin-aarch64", "darwin-x86_64"];
 
 export function tag(version) {
-  return `v${version}`;
+  return `desktop-v${version}`;
 }
 
 // The name the update archive and its signature are published under: unlike the bundler's own

@@ -75,11 +75,11 @@ commits or plan milestones it spans, is made in place at the version it already 
 past schema and no migration test. After a release, the first change to what it carried raises the version once, and
 later changes before the next release fold into that same version and step.
 
-A version is released only once a release tag (`v*`, the tags `.github/workflows/release.yml` builds) is on a commit
-that carries it; check the remote's tags (`git ls-remote --tags origin 'v[0-9]*'`), not only the local `git tag`. With
-no release tags nothing is released, and all three stay at 1 with `MIGRATIONS` empty. What each version guards, once a
-release exists, is in `apps/daemon/PROTOCOL.md`, "Versions and compatibility" and the "Version" paragraph of
-"Configuration export", and in `docs/structure/daemon.md`, "Where new code goes". (Source: user instruction)
+A version is released only once a release tag (`desktop-v*`, the tags `.github/workflows/release.yml` builds) is on a
+commit that carries it; check the remote's tags (`git ls-remote --tags origin 'desktop-v[0-9]*'`), not only the local
+`git tag`. With no release tags nothing is released, and all three stay at 1 with `MIGRATIONS` empty. What each version
+guards, once a release exists, is in `apps/daemon/PROTOCOL.md`, "Versions and compatibility" and the "Version" paragraph
+of "Configuration export", and in `docs/structure/daemon.md`, "Where new code goes". (Source: user instruction)
 
 ## Time a repeating refresh from the client, and bound it in the daemon
 

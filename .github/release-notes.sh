@@ -7,8 +7,8 @@ tag=$1
 # A checkout may hold the tag as a lightweight ref; the annotated tag object carries the message.
 git fetch --quiet --force origin "refs/tags/$tag:refs/tags/$tag"
 version=$(node -p 'require("./apps/desktop/package.json").version')
-if [ "$tag" != "v$version" ]; then
-  echo "::error::The tag $tag does not match the version $version in apps/desktop/package.json. Tag v$version instead." >&2
+if [ "$tag" != "desktop-v$version" ]; then
+  echo "::error::The tag $tag does not match the version $version in apps/desktop/package.json. Tag desktop-v$version instead." >&2
   exit 1
 fi
 if [ "$(git cat-file -t "refs/tags/$tag")" != "tag" ]; then

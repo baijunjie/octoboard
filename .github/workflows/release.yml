@@ -1,14 +1,14 @@
 name: Release
 
-# Pushing an annotated tag `v<version>` builds, signs, notarizes and publishes that version, once the application
-# checks have passed. The tag's message is the release notes, which the in-app update notice shows too. What runs is
-# `pnpm release --no-sign-update`, `sign-update` and `publish-release`, as on a Mac by hand
+# Pushing an annotated tag `desktop-v<version>` builds, signs, notarizes and publishes that version, once the
+# application checks have passed. The tag's message is the release notes, which the in-app update notice shows too. What
+# runs is `pnpm release --no-sign-update`, `sign-update` and `publish-release`, as on a Mac by hand
 # (apps/desktop/scripts/README.md's "Release builds" and "Publishing a release" sections); this workflow only supplies
 # their credentials from the repository's secrets.
 on:
   push:
     tags:
-      - "v[0-9]*"
+      - "desktop-v[0-9]*"
 
 permissions:
   contents: read

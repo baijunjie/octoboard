@@ -39,7 +39,7 @@ test("the archive is published under a name carrying the version, for both archi
 test("an asset's address is under the versioned release of the repository", () => {
   assert.equal(
     releaseAssetUrl("https://github.com/baijunjie/octoboard/", "0.2.0", "Octoboard_0.2.0_universal.app.tar.gz"),
-    "https://github.com/baijunjie/octoboard/releases/download/v0.2.0/Octoboard_0.2.0_universal.app.tar.gz",
+    "https://github.com/baijunjie/octoboard/releases/download/desktop-v0.2.0/Octoboard_0.2.0_universal.app.tar.gz",
   );
 });
 
@@ -49,7 +49,7 @@ test("a repository address gives its owner and name", () => {
 });
 
 test("the manifest names the version, notes, date and the one signed archive for both platforms", () => {
-  const url = "https://github.com/baijunjie/octoboard/releases/download/v0.2.0/a.app.tar.gz";
+  const url = "https://github.com/baijunjie/octoboard/releases/download/desktop-v0.2.0/a.app.tar.gz";
   const manifest = buildManifest({ version: "0.2.0", notes: "Fixes.", pubDate: "2026-11-01T00:00:00.000Z", url, signature: "c2lnbmF0dXJl\n" });
   const entry = { signature: "c2lnbmF0dXJl", url };
   assert.deepEqual(manifest, {

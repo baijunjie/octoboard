@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Publishes the build `pnpm release` made, for the in-app updates to find: creates the versioned GitHub release
-// `v<version>` with the disk image and the signed update archive, then writes the manifests the application
+// `desktop-v<version>` with the disk image and the signed update archive, then writes the manifests the application
 // reads (`beta.json`, and `stable.json` too unless the version has a prerelease suffix) to the `updater`
 // release. Run `pnpm release` first, with a signed build. Outward-facing, so it is a separate, explicit step:
 // nothing else calls it.

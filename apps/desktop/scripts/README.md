@@ -98,12 +98,13 @@ described in `docs/product/in-app-updates.md`, section "Where updates come from"
 
 1. It refuses unless `gh` is logged in, the working tree is clean and the universal build in the bundle directory is
    this version's, signed and notarized: the `.app` says it is `<version>`, the `.dmg` is named for it and passes
-   `stapler validate`, and the update archive and its signature are no older than the `.app`. A release `v<version>`
-   that already exists with exactly this build's assets, the same archive size and the same signature is an earlier run
-   that failed part-way, and this run resumes from step 3; any other (other assets, a rebuild of the same version, a
-   draft) is refused, since a published version is never replaced: raise the version instead.
-2. It creates the release `v<version>` on the current commit (which must be pushed), marked prerelease when the version
-   has a suffix, with the `.dmg` and the update archive and its signature.
+   `stapler validate`, and the update archive and its signature are no older than the `.app`. A release
+   `desktop-v<version>` that already exists with exactly this build's assets, the same archive size and the same
+   signature is an earlier run that failed part-way, and this run resumes from step 3; any other (other assets, a
+   rebuild of the same version, a draft) is refused, since a published version is never replaced: raise the version
+   instead.
+2. It creates the release `desktop-v<version>` on the current commit (which must be pushed), marked prerelease when the
+   version has a suffix, with the `.dmg` and the update archive and its signature.
 3. It creates the `updater` release if it is missing (as a prerelease, so it is never the repository's latest), then
    uploads the manifests the version goes to with `--clobber`. A manifest that already announces a newer version is left
    alone and reported. A manifest that is not valid is refused, with nothing created yet. Immutable releases must stay
@@ -114,15 +115,15 @@ described in `docs/product/in-app-updates.md`, section "Where updates come from"
 
 ## Releasing by tag
 
-Pushing a tag `v<version>` runs `.github/workflows/release.yml`, which does the two steps above on a macOS runner after
-the application checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and `publish-release` path
-stays available. The workflow:
+Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which does the two steps above on a macOS
+runner after the application checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and
+`publish-release` path stays available. The workflow:
 
-1. `validate` runs `.github/release-notes.sh`: the tag must equal `v<version>` from `apps/desktop/package.json` and be
-   an annotated tag with a non-empty message. The message, minus any signature, is the release notes, which the in-app
-   update notice shows too. It also checks that the tagged commit is on `main`, that the repository secrets below are
-   set, and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would
-   otherwise find only after the checks.
+1. `validate` runs `.github/release-notes.sh`: the tag must equal `desktop-v<version>` from `apps/desktop/package.json`
+   and be an annotated tag with a non-empty message. The message, minus any signature, is the release notes, which the
+   in-app update notice shows too. It also checks that the tagged commit is on `main`, that the repository secrets
+   below are set, and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build
+   would otherwise find only after the checks.
 2. `checks` runs `quality.yml`; then `release` builds, signs and notarizes with
    `pnpm --filter @octoboard/desktop release --no-sign-update`, signs the update archive in a step of its own
    (`sign-update`), the only step given the update key (no build step has it in its environment; code planted for
@@ -146,13 +147,13 @@ to the agent CLIs. `src-tauri/build.rs` fails every build and test of the shell 
 `tauri.conf.json` names a version of its own, or when the daemon's manifest does not take the workspace version.
 
 **To release**: raise the version in `apps/desktop/package.json` and in the root `Cargo.toml`, run `cargo check` so that
-`Cargo.lock` records it, push that commit to `main`, write the notes to a file, then
-`git tag -a v<version> --cleanup=whitespace -F <notes-file>` and `git push origin v<version>`. `--cleanup=whitespace`
-keeps the notes' Markdown heading lines, which the default `--cleanup=strip` drops; the file rather than the editor
-keeps git's `#` template lines out of them. Push tags one at a time: GitHub creates no push event when more than three
-tags are pushed at once.
+`Cargo.lock` records it, push that commit to `main`, write the notes to a file, then `git tag -a desktop-v<version>
+--cleanup=whitespace -F <notes-file>` and `git push origin desktop-v<version>`. `--cleanup=whitespace` keeps the notes'
+Markdown heading lines, which the default `--cleanup=strip` drops; the file rather than the editor keeps git's `#`
+template lines out of them. Push tags one at a time: GitHub creates no push event when more than three tags are pushed
+at once.
 
 When a run fails after `gh release create` but before the manifests are uploaded, re-running it rebuilds with a
 different signature, and `publish-release` refuses it. Delete the release but keep the tag
-(`gh release delete v<version>`, without `--cleanup-tag`) and re-run the failed jobs. The script's own messages still
-describe the manual flow.
+(`gh release delete desktop-v<version>`, without `--cleanup-tag`) and re-run the failed jobs. The script's own messages
+still describe the manual flow.

@@ -46,9 +46,9 @@ moves backwards: a release of an older version published after a newer one leave
 the newer version as it is. The `updater` release is itself marked a prerelease, so it is never the repository's
 latest release.
 
-Each version is published once, as the release `v<version>` — marked a prerelease when the version has a suffix — with
-the `.dmg` and the update archive `Octoboard_<version>_universal.app.tar.gz` with its signature beside it as `.sig`. A
-published version's files are never replaced; a changed build ships as a new version.
+Each version is published once, as the release `desktop-v<version>` — marked a prerelease when the version has a
+suffix — with the `.dmg` and the update archive `Octoboard_<version>_universal.app.tar.gz` with its signature beside it
+as `.sig`. A published version's files are never replaced; a changed build ships as a new version.
 
 ## When the application checks
 
@@ -184,13 +184,13 @@ spinner while a check runs; then **Download and install**, showing the spinner w
 way; then **Restart now** once the update is installed.
 
 Before that button, a **What is new** link, drawn as a button, opens in the browser the GitHub release page of the
-version the row's sentence is about, `https://github.com/baijunjie/octoboard/releases/tag/v<version>` (see "Where
-updates come from" above): the newer version while one is available or downloading, the installed version once an
-update is installed, and otherwise the version running. There is no link while the version running is not yet known,
-nor for an installed update whose version is not known. Unlike the update notice's What is new (see "A newer version is
-available" above), it is there for any version the row names, not only an offered one with release notes. When the
-link goes away while it holds keyboard focus — the row turning to an installed update of unknown version — focus moves
-to the row's button.
+version the row's sentence is about, `https://github.com/baijunjie/octoboard/releases/tag/desktop-v<version>` (see
+"Where updates come from" above): the newer version while one is available or downloading, the installed version once
+an update is installed, and otherwise the version running. There is no link while the version running is not yet
+known, nor for an installed update whose version is not known. Unlike the update notice's What is new (see "A newer
+version is available" above), it is there for any version the row names, not only an offered one with release notes.
+When the link goes away while it holds keyboard focus — the row turning to an installed update of unknown version —
+focus moves to the row's button.
 
 The row's controls are, in order: What is new, the warning mark described below when it is shown, and the row's
 button.

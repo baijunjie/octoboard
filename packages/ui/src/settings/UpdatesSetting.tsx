@@ -39,9 +39,9 @@ function checkFailed(state: UpdateState): boolean {
   return state.phase === "idle" && !state.update && state.lastCheck?.outcome === "failed";
 }
 
-/** The GitHub release of a version, whose page holds its release notes; releases are tagged `v<version>`. */
+/** The GitHub release of a version, whose page holds its release notes; releases are tagged `desktop-v<version>`. */
 function releaseUrl(version: string): string {
-  return `${appConfig.repositoryUrl}/releases/tag/v${version}`;
+  return `${appConfig.repositoryUrl}/releases/tag/desktop-v${version}`;
 }
 
 /** The running version with the control that moves it on — Check for updates, then Download and install once a

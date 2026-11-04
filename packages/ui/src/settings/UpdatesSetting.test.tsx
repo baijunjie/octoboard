@@ -264,7 +264,7 @@ it("speaks the result of a check that was already running when Settings opened",
 
 const notesLink = (container: HTMLElement) =>
   Array.from(container.querySelectorAll<HTMLAnchorElement>("a[data-external-link]")).find((candidate) => candidate.textContent === "What is new");
-const releaseOf = (version: string) => `https://github.com/baijunjie/octoboard/releases/tag/v${version}`;
+const releaseOf = (version: string) => `https://github.com/baijunjie/octoboard/releases/tag/desktop-v${version}`;
 
 it("links What is new to the GitHub release of the version the row is about, before the warning mark and the button", async () => {
   let finish: () => void = () => {};
