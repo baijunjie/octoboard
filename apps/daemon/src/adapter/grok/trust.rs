@@ -26,7 +26,7 @@ impl std::error::Error for StoreLocked {}
 
 /// How long Grok has to write its trust entry once its confirmation was pressed, and how long the
 /// user's store may stay locked by another writer.
-const RECORD_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const RECORD_TIMEOUT: Duration = Duration::from_secs(5);
 const LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Where Grok Build records an accepted confirmation, and where that record has to end up. Grok
@@ -42,6 +42,10 @@ pub struct CarriedTrust {
     pub user_store: PathBuf,
     /// The folder Grok records the trust for: the session's working directory, canonical.
     pub folder: String,
+    /// How long the entry is waited for once the hook that carries it has come:
+    /// [`RECORD_TIMEOUT`] for a launch. A test whose stand-in writes the entry gives it as long as
+    /// a spawned process may take under load rather than race it.
+    pub record_wait: Duration,
 }
 
 impl TrustCarrier for CarriedTrust {
@@ -52,7 +56,7 @@ impl TrustCarrier for CarriedTrust {
     /// Waiting for the entry, then for the lock, with room to spare for the reading and writing
     /// around them.
     fn longest(&self) -> Duration {
-        RECORD_TIMEOUT
+        self.record_wait
             .saturating_add(LOCK_TIMEOUT)
             .saturating_add(Duration::from_secs(3))
     }
@@ -88,11 +92,11 @@ fn recorded_entry(carried: &CarriedTrust) -> Option<String> {
     (trusted.as_bool() == Some(true)).then_some(entry)
 }
 
-/// Waits, up to [`RECORD_TIMEOUT`], for the entry Grok writes into the session's copy of its store
-/// once its screen is accepted; `None` when it never says the folder is trusted.
+/// Waits, up to [`CarriedTrust::record_wait`], for the entry Grok writes into the session's copy of
+/// its store once its screen is accepted; `None` when it never says the folder is trusted.
 fn wait_recorded(carried: &CarriedTrust) -> Option<String> {
     let mut entry = None;
-    wait_for(RECORD_TIMEOUT, || {
+    wait_for(carried.record_wait, || {
         entry = recorded_entry(carried);
         entry.is_some()
     });

@@ -79,8 +79,15 @@ pub(crate) fn running_leaving_one(state: &Arc<AppState>, dir: &Path, id: &str) -
 }
 
 /// [`running_leaving_one`] with a second process, in a terminal session of its own as well, that
-/// exits once the stand-in does, as a background terminal an agent's app server closes as it shuts
-/// down. Answers the stand-in, the process that outlives it and the one that does not.
+/// the stand-in ends as it shuts down, as an agent's app server closes its background terminals.
+/// Answers the stand-in, the process that outlives it and the one that does not.
+///
+/// The stand-in takes `SIGTERM`, the signal a restart stops it with, by ending that process and
+/// reaping it before it exits itself, so the process is gone by the time the stand-in's end is
+/// recorded. A process left to notice the end by itself can still be running when the stand-in's
+/// end is observed. It is ready only once its handler is in place, which it says by writing
+/// a file. The process still exits by itself once the stand-in is gone some other way, so it
+/// never outlives the test.
 pub(crate) fn running_leaving_two(
     state: &Arc<AppState>,
     dir: &Path,
@@ -88,6 +95,7 @@ pub(crate) fn running_leaving_two(
 ) -> (StandIn, i32, i32) {
     let survivor_file = dir.join(format!("{id}-survivor"));
     let doomed_file = dir.join(format!("{id}-doomed"));
+    let ready_file = dir.join(format!("{id}-ready"));
     let live = fake_live_session(
         id,
         AgentId::CLAUDE,
@@ -97,18 +105,20 @@ pub(crate) fn running_leaving_two(
             "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
              /usr/bin/perl -MPOSIX -e 'my $agent = getppid(); POSIX::setsid(); {} \
              select(undef, undef, undef, 0.05) while kill 0, $agent;' &\n\
-             exec sleep 300",
+             exec /usr/bin/perl -e 'my $doomed = $ARGV[0]; \
+             $SIG{{TERM}} = sub {{ kill \"TERM\", $doomed; waitpid($doomed, 0); exit 0 }}; \
+             {} sleep 300 while 1;' \"$!\"",
             perl_write(&survivor_file, "$$"),
-            perl_write(&doomed_file, "$$")
+            perl_write(&doomed_file, "$$"),
+            perl_write(&ready_file, "$$"),
         ),
     );
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(state, live.clone());
-    (
-        live,
-        wait_for_pid(&survivor_file),
-        wait_for_pid(&doomed_file),
-    )
+    let survivor = wait_for_pid(&survivor_file);
+    let doomed = wait_for_pid(&doomed_file);
+    wait_for_pid(&ready_file);
+    (live, survivor, doomed)
 }
 
 /// Waits for `pid` to stop running, off the runtime, ticking the ledger's scanner in place of its

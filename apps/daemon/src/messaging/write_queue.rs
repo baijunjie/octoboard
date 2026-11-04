@@ -142,6 +142,13 @@ impl Drop for OutboxHold {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    // Draw a fixture's screen after its message was written, before its send wait expires.
+    static ON_SEND_WAIT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// A running session's prompts as its hooks report them, for the outbox to tell a message the agent
 /// sent from one it left in the input box.
 struct HookPrompts<'a> {
@@ -202,6 +209,13 @@ impl PromptSignal for HookPrompts<'_> {
     }
 
     fn wait_past(&self, before: u64) -> bool {
+        #[cfg(test)]
+        ON_SEND_WAIT.with(|on_wait| {
+            let on_wait = on_wait.borrow_mut().take();
+            if let Some(on_wait) = on_wait {
+                on_wait();
+            }
+        });
         let deadline = Instant::now() + self.wait().unwrap_or_default();
         while self.live.prompts_sent() <= before {
             if Instant::now() >= deadline {
@@ -788,18 +802,18 @@ mod tests {
         insert_record(&state, &dir, "s", SessionStatus::Idle);
         let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
-        *state.send_wait.lock().unwrap() = Some(Duration::from_secs(2));
+        *state.send_wait.lock().unwrap() = Some(Duration::ZERO);
         let mut events = state.subscribe();
         state.queue_message("s", "go on");
         state.queue_message("s", "and then");
 
         let screen = live.clone();
-        let dialog = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(200));
-            screen.on_output(LAUNCH_DIALOG.as_bytes());
+        ON_SEND_WAIT.with(|on_wait| {
+            *on_wait.borrow_mut() = Some(Box::new(move || {
+                screen.on_output(LAUNCH_DIALOG.as_bytes());
+            }))
         });
         let outcome = state.flush_outbox("s", SessionStatus::Idle);
-        dialog.join().unwrap();
 
         assert_eq!(outcome, Drain::Discarded(0));
         assert_eq!(state.outbox.len("s"), 2);
@@ -838,20 +852,26 @@ mod tests {
         insert_record(&state, &dir, "s", SessionStatus::Idle);
         let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
-        *state.send_wait.lock().unwrap() = Some(Duration::from_secs(1));
+        *state.send_wait.lock().unwrap() = Some(Duration::ZERO);
         state.queue_message("s", "go on");
 
         let screen = live.clone();
-        let dialog = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(200));
-            screen.on_output(LAUNCH_DIALOG.as_bytes());
-            screen.on_output(CLEAR_SCREEN.as_bytes());
+        ON_SEND_WAIT.with(|on_wait| {
+            *on_wait.borrow_mut() = Some(Box::new(move || {
+                screen.on_output(LAUNCH_DIALOG.as_bytes());
+                screen.on_output(CLEAR_SCREEN.as_bytes());
+            }))
         });
+        let before = live.input_writes();
         let outcome = state.flush_outbox("s", SessionStatus::Idle);
-        dialog.join().unwrap();
 
         // Written again, and what the second write came to is the answer: the stand-in sends no
         // prompt, so this time it is left unsent.
+        assert_eq!(
+            live.input_writes(),
+            before + 2,
+            "the discarded message was written again"
+        );
         assert_eq!(outcome, Drain::Unsent(0));
         assert_eq!(state.outbox.len("s"), 0);
         assert!(live.unsent_waiting());
@@ -868,18 +888,18 @@ mod tests {
         insert_record(&state, &dir, "s", SessionStatus::Idle);
         let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
         state.register_live(live.clone());
-        *state.send_wait.lock().unwrap() = Some(Duration::from_secs(1));
+        *state.send_wait.lock().unwrap() = Some(Duration::ZERO);
         let mut events = state.subscribe();
         state.queue_message("s", "go on");
         state.queue_message("s", "and then");
 
         let screen = live.clone();
-        let view = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(200));
-            screen.on_output("  \u{25ef} main\r\n".as_bytes());
+        ON_SEND_WAIT.with(|on_wait| {
+            *on_wait.borrow_mut() = Some(Box::new(move || {
+                screen.on_output("  \u{25ef} main\r\n".as_bytes());
+            }))
         });
         let outcome = state.flush_outbox("s", SessionStatus::Idle);
-        view.join().unwrap();
 
         assert_eq!(outcome, Drain::Diverted(0));
         assert_eq!(state.outbox.len("s"), 1);

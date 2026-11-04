@@ -513,11 +513,27 @@ pub(crate) async fn switch_session_account_if(
 /// judged not to have stopped on the limit. The real ordering is not measured.
 #[cfg(not(test))]
 const USAGE_LIMIT_RECORD_WAIT: Duration = Duration::from_secs(4);
+
 #[cfg(test)]
-const USAGE_LIMIT_RECORD_WAIT: Duration = Duration::from_millis(1500);
+thread_local! {
+    pub(super) static USAGE_LIMIT_RECORD_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Read on the caller's thread, so a test's override survives the record's blocking reads.
+fn usage_limit_record_wait() -> Duration {
+    #[cfg(test)]
+    {
+        USAGE_LIMIT_RECORD_WAIT_OVERRIDE
+            .get()
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    USAGE_LIMIT_RECORD_WAIT
+}
 
 /// Whether the conversation record of `session`, found the way [`prepare_switch`] finds it, says
-/// the last turn stopped on the usage limit, read again for up to [`USAGE_LIMIT_RECORD_WAIT`] until
+/// the last turn stopped on the usage limit, read again for up to [`usage_limit_record_wait`] until
 /// it does. Meant to run ahead of the switch's claim, so that the wait holds nothing: `shell_env`
 /// is the snapshot when [`record_needs_shell_env`]. Refused as `prepare_switch` is when the record
 /// is not where it is expected; a session with no conversation has not stopped on a limit.
@@ -527,6 +543,7 @@ pub(crate) async fn wait_for_usage_limit(
     session: &Session,
     shell_env: Option<HashMap<String, String>>,
 ) -> Result<bool> {
+    let record_wait = usage_limit_record_wait();
     let Some(resume_id) = resumable_agent_session_id(session) else {
         return Ok(false);
     };
@@ -539,7 +556,7 @@ pub(crate) async fn wait_for_usage_limit(
         Ok(from.join(relocate::locate(agent, &from, &resume_id)?))
     })
     .await??;
-    let deadline = Instant::now() + USAGE_LIMIT_RECORD_WAIT;
+    let deadline = Instant::now() + record_wait;
     loop {
         let path = record.clone();
         let agent = session.agent;

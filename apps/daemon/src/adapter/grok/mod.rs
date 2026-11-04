@@ -305,6 +305,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         session_store: grok_home.join(grok::GROK_TRUST_STORE),
         user_store: source_home.join(grok::GROK_TRUST_STORE),
         folder: canonical_cwd(spec.cwd),
+        record_wait: trust::RECORD_TIMEOUT,
     };
     // Grok has no `--theme` flag. `GROK_THEME` outranks `config.toml`, so the copy of the user's
     // configuration cannot paint a dark theme onto the light terminal (or the reverse). A launch

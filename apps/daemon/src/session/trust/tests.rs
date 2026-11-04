@@ -2387,6 +2387,8 @@ async fn a_grok_entry_that_never_appears_is_reported_and_records_nothing() {
             session_store: dir.join("session-store.toml"),
             user_store: user_store.clone(),
             folder: "/work/project".to_string(),
+            // Nothing is ever written, so the wait runs out whatever its length.
+            record_wait: Duration::from_millis(500),
         })),
     );
     spawn_reader_thread(live.clone(), 8 * 1024);
@@ -2457,6 +2459,7 @@ async fn grok_answered_in_the_terminal_still_has_its_entry_carried() {
             session_store,
             user_store: user_store.clone(),
             folder: "/work/project".to_string(),
+            record_wait: PATIENCE,
         })),
     );
     spawn_reader_thread(live.clone(), 8 * 1024);
@@ -2510,6 +2513,7 @@ async fn grok_is_pressed_behind_its_animation_and_its_entry_reaches_the_users_st
         session_store,
         user_store: user_store.clone(),
         folder: "/work/project".to_string(),
+        record_wait: PATIENCE,
     };
     let live = watched_live_session(
         "s",
@@ -2635,6 +2639,16 @@ async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
         take(message.len(), "'%RECEIVED%'")
     );
     let (live, received) = start(&state, &dir, record, &script);
+    let ready = Arc::clone(&live);
+    assert!(
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || {
+            ready.recent_output(WINDOW).starts_with(b"ready")
+        }))
+        .await
+        .unwrap(),
+        "the stand-in never became ready"
+    );
+    tokio::time::pause();
     release_when_no_hook_comes(&state, &live, Duration::from_millis(600));
 
     let delivery = crate::messaging::delivery::write_message(
@@ -2648,10 +2662,15 @@ async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
         delivery,
         crate::messaging::delivery::Delivery::Queued
     ));
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Register the fallback timer before advancing it; the PTY uses the real clock.
+    tokio::task::yield_now().await;
+    tokio::time::advance(Duration::from_millis(200)).await;
     assert!(live.trust.holds_writes(), "held before the bound");
     assert!(sent(&received).is_empty());
 
+    tokio::time::advance(Duration::from_millis(400)).await;
+    tokio::task::yield_now().await;
+    tokio::time::resume();
     let delivered =
         tokio::task::spawn_blocking(move || wait_for(PATIENCE, || sent(&received) == message));
     assert!(delivered.await.unwrap(), "released after the bound");
@@ -2837,6 +2856,7 @@ fn a_hook_after_a_press_the_screen_confirmed_still_carries_the_entry() {
             session_store: PathBuf::from("/nonexistent/session/trusted_folders.toml"),
             user_store: PathBuf::from("/nonexistent/user/trusted_folders.toml"),
             folder: "/nonexistent/project".to_string(),
+            record_wait: PATIENCE,
         })),
     );
     watch.sighted.store(true, Ordering::Release);

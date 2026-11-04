@@ -1251,11 +1251,15 @@ async fn no_hold_without_a_trustworthy_reset_time() {
 /// account that reads as used up, a turn that is only running or cut off included.
 #[tokio::test]
 async fn a_session_on_a_used_up_account_is_not_switched_unless_its_turn_hit_the_limit() {
+    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE
+        .set(Some(Duration::from_millis(100)));
     let fixture = Fixture::new("auto-switch-reading-only", SessionStatus::Working);
     fixture.hold(None, 100.0);
     fixture.end_on_a_tool_call();
 
-    assert!(!fixture.failed_turn().await, "not a usage limit");
+    let switched = fixture.failed_turn().await;
+    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE.set(None);
+    assert!(!switched, "not a usage limit");
 
     assert_eq!(fixture.worker().account_id, None);
     assert_eq!(fixture.launched(), 0);
@@ -2248,11 +2252,14 @@ async fn a_relaunch_that_dies_is_reported_as_the_outcome_not_as_ending_on_its_ow
 /// refuse an interrupt, a handoff or a rebinding for the seconds the record is waited on.
 #[tokio::test]
 async fn a_failed_turn_that_did_not_hit_the_limit_takes_no_claim() {
+    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE
+        .set(Some(Duration::from_millis(100)));
     let fixture = Fixture::new("auto-switch-no-claim", SessionStatus::Idle);
     fixture.end_on_a_tool_call();
     let mut events = fixture.state.subscribe();
 
     fixture.failed_turn().await;
+    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE.set(None);
 
     let mut shown_switching = false;
     while let Ok(event) = events.try_recv() {

@@ -784,35 +784,49 @@ fn a_working_directory_that_does_not_answer_does_not_hold_the_scanner() {
 #[test]
 fn a_working_directory_report_that_does_not_answer_is_left_out_and_not_read_again_while_stuck() {
     let dir = ScratchDir::new("ledger-cwd-report-stuck");
-    let ledger = ProcessLedger::new(&dir);
-    quiet(&ledger);
     let me = identity(std::process::id() as i32);
     let stuck = Identity {
         pid: me.pid,
         start: me.start + 1,
     };
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    let held = std::sync::Mutex::new(held);
-    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let counted = reads.clone();
-    *ledger.cwd_read.lock().unwrap() = Some(Arc::new(move |id: Identity| {
-        if id == stuck {
-            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            held.lock().unwrap().recv().ok();
-            return None;
+    let patience = Instant::now() + PATIENCE;
+    let (ledger, reads, release, first) = loop {
+        assert!(
+            Instant::now() < patience,
+            "the stuck read never began in time"
+        );
+        let ledger = ProcessLedger::new(&dir);
+        quiet(&ledger);
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        let held = std::sync::Mutex::new(held);
+        let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = reads.clone();
+        *ledger.cwd_read.lock().unwrap() = Some(Arc::new(move |id: Identity| {
+            if id == stuck {
+                counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                held.lock().unwrap().recv().ok();
+                return None;
+            }
+            table::cwd_report(id)
+        }));
+        LOOK_DEADLINE_OVERRIDE.set(Some(Duration::from_millis(500)));
+        let begun = Instant::now();
+        let first = ledger.cwds([stuck], None);
+        assert!(begun.elapsed() < PATIENCE, "the call waited for the read");
+        // A pass whose worker never began before its deadline did not test a stuck read.
+        if reads.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+            continue;
         }
-        table::cwd_report(id)
-    }));
-    LOOK_DEADLINE_OVERRIDE.set(Some(Duration::from_millis(500)));
-    let begun = Instant::now();
-    let first = ledger.cwds([me, stuck], None);
-    assert!(begun.elapsed() < PATIENCE, "the call waited for the read");
-    // Past its own deadline, the read still running counts as stuck.
+        break (ledger, reads, release, first);
+    };
+    // Past its own deadline, the read still running counts as stuck. The healthy read is
+    // introduced only on the later pass, so its first read gets the whole patience too.
     std::thread::sleep(Duration::from_millis(550));
+    LOOK_DEADLINE_OVERRIDE.set(Some(PATIENCE));
     let again = ledger.cwds([me, stuck], None);
     LOOK_DEADLINE_OVERRIDE.set(None);
+    assert!(again.contains_key(&me), "{again:?}");
     for cwds in [&first, &again] {
-        assert!(cwds.contains_key(&me), "{cwds:?}");
         assert!(!cwds.contains_key(&stuck), "{cwds:?}");
     }
     assert_eq!(

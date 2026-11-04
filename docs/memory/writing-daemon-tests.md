@@ -27,9 +27,8 @@ cause.
 Applies to daemon tests whose fixture is a real process: a fake shell, a stand-in agent on a PTY.
 On a Mac running endpoint-security software, as managed machines do, the security agent can stop
 answering for seconds at a time under the suite's parallel burst of shells; while it does, every
-`exec` on the machine blocks, and so do `kill` and `waitpid` on a child stuck in one. A healthy
-daemon suite takes about 5 s; a run hit by a stall takes 10-30 s and fails whatever was bounded
-in single seconds.
+`exec` on the machine blocks, and so do `kill` and `waitpid` on a child stuck in one. Such stalls
+can exhaust waits bounded in single seconds even when the code under test behaves correctly.
 
 - A wait for anything a spawned process does — output, a file, an event it causes, its exit —
   polls up to `PATIENCE` from `apps/daemon/src/test_support/mod.rs`; a poll returns early, so a
@@ -40,6 +39,8 @@ in single seconds.
   a process stops being readable (`proc_pidinfo`, the ledger's `table::start_of`) as soon as its exit begins, while
   the kernel reparents its children to pid 1 later in that exit, so "the parent is gone" does not yet mean "its child's
   `ppid` is 1": a test asserting a reparenting waits for the child's `ppid` itself.
+  When a test requires children to be gone when their parent's exit is observed, have the fixture parent end and
+  reap them before it exits; children polling for their parent's exit cannot establish that ordering.
 - A test proving that a production timeout fires keeps that timeout short. When the fixture was
   killed before it reached the point under test, nothing was tested: run the whole scenario
   again until `PATIENCE` runs out rather than failing or lengthening the timeout.

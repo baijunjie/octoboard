@@ -473,83 +473,120 @@ mod tests {
     }
 
     /// A path stuck from an earlier look does not hold up the others: they are looked at at once
-    /// with the whole deadline, and the stuck one, waited for in the meantime, is left absent and
-    /// not looked at when no time is left.
+    /// while the stuck one is waited for, and the stuck one is looked at afresh once its earlier
+    /// look ends. Where that look never ends, the stuck path is left absent, with no look started
+    /// at it, when no time is left.
     #[tokio::test]
     async fn a_stuck_path_does_not_take_the_time_of_the_others() {
         let stalled = StalledPasses::default();
         let stuck = PathBuf::from("/octoboard-test/stuck");
         let healthy = PathBuf::from("/octoboard-test/healthy");
+        let key = super::lexically_normalise(&stuck);
         let guard = Arc::new(());
-        stalled.record(super::lexically_normalise(&stuck), Arc::downgrade(&guard));
+        stalled.record(key.clone(), Arc::downgrade(&guard));
+        // The stuck look ends only once the healthy path has been looked at, so the call can
+        // find the stuck path only if it looked at the healthy one while it waited, not after.
+        let ending = Mutex::new(Some(guard));
+        let started = Arc::new(Mutex::new(Vec::new()));
+        let counted = started.clone();
+        let first = healthy.clone();
+        let found = looked_within_stuck(
+            &stalled,
+            vec![stuck.clone(), healthy.clone()],
+            waiting(PATIENCE),
+            move |path| {
+                counted.lock().unwrap().push(path.to_path_buf());
+                if path == first {
+                    ending.lock().unwrap().take();
+                }
+                Some(())
+            },
+        )
+        .await;
+        assert!(
+            found.contains_key(&healthy),
+            "the healthy path is looked at"
+        );
+        assert!(
+            found.contains_key(&stuck),
+            "the stuck path is looked at once its earlier look ended"
+        );
+        assert_eq!(*started.lock().unwrap(), [healthy.clone(), stuck.clone()]);
+
+        let guard = Arc::new(());
+        stalled.record(key.clone(), Arc::downgrade(&guard));
         let started = Arc::new(Mutex::new(Vec::new()));
         let counted = started.clone();
         let begun = Instant::now();
         let found = looked_within_stuck(
             &stalled,
-            vec![stuck.clone(), healthy.clone()],
-            waiting(Duration::from_millis(300)),
+            vec![stuck.clone()],
+            waiting(Duration::from_millis(100)),
             move |path| {
                 counted.lock().unwrap().push(path.to_path_buf());
-                std::thread::sleep(Duration::from_millis(200));
                 Some(())
             },
         )
         .await;
-        assert!(begun.elapsed() >= Duration::from_millis(290));
+        assert!(begun.elapsed() >= Duration::from_millis(90));
+        assert!(found.is_empty(), "still stuck when no time is left");
         assert!(
-            found.contains_key(&healthy),
-            "the healthy path is looked at in full"
-        );
-        assert!(!found.contains_key(&stuck));
-        assert_eq!(
-            *started.lock().unwrap(),
-            std::slice::from_ref(&healthy),
+            started.lock().unwrap().is_empty(),
             "no look is started at the stuck path with no time left"
         );
-        assert!(stalled.is_stuck(&super::lexically_normalise(&stuck)));
+        assert!(stalled.is_stuck(&key));
         drop(guard);
     }
 
     /// A look left behind at its deadline counts as stuck only once it has run for the stuck
-    /// threshold: a slow one is not recorded, so a later look at the path still starts, and one
-    /// that outruns the threshold is.
+    /// threshold: until then it is not recorded, so a later look at the path still starts, and
+    /// past it, still running, it is.
+    ///
+    /// Whether it is stuck yet can be told only by checks made before the threshold has passed
+    /// since it began. An attempt a busy machine held up past it tested nothing, so it is made
+    /// again, at a fresh path, until `PATIENCE` runs out.
     #[tokio::test]
     async fn a_look_counts_as_stuck_only_past_the_stuck_threshold() {
+        const THRESHOLD: Duration = Duration::from_secs(1);
+        let looking = Looking {
+            stuck_after: THRESHOLD,
+            ..Looking::within(Duration::from_millis(50))
+        };
         let stalled = StalledPasses::default();
-        let slow = PathBuf::from("/octoboard-test/slow");
-        let key = super::lexically_normalise(&slow);
-        let looking = Looking {
-            stuck_after: Duration::from_secs(1),
-            ..Looking::within(Duration::from_millis(50))
-        };
-        let found = looked_within_stuck(&stalled, vec![slow.clone()], looking, |_| {
-            std::thread::sleep(Duration::from_millis(150));
-            Some(())
-        })
-        .await;
-        assert!(found.is_empty(), "the answer was not waited for");
-        assert!(!stalled.is_stuck(&key), "a slow look is not a stuck one");
-        let again = looked_within(&stalled, vec![slow.clone()], PATIENCE, |_| Some(())).await;
-        assert!(
-            again.contains_key(&slow),
-            "a later look at the path still starts"
-        );
-
-        let (release, held) = std::sync::mpsc::channel::<()>();
-        let held = Mutex::new(held);
-        let looking = Looking {
-            stuck_after: Duration::from_secs(1),
-            ..Looking::within(Duration::from_millis(50))
-        };
-        looked_within_stuck(&stalled, vec![slow.clone()], looking, move |_| {
-            held.lock().unwrap().recv().ok();
-            Some(())
-        })
-        .await;
-        assert!(!stalled.is_stuck(&key), "not yet past the threshold");
-        tokio::time::sleep(Duration::from_millis(1100)).await;
-        assert!(stalled.is_stuck(&key), "past the threshold, still running");
-        release.send(()).expect("release");
+        let deadline = Instant::now() + PATIENCE;
+        for attempt in 0.. {
+            assert!(
+                Instant::now() < deadline,
+                "no attempt was checked within the threshold"
+            );
+            let slow = PathBuf::from(format!("/octoboard-test/slow-{attempt}"));
+            let key = super::lexically_normalise(&slow);
+            let (release, held) = std::sync::mpsc::channel::<()>();
+            let held = Mutex::new(held);
+            let begun = Instant::now();
+            let found = looked_within_stuck(&stalled, vec![slow.clone()], looking, move |_| {
+                held.lock().unwrap().recv().ok();
+                Some(())
+            })
+            .await;
+            let returned = Instant::now();
+            let stuck = stalled.is_stuck(&key);
+            let again = looked_within(&stalled, vec![slow.clone()], PATIENCE, |_| Some(())).await;
+            if begun.elapsed() >= THRESHOLD {
+                release.send(()).expect("release");
+                continue;
+            }
+            assert!(found.is_empty(), "the answer was not waited for");
+            assert!(!stuck, "a slow look is not a stuck one");
+            assert!(
+                again.contains_key(&slow),
+                "a later look at the path still starts"
+            );
+            tokio::time::sleep_until((returned + THRESHOLD + Duration::from_millis(50)).into())
+                .await;
+            assert!(stalled.is_stuck(&key), "past the threshold, still running");
+            release.send(()).expect("release");
+            break;
+        }
     }
 }
