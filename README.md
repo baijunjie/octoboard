@@ -6,6 +6,24 @@
 
 <p align="center">Programming ends here. Power to rival the Terminator.</p>
 
+<p align="center">
+  <a href="apps/desktop/package.json">
+    <img
+      src="https://img.shields.io/github/package-json/v/baijunjie/octoboard?filename=apps%2Fdesktop%2Fpackage.json&amp;style=plastic&amp;label=version"
+      alt="Desktop package version"
+    />
+  </a>
+  <a href="#platform-support">
+    <img src="https://img.shields.io/badge/platform-macOS-lightgrey?style=plastic" alt="Platform: macOS" />
+  </a>
+  <a href="https://v2.tauri.app/">
+    <img src="https://img.shields.io/badge/built_with-Tauri_2-orange?style=plastic" alt="Built with Tauri 2" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue?style=plastic" alt="License: MIT" />
+  </a>
+</p>
+
 **Your agents. Your accounts. One workspace.**
 
 Octoboard is a local, open source development workspace for **Claude Code**, **Codex**, and **Grok Build**.
