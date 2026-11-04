@@ -207,6 +207,7 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         }
     }
     Ok(json!({
+        "auto_close_idle_shell_terminals": state.store.auto_close_idle_shell_terminals()?,
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,
         "auto_select_account": state.store.auto_select_account()?,
@@ -238,6 +239,10 @@ pub(in crate::mcp) fn update_settings(
         state,
         SettingsChanges {
             auto_pull_repositories: optional_bool(arguments, "auto_pull_repositories")?,
+            auto_close_idle_shell_terminals: optional_bool(
+                arguments,
+                "auto_close_idle_shell_terminals",
+            )?,
             auto_delete_unresumable_archives: optional_bool(
                 arguments,
                 "auto_delete_unresumable_archives",

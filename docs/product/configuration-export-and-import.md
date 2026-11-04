@@ -160,11 +160,14 @@ not stored at all and are in no document either (see "How a quota is read" in `d
 
 ### The application settings an export carries
 
-Fourteen, each under its own key, all in every document that has application settings. The import review notes each
-of the eleven switches. A settings key the daemon does not know, such as `reply_in_interface_language`, is ignored.
+Fifteen, each under its own key, all in every document that has application settings. The import review notes each
+of the twelve switches. A settings key the daemon does not know, such as `reply_in_interface_language`, is ignored.
 The language the daemon holds for the user is not carried either (see "The language the daemon holds" in
 `docs/product/language.md`): applying the document's settings leaves it as the importing daemon holds it.
 
+- **Close idle terminals when closing the panel** (see that section in `docs/product/settings.md`), under
+  `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
+  idle terminals and keeps terminals with running programs.
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
   `docs/product/project-git-status.md`), under `auto_pull_repositories`.
 - **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
@@ -412,7 +415,8 @@ setting a document can carry, `null` for a choice setting left unset — so what
 done. The settings are applied last, through the same path as a change made in Settings — so an import that turns
 automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on"
 in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes nothing until the next
-scheduled check, as the switch does, one that turns automatic account selection on or off changes no session already
+scheduled check, as the switch does, one that changes closing idle terminals with the panel closes nothing at once
+and applies to later panel closes, one that turns automatic account selection on or off changes no session already
 open, one that turns automatic switching at the usage limit on or off changes no session, one that turns the
 starting of usage windows on looks over the quota readings already held at once (see "When an
 account is kicked" in `docs/product/starting-usage-windows.md`), one that turns an automatic approval on or off changes

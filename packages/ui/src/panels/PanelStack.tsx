@@ -123,6 +123,7 @@ export function PanelStack({
   frameKeys,
   onViewFile,
   onDismiss,
+  onPanelClose,
   maximizeArea,
   areaEasing = false,
   floatOnly = false,
@@ -143,6 +144,8 @@ export function PanelStack({
   onViewFile?: PanelContentProps["onViewFile"];
   /** Closing a panel that was only floating in dismisses the floating pane. */
   onDismiss: () => void;
+  /** An explicit header close, independently of hover, resizing and owner changes. */
+  onPanelClose?: (kind: PanelKind) => void;
   /** The agent terminal's area, which a maximized card covers. */
   maximizeArea: React.RefObject<HTMLElement | null>;
   /** The sidebar's dock is easing, which resizes the area, and so a maximized card, every frame. */
@@ -244,6 +247,7 @@ export function PanelStack({
   };
 
   const close = (kind: PanelKind) => {
+    if (!floating) onPanelClose?.(kind);
     if (open.length === 0) onDismiss();
     else if (floating) floating.onClose();
     else {

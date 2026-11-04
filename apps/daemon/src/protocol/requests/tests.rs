@@ -370,7 +370,7 @@ fn an_envelope_id_never_shadows_what_a_request_acts_on() {
         (
             r#"{"type":"close_shell_terminal","id":"request-1","shell_terminal":"terminal-7"}"#,
             |body| match body {
-                RequestBody::CloseShellTerminal { shell_terminal } => Some(shell_terminal),
+                RequestBody::CloseShellTerminal { shell_terminal, .. } => Some(shell_terminal),
                 _ => None,
             },
         ),

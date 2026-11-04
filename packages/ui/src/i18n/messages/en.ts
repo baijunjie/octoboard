@@ -2269,6 +2269,10 @@ export const en = {
   "settings.cloneDir.description.gitUrl":
     "Projects added from a {git} URL are cloned into this directory unless you choose another.",
   "settings.cloneDir.placeholder": "~/Projects",
+  "settings.closeIdleTerminals.label": "Close idle terminals when closing the panel",
+  "settings.closeIdleTerminals.description.off": "Once this is on, closing the Terminal panel closes its idle terminals. Terminals with running programs stay open.",
+  "settings.closeIdleTerminals.description.on": "Closing the Terminal panel closes its idle terminals. Terminals with running programs stay open.",
+  "configuration.import.settings.consequence.closeIdleTerminals": "Closing the Terminal panel will close its idle terminals and keep terminals with running programs.",
   "settings.archiveCleanup.label": "Automatically delete archived sessions whose conversation is gone",
   "settings.archiveCleanup.description.off":
     "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. Archived sessions are checked each time the app starts, then about once a day. Pinned and locked sessions are kept.",

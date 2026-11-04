@@ -199,6 +199,7 @@ working directory. Neither the avatar itself nor the console's console session i
 
 | Field | Contents |
 |---|---|
+| `auto_close_idle_shell_terminals` | Whether explicitly closing a Terminal panel closes its idle terminals (see "Closing the panel" in `docs/product/terminal-panel.md`). |
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
 | `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). Read-only. |
@@ -211,7 +212,8 @@ working directory. Neither the avatar itself nor the console's console session i
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's accounts come in the order automatic account selection takes them in: the user's order of that agent's accounts, then those that order does not name (see "Which account a session uses" in `docs/product/opening-sessions.md`). The default account is listed with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
-`update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `interface_language`,
+`update_settings` takes `auto_close_idle_shell_terminals`, `auto_pull_repositories`,
+`auto_delete_unresumable_archives`, `interface_language`,
 `sidebar_order_by_status`, `default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the
 switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
 built-in default. `interface_language` is a tag of an offered language (see "The offered languages" in
@@ -227,7 +229,8 @@ stays as it is and the rest of the call applies as usual; `get_settings` lists o
 `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in
 Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes
 nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. The call
-answers as `get_settings` does.
+answers as `get_settings` does. Changing `auto_close_idle_shell_terminals` closes nothing at once; it applies when
+a user next explicitly closes the Terminal panel.
 
 ## When a change takes effect
 

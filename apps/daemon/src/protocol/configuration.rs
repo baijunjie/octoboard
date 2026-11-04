@@ -101,6 +101,7 @@ pub struct DocumentAccount {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSettings {
+    pub auto_close_idle_shell_terminals: bool,
     pub auto_pull_repositories: bool,
     pub auto_delete_unresumable_archives: bool,
     pub auto_select_account: bool,
@@ -336,7 +337,9 @@ pub struct InspectedProject {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedSettings {
+    pub auto_close_idle_shell_terminals: bool,
     pub auto_pull_repositories: bool,
+    pub current_auto_close_idle_shell_terminals: bool,
     pub current_auto_pull_repositories: bool,
     pub auto_delete_unresumable_archives: bool,
     pub current_auto_delete_unresumable_archives: bool,

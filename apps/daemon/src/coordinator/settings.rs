@@ -64,6 +64,7 @@ pub(super) fn set_provider_setting(
 /// What `update_settings` changes; a field left at its default is left alone.
 #[derive(Default)]
 pub struct SettingsChanges {
+    pub auto_close_idle_shell_terminals: Option<bool>,
     pub auto_pull_repositories: Option<bool>,
     pub auto_delete_unresumable_archives: Option<bool>,
     pub auto_approve_session_requests: Option<bool>,
@@ -93,6 +94,7 @@ pub struct SettingsChanges {
 /// `settings_updated` only when something actually changed, the trusted-directories pattern.
 pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -> Result<()> {
     let SettingsChanges {
+        auto_close_idle_shell_terminals,
         auto_pull_repositories,
         auto_delete_unresumable_archives,
         auto_approve_session_requests,
@@ -140,6 +142,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         None => None,
     };
     let mut changed = false;
+    if let Some(value) = auto_close_idle_shell_terminals {
+        changed |= state.store.set_auto_close_idle_shell_terminals(value)?;
+    }
     let mut pull_turned_on = false;
     let mut quota_windows_turned_on = false;
     if let Some(value) = auto_pull_repositories {

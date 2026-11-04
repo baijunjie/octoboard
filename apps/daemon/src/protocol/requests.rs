@@ -670,6 +670,8 @@ pub enum RequestBody {
     /// something actually changed, as `remove_trusted_directory` does.
     UpdateSettings {
         #[cfg_attr(test, ts(optional))]
+        auto_close_idle_shell_terminals: Option<bool>,
+        #[cfg_attr(test, ts(optional))]
         auto_pull_repositories: Option<bool>,
         #[cfg_attr(test, ts(optional))]
         auto_delete_unresumable_archives: Option<bool>,
@@ -935,6 +937,11 @@ pub enum RequestBody {
     /// `shell_terminal_deleted`.
     CloseShellTerminal {
         shell_terminal: String,
+        /// Checks the live process state and leaves busy terminals in place. A terminal already
+        /// gone is also acknowledged, so concurrent cleanups are harmless.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        only_if_idle: bool,
     },
     /// Opens the system terminal at the project's directory, on the daemon's host. Answered with
     /// `ack` once the terminal has been asked to open, not when its window closes. Refused with

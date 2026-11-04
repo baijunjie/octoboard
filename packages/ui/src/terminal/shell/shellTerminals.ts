@@ -166,3 +166,17 @@ async function createShellTerminal(daemon: Pick<Daemon, "request" | "store">, pr
     setStarting(project, false);
   }
 }
+
+/** Closes only the terminals this project held at the explicit panel close. The daemon checks
+ * whether each is idle now; the client's periodically refreshed busy flag may already be stale. */
+export async function closeIdleShellTerminals(daemon: Pick<Daemon, "request" | "store">, project: string): Promise<void> {
+  const state = daemon.store.getState();
+  if (!state.settings.auto_close_idle_shell_terminals) return;
+  await Promise.all(shellTerminalsOf(state, project).map(async (terminal) => {
+    try {
+      await daemon.request({ type: "close_shell_terminal", shell_terminal: terminal.id, only_if_idle: true });
+    } catch (err) {
+      raiseError(err, { title: t("shellTerminal.closeFailedTitle") });
+    }
+  }));
+}

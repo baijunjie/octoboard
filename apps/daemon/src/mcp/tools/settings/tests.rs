@@ -1092,3 +1092,24 @@ async fn add_project_takes_the_projects_own_git_workflow_values() {
     .unwrap();
     assert!(added["projects"][0]["git_workflow"]["override"]["delivery"].is_null());
 }
+
+#[tokio::test]
+async fn idle_terminal_cleanup_is_read_and_changed_through_the_tools() {
+    let (state, _dir) = settings_state("app-settings-close-idle-terminals");
+    let read = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(read["auto_close_idle_shell_terminals"], false);
+    let updated = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({
+            "auto_close_idle_shell_terminals": true,
+        })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated["auto_close_idle_shell_terminals"], true);
+    assert!(state.store.auto_close_idle_shell_terminals().unwrap());
+}

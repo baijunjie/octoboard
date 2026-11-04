@@ -211,7 +211,9 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
       return { type: "ack", id: null };
     },
     close_shell_terminal: (body) => {
-      if (!store.getState().shellTerminals.has(body.shell_terminal)) return fail({ code: "unknown_shell_terminal", params: { shell_terminal: body.shell_terminal }, message: `unknown shell terminal ${body.shell_terminal}` });
+      const terminal = store.getState().shellTerminals.get(body.shell_terminal);
+      if (body.only_if_idle && (!terminal || (terminal.state === "running" && terminal.busy))) return { type: "ack", id: null };
+      if (!terminal) return fail({ code: "unknown_shell_terminal", params: { shell_terminal: body.shell_terminal }, message: `unknown shell terminal ${body.shell_terminal}` });
       if (scenario.shellTerminalClose === "pending") return neverReplied();
       store.setState((state) => ({ shellTerminals: new Map([...state.shellTerminals].filter(([id]) => id !== body.shell_terminal)) }));
       return { type: "ack", id: null };

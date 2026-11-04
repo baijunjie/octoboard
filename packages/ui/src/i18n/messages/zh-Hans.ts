@@ -2076,6 +2076,10 @@ export const zhHans: Translation<"other"> = {
   "settings.cloneDir.description.gitUrl":
     "通过 {git} 仓库网址添加项目时，默认克隆到此目录，也可另选目录。",
   "settings.cloneDir.placeholder": "~/Projects",
+  "settings.closeIdleTerminals.label": "关闭面板时关闭闲置终端",
+  "settings.closeIdleTerminals.description.off": "开启后，关闭终端面板会自动关闭其中闲置的终端。运行中的终端会保留。",
+  "settings.closeIdleTerminals.description.on": "关闭终端面板会自动关闭其中闲置的终端。运行中的终端会保留。",
+  "configuration.import.settings.consequence.closeIdleTerminals": "关闭终端面板时会关闭其中闲置的终端，保留运行中的终端。",
   "settings.archiveCleanup.label": "自动删除对话已丢失的已归档会话",
   "settings.archiveCleanup.description.off":
     "开启后，智能体不再保留已归档会话的对话时，将自动删除该会话。应用每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",

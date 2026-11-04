@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Preferences } from "../../fixtures/preferences";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../../fixtures/interact";
@@ -60,8 +61,8 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Several tabs",
     description:
-      "Three evenly spaced, rounded rectangular tabs in the order the shells were started, the newest selected with a blue outline and tinted fill. Every tab keeps its close mark visible. The pane is widened to 560px so the three tabs fit whole on their own row below the title and panel controls. New terminal and the terminal actions menu stay fixed on the right of that row; press New terminal for another tab, selected at once. The \"Live changes\" buttons make what another window would: its new terminal joins the strip at the end without being selected, and closing the shown one hands the view to a neighbour, and reopening it afterwards brings it back without selecting it, so the view stays on the neighbour. Tabs fade in or out while the ones after them slide into place; with reduced motion they appear and disappear at once.",
-    state: stateOf(severalShells),
+      "Three evenly spaced, rounded rectangular tabs in the order the shells were started, the newest selected with a blue outline and tinted fill. Every tab keeps its close mark visible. The pane is widened to 560px so the three tabs fit whole on their own row below the title and panel controls. New terminal and the terminal actions menu stay fixed on the right of that row; press New terminal for another tab, selected at once. The \"Live changes\" buttons make what another window would: its new terminal joins the strip at the end without being selected, and closing the shown one hands the view to a neighbour, and reopening it afterwards brings it back without selecting it, so the view stays on the neighbour. Tabs fade in or out while the ones after them slide into place; with reduced motion they appear and disappear at once. Automatic idle-terminal cleanup is enabled: close the panel and reopen it to see that zsh and git log have closed while the busy pnpm dev terminal remains.",
+    state: { ...stateOf(severalShells), settings: { ...DEFAULT_SETTINGS, auto_close_idle_shell_terminals: true } },
     preferences: WIDE_TERMINAL,
     steps: [openWebsite, showTerminal],
     liveChanges: [

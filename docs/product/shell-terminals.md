@@ -11,9 +11,11 @@ rename it and close it; what that means for who can reach the daemon is in "Who 
 
 ## Who owns a shell terminal
 
-**The daemon owns its shell terminals, not the client that started them.** A terminal lives on after every client
-view of it is closed, after a window is closed while the daemon keeps running, and across a lost and restored
-connection. A client that connects is given every shell terminal the daemon holds, running or exited, oldest first,
+**The daemon owns its shell terminals, not the client that started them.** Hiding a client view does not end a terminal;
+explicitly closing the Terminal panel can close idle terminals when its application setting is on (see "Closing the
+panel" in `docs/product/terminal-panel.md`). A terminal otherwise lives on after every client view is closed, after a
+window is closed while the daemon keeps running, and across a lost and restored connection. A client that connects is
+given every shell terminal the daemon holds, running or exited, oldest first,
 and attaching to one replays its scrollback before live output follows, the same way a session's terminal is
 attached to.
 
@@ -92,6 +94,12 @@ A shell still running is sent `SIGHUP`, the hangup a terminal closing sends, whi
 its jobs. A shell still there 3 seconds later is killed together with its process group. Then the terminal itself is
 hung up, so a job still on it — one a shell that exited left running, or one sent off with `nohup` or `disown` — loses
 its terminal. Nothing of a closed terminal is kept, its output included. Closing answers once the shell is gone.
+
+A close can be conditional on the terminal being idle. The daemon checks whether the shell is busy at that close,
+under "Busy shells" above, rather than trusting its periodically refreshed record. A busy shell, or one whose idle
+state cannot be established, is kept without asking. An idle shell or an exited shell is closed normally. A terminal
+already gone counts as a successful close. This is the close used by "Closing the panel" in
+`docs/product/terminal-panel.md`.
 
 The same ending happens, without anyone being asked, to:
 

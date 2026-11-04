@@ -140,6 +140,7 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
     projects.sort_by(|a, b| (&a.name, &a.id).cmp(&(&b.name, &b.id)));
     let settings = if selection.settings {
         Some(DocumentSettings {
+            auto_close_idle_shell_terminals: store.auto_close_idle_shell_terminals()?,
             auto_pull_repositories: store.auto_pull_repositories()?,
             auto_delete_unresumable_archives: store.auto_delete_unresumable_archives()?,
             auto_select_account: store.auto_select_account()?,
@@ -542,6 +543,7 @@ mod tests {
         assert_eq!(
             document.settings,
             Some(DocumentSettings {
+                auto_close_idle_shell_terminals: false,
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: false,
                 auto_select_account: false,

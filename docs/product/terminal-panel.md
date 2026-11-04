@@ -50,6 +50,27 @@ closed, until the window is reloaded. A folder row's Terminal starts the shell i
 row's actions use (see "A row's actions" in `docs/product/project-pane.md`). What refuses a start, and the shell's
 directory afterwards, is in "Starting a shell terminal" in `docs/product/shell-terminals.md`.
 
+## Closing the panel
+
+By default, closing the panel keeps every shell terminal. The application-wide **Close idle terminals when closing the
+panel** switch in General changes this (see that section in `docs/product/settings.md`): while it is on, an explicit
+close also closes the project's idle and exited terminals, without confirmation. Busy terminals are kept. The panel
+closes at once; the terminals are checked and closed in the background, and any failure raises an error alert.
+
+An explicit close is the panel header's **Close panel**, its top bar toggle or its keyboard shortcut while it closes
+the panel. Below 594 px, dismissing the Terminal panel by pressing its dimmed strip or outer gap, `Escape` where it
+closes the panel, or a closing swipe also counts (see "Below 594 px: one panel floats over the terminal" in
+`docs/product/right-pane-panels.md`). `Escape` inside the shell still goes to the shell and leaves the panel open.
+
+Only terminals of the project being closed that were already present at that close are considered. Which terminals
+qualify is checked afresh under "Closing a shell terminal" in `docs/product/shell-terminals.md`. A terminal kept this
+time is not closed later
+when it becomes idle unless the user closes the panel again. A close removes the terminal for every client, with its
+output, under the same section.
+
+Merely hiding a hover preview or the floating group, switching projects, changing the window width, opening another
+panel in a narrow window, opening the sidebar overlay or opening an archive view does not close terminals.
+
 ## Tabs
 
 The tabs sit in a separate row immediately below the panel's header, one per terminal of the project, **oldest first**.

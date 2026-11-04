@@ -15,6 +15,9 @@ use crate::providers::SettingValue;
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Settings {
+    /// Whether explicitly closing a project Terminal panel closes its idle shell terminals.
+    /// Off unless the user turns it on; running programs are kept.
+    pub auto_close_idle_shell_terminals: bool,
     pub auto_pull_repositories: bool,
     /// Whether the daemon's scan deletes the archived sessions whose conversation is proven gone
     /// (see `coordinator/archive_cleanup.rs`). On unless the user turned it off.
@@ -115,6 +118,7 @@ impl Default for Settings {
     /// The settings of a fresh install: the cleanup of archived sessions is on, the rest empty.
     fn default() -> Self {
         Self {
+            auto_close_idle_shell_terminals: false,
             auto_pull_repositories: false,
             auto_delete_unresumable_archives: true,
             auto_approve_session_requests: false,

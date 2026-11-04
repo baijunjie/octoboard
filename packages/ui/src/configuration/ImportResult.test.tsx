@@ -184,6 +184,7 @@ it("tells of each application setting that was applied, and lists the values of 
   render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false });
   expect(container.querySelector("section > h3")?.textContent).toBe("Application settings applied");
   expect(settingLines(container)).toEqual({
+    "Close idle terminals when closing the panel": { badge: "Off" },
     "Automatically pull repositories": { badge: "On" },
     "Automatically delete archived sessions whose conversation is gone": { badge: "Off" },
     "Automatically select an account": { badge: "Off" },

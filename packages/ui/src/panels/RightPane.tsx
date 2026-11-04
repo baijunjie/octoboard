@@ -27,6 +27,7 @@ export function RightPane({
   peekKind,
   onViewFile,
   onDismiss,
+  onPanelClose,
   maximizeArea,
   areaEasing,
   float,
@@ -51,6 +52,8 @@ export function RightPane({
   onViewFile?: PanelContentProps["onViewFile"];
   /** Closing a panel that was only floating in dismisses the floating pane. */
   onDismiss: () => void;
+  /** An explicit header close, independently of hover, resizing and owner changes. */
+  onPanelClose?: (kind: PanelKind) => void;
   /** The agent terminal's area, which a maximized panel covers. */
   maximizeArea: React.RefObject<HTMLElement | null>;
   /** The sidebar's dock is easing, which resizes the area frame by frame. */
@@ -70,7 +73,7 @@ export function RightPane({
   const hover = useLatest(onHoverChange);
   useEffect(() => { if (!overlay) clearTimeout(edgeDwell.current); }, [overlay]);
   useEffect(() => () => clearTimeout(edgeDwell.current), []);
-  const shared = { owner, project, selectedSessionId, reportSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, maximizeArea, areaEasing };
+  const shared = { owner, project, selectedSessionId, reportSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, onPanelClose, maximizeArea, areaEasing };
   return (
     <>
       {overlay && (

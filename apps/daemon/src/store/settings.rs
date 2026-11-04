@@ -32,6 +32,10 @@ impl Store {
     pub fn get_settings(&self) -> Result<Settings> {
         let conn = self.lock();
         Ok(Settings {
+            auto_close_idle_shell_terminals: read_setting(
+                &conn,
+                "auto_close_idle_shell_terminals",
+            )?,
             auto_pull_repositories: read_setting(&conn, "auto_pull_repositories")?,
             auto_delete_unresumable_archives: read_setting(
                 &conn,
@@ -279,6 +283,7 @@ macro_rules! bool_settings {
 }
 
 bool_settings! {
+    auto_close_idle_shell_terminals, set_auto_close_idle_shell_terminals;
     auto_pull_repositories, set_auto_pull_repositories;
     auto_delete_unresumable_archives, set_auto_delete_unresumable_archives;
     auto_approve_session_requests, set_auto_approve_session_requests;
@@ -509,6 +514,13 @@ mod tests {
             set: fn(&Store, bool) -> Result<bool>,
         }
         let settings = [
+            Setting {
+                column: "auto_close_idle_shell_terminals",
+                default: false,
+                read: |settings| settings.auto_close_idle_shell_terminals,
+                get: Store::auto_close_idle_shell_terminals,
+                set: Store::set_auto_close_idle_shell_terminals,
+            },
             Setting {
                 column: "auto_pull_repositories",
                 default: false,

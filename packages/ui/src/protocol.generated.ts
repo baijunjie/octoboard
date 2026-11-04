@@ -984,6 +984,7 @@ export type DocumentProject = {
 };
 
 export type DocumentSettings = {
+  auto_close_idle_shell_terminals: boolean,
   auto_pull_repositories: boolean,
   auto_delete_unresumable_archives: boolean,
   auto_select_account: boolean,
@@ -1885,7 +1886,9 @@ export type InspectedProject = {
  * can show what applying them would change.
  */
 export type InspectedSettings = {
+  auto_close_idle_shell_terminals: boolean,
   auto_pull_repositories: boolean,
+  current_auto_close_idle_shell_terminals: boolean,
   current_auto_pull_repositories: boolean,
   auto_delete_unresumable_archives: boolean,
   current_auto_delete_unresumable_archives: boolean,
@@ -2883,6 +2886,7 @@ export type Request = {
 }
   | {
   "type": "update_settings",
+  auto_close_idle_shell_terminals?: boolean,
   auto_pull_repositories?: boolean,
   auto_delete_unresumable_archives?: boolean,
   auto_approve_session_requests?: boolean,
@@ -3021,6 +3025,11 @@ export type Request = {
   | {
   "type": "close_shell_terminal",
   shell_terminal: string,
+  /**
+   * Checks the live process state and leaves busy terminals in place. A terminal already
+   * gone is also acknowledged, so concurrent cleanups are harmless.
+   */
+  only_if_idle?: boolean,
 }
   | {
   "type": "open_project_terminal",
@@ -3564,6 +3573,7 @@ export type RequestBody = {
 }
 | {
   "type": "update_settings",
+  auto_close_idle_shell_terminals?: boolean,
   auto_pull_repositories?: boolean,
   auto_delete_unresumable_archives?: boolean,
   auto_approve_session_requests?: boolean,
@@ -3702,6 +3712,11 @@ export type RequestBody = {
 | {
   "type": "close_shell_terminal",
   shell_terminal: string,
+  /**
+   * Checks the live process state and leaves busy terminals in place. A terminal already
+   * gone is also acknowledged, so concurrent cleanups are harmless.
+   */
+  only_if_idle?: boolean,
 }
 | {
   "type": "open_project_terminal",
@@ -4128,6 +4143,11 @@ export type SettingKind = {
  * why the accounts live here rather than in a record of their own.
  */
 export type Settings = {
+  /**
+   * Whether explicitly closing a project Terminal panel closes its idle shell terminals.
+   * Off unless the user turns it on; running programs are kept.
+   */
+  auto_close_idle_shell_terminals: boolean,
   auto_pull_repositories: boolean,
   /**
    * Whether the daemon's scan deletes the archived sessions whose conversation is proven gone

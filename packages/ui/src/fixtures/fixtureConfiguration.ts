@@ -163,6 +163,7 @@ export function exportedDocument(
     exported_by: null,
     settings: regions.settings
       ? {
+        auto_close_idle_shell_terminals: state.settings.auto_close_idle_shell_terminals,
         auto_pull_repositories: state.settings.auto_pull_repositories,
         auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
         auto_select_account: state.settings.auto_select_account,

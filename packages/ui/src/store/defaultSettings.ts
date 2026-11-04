@@ -3,6 +3,7 @@ import type { Settings } from "../protocol";
 
 /** What the store holds before the first settings snapshot arrives, and what a hand-built state starts from. */
 export const DEFAULT_SETTINGS: Settings = {
+  auto_close_idle_shell_terminals: false,
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
   auto_approve_session_requests: false,

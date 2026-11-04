@@ -592,3 +592,53 @@ async fn a_shell_is_busy_while_another_group_holds_its_terminals_foreground() {
     assert!(busy, "the shell read as idle with its foreground held");
     close(&state, &created.id).await.unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn idle_only_close_checks_the_process_even_when_the_record_says_idle() {
+    let (state, _dir, _project) = with_project("shell-close-idle-busy");
+    let created = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let shell = process(&state, &created);
+    shell.write(b"sleep 30\r").unwrap();
+    record_where(&state, &created.id, |record| record.busy).await;
+    super::update(&state, &created.id, |record| record.busy = false);
+    let body = serde_json::json!({
+        "type": "close_shell_terminal", "shell_terminal": created.id, "only_if_idle": true,
+    });
+    request(&state, &body.to_string()).await.unwrap();
+    assert!(state.shell_terminals.process(&created.id).is_some());
+    close(&state, &created.id).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn idle_only_close_removes_idle_and_exited_terminals_and_is_idempotent() {
+    let (state, _dir, _project) = with_project("shell-close-idle");
+    let idle = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let shell = process(&state, &idle);
+    shell.write(b"printf 'ready\\n'\r").unwrap();
+    output_containing(&shell, "ready\r\n").await;
+    record_where(&state, &idle.id, |record| !record.busy).await;
+    super::close_if_idle(&state, &idle.id).await;
+    assert!(state.shell_terminals.process(&idle.id).is_none());
+    super::close_if_idle(&state, &idle.id).await;
+
+    let exited = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    process(&state, &exited).write(b"exit\r").unwrap();
+    record_where(&state, &exited.id, |record| {
+        record.state == ShellTerminalState::Exited
+    })
+    .await;
+    super::close_if_idle(&state, &exited.id).await;
+    assert!(state.shell_terminals.process(&exited.id).is_none());
+    request(
+        &state,
+        r#"{"type":"close_shell_terminal","shell_terminal":"already-gone","only_if_idle":true}"#,
+    )
+    .await
+    .unwrap();
+}

@@ -126,6 +126,7 @@ export function App(): React.ReactElement {
     asidePinned,
     toggleAsideDocked,
     notePanelOpened,
+    notePanelClosed,
     floating,
     floatingShown,
     ownerStack,
@@ -712,6 +713,7 @@ export function App(): React.ReactElement {
                         peekKind={peekKind}
                         onViewFile={viewLinkedFile}
                         onDismiss={() => panes.asidePeek.hide()}
+                        onPanelClose={notePanelClosed}
                         maximizeArea={agentAreaRef}
                         areaEasing={isDockEasing(sidebarColumnPhase)}
                         float={asideFloat}

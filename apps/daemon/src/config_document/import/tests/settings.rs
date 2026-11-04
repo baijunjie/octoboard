@@ -141,6 +141,7 @@ async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_as
     assert_eq!(
         imported.settings_applied,
         Some(DocumentSettings {
+            auto_close_idle_shell_terminals: false,
             auto_pull_repositories: true,
             auto_delete_unresumable_archives: false,
             auto_select_account: false,
@@ -676,4 +677,31 @@ async fn asking_for_settings_a_document_does_not_carry_is_refused_before_anythin
 
     assert_eq!(code_of(&err), error_code::IMPORT_SETTINGS_MISSING);
     assert!(state.store.list_consoles().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn idle_terminal_cleanup_round_trips_through_configuration() {
+    let (source, _source_dir) = app_state("import-idle-cleanup-source");
+    source
+        .store
+        .set_auto_close_idle_shell_terminals(true)
+        .unwrap();
+    let document = export::build(&source.store, &export::Selection::full(false)).unwrap();
+    assert!(
+        document
+            .settings
+            .as_ref()
+            .unwrap()
+            .auto_close_idle_shell_terminals
+    );
+    let document = serde_json::to_value(document).unwrap();
+    let (target, _target_dir) = app_state("import-idle-cleanup-target");
+    let inspection = inspect(&target, &document).await.unwrap();
+    let settings = inspection.settings.unwrap();
+    assert!(settings.auto_close_idle_shell_terminals);
+    assert!(!settings.current_auto_close_idle_shell_terminals);
+    apply(&target, &document, Vec::new(), true, None, false)
+        .await
+        .unwrap();
+    assert!(target.store.auto_close_idle_shell_terminals().unwrap());
 }

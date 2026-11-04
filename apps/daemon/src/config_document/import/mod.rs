@@ -249,6 +249,10 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
 
     let settings = match &document.settings {
         Some(settings) => Some(InspectedSettings {
+            auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
+            current_auto_close_idle_shell_terminals: state
+                .store
+                .auto_close_idle_shell_terminals()?,
             auto_pull_repositories: settings.auto_pull_repositories,
             current_auto_pull_repositories: state.store.auto_pull_repositories()?,
             auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
@@ -522,6 +526,7 @@ pub async fn apply(
     let (mut settings_applied, mut settings_error) = (None, None);
     if let Some(settings) = document.settings.filter(|_| apply_settings) {
         let changes = SettingsChanges {
+            auto_close_idle_shell_terminals: Some(settings.auto_close_idle_shell_terminals),
             auto_pull_repositories: Some(settings.auto_pull_repositories),
             auto_delete_unresumable_archives: Some(settings.auto_delete_unresumable_archives),
             auto_approve_session_requests: Some(settings.auto_approve_session_requests),

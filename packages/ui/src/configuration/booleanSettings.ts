@@ -20,6 +20,11 @@ export interface BooleanSetting {
 /** The copy of each switch, complete by type: a boolean setting added to `DocumentSettings` fails to compile
  * until it has an entry. Its order is the order of the import cards. */
 const COPY: Record<BooleanField, Omit<BooleanSetting, "field">> = {
+  auto_close_idle_shell_terminals: {
+    label: "settings.closeIdleTerminals.label",
+    description: { on: "settings.closeIdleTerminals.description.on", off: "settings.closeIdleTerminals.description.off" },
+    consequence: "configuration.import.settings.consequence.closeIdleTerminals",
+  },
   auto_pull_repositories: {
     label: "settings.git.autoPull.label",
     description: { on: "settings.git.autoPull.description.on", off: "settings.git.autoPull.description.off" },

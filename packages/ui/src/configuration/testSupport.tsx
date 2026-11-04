@@ -18,6 +18,7 @@ import { testDaemon } from "../test/testDaemon";
 export function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
   return {
     auto_pull_repositories: false,
+    auto_close_idle_shell_terminals: false,
     auto_delete_unresumable_archives: false,
     auto_select_account: false,
     auto_switch_on_usage_limit: false,

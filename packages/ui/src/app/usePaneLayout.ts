@@ -14,7 +14,7 @@ import { useProcessPanel } from "../process/useProcessPanel";
 import type { Console, Session } from "../protocol";
 import { useProjectReportSession } from "../report/useProjectReportSession";
 import { useDaemon, useDaemonStore } from "../store";
-import { startShellTerminal } from "../terminal/shell/shellTerminals";
+import { closeIdleShellTerminals, startShellTerminal } from "../terminal/shell/shellTerminals";
 
 /**
  * The window's panes around the agent terminal: the sidebar, as a docked column, a drawer or a
@@ -74,6 +74,13 @@ export function usePaneLayout({
   const [revealAside, setRevealAside] = useState(false);
   const drawer = useState(false);
   const floating = useFloatingPanel({ floats: asideFloats, owner: ownerKind, stacks: panelStacks, drawerOpen: drawer[0], focusTerminal, unavailable: unavailableKinds });
+  const notePanelClosed = (kind: PanelKind) => {
+    if (kind === "terminal" && asideOwner?.kind === "project") void closeIdleShellTerminals(daemon, asideOwner.project);
+  };
+  const closeFloating = () => {
+    if (floating.kind !== undefined) notePanelClosed(floating.kind);
+    floating.close();
+  };
   const floatingShown = floating.kind !== undefined;
   const storedStack = ownerKind ? panelStacks[ownerKind] : undefined;
   const ownerStack = asideFloats && ownerKind ? { open: floating.kind ? [floating.kind] : [], shares: {} } : storedStack;
@@ -94,7 +101,7 @@ export function usePaneLayout({
     asidePeekable: hasAside && (asideOverlay || !columnShown) && !asideFloats,
     focusTerminal,
     floatingPanel: floatingShown,
-    closeFloatingPanel: floating.close,
+    closeFloatingPanel: closeFloating,
     drawer,
   });
   const asideDocked = hasAside && columnShown && !asideFloats && !asideOverlay;
@@ -131,7 +138,7 @@ export function usePaneLayout({
     if (asideFloats) {
       // A card floating in on hover is the one this opens, so it keeps focus where it lands.
       panes.asidePeek.hide(false);
-      if (floating.kind === kind) return floating.close();
+      if (floating.kind === kind) return closeFloating();
       openFloating(ownerKind, kind);
       if (kind === "terminal" && asideOwner?.kind === "project") void startShellTerminal(daemon, asideOwner.project, { ifNone: true });
       return;
@@ -139,6 +146,7 @@ export function usePaneLayout({
     if (asideOverlay) {
       const opened = !openPanels.includes(kind);
       const closing = !opened && panes.asidePeek.active;
+      if (closing) notePanelClosed(kind);
       const next = closing ? toggleKind(ownerStack, kind, ownerOrder) : openPanel(ownerStack, kind, ownerOrder);
       const remaining = shownKinds(next, ownerOrder) as PanelKind[];
       setPanelStack(ownerKind, next);
@@ -153,6 +161,7 @@ export function usePaneLayout({
     // floats in a pane of its own and is shown again in the docked one.
     panes.asidePeek.hide(paneShown && !columnShown);
     const next = toggleKind(ownerStack, kind, ownerOrder);
+    if (shownKinds(ownerStack, ownerOrder).includes(kind) && !shownKinds(next, ownerOrder).includes(kind)) notePanelClosed(kind);
     setPanelStack(ownerKind, next);
     // Opening the Terminal panel on a project with no terminal starts one; floating it in does not.
     const opened = !shownKinds(ownerStack, ownerOrder).includes(kind) && shownKinds(next, ownerOrder).includes(kind);
@@ -244,7 +253,8 @@ export function usePaneLayout({
       if (asidePinned) setRevealAside(true);
       else panes.asidePeek.hide(false);
     },
-    floating,
+    floating: { ...floating, close: closeFloating },
+    notePanelClosed,
     floatingShown,
     ownerStack,
     openPanels,

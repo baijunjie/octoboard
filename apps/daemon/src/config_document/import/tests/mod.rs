@@ -100,6 +100,7 @@ fn with_settings(
     auto_delete: bool,
 ) -> serde_json::Value {
     document["settings"] = json!({
+        "auto_close_idle_shell_terminals": false,
         "auto_pull_repositories": auto_pull,
         "auto_delete_unresumable_archives": auto_delete,
         "auto_select_account": false,

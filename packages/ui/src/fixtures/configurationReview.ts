@@ -54,6 +54,8 @@ export function imported(parts: Pick<Imported, "consoles"> & Partial<Omit<Import
  * a second console whose only project can be cloned, and one with no project. */
 export const REVIEW = inspected({
   settings: {
+    auto_close_idle_shell_terminals: true,
+    current_auto_close_idle_shell_terminals: false,
     auto_pull_repositories: true,
     current_auto_pull_repositories: false,
     auto_delete_unresumable_archives: false,
@@ -146,7 +148,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT = imported({
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW, provider_settings: FILE_PROVIDER_SETTINGS, agent_tags: FILE_AGENT_TAGS },
+  settings_applied: { auto_close_idle_shell_terminals: true, auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW, provider_settings: FILE_PROVIDER_SETTINGS, agent_tags: FILE_AGENT_TAGS },
   consoles: [
     {
       name: "Work laptop",

@@ -38,6 +38,7 @@ vi.mock("./panelRegistry", () => {
 /** The stack beside the agent terminal's area, which the maximized card covers, and below a top
  * bar's control, which it does not. */
 function mount({ open, peek, floating }: { open: string[]; peek?: PanePeek; floating?: { stack: { open: string[]; shares: Record<string, number> }; onClose: () => void } }) {
+  const onPanelClose = vi.fn();
   const area: { current: HTMLDivElement | null } = { current: null };
   let latest!: ReturnType<typeof usePanelStacks>;
   function Probe() {
@@ -65,6 +66,7 @@ function mount({ open, peek, floating }: { open: string[]; peek?: PanePeek; floa
             peekKind={peek ? ("fake" as PanelKind) : undefined}
             frameKeys={{ onEscape: () => {}, onCycleRegion: () => {}, onMoveHistory: () => {}, onMoveConsoleSession: () => {} }}
             onDismiss={() => {}}
+            onPanelClose={onPanelClose}
             maximizeArea={area}
             floating={floating}
           />
@@ -79,7 +81,7 @@ function mount({ open, peek, floating }: { open: string[]; peek?: PanePeek; floa
   });
   act(() => latest.setStack("project", { open, shares: {} }));
   const press = (selector: string) => act(() => void container.querySelector<HTMLButtonElement>(selector)!.click());
-  return { container, stack: () => latest.stacks.project, press };
+  return { container, onPanelClose, stack: () => latest.stacks.project, press };
 }
 
 it("offers maximize on a maximizable kind open alone", () => {
@@ -152,4 +154,13 @@ it("leaves focus that is not in the covered area where it is", () => {
   document.getElementById("top-bar")!.focus();
   press("#panel-fake [aria-label='Maximize panel']");
   expect(document.activeElement?.id).toBe("top-bar");
+});
+
+it("reports only an explicit header close, never mounting or maximizing", () => {
+  const test = mount({ open: ["fake"] });
+  expect(test.onPanelClose).not.toHaveBeenCalled();
+  test.press("#panel-fake [aria-label='Maximize panel']");
+  expect(test.onPanelClose).not.toHaveBeenCalled();
+  test.press("#panel-fake [aria-label='Close panel']");
+  expect(test.onPanelClose).toHaveBeenCalledExactlyOnceWith("fake");
 });

@@ -136,6 +136,7 @@ const placeIn = (project: string, path: string): Step[] => [
  * compatibility choice, except what `carried` sets. */
 function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
   return {
+    auto_close_idle_shell_terminals: false,
     auto_pull_repositories: false,
     auto_delete_unresumable_archives: false,
     auto_select_account: false,
@@ -161,6 +162,7 @@ export function carriedSettings(settings: InspectedSettings): DocumentSettings {
 
 /** The settings that have a value of the document and one of this machine's in an inspection. */
 const SETTING_KEYS = [
+  "auto_close_idle_shell_terminals",
   "auto_pull_repositories",
   "auto_delete_unresumable_archives",
   "auto_select_account",

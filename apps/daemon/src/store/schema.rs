@@ -285,6 +285,7 @@ CREATE TABLE branch_origins (
 CREATE TABLE settings (
     id                     TEXT PRIMARY KEY,
     auto_pull_repositories INTEGER NOT NULL DEFAULT 0,
+    auto_close_idle_shell_terminals INTEGER NOT NULL DEFAULT 0,
     auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1,
     auto_approve_session_requests INTEGER NOT NULL DEFAULT 0,
     auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0,

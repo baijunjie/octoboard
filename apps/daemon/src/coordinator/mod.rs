@@ -798,6 +798,7 @@ async fn handle_inner(
 
         RequestBody::UpdateSettings {
             auto_pull_repositories,
+            auto_close_idle_shell_terminals,
             auto_delete_unresumable_archives,
             auto_approve_session_requests,
             auto_approve_resume_requests,
@@ -817,6 +818,7 @@ async fn handle_inner(
                 state,
                 SettingsChanges {
                     auto_pull_repositories,
+                    auto_close_idle_shell_terminals,
                     auto_delete_unresumable_archives,
                     auto_approve_session_requests,
                     auto_approve_resume_requests,
@@ -874,8 +876,15 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::CloseShellTerminal { shell_terminal } => {
-            crate::terminal::shell::close(state, &shell_terminal).await?;
+        RequestBody::CloseShellTerminal {
+            shell_terminal,
+            only_if_idle,
+        } => {
+            if only_if_idle {
+                crate::terminal::shell::close_if_idle(state, &shell_terminal).await;
+            } else {
+                crate::terminal::shell::close(state, &shell_terminal).await?;
+            }
             Ok(None)
         }
 

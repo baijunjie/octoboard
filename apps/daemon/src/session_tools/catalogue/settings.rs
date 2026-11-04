@@ -198,7 +198,7 @@ pub(super) const UPDATE_CONSOLE: ToolDef = ToolDef {
 
 pub(super) const GET_SETTINGS: ToolDef = ToolDef {
     name: "get_settings",
-    description: "The application-wide settings: `auto_pull_repositories`, \
+    description: "The application-wide settings: `auto_close_idle_shell_terminals`, `auto_pull_repositories`, \
                   `auto_delete_unresumable_archives`, `auto_select_account`, \
                   `interface_language` (the user's language, a tag; `null` until a window \
                   reported one), `sidebar_order_by_status`, `default_clone_dir`, the \
@@ -234,6 +234,10 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                     "type": "boolean",
                     "description": "Whether projects behind their upstream are pulled \
                                     (fast-forwarded) automatically.",
+                },
+                "auto_close_idle_shell_terminals": {
+                    "type": "boolean",
+                    "description": "Close idle shell terminals when the user closes their Terminal panel. Terminals with running programs stay open.",
                 },
                 "auto_delete_unresumable_archives": {
                     "type": "boolean",

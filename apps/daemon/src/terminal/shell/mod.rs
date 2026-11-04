@@ -344,6 +344,23 @@ pub async fn close(state: &AppState, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Checks the process now, rather than trusting the periodically refreshed record. A missing
+/// terminal or a failed check is left alone, so multiple clients can safely clean up together.
+pub async fn close_if_idle(state: &AppState, id: &str) {
+    let Some(process) = state.shell_terminals.process(id) else {
+        return;
+    };
+    let checked = process.clone();
+    let idle =
+        tokio::task::spawn_blocking(move || checked.poll_exit() || !busy::is_busy(&checked)).await;
+    if !matches!(idle, Ok(true)) {
+        return;
+    }
+    if let Some(process) = remove(state, id) {
+        end(process).await;
+    }
+}
+
 /// Ends every terminal of `project`, which is being removed. Returns once their shells are gone.
 pub async fn close_project(state: &AppState, project: &str) {
     close_projects(state, &[project]).await;

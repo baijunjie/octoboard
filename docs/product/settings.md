@@ -16,8 +16,9 @@ sections, in order, are **General**, **Git**, **Agent accounts**, **Agent behavi
 General unless it was asked to open on another section.
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
-automatic deletion of archived sessions whose conversation is gone, the ordering of the sidebar by status, the
-application-wide git workflow settings and the language the daemon holds for the user (see "The language the daemon
+automatic deletion of archived sessions whose conversation is gone, closing idle shell terminals with their panel,
+the ordering of the sidebar by status, the application-wide git workflow settings and the language the daemon holds
+for the user (see "The language the daemon
 holds" in `docs/product/language.md`). It can read, but not change, automatic account selection, Claude compatibility,
 the agent tags, the agent accounts (without their directories) and the trusted folders. The switches of Agent behavior,
 the approval modes, and the switches that switch accounts at the usage limit and start usage windows, it can neither
@@ -137,8 +138,9 @@ settles on (`HOME` when absolute, else the user's entry in the system user datab
 ## How switches save
 
 A row's switch whose value the daemon holds saves when it is turned, on its own: in General, **Order the sidebar by
-status** and **Automatically delete archived sessions whose conversation is gone**; in Git, **Automatically pull
-repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
+status**, **Automatically delete archived sessions whose conversation is gone** and **Close idle terminals when
+closing the panel**; in Git, **Automatically pull repositories**, **Squash commits before delivery**, **Rebase before
+delivery** and **Revert gate**; in Agent accounts,
 **Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
 automatically**; and the five of Agent behavior. The switch always shows the value the daemon has stored, which every
 window shares: it moves when that value changes, not on the press itself. A press made while the save started by the
@@ -156,8 +158,9 @@ the background**, a choice the client keeps itself rather than the daemon (see "
 ## General
 
 Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, an **Order the sidebar
-by status** row, then an **Automatically delete archived sessions whose conversation is gone** row, and last, in the
-macOS application only, a **Keep running in the background** row.
+by status** row, then an **Automatically delete archived sessions whose conversation is gone** row, a **Close idle
+terminals when closing the panel** row, and last, in the macOS application only, a **Keep running in the background**
+row.
 
 ### Appearance
 
@@ -200,14 +203,26 @@ sessions are kept. The value is kept by the daemon, so every window shows the sa
 runs and what turning the switch off or on changes are in "Deleting archived sessions whose conversation is gone" in
 `docs/product/deleting-sessions.md`.
 
+### Close idle terminals when closing the panel
+
+A switch, **off to begin with**: whether explicitly closing a project's Terminal panel also closes its idle terminals.
+The description says what turning it on will do while it is off, and what happens while it is on; either way it says
+terminals with running programs stay open. Which closes count and which terminals are kept are in "Closing the panel"
+in `docs/product/terminal-panel.md`. Turning it on closes nothing at once; it applies to later panel closes.
+
+The daemon stores it as `auto_close_idle_shell_terminals` and keeps it, so every window shows the same. A console
+session may read and change it, and a configuration export that includes the application settings carries it (see
+"Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
+application settings an export carries" in `docs/product/configuration-export-and-import.md`).
+
 ### Keep running in the background
 
 A switch, the section's last row, labelled for what turning it on does: keep Octoboard running in the background when
 the window is closed. It is **off to begin with**, so closing the window quits.
 
 **Only the macOS application has this row.** A browser has no native window to close into the background, so the row
-is absent there — the section then ends with the Automatically delete archived sessions whose conversation is gone
-row. In the macOS application this row sits directly under that switch.
+is absent there — the section then ends with Close idle terminals when closing the panel. In the macOS application
+this row sits directly under that switch.
 
 The row's description says what the choice means and never mentions quitting, which the label already carries: while
 the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the

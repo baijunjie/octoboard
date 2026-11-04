@@ -605,6 +605,18 @@ function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {
 }
 
 describe("the fixture daemon's settings and trusted folders", () => {
+  it("defaults idle-terminal cleanup off and exports the saved choice", async () => {
+    const daemon = createFixtureDaemon({});
+    expect(daemon.store.getState().settings.auto_close_idle_shell_terminals).toBe(false);
+    await daemon.request({ type: "update_settings", auto_close_idle_shell_terminals: true });
+    expect(daemon.store.getState().settings.auto_close_idle_shell_terminals).toBe(true);
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_close_idle_shell_terminals).toBe(true);
+    await daemon.request({ type: "update_settings", auto_pull_repositories: true });
+    expect(daemon.store.getState().settings.auto_close_idle_shell_terminals).toBe(true);
+    await daemon.request({ type: "update_settings", auto_close_idle_shell_terminals: false });
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_close_idle_shell_terminals).toBe(false);
+  });
+
   it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
     const accounts = [accountOf("work", "claude", "Work", "/Users/dev/.claude-work")];
     const daemon = createFixtureDaemon({ state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
@@ -1759,6 +1771,21 @@ describe("the fixture daemon's shell terminals", () => {
     await daemon.request({ type: "close_shell_terminal", shell_terminal: created.shell_terminal.id });
     expect(daemon.store.getState().shellTerminals.size).toBe(0);
     await expect(daemon.request({ type: "close_shell_terminal", shell_terminal: created.shell_terminal.id })).rejects.toMatchObject({ code: "unknown_shell_terminal" });
+  });
+
+  it("conditionally closes idle terminals while preserving busy ones and acknowledging terminals already gone", async () => {
+    const project = projectOf("p", "c", "Site");
+    const idle = shellTerminalOf("idle", project, "zsh", 0);
+    const busy = shellTerminalOf("busy", project, "pnpm dev", 1, { busy: true });
+    const exited = shellTerminalOf("exited", project, "git log", 2, { state: "exited" });
+    const daemon = daemonWithProject({ state: snapshotState({ projects: [project], shellTerminals: [idle, busy, exited] }) });
+    for (const terminal of [idle, busy, exited]) {
+      await expect(daemon.request({ type: "close_shell_terminal", shell_terminal: terminal.id, only_if_idle: true })).resolves.toMatchObject({ type: "ack" });
+    }
+    expect([...daemon.store.getState().shellTerminals.keys()]).toEqual([busy.id]);
+    await expect(daemon.request({ type: "close_shell_terminal", shell_terminal: idle.id, only_if_idle: true })).resolves.toMatchObject({ type: "ack" });
+    await daemon.request({ type: "close_shell_terminal", shell_terminal: busy.id });
+    expect(daemon.store.getState().shellTerminals.size).toBe(0);
   });
 
   it("refuses a terminal for an unknown project and gives each terminal its own id", async () => {

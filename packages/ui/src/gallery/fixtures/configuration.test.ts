@@ -71,6 +71,7 @@ it("reports the setting this machine has now as the scenario's own state has it"
   expect(withSettings.length).toBeGreaterThan(0);
   for (const { id, providers, machine, inspection } of withSettings) {
     const settings = inspection.settings!;
+    expect(settings.current_auto_close_idle_shell_terminals, id).toBe(machine!.auto_close_idle_shell_terminals);
     expect(settings.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
     expect(settings.current_auto_delete_unresumable_archives, id).toBe(machine!.auto_delete_unresumable_archives);
     expect(settings.current_auto_select_account, id).toBe(machine!.auto_select_account ?? false);
