@@ -31,9 +31,9 @@
 //! What it cannot do: a helper a kept process starts that leaves the kept process's terminal
 //! session (`setsid`) and its parent (a double fork) between two scans is reached neither by the
 //! chain nor by the session, and still carries the launch's tag; it is stopped with the launch.
-//! A process whose environment cannot be read (an Apple platform binary on macOS) that a shell
-//! left running in the background is never attributed when that shell exits before a scan has
-//! seen it: its chain no longer reaches the launch, the shell's session was never recorded, and
+//! A process whose environment cannot be read (an Apple platform binary on macOS with SIP on) that
+//! a shell left running in the background is never attributed when that shell exits before a scan
+//! has seen it: its chain no longer reaches the launch, the shell's session was never recorded, and
 //! there is no tag to read. It is neither listed nor stopped with the launch.
 //! A process that outlives `SIGKILL` (one in an uninterruptible sleep) is tried again only after
 //! [`STUBBORN_RETRY`] or once another launch ends.

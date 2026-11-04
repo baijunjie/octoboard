@@ -30,7 +30,7 @@
 //! as another user is not gone, though the table leaves it out. A recorded session is dropped
 //! once it has no member, or once a process with its id leads it that did not before. This is
 //! what reaches an Apple platform binary (`/bin/sleep`, `/usr/bin/tail`), whose environment
-//! cannot be read, after the shell that started it exited and it was reparented.
+//! cannot be read with SIP on, after the shell that started it exited and it was reparented.
 //!
 //! That a session still has members proves it is the one recorded only while the table is read
 //! often enough that it cannot empty and have its id handed on between two reads. A session read

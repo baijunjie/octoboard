@@ -114,7 +114,7 @@ fn bsd_info(pid: i32) -> Option<libc::proc_bsdinfo> {
 
 /// What `KERN_PROCARGS2` holds for the process: the argument count, the executable's path, then
 /// the arguments and the environment, each NUL-terminated. The system leaves the environment out
-/// for an Apple platform binary.
+/// for an Apple platform binary with SIP on.
 fn procargs(pid: i32) -> Option<Vec<u8>> {
     let mut mib = [libc::CTL_KERN, libc::KERN_PROCARGS2, pid];
     let mut size: libc::size_t = 0;

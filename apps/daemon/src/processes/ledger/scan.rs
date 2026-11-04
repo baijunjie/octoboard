@@ -12,6 +12,23 @@ use super::attribute::{self, ENDED};
 use super::table::{self, EnvTag, Identity, Proc, Table};
 use super::{settled, ProcessLedger, SCAN_INTERVAL, STUBBORN_RETRY};
 
+#[cfg(test)]
+thread_local! {
+    /// A pid whose environment the scans on the test's own thread read as unreadable, for a test
+    /// on a system that hands out platform binaries' environments (SIP off).
+    pub(super) static UNREADABLE_OVERRIDE: std::cell::Cell<Option<i32>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Reads `id`'s environment for the tag ([`table::env_tag`]).
+fn env_tag(id: Identity) -> EnvTag {
+    #[cfg(test)]
+    if UNREADABLE_OVERRIDE.get() == Some(id.pid) {
+        return EnvTag::Unreadable;
+    }
+    table::env_tag(id)
+}
+
 impl ProcessLedger {
     /// Reads the table and brings the book up to date with it. A `full` scan may read the
     /// environment of every process; any other only of processes started since the earliest
@@ -48,7 +65,7 @@ impl ProcessLedger {
             {
                 continue;
             }
-            let tag = table::env_tag(proc.id);
+            let tag = env_tag(proc.id);
             #[cfg(test)]
             {
                 *scans.env_reads.entry(proc.id).or_default() += 1;

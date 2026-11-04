@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use super::attribute::{Attributed, Book, ENDED};
 use super::looks::LOOK_DEADLINE_OVERRIDE;
+use super::scan::UNREADABLE_OVERRIDE;
 use super::stop::{self, follow_ups};
 use super::table::{self, Identity, Proc, Table};
 use super::{boot_id, persist, ProcessLedger, BOOT_ID_OVERRIDE, SETTLED_OVERRIDE, TAG_VARIABLE};
@@ -125,8 +126,8 @@ const SLEEPER: [&str; 4] = [
 ];
 
 /// This test binary run as [`sleeper`], detached, with `tag` as its tag: a process whose
-/// environment can be read on macOS, unlike a platform binary's, and that descends from no
-/// agent. Answers once its environment shows the tag.
+/// environment can be read on macOS, unlike a platform binary's with SIP on, and that descends
+/// from no agent. Answers once its environment shows the tag.
 fn tagged_sleeper(tag: &str) -> i32 {
     let pid = detached(
         &test_binary(),
@@ -313,7 +314,8 @@ async fn what_a_launch_left_outside_its_session_is_stopped_before_the_session_re
 }
 
 /// A platform binary first seen after the shell that started it exited — reparented, its
-/// environment unreadable on macOS — is the launch's through the session the shell was seen in.
+/// environment unreadable on macOS with SIP on — is the launch's through the session the shell
+/// was seen in.
 #[test]
 fn a_process_first_seen_after_its_shell_exited_is_adopted_through_its_session() {
     let (state, dir) = app_state("ledger-session");
@@ -1294,12 +1296,23 @@ fn an_unreadable_environment_is_read_again_only_once_another_program_runs() {
     let (state, dir) = app_state("ledger-unreadable-env");
     let _first = following(&state);
     let ledger = &state.process_ledger;
-    let go = dir.join("go");
-    // Perl and then `sleep`: platform binaries both, whose environment the system withholds.
-    let script = format!("{} exec \"/bin/sleep\", \"60\";", perl_wait_for(&go));
+    let (ready, go) = (dir.join("ready"), dir.join("go"));
+    // Perl and then `sleep`: platform binaries both, whose environment the system withholds where
+    // SIP is on. Perl says it is ready from its own program, past the execs that start it, so
+    // that what its environment reads as below is perl's.
+    let script = format!(
+        "{} {} exec \"/bin/sleep\", \"60\";",
+        perl_write(&ready, "$$"),
+        perl_wait_for(&go)
+    );
     let pid = detached("/usr/bin/perl", &["-e", &script], &[]);
     let _guard = KillOnDrop(vec![pid]);
+    assert_eq!(wait_for_pid(&ready), pid);
     let id = identity(pid);
+    // Where SIP is off, as on GitHub's macOS runners, the system hands the environment out: the
+    // scans then read it as unreadable through the override instead.
+    let withheld = table::env_tag(id) == table::EnvTag::Unreadable;
+    UNREADABLE_OVERRIDE.set((!withheld).then_some(pid));
     let reads = || ledger.scans.lock().unwrap().env_reads.get(&id).copied();
 
     ledger.scan(false);
@@ -1318,6 +1331,7 @@ fn an_unreadable_environment_is_read_again_only_once_another_program_runs() {
     ledger.scan(false);
     ledger.scan(false);
     assert_eq!(reads(), Some(2));
+    UNREADABLE_OVERRIDE.set(None);
 }
 
 /// Removed-directory cleanup respects the same retry delay as ended-launch cleanup when a

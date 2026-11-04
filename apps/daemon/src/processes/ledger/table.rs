@@ -217,8 +217,9 @@ pub const TAG_VARIABLE: &str = "OCTOBOARD_PROCESS_TAG";
 /// What reading a process's environment for [`TAG_VARIABLE`] found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnvTag {
-    /// The environment could not be read. On macOS that is every Apple platform binary
-    /// (`/bin/zsh`, `/bin/sleep`, …), whose environment the system withholds from other processes.
+    /// The environment could not be read. On macOS with SIP on that is every Apple platform
+    /// binary (`/bin/zsh`, `/bin/sleep`, …), whose environment the system withholds from other
+    /// processes.
     Unreadable,
     /// The environment was read and carries no tag.
     Untagged,

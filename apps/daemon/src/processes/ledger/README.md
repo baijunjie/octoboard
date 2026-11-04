@@ -68,9 +68,9 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
   outruns it is skipped while it is stuck. Only a directory whose kernel-reported text may lie under a project root is
   looked at; on macOS the report of the working directory is itself read in such a bounded pass, since it may stat the
   vnode.
-- A process whose environment cannot be read (an Apple platform binary on macOS, such as `/bin/sleep`) that a shell
-  left running in the background is never attributed when that shell exits within one scan interval: its chain no
-  longer reaches the launch, the shell's terminal session was never recorded, and it has no readable tag. It is neither
-  listed nor stopped with the launch.
+- A process whose environment cannot be read (an Apple platform binary on macOS with SIP on, such as `/bin/sleep`)
+  that a shell left running in the background is never attributed when that shell exits within one scan interval: its
+  chain no longer reaches the launch, the shell's terminal session was never recorded, and it has no readable tag. It is
+  neither listed nor stopped with the launch.
 - A helper of a kept process that both double-forks and starts a terminal session of its own between two scans escapes
   the kept tree, and is stopped with the launch whose tag it carries.
