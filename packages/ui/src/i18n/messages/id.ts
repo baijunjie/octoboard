@@ -175,6 +175,7 @@ export const id: Translation<"other"> = {
   "error.issue.openFailed": "Browser tidak membuka halaman Issue, sehingga alamatnya ditampilkan di bawah.",
   "error.issue.openFailedTitle": "Tidak dapat membuka halaman Issue",
   "error.diagnostics": "Detail kesalahan",
+  "error.copyDetailsFailed": "Detail kesalahan tidak dapat disalin",
   "error.details": "Detail",
   "error.title": "Kesalahan",
   "error.alertSession": "Sesi: {session}",

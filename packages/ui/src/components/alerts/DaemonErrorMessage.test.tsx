@@ -769,7 +769,7 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
     expect(causes[1]!.textContent).toContain(session.title);
   }
   // The details part is what an alert's Details popover shows, so it has no disclosure of its own to open.
-  expect(details.querySelector("button")).toBeNull();
+  expect([...details.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual(Array(3).fill(translatorFor("zh-Hans")("common.copy")));
   expect(details.querySelector("[hidden]")).toBeNull();
   expect(details.querySelectorAll("li")).toHaveLength(3);
   expect(details.firstElementChild!.querySelectorAll("li")).toHaveLength(0);

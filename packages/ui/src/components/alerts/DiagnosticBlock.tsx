@@ -1,8 +1,10 @@
 import { Surface } from "@heroui/react";
-import { createContext, useContext, type ReactElement } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 
 import { useT } from "../../i18n/react";
-import { CODE_SURFACE_CLASS, CodeBlock, SurfaceCodeBlock } from "../text/CodeBlock";
+import { CopyButton } from "../controls/CopyButton";
+import { ROW_ICON_BUTTON_CLASS } from "../controls/RowControls";
+import { CODE_SURFACE_CLASS, CodeBlock } from "../text/CodeBlock";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 
 /** The id of the summary of the disclosure a block stands in, which names the block's region unless it is given its own
@@ -10,42 +12,38 @@ import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
  * without knowing its id. */
 export const DiagnosticLabelContext = createContext<string | undefined>(undefined);
 
-/** Set by a place that lays every raw block in it out the same way whoever builds the block (an empty-state failure's
- * details): blocks under it wrap and are `tall` unless they say otherwise. */
-export const DiagnosticLayoutContext = createContext<{ wrap: boolean; tall: boolean } | undefined>(undefined);
-
-/** Raw diagnostics sit on a HeroUI `Surface` of their own (the secondary variant), not directly on the dialog, alert or
- * popover around them, and retain their line layout; overflowing lines remain reachable by keyboard. The scrolling
- * region is named "Error details", or by the element `labelledBy` where several blocks stand together (or by the
- * summary of the disclosure around it, see `DiagnosticLabelContext`). The text takes the tone of a `CodeToneContext`
- * around it, as an Alert sets. A block that may be taller than the room it has (a crash's stack) passes `tall`: it
- * scrolls vertically too, up to 40% of the viewport, and fades at the edge it hides the rest behind. A `wrap`ped block
- * breaks long lines instead of scrolling sideways (a daemon's startup failure, a crash's stack, a failed git command's
- * output), so on its own it has no overflow to name as a region or to fade; with `tall` too (in a popover, a dialog or
- * an empty-state failure, none of which should grow with it) it scrolls only vertically. A `tall` block that does not
- * wrap scrolls both ways but is a region and fades only for its height, so a block whose lines can be wider than its
- * box wraps. A `DiagnosticLayoutContext` around the block sets both where it does not. */
-export function DiagnosticBlock({ children, labelledBy, tall: tallProp, wrap: wrapProp }: { children: string; labelledBy?: string; tall?: boolean; wrap?: boolean }): ReactElement {
+/** Raw diagnostics preserve their original line breaks and indentation in every surface. Their height is capped at
+ * 40% of the viewport, with both axes scrollable from the named keyboard region. The copy control stays outside the
+ * scroller so it is always reachable, never faded, and copies the original text rather than the visible portion. */
+export function DiagnosticBlock({ children, labelledBy }: { children: string; labelledBy?: string }): ReactElement {
   const t = useT();
-  const layout = useContext(DiagnosticLayoutContext);
-  const tall = tallProp ?? layout?.tall ?? false;
-  const wrap = wrapProp ?? layout?.wrap ?? false;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const measure = () => setScrollbarWidth(Math.max(0, scroller.offsetWidth - scroller.clientWidth));
+    const resize = new ResizeObserver(measure);
+    resize.observe(scroller);
+    measure();
+    return () => resize.disconnect();
+  });
   const disclosure = useContext(DiagnosticLabelContext);
   const labelId = labelledBy ?? disclosure;
   const region = useFadeRegion(labelId ? { labelledBy: labelId } : { label: t("error.diagnostics") });
-  if (wrap && !tall) {
-    return <SurfaceCodeBlock>{children}</SurfaceCodeBlock>;
-  }
   return (
-    <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} ${region.ring}`}>
+    <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} relative shrink-0 ${region.ring}`}>
       <FadedScroller
         dir="ltr"
-        orientation={tall ? "vertical" : "horizontal"}
+        ref={scrollRef}
         region={region}
-        className={`min-w-0 max-w-full rounded-md ${tall ? `max-h-[40vh] ${wrap ? "overflow-x-hidden overflow-y-auto" : "overflow-auto"}` : "overflow-x-auto overflow-y-hidden"}`}
+        className="min-w-0 max-w-full max-h-[40vh] overflow-auto rounded-md [&>.app-code-block]:pe-7"
       >
-        <CodeBlock dir="ltr" wrap={wrap} flush>{children}</CodeBlock>
+        <CodeBlock dir="ltr" wrap={false} flush>{children}</CodeBlock>
       </FadedScroller>
+      <div className="absolute top-1 z-10 rounded-md bg-surface-secondary" style={{ right: `calc(${scrollbarWidth}px + var(--spacing))` }}>
+        <CopyButton text={children} failedText={t("error.copyDetailsFailed")} size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} />
+      </div>
     </Surface>
   );
 }

@@ -175,6 +175,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "error.issue.openFailed": "لم يفتح المتصفح صفحة Issue، لذا يظهر عنوانها أدناه.",
   "error.issue.openFailedTitle": "تعذر فتح صفحة Issue",
   "error.diagnostics": "تفاصيل الخطأ",
+  "error.copyDetailsFailed": "تعذّر نسخ تفاصيل الخطأ",
   "error.details": "التفاصيل",
   "error.title": "خطأ",
   "error.alertSession": "الجلسة: {session}",

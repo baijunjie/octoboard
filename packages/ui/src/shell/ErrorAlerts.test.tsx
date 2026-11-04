@@ -558,7 +558,7 @@ it("shows a failed account-switch batch as prose: the target once, a short reaso
   expect(details.textContent).toContain("No space left on device (os error 28)");
   const visible = (alert.textContent ?? "").replace(details.textContent ?? "", "");
   expect(visible).not.toContain("os error 28");
-  expect([...alert.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["OK"]);
+  expect([...alert.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Copy", "Copy", "OK"]);
 });
 
 async function failedBatch(failures: Record<string, Error>, accountName = "Work") {

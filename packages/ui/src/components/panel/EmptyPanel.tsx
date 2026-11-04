@@ -3,11 +3,8 @@ import type { LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
 import { Button } from "../controls/Button";
-import { DiagnosticLayoutContext } from "../alerts/DiagnosticBlock";
 import { TitledControl } from "../hint/TitledControl";
 import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
-
-const WRAPPED_TALL = { wrap: true, tall: true };
 
 /** `ErrorAlert`'s announcement of a failure panel. */
 interface Announcement {
@@ -175,11 +172,10 @@ export function EmptyPanel({
       {remedy && <p className="-mt-3 max-w-sm text-sm break-words text-app-muted">{remedy}</p>}
       {/* Start-aligned, unlike the lines above it: it holds paragraphs and raw text. The border is what
           sets it apart on a dialog or a viewer, which are the default surface's colour themselves. Raw
-          text wraps rather than scrolling sideways out of a box this narrow, and scrolls within its
-          block (`tall`) once taller than its room rather than pushing the buttons off the page. */}
+          text keeps its own bounded scroller rather than pushing the buttons off the page. */}
       {details && (
         <Surface className="flex w-full max-w-sm min-w-0 flex-col gap-2 rounded-xl border border-separator p-3 text-start text-sm text-app-muted [overflow-wrap:anywhere]">
-          <DiagnosticLayoutContext.Provider value={WRAPPED_TALL}>{details}</DiagnosticLayoutContext.Provider>
+          {details}
         </Surface>
       )}
       {(action || linkAction || secondaryAction) && (

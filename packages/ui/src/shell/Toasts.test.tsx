@@ -197,8 +197,9 @@ it.each([
     expect(alert.textContent).toContain(reasonLine);
     expect(alert.textContent).not.toContain(remedy);
     expect(alert.textContent).not.toContain("Report issue");
-    // Only the acknowledgement: no button for the nested cause's remedy.
-    expect(alert.querySelectorAll("button")).toHaveLength(1);
+    // Diagnostic copy controls stay in Error details; the only action outside is the acknowledgement.
+    const actions = [...alert.querySelectorAll("button")].filter((button) => !button.closest("details"));
+    expect(actions.map((button) => button.textContent)).toEqual(["OK"]);
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

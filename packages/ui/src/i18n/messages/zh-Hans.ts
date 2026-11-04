@@ -184,6 +184,7 @@ export const zhHans: Translation<"other"> = {
   "error.issue.openFailed": "Issue 页面没有在浏览器中打开，因此下方显示了其地址。",
   "error.issue.openFailedTitle": "无法打开 Issue 页面",
   "error.diagnostics": "错误详情",
+  "error.copyDetailsFailed": "无法复制错误详情",
   "error.details": "详情",
   "error.title": "错误",
   "error.alertSession": "会话：{session}",

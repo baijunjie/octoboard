@@ -36,7 +36,7 @@ const projects = [
 const sessions = projects.map((project, i) => sessionOf(`s-${i}`, console_.id, project.id, "Working on it", "idle"));
 
 const errorStatus = gitStatusOf(errorProject.id, { ahead: 2, behind: 1, error: "fetch: Could not resolve host 'origin'" });
-const unreadableStatus = gitStatusOf(unreadableProject.id, { branch: null, upstream: null, error: "HEAD: unable to read the current branch" });
+const unreadableStatus = gitStatusOf(unreadableProject.id, { branch: null, upstream: null, error: "HEAD: unreadable" });
 
 const gitStatuses = [
   gitStatusOf(evenProject.id),
@@ -130,7 +130,7 @@ const badgesState = snapshotState({
 });
 const longFailureState = snapshotState({
   consoles: [console_], projects: [squeezeProject], sessions: [squeezeSession],
-  gitStatuses: [{ ...squeezeStatus, activity: "idle", error: "fetch: Could not resolve host 'origin'" }],
+  gitStatuses: [{ ...squeezeStatus, activity: "idle", error: `fetch: Could not resolve host 'origin'; remote URL: ssh://git@ssh.github.com:443/octoboard/${"long-diagnostic-segment/".repeat(30)}repository.git; END-OF-DIAGNOSTIC` }],
 });
 const restoreProject = projectOf("p-restore", console_.id, "Search API مرحبا 東京 UnbrokenProjectNameForRestoreConfirmationWrapping");
 const restoreState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id)] });
@@ -226,16 +226,17 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-badges-errors", group: GROUP, category: "exceptional",
     title: "Fetch and branch-read failures",
-    description: "A deliberate fetch error and a HEAD read error each put a danger-coloured circled \"!\" named Git check failed at the start of the badge, in place of the branch glyph. It is a button of its own: pressing it opens a popover with the reason, the remedy and then Git's own text in a block of its own, held open here for the unreadable branch (the top row). The badge's tooltip (hover the branch or counts) covers only the branch and counts and never mentions the failure; the unreadable-branch row has no branch or counts, so only the mark stands there with no tooltip. The third row's next check is already running after a failure: the spinning glyph takes the mark's place, with no mark and no failure in the row's name, and the mark returns only if that run fails again.",
+    description: "A deliberate fetch error and a HEAD read error each put a danger-coloured circled \"!\" named Git check failed at the start of the badge, in place of the branch glyph. It is a button of its own: pressing it opens a popover with the reason, the remedy and then Git's own text in a block of its own, held open here for the unreadable branch (the top row). Its short diagnostic takes only the height it needs, with no unnecessary scroll region; the floating Copy button copies the complete original text. The badge's tooltip (hover the branch or counts) covers only the branch and counts and never mentions the failure; the unreadable-branch row has no branch or counts, so only the mark stands there with no tooltip. The third row's next check is already running after a failure: the spinning glyph takes the mark's place, with no mark and no failure in the row's name, and the mark returns only if that run fails again.",
     state: failureState, preferences: { sidebarWidth: 280 },
     steps: [(ui) => ui.openGitFailure((name) => name.startsWith(unreadableProject.name))],
   },
   {
     id: "git-badge-focus-long-error", group: GROUP, category: "exceptional",
     title: "Fetch failure at the narrowest project focus header",
-    description: "The failure is deliberate: fetch cannot resolve origin. Press the danger-coloured circled \"!\" named Git check failed at the start of the badge for its popover (reason, remedy, then Git's own text). At the narrowest sidebar the mark and the two counts take more than half of the header's free width, so the branch has no room and the badge shows only them, while the title (console over project name) keeps the rest and fades at its end. Hovering the counts shows the badge's tooltip, which does not mention the failure.",
+    description: "The failure is deliberate: fetch cannot resolve origin. The failure mark's popover is open with the reason, remedy and a single long diagnostic line. Scroll all the way to the right: END-OF-DIAGNOSTIC must be fully readable clear of the floating Copy button, which stays at the top right and copies the entire line. At the narrowest sidebar the mark and the two counts take more than half of the header's free width, so the branch has no room and the badge shows only them, while the title (console over project name) keeps the rest and fades at its end. Hovering the counts shows the badge's tooltip, which does not mention the failure.",
     state: longFailureState,
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+    steps: [(ui) => ui.openGitFailure()],
   },
   {
     id: "git-project-menu",
@@ -309,7 +310,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Push failed with long hook output",
-    description: "The push was stopped by a pre-push hook that printed about ninety lines, with Error details open. The raw text sits in a block that wraps its long lines (the file paths and type error) instead of scrolling sideways, is capped at 40% of the window's height and, when the output exceeds that cap, scrolls inside itself with a fade at the edge; scroll the block to reach the last line, Git's own failed to push some refs. Resize the window's height with the controls to see the cap follow it.",
+    description: "The push was stopped by a pre-push hook that printed about ninety lines, with Error details open. The raw text sits in a block that preserves original line breaks without automatic wrapping, scrolls its long lines (the file paths and type error) horizontally, is capped at 40% of the window's height and, when the output exceeds that cap, scrolls inside itself with a fade at the edge; scroll the block to reach the last line, Git's own failed to push some refs. The floating Copy button stays at the top right and copies the entire original output. Resize the window's height with the controls to see the cap follow it.",
     state: hostState,
     projectPushError: { code: "git_push_failed", params: { detail: PUSH_HOOK_OUTPUT }, message: "Git push failed" },
     steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300), (ui) => ui.press(ui.t("error.diagnostics"))],

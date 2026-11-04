@@ -174,6 +174,7 @@ export const hi: Translation<"one" | "other"> = {
   "error.issue.openFailed": "ब्राउज़र में इश्यू पेज नहीं खुला, इसलिए उसका पता नीचे दिया गया है।",
   "error.issue.openFailedTitle": "इश्यू पेज नहीं खुल सका",
   "error.diagnostics": "गड़बड़ी का विवरण",
+  "error.copyDetailsFailed": "गड़बड़ी की जानकारी कॉपी नहीं हो सकी",
   "error.details": "विवरण",
   "error.title": "गड़बड़ी",
   "error.alertSession": "सेशन: {session}",

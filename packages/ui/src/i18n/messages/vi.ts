@@ -174,6 +174,7 @@ export const vi: Translation<"other"> = {
   "error.issue.openFailed": "Trình duyệt không mở được trang Issue nên địa chỉ được hiển thị bên dưới.",
   "error.issue.openFailedTitle": "Không mở được trang Issue",
   "error.diagnostics": "Chi tiết lỗi",
+  "error.copyDetailsFailed": "Không sao chép được chi tiết lỗi",
   "error.details": "Chi tiết",
   "error.title": "Lỗi",
   "error.alertSession": "Phiên: {session}",

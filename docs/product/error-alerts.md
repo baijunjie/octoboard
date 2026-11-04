@@ -194,12 +194,11 @@ details**.
 with nothing else to show. It takes the shape of the empty state's full panel (see "The full panel" in
 `docs/product/empty-states.md`): a red circled `!` as its glyph, a heading saying what could not be loaded, at most two
 sentences under it, then its details, where there are any, and in its centred row **Try again** as the primary button,
-where the subject can be read again. The details — further explanation in Octoboard's words, then the raw text, as
-above — sit on a surface of their own under the sentences, outlined in the separator colour, their text aligned to the
-reading edge rather than centred; the raw text on it wraps its long lines rather than scrolling sideways, and each
-block of it scrolls within itself once taller than its room (see "Names and diagnostic details" below). There is no
-mark beside the heading and no **Details** button. Where the panel fills a pane, a panel or a dialog's body and is
-taller than it, it scrolls in its place (see "Scrolling a surface from the keyboard" in
+where the subject can be read again. The details — further explanation in Octoboard's words, then the raw text, as above
+— sit on a surface of their own under the sentences, outlined in the separator colour, their text aligned to the reading
+edge rather than centred. Each raw-text block follows the scrolling, height and copying rules in "Names and diagnostic
+details" below. There is no mark beside the heading and no **Details** button. Where the panel fills a pane, a panel or
+a dialog's body and is taller than it, it scrolls in its place (see "Scrolling a surface from the keyboard" in
 `docs/product/scrolling-surfaces.md`). The screens for a daemon that could not start, for a daemon of another version
 and for a UI that failed take this shape too, their row holding the recovery, where there is one, and **Report issue**
 (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
@@ -444,22 +443,26 @@ also when it is the cause of a launch or trust-confirmation failure, an import f
 failure. A launch or trust-confirmation failure whose cause Octoboard has no words for gives a generic cause in its
 sentence — for a launch, the sentence of an uncatalogued failure (see "Failures shown on the screen" above); for a trust
 confirmation, that something unexpected went wrong — and the cause's own text is the raw text. The output retains its
-line breaks, indentation and left-to-right order. Long lines scroll horizontally, with a labelled region reachable from
-the keyboard. Raw text that stands as a block of its own — in an alert's body, behind **Error details** or **Details**,
-on an empty-state failure's details surface, or in a mark's popover — sits on a tinted surface of its own rather than
-directly on what holds it, with whatever names it (the disclosure's summary, a heading) outside that surface. A known
-daemon failure's separately rendered diagnostic `detail`, including a failed Git push's hook output and a recognized
-trust confirmation diagnostic, wraps its long lines instead of scrolling sideways wherever that block is shown, and the
-block is at most 40% of the window's height, scrolling vertically within itself beyond that; while it does, it is a
-region named "Error details" that the keyboard can reach and scroll. Other diagnostic blocks, including structured
-sharing details, an unrecognized daemon message and a cause the application has no wording for, keep the horizontal scrolling above unless their containing surface sets wrapping and a
-height limit. On an empty-state failure's details surface, every block of raw text does the same, its region named
-"Error details" or, where several blocks stand together, by the heading over it. A reason Octoboard words itself remains
-part of the explanation; it is not turned into a diagnostic block simply because it accompanies an error. Unrecognized
-daemon messages retain the daemon's own readable wording as their raw text, after the sentence of an uncatalogued
-failure (see "Failures shown on the screen" above). These rules hold wherever the failure is shown: in an error alert,
-where such output is under Error details, in a compact alert, where it is behind Details, in an empty-state failure,
-where it is on the details surface, or in a mark's popover, where it comes last.
+line breaks, indentation and left-to-right order without automatic wrapping. Every diagnostic block sits on a tinted
+surface of its own rather than directly on what holds it, with whatever names it (the disclosure's summary, a heading)
+outside that surface. The whole surface, including its copy control, is at most 40% of the window's height. Long lines
+scroll horizontally, and content beyond the available height scrolls vertically within the block. The scrolling text
+is a region the keyboard can reach when it overflows, named by its disclosure or heading where there is one, and
+otherwise "Error details". These rules are the same for every error source and presentation.
+
+Each block has a muted **Copy** icon button floating over its upper-right corner. It stays in view while either axis
+scrolls, remains at the right in right-to-left layouts, and stays clear of a visible vertical scrollbar. Its opaque
+backing matches the diagnostic surface, so text does not show through the control. Text starts with its normal
+padding; the button reserves neither a header row nor a right-hand column. Extra horizontal scrolling room at the end
+lets the tail of a line be brought clear of the button. It copies the complete original text, including line breaks,
+indentation, and leading and trailing whitespace. It is available before the daemon connects too. A successful copy
+and a failed copy follow "Copy buttons" in `docs/product/labels-and-tooltips.md`.
+
+A reason Octoboard words itself remains part of the explanation; it is not turned into a diagnostic block simply because
+it accompanies an error. Unrecognized daemon messages retain the daemon's own readable wording as their raw text, after
+the sentence of an uncatalogued failure (see "Failures shown on the screen" above). These rules hold wherever the
+failure is shown: in an error alert, where such output is under Error details, in a compact alert, where it is behind
+Details, in an empty-state failure, where it is on the details surface, or in a mark's popover, where it comes last.
 
 ## Recovery and unexpected errors
 

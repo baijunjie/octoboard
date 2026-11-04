@@ -1,7 +1,7 @@
 import { ActionableError } from "../../errors/actionableError";
 import { useT } from "../../i18n/react";
-import { usePlatform } from "../../platform/react";
-import { useDaemon } from "../../store";
+import { useOptionalPlatform } from "../../platform/react";
+import { useOptionalDaemon } from "../../store";
 import { raiseError } from "../alerts/raiseError";
 import { copyText } from "./copyText";
 
@@ -21,13 +21,13 @@ export interface CopyNotice {
  * `failed` when it could not be. The one place a copy raises that alert. */
 export function useCopyWithNotice(): (text: string, notice: CopyNotice) => void {
   const t = useT();
-  const { clipboard } = usePlatform();
-  const { showNotice } = useDaemon();
+  const clipboard = useOptionalPlatform()?.clipboard;
+  const daemon = useOptionalDaemon();
   return (text, { copied, failed, onCopied, anchor }) => {
     copyText(text, { clipboard, anchor }).then(
       () => {
         onCopied?.();
-        if (copied) showNotice(copied);
+        if (copied) daemon?.showNotice(copied);
       },
       (cause: unknown) => raiseError(new ActionableError(failed, "clipboard", { cause }), { title: t("common.copyFailedTitle") }),
     );

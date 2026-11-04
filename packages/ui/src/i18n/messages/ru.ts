@@ -175,6 +175,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "error.issue.openFailed": "Браузер не открыл страницу Issue, поэтому её адрес указан ниже.",
   "error.issue.openFailedTitle": "Не удалось открыть страницу Issue",
   "error.diagnostics": "Подробности ошибки",
+  "error.copyDetailsFailed": "Не удалось скопировать сведения об ошибке",
   "error.details": "Подробности",
   "error.title": "Ошибка",
   "error.alertSession": "Сеанс: {session}",

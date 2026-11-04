@@ -141,7 +141,7 @@ it("shows a failed request as an error with Try again, and reads again when it i
   // The reason, its raw text and Try again are inside the one panel.
   const panel = container.querySelector('[data-slot="empty-state"]')!;
   expect(panel.querySelector(':scope > [data-slot="surface"]')?.textContent).toBe("gone");
-  expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
+  expect([...panel.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Copy", "Try again"]);
   expect(errorAlerts.report).not.toHaveBeenCalled();
   expect(container.textContent).not.toContain("History unavailable");
   request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });

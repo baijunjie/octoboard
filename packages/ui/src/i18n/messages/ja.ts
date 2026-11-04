@@ -176,6 +176,7 @@ export const ja: Translation<"other"> = {
   "error.issue.openFailed": "ブラウザで Issue のページを開けなかったため、アドレスを下に表示しています。",
   "error.issue.openFailedTitle": "Issue のページを開けませんでした",
   "error.diagnostics": "エラーの詳細",
+  "error.copyDetailsFailed": "エラーの詳細をコピーできませんでした",
   "error.details": "詳細",
   "error.title": "エラー",
   "error.alertSession": "セッション: {session}",

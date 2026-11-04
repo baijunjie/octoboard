@@ -104,6 +104,7 @@ function useScrollbarStrips(ref: RefObject<HTMLElement | null>, orientation: Ori
   style: CSSProperties;
   /** The vertical scrollbar's measured width, for a caller that keeps its own overlays clear of it. */
   inline: number;
+  sideways: boolean;
 } {
   const [sideways, setSideways] = useState(false);
   const [inline, setInline] = useState(0);
@@ -133,6 +134,7 @@ function useScrollbarStrips(ref: RefObject<HTMLElement | null>, orientation: Ori
       ? { "--scroll-shadow-scrollbar-size": `${inline}px`, "--scroll-shadow-scrollbar-block-size": `${block}px` } as CSSProperties
       : { "--scroll-shadow-scrollbar-size": `${block}px` } as CSSProperties,
     inline,
+    sideways,
   };
 }
 
@@ -249,8 +251,12 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
 export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, stickySurface, fade = true, endInset, ...props }: FadedScrollerProps): React.ReactElement {
   const ref = useObjectRef(forwarded);
   const strips = useScrollbarStrips(ref, orientation);
-  const rest = useFadeAtRest(ref, region?.onVisibilityChange);
+  const rest = useFadeAtRest(ref, undefined);
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
+  // The fade follows one axis, but keyboard access must cover either axis of a two-way scroller.
+  useEffect(() => {
+    region?.onVisibilityChange?.(visibility === "none" && strips.sideways ? "right" : visibility);
+  }, [region?.onVisibilityChange, visibility, strips.sideways]);
   const [topOffset, setTopOffset] = useState(stickyHeadingHeight ?? 0);
   // Like `useScrollbarStrips`, it re-runs on every commit, to pick up children React replaced.
   useEffect(() => {
@@ -281,7 +287,7 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
       {...strips.marker}
       ref={ref}
       onVisibilityChange={(value) => {
-        if (stickyHeadingHeight !== undefined) setVisibility(value);
+        setVisibility(value);
         rest.onVisibilityChange(value);
       }}
       {...region?.props}

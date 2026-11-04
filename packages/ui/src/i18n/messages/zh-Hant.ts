@@ -177,6 +177,7 @@ export const zhHant: Translation<"other"> = {
   "error.issue.openFailed": "Issue 頁面沒有在瀏覽器中開啟，因此下方顯示了其地址。",
   "error.issue.openFailedTitle": "無法開啟 Issue 頁面",
   "error.diagnostics": "錯誤詳細資訊",
+  "error.copyDetailsFailed": "無法複製錯誤詳細資訊",
   "error.details": "詳細資訊",
   "error.title": "錯誤",
   "error.alertSession": "工作階段：{session}",

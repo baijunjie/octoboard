@@ -175,6 +175,7 @@ export const th: Translation<"other"> = {
   "error.issue.openFailed": "เบราว์เซอร์ไม่ได้เปิดหน้า Issue จึงแสดงที่อยู่ไว้ด้านล่าง",
   "error.issue.openFailedTitle": "เปิดหน้า Issue ไม่ได้",
   "error.diagnostics": "รายละเอียดข้อผิดพลาด",
+  "error.copyDetailsFailed": "คัดลอกรายละเอียดข้อผิดพลาดไม่ได้",
   "error.details": "รายละเอียด",
   "error.title": "ข้อผิดพลาด",
   "error.alertSession": "เซสชัน: {session}",

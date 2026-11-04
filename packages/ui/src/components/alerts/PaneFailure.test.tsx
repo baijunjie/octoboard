@@ -53,8 +53,8 @@ it.each(["internal_error", "unexpected_error", "some_code_from_a_newer_daemon"])
   expect(panel.querySelector("p")?.textContent).toBe("Something unexpected went wrong.");
   expect(container.querySelector("[role=alert]")?.textContent).toBe("Could not load the pagesSomething unexpected went wrong.");
   expect(details(panel)?.textContent).toBe("database is locked");
-  // Raw text wraps in the narrow surface rather than scrolling sideways.
-  expect(details(panel)?.querySelector("pre")?.className).toContain("whitespace-pre-wrap");
+  // Raw diagnostics preserve their original line layout in every surface.
+  expect(details(panel)?.querySelector("pre")?.className).toContain("whitespace-pre");
 });
 
 it("keeps the application's own remedy under the line, outside the announcement, with no details surface when there is no raw text", () => {

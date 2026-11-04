@@ -206,6 +206,7 @@ export const en = {
   "error.issue.openFailed": "The browser did not open the Issue page, so its address is shown below.",
   "error.issue.openFailedTitle": "Could not open the Issue page",
   "error.diagnostics": "Error details",
+  "error.copyDetailsFailed": "Could not copy the error details",
   "error.details": "Details",
   "error.title": "Error",
   "error.alertSession": "Session: {session}",

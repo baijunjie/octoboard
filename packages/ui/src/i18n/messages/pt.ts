@@ -174,6 +174,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "error.issue.openFailed": "O navegador não abriu a página da issue. O endereço é mostrado abaixo.",
   "error.issue.openFailedTitle": "Não foi possível abrir a página da issue",
   "error.diagnostics": "Detalhes do erro",
+  "error.copyDetailsFailed": "Não foi possível copiar os detalhes do erro",
   "error.details": "Detalhes",
   "error.title": "Erro",
   "error.alertSession": "Sessão: {session}",

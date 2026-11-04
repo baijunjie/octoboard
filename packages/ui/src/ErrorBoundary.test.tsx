@@ -90,12 +90,12 @@ it.each([
   expect(fitting.hasAttribute("tabindex")).toBe(false);
 });
 
-it("says the crash in the application's words on the page and keeps the error's own text on a surface under them, with Try again the only button", async () => {
+it("says the crash in the application's words on the page and keeps the error's own text on a surface under them, with Copy and Try again", async () => {
   const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 });
   expect(container.querySelector("h1")?.textContent).toBe(t("error.crashed.heading"));
   expect(container.textContent).toContain(t("error.crashed"));
   expect(container.textContent).toContain(t("error.crashed.retry"));
-  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
+  expect([...container.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Copy", "Try again"]);
   expect(stack(container).textContent).toContain("boom");
 });
 
@@ -175,7 +175,7 @@ it("has no Quit button where the platform can quit, yet answers a quit gesture a
     confirmQuit,
   };
   const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri", exit });
-  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
+  expect([...container.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Copy", "Try again"]);
   await act(async () => onQuitRequested());
   expect(confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: false });
 });

@@ -48,7 +48,7 @@ it("says the daemon's failure to start in the application's words and keeps its 
   expect(guidance.textContent).toMatch(/^If the steps above do not resolve it, use Report issue to file an Issue/);
   expect(guidance.textContent).not.toContain("bug");
   expect(raw.querySelector("pre")?.textContent).toBe(DIAGNOSTIC);
-  expect(container.querySelector("button")).toBeNull();
+  expect([...container.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual(["Copy"]);
 });
 
 it.each([

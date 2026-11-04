@@ -1332,10 +1332,10 @@ state's shape (see "An empty state is a glyph, a heading, and what fills it") ra
 heading saying what could not be loaded, the line under it in the application's own words (why, and how to recover),
 then what an Alert's Details holds — further explanation in the application's own words, then the raw text — on a
 `Surface` of its own under those lines, bordered with the separator colour so it stands apart on a dialog or a viewer as
-on a pane, start-aligned and outside the announcement, its raw blocks wrapped and `tall` so they neither scroll sideways
-in that narrow box nor push the row off the page, and in its centred row the recovery action (Try again) as the primary
-button. Nothing else marks it as an error: no status mark beside the heading and no Details button, since the page has
-room for the whole failure. The cap on a raw block is a share of the window, so where the panel fills a pane (which does
+on a pane, start-aligned and outside the announcement, its raw blocks keeping their original line breaks within
+bounded scrollers rather than pushing the row off the page, and in its centred row the recovery action (Try again) as
+the primary button. Nothing else marks it as an error: no status mark beside the heading and no Details button, since
+the page has room for the whole failure. The cap on a raw block is a share of the window, so where the panel fills a pane (which does
 not scroll) or a dialog's body, it scrolls in its place, a region named by its heading (see "A scroller nothing else on
 screen scrolls takes focus itself"). An Alert is for a failure shown among other content.
 
@@ -1569,12 +1569,16 @@ text without chip markup. Isolate references at the sentence boundary where need
 collection keys, `textValue`, sorting, defaults and submitted values stay raw. Raw diagnostics shown as a block of their
 own sit on a secondary `Surface` of their own, never straight on the dialog, Alert or popover that holds them, with the
 summary or label naming them outside that surface; they preserve their text, direction and indentation, and long content
-remains scrollable and reachable from the keyboard, the focus ring drawn on the surface. A block that may be taller than
-its room (a crash's stack) is `tall`: it scrolls vertically as well, with the same named region and ring. A `wrap`ped
-block breaks long lines instead, so it has nothing to scroll sideways and, unless it is `tall` too, no region to name. A
-`tall` block is a region and fades only for its height, so one whose lines can be wider than its box (a crash's stack, a
-daemon's startup failure) also wraps. Keep structured error metadata separate from the plain error message, so
-notifications and unknown-error fallbacks retain usable text.
+remains scrollable and reachable from the keyboard, the focus ring drawn on the surface. Every diagnostic block uses
+`DiagnosticBlock`: no automatic line wrapping, a maximum height of 40% of the viewport, and scrolling on either axis
+when needed. Overflow on either axis makes the block a named, keyboard-reachable region; content that fits adds no
+scrolling tab stop. The vertical edges fade while they hide content. A floating `CopyButton` stays at the surface's
+top-right corner outside the scroller and its fade, without a reserved row or column. Its opaque backing matches the
+diagnostic surface so text cannot show through the control. Extra horizontal scroll room at
+the end lets the first line clear the button; the button stays clear of a vertical scrollbar. It copies the complete
+original text including whitespace and line breaks, and remains available before a daemon connection exists. Keep
+structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks retain
+usable text.
 
 #### A chip's size follows the line it sits in
 

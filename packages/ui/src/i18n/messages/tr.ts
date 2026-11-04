@@ -175,6 +175,7 @@ export const tr: Translation<"one" | "other"> = {
   "error.issue.openFailed": "Tarayıcı Issue sayfasını açmadığı için adresi aşağıda gösteriliyor.",
   "error.issue.openFailedTitle": "Issue sayfası açılamadı",
   "error.diagnostics": "Hata ayrıntıları",
+  "error.copyDetailsFailed": "Hata ayrıntıları kopyalanamadı",
   "error.details": "Ayrıntılar",
   "error.title": "Hata",
   "error.alertSession": "Oturum: {session}",

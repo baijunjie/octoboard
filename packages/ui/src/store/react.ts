@@ -19,9 +19,14 @@ export function useDaemonStoreOrEmpty<T>(selector: (state: State) => T): T {
   return useStore(daemon?.store ?? EMPTY_STORE, selector);
 }
 
+/** The connection when available; startup and crash screens may have none. */
+export function useOptionalDaemon(): Daemon | undefined {
+  return useContext(DaemonContext);
+}
+
 /** The requests and actions; they never change, so using this never re-renders. */
 export function useDaemon(): Daemon {
-  const daemon = useContext(DaemonContext);
+  const daemon = useOptionalDaemon();
   if (!daemon) throw new Error("useDaemon() called outside a DaemonProvider");
   return daemon;
 }

@@ -148,8 +148,7 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
       ? <span className="block"><SharingFailureReason cause={error.params.cause} detail={pointedAt} /></span>
       : null;
   const sharingRaw = sharing || (parts.sharing && rawReason) ? <SharingDetails items={sharing ?? []} detail={rawReason} /> : null;
-  // Verbatim diagnostic output (a push's hook checks) can run to hundreds of lines: it wraps and scrolls inside the block.
-  const diagnostic = parts.diagnostic ? <DiagnosticBlock wrap tall>{parts.diagnostic}</DiagnosticBlock> : null;
+  const diagnostic = parts.diagnostic ? <DiagnosticBlock>{parts.diagnostic}</DiagnosticBlock> : null;
   const unwordedRaw = unworded ? <DiagnosticBlock>{unworded.raw}</DiagnosticBlock> : null;
   // The supported agents follow their sentence as a list, one agent to an item.
   const recovery = !parts.recovery

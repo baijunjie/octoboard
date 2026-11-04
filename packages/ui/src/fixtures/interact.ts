@@ -1186,7 +1186,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const where = row === undefined ? "in the sidebar" : `in the row matching ${String(row)}`;
       const mark = await waitFor(() => {
         const scope = row === undefined ? doc.querySelector("[data-region=sidebar]") : find(row);
-        return Array.from(scope?.querySelectorAll<HTMLElement>("[data-status-mark]") ?? []).find((element) => element.getAttribute("aria-label") === label);
+        return Array.from(scope?.querySelectorAll<HTMLElement>("[data-status-mark]") ?? []).find((element) => nameOf(element) === label);
       }, `No git failure mark ${where}`);
       touch(mark);
       const popover = await markPopover(mark, `A touch press of the git failure mark ${where} opened no popover`);

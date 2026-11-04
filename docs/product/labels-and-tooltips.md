@@ -115,9 +115,9 @@ application buttons below. These are:
   "A panel's header" in `docs/product/right-pane-panels.md`);
 - the project pane's Refresh and Collapse all folders buttons (see `docs/product/project-pane.md`), and the file
   viewer's Previous file and Next file buttons (see `docs/product/file-viewer.md`);
-- the copy buttons — the file viewer's Copy path and the Git mode's Copy worktree path, on the change list's line naming
-  the worktree — whose tooltip, and the name announced with it, turns to the copied wording after a press (see "Copy
-  buttons" below);
+- the copy buttons — the file viewer's Copy path, the Git mode's Copy worktree path on the change list's line naming
+  the worktree, and a diagnostic block's Copy — whose tooltip, and the name announced with it, turns to the copied
+  wording after a press (see "Copy buttons" below);
 - the file viewer's File manager and Default application buttons, whose tooltip is the short "File manager" or "Default
   application" that names the action in a project pane row's menu, while the name announced for each says what pressing
   it does, "Open in file manager" or "Open in default application" (see "The header" in `docs/product/file-viewer.md`);
@@ -259,17 +259,18 @@ outline (see "The find bar" in `docs/product/finding-in-the-file-viewer.md`).
 
 ## Copy buttons
 
-A copy button is an icon button that puts a text on the clipboard and says it did so on the button itself rather than
-in a toast. These are the file viewer's Copy path (see "The header" in `docs/product/file-viewer.md`) and the
-button after the worktree's name on the Git mode's change list (see "Uncommitted changes" in
-`docs/product/project-pane-git-change-list.md`). For both:
+A copy button is an icon button that puts a text on the clipboard and says it did so on the button itself rather than in
+a toast. These are the file viewer's Copy path (see "The header" in `docs/product/file-viewer.md`), the button after the
+worktree's name on the Git mode's change list (see "Uncommitted changes" in
+`docs/product/project-pane-git-change-list.md`), and each diagnostic block's Copy (see "Names and diagnostic details" in
+`docs/product/error-alerts.md`). For all of them:
 
 - Before a press, its tooltip and name say what it copies — "Copy path", "Copy worktree path" — and its icon is the
-  copy glyph.
-- Once the text is on the clipboard, **the tooltip turns to the copied wording and stays open through the press**:
-  "Path copied" for Copy path, "Copied" for the worktree's. The name assistive technology is given changes with it, and
-  the copied wording is also announced as a status message, since a control that keeps focus is not reliably read
-  again. The icon changes to a check that fades in.
+  copy glyph. A diagnostic block's says simply "Copy".
+- Once the text is on the clipboard, **the tooltip turns to the copied wording and stays open through the press**: "Path
+  copied" for Copy path, "Copied" for the worktree's and the diagnostic block's. The name assistive technology is given
+  changes with it, and the copied wording is also announced as a status message, since a control that keeps focus is not
+  reliably read again. The icon changes to a check that fades in.
 - **It goes back once the tooltip has closed** — the pointer or keyboard focus leaving it — its copy glyph fading in
   again. After a press that showed no tooltip, such as a tap, it goes back after about two seconds.
 - Where the system asks for reduced motion, the icons change without fading.

@@ -177,6 +177,7 @@ export const ko: Translation<"other"> = {
   "error.issue.openFailed": "브라우저에서 Issue 페이지가 열리지 않아 아래에 주소를 표시합니다.",
   "error.issue.openFailedTitle": "Issue 페이지를 열지 못했습니다",
   "error.diagnostics": "오류 세부사항",
+  "error.copyDetailsFailed": "오류 세부 정보를 복사하지 못했습니다",
   "error.details": "세부사항",
   "error.title": "오류",
   "error.alertSession": "세션: {session}",
