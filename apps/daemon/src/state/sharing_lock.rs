@@ -185,12 +185,21 @@ impl AppState {
     ///
     /// [`AccountSharingLock::end_restart`]: AccountSharingLock::end_restart
     pub(crate) fn queue_if_restarting(&self, id: &str, text: &str) -> Option<Ticket> {
+        self.queue_if_restarting_with(id, || self.outbox.push(id, text))
+    }
+
+    /// Keeps a pre-reserved first message in the same atomic restart check as ordinary input.
+    pub(crate) fn queue_if_restarting_with<T>(
+        &self,
+        id: &str,
+        queue: impl FnOnce() -> T,
+    ) -> Option<T> {
         let ticket = {
             let live = self.live.read().expect("live sessions lock poisoned");
             live.sharing_locks
                 .values()
                 .any(|entry| entry.restarting.contains(id))
-                .then(|| self.outbox.push(id, text))
+                .then(queue)
         }?;
         // After the lock: it reads the live sessions again.
         self.note_activity(id);

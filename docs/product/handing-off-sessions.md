@@ -283,12 +283,12 @@ conversation can hold secrets. It stays for as long as the receiving session's r
 
 ## What the receiving session takes over
 
-The receiving session starts with an opening prompt that names the original, gives the package's path and tells it to
-read the package whole before doing anything else and to carry on where the original stopped — and, when the package
-names an earlier handoff package, to read that one too, and so on back along the chain, before carrying on; it also
-tells it that
-its place is about to move to it, that it will be told what it holds, and not to message the original. It comes up
-*working* on that prompt.
+The receiving session starts without a task. Its first automatic message is one complete work prompt, sent only after
+the original's place has moved and the original has been archived. It names the original, gives the package's path and
+tells it to read the package whole before doing anything else and to carry on where the original stopped — and, when
+the package names an earlier handoff package, to read that one too, and so on back along the chain, before carrying on.
+The same prompt says that the original is archived, lists the receiving session's final responsibilities, and tells it
+not to message the original. No separate message announcing handoff completion is sent to the receiving session.
 
 Once it is running, it takes the original's whole place:
 
@@ -311,10 +311,20 @@ then archived, last, once nothing is bound to it: none of the
 sessions that moved is archived with it, and **its branches and worktrees are not cleaned up**, since they moved to the
 receiving session.
 
+The first work prompt states its role, its owner and how to report to it — for a coordinator with a parent, also that
+this replaces what its role description says about being independent, how its reports archive it, and that items that
+are its parent's to carry out go in `owner_items` — or that it has no owner and reports to the user. It lists the
+branches it now holds, each with its target branch where one is recorded (see "Target branches and fork points" in
+`docs/product/revert-gate.md`), or says that they could not be moved and still name the original; it also lists each
+session it now owns, with its status. Reports from moved child sessions that arrive during the handoff wait behind
+this prompt and are delivered once each. The prompt uses ordinary message delivery, including its startup and
+user-dialog holds (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
+
 ## Who is told
 
-The sessions concerned are told by messages written through the delivery every message takes (see "Messages held
-until a session can take them" in `docs/product/message-delivery.md`):
+After the first work prompt has been submitted for delivery, the other sessions concerned are told by messages written
+through the delivery every message takes (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`):
 
 - **each moved session** is told that its owner has changed, which session took the original's place, that it takes
   work only from it or from the user typing in its terminal and reports to it, that this replaces what it was told of
@@ -325,13 +335,7 @@ until a session can take them" in `docs/product/message-delivery.md`):
   another agent, which now reports to it and which it drives like any session of its own, and that the original is
   archived — unless the owner made the handoff itself with `handoff_session`, whose result tells it instead. An
   interrupted owner has the message kept for its resume (see "Reports and notices for an interrupted owner" in
-  `docs/product/reporting-to-owners.md`);
-- **the receiving session** is told what it now holds: its owner and how to report to it — for a coordinator with a
-  parent, also that this replaces what its role description says about being independent, how its reports archive it,
-  and that items that are its parent's to carry out go in `owner_items` — or that it has no owner and reports to the
-  user; the branches it is now responsible for, each with its target branch where one is recorded (see "Target branches
-  and fork points" in `docs/product/revert-gate.md`), or that they could not be moved and still name the original; and
-  each session it now owns, with its status.
+  `docs/product/reporting-to-owners.md`).
 
 An archived owner is told nothing.
 
@@ -341,8 +345,9 @@ From the moment a handoff is accepted, messages for the original are **held**: t
 session that cannot take one right now, and none is written into it, so that none starts a turn on work that is being
 moved. The held queue is kept even if the original's process ends meanwhile.
 
-- Once the receiving session has taken the place, everything queued for the original, including what was already
-  waiting there before the handoff, is forwarded to the receiving session, in order, before the original is archived.
+- After the original is archived and the first work prompt has been submitted for delivery, everything queued for the
+  original, including what was already waiting there before the handoff, is forwarded to the receiving session, in
+  order, behind that prompt.
   What was kept for an interrupted original until its resume — information (see "Information for an interrupted
   session" in `docs/product/information-between-sessions.md`), and for an owner its reports and notices (see "Reports
   and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`) — follows the queue, each piece once,
@@ -385,9 +390,16 @@ Every refusal comes before anything is written or started. After that:
   the user that the original session is still open and to archive it themselves; after a failed move it tells the user
   that both the original session and the new one are running, to check which one holds the work and to archive the one
   no longer needed. Where the binding had not moved yet, nothing of the original's moved and it is not archived; where
-  it had, the place stays with the receiving session and the original may be left unarchived.
+  it had, the place stays with the receiving session and the original may be left unarchived. The receiving session
+  is not sent the first work prompt, and neither the owner nor the moved sessions is sent the normal notification
+  that the handoff succeeded. After a failed archive, messages held for the original still go to the receiving session,
+  since the place has moved.
 - **Branches that cannot be moved** do not fail the handoff: they stay with the original, and the receiving session is
   told so.
+- **The first work prompt is immediately refused by message delivery** — every window is sent the
+  `handoff_messages_dropped` notice about the receiving session, with the same guidance to check its terminal and
+  resend missing content as for undeliverable forwarded messages above. The completed move and archive still count as
+  a successful handoff; they are not undone. A prompt accepted into the queue follows ordinary delivery rules.
 
 A handoff that succeeds is answered with the receiving session; `handoff_session`'s answer is in "Handing off from an
 owner's tool" above.

@@ -63,6 +63,12 @@ pub enum Drain {
 /// What [`Outbox::push`] hands back for a message, for telling it apart in a drain's outcome.
 pub type Ticket = u64;
 
+/// The first message's place, reserved before its session is published and while its queue is paused.
+pub(crate) struct FirstTicket {
+    id: String,
+    ticket: Ticket,
+}
+
 /// What a drain learns from the agent about whether what it wrote was sent.
 pub trait PromptSignal {
     /// How many prompts the agent has reported sending so far.
@@ -187,6 +193,48 @@ impl Outbox {
             .or_default()
             .push_back((ticket, text.to_string(), None));
         ticket
+    }
+
+    /// Reserves the first ticket without queuing a placeholder that could be delivered or lost.
+    pub(crate) fn reserve_first(&self, id: &str) -> anyhow::Result<FirstTicket> {
+        anyhow::ensure!(
+            self.is_paused(id),
+            "a first message requires a paused queue"
+        );
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        anyhow::ensure!(
+            !queues.contains_key(id),
+            "the first message must be reserved before other messages"
+        );
+        queues.insert(id.to_string(), MessageQueue::new());
+        Ok(FirstTicket {
+            id: id.to_string(),
+            ticket: self.next_ticket.fetch_add(1, Ordering::Relaxed),
+        })
+    }
+
+    pub(crate) fn push_first(&self, first: FirstTicket, text: &str) -> anyhow::Result<Ticket> {
+        anyhow::ensure!(
+            self.is_paused(&first.id),
+            "a reserved first message requires its queue pause"
+        );
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        let queue = queues.entry(first.id).or_default();
+        anyhow::ensure!(
+            queue
+                .front()
+                .is_none_or(|(ticket, _, _)| *ticket > first.ticket),
+            "a reserved first ticket must precede the queue"
+        );
+        queue.push_front((first.ticket, text.to_string(), None));
+        Ok(first.ticket)
+    }
+
+    pub(crate) fn cancel_first(&self, first: FirstTicket) {
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if queues.get(&first.id).is_some_and(MessageQueue::is_empty) {
+            queues.remove(&first.id);
+        }
     }
 
     /// [`Self::push`] for a message kept in the store as row `row`, which goes once it is written.
@@ -774,6 +822,49 @@ mod tests {
             written,
             error: std::io::Error::new(std::io::ErrorKind::TimedOut, "no room"),
         }
+    }
+
+    #[test]
+    fn a_reserved_first_message_preserves_ticket_order_and_cancel_keeps_later_messages() {
+        let outbox = Outbox::default();
+        outbox.pause("s");
+        let first = outbox.reserve_first("s").unwrap();
+        assert!(
+            outbox.reserve_first("s").is_err(),
+            "the first place is already reserved"
+        );
+        let report = outbox.push("s", "child report");
+        let bootstrap = outbox.push_first(first, "bootstrap").unwrap();
+        assert!(bootstrap < report);
+        outbox.resume("s");
+        let mut written = Vec::new();
+        assert_eq!(
+            outbox.drain_with(
+                "s",
+                &mut |ticket, text, _| {
+                    written.push((ticket, text.to_string()));
+                    Ok(())
+                },
+                &MidTurn
+            ),
+            Drain::Clear
+        );
+        assert_eq!(
+            written,
+            [
+                (bootstrap, "bootstrap".to_string()),
+                (report, "child report".to_string())
+            ]
+        );
+        outbox.pause("cancelled");
+        let cancelled = outbox.reserve_first("cancelled").unwrap();
+        outbox.push("cancelled", "external input");
+        outbox.cancel_first(cancelled);
+        outbox.resume("cancelled");
+        assert_eq!(
+            outbox.take("cancelled"),
+            [("external input".to_string(), None)]
+        );
     }
 
     #[test]

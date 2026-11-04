@@ -14,6 +14,7 @@ use crate::messaging::outbox::{Drain, Ticket};
 use crate::messaging::texts::{
     idle_notice_session, is_idle_notice, is_waiting_notice, waiting_notice_session,
 };
+use crate::messaging::write_queue::FirstMessage;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::session::term;
 use crate::session_tools::catalogue;
@@ -156,6 +157,16 @@ pub fn write_message(
     text: &str,
     when_blocked: WhenBlocked,
 ) -> Result<Delivery> {
+    write_message_inner(state, id, text, when_blocked, None)
+}
+
+fn write_message_inner(
+    state: &Arc<AppState>,
+    id: &str,
+    text: &str,
+    when_blocked: WhenBlocked,
+    mut first: Option<&mut FirstMessage>,
+) -> Result<Delivery> {
     // Written, it would be an empty prompt the agent does not send, and nobody would learn why.
     if term::is_blank_once_stripped(text) {
         return Err(CodedError::raised(
@@ -168,7 +179,14 @@ pub fn write_message(
     // Held from the claim on until the resume, so queued rather than refused whatever state its
     // process is in meanwhile: the account's hold keeps the queue and the resumed process gets it,
     // or its drop reports the queue as dropped when the session is not relaunched.
-    if state.queue_if_restarting(id, text).is_some() {
+    let restarting = match first.as_mut() {
+        Some(first) => state
+            .queue_if_restarting_with(id, || first.enqueue(text))
+            .transpose()?
+            .is_some(),
+        None => state.queue_if_restarting(id, text).is_some(),
+    };
+    if restarting {
         return Ok(Delivery::Queued);
     }
     // Nothing to write to and nothing to wait for: a resume starts the agent at its prompt rather
@@ -204,8 +222,31 @@ pub fn write_message(
     }
 
     // Queued even when the session looks ready, so messages cannot overtake one another.
-    let ticket = state.queue_message(id, text);
+    let ticket = match first {
+        Some(first) => {
+            state.cancel_recoveries_silently(id);
+            let ticket = first.enqueue(text)?;
+            state.note_activity(id);
+            ticket
+        }
+        None => state.queue_message(id, text),
+    };
     delivery_of(state.flush_outbox(id, agent_status), ticket)
+}
+
+/// Delivers a first message through the same checks as every automatic message, preserving the
+/// place it reserved before the session was published.
+pub(crate) async fn write_first_message_off_runtime(
+    state: &Arc<AppState>,
+    mut first: FirstMessage,
+    text: String,
+) -> Result<Delivery> {
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || {
+        let id = first.id().to_string();
+        write_message_inner(&state, &id, &text, WhenBlocked::Queue, Some(&mut first))
+    })
+    .await?
 }
 
 /// What a drain's outcome means for the message with `ticket`, queued before the drain began.

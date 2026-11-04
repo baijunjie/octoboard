@@ -95,9 +95,8 @@ pub(crate) fn takeover_prompt(original: &Session, package: &Path, note: Option<&
          what comes next from it, and carry on where the original stopped; do not start over. \
          If the package names an earlier handoff package, read that one too, and so on back \
          along the chain, before you carry on.\n\n\
-         Once you are running, Octoboard moves the original's place to you: its owner, its \
-         branches and its sessions. It sends you a message saying what you now hold, and archives \
-         the original; do not message the original.{note}",
+         Octoboard has moved the original's place to you: its owner, its branches and its \
+         sessions. Your responsibilities are listed below; do not message the original.{note}",
         kind = original.kind.name(),
         label = naming::label(original),
         agent = original.agent.label(),

@@ -108,6 +108,11 @@ impl Gates {
     }
 
     #[cfg(test)]
+    pub(crate) fn with_repository_held<T>(&self, repo: &Path, work: impl FnOnce() -> T) -> T {
+        self.serialized(repo, work)
+    }
+
+    #[cfg(test)]
     pub(super) fn holds_no_repository(&self) -> bool {
         self.gates.is_empty() && self.wrote_ats().is_empty()
     }

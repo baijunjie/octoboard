@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use super::outbox::{Drain, PromptSignal, Ticket};
+use super::outbox::{Drain, FirstTicket, PromptSignal, Ticket};
 use crate::protocol::{notice_code, Notice, SessionStatus};
 use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
@@ -26,6 +26,35 @@ impl Drop for OutboxPause {
         if let Ok(session) = self.state.session_record(&self.id) {
             let status = self.state.agent_status(&session);
             self.state.spawn_flush_outbox(&self.id, status);
+        }
+    }
+}
+
+/// A session's first message, whose place is reserved before the session exists. The pause lives
+/// until normal delivery has accepted it, or a failed handoff drops the reservation.
+pub(crate) struct FirstMessage {
+    pause: OutboxPause,
+    ticket: Option<FirstTicket>,
+}
+
+impl FirstMessage {
+    pub(crate) fn id(&self) -> &str {
+        &self.pause.id
+    }
+
+    pub(crate) fn enqueue(&mut self, text: &str) -> Result<Ticket> {
+        let first = self
+            .ticket
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("the first message was already queued"))?;
+        self.pause.state.outbox.push_first(first, text)
+    }
+}
+
+impl Drop for FirstMessage {
+    fn drop(&mut self) {
+        if let Some(first) = self.ticket.take() {
+            self.pause.state.outbox.cancel_first(first);
         }
     }
 }
@@ -266,6 +295,20 @@ impl AppState {
         let ticket = self.outbox.push(id, text);
         self.note_activity(id);
         ticket
+    }
+
+    /// Reserves a new session's first automatic message before the session can receive reports.
+    pub(crate) fn reserve_first_message(self: &Arc<Self>, id: &str) -> Result<FirstMessage> {
+        anyhow::ensure!(
+            self.store.get_session(id)?.is_none(),
+            "a first message must be reserved before the session exists"
+        );
+        let pause = self.pause_outbox(id);
+        let ticket = self.outbox.reserve_first(id)?;
+        Ok(FirstMessage {
+            pause,
+            ticket: Some(ticket),
+        })
     }
 
     /// [`Self::queue_message`] for a message kept in the store as `row` (see

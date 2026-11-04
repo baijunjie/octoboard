@@ -5,11 +5,12 @@
 //! is responsible for, and the sessions it owns.
 //!
 //! **Nothing changes until the receiving session is running.** The session's own refusals come
-//! first, then the package is written and the session started with it in its brief; a start that
+//! first, then the package is written and the session started without a task; a start that
 //! fails, whether opening refuses it or the agent does not come up, removes the package and leaves
 //! the original, its branches and its sessions as they were. Only then do the binding, the branches
-//! and the owned sessions move, the sessions concerned are told, and the original is archived,
-//! last, once nothing is bound to it.
+//! and the owned sessions move, and the original is archived once nothing is bound to it. Only then
+//! does the receiving session get one work prompt with the package and its final responsibilities,
+//! followed by the notifications and forwarded messages.
 //!
 //! **The original's message queue is held from the moment the handoff claims it.** Messages for it
 //! are accepted and queued but not written, so none starts a turn on a session whose work is being
@@ -32,7 +33,7 @@ use crate::messaging::naming::{label, named_session, place_of};
 use crate::messaging::owner_notices::{
     duties_under_new_parent, new_owner_notice, parent_changed_notice, INDEPENDENT_COORDINATOR_ROLE,
 };
-use crate::messaging::texts::{takeover_prompt, NOTICE_PREFIX};
+use crate::messaging::texts::takeover_prompt;
 use crate::protocol::{
     error_code, notice_code, AgentId, CodedError, Notice, Role, Session, SessionStatus,
     TerminalAppearance,
@@ -89,6 +90,8 @@ pub(crate) async fn handoff_session_with(
     crate::accounts::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
 
     let key = Uuid::new_v4().to_string();
+    // The process may report readiness before the handoff has finished moving its place.
+    let first = state.reserve_first_message(&key)?;
     let open = receiving_request(state, &original, &request, Some(key.clone()));
 
     // Refused here for what opening would refuse, before the package is read and written.
@@ -101,10 +104,6 @@ pub(crate) async fn handoff_session_with(
         tokio::task::spawn_blocking(move || crate::handoff::prepare(&state, &original, None, &key))
             .await??
     };
-    let open = OpenRequest {
-        task: Some(takeover_prompt(&original, &path, request.note.as_deref())),
-        ..open
-    };
     let receiving = match super::open::open_session_with(state, open, launch).await {
         Ok(receiving) => receiving,
         Err(err) => {
@@ -116,8 +115,8 @@ pub(crate) async fn handoff_session_with(
     };
 
     let moved = move_place(state, &original, &receiving, &hold).await?;
-    tell(state, &original, &moved, request.asked_by.as_deref()).await;
-    forward_queued(state, &original.id, &moved.receiving.id).await;
+    // Archive clears kept messages, so take them before it runs without starting the successor.
+    let forwarded = take_forwarded(state, &original.id);
     // What the original's process started is carried over to the receiving session when the
     // archive ends that process, rather than stopped with it.
     let carried = state.live_session(&original.id).map(|live| {
@@ -128,13 +127,23 @@ pub(crate) async fn handoff_session_with(
     });
     // No branch cleanup follows the archive: the branches the original was responsible for have
     // moved to the receiving session, and any that could not move are not the archive's to remove.
-    super::lifecycle::archive_session(state, &original.id).map_err(|err| {
+    if let Err(err) = super::lifecycle::archive_session(state, &original.id) {
         // The original stays as it is, and what it started stays its own.
         if let Some(launch) = &carried {
             state.process_ledger.withdraw_carry_over(launch);
         }
-        archive_failed(&receiving.id, &err)
-    })?;
+        forward_messages(state, &moved.receiving.id, forwarded).await;
+        clear_forwarded(state, &original.id);
+        return Err(archive_failed(&receiving.id, &err));
+    }
+    let held = takeover_context(state, &moved).await;
+    let prompt = format!(
+        "{}\n\nThe original is archived; what it held is yours now:{held}",
+        takeover_prompt(&original, &path, request.note.as_deref()),
+    );
+    start_work(state, first, prompt).await;
+    tell(state, &original, &moved, request.asked_by.as_deref()).await;
+    forward_messages(state, &moved.receiving.id, forwarded).await;
     // Dropping the hold forwards a message queued after the forward above to the receiving session,
     // as it does on every path out of here once the place has moved.
     drop(hold);
@@ -343,7 +352,7 @@ async fn move_place_inner(
     })
 }
 
-/// Tells the receiving session what it took over, each moved session that its owner changed, and
+/// Tells each moved session that its owner changed, and
 /// the owner that its session was handed off, unless that owner is `asked_by`, which made the call.
 /// A moved session without a process (an archived or interrupted one) is told when it next starts,
 /// from its binding as it stands then; an owner without one learns of the new session from its
@@ -355,7 +364,6 @@ pub(super) async fn tell(
     asked_by: Option<&str>,
 ) {
     let receiving = &moved.receiving;
-    let tool = |agent: AgentId, name: &str| qualified_tool_name(agent, name);
     let owner = receiving
         .bound_to
         .as_deref()
@@ -415,7 +423,7 @@ pub(super) async fn tell(
                 to = named_session(receiving),
                 place = place_of(state, receiving),
             ),
-            " The original is archived. The new session read a package built from the original's \
+            " The original is archived. The new session has a package built from the original's \
              conversation and has its branches and its child sessions.",
         );
         // Kept for an owner that is interrupted, as a session's own report to it would be.
@@ -425,7 +433,16 @@ pub(super) async fn tell(
             tracing::warn!(session = %owner.id, %err, "telling an owner of a handoff failed");
         }
     }
+}
 
+/// The final responsibilities included in the receiving session's first work prompt.
+async fn takeover_context(state: &Arc<AppState>, moved: &Moved) -> String {
+    let receiving = &moved.receiving;
+    let tool = |agent: AgentId, name: &str| qualified_tool_name(agent, name);
+    let owner = receiving
+        .bound_to
+        .as_deref()
+        .and_then(|id| state.store.get_session(id).ok().flatten());
     let mut held = String::new();
     match &owner {
         Some(owner) if receiving.role == Role::Coordinator => held.push_str(&format!(
@@ -468,12 +485,7 @@ pub(super) async fn tell(
             status_word(session.status)
         ));
     }
-    let text = format!(
-        "{NOTICE_PREFIX} about the handoff: you took over the place of {from}. The \
-         original is archived; what it held is yours now:{held}",
-        from = named_session(original),
-    );
-    send(state, &receiving.id, text).await;
+    held
 }
 
 /// The target branch recorded for each of `branches` (wire paths) that `receiving` now holds, by
@@ -500,10 +512,8 @@ async fn targets_of(
     .unwrap_or_default()
 }
 
-/// Forwards what was queued for the original to the receiving session, in order, through the same
-/// delivery any message takes: its queue, then the messages kept in the store for it while it
-/// was interrupted that is not in it, which the archive that follows would otherwise drop.
-async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) {
+/// Takes the original's queued and kept messages before its archive can drop them.
+fn take_forwarded(state: &Arc<AppState>, original: &str) -> Vec<String> {
     // The queue in order, then what is kept and was not queued: a kept message is in both once the
     // session has been resumed and not yet written to.
     let queued = state.take_queued_with_rows(original);
@@ -520,6 +530,18 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
             "reading the messages kept for the original session failed"
         ),
     }
+    texts
+}
+
+/// Removes the originals once forwarding after a failed archive has taken responsibility for them.
+fn clear_forwarded(state: &Arc<AppState>, original: &str) {
+    if let Err(err) = state.store.clear_kept_messages(original) {
+        tracing::warn!(session = %original, %err, "clearing the messages kept for the original session failed");
+    }
+}
+
+/// Delivers the messages taken from the original, in order.
+async fn forward_messages(state: &Arc<AppState>, receiving: &str, texts: Vec<String>) {
     for text in texts {
         if let Err(err) =
             delivery::write_message_off_runtime(state, receiving, text, WhenBlocked::Queue).await
@@ -547,21 +569,29 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
             );
         }
     }
-    // Forwarded, or announced as dropped: either way not the original's to keep.
-    if let Err(err) = state.store.clear_kept_messages(original) {
-        tracing::warn!(
-            session = %original, %err,
-            "clearing the messages kept for the original session failed"
-        );
-    }
 }
 
-/// Delivers `text` to a session through the ordinary message delivery. A session that cannot take
-/// it is told nothing more: the record is already right, and a relaunch tells it.
-async fn send(state: &Arc<AppState>, id: &str, text: String) {
-    if let Err(err) = delivery::write_message_off_runtime(state, id, text, WhenBlocked::Queue).await
-    {
-        tracing::warn!(session = %id, %err, "telling a session of a handoff failed");
+/// Queues the first work prompt, announcing an immediate rejection as a lost handoff message.
+async fn start_work(
+    state: &Arc<AppState>,
+    first: crate::messaging::write_queue::FirstMessage,
+    text: String,
+) {
+    let id = first.id().to_string();
+    if let Err(err) = delivery::write_first_message_off_runtime(state, first, text).await {
+        tracing::warn!(session = %id, %err, "delivering the first handoff work prompt failed");
+        state.broadcast(
+            Notice::new(
+                notice_code::HANDOFF_MESSAGES_DROPPED,
+                format!(
+                    "{} completed the handoff, but could not deliver the initial work prompt to \
+                     the receiving session: {err:#}",
+                    crate::APP_NAME,
+                ),
+                &[],
+            )
+            .about(&id),
+        );
     }
 }
 

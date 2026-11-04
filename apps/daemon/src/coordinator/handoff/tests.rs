@@ -10,7 +10,7 @@ use crate::protocol::{Account, Availability, Role, SessionKind};
 use crate::session_tools::Owner;
 use crate::test_support::{
     app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
-    output_containing, repo_with, running, stand_in_launch, Launched, ScratchDir, StandIn,
+    output_containing, repo_with, running, stand_in_launch_running, Launched, ScratchDir, StandIn,
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
@@ -94,7 +94,19 @@ impl Fixture {
         &self,
         during: impl FnOnce() + Send + 'static,
     ) -> impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static {
-        stand_in_launch(&self.started, &self.launches, during)
+        // The combined prompt exceeds the cooked terminal's echo buffer; drain it like an agent.
+        let launch = stand_in_launch_running(
+            &self.started,
+            &self.launches,
+            "stty raw -echo; printf 'handoff-input-ready\\n'; exec cat",
+            during,
+        );
+        move |request| {
+            let launched = launch(request)?;
+            let ready = output_containing(&launched.session, "handoff-input-ready");
+            assert!(ready.contains("handoff-input-ready"), "{ready}");
+            Ok(launched)
+        }
     }
 
     async fn handoff(&self, session: &str) -> Result<Session> {
@@ -186,8 +198,257 @@ impl Fixture {
     }
 }
 
-/// The receiving session runs with the package in its brief, in the original's place with the
-/// original's role; the original is archived, and so is nothing it owned.
+/// A receiver that exits before bootstrap delivery leaves a visible failure, not only a log.
+#[tokio::test]
+async fn a_rejected_first_work_prompt_is_announced_to_the_user() {
+    let fixture = Fixture::new("bootstrap-rejected");
+    let first = fixture.state.reserve_first_message("receiving").unwrap();
+    fixture
+        .state
+        .store
+        .insert_session(&session("receiving", true, "interrupted", None, false))
+        .unwrap();
+    let mut events = fixture.state.subscribe();
+    start_work(
+        &fixture.state,
+        first,
+        "Read the handoff package".to_string(),
+    )
+    .await;
+    let mut notices = Vec::new();
+    while let Ok(event) = events.try_recv() {
+        if let crate::protocol::Event::SessionNotice {
+            session,
+            code,
+            message,
+            ..
+        } = event
+        {
+            notices.push((session, code, message));
+        }
+    }
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    assert_eq!(notices[0].0, "receiving");
+    assert_eq!(notices[0].1, notice_code::HANDOFF_MESSAGES_DROPPED);
+    assert!(notices[0].2.contains("initial work prompt"), "{notices:?}");
+    assert!(
+        notices[0].2.contains("this session is not running"),
+        "{notices:?}"
+    );
+}
+
+/// Native queues receive one bootstrap after the original is archived and the place has moved.
+#[tokio::test]
+async fn the_first_native_submission_has_the_completed_handoff_context() {
+    struct Capture {
+        state: Arc<AppState>,
+        repo: String,
+        messages: Mutex<Vec<String>>,
+    }
+    impl term::MessageTransport for Capture {
+        fn send(
+            &self,
+            text: &str,
+            _: &str,
+        ) -> std::result::Result<(), crate::terminal::ptyio::PartialWrite> {
+            assert_eq!(
+                self.state.session_record("original").unwrap().status,
+                SessionStatus::Archived
+            );
+            let origins = self.state.store.branch_origins(&self.repo).unwrap();
+            let receiving = &origins
+                .iter()
+                .find(|origin| origin.branch == "one")
+                .unwrap()
+                .responsible_session;
+            let stored = self.state.session_record(receiving).unwrap();
+            assert_eq!(stored.bound_to.as_deref(), Some("hub"));
+            assert_eq!(stored.role, Role::Coordinator);
+            assert_eq!(
+                self.state
+                    .session_record("worker")
+                    .unwrap()
+                    .bound_to
+                    .as_deref(),
+                Some(receiving.as_str())
+            );
+            self.messages.lock().unwrap().push(text.to_string());
+            Ok(())
+        }
+        fn stop(&self) {}
+    }
+    let fixture = Fixture::new("native-first-prompt");
+    fixture.run(session("hub", false, "idle", None, false));
+    fixture.run(session("original", true, "idle", Some("hub"), true));
+    fixture.run(session("worker", true, "idle", Some("original"), false));
+    branch_made_from(
+        &fixture.state,
+        &fixture.repo,
+        "one",
+        "original",
+        Some("main"),
+    );
+    let capture = Arc::new(Capture {
+        state: fixture.state.clone(),
+        repo: repo_key(&repository_of(&fixture.repo).unwrap()),
+        messages: Default::default(),
+    });
+    let (started, launches, transport) = (
+        fixture.started.clone(),
+        fixture.launches.clone(),
+        capture.clone(),
+    );
+    let receiving = fixture
+        .handoff_launching("original", AgentId::CODEX, move |request| {
+            assert!(
+                request.task.is_none(),
+                "the process must start without a working turn"
+            );
+            let live = crate::test_support::tagged_live_session(
+                &request.session_id,
+                request.agent,
+                "sleep 30",
+                &request.process_tag,
+            )
+            .with_transport(transport);
+            crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+            let process = (*live).clone();
+            started.lock().unwrap().push(live);
+            launches
+                .lock()
+                .unwrap()
+                .push((request.session_id, request.owner, request.task));
+            Ok(term::Launch {
+                session: process,
+                agent_session_id: None,
+                notice: None,
+            })
+        })
+        .await
+        .unwrap();
+    let observed = capture.clone();
+    assert!(
+        crate::test_support::within(crate::test_support::PATIENCE, move || !observed
+            .messages
+            .lock()
+            .unwrap()
+            .is_empty())
+        .await
+    );
+    let messages = capture.messages.lock().unwrap();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    let prompt = &messages[0];
+    assert!(
+        prompt.starts_with(crate::messaging::texts::TAKEOVER_OPENING),
+        "{prompt}"
+    );
+    assert!(prompt.contains(&format!("{}.md", receiving.id)), "{prompt}");
+    for expected in [
+        "Read that file first",
+        "original is archived",
+        "Your role is coordinator and your parent session",
+        "`hub`",
+        "`one` (target branch `main`)",
+        "Your child session:",
+        "`worker`",
+    ] {
+        assert!(prompt.contains(expected), "missing {expected}: {prompt}");
+    }
+}
+
+/// A child can report after its parent changes while branch transfer is still blocked. Its real
+/// report must wait behind the completed bootstrap, rather than become the successor's first turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_report_during_branch_transfer_follows_the_completed_bootstrap_once() {
+    let fixture = Fixture::new("report-during-transfer");
+    fixture.run(session("original", true, "idle", None, false));
+    let _worker = fixture.run(session("worker", true, "idle", Some("original"), false));
+    branch_made_by(&fixture.state, &fixture.repo, "one", "original");
+    let repo = repository_of(&fixture.repo).unwrap();
+    let (release, released) = std::sync::mpsc::channel();
+    let (ready, acquired) = std::sync::mpsc::channel();
+    let state = fixture.state.clone();
+    let gate_thread = Arc::new(Mutex::new(None));
+    let gate_handle = gate_thread.clone();
+    let during = fixture.launch_after(move || {
+        let gate = std::thread::spawn(move || {
+            state.branch_origins.with_repository_held(&repo, || {
+                ready.send(()).unwrap();
+                released
+                    .recv_timeout(crate::test_support::PATIENCE)
+                    .unwrap();
+            });
+        });
+        *gate_handle.lock().unwrap() = Some(gate);
+        acquired
+            .recv_timeout(crate::test_support::PATIENCE)
+            .unwrap();
+    });
+    let state = fixture.state.clone();
+    let report = async move {
+        let rebound = state.clone();
+        assert!(
+            crate::test_support::within(crate::test_support::PATIENCE, move || {
+                rebound
+                    .session_record("worker")
+                    .unwrap()
+                    .bound_to
+                    .as_deref()
+                    != Some("original")
+            })
+            .await,
+            "the child was rebound while branch transfer waited"
+        );
+        let (_, delivered) = crate::messaging::reporting::deliver_own_report(
+            &state,
+            "worker",
+            "report during the branch move".to_string(),
+            crate::messaging::reporting::ReportStatus::NeedsDecision,
+            vec!["wait for the next instruction".to_string()],
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(delivered, delivery::Delivery::Queued);
+        release.send(()).unwrap();
+    };
+    let (receiving, ()) = tokio::join!(
+        fixture.handoff_launching("original", AgentId::CODEX, during),
+        report
+    );
+    let receiving = receiving.unwrap();
+    gate_thread.lock().unwrap().take().unwrap().join().unwrap();
+    assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
+    assert_eq!(fixture.responsible("one"), receiving.id);
+    let started = fixture.started.lock().unwrap();
+    let live = started.iter().find(|live| live.id == receiving.id).unwrap();
+    let output = heard_after_marker(&fixture.state, live);
+    let bootstrap = output
+        .find(crate::messaging::texts::TAKEOVER_OPENING)
+        .expect("bootstrap arrived");
+    let context = output
+        .find("what it held is yours now")
+        .expect("completed context arrived");
+    let report = output
+        .find("Report from session worker")
+        .expect("the real child report arrived");
+    assert!(bootstrap < context && context < report, "{output}");
+    assert_eq!(
+        output.matches("report during the branch move").count(),
+        1,
+        "{output}"
+    );
+    assert_eq!(
+        output
+            .matches(crate::messaging::texts::TAKEOVER_OPENING)
+            .count(),
+        1,
+        "{output}"
+    );
+}
+
+/// The receiving session gets one prompt with the package and responsibilities after the original
+/// is archived; it takes the original's role, and nothing the original owned is archived.
 #[tokio::test]
 async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_receiving_session() {
     let fixture = Fixture::new("unbound");
@@ -217,7 +478,7 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(stored.agent, AgentId::CODEX);
-    assert_eq!(stored.status, SessionStatus::Working);
+    assert_eq!(stored.status, SessionStatus::Idle);
     assert!(stored.pinned, "the original's pinned mark is carried over");
     assert_eq!(
         stored.title, "Fix the build｜Session original",
@@ -236,7 +497,11 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     let launches = fixture.launches.lock().unwrap();
     let (_, owner, task) = &launches[0];
     assert_eq!(*owner, None);
-    let task = task.as_deref().unwrap();
+    assert!(
+        task.is_none(),
+        "handoff work must wait until the original is archived"
+    );
+    let task = fixture.output_of(&receiving.id, "what it held is yours now");
     let package = fixture
         .state
         .handoff_dir()
@@ -287,6 +552,20 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
         "{held}"
     );
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
+    let started = fixture.started.lock().unwrap();
+    let live = started.iter().find(|live| live.id == receiving.id).unwrap();
+    let all = heard_after_marker(&fixture.state, live);
+    assert_eq!(
+        all.matches(crate::messaging::texts::TAKEOVER_OPENING)
+            .count(),
+        1,
+        "{all}"
+    );
+    assert_eq!(all.matches("what it held is yours now").count(), 1, "{all}");
+    assert!(
+        !all.contains("Message from Octoboard about the handoff"),
+        "{all}"
+    );
     drop(original);
 }
 
@@ -749,10 +1028,16 @@ async fn kept_information_that_is_also_queued_is_forwarded_once() {
 
     let output = fixture.output_of(&receiving.id, "kept only");
     assert_eq!(output.matches("kept and queued").count(), 1, "{output}");
-    assert!(
-        output.find("kept and queued") < output.find("kept only"),
-        "{output}"
-    );
+    let bootstrap = output
+        .find("what it held is yours now")
+        .expect("bootstrap was delivered");
+    let queued = output
+        .find("kept and queued")
+        .expect("queued information was delivered");
+    let kept = output
+        .find("kept only")
+        .expect("kept information was delivered");
+    assert!(bootstrap < queued && queued < kept, "{output}");
     assert!(fixture
         .state
         .store
@@ -839,6 +1124,15 @@ async fn messages_held_for_the_original_go_to_the_receiving_session_when_the_han
     );
     assert_eq!(fixture.stored("original").status, SessionStatus::Idle);
     fixture.output_of(&receiving, "sent during the handoff");
+    assert!(fixture.launches.lock().unwrap()[0].2.is_none());
+    let started = fixture.started.lock().unwrap();
+    let live = started.iter().find(|live| live.id == receiving).unwrap();
+    let output = heard_after_marker(&fixture.state, live);
+    assert!(
+        !output.contains(crate::messaging::texts::TAKEOVER_OPENING),
+        "{output}"
+    );
+    assert!(!output.contains("original is archived"), "{output}");
     let heard = heard_after_marker(&fixture.state, &original);
     assert!(!heard.contains("during the handoff"), "{heard}");
 }

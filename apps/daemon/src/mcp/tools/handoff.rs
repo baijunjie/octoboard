@@ -273,7 +273,10 @@ mod tests {
         account, arguments, peer_state, project_session, shared_console_state, Launches, Started,
     };
     use crate::protocol::{AgentId, Event, SessionRequestAction, SessionStatus};
-    use crate::test_support::{heard_after_marker, running, stand_in_launch, StandIn};
+    use crate::test_support::{
+        heard_after_marker, output_containing, running, stand_in_launch, stand_in_launch_running,
+        StandIn,
+    };
 
     /// Every session of the store with its status and owner, for what a refusal must leave alone.
     fn statuses_and_owners(state: &Arc<AppState>) -> Vec<(String, SessionStatus, Option<String>)> {
@@ -305,6 +308,13 @@ mod tests {
         let caller = running(&state, "a");
         let _original = running(&state, "of-a");
         let (launches, started) = (Launches::default(), Started::default());
+        // A complete bootstrap needs a reader rather than the cooked terminal's bounded echo.
+        let launch = stand_in_launch_running(
+            &started,
+            &launches,
+            "stty raw -echo; printf 'handoff-input-ready\\n'; exec cat",
+            || {},
+        );
 
         let result = handoff_session(
             &state,
@@ -314,7 +324,16 @@ mod tests {
                 "agent": "codex",
                 "note": "Start with the failing test.",
             })),
-            stand_in_launch(&started, &launches, || {}),
+            move |request| {
+                assert!(
+                    request.task.is_none(),
+                    "handoff work must wait for the completed transfer"
+                );
+                let launched = launch(request)?;
+                let ready = output_containing(&launched.session, "handoff-input-ready");
+                assert!(ready.contains("handoff-input-ready"), "{ready}");
+                Ok(launched)
+            },
         )
         .await
         .unwrap();
@@ -333,9 +352,33 @@ mod tests {
         );
         let launched = launches.lock().unwrap().clone();
         assert_eq!(launched.len(), 1);
-        let opening = launched[0].2.as_deref().unwrap();
+        assert_eq!(launched[0].2, None);
+        let started = started.lock().unwrap();
+        let live = started.iter().find(|live| live.id == receiving).unwrap();
+        let opening = heard_after_marker(&state, live);
+        for expected in [
+            "Read that file first",
+            "> Start with the failing test.",
+            "The original is archived; what it held is yours now",
+            "Your role is coordinator and your parent session is the console session `a`",
+        ] {
+            assert!(opening.contains(expected), "missing {expected}: {opening}");
+        }
+        assert!(opening.contains(&format!("{receiving}.md")), "{opening}");
+        assert_eq!(
+            opening
+                .matches(crate::messaging::texts::TAKEOVER_OPENING)
+                .count(),
+            1,
+            "{opening}"
+        );
+        assert_eq!(
+            opening.matches("what it held is yours now").count(),
+            1,
+            "{opening}"
+        );
         assert!(
-            opening.contains("> Start with the failing test."),
+            !opening.contains("Message from Octoboard about the handoff"),
             "{opening}"
         );
         assert_caller_not_told(&state, &caller);
