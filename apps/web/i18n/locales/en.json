@@ -110,6 +110,8 @@
   "demoTabletReport": "Staff can place orders by table and select meal deal add-ons. Order synchronization has been verified.",
   "demoPosReport": "Checkout supports meal deal discount checks and order redemption. The checkout flow has been verified.",
   "demoKitchenReport": "Kitchen tickets include meal deals, and order status updates when food is ready. Status synchronization has been verified.",
+  "codingAgentsSeoTitle": "{appName} — Claude Code & Codex multi-agent workspace",
+  "codingAgentsSeoDescription": "Manage Claude Code, Codex and Grok Build accounts in one open source macOS workspace. Track usage, switch accounts and coordinate coding agents across projects.",
   "workspaceSeoTitle": "{appName} — One workspace for coding agents",
   "workspaceSeoDescription": "Switch accounts, hand work to another coding agent, and track usage. Coordinate projects in one open source workspace.",
   "workspaceTitle": "Your agents.",

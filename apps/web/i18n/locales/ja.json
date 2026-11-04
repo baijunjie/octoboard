@@ -110,6 +110,8 @@
   "demoTabletReport": "スタッフがテーブル別に注文し、セットを追加できるようになりました。注文の同期も検証済みです。",
   "demoPosReport": "会計時にセット割引を確認し、注文を引き換えられるようになりました。会計の流れも検証済みです。",
   "demoKitchenReport": "調理伝票にセット情報が表示され、料理の準備ができると注文状況が更新されます。状況の同期も検証済みです。",
+  "codingAgentsSeoTitle": "{appName} — Claude Code・Codexのマルチエージェントワークスペース",
+  "codingAgentsSeoDescription": "Claude Code、Codex、Grok Buildの複数アカウントをオープンソースのmacOSワークスペースで管理できます。使用量の確認、アカウントの切り替え、複数プロジェクトにまたがるコーディングエージェントの連携に対応します。",
   "workspaceSeoTitle": "{appName} — コーディングエージェントをひとつのワークスペースに",
   "workspaceSeoDescription": "アカウントの切り替え、別のコーディングエージェントへの引き継ぎ、使用量の確認をひとつの場所で行えます。オープンソースのワークスペースで複数のプロジェクトを連携させます。",
   "workspaceTitle": "エージェントも",

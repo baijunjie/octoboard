@@ -110,6 +110,8 @@
   "demoTabletReport": "按桌点餐和套餐加购功能已完成，订单同步已验证。",
   "demoPosReport": "收银结账、套餐优惠校验和核销功能已完成，结账流程已验证。",
   "demoKitchenReport": "制作单已包含套餐信息，出餐状态同步已验证。",
+  "codingAgentsSeoTitle": "{appName}｜Claude Code、Codex 多账号与多智能体工作台",
+  "codingAgentsSeoDescription": "在开源 macOS 工作台中管理 Claude Code、Codex 和 Grok Build 多个账号，监控用量、切换账号，并协调编程智能体跨项目协作。",
   "workspaceSeoTitle": "{appName}｜多账号、多智能体，一站式开发工作台",
   "workspaceSeoDescription": "切换账号，延续对话；跨提供商交接任务，集中查看用量与重置时间。在同一个开源工作台中协调多个项目。",
   "workspaceTitle": "多个账号",

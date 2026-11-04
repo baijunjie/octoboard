@@ -110,6 +110,8 @@
   "demoTabletReport": "Nhân viên có thể gọi món theo bàn và thêm combo. Đồng bộ đơn hàng đã được kiểm tra.",
   "demoPosReport": "Tính năng thanh toán hỗ trợ kiểm tra ưu đãi combo và xác nhận nhận món. Quy trình thanh toán đã được kiểm tra.",
   "demoKitchenReport": "Phiếu chế biến có thông tin combo, và trạng thái đơn hàng cập nhật khi món đã sẵn sàng. Việc đồng bộ trạng thái đã được kiểm tra.",
+  "codingAgentsSeoTitle": "{appName} — Không gian làm việc đa agent cho Claude Code và Codex",
+  "codingAgentsSeoDescription": "Quản lý tài khoản Claude Code, Codex và Grok Build trong không gian làm việc mã nguồn mở cho macOS. Theo dõi mức sử dụng, chuyển tài khoản và điều phối agent lập trình giữa các dự án.",
   "workspaceSeoTitle": "{appName} — Một không gian làm việc cho agent lập trình",
   "workspaceSeoDescription": "Đổi tài khoản, bàn giao công việc cho agent lập trình khác và theo dõi mức sử dụng. Điều phối các dự án trong một không gian làm việc mã nguồn mở.",
   "workspaceTitle": "Agent của bạn",

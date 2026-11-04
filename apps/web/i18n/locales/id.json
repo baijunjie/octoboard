@@ -110,6 +110,8 @@
   "demoTabletReport": "Staf dapat menerima pesanan per meja dan menambahkan paket. Sinkronisasi pesanan sudah diverifikasi.",
   "demoPosReport": "Fitur pembayaran mendukung pemeriksaan diskon paket dan konfirmasi pengambilan pesanan. Alur pembayaran sudah diverifikasi.",
   "demoKitchenReport": "Tiket dapur memuat informasi paket, dan status pesanan diperbarui saat makanan siap. Sinkronisasi status sudah diverifikasi.",
+  "codingAgentsSeoTitle": "{appName} — Ruang kerja multiagen untuk Claude Code dan Codex",
+  "codingAgentsSeoDescription": "Kelola akun Claude Code, Codex, dan Grok Build dalam ruang kerja sumber terbuka untuk macOS. Pantau penggunaan, ganti akun, dan koordinasikan agen pemrograman lintas proyek.",
   "workspaceSeoTitle": "{appName} — Satu ruang kerja untuk agen pemrograman",
   "workspaceSeoDescription": "Berganti akun, serahkan pekerjaan ke agen pemrograman lain, dan pantau penggunaan. Koordinasikan proyek dalam satu ruang kerja sumber terbuka.",
   "workspaceTitle": "Agen Anda.",

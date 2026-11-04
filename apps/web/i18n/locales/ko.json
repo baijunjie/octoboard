@@ -110,6 +110,8 @@
   "demoTabletReport": "직원이 테이블별로 주문하고 세트를 추가할 수 있습니다. 주문 동기화도 검증했습니다.",
   "demoPosReport": "결제 시 세트 할인과 주문 수령 여부를 확인할 수 있습니다. 결제 흐름도 검증했습니다.",
   "demoKitchenReport": "조리 전표에 세트 정보가 표시되고, 음식이 준비되면 주문 상태가 업데이트됩니다. 상태 동기화도 검증했습니다.",
+  "codingAgentsSeoTitle": "{appName} — Claude Code·Codex 멀티 에이전트 워크스페이스",
+  "codingAgentsSeoDescription": "오픈 소스 macOS 워크스페이스에서 Claude Code, Codex, Grok Build의 여러 계정을 관리합니다. 사용량을 확인하고 계정을 전환하며 여러 프로젝트의 코딩 에이전트를 조율합니다.",
   "workspaceSeoTitle": "{appName} — 코딩 에이전트를 위한 하나의 작업 공간",
   "workspaceSeoDescription": "계정을 바꾸고, 다른 코딩 에이전트에 작업을 넘기며, 사용량을 확인합니다. 하나의 오픈 소스 작업 공간에서 프로젝트를 조율합니다.",
   "workspaceTitle": "여러 에이전트",

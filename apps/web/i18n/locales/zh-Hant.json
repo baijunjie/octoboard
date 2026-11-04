@@ -110,6 +110,8 @@
   "demoTabletReport": "店員可依桌號點餐並加購套餐。訂單同步已驗證。",
   "demoPosReport": "收銀結帳已支援套餐優惠驗證與訂單核銷。結帳流程已驗證。",
   "demoKitchenReport": "製作單已包含套餐資訊，餐點完成時會更新訂單狀態。狀態同步已驗證。",
+  "codingAgentsSeoTitle": "{appName}｜Claude Code、Codex 多帳號與多代理工作區",
+  "codingAgentsSeoDescription": "在開源 macOS 工作區中管理 Claude Code、Codex 和 Grok Build 的多個帳號，追蹤用量、切換帳號，並協調程式開發代理跨專案協作。",
   "workspaceSeoTitle": "{appName} — 程式開發代理的一站式工作區",
   "workspaceSeoDescription": "切換帳號、交接工作給其他程式開發代理，並掌握用量。在同一個開源工作區協調多個專案。",
   "workspaceTitle": "多個代理",

@@ -26,6 +26,12 @@ unprefixed English URL of that page. Those alternates use the same BCP-47 tags a
 HTML page adds one tag that repeats an existing URL: `zh` is the Simplified Chinese page, the same URL as `zh-Hans`.
 The sitemap does not include `zh`. Portuguese uses `pt` in both the HTML alternates and the sitemap.
 
+Every language's homepage SEO title identifies Octoboard as a multi-agent workspace for Claude Code and Codex. Its SEO
+description names Claude Code, Codex and Grok Build, describes an open source macOS workspace, and covers account
+management, usage tracking, account switching and coordination across projects. These localized titles and descriptions
+are used in the HTML metadata, social metadata, structured data and agent-readable page listings. The visible homepage
+headings and share-image text retain their own wording.
+
 Open Graph locale is `language_TERRITORY`. The current page uses `og:locale`; every other language uses
 `og:locale:alternate`. The values are `ar_AR`, `de_DE`, `en_US`, `es_ES`, `fr_FR`, `hi_IN`, `id_ID`,
 `it_IT`, `ja_JP`, `ko_KR`, `pt_BR`, `ru_RU`, `th_TH`, `tr_TR`, `vi_VN`, `zh_CN`, and `zh_TW`. A value
@@ -80,16 +86,20 @@ Agent-readable files are published at the deployment root and are crawlable:
   English privacy page is `privacy.md`. Another language's homepage is `<route code>.md`, so Simplified
   Chinese is `zh.md`, not `zh-Hans.md`. Another language's privacy page is `<route code>/privacy.md`.
 - `llms.txt`, in English. Its notes state that Octoboard is free and open source under the MIT License, and cover
-  local data handling, account switching, agent handoff, usage and resets, the nine questions and answers, the
-  support email, and the repository.
-  It then lists every language, each linking to that language's homepage Markdown and stating that the language has
-  two pages. The English
-  entry is the one whose pages are listed in the file; each other language is listed as pages to open.
-  The page list names only the two English pages, with their SEO titles and descriptions, and the file
-  links to `sitemap.md`.
+  the supported macOS processors, beta status, each platform's availability, the releases link, local data handling,
+  account switching, agent handoff, usage and resets, the nine questions and answers, the support email, and the
+  repository. Platform availability is described in `docs/product/website.md`, "Platform availability".
+  It then lists every language, each linking to that language's homepage Markdown and full-content bundle and stating
+  that the language has two pages. The page list names only the two English pages, with their SEO titles and
+  descriptions. The file links to the English full-content bundle, the all-language bundle and `sitemap.md`, directing
+  readers to a single-language bundle unless they need all languages.
 - `llms-full.txt` contains every language and both pages. English comes first, then the other languages in the order in
   `docs/product/website.md`, "Pages and languages", homepage before privacy page. Each part gives the page's SEO title,
-  the HTML URL as its source, the SEO description, and the Markdown body.
+  the HTML URL as its source, the SEO description, and the Markdown body. Its opening product summary is in English.
+- `llms-full-<route code>.txt` contains only that language's homepage and privacy page, in that order, with the same
+  per-page information as the all-language bundle. All 17 languages have a bundle, including `llms-full-en.txt` for
+  English and `llms-full-zh.txt` for Simplified Chinese. Each bundle opens with the product name, the homepage's SEO
+  description in that language, and the canonical site origin.
 - `sitemap.md` lists every Markdown URL with that page's localized SEO title. The unprefixed homepage
   stands alone, the unprefixed privacy page stands alone, and each other language's two pages are
   listed together.
@@ -101,7 +111,7 @@ the repository, the license, the GitHub privacy statement, and email — stay on
 The Markdown carries the page's localized wording in the same section order. It includes all three feature groups and
 their 16 titles and descriptions, the statement that Octoboard is free and open source under the MIT License, the
 preview scene names and sample-data explanation, and every workflow node's task and report. The developer's motivation
-follows the workflow in each homepage copy and in `llms-full.txt`, including its title, opening, three subsections,
+follows the workflow in each homepage copy and full-content bundle, including its title, opening, three subsections,
 product purpose, invitation, and byline. It does not include the embedded application's sample screens. Release links
 are those in `docs/product/website.md`, "Homepage and navigation" and sit beside the beta status. The workflow is
 identified as an illustration. The copies omit the header, the footer, decorative art, the labels and numbers that mark

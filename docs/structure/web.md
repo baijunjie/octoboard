@@ -3,9 +3,10 @@
 `@octoboard/web`: the public product website, built with Nuxt 4 (Vue 3, `@nuxtjs/i18n`, `@nuxtjs/sitemap`, `nuxt-gtag`)
 and generated as static files for GitHub Pages. It has no backend and never connects to `octoboardd`. It serves
 localized home and privacy pages (17 language catalogs), one Markdown rendering of each page plus `llms.txt`,
-`llms-full.txt` and `sitemap.md` for agents, and embeds a separately built, fixture-backed React preview from
-`packages/ui/` (built into the ignored `apps/web/public/preview/` by `apps/web/scripts/build-preview.mjs` before every
-development run and generation). The deployment is `.github/workflows/website.yml`.
+all-language and per-language `llms-full*.txt` bundles and `sitemap.md` for agents, and embeds a separately built,
+fixture-backed React preview from `packages/ui/` (built into the ignored `apps/web/public/preview/` by
+`apps/web/scripts/build-preview.mjs` before every development run and generation). The deployment is
+`.github/workflows/website.yml`.
 
 Paths in this doc that do not start with `apps/` or `packages/` are relative to `apps/web/`.
 

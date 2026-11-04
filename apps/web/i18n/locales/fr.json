@@ -110,6 +110,8 @@
   "demoTabletReport": "Le personnel peut prendre les commandes par table et y ajouter des menus. La synchronisation des commandes a été vérifiée.",
   "demoPosReport": "La caisse prend en charge la vérification des remises sur les menus et la validation des commandes sur place. Le parcours de paiement a été vérifié.",
   "demoKitchenReport": "Les bons de préparation incluent les menus, et le statut des commandes est mis à jour lorsque les plats sont prêts. La synchronisation des statuts a été vérifiée.",
+  "codingAgentsSeoTitle": "{appName} — Espace multi-agents pour Claude Code et Codex",
+  "codingAgentsSeoDescription": "Gérez vos comptes Claude Code, Codex et Grok Build dans un espace open source pour macOS. Suivez l’utilisation, changez de compte et coordonnez vos agents de programmation entre projets.",
   "workspaceSeoTitle": "{appName} — Un espace pour vos agents de programmation",
   "workspaceSeoDescription": "Changez de compte, confiez le travail à un autre agent de programmation et suivez votre consommation. Coordonnez vos projets dans un même espace de travail open source.",
   "workspaceTitle": "Vos agents.",

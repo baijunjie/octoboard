@@ -110,6 +110,8 @@
   "demoTabletReport": "Personel masaya göre sipariş verebiliyor ve siparişe kampanyalı menü ekleyebiliyor. Sipariş eşitleme doğrulandı.",
   "demoPosReport": "Kasada ödeme akışı, kampanyalı menülerin indirim kontrolünü ve sipariş teslimi doğrulamasını destekliyor. Ödeme akışı doğrulandı.",
   "demoKitchenReport": "Mutfak fişlerinde kampanyalı menüler yer alıyor ve yemek hazır olduğunda sipariş durumu güncelleniyor. Durum eşitleme doğrulandı.",
+  "codingAgentsSeoTitle": "{appName} — Claude Code ve Codex için çok ajanlı çalışma alanı",
+  "codingAgentsSeoDescription": "Claude Code, Codex ve Grok Build hesaplarını macOS için açık kaynaklı bir çalışma alanında yönetin. Kullanımı izleyin, hesap değiştirin ve kodlama ajanlarını projeler arasında koordine edin.",
   "workspaceSeoTitle": "{appName} — Kodlama ajanları için tek çalışma alanı",
   "workspaceSeoDescription": "Hesap değiştirin, işi başka bir kodlama ajanına devredin ve kullanımı takip edin. Projeleri tek bir açık kaynaklı çalışma alanından koordine edin.",
   "workspaceTitle": "Ajanlarınız.",

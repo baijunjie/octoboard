@@ -26,12 +26,12 @@ export function useSiteSeo() {
   const locale = computed(() => localeByCode(code.value));
   const canonical = computed(() => canonicalUrl(siteUrl, route.path));
   const title = computed(() =>
-    t(kind.value === "privacy" ? "privacySeoTitle" : "workspaceSeoTitle"),
+    t(kind.value === "privacy" ? "privacySeoTitle" : "codingAgentsSeoTitle"),
   );
   const description = computed(() =>
-    t(kind.value === "privacy" ? "privacySeoDescription" : "workspaceSeoDescription"),
+    t(kind.value === "privacy" ? "privacySeoDescription" : "codingAgentsSeoDescription"),
   );
-  const siteDescription = computed(() => t("workspaceSeoDescription"));
+  const siteDescription = computed(() => t("codingAgentsSeoDescription"));
 
   useHead(() => {
     const contentPage = kind.value === "home" || kind.value === "privacy";

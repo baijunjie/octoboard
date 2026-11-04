@@ -225,6 +225,14 @@ test("agent documents follow the pages and do not publish a download that does n
   assert.match(llms, /Support: support@octoboard\.dev/);
   assert.match(llms, /https:\/\/octoboard\.dev\/index\.md/);
   assert.match(llms, /https:\/\/octoboard\.dev\/ja\.md/);
+  assert.match(llms, /macOS on Apple silicon and Intel · Beta/);
+  assert.match(llms, /macOS: Beta/);
+  assert.match(llms, /Linux: Server · Planned/);
+  assert.match(llms, /Windows: Planned/);
+  assert.match(llms, /iOS: Planned/);
+  assert.match(llms, /Android: Planned/);
+  assert.match(llms, /\[View releases\]\(https:\/\/github\.com\/baijunjie\/octoboard\/releases\)/);
+  assert.match(llms, /\[all languages\]\(https:\/\/octoboard\.dev\/llms-full\.txt\)/);
   assert.match(files["sitemap.md"], /https:\/\/octoboard\.dev\/zh\/privacy\.md/);
   assert.match(
     files["llms-full.txt"],
@@ -232,6 +240,50 @@ test("agent documents follow the pages and do not publish a download that does n
   );
   for (const [name, body] of Object.entries(files)) {
     assert.equal(body.includes("{"), false, name);
+  }
+});
+
+test("agent entry links resolve and language bundles contain only their own two pages", async () => {
+  const messages = await readLocaleMessages(
+    fileURLToPath(new URL("../i18n/locales/", import.meta.url)),
+  );
+  for (const siteUrl of ["https://octoboard.dev/", "https://example.com/product/"]) {
+    const files = renderAgentFiles({
+      siteUrl,
+      appName: "Octoboard",
+      operatorName: appConfig.author.name,
+      contactEmail: "support@octoboard.dev",
+      repositoryUrl: "https://github.com/baijunjie/octoboard",
+      messages,
+    });
+    assert.equal((files["llms-full.txt"].match(/\*\*Source:\*\*/g) ?? []).length, 34);
+    for (const locale of locales) {
+      const file = `llms-full-${locale.code}.txt`;
+      assert.ok(files["llms.txt"].includes(`${siteUrl}${file}`), file);
+      const bundle = files[file];
+      assert.equal((bundle.match(/\*\*Source:\*\*/g) ?? []).length, 2, file);
+      const prefix = locale.code === "en" ? "" : `${locale.code}/`;
+      for (const path of ["", "privacy/"]) {
+        assert.ok(bundle.includes(`**Source:** ${siteUrl}${prefix}${path}\n`), file);
+        assert.ok(bundle.includes(files[markdownFile(`/${prefix}${path}`)].trim()), file);
+      }
+      const catalog = messages[locale.code];
+      assert.ok(bundle.includes(catalog.codingAgentsSeoDescription), file);
+      for (const name of ["Claude Code", "Codex"]) {
+        assert.ok(catalog.codingAgentsSeoTitle.includes(name), `${locale.code}: ${name}`);
+      }
+      for (const name of ["Claude Code", "Codex", "Grok Build", "macOS"]) {
+        assert.ok(catalog.codingAgentsSeoDescription.includes(name), `${locale.code}: ${name}`);
+      }
+    }
+    for (const [file, body] of Object.entries(files)) {
+      for (const match of body.matchAll(/\]\((https:\/\/[^)]+\.(?:md|txt))\)/g)) {
+        const href = match[1];
+        if (href.startsWith(siteUrl)) {
+          assert.ok(Object.hasOwn(files, href.slice(siteUrl.length)), `${file}: broken link ${href}`);
+        }
+      }
+    }
   }
 });
 

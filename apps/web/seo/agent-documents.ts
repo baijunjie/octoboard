@@ -237,6 +237,11 @@ function llmsTxt(copy: AgentCopy): string {
   const params = valuesFor(copy);
   const text = (key: string) => flatten(message(english, key, params));
   const notes = [
+    text("workspaceIntroduction"),
+    text("heroPlatformNote"),
+    `${developedPlatform.name}: ${text("platformsMacStatus")}`,
+    ...plannedPlatforms.map((platform) => `${platform.name}: ${text(platform.status)}`),
+    link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
     text("proofFreeCaption"),
     text("localDescription"),
     ...homeFeatures.map((feature) => text(`${feature.key}FeatureDescription`)),
@@ -249,9 +254,9 @@ function llmsTxt(copy: AgentCopy): string {
   ];
   const pageLink = (code: string, page: "" | "privacy/") => {
     const messages = catalog(copy, code);
-    const titleKey = page === "" ? "workspaceSeoTitle" : "privacySeoTitle";
+    const titleKey = page === "" ? "codingAgentsSeoTitle" : "privacySeoTitle";
     const descriptionKey =
-      page === "" ? "workspaceSeoDescription" : "privacySeoDescription";
+      page === "" ? "codingAgentsSeoDescription" : "privacySeoDescription";
     const title = flatten(message(messages, titleKey, params));
     const description = truncate(
       message(messages, descriptionKey, params),
@@ -265,19 +270,22 @@ function llmsTxt(copy: AgentCopy): string {
       copy.siteUrl,
       `/${localizedPath(locale.code, "")}`,
     );
-    const suffix =
-      locale.code === "en"
-        ? "content included below"
-        : "visit this language for content";
-    return `- ${link(`${locale.name} (${locale.code})`, href)}: ${pagePaths.length} pages; ${suffix}.`;
+    const full = link("full content", `${copy.siteUrl}llms-full-${locale.code}.txt`);
+    return `- ${link(`${locale.name} (${locale.code})`, href)}: ${pagePaths.length} pages; ${full}.`;
   });
   return document([
     heading(1, copy.appName),
-    `> ${text("workspaceSeoDescription")}`,
+    `> ${text("codingAgentsSeoDescription")}`,
     `Canonical Origin: ${copy.siteUrl}`,
     ["**Notes:**", ...notes].join("\n\n"),
     ["## Available Languages on Website", "", ...languages].join("\n"),
     ["## Pages", "", pageLink("en", ""), pageLink("en", "privacy/")].join("\n"),
+    [
+      "## Full content",
+      "",
+      `Read ${link("English full content", `${copy.siteUrl}llms-full-en.txt`)} or choose a language above to read only that language's pages.`,
+      `Read ${link("all languages", `${copy.siteUrl}llms-full.txt`)} only when you need the complete multilingual content.`,
+    ].join("\n"),
     [
       "## Sitemap",
       "",
@@ -294,9 +302,10 @@ function llmsFull(
     description: string;
     markdown: string;
   }>,
+  code = "en",
 ): string {
   const description = flatten(
-    message(catalog(copy, "en"), "workspaceSeoDescription", valuesFor(copy)),
+    message(catalog(copy, code), "codingAgentsSeoDescription", valuesFor(copy)),
   );
   const header = document([
     heading(1, copy.appName),
@@ -367,6 +376,8 @@ export async function readLocaleMessages(
 export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
   const params = valuesFor(copy);
   const pages: Array<{
+    code: string;
+    source: string;
     route: string;
     file: string;
     markdown: string;
@@ -387,18 +398,20 @@ export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
       const title = flatten(
         message(
           catalog(copy, locale.code),
-          page === "" ? "workspaceSeoTitle" : "privacySeoTitle",
+          page === "" ? "codingAgentsSeoTitle" : "privacySeoTitle",
           params,
         ),
       );
       const description = flatten(
         message(
           catalog(copy, locale.code),
-          page === "" ? "workspaceSeoDescription" : "privacySeoDescription",
+          page === "" ? "codingAgentsSeoDescription" : "privacySeoDescription",
           params,
         ),
       );
       pages.push({
+        code: locale.code,
+        source: copy.siteUrl + route.slice(1),
         route,
         file: markdownUrl(copy.siteUrl, route).slice(copy.siteUrl.length),
         markdown,
@@ -409,15 +422,7 @@ export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
   }
   const files: Record<string, string> = {
     "llms.txt": llmsTxt(copy),
-    "llms-full.txt": llmsFull(
-      copy,
-      pages.map((page) => ({
-        source: copy.siteUrl + page.route.slice(1),
-        title: page.title,
-        description: page.description,
-        markdown: page.markdown,
-      })),
-    ),
+    "llms-full.txt": llmsFull(copy, pages),
     "sitemap.md": sitemapMd(
       copy,
       pages.map((page) => ({
@@ -427,6 +432,9 @@ export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
       })),
     ),
   };
+  for (const { code } of ordered) {
+    files[`llms-full-${code}.txt`] = llmsFull(copy, pages.filter((page) => page.code === code), code);
+  }
   for (const page of pages) files[page.file] = page.markdown;
   for (const [name, body] of Object.entries(files)) {
     if (body.includes("{")) {

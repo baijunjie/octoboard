@@ -16,10 +16,10 @@ const paused = ref(false);
 const releasesUrl = `${config.public.repositoryUrl}/releases`;
 useSectionReveal(page);
 useSeoMeta({
-  title: () => t("workspaceSeoTitle"),
-  description: () => t("workspaceSeoDescription"),
-  ogTitle: () => t("workspaceSeoTitle"),
-  ogDescription: () => t("workspaceSeoDescription"),
+  title: () => t("codingAgentsSeoTitle"),
+  description: () => t("codingAgentsSeoDescription"),
+  ogTitle: () => t("codingAgentsSeoTitle"),
+  ogDescription: () => t("codingAgentsSeoDescription"),
 });
 </script>
 
