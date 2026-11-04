@@ -28,7 +28,8 @@ between providers. Work on one project or choose an agent to coordinate work acr
 - **Switch accounts and continue.** Move a session to another account of the same agent while keeping its conversation
   and task context.
 - **Recover from usage limits.** Enable automatic account switching to continue interrupted work on another available
-  account of the same agent. If none is available, wait until a fresh usage reading confirms quota recovery to resume.
+  account of the same agent. If no account is available, Octoboard waits and automatically resumes the task once updated
+  usage data confirms that an account has recovered its quota.
 
 ### Context and continuity
 
