@@ -1331,6 +1331,10 @@ export type Event = {
   "type": "agent_detected",
   id: string | null,
   agent: Agent | null,
+  /**
+   * Whether the local directory exists; absent for a remote repository probe.
+   */
+  directory_exists?: boolean,
 }
 | {
   "type": "agent_models",

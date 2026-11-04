@@ -63,6 +63,64 @@ pub(crate) fn project_git(state: &AppState) -> Result<Runner, String> {
         .map_err(|err| format!("{err:#}"))
 }
 
+/// Creates a missing directory with an empty repository, leaving existing directories untouched.
+/// Blocking: initialization finishes in an owned sibling before the target is created, so a
+/// failed initialization cannot turn a retry into the association of an uninitialized directory.
+pub(crate) fn create_empty(state: &AppState, path: &Path) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    if crate::hostfs::directory_exists_or_creatable(path)? {
+        return Ok(());
+    }
+    let git = project_git(state)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("initializing `{}`", path.display()))?;
+    let parent = path
+        .parent()
+        .expect("an absolute missing path has a parent");
+    std::fs::create_dir_all(parent).map_err(|err| {
+        crate::hostfs::directory_unreadable(
+            path,
+            &err,
+            format!("creating `{}`: {err}", path.display()),
+        )
+    })?;
+    let temporary = parent.join(format!(".octoboard-new-project-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&temporary).with_context(|| format!("preparing `{}`", path.display()))?;
+    let temporary = NewProjectDirectory(temporary);
+    // Parent-directory discovery must not mistake the temporary holder for a project.
+    let repository = temporary.0.join("repository");
+    std::fs::create_dir(&repository).with_context(|| format!("preparing `{}`", path.display()))?;
+    git.write(&repository, ["init", "--quiet", "--template="])
+        .with_context(|| format!("initializing `{}`", path.display()))?;
+    match std::fs::create_dir(path) {
+        Ok(()) => {
+            if let Err(err) = std::fs::rename(repository.join(".git"), path.join(".git")) {
+                // Only an empty leaf is removable; concurrent user files must survive a failure.
+                std::fs::remove_dir(path).ok();
+                return Err(err).with_context(|| format!("initializing `{}`", path.display()));
+            }
+            Ok(())
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            crate::hostfs::require_directory(path)
+        }
+        Err(err) => Err(crate::hostfs::directory_unreadable(
+            path,
+            &err,
+            format!("creating `{}`: {err}", path.display()),
+        )),
+    }
+}
+
+struct NewProjectDirectory(std::path::PathBuf);
+
+impl Drop for NewProjectDirectory {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.0).ok();
+    }
+}
+
 /// The stored projects whose directory is in the repository with canonical common directory
 /// `repository`, the linked worktrees of one repository counting as it. A directory that cannot be
 /// traced to a repository is in none. Blocking: it resolves every project's directory.

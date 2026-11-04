@@ -38,6 +38,74 @@ it("preselects the agent detected for a typed directory, and only the latest ans
   expect(agentValue()).toBe("grok");
 });
 
+const emptyProjectHint = "An empty project will be created in this directory.";
+
+it("describes creating an empty project only after the directory is confirmed missing, and clears the hint as the path changes", async () => {
+  const pending = render();
+  const directory = input("Directory");
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+  type(directory, "~/code/new-project");
+  expect(document.body.textContent).toContain("Checking the directory…");
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+  await settle(500);
+  await answer(pending[0], null, false);
+  expect(document.body.textContent).toContain(emptyProjectHint);
+  expect(input("Directory")).toBe(directory);
+  expect(directory.getAttribute("aria-describedby")?.split(" ").some((id) => document.getElementById(id)?.textContent === emptyProjectHint)).toBe(true);
+  expect(input("Name").disabled).toBe(false);
+
+  type(directory, "~/code/existing");
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+  expect(document.body.textContent).toContain("Checking the directory…");
+  await settle(500);
+  await answer(pending[1], null, true);
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+  type(directory, "~/code/another-new-project");
+  await settle(500);
+  await answer(pending[2], null, false);
+  expect(document.body.textContent).toContain(emptyProjectHint);
+  type(directory, "");
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+});
+
+it("drops stale missing-directory replies and shows no creation hint after a failed check", async () => {
+  const pending = render();
+  type(input("Directory"), "~/code/old");
+  await settle(500);
+  type(input("Directory"), "~/code/current");
+  await settle(500);
+  await answer(pending[1], null, true);
+  await answer(pending[0], null, false);
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+  type(input("Directory"), "~/code/unreadable");
+  await settle(500);
+  await act(async () => pending[2].reject(new CodedError("Cannot read directory", "directory_unreadable", { path: "~/code/unreadable", detail: "Permission denied" })));
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+});
+
+it.each(["A parent directory", "Git repository URL"])("drops the creation hint when switching to %s", async (source) => {
+  const pending = render();
+  type(input("Directory"), "~/code/new-project");
+  await settle(500);
+  await answer(pending[0], null, false);
+  expect(document.body.textContent).toContain(emptyProjectHint);
+  await chooseSource(source);
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+  if (source === "Git repository URL") {
+    type(input("Repository URL"), "https://example.com/project.git");
+    await settle(900);
+    await answer(pending[1], null);
+    expect(document.body.textContent).not.toContain(emptyProjectHint);
+  }
+});
+
+it("shows no creation hint and makes no directory probe when editing", async () => {
+  const pending = render(stored);
+  await settle(500);
+  expect(pending.some((request) => request.body.type === "detect_directory_agent")).toBe(false);
+  expect(document.body.textContent).not.toContain(emptyProjectHint);
+});
+
 it.each(["path_not_found", "path_not_a_directory"])("shows %s as the Directory field's own error, with the path as danger-toned code", async (code) => {
   const pending = render();
   type(input("Directory"), "~/code/missing");

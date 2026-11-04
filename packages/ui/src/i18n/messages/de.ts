@@ -1356,6 +1356,7 @@ export const de: Translation<"one" | "other"> = {
   "dialog.project.agentDetectMechanism": "{detect} sucht in jedem Repository nach {claudeFile}, {agentsFile} und Agentenordnern wie {claudeDir} oder {codexDir}. Ist keine eindeutige Zuordnung möglich, gilt der Agent der Konsole.",
   "dialog.project.directoryRequired": "Ein Verzeichnis ist erforderlich.",
   "dialog.project.pathChecking": "Verzeichnis wird geprüft…",
+  "dialog.project.createEmptyHint": "In diesem Verzeichnis wird ein leeres Projekt erstellt.",
   "dialog.project.detectFailedTitle": "Speicherort konnte nicht geprüft werden",
   "dialog.project.addFailedTitle": "Projekt konnte nicht hinzugefügt werden",
   "dialog.project.saveFailedTitle": "Projekt konnte nicht gesichert werden",

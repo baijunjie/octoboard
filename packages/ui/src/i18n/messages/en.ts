@@ -1554,6 +1554,7 @@ export const en = {
     "{detect} looks for {claudeFile}, {agentsFile} and agent folders such as {claudeDir} or {codexDir} in each repository; one it cannot decide on inherits from the console.",
   "dialog.project.directoryRequired": "A directory is required.",
   "dialog.project.pathChecking": "Checking the directory…",
+  "dialog.project.createEmptyHint": "An empty project will be created in this directory.",
   "dialog.project.detectFailedTitle": "Could not check the location",
   "dialog.project.addFailedTitle": "Could not add the project",
   "dialog.project.saveFailedTitle": "Could not save the project",

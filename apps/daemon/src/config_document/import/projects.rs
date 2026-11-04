@@ -181,6 +181,7 @@ pub(super) async fn place_project(
                     // The document's values were chosen on the machine it came from.
                     check_launch: false,
                     check_text_limits: false,
+                    create_directory: false,
                 },
             )
             .await

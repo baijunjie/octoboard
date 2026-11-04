@@ -144,6 +144,9 @@ export function ProjectDialog({
   // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
   // first character, so it stays locked while empty too.
   const detectionAlertId = useId();
+  const directoryDescriptionId = useId();
+  const directoryDescription = source === "local" ? detection.status === "checking" ? t("dialog.project.pathChecking")
+    : detection.status === "ready" && detection.directoryExists === false ? t("dialog.project.createEmptyHint") : undefined : undefined;
   // The lookup found the location wrong (no such path, not a directory): that is the location field's own error.
   const locationProblem = source === "local" && detection.status === "failed" && typeof detection.error !== "string" && LOCATION_PROBLEMS.has(detection.error.code) ? detection.error : undefined;
   const detectionAlert = detection.status === "failed" && !locationProblem ? (
@@ -291,9 +294,9 @@ export function ProjectDialog({
               // repository URL only appears after a switch, which must not take focus off the picker.
               autoFocus
               placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
-              description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
+              description={directoryDescription && <span id={directoryDescriptionId}>{directoryDescription}</span>}
               errorMessage={shown(pathError) ?? (locationProblem && <DaemonErrorMessage error={locationProblem} part="summary" />)}
-              describedBy={source === "local" && !shown(pathError) && detectionAlert ? detectionAlertId : undefined}
+              describedBy={[directoryDescription && directoryDescriptionId, source === "local" && !shown(pathError) && detectionAlert && detectionAlertId].filter(Boolean).join(" ") || undefined}
               isDisabled={source === "git" && locked}
               trailing={directoryBrowse.browseButton({ isDisabled: source === "git" && locked })}
             />

@@ -161,6 +161,7 @@ async fn add_project_detects_the_agent_only_when_none_is_given() {
                 description: None,
                 check_launch: true,
                 check_text_limits: true,
+                create_directory: false,
             },
         )
     };
@@ -215,6 +216,7 @@ async fn add_project_applies_a_description_to_a_single_project_only() {
                 description: Some("  Billing.  ".to_string()),
                 check_launch: true,
                 check_text_limits: true,
+                create_directory: false,
             },
         )
     };
@@ -263,6 +265,7 @@ async fn add_project_refuses_a_directory_spelled_another_way() {
                 description: None,
                 check_launch: true,
                 check_text_limits: true,
+                create_directory: false,
             },
         )
     };
@@ -312,6 +315,7 @@ async fn add_project_associates_a_linked_repository_of_a_parent_once() {
             description: None,
             check_launch: true,
             check_text_limits: true,
+            create_directory: false,
         },
     )
     .await
@@ -371,7 +375,6 @@ async fn adding_project_text_checks_trimmed_character_limits_before_storing_or_c
         .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
         .unwrap();
     let repo = dir.join("repo");
-    std::fs::create_dir(&repo).unwrap();
     let request = |name, description| AddProjectRequest {
         console_id: "console-1".to_string(),
         source: ProjectSource::Local,
@@ -385,6 +388,7 @@ async fn adding_project_text_checks_trimmed_character_limits_before_storing_or_c
         description: Some(description),
         check_launch: true,
         check_text_limits: true,
+        create_directory: true,
     };
     for (field, name, description, limit) in [
         ("name", "界".repeat(101), "ok".to_string(), "100"),
@@ -400,6 +404,7 @@ async fn adding_project_text_checks_trimmed_character_limits_before_storing_or_c
             assert_eq!(coded.params["field"], field);
             assert_eq!(coded.params["limit"], limit);
             assert!(state.store.list_projects().unwrap().is_empty());
+            assert!(!repo.exists());
         }
     }
     let name = "界".repeat(100);
@@ -437,6 +442,7 @@ async fn derived_names_and_ignored_parent_text_do_not_block_association() {
         description: None,
         check_launch: true,
         check_text_limits: true,
+        create_directory: false,
     };
     assert_eq!(
         add_project(&state, request).await.unwrap()[0].name,
@@ -457,6 +463,7 @@ async fn derived_names_and_ignored_parent_text_do_not_block_association() {
         description: Some("x".repeat(2_001)),
         check_launch: true,
         check_text_limits: true,
+        create_directory: false,
     };
     let err = add_project(&state, request()).await.unwrap_err();
     assert_eq!(
@@ -982,7 +989,6 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
         })
         .unwrap();
     let repo = dir.join("repo");
-    std::fs::create_dir(&repo).expect("repo");
     let request = |settings: NewProjectSettings| AddProjectRequest {
         console_id: "console-1".to_string(),
         source: ProjectSource::Local,
@@ -996,6 +1002,7 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
         description: None,
         check_launch: true,
         check_text_limits: true,
+        create_directory: true,
     };
     // What Grok Build offers, so the effort below is checked against this and not against
     // whatever is installed on the machine running the test.
@@ -1013,6 +1020,7 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
     let coded = err.downcast_ref::<CodedError>().expect("a coded error");
     assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT);
     assert!(state.store.list_projects().unwrap().is_empty());
+    assert!(!repo.exists());
 
     let added = add_project(
         &state,
@@ -1168,6 +1176,7 @@ async fn add_local(state: Arc<AppState>, path: PathBuf) -> Result<Vec<Project>> 
             description: None,
             check_launch: true,
             check_text_limits: true,
+            create_directory: true,
         },
     )
     .await
@@ -1212,7 +1221,6 @@ async fn two_concurrent_add_projects_for_one_directory_store_one_project() {
         .insert_console(&console(AgentId::CLAUDE, &workdir))
         .unwrap();
     let target = dir.join("target");
-    std::fs::create_dir(&target).unwrap();
 
     let (first, second) = tokio::join!(
         add_local(state.clone(), target.clone()),
@@ -1230,4 +1238,180 @@ async fn two_concurrent_add_projects_for_one_directory_store_one_project() {
         Some(error_code::ALL_PROJECTS_ALREADY_ADDED)
     );
     assert_eq!(state.store.project_paths("console-1").unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn adding_a_missing_local_directory_creates_an_empty_repository_only_on_submission() {
+    let (state, dir) = crate::test_support::app_state("coordinator-create-local-project");
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
+        .unwrap();
+    let target = dir.join("nested/project");
+    let detected = handle(
+        &state,
+        None,
+        RequestBody::DetectDirectoryAgent {
+            path: target.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        detected,
+        Some(Event::AgentDetected {
+            agent: None,
+            directory_exists: Some(false),
+            ..
+        })
+    ));
+    assert!(!dir.join("nested").exists());
+
+    let added = add_local(state.clone(), target.clone()).await.unwrap();
+    assert_eq!(added.len(), 1);
+    assert_eq!(added[0].name, "project");
+    assert_eq!(added[0].default_agent, None);
+    assert!(target.join(".git").is_dir());
+    assert_eq!(std::fs::read_dir(&target).unwrap().count(), 1);
+    let git = crate::project_git::test_git();
+    assert!(git
+        .read(&target, ["rev-parse", "--verify", "HEAD"])
+        .is_err());
+    assert!(git.read(&target, ["ls-files"]).unwrap().is_empty());
+
+    let detected = handle(
+        &state,
+        None,
+        RequestBody::DetectDirectoryAgent {
+            path: target.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        detected,
+        Some(Event::AgentDetected {
+            directory_exists: Some(true),
+            ..
+        })
+    ));
+
+    let existing = dir.join("existing");
+    std::fs::create_dir(&existing).unwrap();
+    std::fs::write(existing.join("keep"), "unchanged").unwrap();
+    add_local(state.clone(), existing.clone()).await.unwrap();
+    assert!(!existing.join(".git").exists());
+    assert_eq!(
+        std::fs::read_to_string(existing.join("keep")).unwrap(),
+        "unchanged"
+    );
+
+    let original_tools = state.host_tools.get();
+    let mut tools = original_tools;
+    tools.git = || anyhow::bail!("git unavailable for this test");
+    state.host_tools.replace(tools);
+    let failed = dir.join("unmade/failed");
+    let err = add_local(state.clone(), failed.clone()).await.unwrap_err();
+    assert!(format!("{err:#}").contains("git unavailable"));
+    assert!(!dir.join("unmade").exists());
+    assert_eq!(state.store.list_projects().unwrap().len(), 2);
+
+    tools.git = || {
+        Ok(crate::git::run::UserGit::new(
+            "/usr/bin/false",
+            crate::test_support::isolated_git_env(),
+        ))
+    };
+    state.host_tools.replace(tools);
+    let err = add_local(state.clone(), failed.clone()).await.unwrap_err();
+    assert!(format!("{err:#}").contains("initializing"));
+    assert!(!failed.exists());
+    assert_eq!(std::fs::read_dir(dir.join("unmade")).unwrap().count(), 0);
+    assert_eq!(state.store.list_projects().unwrap().len(), 2);
+
+    state.host_tools.replace(original_tools);
+    add_local(state.clone(), failed.clone()).await.unwrap();
+    assert!(failed.join(".git").is_dir());
+    assert_eq!(state.store.list_projects().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn invalid_launch_or_missing_import_directory_creates_nothing() {
+    let (state, dir) = crate::test_support::app_state("coordinator-create-local-validation");
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
+        .unwrap();
+    let target = dir.join("nested/project");
+    crate::test_support::offer_models(&state, AgentId::CLAUDE, &[("sonnet", &["low"])]);
+    for create_directory in [true, false] {
+        let err = add_project(
+            &state,
+            AddProjectRequest {
+                console_id: "console-1".to_string(),
+                source: ProjectSource::Local,
+                path: Some(target.to_string_lossy().into_owned()),
+                remote_url: None,
+                name: None,
+                default_agent: None,
+                settings: NewProjectSettings {
+                    launch: PerAgent::default().with(
+                        AgentId::CLAUDE,
+                        Launch {
+                            model: Some("sonnet".to_string()),
+                            effort: Some("invalid".to_string()),
+                        },
+                    ),
+                    ..Default::default()
+                },
+                detect_default_agent: false,
+                tags: None,
+                description: None,
+                check_launch: true,
+                check_text_limits: true,
+                create_directory,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().code,
+            if create_directory {
+                error_code::INVALID_LAUNCH_SETTING
+            } else {
+                error_code::PATH_NOT_FOUND
+            }
+        );
+        assert!(!dir.join("nested").exists());
+        assert!(state.store.list_projects().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn project_detection_and_creation_reject_a_file_ancestor() {
+    let (state, dir) = crate::test_support::app_state("coordinator-create-file-ancestor");
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
+        .unwrap();
+    std::fs::write(dir.join("file"), "keep").unwrap();
+    let target = dir.join("file/project");
+    let probe = handle(
+        &state,
+        None,
+        RequestBody::DetectDirectoryAgent {
+            path: target.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap_err();
+    let add = add_local(state.clone(), target).await.unwrap_err();
+    for err in [probe, add] {
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().code,
+            error_code::PATH_NOT_A_DIRECTORY
+        );
+    }
+    assert_eq!(std::fs::read_to_string(dir.join("file")).unwrap(), "keep");
+    assert!(state.store.list_projects().unwrap().is_empty());
 }

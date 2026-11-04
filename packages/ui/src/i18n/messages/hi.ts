@@ -1328,6 +1328,7 @@ export const hi: Translation<"one" | "other"> = {
   "dialog.project.agentDetectMechanism": "{detect} हर रिपॉज़िटरी में {claudeFile}, {agentsFile} और {claudeDir} या {codexDir} जैसे एजेंट फ़ोल्डर खोजता है; जहाँ तय न हो सके वहाँ कंसोल की सेटिंग ली जाती है।",
   "dialog.project.directoryRequired": "डायरेक्टरी ज़रूरी है।",
   "dialog.project.pathChecking": "डायरेक्टरी की जाँच हो रही है…",
+  "dialog.project.createEmptyHint": "इस डायरेक्टरी में एक खाली प्रोजेक्ट बनाया जाएगा।",
   "dialog.project.detectFailedTitle": "जगह की जाँच नहीं हो सकी",
   "dialog.project.addFailedTitle": "प्रोजेक्ट नहीं जुड़ सका",
   "dialog.project.saveFailedTitle": "प्रोजेक्ट सेव नहीं हो सका",

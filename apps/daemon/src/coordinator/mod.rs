@@ -249,6 +249,7 @@ async fn handle_inner(
                     description,
                     check_launch: true,
                     check_text_limits: true,
+                    create_directory: true,
                 },
             )
             .await?;
@@ -330,14 +331,20 @@ async fn handle_inner(
         RequestBody::DetectDirectoryAgent { path } => {
             let directory = absolute_path(&path)?;
             let detecting = state.clone();
-            let agent = tokio::task::spawn_blocking(move || {
-                hostfs::require_directory(&directory)?;
-                Ok::<_, anyhow::Error>(detect_project_agent(&detecting, &directory))
+            let (agent, directory_exists) = tokio::task::spawn_blocking(move || {
+                let directory_exists = hostfs::directory_exists_or_creatable(&directory)?;
+                let agent = if directory_exists {
+                    detect_project_agent(&detecting, &directory)
+                } else {
+                    None
+                };
+                Ok::<_, anyhow::Error>((agent, directory_exists))
             })
             .await??;
             Ok(Some(Event::AgentDetected {
                 id: request_id,
                 agent,
+                directory_exists: Some(directory_exists),
             }))
         }
 
@@ -354,6 +361,7 @@ async fn handle_inner(
             Ok(Some(Event::AgentDetected {
                 id: request_id,
                 agent: detected.filter(|agent| agent_is_available(state, *agent)),
+                directory_exists: None,
             }))
         }
 

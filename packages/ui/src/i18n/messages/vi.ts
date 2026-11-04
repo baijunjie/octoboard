@@ -1328,6 +1328,7 @@ export const vi: Translation<"other"> = {
   "dialog.project.agentDetectMechanism": "{detect} tìm {claudeFile}, {agentsFile} và các thư mục tác tử như {claudeDir} hoặc {codexDir} trong mỗi kho lưu trữ; kho nào không xác định được sẽ kế thừa từ bảng điều khiển.",
   "dialog.project.directoryRequired": "Cần chọn thư mục.",
   "dialog.project.pathChecking": "Đang kiểm tra thư mục…",
+  "dialog.project.createEmptyHint": "Một dự án trống sẽ được tạo trong thư mục này.",
   "dialog.project.detectFailedTitle": "Không kiểm tra được vị trí",
   "dialog.project.addFailedTitle": "Không thêm được dự án",
   "dialog.project.saveFailedTitle": "Không lưu được dự án",

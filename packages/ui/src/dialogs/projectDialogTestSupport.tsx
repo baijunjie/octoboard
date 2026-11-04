@@ -65,8 +65,8 @@ export { buttons, click, pickerNamed, type };
 export const input = (label: string) => inputLabelled(label);
 
 export const settle = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
-export const answer = (request: Pending | undefined, agent: Agent | null) =>
-  act(async () => request?.resolve({ type: "agent_detected", id: null, agent }));
+export const answer = (request: Pending | undefined, agent: Agent | null, directoryExists?: boolean) =>
+  act(async () => request?.resolve({ type: "agent_detected", id: null, agent, ...(directoryExists !== undefined && { directory_exists: directoryExists }) }));
 
 export async function chooseSource(label: string) {
   await click(Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent?.includes("A single directory")));

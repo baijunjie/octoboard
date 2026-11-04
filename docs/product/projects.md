@@ -30,21 +30,36 @@ There are three sources:
 
 | Source | Input | Result |
 |---|---|---|
-| A single directory | a path | That one directory becomes a project. The path must exist and be a directory. |
-| A parent directory | a path | Every git repository **directly beneath** that path becomes its own project, including directories whose names begin with a dot; a directory counts as one by the rule in "What one check does" in `docs/product/project-git-status.md`. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
+| A single directory | a path | That one directory becomes a project. An existing directory is associated as it is, including one that is not a git repository. A missing directory is created, with any missing parents, and initialized as an empty git repository when submitted. |
+| A parent directory | a path | The path must be an existing directory. Every git repository **directly beneath** it becomes its own project, including directories whose names begin with a dot; a directory counts as one by the rule in "What one check does" in `docs/product/project-git-status.md`. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
 | A git repository URL | a repository URL plus a parent directory | The repository, from any git remote and not only GitHub, is cloned into a new directory beneath the parent, and the clone is then associated. The parent directory is filled in with the default clone directory (see below), which can be changed in the form or left blank to use that directory anyway. |
 
 For a single directory, the form asks the daemon about the path as soon as it is entered or picked (after a short pause
-when typed): the path must be an existing directory, and its agent is read and preselected in the Default agent field,
-which stays changeable; see "The project's default agent". While the answer for the current path is outstanding the
-form says it is checking, and the fields below the path (name, description, tags, default agent) and the submit button
-are disabled. An answer that finds the path itself wrong — it does not exist, or is not a directory — is the path
+when typed): an existing directory's agent is read and preselected in the Default agent field, which stays changeable;
+a missing directory has no detected agent and follows the console's default. See "The project's default agent". This
+check only reads the path: entering it, checking it, or cancelling the form creates nothing. While the answer for the
+current path is outstanding the form says it is checking, and the fields below the path (name, description, tags,
+default agent) and the submit button
+are disabled. An answer that finds the path itself wrong — it, or an existing ancestor, is not a directory — is the path
 field's own error: it is said under the field, which is marked invalid, as soon as the answer arrives, without waiting
 for a submit, and keeps them disabled. Any other failure of the check, one that says nothing about the path because the
 check could not run, is shown in an alert directly under the path field instead and keeps them disabled too; a path
-that cannot be looked at — Octoboard is not allowed to, or the system fails to say what is there — is such a failure,
-not a path that does not exist. Only the
-latest path's answer counts, and a changed path is read again and its result preselected anew.
+or its nearest existing ancestor that cannot be read — Octoboard is not allowed to, or the system fails to say what is
+there — is such a failure. A dangling symbolic link or a symbolic-link loop is a failure too, not an absent directory
+that can be created. Only the latest path's answer counts, and a changed path is read again and its result preselected
+anew.
+
+Once the check confirms that the current single-directory path is missing, a description under Directory says that
+an empty project will be created there. It appears only for that successful check of a missing path: changing the path
+removes it immediately, with the checking description shown while the new check runs; an existing directory, a failed
+check, another association source or editing a project shows no creation description.
+
+Submitting a missing single directory initializes a repository without template files, project files or an initial
+commit. Existing directories are never initialized by this association. If creation or initialization fails, no project
+is associated; any parent directories already created may remain. A failed git initialization leaves the target
+directory absent, so submitting again retries initialization. Configuration import still requires an existing directory
+when associating a local project (see "Where an imported project goes" in
+`docs/product/configuration-export-and-import.md`).
 
 For a git URL, the form first checks the repository: once the URL stops changing, the daemon fetches the remote's tip
 commit without file contents or history into a scratch directory, which proves the remote can be read with the user's

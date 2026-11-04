@@ -1395,6 +1395,7 @@ export const tr: Translation<"one" | "other"> = {
   "dialog.project.agentDetectMechanism": "{detect}, her depoda {claudeFile}, {agentsFile} ve {claudeDir} veya {codexDir} gibi ajan klasörlerini arar; karar veremediği depolar konsolun ayarını devralır.",
   "dialog.project.directoryRequired": "Dizin gereklidir.",
   "dialog.project.pathChecking": "Dizin kontrol ediliyor…",
+  "dialog.project.createEmptyHint": "Bu dizinde boş bir proje oluşturulacak.",
   "dialog.project.detectFailedTitle": "Konum kontrol edilemedi",
   "dialog.project.addFailedTitle": "Proje eklenemedi",
   "dialog.project.saveFailedTitle": "Proje kaydedilemedi",

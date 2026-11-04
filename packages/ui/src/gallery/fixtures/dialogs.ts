@@ -358,8 +358,9 @@ const DIRECTORY_UNREADABLE = (path: string): FixtureError => ({
 
 const dialogFixture = { state: dialogState, directories: { "/Users/dev": HOME_LISTING }, detections: { ...{ "~/code/slow": "pending" },
   ...{ "~/code/site": { agent: "codex" } },
+  ...{ "~/code/new-project": { agent: null, directory_exists: false } },
   ...{
-    "~/code/missing": { code: "path_not_found", params: { path: "/Users/me/code/missing" }, message: "`/Users/me/code/missing` does not exist" },
+    "~/code/README.md": { code: "path_not_a_directory", params: { path: "/Users/dev/code/README.md" }, message: "`/Users/dev/code/README.md` is not a directory" },
   },
   ...{
     "git@example.com:o/private.git": {
@@ -918,11 +919,14 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project",
-    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open, framed, with the tabs Launch settings and Git workflow in a row at its top and Git workflow selected: its five pickers, in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery and Revert gate, all read Same as global setting, each followed by a grey badge with the current global value (In a worktree of its own, Off, On, Ask each time, Off), and the note on how the items follow the global setting ends the tab. The group has no heading of its own above the pickers, since the tab names it. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "The new Directory path is accepted without a field error or detected agent, with Add enabled and a note below Directory saying an empty project will be created there. Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open, framed, with the tabs Launch settings and Git workflow in a row at its top and Git workflow selected: its five pickers, in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery and Revert gate, all read Same as global setting, each followed by a grey badge with the current global value (In a worktree of its own, Off, On, Ask each time, Off), and the note on how the items follow the global setting ends the tab. The group has no heading of its own above the pickers, since the tab names it. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1400,
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.focus(ui.t("dialog.project.directory")),
+      (ui) => ui.type("~/code/new-project"),
+      (ui) => ui.wait(700),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
       (ui) => ui.press(ui.t("dialog.project.gitWorkflow.title")),
     ],
@@ -1797,12 +1801,12 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project path refused",
-    description: "The Directory field itself is marked invalid, its label and border in the danger colour, and its own error under it says the path does not exist, with the missing path as code in it; no Alert stands under the field, since the lookup found the path wrong rather than failing to run.",
+    description: "The Directory field itself is marked invalid, its label and border in the danger colour, and its own error under it says the path is not a directory, with the file path as code in it; no Alert stands under the field, since the lookup found the path wrong rather than failing to run.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.focus(ui.t("dialog.project.directory")),
-      (ui) => ui.type("~/code/missing"),
+      (ui) => ui.type("~/code/README.md"),
       (ui) => ui.wait(700),
     ],
   },

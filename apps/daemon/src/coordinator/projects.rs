@@ -56,6 +56,8 @@ pub struct AddProjectRequest {
     pub check_launch: bool,
     /// Imported legacy text must survive configuration roundtrips, including overlong values.
     pub check_text_limits: bool,
+    /// Create and initialize a missing local directory; imports require an existing directory.
+    pub create_directory: bool,
 }
 
 /// What a project is associated with beyond where it is, as the request carries it: an account
@@ -115,6 +117,7 @@ pub async fn add_project(
         description,
         check_launch,
         check_text_limits,
+        create_directory,
     } = request;
     let console = state.store.require_console(&console_id)?;
     // Blank is no name: it is ignored for a parent directory, and a single project takes its
@@ -145,12 +148,26 @@ pub async fn add_project(
     let directories: Vec<PathBuf> = match source {
         ProjectSource::Local => {
             let path = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
-            let path = tokio::task::spawn_blocking(move || {
-                hostfs::require_directory(&path)?;
-                Ok::<_, anyhow::Error>(path)
+            let checked = path.clone();
+            tokio::task::spawn_blocking(move || {
+                if create_directory {
+                    hostfs::directory_exists_or_creatable(&checked).map(|_| ())
+                } else {
+                    hostfs::require_directory(&checked)
+                }
             })
             .await??;
             check_new_project_launch(state, &console, &settings, &accounts, check_launch).await?;
+            if create_directory {
+                // A second creation must wait until the first has installed its git directory.
+                let _preparation = state.claim_project_association(&console_id).await;
+                let preparing = state.clone();
+                let creating = path.clone();
+                tokio::task::spawn_blocking(move || {
+                    project_git::create_empty(&preparing, &creating)
+                })
+                .await??;
+            }
             vec![path]
         }
         ProjectSource::Parent => {

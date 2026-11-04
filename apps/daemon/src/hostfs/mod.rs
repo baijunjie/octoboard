@@ -228,6 +228,49 @@ pub fn directory_unreadable(path: &Path, err: &std::io::Error, message: String) 
     )
 }
 
+/// Whether `path` is a readable directory or may be created beneath an existing directory.
+/// A dangling link is an occupied entry, even though following it reports `NotFound`.
+pub fn directory_exists_or_creatable(path: &Path) -> Result<bool> {
+    let mut candidate = path;
+    loop {
+        match std::fs::symlink_metadata(candidate) {
+            Ok(_) => {
+                let metadata = std::fs::metadata(candidate).map_err(|err| {
+                    directory_unreadable(
+                        path,
+                        &err,
+                        format!("`{}` could not be looked at: {err}", path.display()),
+                    )
+                })?;
+                if !metadata.is_dir() {
+                    return Err(not_a_directory(candidate));
+                }
+                std::fs::read_dir(candidate).map_err(|err| {
+                    directory_unreadable(
+                        path,
+                        &err,
+                        format!("`{}` could not be read: {err}", path.display()),
+                    )
+                })?;
+                return Ok(candidate == path);
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                candidate = candidate.parent().ok_or_else(|| not_a_directory(path))?;
+            }
+            Err(err) if err.raw_os_error() == Some(libc::ENOTDIR) => {
+                return Err(not_a_directory(path));
+            }
+            Err(err) => {
+                return Err(directory_unreadable(
+                    path,
+                    &err,
+                    format!("`{}` could not be looked at: {err}", path.display()),
+                ))
+            }
+        }
+    }
+}
+
 /// Refuses a `path` that is not an existing directory, with `path_not_found` for one that is not
 /// there, `path_not_a_directory` for one that is something else, and `directory_unreadable` when it
 /// cannot be looked at (no access, or any other I/O failure): only a missing path is absent.
@@ -289,14 +332,46 @@ mod tests {
                 .unwrap()
         };
         chmod(0o000);
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            require_directory(&dir.join("locked/inner"))
+        let results = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            [
+                require_directory(&dir.join("locked/inner")),
+                directory_exists_or_creatable(&dir.join("locked/inner")).map(|_| ()),
+                directory_exists_or_creatable(&dir.join("locked/missing")).map(|_| ()),
+            ]
         }));
         chmod(0o755);
-        assert_eq!(
-            code_of(result.expect("looking at the path panicked")),
-            error_code::DIRECTORY_UNREADABLE
-        );
+        for result in results.expect("looking at the path panicked") {
+            assert_eq!(code_of(result), error_code::DIRECTORY_UNREADABLE);
+        }
+    }
+
+    #[test]
+    fn creatable_directories_exclude_occupied_and_unresolvable_paths() {
+        use std::os::unix::fs::symlink;
+
+        let dir = ScratchDir::new("hostfs-creatable-directory");
+        assert!(!directory_exists_or_creatable(&dir.join("missing/nested")).unwrap());
+        assert!(!dir.join("missing").exists());
+        assert!(directory_exists_or_creatable(&dir).unwrap());
+        std::fs::write(dir.join("file"), "keep").unwrap();
+        symlink(dir.join("absent"), dir.join("dangling")).unwrap();
+        symlink(dir.join("loop"), dir.join("loop")).unwrap();
+        for name in [
+            "file",
+            "file/child",
+            "dangling",
+            "dangling/child",
+            "loop",
+            "loop/child",
+        ] {
+            assert!(
+                directory_exists_or_creatable(&dir.join(name)).is_err(),
+                "{name}"
+            );
+        }
+        symlink(&*dir, dir.join("valid")).unwrap();
+        assert!(directory_exists_or_creatable(&dir.join("valid")).unwrap());
+        assert!(!directory_exists_or_creatable(&dir.join("valid/new/nested")).unwrap());
     }
 
     #[test]

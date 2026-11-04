@@ -320,6 +320,10 @@ pub enum Event {
     AgentDetected {
         id: Option<String>,
         agent: Option<AgentId>,
+        /// Whether the local directory exists; absent for a remote repository probe.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        directory_exists: Option<bool>,
     },
     /// The reply to `list_agent_models`: `agent` and `account` echo the request. `models` is
     /// empty exactly when `unavailable` says why; a client then offers a free-text field or the

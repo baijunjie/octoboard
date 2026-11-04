@@ -1329,6 +1329,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "dialog.project.agentDetectMechanism": "{detect} cerca {claudeFile}, {agentsFile} e cartelle degli agenti come {claudeDir} o {codexDir} in ogni repository. Se non riesce a decidere, viene ereditato l’agente della console.",
   "dialog.project.directoryRequired": "Una directory è obbligatoria.",
   "dialog.project.pathChecking": "Verifica della directory…",
+  "dialog.project.createEmptyHint": "In questa directory verrà creato un progetto vuoto.",
   "dialog.project.detectFailedTitle": "Impossibile verificare la posizione",
   "dialog.project.addFailedTitle": "Impossibile aggiungere il progetto",
   "dialog.project.saveFailedTitle": "Impossibile salvare il progetto",

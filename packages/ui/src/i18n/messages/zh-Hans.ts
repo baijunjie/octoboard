@@ -1422,6 +1422,7 @@ export const zhHans: Translation<"other"> = {
     "{detect} 会在每个仓库中查找 {claudeFile}、{agentsFile} 以及 {claudeDir}、{codexDir} 等智能体目录；无法判定的仓库将继承控制台的默认值。",
   "dialog.project.directoryRequired": "必须提供目录。",
   "dialog.project.pathChecking": "正在检查目录…",
+  "dialog.project.createEmptyHint": "将在此目录中创建一个空项目。",
   "dialog.project.detectFailedTitle": "无法检查此位置",
   "dialog.project.addFailedTitle": "无法添加项目",
   "dialog.project.saveFailedTitle": "无法保存项目",

@@ -1374,6 +1374,7 @@ export const ja: Translation<"other"> = {
   "dialog.project.agentDetectMechanism": "{detect} は、各リポジトリで {claudeFile}、{agentsFile}、および {claudeDir} や {codexDir} などのエージェントのフォルダを探します。判定できないリポジトリは、コンソールの設定を継承します。",
   "dialog.project.directoryRequired": "ディレクトリを指定してください。",
   "dialog.project.pathChecking": "ディレクトリを確認中…",
+  "dialog.project.createEmptyHint": "このディレクトリに空のプロジェクトが作成されます。",
   "dialog.project.detectFailedTitle": "場所を確認できませんでした",
   "dialog.project.addFailedTitle": "プロジェクトを追加できませんでした",
   "dialog.project.saveFailedTitle": "プロジェクトを保存できませんでした",

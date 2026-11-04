@@ -1375,6 +1375,7 @@ export const ko: Translation<"other"> = {
   "dialog.project.agentDetectMechanism": "{detect}은(는) 각 저장소에서 {claudeFile}, {agentsFile} 및 {claudeDir}, {codexDir} 같은 에이전트 폴더를 찾습니다. 판별할 수 없는 저장소는 콘솔 설정을 상속합니다.",
   "dialog.project.directoryRequired": "디렉터리가 필요합니다.",
   "dialog.project.pathChecking": "디렉터리 확인 중…",
+  "dialog.project.createEmptyHint": "이 디렉터리에 빈 프로젝트가 생성됩니다.",
   "dialog.project.detectFailedTitle": "위치를 확인하지 못했습니다",
   "dialog.project.addFailedTitle": "프로젝트를 추가하지 못했습니다",
   "dialog.project.saveFailedTitle": "프로젝트를 저장하지 못했습니다",

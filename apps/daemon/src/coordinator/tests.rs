@@ -335,6 +335,7 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
                 description: None,
                 check_launch: true,
                 check_text_limits: true,
+                create_directory: false,
             },
         )
     };

@@ -1329,6 +1329,7 @@ export const id: Translation<"other"> = {
   "dialog.project.agentDetectMechanism": "{detect} mencari {claudeFile}, {agentsFile}, dan folder agen seperti {claudeDir} atau {codexDir} di setiap repositori; repositori yang tidak dapat ditentukan mewarisi pengaturan konsol.",
   "dialog.project.directoryRequired": "Direktori wajib diisi.",
   "dialog.project.pathChecking": "Memeriksa direktori…",
+  "dialog.project.createEmptyHint": "Proyek kosong akan dibuat di direktori ini.",
   "dialog.project.detectFailedTitle": "Tidak dapat memeriksa lokasi",
   "dialog.project.addFailedTitle": "Tidak dapat menambahkan proyek",
   "dialog.project.saveFailedTitle": "Tidak dapat menyimpan proyek",

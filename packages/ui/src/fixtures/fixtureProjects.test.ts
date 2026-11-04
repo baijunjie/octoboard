@@ -7,6 +7,22 @@ import type { Fixture } from "./fixture";
 
 const make = (extra: Partial<Fixture> = {}) => createFixtureDaemon({ state: snapshotState({ consoles: [consoleOf("c", "Main")] }), ...extra });
 
+describe("fixture project detection", () => {
+  it("distinguishes existing and new directories without adding a project", async () => {
+    const daemon = make({ detections: { "/code/new-project": { agent: null, directory_exists: false }, "/code/site": { agent: "codex" } } });
+    await expect(daemon.request({ type: "detect_directory_agent", path: "/code/new-project" })).resolves.toEqual({ type: "agent_detected", id: null, agent: null, directory_exists: false });
+    await expect(daemon.request({ type: "detect_directory_agent", path: "/code/site" })).resolves.toEqual({ type: "agent_detected", id: null, agent: "codex", directory_exists: true });
+    await expect(daemon.request({ type: "detect_directory_agent", path: "/code/plain" })).resolves.toEqual({ type: "agent_detected", id: null, agent: null, directory_exists: true });
+    expect(daemon.store.getState().projects.size).toBe(0);
+  });
+
+  it("omits directory existence from remote probes", async () => {
+    const remote_url = "git@example.com:team/site.git";
+    const daemon = make({ detections: { [remote_url]: { agent: "codex" } } });
+    await expect(daemon.request({ type: "probe_git_remote", remote_url })).resolves.toEqual({ type: "agent_detected", id: null, agent: "codex" });
+  });
+});
+
 describe("fixture project writes", () => {
   it.each([
     ["~/code/./review/../website/", "/Users/dev/code/website", "website"],

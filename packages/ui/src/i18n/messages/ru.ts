@@ -1329,6 +1329,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "dialog.project.agentDetectMechanism": "{detect} ищет {claudeFile}, {agentsFile} и папки агентов, например {claudeDir} или {codexDir}, в каждом репозитории; если определить агента нельзя, наследуется настройка консоли.",
   "dialog.project.directoryRequired": "Нужно указать каталог.",
   "dialog.project.pathChecking": "Проверка каталога…",
+  "dialog.project.createEmptyHint": "В этом каталоге будет создан пустой проект.",
   "dialog.project.detectFailedTitle": "Не удалось проверить расположение",
   "dialog.project.addFailedTitle": "Не удалось добавить проект",
   "dialog.project.saveFailedTitle": "Не удалось сохранить проект",

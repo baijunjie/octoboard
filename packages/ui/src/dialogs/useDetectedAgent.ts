@@ -13,7 +13,7 @@ import { shownError } from "./shownError";
 export type DetectionStatus = "idle" | "checking" | "ready" | "failed";
 
 /** The state of the check, with the daemon's refusal when it is `failed`. */
-export type Detection = { status: Exclude<DetectionStatus, "failed"> } | { status: "failed"; error: ErrorPresentation };
+export type Detection = { status: "idle" | "checking" } | { status: "ready"; directoryExists?: boolean } | { status: "failed"; error: ErrorPresentation };
 
 /** What the form can ask the daemon about: a directory's agent, or a git remote's. */
 export type DetectionQuery = Extract<ClientRequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>;
@@ -55,7 +55,7 @@ export function useDetectedAgent(
         request: () => request(query!),
         accept: (event) => {
           onDetected(event.agent ?? "");
-          return () => ({ status: "ready" });
+          return () => ({ status: "ready", directoryExists: event.directory_exists });
         },
         failed: (failure, _held, t) => ({ status: "failed", error: shownError(failure, t) }),
       });

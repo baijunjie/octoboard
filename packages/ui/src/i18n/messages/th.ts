@@ -1373,6 +1373,7 @@ export const th: Translation<"other"> = {
   "dialog.project.agentDetectMechanism": "{detect} ค้นหา {claudeFile}, {agentsFile} และโฟลเดอร์เอเจนต์ เช่น {claudeDir} หรือ {codexDir} ในแต่ละที่เก็บ หากระบุไม่ได้จะใช้ค่าจากคอนโซล",
   "dialog.project.directoryRequired": "ต้องระบุไดเรกทอรี",
   "dialog.project.pathChecking": "กำลังตรวจสอบไดเรกทอรี…",
+  "dialog.project.createEmptyHint": "จะสร้างโปรเจกต์ว่างในไดเรกทอรีนี้",
   "dialog.project.detectFailedTitle": "ตรวจสอบตำแหน่งไม่ได้",
   "dialog.project.addFailedTitle": "เพิ่มโปรเจ็กต์ไม่ได้",
   "dialog.project.saveFailedTitle": "บันทึกโปรเจ็กต์ไม่ได้",

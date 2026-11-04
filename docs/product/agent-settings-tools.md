@@ -247,8 +247,9 @@ window does (see "The guidance on the user's language" in `docs/product/launchin
 
 ## Refusals
 
-A refused call comes back as a tool error carrying the reason in prose and changes nothing, as for every Octoboard
-tool. Besides the refusals above, an argument of the wrong type — a boolean, a list or a text given as something else —
+A refused call comes back as a tool error carrying the reason in prose and changes no stored settings. A failed local
+project creation may leave parent directories behind (see "Associating a project" in `docs/product/projects.md`).
+Besides the refusals above, an argument of the wrong type — a boolean, a list or a text given as something else —
 is refused with a reason rather than read as left out. So is a `git_workflow` object, for a project or
 application-wide, that holds a key other than the five git workflow settings, a `development` other than `in_place`,
 `branch` and `worktree`, or a `delivery` other than `ask`, `merge` and `pull_request`,

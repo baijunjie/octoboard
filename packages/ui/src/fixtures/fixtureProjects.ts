@@ -61,7 +61,10 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
     const detected = scenario.detections?.[body.type === "probe_git_remote" ? body.remote_url : body.path];
     if (detected === "pending") return neverReplied();
     if (detected && "code" in detected) return fail(detected);
-    return { type: "agent_detected", id: null, agent: detected?.agent ?? null };
+    return {
+      type: "agent_detected", id: null, agent: detected?.agent ?? null,
+      ...(body.type === "detect_directory_agent" && { directory_exists: detected?.directory_exists ?? true }),
+    };
   };
 
   return {

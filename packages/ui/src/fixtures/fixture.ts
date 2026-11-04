@@ -1,5 +1,6 @@
 import type { ErrorRecovery } from "../errors/errorRecovery";
 import type { Translate } from "../i18n/catalog";
+import type { ReplyOf } from "../requests";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence } from "../protocol";
@@ -168,8 +169,9 @@ export interface Fixture {
   directories?: Record<string, DirEntry[] | FixtureError>;
   /** What `detect_directory_agent` and `probe_git_remote` answer per path or URL: an agent (or null
    * for none), a daemon error, or `"pending"` for a request that is never answered. One not listed
-   * answers with no agent. */
-  detections?: Record<string, { agent: Agent | null } | FixtureError | "pending">;
+   * answers with no agent. Local paths exist unless `directory_exists` is false; remote probes omit
+   * directory existence. */
+  detections?: Record<string, Pick<ReplyOf<"detect_directory_agent">, "agent" | "directory_exists"> | FixtureError | "pending">;
   /** What `list_agent_models` answers per agent: a list, a reason there is none, or `"pending"` for a
    * request that is never answered. An agent not listed gets `SAMPLE_CLAUDE_MODELS` for Claude Code
    * and an empty list for the others. The reply's `default_model` is, for Claude Code, the first listed

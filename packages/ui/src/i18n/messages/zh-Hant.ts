@@ -1375,6 +1375,7 @@ export const zhHant: Translation<"other"> = {
   "dialog.project.agentDetectMechanism": "{detect} 會在每個儲存庫中尋找 {claudeFile}、{agentsFile} 以及 {claudeDir}、{codexDir} 等代理程式目錄；無法判定的儲存庫將繼承主控台的預設值。",
   "dialog.project.directoryRequired": "必須提供目錄。",
   "dialog.project.pathChecking": "正在檢查目錄…",
+  "dialog.project.createEmptyHint": "將在此目錄中建立一個空專案。",
   "dialog.project.detectFailedTitle": "無法檢查此位置",
   "dialog.project.addFailedTitle": "無法加入專案",
   "dialog.project.saveFailedTitle": "無法儲存專案",

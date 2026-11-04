@@ -101,6 +101,7 @@ pub(in crate::mcp) async fn add_project(
             detect_default_agent: true,
             check_launch: true,
             check_text_limits: true,
+            create_directory: true,
             tags: optional_string_list(arguments, "tags")?,
             description: present_text(arguments, "description")?.flatten(),
         },
