@@ -147,9 +147,10 @@ The row it sits on tints under the pointer, and a press anywhere on that row exp
 "Rows and the keyboard" in `docs/product/project-pane.md`). Assistive technology names the arrow "Expand" or
 "Collapse", followed by the row's name.
 
-The right pane's resize grips — its width handle and the handles between its panels or columns — have a tooltip too, a
-short "Resize" shown beside the grip only while a mouse pointer rests on the handle, not on keyboard focus; the name
-announced for each says what it resizes (see "Resizing the sidebar and the right pane" in
+The floating sidebar's width grip and the right pane's resize grips — its width handle and the handles between its
+panels or columns — have a tooltip too, a short "Resize" shown beside the grip only while a mouse pointer rests on
+the handle, not on keyboard focus; the name announced for each says what it resizes (see "Resizing the sidebar and
+the right pane" in
 `docs/product/window-layout.md` and "Resizing panels" in `docs/product/right-pane-panels.md`).
 
 While the sidebar can reveal on hover, a console's avatar opens its tooltip on keyboard focus only:

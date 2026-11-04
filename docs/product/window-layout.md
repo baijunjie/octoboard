@@ -412,16 +412,19 @@ terminal, alone or as a whole floating group, coming or going does not.
 
 ### Resizing the sidebar and the right pane
 
-Each pane has a resize handle on its inner edge, running the pane's full height, from below the top bar to above the
-connection banner, while it is shown:
+At 594 px and wider, each pane has a resize handle on its inner edge while it is shown, running the pane's full
+height. A docked handle runs from below the top bar to above the connection banner; a floating handle follows the
+card's inset edge:
 
-- the **sidebar's** on its right edge, drawn on hover and keyboard focus as a line along the whole edge;
+- the **docked sidebar's** on its right edge, drawn on hover and keyboard focus as a line along the whole edge;
+- the **floating sidebar's** in the 8 px gap outside its inner edge, drawn as the same grip as the right pane's;
 - the **right pane's** in the 8 px gap between the terminal and the cards, drawn as a **grip**: a short rounded bar
   in the middle of the gap's height, light grey while the pointer or keyboard focus is on the handle, and strong only
   while it is pressed or dragged. While a mouse pointer rests on it, a tooltip saying "Resize" opens beside the grip,
-  toward the pane. It is named "Resize panel area".
+  toward the pane. It is named "Resize panel area". The floating sidebar's grip has the same tooltip, facing into
+  the sidebar; it mirrors with the layout under a right-to-left language. Both vertical grips are 4×40 px.
 
-Both work the same way:
+The handles work the same way:
 
 - **Dragging** the handle sets the pane's width within its current limits; the right pane's minimum follows the
   number of cards (see "Pane widths below 1394 px" below).
@@ -429,17 +432,22 @@ Both work the same way:
 - The handle is also reachable with Tab and is then operated from the keyboard: the arrow pointing away from the pane
   widens it and the other narrows it (Right widens the sidebar and Left the right pane; the other way round under a
   right-to-left language, where the panes have swapped sides), by 16 px, by 64 px with Shift held; Home sets the pane's
-  minimum, and End the widest the window currently allows. While it has keyboard focus the sidebar's handle is drawn as
-  a solid accent-coloured bar with a focus ring around it, and the right pane's grip shows with a focus ring around
-  the handle. Pressing the handle with the mouse does not take keyboard focus off the terminal, and while it is dragged
+  minimum, and End the widest the window currently allows. While it has keyboard focus the docked sidebar's handle
+  is drawn as a solid accent-coloured bar with a focus ring around it, and a grip shows with a focus ring around the
+  handle. Pressing the handle with the mouse does not take keyboard focus off the terminal, and while it is dragged
   the pointer shows the resize cursor wherever it is.
 
-The sidebar's handle is there only while the sidebar is shown in the row, and absent while its column is easing. The
-right pane's handle is available while docked and while its whole group floats, including the middle width range. It
+The sidebar's handle is available while docked and while floating, including a hover preview on a large screen and
+the middle width range. Its pointer target is 6 px wide while docked and 24 px wide while floating, centred on the
+8 px gap outside the floating card's inner edge. It is absent while the docked column is easing and below 594 px.
+The floating sidebar uses the same remembered width as the docked sidebar, within **280–480 px**, with a default
+of **280 px**.
+
+The right pane's handle is available while docked and while its whole group floats, including the middle width range. It
 remains reachable at the floating group's inner edge and changes the group's total width. It is absent for a single-card
 preview of an empty docked column, a mobile panel and a column folded away under a maximized panel (see "Maximizing a
 panel" in `docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 8 px gap. Resizing a
-floating group keeps it revealed throughout the drag and does not resize the agent terminal.
+floating sidebar or right group keeps it revealed throughout the drag and does not resize the agent terminal.
 
 **A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum
 total width is the window's width less the **48 px rail** and the width of the docked sidebar while shown. With the

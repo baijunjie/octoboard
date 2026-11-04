@@ -26,8 +26,10 @@ The top bar stays reachable, and from 594 px up the rail stays in the row beside
   px it instead slides 40 px from the start edge as it fades in, and back towards that edge as it fades out. Both take
   240 ms with `cubic-bezier(0.2, 0, 0, 1)` easing. Reduced motion removes the movement and delay. While closed, its exit
   included, the sidebar takes no presses or keyboard focus and is hidden from assistive technology.
-- **Width**: 280 px from 594 px up; below that, 328 px including the 48 px rail. It is capped at the window's width less
-  the rail and two surrounding gaps, so it leaves room beside the card to dismiss an explicitly opened overlay.
+- **Width**: from 594 px up, it uses the sidebar's remembered width and can be resized at its inner edge (see
+  "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`). Below that, it is 328 px including the
+  48 px rail, with no width handle. It is capped at the window's width less the rail and two surrounding gaps, so it
+  leaves room beside the card to dismiss an explicitly opened overlay.
 - **Dismissal**: `Escape` closes it without reaching the running agent; in a text field holding text it clears the field
   first. A press on the dimmed area dismisses an explicitly opened overlay. Revealing the right pane closes it, and
   opening the sidebar hides a floating right pane: only one floating side is revealed at a time.

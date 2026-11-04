@@ -25,7 +25,7 @@ vi.mock("../hint/AnchoredTooltip", async (importOriginal) => {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function mount(orientation: "vertical" | "horizontal", grow: 1 | -1 = 1, direction: "ltr" | "rtl" = "ltr", extra: { appearance?: "grip"; tooltip?: string } = {}) {
+function mount(orientation: "vertical" | "horizontal", grow: 1 | -1 = 1, direction: "ltr" | "rtl" = "ltr", extra: { appearance?: "grip"; tooltip?: string; tooltipPlacement?: "start" | "end" } = {}) {
   const onChange = vi.fn();
   const onCommit = vi.fn();
   const onReset = vi.fn();
@@ -76,15 +76,50 @@ it.each([
   ["vertical", { clientX: 10, clientY: 0 }, { clientX: 50, clientY: 90 }],
   ["horizontal", { clientX: 0, clientY: 10 }, { clientX: 90, clientY: 50 }],
 ] as const)("%s: a drag along its axis changes the value without committing, and commits once at the end", (orientation, from, to) => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
   const { separator, onChange, onCommit, pointer } = mount(orientation);
   pointer("pointerdown", { button: 0, pointerId: 1, ...from });
   expect(separator.setPointerCapture).toHaveBeenCalledWith(1);
   expect(document.documentElement.classList.contains("pane-resizing")).toBe(true);
   expect(document.documentElement.style.getPropertyValue("--pane-resize-cursor")).toBe(orientation === "vertical" ? "col-resize" : "row-resize");
   pointer("pointermove", { pointerId: 1, ...to });
+  act(() => vi.advanceTimersToNextFrame());
   expect(onChange).toHaveBeenLastCalledWith(240, { commit: false });
   expect(onCommit).not.toHaveBeenCalled();
   pointer("lostpointercapture", { pointerId: 1 });
+  expect(onCommit).toHaveBeenCalledOnce();
+});
+
+it("coalesces high-rate moves and applies the last pending position before committing", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const { pointer, onChange, onCommit } = mount("vertical");
+  pointer("pointerdown", { button: 0, pointerId: 1, clientX: 10 });
+  for (let clientX = 11; clientX <= 90; clientX++) pointer("pointermove", { pointerId: 1, clientX });
+  expect(onChange).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersToNextFrame());
+  expect(onChange).toHaveBeenCalledExactlyOnceWith(280, { commit: false });
+  pointer("pointermove", { pointerId: 1, clientX: 110 });
+  onCommit.mockImplementation(() => expect(onChange).toHaveBeenLastCalledWith(300, { commit: false }));
+  pointer("lostpointercapture", { pointerId: 1 });
+  expect(onChange).toHaveBeenCalledTimes(2);
+  expect(onCommit).toHaveBeenCalledOnce();
+  act(() => vi.advanceTimersToNextFrame());
+  expect(onChange).toHaveBeenCalledTimes(2);
+});
+
+it("ignores another pointer while a drag is captured", () => {
+  const { pointer, onChange, onCommit } = mount("vertical");
+  pointer("pointerdown", { button: 0, pointerId: 1, clientX: 10 });
+  pointer("pointerdown", { button: 0, pointerId: 2, clientX: 30 });
+  pointer("pointermove", { pointerId: 2, clientX: 100 });
+  pointer("lostpointercapture", { pointerId: 2 });
+  expect(onChange).not.toHaveBeenCalled();
+  expect(onCommit).not.toHaveBeenCalled();
+  pointer("pointermove", { pointerId: 1, clientX: 50 });
+  pointer("lostpointercapture", { pointerId: 1 });
+  expect(onChange).toHaveBeenCalledExactlyOnceWith(240, { commit: false });
   expect(onCommit).toHaveBeenCalledOnce();
 });
 
@@ -148,5 +183,15 @@ it("opens a horizontal grip's tooltip above it", () => {
   enter(separator);
   act(() => void vi.runOnlyPendingTimers());
   expect(placements.at(-1)).toBeUndefined();
+  expect(openTooltip()?.textContent).toBe("Resize panel");
+});
+
+it("can face a vertical grip's tooltip toward the pane on its start side", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const { separator } = mount("vertical", 1, "ltr", { appearance: "grip", tooltip: "Resize panel", tooltipPlacement: "start" });
+  enter(separator);
+  act(() => void vi.runOnlyPendingTimers());
+  expect(placements.at(-1)).toBe("start");
   expect(openTooltip()?.textContent).toBe("Resize panel");
 });

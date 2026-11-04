@@ -169,10 +169,11 @@ then sent away with its Close panel button or by moving the pointer away. In the
   keyboard focus back to that terminal** when the viewer closes, while its tab is still there and shown; otherwise focus
   goes to the agent terminal.
 - **Size**: whatever changes the panel's size resizes the shell's terminal, and the shell is told the new size the way
-  an agent is (see "Output, scrollback and size" in `docs/product/session-terminal.md`). A terminal whose tab has not
-  been shown yet tells the shell no size until it is first shown. While the panel is maximized and the docked
-  sidebar's column eases open or closed, the shown terminal keeps its size, whatever else changes it meanwhile, and is
-  fitted once, when the column comes to rest, as the agent terminal is.
+  an agent is, including holding its grid size during a resize-handle drag and fitting a changed area when the drag
+  ends (see "Output, scrollback and size" in `docs/product/session-terminal.md`). Output continues during the drag.
+  A terminal whose tab has not been shown yet tells the shell no size until it is first shown. While the panel is
+  maximized and the docked sidebar's column eases open or closed, the shown terminal keeps its size, whatever else
+  changes it meanwhile, and is fitted once, when the column comes to rest, as the agent terminal is.
 - **Drawing**: a shell terminal is drawn without GPU acceleration, so however many tabs are open none of them takes a
   graphics context from the agent terminal. Its colours, and the minimum contrast its text is held to, follow the
   window's appearance as the agent terminal's do (see "What follows the choice" in `docs/product/appearance.md`).

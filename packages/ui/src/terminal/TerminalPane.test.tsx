@@ -6,6 +6,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { startResizeDrag } from "../components/panel/resizeDrag";
 import type { PlatformAdapter } from "../platform";
 import type { Event, ClientRequestBody } from "../protocol";
 import { setAccountSwitchesQueued, type Daemon, type State } from "../store";
@@ -232,6 +233,36 @@ it("holds its size while a docked pane eases, then fits once", () => {
   expect(FakeController.last.fits).toBe(fits + 1);
   observers.forEach((notify) => notify());
   expect(FakeController.last.fits).toBe(fits + 2);
+});
+
+it("holds the terminal grid through captured drags and fits only changed containers after the last release", () => {
+  const observers: (() => void)[] = [];
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) { observers.push(callback); }
+    observe(): void {}
+    disconnect(): void {}
+  });
+  onTestFinished(() => { vi.unstubAllGlobals(); });
+  mount();
+  const controller = FakeController.last;
+  const fits = controller.fits;
+  const attaches = controller.attaches;
+  let finish!: () => void;
+  let finishOther!: () => void;
+  act(() => { finish = startResizeDrag(); });
+  // A floating sidebar changes no terminal dimensions, so it needs no catch-up fit.
+  act(() => finish());
+  expect(controller.fits).toBe(fits);
+  act(() => { finish = startResizeDrag(); finishOther = startResizeDrag(); });
+  for (let step = 0; step < 35; step++) observers.forEach((notify) => notify());
+  expect(controller.fits).toBe(fits);
+  act(() => finish());
+  expect(controller.fits).toBe(fits);
+  act(() => finishOther());
+  expect(controller.fits).toBe(fits + 1);
+  act(() => { finish(); finishOther(); });
+  expect(controller.fits).toBe(fits + 1);
+  expect(controller.attaches).toBe(attaches);
 });
 
 it("names the terminal's input in the UI language, and follows a language change", () => {

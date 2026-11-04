@@ -136,14 +136,15 @@ export const layoutScenarios: Scenario[] = [
     id: "layout-sidebar-float-beside-pane",
     group: GROUP,
     category: "normal",
-    title: "Floating sidebar card beside the docked Files pane",
-    // The hidden docked sidebar exists only in a docked window (from 1394px).
-    minWidth: 1394,
+    title: "Resizable floating sidebar card",
+    // Hover reveals the sidebar from 594px; below that it is a fixed-width mobile card.
+    minWidth: 594,
     state: railState,
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
-    description: "The hidden docked sidebar floated in by hovering its toggle, over the terminal, while the Files panel stays docked on the other side, to compare the two cards: both are rounded-xl with the same hairline edge, the same drop shadow and the same 8px gap to the top bar and the bottom (and to the rail or window edge), and their headers are both 40px tall with the same type, padding and bottom line. Any difference in corner radius, edge, shadow or header height between them is a mismatch. Dismiss the sidebar and rest on a blank part of its rail for 200ms to reveal it again; crossing the rail briefly or hovering a rail action button must not reveal it. Console avatars retain their independent 130ms preview delay, and moving from the blank rail into the revealed card keeps it visible.",
+    description: "The sidebar floats over the terminal, revealed by hovering its toggle. Drag its inner edge to resize it from 280px to 480px; the handle matches the right pane's short rounded grip, centred in the gap outside the card, and keeps the card open while hovering or dragging. Its hit area is 24px wide and its visible bar is 4px by 40px, appearing on hover, keyboard focus and drag. The remembered width is shared with the docked sidebar. Choose Tablet portrait (768px) to inspect the floating drawer, or Desktop (1440px) for the hidden sidebar's hover preview beside the docked Files panel. At Desktop compare the two cards: both are rounded-xl with the same hairline edge, drop shadow, 8px gaps and 40px headers. Dismiss the sidebar and rest on a blank part of its rail for 200ms to reveal it again; crossing the rail briefly or hovering a rail action button must not reveal it. Console avatars retain their independent 130ms preview delay, and moving from the blank rail into the revealed card keeps it visible.",
     steps: [
       (ui) => ui.press(ui.session("Fix the summary layout")),
+      (ui) => ui.closeDrawer(),
       (ui) => ui.floatPane(ui.t("titleBar.sidebar.show")),
     ],
   },
@@ -197,7 +198,7 @@ export const layoutScenarios: Scenario[] = [
     width: 390,
     state: railState,
     preferences: { sidebarConsole: main.id },
-    description: "The mobile sidebar is one card floating over the dimmed terminal, inset 4px from the window's edges and below the top bar, with the rounded corners, hairline edge and drop shadow of the hidden desktop sidebar's preview. The rail, which is not in the row at this width, is inside it at the start side, transparent over the card, with a single vertical line between it and the sidebar's content; the backdrop covers the whole window around the card. Close and reopen it with the toggle to inspect the card sliding in from the start edge with a fade, the backdrop fading with it; a swipe does the same on a touch screen (a touch-emulating window will do): sideways towards the end of the line opens it, towards the start closes it. The backdrop and Escape also close it; Arabic mirrors the card, which slides in from the right.",
+    description: "Below 594px the sidebar keeps its fixed 328px width, including the rail, and has no resize handle. It is one card floating over the dimmed terminal, inset 4px from the window's edges and below the top bar, with the rounded corners, hairline edge and drop shadow of the hidden desktop sidebar's preview. The rail, which is not in the row at this width, is inside it at the start side, transparent over the card, with a single vertical line between it and the sidebar's content; the backdrop covers the whole window around the card. Close and reopen it with the toggle to inspect the card sliding in from the start edge with a fade, the backdrop fading with it; a swipe does the same on a touch screen (a touch-emulating window will do): sideways towards the end of the line opens it, towards the start closes it. The backdrop and Escape also close it; Arabic mirrors the card, which slides in from the right.",
     steps: [
       // The same swipe a finger makes, which the toggle's press would also have done.
       (ui) => ui.swipe("end"),

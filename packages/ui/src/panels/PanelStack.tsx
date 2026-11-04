@@ -208,7 +208,8 @@ export function PanelStack({
       const width = container.getBoundingClientRect().width;
       const gap = parseFloat(getComputedStyle(container).columnGap) || 0;
       setContainerSize((current) => current.width === width && current.gap === gap ? current : { width, gap });
-      setHeights(cardHeights(container));
+      const nextHeights = cardHeights(container);
+      setHeights((current) => current.length === nextHeights.length && current.every((height, index) => height === nextHeights[index]) ? current : nextHeights);
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;

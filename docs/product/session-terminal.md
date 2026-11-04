@@ -137,11 +137,17 @@ program's next copy replaces it.
   the right pane, hiding or showing the sidebar, and the right pane coming or going as its panels open and close all do;
   a pane floating in or the sidebar's drawer opening over the terminal does not (see `docs/product/window-layout.md` and
   `docs/product/sidebar-drawer.md`).
-  The screen follows at once (except while a docked column eases, below), but the agent is told the new size only once
-  it has held still for about 120 ms, and only when it differs from the size the agent already has, so a drag sends the
-  agent one size change rather than one for every step of the drag. The window has a minimum size, sized so that the
-  sidebar, the terminal and the right pane all stay usable side by side — see "The window's minimum size" in
+  The screen follows at once (except while a resize handle is dragged or a docked column eases, below), but the agent
+  is told the new size only once it has held still for about 120 ms, and only when it differs from the size the agent
+  already has, so a drag sends the agent one size change rather than one for every step of the drag. The window has
+  a minimum size, sized so that the sidebar, the terminal and the right pane all stay usable side by side — see
+  "The window's minimum size" in
   `docs/product/window-layout.md`.
+- While any pane-width, panel-height or column-width handle is being dragged, the terminal keeps its grid size and
+  continues showing the agent's output. After the drag ends, a shown terminal whose area changed is fitted once to
+  its current area; a terminal whose area did not change needs no fit. Resizing a floating sidebar therefore leaves
+  the agent terminal's grid unchanged. A hidden terminal fits when it is shown. The agent is told a changed size
+  with the same delay as above.
 - While the docked sidebar's column is easing open or closed (see "Hiding the sidebar" in
   `docs/product/window-layout.md`), the terminal's grid keeps the size it had when the ease began, and is fitted to its
   area once, when the column comes to rest — at most about a quarter of a second after the toggle was last pressed. Any

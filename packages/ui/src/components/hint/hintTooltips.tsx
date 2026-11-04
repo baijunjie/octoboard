@@ -314,9 +314,9 @@ export function AnchoredHint({
   /** Whether the tooltip shows: the pointer is on what it belongs to, or, for a caller that reports it, the
    * control has keyboard focus. */
   hovered: boolean;
-  /** Where it opens relative to the anchor; HeroUI's default is above it. `end` is the reading
-   * direction's, so it is mirrored under right-to-left. */
-  placement?: "end";
+  /** Where it opens relative to the anchor; HeroUI's default is above it. The sides follow the
+   * reading direction, so they are mirrored under right-to-left. */
+  placement?: "start" | "end";
   /** Show with no wait, as a tooltip does when its control takes keyboard focus. Read as this opens. */
   immediate?: boolean;
 }): React.ReactElement | null {

@@ -134,11 +134,11 @@ export function usePaneWidths({
     asideWidth: {
       ...asideWidth,
       setWidth: (width: number, options?: { persist?: boolean }) => {
-        setAllocation((current) => current && { ...current, adjustment: 0, pair: undefined });
+        setAllocation((current) => current && (current.adjustment !== 0 || current.pair !== undefined) ? { ...current, adjustment: 0, pair: undefined } : current);
         asideWidth.setWidth(width, options);
       },
       reset: () => {
-        setAllocation((current) => current && { ...current, adjustment: 0, pair: undefined });
+        setAllocation((current) => current && (current.adjustment !== 0 || current.pair !== undefined) ? { ...current, adjustment: 0, pair: undefined } : current);
         asideWidth.reset();
       },
     },

@@ -56,7 +56,7 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
  * place and back out of it, sliding in from the end edge and back to it (`useFadeUp`, replayed when
  * another panel takes its place, at once under reduced motion), staying inert while it goes, with no hover's card taking its place until it
  * has gone; the terminal under it keeps its size, and `data-floating-panel` marks it for the
- * terminal's focus handoff. With `peek`, the group floats at `--aside-width`, capped to leave
+ * terminal's focus handoff. With `peek`, the group floats at its chosen width, capped to leave
  * the rail clear. The gaps pass pointer events through except for the width grip; only the cards
  * cover the terminal. With no open card it previews the hovered kind instead. The
  * cards look the same docked and floating (`PANEL_CARD_CLASS`, the sidebar's floating card). It
@@ -99,18 +99,18 @@ export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLay
       // content and the percentage is the card's.
       data-card-motion={peek ? motionOf(dock.insetShown, dock.preparingInset) : floating ? motionOf(fade.shown, fade.preparing) : undefined}
       data-escape-scope
-      style={{ "--aside-width": `${width}px`, "--aside-min-width": `${minWidth}px` } as React.CSSProperties}
+      style={{ width: !peek && folded ? 0 : width, minWidth: !peek && !folded && !floating ? minWidth : undefined }}
       onTransitionEnd={floating ? fade.onTransitionEnd : dock.onInsetTransitionEnd}
       onPointerEnter={peek?.keep}
       onPointerLeave={peek?.leave}
       className={`flex min-h-0 flex-col ${folded ? "" : floating ? "p-(--peek-gap)" : "ps-(--panel-grip-gap) pe-(--peek-gap) py-(--peek-gap)"} ${
         peek
-          ? `pointer-events-none fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) end-0 z-40 w-(--aside-width) max-w-[calc(100vw-var(--rail-width))] transition-[opacity,visibility] duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${dock.insetShown ? "opacity-100" : "opacity-0 invisible"}${dock.preparingInset ? " transition-none" : ""}`
+          ? `pointer-events-none fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) end-0 z-40 max-w-[calc(100vw-var(--rail-width))] transition-[opacity,visibility] duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${dock.insetShown ? "opacity-100" : "opacity-0 invisible"}${dock.preparingInset ? " transition-none" : ""}`
           : folded
-            ? "h-full w-0"
+            ? "h-full"
             : floating
-              ? `pointer-events-none absolute inset-y-0 end-0 z-35 w-(--aside-width) max-w-[calc(100%-var(--rail-width))] [@media(max-width:360px)]:max-w-[calc(100%-24px)] transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "opacity-0"}${fade.preparing ? " transition-none" : ""}`
-              : "h-full w-(--aside-width) min-w-(--aside-min-width) shrink"
+              ? `pointer-events-none absolute inset-y-0 end-0 z-35 max-w-[calc(100%-var(--rail-width))] [@media(max-width:360px)]:max-w-[calc(100%-24px)] transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "opacity-0"}${fade.preparing ? " transition-none" : ""}`
+              : "h-full shrink"
       }`}
     >
       {typeof children === "function" ? children(peek) : children}

@@ -56,10 +56,9 @@ function mount(reduce = false) {
 it("docks as a row sibling that takes its room from the terminal, at any width", () => {
   const test = mount();
   const pane = test.pane()!;
-  expect(pane.className).toContain("w-(--aside-width)");
-  expect(pane.style.getPropertyValue("--aside-min-width")).toBe("320px");
+  expect(pane.style.width).toBe("300px");
+  expect(pane.style.minWidth).toBe("320px");
   expect(pane.className).not.toMatch(/fixed|docked:|drawer/);
-  expect(pane.style.getPropertyValue("--aside-width")).toBe("300px");
 });
 
 it("floats an open panel over the terminal's area in a window too narrow to dock it, in place, clear of a strip beside it, fading up as it comes", () => {
@@ -71,7 +70,7 @@ it("floats an open panel over the terminal's area in a window too narrow to dock
   test.render(true, false, undefined, true, "files");
   expect(test.pane()).toBe(pane);
   expect(pane.className).toContain("absolute inset-y-0 end-0");
-  expect(pane.className).toContain("w-(--aside-width) max-w-[calc(100%-var(--rail-width))] [@media(max-width:360px)]:max-w-[calc(100%-24px)]");
+  expect(pane.className).toContain("max-w-[calc(100%-var(--rail-width))] [@media(max-width:360px)]:max-w-[calc(100%-24px)]");
   // No width grip beside it: the gap is the same all round.
   expect(pane.className).toContain("p-(--peek-gap)");
   expect(pane.className).not.toMatch(/fixed|min-w-|invisible/);
@@ -98,7 +97,7 @@ it("floats an open panel over the terminal's area in a window too narrow to dock
   expect(pane.className).toContain("opacity-100");
 
   test.render(true);
-  expect(pane.className).toContain("h-full w-(--aside-width) min-w-(--aside-min-width) shrink");
+  expect(pane.className).toContain("h-full shrink");
   expect(test.mounted).toHaveBeenCalledTimes(1);
   test.advance(300);
 });
@@ -137,8 +136,8 @@ it("updates the column floor without replacing its content or rewriting its chos
   for (const min of [336, 320]) {
     test.render(true, false, min);
     expect(test.pane()).toBe(pane);
-    expect(pane.style.getPropertyValue("--aside-min-width")).toBe(`${min}px`);
-    expect(pane.style.getPropertyValue("--aside-width")).toBe("300px");
+    expect(pane.style.minWidth).toBe(`${min}px`);
+    expect(pane.style.width).toBe("300px");
     expect(pane.querySelector("input")).toBe(input);
     expect(document.activeElement).toBe(input);
   }

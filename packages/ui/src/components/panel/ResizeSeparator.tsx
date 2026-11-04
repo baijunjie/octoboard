@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
+import { useLatest } from "../hooks/useLatest";
+import { startResizeDrag } from "./resizeDrag";
 
 /** Pixels an arrow key press moves the edge; Shift multiplies it. */
 const KEY_STEP = 16;
@@ -42,8 +44,8 @@ function physicalGrow(element: HTMLElement, orientation: keyof typeof AXES, grow
  * value slider with a track and a thumb, not an edge between two parts.
  *
  * The caller positions it (`className`, `style`) and owns what the value means: a drag calls
- * `onChange` on every move with `commit: false`, then `onCommit` once; a key press calls it with
- * the default.
+ * `onChange` with the latest position once per frame with `commit: false`, flushes any pending
+ * position before `onCommit` once at the end; a key press calls it with the default.
  */
 export function ResizeSeparator({
   id,
@@ -62,6 +64,7 @@ export function ResizeSeparator({
   region,
   appearance = "line",
   tooltip,
+  tooltipPlacement = "end",
 }: {
   id?: string;
   orientation: keyof typeof AXES;
@@ -84,17 +87,26 @@ export function ResizeSeparator({
    * rounded bar centred on the edge in the gap the handle sits in. */
   appearance?: "line" | "grip";
   /** What a tooltip on a grip says while a mouse pointer is on the handle, placed against the grip
-   * itself rather than the handle's long box: beside it, toward the end, for a vertical grip, above
+   * itself rather than the handle's long box: beside it, toward the end by default, for a vertical grip, above
    * a horizontal one. It is no second name: the tooltip is not linked to
    * the separator, which keeps its `label`. */
   tooltip?: string;
+  /** Which side of a vertical grip its tooltip faces, in the reading direction. */
+  tooltipPlacement?: "start" | "end";
 }): React.ReactElement {
   const axis = AXES[orientation];
   const [dragging, setDragging] = useState(false);
   const focusVisible = useFocusVisibleProps();
   const gripRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
-  const dragRef = useRef<{ start: number; startValue: number; grow: 1 | -1 } | undefined>(undefined);
+  const latest = useLatest({ onChange, onCommit });
+  const dragRef = useRef<{ pointerId: number; start: number; startValue: number; grow: 1 | -1; finish: () => void; pending?: number; frame?: number } | undefined>(undefined);
+
+  useEffect(() => () => {
+    const frame = dragRef.current?.frame;
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    dragRef.current?.finish();
+  }, []);
 
   useEffect(() => {
     if (!dragging) return;
@@ -109,10 +121,15 @@ export function ResizeSeparator({
 
   // The pointer capture ends with the press (release or cancel), which is what calls this.
   const endDrag = () => {
-    if (!dragRef.current) return;
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (drag.frame !== undefined) cancelAnimationFrame(drag.frame);
+    // Pointer capture can end before the next paint. Apply its last position before saving.
+    if (drag.pending !== undefined) latest.current.onChange(drag.pending, { commit: false });
     dragRef.current = undefined;
     setDragging(false);
-    onCommit();
+    drag.finish();
+    latest.current.onCommit();
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
@@ -153,16 +170,27 @@ export function ResizeSeparator({
       onPointerLeave={() => setHovered(false)}
       onMouseDown={(event) => event.preventDefault()}
       onPointerDown={(event) => {
-        if (event.button !== 0) return;
+        if (event.button !== 0 || dragRef.current) return;
         event.currentTarget.setPointerCapture(event.pointerId);
-        dragRef.current = { start: event[axis.pointer], startValue: value, grow: physicalGrow(event.currentTarget, orientation, grow) };
+        dragRef.current = { pointerId: event.pointerId, start: event[axis.pointer], startValue: value, grow: physicalGrow(event.currentTarget, orientation, grow), finish: startResizeDrag() };
         setDragging(true);
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
-        if (drag) onChange(drag.startValue + drag.grow * (event[axis.pointer] - drag.start), { commit: false });
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        drag.pending = drag.startValue + drag.grow * (event[axis.pointer] - drag.start);
+        // High-rate pointers can deliver several moves before a paint; only the latest can show.
+        if (drag.frame !== undefined) return;
+        drag.frame = requestAnimationFrame(() => {
+          drag.frame = undefined;
+          const next = drag.pending;
+          drag.pending = undefined;
+          if (next !== undefined) latest.current.onChange(next, { commit: false });
+        });
       }}
-      onLostPointerCapture={endDrag}
+      onLostPointerCapture={(event) => {
+        if (event.pointerId === dragRef.current?.pointerId) endDrag();
+      }}
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
     >
@@ -171,7 +199,7 @@ export function ResizeSeparator({
       ) : (
         <div className={`transition-colors motion-reduce:transition-none group-hover:bg-accent group-data-focus-visible:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
       )}
-      {tooltip && appearance === "grip" && <AnchoredTooltip tooltip={tooltip} anchor={gripRef} hovered={hovered && !dragging} placement={orientation === "vertical" ? "end" : undefined} />}
+      {tooltip && appearance === "grip" && <AnchoredTooltip tooltip={tooltip} anchor={gripRef} hovered={hovered && !dragging} placement={orientation === "vertical" ? tooltipPlacement : undefined} />}
     </div>
   );
 }

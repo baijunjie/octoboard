@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 
 import { reportExternalLinkFailure } from "../components/text/ExternalLink";
 import { useLatest } from "../components/hooks/useLatest";
+import { useResizeDrag } from "../components/panel/resizeDrag";
 import { useT } from "../i18n/react";
 import { useOctoboardTheme } from "../preferences/theme";
 import { usePlatform } from "../platform/react";
@@ -58,7 +59,10 @@ export function useTerminalController({
   const { request } = useDaemon();
   const { links, clipboard } = usePlatform();
   const { resolved: colorTheme } = useOctoboardTheme();
-  const resizingRef = useLatest(resizing);
+  const dragging = useResizeDrag();
+  const holdingSize = resizing || dragging;
+  const resizingRef = useLatest(holdingSize);
+  const pendingFitRef = useRef(false);
   const latest = useLatest({ t, request, project: project ?? undefined, viewFile });
   // What the controller's theme currently is: the construction below reads it for the initial
   // value, and the `colorTheme` effect further down both reads and updates it. One ref rather than
@@ -94,8 +98,13 @@ export function useTerminalController({
     controllerRef.current = controller;
     if (containerRef.current) controller.mount(containerRef.current);
     const resizeObserver = new ResizeObserver(() => {
-      // The observer does not fire again after the last size of the ease; the effect below fits.
-      if (resizingRef.current) return;
+      // xterm clears its renderer on resize and repaints a frame later. Hold the grid through
+      // continuous layout changes so intermediate sizes do not expose a cleared canvas.
+      if (resizingRef.current) {
+        pendingFitRef.current = true;
+        return;
+      }
+      pendingFitRef.current = false;
       controller.fit();
       controller.syncSize();
     });
@@ -108,15 +117,16 @@ export function useTerminalController({
     // callbacks and options documented as read once.
   }, []);
 
-  // The observer skipped the sizes of the ease, so the view fits once it has ended.
+  // Only views whose containers changed need a catch-up fit; floating panes leave the agent alone.
   const wasResizingRef = useRef(false);
   useEffect(() => {
-    const ended = wasResizingRef.current && !resizing;
-    wasResizingRef.current = resizing;
-    if (!ended || !shown) return;
+    const ended = wasResizingRef.current && !holdingSize;
+    wasResizingRef.current = holdingSize;
+    if (!ended || !shown || !pendingFitRef.current) return;
+    pendingFitRef.current = false;
     controllerRef.current?.fit();
     controllerRef.current?.syncSize();
-  }, [resizing]);
+  }, [holdingSize]);
 
   // Names the terminal's input in the UI language; it follows a language change in place, as
   // xterm only names the input once, when it opens.

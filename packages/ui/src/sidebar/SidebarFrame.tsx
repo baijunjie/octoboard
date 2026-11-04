@@ -6,6 +6,7 @@ import { useT } from "../i18n/react";
 import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "../layout/paneDockMotion";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
+import { PaneResizeHandle } from "../layout/PaneResizeHandle";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { focusTargetId } from "./focus";
 import type { FocusTarget } from "./types";
@@ -112,6 +113,7 @@ export function SidebarFrame({
   const drawerClassName = dock.inset
     ? `docked:rounded-xl ${drawerClass("floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
     : `${drawerClass("drawer", open)} docked:h-full`;
+  const handleOverflow = dock.inset ? "phone:overflow-visible!" : "phone:max-docked:overflow-visible!";
 
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another
@@ -194,16 +196,19 @@ export function SidebarFrame({
           data-region="sidebar"
           // The width cap keeps a strip at the end to tap to dismiss. Below `phone` the card carries the
           // rail inside its width, so the cap holds the rail and the sidebar together.
-          className={`flex w-70 max-phone:w-[calc(var(--spacing)*70+var(--rail-width))] max-phone:ps-(--rail-width) max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
+          className={`flex max-phone:w-[calc(var(--spacing)*70+var(--rail-width))]! max-phone:ps-(--rail-width) max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 ${handleOverflow} ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
           onPointerDownCapture={peek ? onPeekPress : undefined}
           onTransitionEnd={dock.inset ? dock.onInsetTransitionEnd : undefined}
-          style={{ "--sidebar-width": `${sidebarWidth.width}px` } as React.CSSProperties}
+          style={{ width: sidebarWidth.width }}
           aria-label={t("sidebar.sessions")}
         >
-          <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col">
+          <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[inherit]">
             {children}
+          </div>
+          <div className={dock.inset ? "hidden phone:contents" : "hidden phone:contents docked:hidden"}>
+            <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} floating />
           </div>
         </nav>
       </div>

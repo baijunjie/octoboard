@@ -149,7 +149,11 @@ export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolea
     preferredWidth: chosen ?? defaultWidth,
     min,
     max,
-    setWidth: (width, options) => preference.set(Math.round(clamp(width, min, max)), options),
+    setWidth: (width, options) => {
+      const next = Math.round(clamp(width, min, max));
+      if (next !== preference.get()) preference.set(next, options);
+      else if (options?.persist !== false) preference.persist();
+    },
     persist: preference.persist,
     reset: () => preference.set(undefined),
   };

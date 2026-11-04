@@ -64,7 +64,8 @@ export function PaneResizeHandle({
 }): React.ReactElement {
   const t = useT();
   const { width, min, max, setWidth, persist, reset } = paneWidth;
-  const { label, edge, offset, grow, centre, appearance, layout } = SIDES[side];
+  const { label, edge, offset, grow, centre, appearance: dockedAppearance, layout } = SIDES[side];
+  const appearance = floating ? "grip" : dockedAppearance;
   return (
     <ResizeSeparator
       orientation="vertical"
@@ -80,9 +81,10 @@ export function PaneResizeHandle({
       region={region ?? side}
       appearance={appearance}
       tooltip={appearance === "grip" ? t("pane.resize") : undefined}
+      tooltipPlacement={side === "sidebar" ? "start" : "end"}
       // Centred on the pane's inner edge, or in the gap it leaves, anchored to the logical side the
       // pane is on.
-      style={floating ? { insetInlineStart: "calc((var(--panel-grip-gap) - 24px) / 2)" } : { [edge]: `calc(${width - HIT_WIDTH[side] / 2}px - ${centre} + ${offset})` }}
+      style={floating ? side === "sidebar" ? { insetInlineEnd: "calc((var(--panel-grip-gap) + 24px) / -2)" } : { insetInlineStart: "calc((var(--panel-grip-gap) - 24px) / 2)" } : { [edge]: `calc(${width - HIT_WIDTH[side] / 2}px - ${centre} + ${offset})` }}
       className={floating ? "absolute inset-y-0 z-50 w-6 pointer-events-auto" : `absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 ${layout}`}
     />
   );

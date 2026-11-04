@@ -689,8 +689,7 @@ export class TerminalController {
 
   /** Tells the daemon the terminal's current size once it has settled for `RESIZE_SETTLE_MS`, and
    * only if it differs from what the daemon already has. Each size sent is a SIGWINCH to the agent,
-   * so a continuous container resize (a sidebar drag, a window drag) must not forward every
-   * intermediate size; `fit()` still runs live, so the screen itself keeps up. */
+   * so repeated calls as a container changes size must not forward every intermediate size. */
   syncSize(): void {
     clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(() => {
