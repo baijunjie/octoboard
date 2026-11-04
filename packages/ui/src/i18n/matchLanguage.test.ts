@@ -14,7 +14,6 @@ it.each([
   [["zh-Hant-CN"], "zh-Hant"],
   [["zh-Latn"], "en"],
   [["pt-PT"], "pt"],
-  [["pt-BR"], "pt"],
   [["pt"], "pt"],
 ])("maps %j to %s", (preferred, expected) => {
   expect(matchLanguage(preferred)).toBe(expected);

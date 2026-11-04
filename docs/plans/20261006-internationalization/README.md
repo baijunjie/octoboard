@@ -34,7 +34,7 @@ translated before the application ships.
   - Chinese with only a region gets the script that region conventionally uses: TW / HK / MO → Hant, CN / SG → Hans;
     other regions get none.
   - A script conflict never matches (zh-Hant never lands on zh-Hans); when either side has no script, the language
-    alone decides, so pt-PT and pt-BR map to pt.
+    alone decides, so pt-PT maps to pt.
   - A language that maps to nothing is dropped, and the UI falls back to English.
 - **Plurals follow CLDR**: every message with a count gives every plural category each language requires.
 - **ar mirrors the whole UI**: directional icons (forward, back, external-link arrows) point the mirrored way; an

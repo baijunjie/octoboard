@@ -53,7 +53,7 @@ the source language for this.
 | de | du, verbal sentences | Nominalized openings (Bei Aktivierung → Wenn du das einschaltest) |
 | es | tú | Mixing tú / usted in one product |
 | it | tu | Mixing tu / Lei in one product |
-| pt-BR | você | Over-formal address such as o senhor |
+| pt | você | Over-formal address such as o senhor |
 | th | Omit the pronoun | ท่าน, ครับ / ค่ะ on every sentence |
 | vi | Pronoun-less imperatives; keep bạn có thể where it means "you can" | bạn có thể or quý khách added only for politeness |
 
@@ -61,7 +61,7 @@ Buttons use the verb form the language's UIs conventionally use, not an honorifi
 
 | Language | Button form | Examples |
 |---|---|---|
-| de, fr, es, pt-BR, ru | Infinitive | Löschen, Supprimer, Eliminar, Apagar, Удалить |
+| de, fr, es, pt, ru | Infinitive | Löschen, Supprimer, Eliminar, Apagar, Удалить |
 | it | Second-person singular imperative | Elimina, Annulla |
 | ja | Noun or short name | 削除, キャンセル; not 削除してください |
 | ko | Noun | 삭제, 취소 |
@@ -164,7 +164,7 @@ language; when the app renames something, go back and sync it.
   | de | z. B. (a no-break space in the middle) | z. B. Außen |
   | es | p. ej. | p. ej. exterior |
   | it | Es.: | Es.: Esterno |
-  | pt-BR | Ex.: | Ex.: Área externa |
+  | pt | Ex.: | Ex.: Área externa |
   | ru | Например: | Например: снаружи |
   | ar | مثال: | مثال: بالخارج |
   | id | Misalnya: | Misalnya: Di luar |
@@ -196,7 +196,7 @@ language; when the app renames something, go back and sync it.
   | fr | « », with narrow no-break spaces inside |
   | de | „“ |
   | ru | «» |
-  | es, it, pt-BR | As the project decides; “” by default |
+  | es, it, pt | As the project decides; “” by default |
 
 ### Destructive actions
 
@@ -379,16 +379,16 @@ Title Case words per language:
 |---|---|---|---|
 | en | Articles, coordinating conjunctions (and, but, or, nor), prepositions of four letters or fewer (to, at, by, for, in, of, off, on, out, up, via, from, into, onto, over, with, per) and as | Prepositions of five letters or more (About, Between, Through), subordinating conjunctions (If, When, Because), particles of phrasal verbs (Turn Off, Sign In) | Capitalized |
 | id | dan, atau, di, ke, dari, untuk, yang, dengan, dalam, pada, secara, hingga, sampai, tentang, per, oleh | tanpa, antara | Capitalized |
-| pt-BR | a, o, os, as, de, da, do, das, dos, e, em, no, na, nos, nas, ou, para, com, ao, à, um, uma, por, pelo, pela, pelos, pelas, até, sem, sobre, que, and contractions like desta / nesta / deste / neste | entre, contra, após | Capitalized |
+| pt | a, o, os, as, de, da, do, das, dos, e, em, no, na, nos, nas, ou, para, com, ao, à, um, uma, por, pelo, pela, pelos, pelas, até, sem, sobre, que, and contractions like desta / nesta / deste / neste | entre, contra, após | Capitalized |
 | tr | Only ve, ile, veya, yahut, and the separately written clitics and question particles de, da, ki, ya (including ya da), mı, mi, mu, mü; an attached -de, -da, -ki is part of the word and is not split off | Other postpositions: için, kadar, gibi | Separately written clitics and question particles stay lowercase even first or last |
 
 - de, fr, es, it, vi, ru and the other languages with case: use sentence case as Apple does, not Title Case.
-- Words not in the table are always capitalized. Exception: in id and pt-BR, a preposition not in the table with no
+- Words not in the table are always capitalized. Exception: in id and pt, a preposition not in the table with no
   sample in Apple's localization is lowercased, but the words in the "easily misjudged, actually capitalized" column
   are always capitalized; tr has no such exception and recognizes only the list above (TDK Yazım Kılavuzu, "Büyük
   harflerin kullanıldığı yerler").
 - en hyphenated compounds capitalize the second part (Add-On, Follow-Up, %lld-Day), except Built-in and Plug-in; in id
-  and pt-BR each part is judged on its own.
+  and pt each part is judged on its own.
 
 ### General
 
@@ -472,8 +472,8 @@ are now wrong or it leaves out one thing, the meaning has changed.
 
 ## This project
 
-- **Languages**: 17 languages — `ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt-BR`, `ru`, `th`, `tr`,
-  `vi`, `zh-Hans`, `zh-Hant`; only `en` and `zh-Hans` have catalogs so far, the other 15 render English.
+- **Languages**: 17 languages — `ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`,
+  `vi`, `zh-Hans`, `zh-Hant`; all 17 have complete catalogs.
   (`packages/ui/src/i18n/languages.ts`; `docs/product/language.md`, "What is translated so far")
 - **Source language**: the English catalog is the source every other language is translated from, and the type of
   every message key and its placeholders is read off it. (`packages/ui/src/i18n/messages/en.ts`;
@@ -556,13 +556,13 @@ are now wrong or it leaves out one thing, the meaning has changed.
 
   (the user's decision)
 - **Grammatically required contractions**: the contraction table under "English" is en-only, but these preposition +
-  article contractions are grammatically required in fr, pt-BR, it, de and es; they are not abbreviations to expand, so
+  article contractions are grammatically required in fr, pt, it, de and es; they are not abbreviations to expand, so
   keep them in the language's copy even where the en rules forbid contracting.
 
   | Language | Keep |
   |---|---|
   | fr | du, des, au, aux |
-  | pt-BR | do, da, dos, das, no, na, nos, nas, ao, à, pelo, pela |
+  | pt | do, da, dos, das, no, na, nos, nas, ao, à, pelo, pela |
   | it | The full set of preposition + article: del, al, dal, nel, sul, della, nella and so on |
   | de | am, im, beim, vom, zum, zur, ans, ins |
   | es | del, al; the pronoun él does not contract (de él, a él) |

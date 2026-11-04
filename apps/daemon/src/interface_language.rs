@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn a_tag_the_interface_does_not_offer_has_no_name() {
         for tag in [
-            "", "xx", "zh", "pt-BR", "ZH-Hans", "zh-hans", "en-GB", " ja",
+            "", "xx", "zh", "pt-PT", "ZH-Hans", "zh-hans", "en-GB", " ja",
         ] {
             assert_eq!(display_name(tag), None, "{tag:?}");
         }

@@ -60,7 +60,7 @@ Some consequences:
 |---|---|
 | `en-GB` | `en` |
 | `fr-CA` | `fr` |
-| `pt-BR`, `pt-PT`, `pt` | `pt` |
+| `pt-PT`, `pt` | `pt` |
 | `zh-TW`, `zh-HK`, `zh-MO`, `zh-Hant` | `zh-Hant` |
 | `zh-CN`, `zh-SG`, `zh`, `zh-Hans` | `zh-Hans` |
 | `nl` only | `en` (nothing maps) |
