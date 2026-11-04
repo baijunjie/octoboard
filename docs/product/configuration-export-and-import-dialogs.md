@@ -72,10 +72,8 @@ a file that could not be written is told as above.
 
 ## Choosing the file to import
 
-**Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that the file is one
-exported earlier, that its contents can be reviewed and where each project goes on the machine running Octoboard chosen
-before anything is created, and that the file may also carry accounts, which are created without being logged in, and
-the application settings — and the window sends its document to the daemon to be inspected; a file that is not JSON,
+**Importing** opens a dialog in three steps. The first step asks only for a configuration file exported earlier.
+The user picks a file, and the window sends its document to the daemon to be inspected; a file that is not JSON,
 or that the daemon refuses (not a configuration, a version this Octoboard does not read, unreadable), is told with its
 reason, and another can be chosen. A browser too old to report a dismissed file picker never answers for one, so the
 dialog is not held while the picker is open: it can be closed, or the picker opened again. What the daemon answers is

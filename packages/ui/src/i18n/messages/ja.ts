@@ -1756,7 +1756,7 @@ export const ja: Translation<"other"> = {
   "configuration.export.couldNotSave": "ファイルを保存できませんでした。",
   "configuration.export.alertTitle": "設定を書き出せませんでした",
   "configuration.import.title": "設定を読み込む",
-  "configuration.import.choose.intro": "書き出した設定ファイルを選択してください。作成を開始する前に内容を確認し、{appName} が動作するコンピュータで各プロジェクトの配置先を選べます。ファイルには、アカウントやアプリケーション設定も含まれる場合があります。作成するアカウントは未ログインの状態になります。",
+  "configuration.import.choose.filePrompt": "書き出した設定ファイルを選択してください。",
   "configuration.import.choose.submit": "ファイルを選択",
   "configuration.import.couldNotRead": "ファイルを読み取れませんでした。",
   "configuration.import.alertTitle": "設定を読み込めませんでした",

@@ -1757,7 +1757,7 @@ export const zhHant: Translation<"other"> = {
   "configuration.export.couldNotSave": "無法儲存檔案。",
   "configuration.export.alertTitle": "無法匯出設定",
   "configuration.import.title": "匯入設定",
-  "configuration.import.choose.intro": "請選擇一個匯出的設定檔案。匯入前，你可以先檢視其中的內容，並為每個專案選擇存放目錄（位於 {appName} 所在的電腦上）。檔案還可能包含帳號和應用程式設定；帳號建立後處於未登入狀態。",
+  "configuration.import.choose.filePrompt": "請選擇一個匯出的設定檔案。",
   "configuration.import.choose.submit": "選擇檔案",
   "configuration.import.couldNotRead": "無法讀取檔案。",
   "configuration.import.alertTitle": "無法匯入設定",

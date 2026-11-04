@@ -1633,7 +1633,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "configuration.export.couldNotSave": "تعذر حفظ الملف.",
   "configuration.export.alertTitle": "تعذر تصدير الإعدادات",
   "configuration.import.title": "استيراد الإعدادات",
-  "configuration.import.choose.intro": "اختر ملف إعدادات مُصدّراً. قبل إنشاء أي شيء، يمكنك مراجعة محتوياته واختيار مكان كل مشروع على الجهاز الذي يشغّل {appName}. قد يحتوي الملف أيضاً على حسابات تُنشأ دون تسجيل الدخول، وعلى إعدادات التطبيق.",
+  "configuration.import.choose.filePrompt": "اختر ملف إعدادات مُصدّراً.",
   "configuration.import.choose.submit": "اختيار ملف",
   "configuration.import.couldNotRead": "تعذرت قراءة الملف.",
   "configuration.import.alertTitle": "تعذر استيراد الإعدادات",

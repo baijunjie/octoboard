@@ -1632,7 +1632,7 @@ export const vi: Translation<"other"> = {
   "configuration.export.couldNotSave": "Không lưu được tệp.",
   "configuration.export.alertTitle": "Không xuất được cấu hình",
   "configuration.import.title": "Nhập cấu hình",
-  "configuration.import.choose.intro": "Chọn tệp cấu hình đã xuất. Trước khi tạo bất cứ mục nào, bạn có thể xem nội dung và chọn vị trí cho từng dự án trên máy chạy {appName}. Tệp cũng có thể chứa các tài khoản được tạo ở trạng thái chưa đăng nhập và cài đặt ứng dụng.",
+  "configuration.import.choose.filePrompt": "Chọn tệp cấu hình đã xuất.",
   "configuration.import.choose.submit": "Chọn tệp",
   "configuration.import.couldNotRead": "Không đọc được tệp.",
   "configuration.import.alertTitle": "Không nhập được cấu hình",

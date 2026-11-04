@@ -1988,8 +1988,7 @@ export const en = {
   "configuration.export.couldNotSave": "Could not save the file.",
   "configuration.export.alertTitle": "Could not export the configuration",
   "configuration.import.title": "Import configuration",
-  "configuration.import.choose.intro":
-    "Choose an exported configuration file. Before anything is created, you can review its contents and choose where each project goes on the machine running {appName}. The file may also carry accounts, which are created without being logged in, and the application settings.",
+  "configuration.import.choose.filePrompt": "Choose an exported configuration file.",
   "configuration.import.choose.submit": "Choose file",
   "configuration.import.couldNotRead": "Could not read the file.",
   "configuration.import.alertTitle": "Could not import the configuration",

@@ -1816,7 +1816,7 @@ export const tr: Translation<"one" | "other"> = {
   "configuration.export.couldNotSave": "Dosya kaydedilemedi.",
   "configuration.export.alertTitle": "Yapılandırma dışa aktarılamadı",
   "configuration.import.title": "Yapılandırmayı içe aktar",
-  "configuration.import.choose.intro": "Dışa aktarılmış bir yapılandırma dosyası seçin. Hiçbir şey oluşturulmadan içeriğini inceleyebilir ve her projenin {appName} çalıştıran makinede nereye yerleştirileceğini seçebilirsiniz. Dosya ayrıca giriş yapılmadan oluşturulacak hesapları ve uygulama ayarlarını içerebilir.",
+  "configuration.import.choose.filePrompt": "Dışa aktarılmış bir yapılandırma dosyası seçin.",
   "configuration.import.choose.submit": "Dosya seç",
   "configuration.import.couldNotRead": "Dosya okunamadı.",
   "configuration.import.alertTitle": "Yapılandırma içe aktarılamadı",

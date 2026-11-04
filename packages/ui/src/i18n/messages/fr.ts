@@ -1633,7 +1633,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "configuration.export.couldNotSave": "Impossible d’enregistrer le fichier.",
   "configuration.export.alertTitle": "Impossible d’exporter la configuration",
   "configuration.import.title": "Importer une configuration",
-  "configuration.import.choose.intro": "Choisissez un fichier de configuration exporté. Avant toute création, vous pourrez en examiner le contenu et choisir l’emplacement de chaque projet sur la machine exécutant {appName}. Le fichier peut aussi contenir des comptes, créés sans connexion, et les réglages de l’application.",
+  "configuration.import.choose.filePrompt": "Choisissez un fichier de configuration exporté.",
   "configuration.import.choose.submit": "Choisir un fichier",
   "configuration.import.couldNotRead": "Impossible de lire le fichier.",
   "configuration.import.alertTitle": "Impossible d’importer la configuration",

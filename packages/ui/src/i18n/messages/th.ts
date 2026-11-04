@@ -1755,7 +1755,7 @@ export const th: Translation<"other"> = {
   "configuration.export.couldNotSave": "บันทึกไฟล์ไม่ได้",
   "configuration.export.alertTitle": "ส่งออกการกำหนดค่าไม่ได้",
   "configuration.import.title": "นำเข้าการกำหนดค่า",
-  "configuration.import.choose.intro": "เลือกไฟล์การกำหนดค่าที่ส่งออก ก่อนสร้างรายการใด สามารถตรวจเนื้อหาและเลือกตำแหน่งแต่ละโปรเจ็กต์บนเครื่องที่เรียกใช้ {appName} ไฟล์อาจมีบัญชีและการตั้งค่าแอปด้วย โดยบัญชีจะถูกสร้างในสถานะยังไม่ได้ลงชื่อเข้าใช้",
+  "configuration.import.choose.filePrompt": "เลือกไฟล์การกำหนดค่าที่ส่งออก",
   "configuration.import.choose.submit": "เลือกไฟล์",
   "configuration.import.couldNotRead": "อ่านไฟล์ไม่ได้",
   "configuration.import.alertTitle": "นำเข้าการกำหนดค่าไม่ได้",

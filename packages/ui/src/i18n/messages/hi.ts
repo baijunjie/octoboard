@@ -1632,7 +1632,7 @@ export const hi: Translation<"one" | "other"> = {
   "configuration.export.couldNotSave": "फ़ाइल सेव नहीं हो सकी।",
   "configuration.export.alertTitle": "कॉन्फ़िगरेशन एक्सपोर्ट नहीं हो सकी",
   "configuration.import.title": "कॉन्फ़िगरेशन इंपोर्ट करें",
-  "configuration.import.choose.intro": "एक्सपोर्ट की गई कॉन्फ़िगरेशन फ़ाइल चुनें। कुछ भी बनने से पहले आप उसकी सामग्री जाँच सकते हैं और तय कर सकते हैं कि {appName} चला रही मशीन पर हर प्रोजेक्ट कहाँ जाएगा। फ़ाइल में अकाउंट भी हो सकते हैं, जो बिना लॉगिन के बनते हैं, और ऐप की सेटिंग्स भी।",
+  "configuration.import.choose.filePrompt": "एक्सपोर्ट की गई कॉन्फ़िगरेशन फ़ाइल चुनें।",
   "configuration.import.choose.submit": "फ़ाइल चुनें",
   "configuration.import.couldNotRead": "फ़ाइल पढ़ी नहीं जा सकी।",
   "configuration.import.alertTitle": "कॉन्फ़िगरेशन इंपोर्ट नहीं हो सकी",

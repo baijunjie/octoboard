@@ -1812,7 +1812,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.export.couldNotSave": "无法保存文件。",
   "configuration.export.alertTitle": "无法导出配置",
   "configuration.import.title": "导入配置",
-  "configuration.import.choose.intro": "请选择一个导出的配置文件。导入前，你可以先查看其中的内容，并为每个项目选择存放目录（位于 {appName} 所在的机器上）。文件还可能包含账户和应用设置；账户创建后处于未登录状态。",
+  "configuration.import.choose.filePrompt": "请选择一个导出的配置文件。",
   "configuration.import.choose.submit": "选择文件",
   "configuration.import.couldNotRead": "无法读取文件。",
   "configuration.import.alertTitle": "无法导入配置",

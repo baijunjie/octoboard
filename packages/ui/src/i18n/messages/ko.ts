@@ -1757,7 +1757,7 @@ export const ko: Translation<"other"> = {
   "configuration.export.couldNotSave": "파일을 저장하지 못했습니다.",
   "configuration.export.alertTitle": "설정을 내보내지 못했습니다",
   "configuration.import.title": "설정 가져오기",
-  "configuration.import.choose.intro": "내보낸 설정 파일을 선택해 주세요. 생성하기 전에 내용을 검토하고, {appName}이(가) 실행되는 컴퓨터에서 각 프로젝트의 위치를 선택할 수 있습니다. 파일에는 계정과 앱 설정도 포함될 수 있으며, 계정은 로그인되지 않은 상태로 생성됩니다.",
+  "configuration.import.choose.filePrompt": "내보낸 설정 파일을 선택해 주세요.",
   "configuration.import.choose.submit": "파일 선택",
   "configuration.import.couldNotRead": "파일을 읽지 못했습니다.",
   "configuration.import.alertTitle": "설정을 가져오지 못했습니다",

@@ -1633,7 +1633,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "configuration.export.couldNotSave": "Impossibile salvare il file.",
   "configuration.export.alertTitle": "Impossibile esportare la configurazione",
   "configuration.import.title": "Importa configurazione",
-  "configuration.import.choose.intro": "Scegli un file di configurazione esportato. Prima che venga creato qualcosa, puoi controllarne il contenuto e scegliere dove collocare ogni progetto sul computer che esegue {appName}. Il file può contenere anche account, che vengono creati senza accesso effettuato, e le impostazioni dell’applicazione.",
+  "configuration.import.choose.filePrompt": "Scegli un file di configurazione esportato.",
   "configuration.import.choose.submit": "Scegli file",
   "configuration.import.couldNotRead": "Impossibile leggere il file.",
   "configuration.import.alertTitle": "Impossibile importare la configurazione",

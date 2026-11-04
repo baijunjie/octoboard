@@ -1633,7 +1633,7 @@ export const id: Translation<"other"> = {
   "configuration.export.couldNotSave": "Tidak dapat menyimpan file.",
   "configuration.export.alertTitle": "Tidak dapat mengekspor konfigurasi",
   "configuration.import.title": "Impor konfigurasi",
-  "configuration.import.choose.intro": "Pilih file konfigurasi yang diekspor. Sebelum apa pun dibuat, Anda dapat meninjau isinya dan memilih lokasi setiap proyek di mesin yang menjalankan {appName}. File juga dapat berisi akun, yang dibuat tanpa login, serta pengaturan aplikasi.",
+  "configuration.import.choose.filePrompt": "Pilih file konfigurasi yang diekspor.",
   "configuration.import.choose.submit": "Pilih file",
   "configuration.import.couldNotRead": "Tidak dapat membaca file.",
   "configuration.import.alertTitle": "Tidak dapat mengimpor konfigurasi",

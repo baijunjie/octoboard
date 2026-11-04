@@ -806,7 +806,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, choosing the file",
-    description: "Opened from the welcome screen, where a new computer starts. The intro ends by saying that the file may also carry accounts, which are created without being logged in, and the application settings. The picker is never reported dismissed, as in a browser without the file input's cancel event: Choose file shows that it is waiting and ignores another press, while Cancel, the close button and Escape still work.",
+    description: "Opened from the welcome screen, where a new computer starts. A single sentence asks for an exported configuration file; details about its contents and import choices appear after choosing it. The picker is never reported dismissed, as in a browser without the file input's cancel event: Choose file shows that it is waiting and ignores another press, while Cancel, the close button and Escape still work.",
     state: noConsoleState,
     configuration: { file: "pending" },
     steps: [

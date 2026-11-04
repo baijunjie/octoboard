@@ -1660,7 +1660,7 @@ export const de: Translation<"one" | "other"> = {
   "configuration.export.couldNotSave": "Die Datei konnte nicht gesichert werden.",
   "configuration.export.alertTitle": "Konfiguration konnte nicht exportiert werden",
   "configuration.import.title": "Konfiguration importieren",
-  "configuration.import.choose.intro": "Wähle eine exportierte Konfigurationsdatei. Bevor etwas erstellt wird, kannst du ihren Inhalt prüfen und für jedes Projekt einen Speicherort auf dem Rechner auswählen, auf dem {appName} läuft. Die Datei kann auch Konten und Anwendungseinstellungen enthalten. Konten werden ohne Anmeldung erstellt.",
+  "configuration.import.choose.filePrompt": "Wähle eine exportierte Konfigurationsdatei.",
   "configuration.import.choose.submit": "Datei auswählen",
   "configuration.import.couldNotRead": "Die Datei konnte nicht gelesen werden.",
   "configuration.import.alertTitle": "Konfiguration konnte nicht importiert werden",

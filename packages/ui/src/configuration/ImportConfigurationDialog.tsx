@@ -250,7 +250,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       {...frame}
     >
       <div ref={bodyRef} className="flex flex-col gap-4">
-        {stage.kind === "choose" && <p className="text-sm"><Message id="configuration.import.choose.intro" /></p>}
+        {stage.kind === "choose" && <p className="text-sm"><Message id="configuration.import.choose.filePrompt" /></p>}
         {stage.kind === "review" && (
           <ImportReview
             fileName={stage.fileName}

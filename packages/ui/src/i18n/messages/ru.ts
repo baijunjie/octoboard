@@ -1633,7 +1633,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "configuration.export.couldNotSave": "Не удалось сохранить файл.",
   "configuration.export.alertTitle": "Не удалось экспортировать конфигурацию",
   "configuration.import.title": "Импорт конфигурации",
-  "configuration.import.choose.intro": "Выберите экспортированный файл конфигурации. До создания объектов можно проверить его содержимое и выбрать расположение каждого проекта на компьютере с {appName}. Файл также может содержать учётные записи, которые создаются без входа в них, и настройки приложения.",
+  "configuration.import.choose.filePrompt": "Выберите экспортированный файл конфигурации.",
   "configuration.import.choose.submit": "Выбрать файл",
   "configuration.import.couldNotRead": "Не удалось прочитать файл.",
   "configuration.import.alertTitle": "Не удалось импортировать конфигурацию",
