@@ -68,10 +68,15 @@ freshly exec'd test binary) and is hit only under the suite's load, as a fixture
 - When the test sends the signal, the fixture announces itself — writes its pid or a marker file, prints a line —
   only after the disposition is set, from the process that set it, and the test waits for that announcement.
 - When the code under test can find and signal the fixture on its own as soon as it exists — a ledger stop round over
-  a launch's processes, a sweep — there is no announcement to wait for. Block the signal in the child's `pre_exec`
-  (`pthread_sigmask(SIG_BLOCK, ...)`): the blocked mask survives `exec` and a handler does not, so the fixture
-  installs its handler, then unblocks, and a signal sent in between stays pending for the handler. An ignored
-  disposition (`SIG_IGN`) also survives `exec`, so a fixture that only ignores the signal can set it before `exec`.
+  a launch's processes, a sweep — there is no announcement to wait for. Start the fixture with the signal blocked:
+  `pthread_sigmask(SIG_BLOCK, ...)` in the child's `pre_exec`, or the same call in whatever launcher execs it (a
+  `perl -MPOSIX` one-liner from a shell script); the blocked mask survives `exec` and every thread inherits it. Then
+  never unblock it: take it with `sigwait`, and check the signal number it hands back, not only its return value —
+  macOS returns 0 for an interrupted wait without filling it in. Installing a handler and then unblocking loses the
+  signal on macOS whenever it arrived first: a signal sent while every thread blocks it stays pending on one
+  particular thread, and unblocking it on another thread never delivers it — and a Rust fixture run from the test
+  binary runs on libtest's test thread, not the main thread. Linux delivers it, so a pass there proves nothing. An
+  ignored disposition (`SIG_IGN`) survives `exec`, so a fixture that only ignores the signal sets it before `exec`.
 
 ## Assert a stand-in session was sent nothing behind a marker, and that it was sent something by waiting for it
 

@@ -38,18 +38,12 @@ const IGNORE_TERM_VAR: &str = "OCTOBOARDD_TEST_LEDGER_IGNORE_TERM";
 /// When set, [`sleeper`] writes its pid to `gen-<n>` in the directory the variable names, `n`
 /// being [`RESPAWN_GEN_VAR`] (0 when unset), and on `SIGTERM`, while `n` is below
 /// [`RESPAWN_LAST`], first starts itself again in a terminal session of its own as generation
-/// `n + 1`, then exits: a process that each round of a stop finds anew, somewhere new.
+/// `n + 1`, then exits: a process that each round of a stop finds anew, somewhere new. Its
+/// process must be started with `SIGTERM` blocked (see [`respawning`]).
 const RESPAWN_VAR: &str = "OCTOBOARDD_TEST_LEDGER_RESPAWN";
 const RESPAWN_GEN_VAR: &str = "OCTOBOARDD_TEST_LEDGER_RESPAWN_GEN";
 /// The last generation [`RESPAWN_VAR`] starts: one per round of a stop, `STOP_PASSES` in all.
 const RESPAWN_LAST: usize = super::STOP_PASSES - 1;
-
-/// Set by [`sleeper`]'s `SIGTERM` handler under [`RESPAWN_VAR`].
-static TERMINATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-extern "C" fn note_terminated(_: libc::c_int) {
-    TERMINATED.store(true, std::sync::atomic::Ordering::SeqCst);
-}
 
 /// Keeps the scanner thread from starting, so that the table is read only when a test says so and
 /// what each read finds is the test's to decide.
@@ -180,40 +174,41 @@ fn sleeper() {
 }
 
 /// [`sleeper`] under [`RESPAWN_VAR`]: never returns.
+///
+/// A round of a stop can find a generation, and signal it, the moment its process has started,
+/// long before this runs. So the process is started with `SIGTERM` blocked, which `exec` keeps
+/// and every thread inherits, and takes the signal with `sigwait`, never unblocking it. A handler
+/// installed here and then unblocked would not do, since libtest runs this on a thread of its
+/// own: macOS leaves a signal sent while every thread blocked it pending on one of them, and
+/// another thread unblocking it never receives it, while `sigwait` takes it wherever it waits.
 fn respawning(dir: &Path) -> ! {
     use std::os::unix::process::CommandExt;
     let generation: usize = std::env::var(RESPAWN_GEN_VAR)
         .ok()
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
-    // A later generation starts with `SIGTERM` blocked, so that a round of a stop that finds it
-    // before this point, as it can when its process has only just started, leaves the signal
-    // pending for the handler instead of ending it before it could start the next generation.
-    // SAFETY: the handler only stores to an atomic, and the mask is this thread's own.
-    unsafe {
-        libc::signal(
-            libc::SIGTERM,
-            note_terminated as extern "C" fn(libc::c_int) as libc::sighandler_t,
-        );
-        libc::pthread_sigmask(libc::SIG_UNBLOCK, &sigterm_set(), std::ptr::null_mut());
-    }
     let file = dir.join(format!("gen-{generation}"));
     let partial = file.with_extension("tmp");
     std::fs::write(&partial, std::process::id().to_string()).unwrap();
     std::fs::rename(&partial, &file).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(60);
-    while !TERMINATED.load(std::sync::atomic::Ordering::SeqCst) && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    if generation < RESPAWN_LAST && TERMINATED.load(std::sync::atomic::Ordering::SeqCst) {
+    let mut signal = 0;
+    // A minute without a stop ends the process, by `SIGALRM`'s default action.
+    // SAFETY: `alarm` and `sigwait` act only on this process's own signals.
+    let waited = unsafe {
+        libc::alarm(60);
+        libc::sigwait(&sigterm_set(), &mut signal)
+    };
+    assert_eq!(waited, 0, "waiting for SIGTERM failed");
+    // macOS reports an interrupted wait as a success with `signal` untouched.
+    assert_eq!(signal, libc::SIGTERM, "the wait ended without SIGTERM");
+    if generation < RESPAWN_LAST {
         let mut next = Command::new(std::env::current_exe().expect("the test binary"));
         next.args(SLEEPER)
             .env(RESPAWN_GEN_VAR, (generation + 1).to_string())
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
-        // The mask is kept across `exec`, and the next generation unblocks `SIGTERM` once its
-        // handler is in place.
+        // Blocked here, after the mask `spawn` clears in the child, and kept across `exec`.
         let blocked = sigterm_set();
         // SAFETY: `setsid` and `pthread_sigmask` are async-signal-safe.
         unsafe {
@@ -2199,7 +2194,8 @@ fn the_file_written_at_a_launch_end_names_no_session_its_stop_emptied() {
     let _first = following(&state);
     let pending = ledger.begin_launch("s1");
     let script = format!(
-        "{RESPAWN_VAR}='{}' /usr/bin/perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' -- '{}' {} \
+        "{RESPAWN_VAR}='{}' /usr/bin/perl -MPOSIX -e 'POSIX::setsid(); \
+         POSIX::sigprocmask(SIG_BLOCK, POSIX::SigSet->new(SIGTERM)); exec @ARGV' -- '{}' {} \
          >/dev/null 2>&1 &\nexec sleep 300",
         dir.display(),
         test_binary(),
