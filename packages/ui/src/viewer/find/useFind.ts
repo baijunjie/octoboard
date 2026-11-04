@@ -8,6 +8,7 @@ import { isPrimaryModifier } from "../../input/keys";
 import { DEFAULT_FIND_OPTIONS, findPattern, MAX_FIND_MATCHES, stepMatch, type FindOptions } from "./find";
 import type { FindBar, FindStatus } from "./FindBar";
 import { clearMatches, findMatches, findRegions, hasPlaceholder, paintMatches, revealMatch } from "./findDom";
+import { findSelection } from "./findSelection";
 import { shadowRootsIn } from "../code/rendererDom";
 
 /** How long the query rests before the search runs, so typing in a large file is not a search per
@@ -237,7 +238,7 @@ export function useFind({
       justOpened.current = false;
       focusQuery();
     }
-  }, [open, visible]);
+  }, [open, visible, query]);
 
   /** Focus to the code, or the dialog where there is none left to take it. */
   const focusContent = () => {
@@ -270,7 +271,7 @@ export function useFind({
   };
 
   // The latest of everything the listeners, added once, read.
-  const latest = useLatest({ open: visible, close });
+  const latest = useLatest({ open: visible, close, subjectKey });
   useEffect(() => {
     const dialog = headerRef.current?.closest<HTMLElement>("[role=dialog]");
     if (!dialog) return;
@@ -283,6 +284,16 @@ export function useFind({
         event.preventDefault();
         event.stopPropagation();
         setInteractionModality("keyboard");
+        // Match pasting into the single-line query: its value cannot contain CR or LF.
+        const selected = container && !barRef.current?.contains(document.activeElement) ? findSelection(container).replace(/[\r\n]/g, "") : "";
+        if (selected) {
+          setQuery(selected);
+          setSettled(selected);
+          setStepped({ key: latest.current.subjectKey, index: 0 });
+          revealNext.current = true;
+          justOpened.current = true;
+          searchAgain();
+        }
         if (latest.current.open) focusQuery();
         else openBar();
         return;

@@ -69,6 +69,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  document.getSelection()?.removeAllRanges();
   act(() => root.unmount());
   vi.useRealTimers();
   container.remove();
@@ -151,6 +152,88 @@ it("counts the matches as the query settles and steps through them, wrapping aro
   expect(status()).toBe("3/3");
   act(() => toggle("Previous match").click());
   expect(status()).toBe("2/3");
+});
+
+function selectText(node: Node, start: number, end: number): void {
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, end);
+  const selection = document.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+it("prefills Find with selected file text, focuses and selects the query, and searches immediately", async () => {
+  show(textFile("a.ts", "alpha beta beta"));
+  await settled();
+  vi.useFakeTimers();
+  const text = dialog().querySelector("[data-renderer]")!.firstChild!;
+  selectText(text, 6, 10);
+  find();
+  expect(input().value).toBe("beta");
+  expect(document.activeElement).toBe(input());
+  expect(input().selectionStart).toBe(0);
+  expect(input().selectionEnd).toBe(4);
+  expect(status()).toBe("1/2");
+});
+
+it("replaces an open query with selected file text and keeps it when there is no file selection", async () => {
+  await open("alpha beta beta");
+  type("alpha");
+  await rest();
+  const region = dialog().querySelector<HTMLElement>("[data-find-region]")!;
+  act(() => region.focus());
+  selectText(region.querySelector("[data-renderer]")!.firstChild!, 6, 10);
+  find(region);
+  expect(input().value).toBe("beta");
+  expect(input().selectionEnd).toBe(4);
+  expect(status()).toBe("1/2");
+  document.getSelection()!.removeAllRanges();
+  find(input());
+  expect(input().value).toBe("beta");
+  act(() => toggle("Close find").click());
+  find();
+  expect(input().value).toBe("beta");
+});
+
+it("handles line breaks like pasting into the single-line query, keeping its value and search in sync", async () => {
+  show(textFile("a.ts", "alpha\nbeta\nalphabeta"));
+  await settled();
+  vi.useFakeTimers();
+  const text = dialog().querySelector("[data-renderer]")!.firstChild!;
+  selectText(text, 0, 10);
+  find();
+  expect(input().value).toBe("alphabeta");
+  expect(input().selectionEnd).toBe(9);
+  expect(status()).toBe("1/1");
+});
+
+it("reveals the first match when the selection is the same as the open query", async () => {
+  await open(lines(100, { 10: "needle", 40: "needle" }));
+  const region = dialog().querySelector<HTMLElement>("[data-find-region]")!;
+  scrollable(region);
+  type("needle");
+  await rest();
+  press(input(), "Enter");
+  expect(region.scrollTop).toBe(760);
+  act(() => region.focus());
+  const text = region.querySelector("[data-renderer]")!.firstChild!;
+  const start = text.textContent!.indexOf("needle");
+  selectText(text, start, start + 6);
+  find(region);
+  expect(status()).toBe("1/2");
+  expect(region.scrollTop).toBe(160);
+});
+
+it("does not seed Find from a selected viewer heading", async () => {
+  show(textFile("a.ts", "alpha beta"));
+  await settled();
+  vi.useFakeTimers();
+  const heading = dialog().querySelector("h2")!;
+  const selection = document.getSelection()!;
+  selection.selectAllChildren(heading);
+  find();
+  expect(input().value).toBe("");
 });
 
 it("scrolls the current match to the middle of the region as the reader steps to it", async () => {

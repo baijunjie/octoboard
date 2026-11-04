@@ -4,8 +4,11 @@
 finds. **⌘F** (Ctrl+F off macOS), pressed anywhere in the viewer, opens the **find bar** with keyboard focus in its
 query, and so does the header's Find in file control (see "The header" in `docs/product/file-viewer.md`). The key is
 matched by its physical key, so a keyboard layout does not move it, and it cannot be changed (see "What is listed" in
-`docs/product/keyboard-shortcuts.md`). ⌘F while the bar is open puts keyboard focus back in the query and selects it.
-Closing the bar keeps its query and switches while the viewer stays open, so the bar opens again with them.
+`docs/product/keyboard-shortcuts.md`). ⌘F fills the query with text selected wholly within one searched view, even
+when the bar is already open, and searches immediately; carriage returns and line feeds are removed, and other
+whitespace is kept. It focuses and selects the query, keeping the current query when no searchable text is selected
+and keeping the switches in either case. Closing the bar keeps its query and switches while the viewer stays open,
+so the bar opens again with them.
 
 ## What is searched
 
@@ -47,9 +50,10 @@ it; opening or closing it over scrolled text leaves that text where it was. In o
 ## The matches
 
 Every match is highlighted, and the current one more strongly, with a text colour of its own and an underline, so it is
-told from the others by more than colour. Typing, changing a switch and moving to another file or change make the first
-match current; stepping makes the next or previous one current. Each of these also scrolls the current match to the
-middle of the view, and sideways into view on a line that does not wrap; nothing else scrolls the text.
+told from the others by more than colour. Typing, filling the query from selected text, changing a switch and moving
+to another file or change make the first match current; stepping makes the next or previous one current. Each of these
+also scrolls the current match to the middle of the view, and sideways into view on a line that does not wrap; nothing
+else scrolls the text.
 
 When what is drawn changes — wrapping turned on or off, the diff's layout switched, the file read again after a change
 on disk, collapsed lines expanded — the text is searched again, without scrolling, and the current match keeps its
