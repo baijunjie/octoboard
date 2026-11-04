@@ -196,8 +196,8 @@ receive a hover background; an expanded question and its answer share a uniform 
 
 The primary action in the header, hero, and closing section uses the same localized label for viewing releases and opens
 the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies macOS on
-Apple silicon and Intel and labels the app as an early prototype. The closing note repeats that status beside the MIT
-License. Other repository links open GitHub; the footer links to the developer's motivation at the localized homepage's
+Apple silicon and Intel and labels the app as a beta. The closing note repeats that status beside the MIT License. Other
+repository links open GitHub; the footer links to the developer's motivation at the localized homepage's
 `#developer-intent` and to the localized privacy page, explicitly names the MIT License in its license link, provides
 the operator's email address, and ends with the analytics settings button described in
 `docs/product/website-privacy.md`, "Analytics consent". The hero, open-source section and footer use icon-only GitHub
@@ -264,10 +264,10 @@ remains localized text rather than part of the wordmark artwork.
 
 ## Platform availability
 
-Platform availability appears within the local-data and open-source section, before the questions. Its five entries
-have equal visual weight in a desktop row and become a compact list of icons and text on small screens. The macOS
-entry uses brighter text and identifies the version as an early prototype. The section introduction describes the
-macOS app as an early prototype still in development. The site does not give an installer date.
+Platform availability appears within the local-data and open-source section, before the questions. Its five entries have
+equal visual weight in a desktop row and become a compact list of icons and text on small screens. The macOS entry uses
+brighter text and identifies the version as a beta. The section introduction describes the macOS app as a beta still in
+development. The site does not give an installer date.
 
 Status: not implemented — the Linux server and the Windows, iOS and Android apps. Each appears with a platform icon
 and no download or availability date.

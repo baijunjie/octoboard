@@ -53,7 +53,7 @@ to a coordinator, let each project agent work with its own context, and follow t
 
 ## Getting started
 
-**Octoboard is an early prototype, still in development.** Features and workflows are still being refined.
+**Octoboard is in beta, still in development.** Features and workflows are still being refined.
 
 1. Install and configure the coding-agent CLIs you want to use: Claude Code, Codex, or Grok Build.
 2. Check the [macOS releases](https://github.com/baijunjie/octoboard/releases) for an available build, or use the
@@ -70,7 +70,7 @@ or billing terms of the providers you choose. If your agent supports a self-host
 
 | Form | Status |
 |---|---|
-| macOS app (Apple silicon and Intel, macOS 11 or later) | Early prototype, still in development |
+| macOS app (Apple silicon and Intel, macOS 11 or later) | Beta, still in development |
 | Linux server — the daemon on a headless server, the interface in a browser on the network | Planned |
 | Windows app | Planned |
 | iOS app | Planned |

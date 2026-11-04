@@ -104,8 +104,8 @@ their 16 titles and descriptions, the statement that Octoboard is free and open 
 preview scene names and sample-data explanation, and every workflow node's task and report. The developer's motivation
 follows the workflow in each homepage copy and in `llms-full.txt`, including its title, opening, three subsections,
 product purpose, invitation, and byline. It does not include the embedded application's sample screens. Release links
-are those in `docs/product/website.md`, "Homepage and navigation" and sit beside the early-prototype status. The
-workflow is identified as an illustration. The copies omit the header, the footer, decorative art, the labels and
-numbers that mark a section, the scroll cue, the MIT badge, and interactive controls. The brand slogan stays, and the
-homepage Markdown also includes the sentence that states the slogan's two meanings. The privacy page's introductory line
-and the workflow's participant labels stay.
+are those in `docs/product/website.md`, "Homepage and navigation" and sit beside the beta status. The workflow is
+identified as an illustration. The copies omit the header, the footer, decorative art, the labels and numbers that mark
+a section, the scroll cue, the MIT badge, and interactive controls. The brand slogan stays, and the homepage Markdown
+also includes the sentence that states the slogan's two meanings. The privacy page's introductory line and the
+workflow's participant labels stay.
