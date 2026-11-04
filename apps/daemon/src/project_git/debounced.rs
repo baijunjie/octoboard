@@ -95,6 +95,12 @@ impl<K: Clone + Eq + Hash + Send + 'static> Debounced<K> {
         self.lock().is_empty()
     }
 
+    /// Whether `key` has a read running.
+    #[cfg(test)]
+    pub fn is_reading(&self, key: &K) -> bool {
+        matches!(self.lock().get(key), Some(Phase::Reading { .. }))
+    }
+
     /// Waits out the key's reports, reads it, and goes round again while reports arrived during
     /// the read.
     async fn settle<R>(self: Arc<Self>, key: K, read: Arc<R>)
@@ -143,6 +149,7 @@ impl<K: Clone + Eq + Hash + Send + 'static> Debounced<K> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::PATIENCE;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     const TIMING: Timing = Timing {
@@ -154,6 +161,22 @@ mod tests {
     /// Lets the scheduler's tasks run without moving the paused clock.
     async fn settle_tasks() {
         for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Lets the scheduler's tasks run, without moving the paused clock, until `key`'s read is
+    /// over. A read tells the test it ran from its blocking thread before it returns, and that
+    /// thread can be held up for any length of time on a busy machine, so no fixed number of
+    /// yields is enough. Bounded by [`PATIENCE`] of real time, which the paused clock leaves
+    /// running.
+    async fn read_over(scheduler: &Debounced<&'static str>, key: &'static str) {
+        let deadline = std::time::Instant::now() + PATIENCE;
+        while scheduler.is_reading(&key) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the read of {key} never ended"
+            );
             tokio::task::yield_now().await;
         }
     }
@@ -197,7 +220,7 @@ mod tests {
         done.recv().await.unwrap();
         // The last report came at 400 ms, so the read ran 300 ms after it.
         assert_eq!(start.elapsed(), Duration::from_millis(700));
-        settle_tasks().await;
+        read_over(&scheduler, "a").await;
         assert_eq!(reads.load(Ordering::SeqCst), 1);
         assert!(scheduler.is_idle());
     }
@@ -313,7 +336,7 @@ mod tests {
         started.recv().await.unwrap();
         scheduler.report("a", &read);
         release_tx.send(()).unwrap();
-        settle_tasks().await;
+        read_over(&scheduler, "a").await;
         // The first read is over; the second is owed `TIMING.owed` after it.
         tokio::time::advance(TIMING.owed - Duration::from_millis(1)).await;
         settle_tasks().await;
