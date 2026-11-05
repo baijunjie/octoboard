@@ -42,9 +42,13 @@ pub(crate) fn show_agents_view(live: &LiveSession) {
         .is_some_and(|dialog| dialog.is_agents_view()));
 }
 
-/// A stand-in live session that stays alive on a PTY (`sleep 30`) with nothing reading it.
+/// A sleeping stand-in lives until its guard terminates it. A fixed lifetime can expire while
+/// a process-heavy test is still preparing the messages it expects the stand-in to receive.
+pub(crate) const IDLE_STAND_IN_SCRIPT: &str = "exec /usr/bin/perl -e 'sleep 3600 while 1'";
+
+/// A stand-in live session that stays idle on a PTY until its guard drops, with nothing reading it.
 pub(crate) fn idle_stand_in(id: &str) -> StandIn {
-    fake_live_session(id, AgentId::CLAUDE, 80, 24, "sleep 30")
+    fake_live_session(id, AgentId::CLAUDE, 80, 24, IDLE_STAND_IN_SCRIPT)
 }
 
 /// A stand-in session for `id` that is registered with `state` and has its output read, so a test
@@ -259,7 +263,7 @@ pub(crate) fn stand_in_launch(
 ) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
        + Send
        + 'static {
-    stand_in_launch_running(started, launches, "sleep 30", during)
+    stand_in_launch_running(started, launches, IDLE_STAND_IN_SCRIPT, during)
 }
 
 /// [`stand_in_launch`] with a stand-in that runs `script`.

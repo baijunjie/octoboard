@@ -11,6 +11,7 @@ use crate::session_tools::Owner;
 use crate::test_support::{
     app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
     output_containing, repo_with, running, stand_in_launch_running, Launched, ScratchDir, StandIn,
+    IDLE_STAND_IN_SCRIPT,
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
@@ -307,7 +308,7 @@ async fn the_first_native_submission_has_the_completed_handoff_context() {
             let live = crate::test_support::tagged_live_session(
                 &request.session_id,
                 request.agent,
-                "sleep 30",
+                IDLE_STAND_IN_SCRIPT,
                 &request.process_tag,
             )
             .with_transport(transport);
