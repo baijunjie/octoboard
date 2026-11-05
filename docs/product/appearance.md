@@ -12,10 +12,11 @@ the window is open — the user does not have to come back to the control after 
 
 Everything the window shows follows the chosen appearance, including:
 
-- **The terminal.** Each appearance has its own full palette — background, foreground, cursor, selection
+- **The terminal.** Each appearance has its own full palette — background, foreground, selection
   and all sixteen ANSI colours — so ordinary coloured agent output stays readable on a light background as
-  well as a dark one. On top of that, in either appearance the terminal enforces a **minimum contrast ratio of
-  4.5:1** between each character and the background of its own cell — the terminal's background, a background colour
+  well as a dark one. The cursor is neutral grey in both appearances, with black text inside a block cursor, so it
+  remains distinct from Codex's inverse-video selection. On top of that, in either appearance the terminal enforces a
+  **minimum contrast ratio of 4.5:1** between each character and the background of its own cell — the terminal's background, a background colour
   the agent set for that cell, or the selection colour where the text is selected. A foreground colour that falls
   under it, whether the default foreground, one of the sixteen ANSI colours, the 256-colour range or a true colour, is
   shown lightened or darkened until it reaches the ratio, or as near to it as the colour can go where it cannot; colours

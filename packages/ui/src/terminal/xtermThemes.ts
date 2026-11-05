@@ -4,8 +4,9 @@ import type { ITheme } from "@xterm/xterm";
  * The two xterm colour themes the terminal switches between, one per resolved UI theme. xterm's
  * default ANSI colours assume a dark background, so an agent printing a plain ANSI colour (most
  * TUI output) would be unreadable on a light one. Each palette therefore gives all 16 ANSI colours
- * and the cursor pair a value checked for contrast against its own `background`, not borrowed from
- * the other mode.
+ * a value checked for contrast against its own `background`, not borrowed from the other mode.
+ * A neutral cursor stays distinct from a program's inverse-video selection; black text remains
+ * readable inside the block in either theme.
  *
  * `dark` (background `#1e1f22`, foreground `#e4e4e6`) takes its ANSI colours from the "One Dark"
  * terminal scheme. `light` is a parallel palette in the style of "One Light": a light "paper"
@@ -20,8 +21,8 @@ export const XTERM_THEMES: Record<"light" | "dark", ITheme> = {
   dark: {
     background: "#1e1f22",
     foreground: "#e4e4e6",
-    cursor: "#e4e4e6",
-    cursorAccent: "#1e1f22",
+    cursor: "#808080",
+    cursorAccent: "#000000",
     selectionBackground: "#3a3b40",
     black: "#45474d",
     red: "#e06c75",
@@ -43,8 +44,8 @@ export const XTERM_THEMES: Record<"light" | "dark", ITheme> = {
   light: {
     background: "#fafafa",
     foreground: "#383a42",
-    cursor: "#383a42",
-    cursorAccent: "#fafafa",
+    cursor: "#808080",
+    cursorAccent: "#000000",
     selectionBackground: "#d4d6db",
     black: "#383a42",
     red: "#d6265a",

@@ -243,6 +243,8 @@ export interface Ui {
   contextMenu: (matcher: Matcher) => Promise<void>;
   /** Opens the terminal's edit menu once the terminal has rendered its output. */
   terminalContextMenu: () => Promise<void>;
+  /** Focuses the rendered agent terminal without sending input or changing its selection. */
+  focusTerminal: () => Promise<void>;
   /** Presses the button that submits the open dialog, waiting for it to appear and be enabled: for a
    * dialog whose confirming button is named as a control behind it, which `press` would find first.
    * A disabled button (`isDisabled`, such as Confirm before a `typeToConfirm` word is typed) is
@@ -1199,6 +1201,15 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const popover = await markPopover(mark, `A touch press of the git failure mark ${where} opened no popover`);
       if (popover.querySelector("[role=dialog][aria-modal=false]")) throw new Error(`The popover of the git failure mark ${where} is the hover form, not the press form`);
       await wait(TOOLTIP_SHOW_MS);
+    },
+    async focusTerminal() {
+      const input = await waitFor(() => {
+        const terminal = doc.querySelector(`${AGENT_TERMINAL} .xterm`) as TerminalElement | null;
+        if (!terminal?.octoboardTerminalText?.row(0)) return undefined;
+        return terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea") ?? undefined;
+      }, "No rendered terminal to focus");
+      input.focus();
+      await wait(150);
     },
     async terminalContextMenu() {
       const screen = await waitFor(() => {

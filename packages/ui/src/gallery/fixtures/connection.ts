@@ -177,6 +177,17 @@ export const connectionScenarios: Scenario[] = [
     ],
   },
   {
+    id: "terminal-cursor-selection",
+    group: TERMINAL,
+    category: "normal",
+    title: "Block cursor beside reversed text",
+    description: "Only the first two Chinese characters are reversed. The focused terminal's gray block cursor covers the third character, whose glyph stays black, so the cursor is distinct from the reversed text. Switch themes to compare both backgrounds; click a control outside the terminal to see the inactive cursor outline, then click the terminal to restore its block. The program requests a steady block so the comparison stays visible.",
+    terminal: "cursor-selection",
+    preferences: { panelStacks: { project: { open: [], shares: {} }, report: { open: [], shares: {} } } },
+    state: snapshotState({ consoles: [console_], projects: [project], sessions: sessions.map((session) => session.id === "s-working" ? { ...session, agent: "codex" as const } : session) }),
+    steps: [pickSession, (ui) => ui.focusTerminal()],
+  },
+  {
     id: "terminal-fullscreen-links",
     group: TERMINAL,
     category: "normal",

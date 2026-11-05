@@ -116,7 +116,7 @@ export interface Fixture {
   notifications?: NotificationFixture[];
   /** How a session's terminal behaves: `output` draws scrolling sample output (default), `mouse`
    * draws it from a program with mouse reporting on, `fullscreen` draws a response in the
-   * alternate screen, `paths` draws output naming files and folders (see `pathLinks`), and
+   * alternate screen, `cursor-selection` draws reversed text beside a block cursor, `paths` draws output naming files and folders (see `pathLinks`), and
    * `refuse` never connects. It does not reach the Terminal panel's shells (`shellTerminal`). */
   terminal?: Exclude<TerminalBehaviour, "shell" | "exited">;
   /** How the Terminal panel's shell terminals behave, as `terminal` does for a session's: `shell`

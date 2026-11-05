@@ -3,7 +3,8 @@
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
  * request to read off the console: `output` connects and draws a sample (for a process-less session, as
  * the output its last process left), `mouse` draws that sample from a program with mouse reporting
- * on, `fullscreen` draws in the alternate screen, `paths` draws output that names files and
+ * on, `fullscreen` draws in the alternate screen, `cursor-selection` places a block cursor beside
+ * reversed text, `paths` draws output that names files and
  * folders, `shell` draws a shell at its prompt (the Terminal panel's shells), `exited` draws the
  * last screen of a shell that has ended and then closes, and `refuse` closes at once without ever
  * opening, which is a live session whose terminal cannot be reached.
@@ -11,7 +12,7 @@
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";
 
-export type TerminalBehaviour = "output" | "mouse" | "fullscreen" | "paths" | "shell" | "exited" | "refuse";
+export type TerminalBehaviour = "output" | "mouse" | "fullscreen" | "cursor-selection" | "paths" | "shell" | "exited" | "refuse";
 
 /** The URL of a fixture socket. A `shell` given the folder it was started in (`cwd`) draws a fresh prompt there, as
  * a shell started a moment ago does, instead of the sample of one that has been used. */
@@ -236,6 +237,15 @@ const fullscreenSample = () => `${ESC}?1049h${ESC}H${ESC}2J` + [
   "  > ",
 ].join("\r\n");
 
+/** A settled program-drawn selection beside the actual terminal cursor, not a simulated cursor cell. */
+const cursorSelectionSample = () => `${ESC}?1049h${ESC}H${ESC}2J${ESC}?25h${ESC}2 q` + [
+  "  Codex",
+  "",
+  `${ESC}7m是大${ESC}0m三`,
+  "",
+  "  Two reversed characters; the cursor covers the next.",
+].join("\r\n") + `${ESC}3;5H`;
+
 /** A shell at its prompt after a couple of commands, as a Terminal panel's shell shows it. */
 const shellSample = () => [
   `${ESC}32m~/code/website${ESC}0m ${ESC}1m%${ESC}0m git status`,
@@ -274,6 +284,7 @@ const SAMPLES: Record<TerminalBehaviour, (cols: number) => string> = {
   output: sample,
   mouse: mouseSample,
   fullscreen: fullscreenSample,
+  "cursor-selection": cursorSelectionSample,
   paths: pathsSample,
   shell: shellSample,
   exited: exitedSample,
