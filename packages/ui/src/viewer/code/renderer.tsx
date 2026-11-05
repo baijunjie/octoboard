@@ -25,6 +25,7 @@ import { createPortal } from "react-dom";
 import { useRenderLatest } from "../../components/hooks/useLatest";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { RENDER_BUDGETS } from "./budgets";
+import { highlightCacheKey } from "./cacheKey";
 import { CODE_THEMES } from "./codeTheme";
 import type { ChangeBodies } from "../content";
 import type { DiffLayout } from "./diffLayout";
@@ -187,8 +188,8 @@ const overflowOption = (wrap: boolean) => (wrap ? "wrap" : "scroll");
  * cannot start, the library highlights on the main thread instead, within the same budgets. The
  * library's own provider ends its pool whenever the last renderer using it unmounts, which would
  * restart the workers and reload every theme and grammar each time the viewer moved from code to
- * an image and back; so the pool is created once here and ended only by `endRendererPool`, when
- * the last viewer closes.
+ * an image and back; so the pool is created once here and ended only by `endRendererPool`, a while
+ * after the last viewer closes (`useRendererScope`).
  */
 function rendererPool(): ReturnType<typeof getOrCreateWorkerPoolSingleton> {
   return getOrCreateWorkerPoolSingleton({
@@ -293,10 +294,11 @@ export const HighlightedFile = memo(function HighlightedFile({
     if (failed !== undefined) onPlainChange?.(failed);
   }, [failed, onPlainChange]);
   // The library numbers the empty line after a final newline as a line of its own.
-  const file = useMemo<FileContents | undefined>(
-    () => (language ? { name, contents: text.endsWith("\n") ? text.slice(0, -1) : text, lang: language.lang } : undefined),
-    [name, text, language],
-  );
+  const file = useMemo<FileContents | undefined>(() => {
+    if (!language) return undefined;
+    const contents = text.endsWith("\n") ? text.slice(0, -1) : text;
+    return { name, contents, lang: language.lang, cacheKey: highlightCacheKey("file", name, language.lang, contents) };
+  }, [name, text, language]);
   // Left uncontrolled without a line, so what the user selects themselves is theirs.
   const selection = useMemo(() => (line === undefined ? undefined : { start: line, end: line }), [line]);
   const onPostRender = useDrawnCallback(onDrawn);
@@ -351,10 +353,10 @@ export const RenderedDiff = memo(function RenderedDiff({
   const fileDiff = useMemo<FileDiffMetadata | undefined>(() => {
     if (!lang) return undefined;
     // Throws on a patch it cannot read, which the caller's boundary turns into the raw patch.
-    const metadata = processFile(patch, { throwOnError: true });
+    const metadata = processFile(patch, { throwOnError: true, cacheKey: highlightCacheKey("diff", name, lang, patch) });
     if (!metadata) throw new Error("The patch holds no file change");
     return { ...metadata, lang };
-  }, [patch, lang]);
+  }, [name, patch, lang]);
   // What the expansion has come to for this diff: the whole file shown, or no more offered.
   const [ended, setEnded] = useState<{ diff: FileDiffMetadata; how: "all" | "stopped" }>();
   const how = ended && ended.diff === fileDiff ? ended.how : undefined;

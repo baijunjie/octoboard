@@ -51,17 +51,31 @@ export class RendererBoundary extends React.Component<
   }
 }
 
+/** How long the worker pool outlives the last viewer. Starting it again means starting the workers,
+ * loading the themes and every grammar again and losing the highlighted results it keeps, all before
+ * any code is drawn, which closing a viewer and opening the next one would otherwise pay each time. */
+const POOL_IDLE_MS = 5 * 60_000;
+
 /** Keeps the renderer's worker pool for as long as a viewer that calls this is mounted, and ends
- * it, if code was shown at all, once the last one unmounts. The count is checked again once the
- * renderer module is at hand, so a viewer opened in the meantime keeps the pool. */
+ * it, if code was shown at all, once none has been for `POOL_IDLE_MS`. A viewer opened in the
+ * meantime keeps the pool; the count is checked again once the renderer module is at hand. */
 let mountedViewers = 0;
+let poolIdleTimer: ReturnType<typeof setTimeout> | undefined;
+// A module replaced in development leaves no timer behind to end the pool under the new copy's viewers.
+import.meta.hot?.dispose(() => clearTimeout(poolIdleTimer));
+
 export function useRendererScope(): void {
   useEffect(() => {
     mountedViewers += 1;
+    clearTimeout(poolIdleTimer);
+    poolIdleTimer = undefined;
     return () => {
       mountedViewers -= 1;
       if (mountedViewers === 0 && rendererLoaded) {
-        void renderer().then((module) => mountedViewers === 0 && module.endRendererPool());
+        poolIdleTimer = setTimeout(() => {
+          poolIdleTimer = undefined;
+          void renderer().then((module) => mountedViewers === 0 && module.endRendererPool());
+        }, POOL_IDLE_MS);
       }
     };
   }, []);

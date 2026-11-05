@@ -100,8 +100,8 @@ function useCodeFrame(label: string): { region: FadeRegion; onKeyDown: (event: R
  *
  * It says it is loading until the renderer reports the subject's code drawn (`onDrawn`), not only
  * while the renderer's module loads: the library draws nothing until its worker pool has started,
- * which the pool does again each time the viewer opens, and a large file would otherwise stand blank
- * for seconds.
+ * which it does again when a viewer opens after the pool has been ended, and a large file would
+ * otherwise stand blank for seconds.
  */
 function CodeFrame({
   label,

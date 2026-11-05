@@ -5,6 +5,7 @@
 // to them. Everything it reads or sets in the library's markup goes through `rendererDom.ts`. No
 // library type crosses it.
 import { bodiesPlan } from "./budgets";
+import { highlightCacheKey } from "./cacheKey";
 import { bodiesFailure, ChangeBodiesError, type BodiesFailure, type ChangeBodies } from "../content";
 import {
   controlOf,
@@ -84,6 +85,20 @@ export interface ExpansionHooks {
 interface LoadedFile {
   name: string;
   contents: string;
+  /** With the other side's, keys the highlighting of the whole diff once expanded. */
+  cacheKey: string;
+}
+
+/** What the library hands `files`: the diff being expanded, which it then merges the sides into. */
+interface ExpandingDiff {
+  name: string;
+  prevName?: string;
+  lang?: string;
+  cacheKey?: string;
+}
+
+function loadedFile(name: string, language: string | undefined, contents: string): LoadedFile {
+  return { name, contents, cacheKey: highlightCacheKey("side", name, language, contents) };
 }
 
 /** Any input ends a wish to have focus given back to a separator's control, as the user has moved on. */
@@ -166,12 +181,21 @@ export class Expansion {
   constructor(private readonly hooks: ExpansionHooks) {}
 
   /** What the library calls to read the sides' text: only ever after `activate` has them. */
-  readonly files = (diff: { name: string; prevName?: string }): Promise<{ oldFile: LoadedFile; newFile: LoadedFile }> => {
+  readonly files = (diff: ExpandingDiff): Promise<{ oldFile: LoadedFile; newFile: LoadedFile }> => {
     const { bodies } = this;
     if (!bodies) return Promise.reject(new Error("The bodies are read before the library asks for them"));
+    // The expanded diff holds the lines the patch leaves out, which can differ while the patch stays
+    // the same, so its highlighting is keyed by both sides' text. The library keys it by the sides'
+    // keys only when the diff it merges them into has none of its own (`getHydratedCacheKey` in
+    // `@pierre/diffs`'s `hydratePartialDiff`); it would otherwise key it by the patch's key alone and
+    // serve one version's expanded lines for another. The diff is the library's own, merged in place.
+    // The patch's key goes into a side's, so two patches over the same text keep their own changes.
+    const patchKey = diff.cacheKey;
+    delete diff.cacheKey;
+    const newFile = loadedFile(diff.name, diff.lang, bodies.new);
     return Promise.resolve({
-      oldFile: { name: diff.prevName ?? diff.name, contents: bodies.old },
-      newFile: { name: diff.name, contents: bodies.new },
+      oldFile: loadedFile(diff.prevName ?? diff.name, diff.lang, bodies.old),
+      newFile: patchKey === undefined ? newFile : { ...newFile, cacheKey: `${newFile.cacheKey}:${patchKey}` },
     });
   };
 

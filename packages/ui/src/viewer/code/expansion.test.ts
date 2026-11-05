@@ -4,6 +4,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { ChangeBodiesError, type ChangeBodies } from "../content";
+import { highlightCacheKey } from "./cacheKey";
 import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
 
 const labels: SeparatorLabels = {
@@ -117,7 +118,16 @@ it("reads the bodies on the first expansion only, then reveals 20 lines each tim
     [1, "down", EXPANSION_STEP],
     [1, "both", Number.POSITIVE_INFINITY],
   ]);
-  expect((await expansion.files({ name: "a.ts" })).newFile).toEqual({ name: "a.ts", contents: "b\n" });
+  expect((await expansion.files({ name: "a.ts" })).newFile).toMatchObject({ name: "a.ts", contents: "b\n" });
+});
+
+it("keys the expanded diff by both sides' text as well as the patch", async () => {
+  await press(control("[data-expand-up]"));
+  const diff = { name: "a.ts", lang: "typescript", cacheKey: "patch" };
+  const { oldFile, newFile } = await expansion.files(diff);
+  expect(diff.cacheKey).toBeUndefined();
+  expect(newFile.cacheKey).toBe(`${highlightCacheKey("side", "a.ts", "typescript", newFile.contents)}:patch`);
+  expect(oldFile.cacheKey).toBe(highlightCacheKey("side", "a.ts", "typescript", oldFile.contents));
 });
 
 it("reveals the whole gap when the separator's own text is used", async () => {
