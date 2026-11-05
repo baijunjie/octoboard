@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the
 // target-triple-suffixed name Tauri's `externalBin` requires (for a universal release, both architectures and
-// their `lipo` join), so `pnpm tauri build` works from a clean checkout without a manual copy step:
-// `beforeBuildCommand` in tauri.conf.json runs it.
+// their `lipo` join; for a Windows target the name ends in `.exe`), so `pnpm tauri build` works from a clean checkout without a manual copy step:
+// `beforeBuildCommand` runs it (`pnpm build:tauri`), the one in `tauri.conf.json` and, on Windows, the one in
+// `tauri.windows.conf.json`, which replaces it.
 //
 // `tauri dev` does NOT run it — `beforeDevCommand` starts the frontend dev server and nothing else.
 // So a dev run after a change to `apps/daemon/` serves whatever binary is already in `binaries/`: a
@@ -26,6 +27,10 @@ const binariesDir = path.join(appDir, "src-tauri", "binaries");
 // universal sidecar named `octoboardd-universal-apple-darwin`, so all three are provided.
 const universal = process.env.TAURI_ENV_TARGET_TRIPLE === UNIVERSAL || process.argv.includes("--universal");
 
+// The Windows release passes its target to `tauri build`, which announces it the same way: the daemon is then built for
+// that target, `--locked` like the universal one, and a name with `.exe` is what `externalBin` looks for.
+const windowsTarget = process.env.TAURI_ENV_TARGET_TRIPLE?.includes("windows") ? process.env.TAURI_ENV_TARGET_TRIPLE : null;
+
 mkdirSync(binariesDir, { recursive: true });
 
 // Both crates are members of the root Cargo workspace, so the build runs from the repository root and writes into the
@@ -46,6 +51,15 @@ if (universal) {
   const dest = path.join(binariesDir, `octoboardd-${UNIVERSAL}`);
   execFileSync("lipo", ["-create", "-output", dest, ...built], { stdio: "inherit" });
   console.log(`joined ${built.length} builds -> ${dest}`);
+} else if (windowsTarget) {
+  execFileSync("cargo", ["build", "--release", "--locked", "--target", windowsTarget, "-p", "octoboardd"], {
+    cwd: repoRoot,
+    stdio: "inherit",
+  });
+  const source = path.join(repoRoot, "target", windowsTarget, "release", "octoboardd.exe");
+  const dest = path.join(binariesDir, `octoboardd-${windowsTarget}.exe`);
+  copyFileSync(source, dest);
+  console.log(`copied ${source} -> ${dest}`);
 } else {
   execFileSync("cargo", ["build", "--release", "-p", "octoboardd"], {
     cwd: repoRoot,
@@ -59,8 +73,9 @@ if (universal) {
   if (!hostLine) throw new Error("could not determine the host target triple from `rustc -vV`");
   const targetTriple = hostLine.slice("host: ".length).trim();
 
-  const source = path.join(repoRoot, "target", "release", "octoboardd");
-  const dest = path.join(binariesDir, `octoboardd-${targetTriple}`);
+  const extension = targetTriple.includes("windows") ? ".exe" : "";
+  const source = path.join(repoRoot, "target", "release", `octoboardd${extension}`);
+  const dest = path.join(binariesDir, `octoboardd-${targetTriple}${extension}`);
   copyFileSync(source, dest);
   console.log(`copied ${source} -> ${dest}`);
 }

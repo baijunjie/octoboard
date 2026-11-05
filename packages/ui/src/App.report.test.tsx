@@ -16,6 +16,7 @@ import type { Event, Project } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -81,7 +82,7 @@ function mountApp(narrow = false) {
     showNotice: vi.fn(),
   });
   mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <ThemeProvider><DaemonProvider value={daemon}><StackReset />{SESSIONS.map((session) => <StackReset key={session} session={session} />)}<App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
@@ -94,7 +95,7 @@ function mountApp(narrow = false) {
       type: "snapshot",
       hosts: [...(state.hosts?.values() ?? [])], consoles: [...state.consoles.values()], projects: [...state.projects.values()],
       sessions: [...state.sessions.values()], trusted_directories: [], settings: state.settings, git_statuses: [], providers: state.providers,
-      agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+      agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
     });
   };
   const push = (session: string, id: string) => receive({ type: "page_created", page: pageOf(id, session, `<p>${id}</p>`, 0) });

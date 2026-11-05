@@ -29,7 +29,6 @@
 //! `index.*`.
 
 use std::collections::HashMap;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -52,8 +51,7 @@ pub static PROBE_PERMITS: Semaphore = Semaphore::const_new(crate::blocking_pass:
 const ROOTS_TTL: Duration = Duration::from_secs(5);
 
 /// The temp roots. `canonical` are the roots as they resolve now; `lexical` are the spellings a
-/// path may start with before it is looked at (`/tmp` and `/private/tmp`, the daemon's temp
-/// directory as given and as resolved).
+/// path may start with before it is looked at (each root as the host names it, and as resolved).
 pub struct TempRoots {
     pub canonical: Vec<PathBuf>,
     pub lexical: Vec<PathBuf>,
@@ -62,19 +60,16 @@ pub struct TempRoots {
     pub check_owner: bool,
 }
 
-/// The temp roots: `/tmp`, `/private/tmp` and the platform's temp directory (`$TMPDIR`). A root
-/// that does not exist is left out, and so is one that is the filesystem root or holds the home
-/// directory, which would make everything there a scratch file.
+/// The temp roots: the directories the host keeps scratch files in
+/// ([`crate::platform::fs::temp_roots`]). A root that does not exist is left out, and so is one
+/// that is the filesystem root or holds the home directory, which would make everything there a
+/// scratch file.
 pub fn temp_roots() -> TempRoots {
-    let home = crate::paths::known_home_dir().and_then(|home| std::fs::canonicalize(home).ok());
-    let candidates = [
-        PathBuf::from("/tmp"),
-        PathBuf::from("/private/tmp"),
-        std::env::temp_dir(),
-    ]
-    .into_iter()
-    .filter_map(|root| Some((std::fs::canonicalize(&root).ok()?, root)))
-    .collect::<Vec<_>>();
+    let home = crate::paths::known_home_dir().and_then(|home| crate::hostfs::canonical(home).ok());
+    let candidates = crate::platform::fs::temp_roots()
+        .into_iter()
+        .filter_map(|root| Some((crate::hostfs::canonical(&root).ok()?, root)))
+        .collect::<Vec<_>>();
     usable_temp_roots(&candidates, home.as_deref())
 }
 
@@ -253,10 +248,10 @@ fn view_of(resolved: &Resolved, roots: &ProjectRoots) -> Option<PathLinkView> {
         PathLinkKind::Directory => entry_file(&resolved.path)?,
         PathLinkKind::None => return None,
     };
-    let relative = target.strip_prefix(roots.canonical.get(index)?).ok()?;
+    let relative = crate::wire_path::RelPath::below(roots.canonical.get(index)?, &target)?;
     Some(PathLinkView {
         worktree: roots.worktrees.get(index)?.clone(),
-        path: crate::wire_path::encode(relative.as_os_str().as_bytes()),
+        path: relative.to_wire(),
     })
 }
 
@@ -349,7 +344,7 @@ pub fn open(state: &crate::state::AppState, project: Option<&str>, path: &str) -
         state,
         project,
         path,
-        |path| cfg!(target_os = "macos") && crate::host_open::paths::is_macos_package(path),
+        crate::host_open::paths::is_macos_package,
         |path| crate::host_open::paths::open_path(path, false),
     )
 }

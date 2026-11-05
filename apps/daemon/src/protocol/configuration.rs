@@ -365,6 +365,10 @@ pub struct InspectedProject {
     pub name: String,
     /// The path as the document records it.
     pub path: String,
+    /// Whether `path` is absolute in the other operating system's style (a Windows path read on
+    /// macOS or Linux, a Unix one read on Windows). Such a path names nothing on this machine, so
+    /// no directory is derived from it and `exported_path` and `default_clone_dir` are never offered.
+    pub foreign_path: bool,
     pub remote_url: Option<String>,
     pub offers: DirectoryOffers,
     #[cfg_attr(
@@ -422,6 +426,10 @@ pub struct InspectedSettings {
     /// absent when the document carries none or it is not usable here (neither absolute nor
     /// starting with `~/`), which an import leaves out.
     pub default_clone_dir: Option<String>,
+    /// Whether the document's default clone directory is absolute in the other operating system's
+    /// style (a Windows path read on macOS or Linux, a Unix one read on Windows). It is then the
+    /// reason `default_clone_dir` is absent, which a client can say.
+    pub foreign_default_clone_dir: bool,
     /// This machine's default clone directory.
     pub current_default_clone_dir: String,
 }
@@ -602,6 +610,10 @@ pub struct InspectedAccount {
     pub name: String,
     /// The directory as the document records it.
     pub directory: String,
+    /// Whether `directory` is absolute in the other operating system's style (a Windows path read
+    /// on macOS or Linux, a Unix one read on Windows). It then names nothing on this machine, and
+    /// `proposed_directory` is absent; a client can say why.
+    pub foreign_directory: bool,
     /// The directory as it resolves on this machine (`~/` expanded); absent when the document's
     /// cannot be resolved.
     pub proposed_directory: Option<String>,

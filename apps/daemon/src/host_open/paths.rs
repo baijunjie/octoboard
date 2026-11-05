@@ -1,36 +1,34 @@
 //! Opening project directories and live paths with the daemon host's system applications, or
 //! revealing an entry in its file manager. macOS open and Linux ShowItems/ShowFolders return once
 //! accepted; Linux xdg-open is detached and reaped because it may live as long as the application
-//! it opens.
+//! it opens. Windows opens through the shell's own call and reveals through a detached
+//! `explorer.exe`, whose exit status says nothing.
 
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::AtomicBool;
 
 use super::{start, OPEN_BOUNDS};
+use crate::platform::open::paths::{
+    directory_launch_for, is_detached, package_probe, package_tree_is_package, path_launch_for,
+    shell_open, text_editor_launch, PathAction,
+};
 use crate::processes::subprocess::run_bounded;
 use crate::protocol::{error_code, CodedError};
 
 pub fn open(directory: &Path) -> Result<(), anyhow::Error> {
     validate_directory(directory).map_err(|detail| unavailable(&detail))?;
-    let command = launch_for(std::env::consts::OS, directory, || {
+    if let Some(opened) = shell_open(directory) {
+        return opened.map_err(|detail| unavailable(&detail));
+    }
+    let command = directory_launch_for(std::env::consts::OS, directory, || {
         let env = crate::env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
-        crate::env_shell::resolve_binary("xdg-open", &env)
+        crate::env_shell::resolve_program("xdg-open", &env)
             .map_err(|_| "xdg-open was not found".to_string())
     })
     .map_err(|detail| unavailable(&detail))?;
-    start(std::env::consts::OS == "linux", command).map_err(|detail| unavailable(&detail))
-}
-
-/// What the host is asked to do with a resolved live path.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PathAction {
-    /// Open it with its default application, or a folder in the file manager.
-    Open,
-    /// Select it in its containing folder.
-    Select,
-    /// Show a folder's own contents.
-    ShowFolder,
+    start(is_detached(std::env::consts::OS, PathAction::Open), command)
+        .map_err(|detail| unavailable(&detail))
 }
 
 /// Opens a resolved live path, either with its default application or revealed in the file
@@ -43,15 +41,20 @@ pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
     } else {
         PathAction::Select
     };
+    if action == PathAction::Open {
+        if let Some(opened) = shell_open(path) {
+            return opened.map_err(|detail| path_unavailable(reveal, &detail));
+        }
+    }
     let command = path_launch_for(std::env::consts::OS, path, action, |binary| {
         let env = crate::env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
-        crate::env_shell::resolve_binary(binary, &env)
+        crate::env_shell::resolve_program(binary, &env)
             .map_err(|_| format!("{binary} was not found"))
     })
     .map_err(|detail| path_unavailable(reveal, &detail))?;
     // ShowItems and ShowFolders are short D-Bus calls whose failure must reach the client;
     // xdg-open may instead live as long as the application it opens.
-    let detached = std::env::consts::OS == "linux" && !reveal;
+    let detached = is_detached(std::env::consts::OS, action);
     start(detached, command)
         .or_else(
             |detail| match fallback_launch(std::env::consts::OS, path, reveal, &detail) {
@@ -67,30 +70,27 @@ pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
 /// macOS a folder Finder treats as a package (`Foo.app`, `Foo.xcodeproj`) is selected too:
 /// `open -a Finder` on one launches it instead of showing it.
 fn shows_as_folder(os: &str, path: &Path) -> bool {
-    if !std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) {
-        return false;
-    }
-    os != "macos" || !is_macos_package(path)
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) && !is_package(os, path)
 }
 
-/// Whether macOS types the folder as a package. A package is always named with an extension, so a
+/// Whether macOS types the folder as a package; never on another host. See [`is_package`].
+pub(crate) fn is_macos_package(path: &Path) -> bool {
+    is_package(std::env::consts::OS, path)
+}
+
+/// Whether `os` types the folder as a package, which only macOS does
+/// ([`package_probe`] has no probe elsewhere). A package is always named with an extension, so a
 /// folder without one is skipped without asking. Spotlight's content type tree is what Finder
 /// itself goes by (a bundle `Info.plist` check misses `.xcodeproj` and the like); when it cannot
 /// be read the folder counts as a package, since selecting it is harmless where opening it may
 /// launch something.
-pub(crate) fn is_macos_package(path: &Path) -> bool {
-    if path.extension().is_none() {
+fn is_package(os: &str, path: &Path) -> bool {
+    let Some(mut command) = package_probe(os, path) else {
         return false;
-    }
-    let mut command = Command::new("/usr/bin/mdls");
-    command.args(["-raw", "-name", "kMDItemContentTypeTree", "--"]);
-    command.arg(path);
-    command.stdin(std::process::Stdio::null());
+    };
     match run_bounded(&mut command, &OPEN_BOUNDS, &AtomicBool::new(false)) {
         Ok(output) if output.status.success() => {
-            let tree = String::from_utf8_lossy(&output.stdout);
-            // A tree without `public.directory` (Spotlight's "(null)") says nothing about it.
-            tree.contains("com.apple.package") || !tree.contains("public.directory")
+            package_tree_is_package(&String::from_utf8_lossy(&output.stdout))
         }
         _ => true,
     }
@@ -104,14 +104,8 @@ const TEXT_SNIFF_BYTES: usize = 8192;
 /// does so when asked with -t, so a failure for want of a claiming application is retried that
 /// way when the file reads as text.
 fn fallback_launch(os: &str, path: &Path, reveal: bool, detail: &str) -> Option<Command> {
-    if os != "macos" || reveal || !no_application_claims(detail) || !looks_like_text(path) {
-        return None;
-    }
-    let mut command = Command::new("/usr/bin/open");
-    command.args(["-t", "--"]);
-    command.arg(path);
-    command.stdin(std::process::Stdio::null());
-    Some(command)
+    let command = text_editor_launch(os, path)?;
+    (!reveal && no_application_claims(detail) && looks_like_text(path)).then_some(command)
 }
 
 /// Whether macOS open failed because Launch Services binds no application to the file's type,
@@ -153,73 +147,6 @@ fn path_unavailable(reveal: bool, detail: &str) -> anyhow::Error {
     )
 }
 
-fn path_launch_for(
-    os: &str,
-    path: &Path,
-    action: PathAction,
-    resolve: impl FnOnce(&str) -> Result<String, String>,
-) -> Result<Command, String> {
-    let mut command = match os {
-        "macos" => {
-            let mut command = Command::new("/usr/bin/open");
-            match action {
-                PathAction::Open => {}
-                PathAction::Select => {
-                    command.arg("-R");
-                }
-                // Without -a, open hands a folder to the application that claims it.
-                PathAction::ShowFolder => {
-                    command.args(["-a", "Finder"]);
-                }
-            }
-            command.arg("--");
-            command.arg(path);
-            command
-        }
-        "linux" if action != PathAction::Open => {
-            let mut command = Command::new(resolve("gdbus")?);
-            command.args([
-                "call",
-                "--session",
-                "--dest",
-                "org.freedesktop.FileManager1",
-                "--object-path",
-                "/org/freedesktop/FileManager1",
-                "--method",
-            ]);
-            command.arg(if action == PathAction::ShowFolder {
-                "org.freedesktop.FileManager1.ShowFolders"
-            } else {
-                "org.freedesktop.FileManager1.ShowItems"
-            });
-            command.arg(format!("['{}']", file_uri(path)));
-            command.arg("");
-            command
-        }
-        "linux" => {
-            let mut command = Command::new(resolve("xdg-open")?);
-            command.arg(path);
-            command
-        }
-        _ => return Err("this operating system has no supported system file manager".to_string()),
-    };
-    command.stdin(std::process::Stdio::null());
-    Ok(command)
-}
-
-fn file_uri(path: &Path) -> String {
-    use std::os::unix::ffi::OsStrExt;
-    let mut uri = String::from("file://");
-    for &byte in path.as_os_str().as_bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.' | b'~') {
-            uri.push(byte as char);
-        } else {
-            uri.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    uri
-}
-
 fn unavailable(detail: &str) -> anyhow::Error {
     CodedError::raised(
         error_code::DIRECTORY_UNAVAILABLE,
@@ -235,27 +162,9 @@ fn validate_directory(directory: &Path) -> Result<(), String> {
     crate::hostfs::require_directory(directory).map_err(|err| err.to_string())
 }
 
-fn launch_for(
-    os: &str,
-    directory: &Path,
-    resolve: impl FnOnce() -> Result<String, String>,
-) -> Result<Command, String> {
-    let mut command = match os {
-        "macos" => {
-            let mut command = Command::new("/usr/bin/open");
-            command.arg("--");
-            command
-        }
-        "linux" => Command::new(resolve()?),
-        _ => return Err("this operating system has no supported system file manager".to_string()),
-    };
-    // Stored project paths are absolute, so xdg-open cannot interpret one as an option or URL.
-    command.arg(directory);
-    Ok(command)
-}
-
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::time::Duration;
 
     use super::*;
@@ -304,13 +213,13 @@ mod tests {
 
         let mut cut = vec![b'a'; TEXT_SNIFF_BYTES - 1];
         cut.extend_from_slice("é".as_bytes());
-        let fifo = dir.join("fifo");
-        let c_fifo = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
-        assert_eq!(unsafe { libc::mkfifo(c_fifo.as_ptr(), 0o600) }, 0);
+        #[cfg(unix)]
+        crate::test_support::mkfifo(&dir.join("fifo"));
         for (name, bytes, text) in [
             ("cut", Some(cut), true),
             ("nul", Some(b"a\0b".to_vec()), false),
             ("latin1", Some(b"caf\xe9 ok".to_vec()), false),
+            #[cfg(unix)]
             ("fifo", None, false),
             ("missing", None, false),
         ] {
@@ -325,58 +234,6 @@ mod tests {
     }
 
     #[test]
-    fn path_actions_keep_paths_literal_per_action() {
-        let path = Path::new("/work/a '$(file)%é");
-        for action in [PathAction::Open, PathAction::Select, PathAction::ShowFolder] {
-            let command = path_launch_for("macos", path, action, |_| panic!("no lookup")).unwrap();
-            assert_eq!(command.get_program(), "/usr/bin/open");
-            let expected = match action {
-                PathAction::Open => vec![std::ffi::OsStr::new("--"), path.as_os_str()],
-                PathAction::Select => vec![
-                    std::ffi::OsStr::new("-R"),
-                    std::ffi::OsStr::new("--"),
-                    path.as_os_str(),
-                ],
-                PathAction::ShowFolder => vec![
-                    std::ffi::OsStr::new("-a"),
-                    std::ffi::OsStr::new("Finder"),
-                    std::ffi::OsStr::new("--"),
-                    path.as_os_str(),
-                ],
-            };
-            assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
-        }
-        for (action, method) in [
-            (PathAction::Select, "org.freedesktop.FileManager1.ShowItems"),
-            (
-                PathAction::ShowFolder,
-                "org.freedesktop.FileManager1.ShowFolders",
-            ),
-        ] {
-            let command = path_launch_for("linux", path, action, |binary| {
-                assert_eq!(binary, "gdbus");
-                Ok("/usr/bin/gdbus".into())
-            })
-            .unwrap();
-            let args = command.get_args().collect::<Vec<_>>();
-            assert_eq!(args[7], method);
-            assert_eq!(args[8], "['file:///work/a%20%27%24%28file%29%25%C3%A9']");
-            assert_eq!(args[9], "");
-        }
-        let command = path_launch_for("linux", path, PathAction::Open, |binary| {
-            assert_eq!(binary, "xdg-open");
-            Ok("/usr/bin/xdg-open".into())
-        })
-        .unwrap();
-        assert_eq!(command.get_args().collect::<Vec<_>>(), [path.as_os_str()]);
-        for action in [PathAction::Select, PathAction::ShowFolder] {
-            assert!(
-                path_launch_for("linux", path, action, |_| Err("missing gdbus".into())).is_err()
-            );
-        }
-    }
-
-    #[test]
     fn revealing_shows_a_folder_but_selects_files_and_links() {
         let dir = ScratchDir::new("reveal-kind");
         let folder = dir.join("folder");
@@ -384,7 +241,7 @@ mod tests {
         std::fs::create_dir(&folder).unwrap();
         std::fs::write(&file, "content").unwrap();
         let to_folder = dir.join("to-folder");
-        std::os::unix::fs::symlink(&folder, &to_folder).unwrap();
+        crate::test_support::symlink(&folder, &to_folder).unwrap();
         for os in ["linux", "macos"] {
             assert!(shows_as_folder(os, &folder), "{os}");
             assert!(!shows_as_folder(os, &file), "{os}");
@@ -423,37 +280,6 @@ mod tests {
     }
 
     #[test]
-    fn macos_uses_open_without_resolving_a_shell_and_keeps_the_path_as_one_argument() {
-        let command = launch_for("macos", Path::new("/work/project '$(name)"), || {
-            panic!("macOS does not resolve xdg-open")
-        })
-        .unwrap();
-        assert_eq!(command.get_program(), "/usr/bin/open");
-        assert_eq!(
-            command.get_args().collect::<Vec<_>>(),
-            ["--", "/work/project '$(name)"]
-        );
-    }
-
-    #[test]
-    fn linux_uses_the_resolved_launcher_and_reports_lookup_failures() {
-        let command = launch_for("linux", Path::new("/work/app"), || {
-            Ok("/custom/bin/xdg-open".to_string())
-        })
-        .unwrap();
-        assert_eq!(command.get_program(), "/custom/bin/xdg-open");
-        assert_eq!(command.get_args().collect::<Vec<_>>(), ["/work/app"]);
-        for detail in ["xdg-open was not found", "the login shell did not finish"] {
-            assert_eq!(
-                launch_for("linux", Path::new("/work/app"), || Err(detail.to_string()))
-                    .unwrap_err(),
-                detail
-            );
-        }
-        assert!(launch_for("windows", Path::new("/work/app"), || panic!("no lookup")).is_err());
-    }
-
-    #[test]
     fn missing_non_directory_and_relative_paths_are_refused_before_launch() {
         let dir = ScratchDir::new("open-directory");
         let file = dir.join("file");
@@ -470,11 +296,22 @@ mod tests {
 
     #[test]
     fn launcher_failures_include_the_process_diagnostic() {
-        let mut command = Command::new("/bin/sh");
-        command.args(["-c", "printf 'no desktop session' >&2; exit 1"]);
+        #[cfg(unix)]
+        let command = {
+            let mut command = Command::new("/bin/sh");
+            command.args(["-c", "printf 'no desktop session' >&2; exit 1"]);
+            command
+        };
+        #[cfg(windows)]
+        let command = {
+            let mut command = Command::new("cmd");
+            command.args(["/d", "/c", "echo no desktop session 1>&2 & exit /b 1"]);
+            command
+        };
         assert_eq!(start(false, command).unwrap_err(), "no desktop session");
     }
 
+    #[cfg(unix)]
     #[test]
     fn linux_acknowledges_a_detached_running_launcher_and_reaps_it_after_exit() {
         use crate::test_support::{assert_gone_by, read_pid_file, PATIENCE};

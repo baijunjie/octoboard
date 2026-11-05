@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { gitChecked, runResult } from "../../../scripts/lib/git.mjs";
 import { parseOptions, releaseDesktop, versionFiles } from "./release-desktop.mjs";
+import { readTagMessage } from "./release-manifest.mjs";
 
 import { assertRepositoryEnvironmentCleared } from "../../../scripts/verify/environment.mjs";
 
@@ -74,9 +75,10 @@ test("requires one explicit version and one nonempty source of release notes", (
   const { root } = fixture(t);
   writeFileSync(path.join(root, "notes.md"), "## Changes\n\nA fix.\n");
   assert.deepEqual(parseOptions(["0.1.0-beta.2", "--notes-file", "notes.md", "--dry-run"], root), {
-    version: "0.1.0-beta.2", notes: "## Changes\n\nA fix.", dryRun: true,
+    version: "0.1.0-beta.2", notes: "## Changes\n\nA fix.", platforms: ["macos", "windows"], dryRun: true,
   });
-  for (const args of [[], ["0.1.0"], ["0.1.0", "--notes", ""], ["0.1.0", "--notes", "a", "--notes-file", "notes.md"], ["0.1.0", "0.2.0", "--notes", "a"]]) {
+  assert.deepEqual(parseOptions(["0.1.0", "--notes", "a", "--platforms", "windows"], root).platforms, ["windows"]);
+  for (const args of [[], ["0.1.0"], ["0.1.0", "--notes", ""], ["0.1.0", "--notes", "a", "--notes-file", "notes.md"], ["0.1.0", "0.2.0", "--notes", "a"], ["0.1.0", "--notes", "a", "--platforms", "linux"]]) {
     assert.throws(() => parseOptions(args, root));
   }
 });
@@ -113,6 +115,14 @@ test("publishes one version commit and an annotated tag atomically, keeping hook
   const tagging = calls.findIndex(({ name, args }) => name === "git" && args[0] === "tag");
   assert.ok(releaseCheck < pushCheck && pushCheck < tagging);
   assert.ok(calls.every(({ args }) => !args.includes("--no-verify") && !args.includes("--force")));
+});
+
+test("a version for one platform ends its tag message with the platforms line, which reads back", (t) => {
+  const { git, options } = fixture(t);
+  releaseDesktop({ ...options, platforms: ["macos"] });
+  const message = git("tag", "-l", "--format=%(contents)", "desktop-v0.1.0-beta.2");
+  assert.equal(message, `${options.notes.trim()}\n\nPlatforms: macos`);
+  assert.deepEqual(readTagMessage(message), { notes: options.notes.trim(), platforms: ["macos"] });
 });
 
 test("dirty worktrees and existing local or remote tags are refused without creating a branch", (t) => {

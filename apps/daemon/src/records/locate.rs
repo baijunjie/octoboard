@@ -14,7 +14,7 @@ use serde_json::Value;
 use std::time::SystemTime;
 
 use crate::adapter::provider;
-use crate::hostfs::lexically_normalise;
+use crate::hostfs::{lexical_key, lexically_normalise, lexically_within};
 use crate::protocol::{Account, AgentId, Session};
 use crate::providers::layout::layout;
 use crate::records::RecordStore;
@@ -275,7 +275,10 @@ pub(super) fn account_roots(
         let root = lexically_normalise(&root);
         if !root.is_absolute() {
             complete = false;
-        } else if !roots.contains(&root) {
+        } else if !roots
+            .iter()
+            .any(|known| lexical_key(known) == lexical_key(&root))
+        {
             roots.push(root);
         }
     }
@@ -328,7 +331,7 @@ pub fn record_paths(
         let home = roots
             .iter()
             .map(|root| records_dir(agent, root))
-            .find(|dir| hint.starts_with(dir));
+            .find(|dir| lexically_within(&hint, dir));
         if let (true, Some(dir)) = (hint.is_absolute(), home) {
             records.push((dir, hint));
         }
@@ -785,7 +788,7 @@ mod tests {
         .is_empty());
         // A project directory that is a link is not followed.
         let linked = account.join("projects").join("linked");
-        std::os::unix::fs::symlink(&victim, &linked).unwrap();
+        crate::test_support::symlink(&victim, &linked).unwrap();
         watch.hints.lock().unwrap().insert(
             "s".to_owned(),
             (

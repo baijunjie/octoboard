@@ -892,6 +892,15 @@ h3 {
   font-size: 15px;
   line-height: 1.85;
 }
+.platform-note {
+  max-width: 72ch;
+  margin: 32px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.85;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
 .platform-list {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

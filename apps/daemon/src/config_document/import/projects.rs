@@ -14,6 +14,7 @@ use crate::blocking_pass::each_blocking;
 use crate::coordinator;
 use crate::coordinator::projects::{AddProjectRequest, NewProjectSettings};
 use crate::hostfs;
+use crate::platform::names;
 use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, CodedError, DirectoryChoice, DirectoryOffers, DocumentProject, ImportStatus,
@@ -29,12 +30,21 @@ pub(super) fn exported_directory(recorded: &str) -> Option<PathBuf> {
         .then(|| hostfs::lexically_normalise(path))
 }
 
+/// Whether the recorded path is absolute in the other host family's style, the way a document
+/// exported on another operating system records one. It names nothing on this machine, so it
+/// derives no directory at all. Surrounding whitespace is ignored, as it is for the account and
+/// clone directories.
+pub(super) fn is_foreign(recorded: &str) -> bool {
+    names::is_foreign_absolute(recorded.trim())
+}
+
 /// The recorded path's last segment under `clone_dir`. A document exported without paths records
 /// only a directory's name, which is that segment as it stands. `None` when the path has no last
-/// segment (the filesystem root, `.`, `..`, empty), and so never a path outside `clone_dir`.
+/// segment (the filesystem root, `.`, `..`, empty), and so never a path outside `clone_dir`; and
+/// `None` for a path written on another operating system (see [`is_foreign`]).
 pub(super) fn derived_directory(clone_dir: &str, recorded: &str) -> Option<PathBuf> {
     let clone_dir = Path::new(clone_dir);
-    if !clone_dir.is_absolute() {
+    if !clone_dir.is_absolute() || is_foreign(recorded) {
         return None;
     }
     let name = match exported_directory(recorded) {

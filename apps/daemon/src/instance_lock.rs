@@ -6,9 +6,10 @@
 //! legible failure; the application surfaces the message below.
 
 use std::fs::File;
-use std::os::unix::io::AsRawFd;
 
 use anyhow::{bail, Context, Result};
+
+use crate::platform::fs::Busy;
 
 /// Holds the lock for as long as it is alive. The lock is released by the OS when the process
 /// exits, so a crashed daemon leaves no stale lock behind.
@@ -19,19 +20,19 @@ pub struct InstanceLock {
 pub fn acquire() -> Result<InstanceLock> {
     let dir = crate::paths::data_dir();
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    let path = dir.join("daemon.lock");
-    let file = File::create(&path).with_context(|| format!("opening {}", path.display()))?;
-
-    // SAFETY: the descriptor belongs to `file`, which outlives this call.
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-        let err = std::io::Error::last_os_error();
-        if err.raw_os_error() == Some(libc::EWOULDBLOCK) {
-            bail!(
-                "another octoboardd is already running against {}",
-                dir.display()
-            );
-        }
-        return Err(err).with_context(|| format!("locking {}", path.display()));
+    // The files written below hold keys and session data; where the host makes them private
+    // through the directory, an unprivate one is still written, so the daemon runs on.
+    if let Err(err) = crate::platform::fs::keep_private_below(&dir) {
+        tracing::warn!(path = %dir.display(), %err, "making the data directory private failed");
     }
-    Ok(InstanceLock { _file: file })
+    let path = dir.join("daemon.lock");
+    match crate::platform::fs::try_lock_file(&path) {
+        Ok(file) => Ok(InstanceLock { _file: file }),
+        Err(Busy::Held) => bail!(
+            "another octoboardd is already running against {}",
+            dir.display()
+        ),
+        Err(Busy::Open(err)) => Err(err).with_context(|| format!("opening {}", path.display())),
+        Err(Busy::Lock(err)) => Err(err).with_context(|| format!("locking {}", path.display())),
+    }
 }

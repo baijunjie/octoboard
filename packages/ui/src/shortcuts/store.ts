@@ -1,8 +1,9 @@
 import { useState } from "react";
 
+import { readHost } from "../platform/host";
 import { createPersistedPreference } from "../preferences/persistedPreference";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
-import { bindingsEqual, matches, parseBinding, type Binding } from "./binding";
+import { bindingsEqual, matches, parseBinding, sameKeys, type Binding, type ModifierHost } from "./binding";
 import { defaultBinding, isCommandId, REBINDABLE_COMMANDS, type CommandId } from "./commands";
 import { validateBinding, type ShortcutProblem } from "./validate";
 
@@ -21,8 +22,15 @@ export function effectiveBindings(overrides: Overrides): Record<CommandId, Bindi
  * whatever order it is written in. Two entries that claim one combination leave the earlier one in
  * the value's own order. `skipped` counts the entries dropped for any reason but being the default
  * already.
+ *
+ * The value may come from another platform, in a configuration document: each entry is judged as
+ * the keys it is on `host` (`onHost`), its `primary` and `other` the modifiers `host` has under those
+ * names. An entry those keys cannot be here, or that would take
+ * another command's keys here, is dropped and its command keeps this host's default; an entry kept
+ * is kept as it is written, never rewritten into another combination, so it means the same again
+ * when carried back.
  */
-export function sanitizeOverrides(value: unknown): { overrides: Overrides; skipped: number } {
+export function sanitizeOverrides(value: unknown, host: ModifierHost): { overrides: Overrides; skipped: number } {
   const overrides: Overrides = {};
   let skipped = 0;
   if (typeof value !== "object" || value === null || Array.isArray(value)) return { overrides, skipped };
@@ -31,14 +39,14 @@ export function sanitizeOverrides(value: unknown): { overrides: Overrides; skipp
   for (const id of Object.keys(record)) {
     const binding = parseBinding(record[id]);
     if (!isCommandId(id) || !binding) skipped++;
-    else if (!bindingsEqual(binding, defaultBinding(id))) candidates.push([id, binding]);
+    else if (!sameKeys(binding, defaultBinding(id), host)) candidates.push([id, binding]);
   }
   // Dropping an entry gives its command its default back, which can clash with another entry, so
   // the set is judged again after each drop until none is left to drop.
   for (;;) {
     const effective = effectiveBindings(Object.fromEntries(candidates));
     const drop = candidates.findIndex(([id, binding], index) => {
-      const problem = validateBinding(id, binding, effective);
+      const problem = validateBinding(id, binding, effective, host);
       if (!problem) return false;
       if (problem.reason !== "conflict" || !isCommandId(problem.with)) return true;
       const holder = candidates.findIndex(([other]) => other === problem.with);
@@ -51,13 +59,14 @@ export function sanitizeOverrides(value: unknown): { overrides: Overrides; skipp
   return { overrides: Object.fromEntries(candidates), skipped };
 }
 
-/** The user's shortcut overrides, kept in this client's `localStorage`. */
+/** The user's shortcut overrides, kept in this client's `localStorage`. They are read when the module loads, before
+ * any adapter exists, so they are judged against `readHost()`. */
 export const shortcutOverrides = createPersistedPreference<Overrides>(
   PREFERENCE_KEYS.keyboardShortcuts,
   (raw) => {
     if (raw === null) return {};
     try {
-      return sanitizeOverrides(JSON.parse(raw)).overrides;
+      return sanitizeOverrides(JSON.parse(raw), readHost()).overrides;
     } catch {
       return {};
     }
@@ -88,8 +97,8 @@ export function useBindings(): Record<CommandId, Binding> {
 }
 
 /** Whether `event` is the command's key combination as it is bound now. */
-export function matchesCommand(id: CommandId, event: KeyboardEvent): boolean {
-  return matches(bindingFor(id), event);
+export function matchesCommand(id: CommandId, event: KeyboardEvent, host: ModifierHost): boolean {
+  return matches(bindingFor(id), event, host);
 }
 
 function removeOverride(id: CommandId): void {
@@ -98,8 +107,8 @@ function removeOverride(id: CommandId): void {
 }
 
 /** Puts the command's default binding back and returns `undefined`, or returns why it cannot be (another command has taken that combination) and changes nothing. */
-export function restoreBinding(id: CommandId): ShortcutProblem | undefined {
-  const problem = validateBinding(id, defaultBinding(id), effectiveBindings(shortcutOverrides.get()));
+export function restoreBinding(id: CommandId, host: ModifierHost): ShortcutProblem | undefined {
+  const problem = validateBinding(id, defaultBinding(id), effectiveBindings(shortcutOverrides.get()), host);
   if (problem) return problem;
   removeOverride(id);
   return undefined;
@@ -110,17 +119,17 @@ export function restoreAllBindings(): void {
 }
 
 /** Binds `id` to `binding` and returns `undefined`, or returns why it cannot be and changes nothing. */
-export function setBinding(id: CommandId, binding: Binding): ShortcutProblem | undefined {
-  const problem = validateBinding(id, binding, effectiveBindings(shortcutOverrides.get()));
+export function setBinding(id: CommandId, binding: Binding, host: ModifierHost): ShortcutProblem | undefined {
+  const problem = validateBinding(id, binding, effectiveBindings(shortcutOverrides.get()), host);
   if (problem) return problem;
-  if (bindingsEqual(binding, defaultBinding(id))) removeOverride(id);
+  if (sameKeys(binding, defaultBinding(id), host)) removeOverride(id);
   else shortcutOverrides.set({ ...shortcutOverrides.get(), [id]: binding });
   return undefined;
 }
 
 /** Replaces every override with those the imported `value` holds; says how many stood, how many entries could not, and which overrides were set. */
-export function replaceOverrides(value: unknown): { applied: number; skipped: number; overrides: Overrides } {
-  const { overrides, skipped } = sanitizeOverrides(value);
+export function replaceOverrides(value: unknown, host: ModifierHost): { applied: number; skipped: number; overrides: Overrides } {
+  const { overrides, skipped } = sanitizeOverrides(value, host);
   shortcutOverrides.set(overrides);
   return { applied: Object.keys(overrides).length, skipped, overrides };
 }

@@ -7,15 +7,19 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnounce
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
-import { eventKey, type Binding } from "../shortcuts/binding";
-import { bindingFor, restoreAllBindings, setBinding } from "../shortcuts/store";
+import { eventKey as eventKeyFor, type Binding } from "../shortcuts/binding";
+import { bindingFor, restoreAllBindings, setBinding as setBindingFor } from "../shortcuts/store";
 import { ShortcutsSection } from "./ShortcutsSection";
+import { BROWSER_HOST, WINDOWS_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const APP: PlatformAdapter = { kind: "tauri", windowChrome: { leftInset: () => 0, subscribe: () => () => {} }, appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} } };
+const eventKey = (binding: Binding) => eventKeyFor(binding, BROWSER_HOST);
+const setBinding = (id: Parameters<typeof setBindingFor>[0], binding: Binding) => setBindingFor(id, binding, BROWSER_HOST);
 
-function mount(platform: PlatformAdapter = { kind: "browser" }) {
+const APP: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, windowChrome: { leftInset: () => 0, subscribe: () => () => {} }, appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} } };
+
+function mount(platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }) {
   return mountHost(<LanguageProvider><ShortcutsSection /></LanguageProvider>, { platform });
 }
 
@@ -39,7 +43,7 @@ it("lists only the commands this client has, and says the fixed ones cannot be c
   for (const retired of ["Lock or unlock the session", "Pin or unpin the session", "Archive the session", "Copy session ID"]) expect(text(browser)).not.toContain(retired);
   expect(text(browser)).toContain("Next region of the window");
   expect(text(browser)).not.toContain("Back");
-  expect(text(browser)).not.toContain("Open settings");
+  expect(text(browser)).toContain("Open settings");
   expect(text(browser)).not.toContain("Undo");
   expect(button(browser, "Change the shortcut for Toggle focus mode")).not.toBeNull();
   expect(button(browser, "Change the shortcut for Next region of the window")).toBeNull();
@@ -55,6 +59,20 @@ it("lists the desktop app's own commands and the native menu's fixed keys there"
   expect(text(app)).toContain("Next console session");
   expect(text(app)).toContain("Undo");
   expect(text(app)).toContain("Fixed");
+});
+
+it("lists Open settings, which the page handles itself, and the console-session switch in the Windows app, but not the native menu's fixed keys", () => {
+  const windows = mount({ kind: "tauri", host: WINDOWS_HOST });
+  expect(text(windows)).toContain("Open settings");
+  expect(button(windows, "Change the shortcut for Open settings")).not.toBeNull();
+  expect(text(windows)).not.toContain("Undo");
+  expect(text(windows)).not.toContain("Back");
+  // Ctrl+Tab and Ctrl+Shift+Tab, as Windows writes them: never the Windows key, whose Tab is the system's Task View.
+  expect(windows.querySelector('[aria-label="Ctrl+Tab"]')).not.toBeNull();
+  expect(windows.querySelector('[aria-label="Ctrl+Shift+Tab"]')).not.toBeNull();
+  act(() => button(windows, "Change the shortcut for Toggle focus mode")!.click());
+  press({ code: "Tab", primary: true }, { key: "Tab" });
+  expect(windows.querySelector(".text-danger")?.textContent).toBe("Already used for Next console session.");
 });
 
 it("records the next combination, saves it at once and offers Reset", () => {
@@ -198,7 +216,10 @@ const refusals: [string, Binding, string][] = [
   ["Escape, F6 and the context-menu key", { code: "Escape", primary: true }, "Escape, F6 and the context-menu key keep their own meaning."],
   ["the caret and editing keys", { code: "ArrowLeft", primary: true }, "With Ctrl, the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used."],
   ["a key the system keeps", { code: "KeyK", other: true }, "The system keeps this combination for itself."],
-  ["Tab with the primary modifier", { code: "Tab", primary: true }, "The system keeps this combination for itself."],
+  ["Tab with Ctrl and Alt", { code: "Tab", primary: true, alt: true }, "The system keeps this combination for itself."],
+  ["Tab with the other modifier", { code: "Tab", other: true }, "The system keeps this combination for itself."],
+  // The switch is the desktop app's, so a browser does not list it, but its Ctrl+Tab is still not another command's.
+  ["Ctrl+Tab", { code: "Tab", primary: true }, "Already used for Next console session in the desktop app."],
   ["Ctrl+C", { code: "KeyC", primary: true }, "Ctrl+C interrupts the program in the terminal, so it cannot be used."],
 ];
 

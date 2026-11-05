@@ -71,9 +71,17 @@ fn main() {
     );
 
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");
-    // Where the update manifests are published (`src/updater.rs`).
+    // Where the update manifests are published (`src/updater/`).
     println!("cargo:rustc-env=OCTOBOARD_REPOSITORY_URL={repository_url}");
-    // Cargo-only checks need the same generated resources as the Tauri CLI's before-build hook.
+    // The generated resources are macOS bundle resources (`tauri.macos.conf.json`); Cargo-only checks
+    // there need them as much as the Tauri CLI's before-build hook does, and other targets do not list them.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        generate_native_localizations();
+    }
+    tauri_build::build()
+}
+
+fn generate_native_localizations() {
     for input in [
         "../scripts/native-localizations.mjs",
         "localizations/en.json",
@@ -87,5 +95,4 @@ fn main() {
         .status()
         .expect("generate native localizations: Node.js is required");
     assert!(generated.success(), "generate native localizations");
-    tauri_build::build()
 }

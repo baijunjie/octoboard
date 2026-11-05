@@ -6,6 +6,7 @@ use super::*;
 use crate::messaging::delivery::{self, Delivery, WhenBlocked};
 use crate::protocol::{AgentId, CodedError, Session, SessionStatus};
 use crate::session::input_box::captures::*;
+use crate::session::input_box::input_box;
 use crate::state::AppState;
 use crate::test_support::{
     app_state, console, console_session, fake_live_session, watched_live_session, ScratchDir,
@@ -21,6 +22,11 @@ fn running_title(agent: AgentId) -> &'static [u8] {
         other => panic!("no fixture for {other}"),
     }
 }
+
+/// The bytes the interrupt's keys reach the stand-in as.
+const ESC: &[u8] = b"\x1b";
+const CTRL_U: &[u8] = b"\x15";
+const CTRL_C: &[u8] = b"\x03";
 
 const CLAUDE_AT_PROMPT_TITLE: &[u8] = "\x1b]0;\u{2733} Claude Code\x07".as_bytes();
 const GROK_AT_PROMPT_TITLE: &[u8] = b"\x1b]0;NOTOKEN wait - grok\x07";

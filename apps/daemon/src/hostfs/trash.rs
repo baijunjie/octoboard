@@ -37,14 +37,7 @@ impl std::error::Error for TrashFailure {}
 /// hardened app does not hold. It costs the Finder's "Put Back" option; the folder is still
 /// recoverable from the Trash.
 pub fn move_to_trash(path: &Path) -> Result<(), TrashFailure> {
-    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
-    let mut context = trash::TrashContext::default();
-    #[cfg(target_os = "macos")]
-    {
-        use trash::macos::{DeleteMethod, TrashContextExtMacos};
-        context.set_delete_method(DeleteMethod::NsFileManager);
-    }
-    context
+    crate::platform::fs::trash_context()
         .delete(path)
         .map_err(|err| TrashFailure::new(path, err))
 }

@@ -31,8 +31,8 @@ function DisableAccountRow({ agent, account, name }: { agent: Agent; account: st
  * default account): the account's switches as the Settings page's rows are. The title is plain ("Account settings");
  * the body's first line names the account, with its email under it, so it is clear which one the switches are for.
  * Then, for an account the user owns whose provider can share the default configuration (`config_sharing`), the
- * Share default configuration switch with the lock reason, the progress and the
- * unfinished-change warning it carries, and last the Disable account switch, whose description follows the switch (off
+ * Share default configuration switch with the lock reason (the daemon's host unable to make file links among them), the
+ * progress and the unfinished-change warning it carries, and last the Disable account switch, whose description follows the switch (off
  * or on). What the account is, its quota and where its configuration lives are in `AccountDetailsDialog`. It has no
  * footer: the header's close button, Escape and a click outside close it. It reads the account from the store as it is
  * now, so a change from another window shows, and closes if the account is removed. `focusSharing` puts focus on the

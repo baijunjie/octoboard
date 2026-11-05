@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use anyhow::bail;
 
-use crate::adapter::{account_cli, provider};
+use crate::adapter::account_cli::{self, NotRun};
+use crate::adapter::provider;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{AgentId, CodedError, ProviderOperation};
 
@@ -62,8 +63,13 @@ pub(super) fn kick(
             .and_then(|ops| ops.kick_command()),
     )?;
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let mut run = account_cli::admitted_command(agent, shell_env, config_dir, &args)
-        .map_err(|refused| anyhow::anyhow!(refused.detail()))?;
+    let mut run =
+        account_cli::admitted_command(agent, shell_env, config_dir, &args).map_err(|refused| {
+            match refused {
+                NotRun::BinaryRefused(refusal) => anyhow::Error::new(refusal),
+                other => anyhow::anyhow!(other.detail()),
+            }
+        })?;
     run.command.envs(env);
     let output = run
         .run(timeout, OUTPUT_LIMIT, Some(cancel))

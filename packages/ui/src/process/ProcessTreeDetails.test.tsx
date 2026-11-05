@@ -11,7 +11,7 @@ import { ProcessCommand, ProcessTreeDetails } from "./ProcessTreeDetails";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const tree = (extra: Partial<ProcessTree> = {}): ProcessTree => ({
-  id: "1:1", command: "npm run dev", cwd: "/work/search", cwd_missing: false, kept: false, started_at: 0, process_count: 1, memory_bytes: 1_000_000, ports: [], ...extra,
+  id: "1:1", command: "npm run dev", cwd: "/work/search", cwd_missing: false, kept: false, keepable: true, started_at: 0, process_count: 1, memory_bytes: 1_000_000, ports: [], ...extra,
 });
 
 async function render(element: React.ReactElement): Promise<HTMLElement> {

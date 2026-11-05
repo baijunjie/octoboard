@@ -60,7 +60,6 @@ mod target;
 mod tests;
 pub mod transfer;
 
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -68,6 +67,7 @@ use serde::{Deserialize, Serialize};
 use crate::browse::budget;
 use crate::git::reflog::{self, Creation};
 use crate::git::repo_files::{common_dir_of, repository_of, uses_reftable};
+use crate::platform::names;
 use crate::state::AppState;
 use crate::store::BranchOrigin;
 use crate::wire_path;
@@ -116,11 +116,11 @@ pub struct CreatedRef {
 /// and the `GIT_DIR` it set (wire paths): the one `GIT_DIR` names when git set it, else the one
 /// holding the directory.
 pub(crate) fn reported_repository(cwd: &str, git_dir: Option<&str>) -> Option<PathBuf> {
-    let cwd = PathBuf::from(std::ffi::OsStr::from_bytes(&wire_path::decode(cwd)?));
+    let cwd = names::path_from_name_bytes(&wire_path::decode(cwd)?)?;
     let Some(git_dir) = git_dir else {
         return repository_of(&cwd);
     };
-    let git_dir = cwd.join(std::ffi::OsStr::from_bytes(&wire_path::decode(git_dir)?));
+    let git_dir = cwd.join(names::path_from_name_bytes(&wire_path::decode(git_dir)?)?);
     common_dir_of(&git_dir)
 }
 
@@ -181,5 +181,5 @@ fn recorded_title(title: &str) -> String {
 
 /// The key a repository's rows are stored under: its canonical common directory, as a wire path.
 pub(crate) fn repo_key(repo: &Path) -> String {
-    wire_path::encode(repo.as_os_str().as_bytes())
+    wire_path::encode(&names::name_bytes(repo.as_os_str()))
 }

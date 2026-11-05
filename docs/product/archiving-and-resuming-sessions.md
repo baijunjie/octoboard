@@ -33,8 +33,8 @@ divider:
 - **Worktrees and branches**, the choices of taking along what git refuses to remove and locked worktrees, with the
   lines saying what a ticked choice does right under them (see "The confirmation" in
   `docs/product/branch-and-worktree-cleanup.md`);
-- **Background processes**, the processes the archive stops, with the choice of keeping any of them running (see
-  "Processes in an archive confirmation" in `docs/product/background-processes.md`).
+- **Background processes**, the processes the archive stops, with the choice of keeping those that can be kept
+  running (see "Processes in an archive confirmation" in `docs/product/background-processes.md`).
 
 A session that has never been used offers **Delete** in the confirmation instead, unless it is still starting (see
 "Deleting an unused session" in `docs/product/deleting-sessions.md`). An archive confirmed there that fails is reported

@@ -8,6 +8,8 @@
     "lint": "eslint . --cache --cache-strategy content --cache-location node_modules/.cache/eslint/ --max-warnings 0",
     "format": "eslint . --fix --fix-type layout && cargo fmt --all",
     "format:staged": "node scripts/hooks/format-staged.mjs",
+    "check:windows": "node scripts/cargo.mjs check-windows",
+    "fetch:conpty": "node scripts/fetch-conpty.mjs",
     "clippy:rust": "node scripts/cargo.mjs clippy",
     "test:rust": "node scripts/cargo.mjs test",
     "identity:sync": "node scripts/sync-identity.mjs",

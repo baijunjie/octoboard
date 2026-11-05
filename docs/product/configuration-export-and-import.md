@@ -245,6 +245,17 @@ offered the recorded path, since a name is not an absolute path, so it can be of
 default clone directory and a fresh clone; an empty name derives no directory, which leaves only the clone. A project
 with nothing offered is left out of the import unless the user points at a directory for it.
 
+**A path written on another operating system.** A document records each project's path as the exporting machine wrote
+it. A path that is absolute in the other operating system's style — a Windows path such as `C:\work\app`,
+`C:/work/app`, `\\server\share\app` or `\\?\C:\app` read on macOS or Linux, or a path starting with `/` read on
+Windows (where `//server/share` is Windows' own form) — names nothing on the daemon's host, so no directory is offered
+from it: neither the recorded path nor a directory derived from it, under this machine's default clone directory or
+the document's. The inspection marks such a project (`foreign_path`), and asking for its
+recorded path or its derived directory anyway is refused for that project as unavailable
+(`import_choice_unavailable`). A fresh clone stays offered under the usual rule, and the user can still point at a
+directory for the project. A project recorded by its directory name alone, and a path in this host's own style, are
+read as above.
+
 A directory the user points at has to be absolute, or to start with `~/`, which is expanded to the home directory of
 the host the daemon runs on.
 
@@ -290,9 +301,12 @@ what importing it would come to:
 
 A directory is resolved on the daemon's host: `~` and a path starting with `~/` under its home directory, an absolute
 path as it is; a bare name is not a directory. A directory that does not exist yet is fine, as it is for the Add account
-form. Any account but an existing one can be left out. An account whose directory is in use or cannot be used can be
-given **another directory** instead, absolute or starting with `~/`; one whose name is the problem can only be left
-out, since no directory would help.
+form. A directory that is absolute in the other operating system's style (see "A path written on another operating
+system" under "Where an imported project goes" above) names nothing on the daemon's host, so it resolves to nothing and
+the account cannot be created as the document has it, with the form's reason that the directory is not absolute; the
+inspection marks such an account (`foreign_directory`) so the review can say why instead. Any account but an existing
+one can be left out. An account whose directory is in use or cannot be used can be given **another directory** instead,
+absolute or starting with `~/`; one whose name is the problem can only be left out, since no directory would help.
 
 The inspection also says which of the document's added agents this machine has not added (none while this machine's
 list is undecided), and, for each agent, the name the document gives its default account and whether an import would

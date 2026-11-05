@@ -656,10 +656,11 @@ async fn handle_inner(
         }
 
         RequestBody::StopProcesses { ids } => {
-            let ids = processes::stop(state, ids).await?;
+            let stopped = processes::stop(state, ids).await?;
             Ok(Some(Event::ProcessesStopped {
                 id: request_id,
-                ids,
+                ids: stopped.stopped,
+                not_stopped: stopped.not_stopped,
             }))
         }
 

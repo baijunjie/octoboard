@@ -21,16 +21,30 @@ pub(crate) fn isolated_git_env() -> HashMap<String, String> {
 }
 
 /// The `git` a test runs: the system one, already exec'd countless times, so no
-/// fresh-executable cost.
+/// fresh-executable cost. On Windows, Git for Windows where its installer puts it, as on the CI
+/// runners.
+#[cfg(unix)]
 pub(crate) const SYSTEM_GIT: &str = "/usr/bin/git";
+#[cfg(windows)]
+pub(crate) const SYSTEM_GIT: &str = r"C:\Program Files\Git\cmd\git.exe";
+
+/// The `PATH` of [`pinned_shell_env`]: one that holds a git on this host.
+fn pinned_path() -> String {
+    if cfg!(windows) {
+        std::env::var("PATH").unwrap_or_default()
+    } else {
+        "/usr/bin:/bin".to_owned()
+    }
+}
 
 /// A user's shell environment for pinning the command a `git` runner builds: a variable that is
 /// kept, the configuration location the user's own material is named by, a `GIT_*` that would
 /// redirect the command, and the prompt settings the daemon overrides. The values are never run.
 pub(crate) fn pinned_shell_env() -> HashMap<String, String> {
+    let path = pinned_path();
     [
         ("HOME", "/home/u"),
-        ("PATH", "/usr/bin:/bin"),
+        ("PATH", path.as_str()),
         ("GIT_CONFIG_GLOBAL", "/home/u/.gitconfig"),
         ("GIT_CONFIG_NOSYSTEM", "1"),
         ("GIT_DIR", "/elsewhere/.git"),
@@ -78,9 +92,10 @@ impl CommandLine {
         extra: &[(&str, &str)],
         dir: Option<&str>,
     ) -> Self {
+        let path = pinned_path();
         let env: std::collections::BTreeMap<String, Option<String>> = [
             ("HOME", "/home/u"),
-            ("PATH", "/usr/bin:/bin"),
+            ("PATH", path.as_str()),
             ("GIT_CONFIG_GLOBAL", "/home/u/.gitconfig"),
             ("GIT_CONFIG_NOSYSTEM", "1"),
             ("GIT_TERMINAL_PROMPT", "0"),
@@ -149,10 +164,11 @@ pub(crate) fn git_has_show_ref_exists(dir: &Path) -> bool {
 
 /// [`git`] with arguments that need not be UTF-8.
 pub(crate) fn git_bytes(dir: &Path, args: &[&[u8]]) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
-    let args: Vec<&std::ffi::OsStr> = args
+    let args: Vec<std::ffi::OsString> = args
         .iter()
-        .map(|arg| std::ffi::OsStr::from_bytes(arg))
+        .map(|arg| {
+            crate::platform::names::name_from_bytes(arg).expect("an argument this host spells")
+        })
         .collect();
     let output = fixture_git(dir).args(&args).output().expect("git runs");
     assert!(
@@ -189,24 +205,22 @@ pub(crate) fn git_stdin_env(dir: &Path, args: &[&str], env: &[(&str, &str)], inp
 /// `/Users` one, as a bind mount does on Linux.
 pub(crate) fn second_real_path(real: &Path) -> Option<PathBuf> {
     let second = Path::new("/System/Volumes/Data").join(real.strip_prefix("/").ok()?);
-    let identity = |path: &Path| {
-        std::fs::metadata(path)
-            .ok()
-            .map(|metadata| crate::hostfs::identity::raw(&metadata))
-    };
-    let distinct = std::fs::canonicalize(&second).ok()? != std::fs::canonicalize(real).ok()?;
+    let identity =
+        |path: &Path| crate::platform::fs::identity(path, crate::platform::fs::Links::Follow).ok();
+    let distinct =
+        crate::hostfs::canonical(&second).ok()? != crate::hostfs::canonical(real).ok()?;
     (distinct && identity(&second).is_some() && identity(&second) == identity(real))
         .then_some(second)
 }
 
 /// A repository in a scratch directory with one commit holding `files`.
 pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
-    use std::os::unix::ffi::OsStrExt;
-
     let dir = ScratchDir::new(label);
     git(&dir, &["init", "-q"]);
     for (name, body) in files {
-        let path = dir.join(std::ffi::OsStr::from_bytes(name));
+        let path = dir.join(
+            crate::platform::names::path_from_name_bytes(name).expect("a name this host spells"),
+        );
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, body).unwrap();
     }

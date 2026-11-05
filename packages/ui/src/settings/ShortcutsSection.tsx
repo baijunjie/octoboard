@@ -4,13 +4,12 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announ
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import { bindingOf, bindingsEqual, describeBinding, isModifierCode, type Binding } from "../shortcuts/binding";
-import { ALL_COMMANDS, defaultBinding, isAvailable, SHORTCUT_GROUPS, type CommandId, type ShortcutCommand } from "../shortcuts/commands";
+import { bindingOf, describeBinding, isModifierCode, sameKeys, type Binding } from "../shortcuts/binding";
+import { ALL_COMMANDS, clientCapabilities, defaultBinding, isAvailable, SHORTCUT_GROUPS, type CommandId, type ShortcutCommand } from "../shortcuts/commands";
 import { recordKeys } from "../shortcuts/recording";
 import { BindingKbd } from "../shortcuts/ShortcutKbd";
 import { restoreAllBindings, restoreBinding, setBinding, shortcutOverrides, useBindings } from "../shortcuts/store";
 import type { ShortcutProblem } from "../shortcuts/validate";
-import { IS_MAC } from "../input/keys";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
 import { Button } from "../primitives";
@@ -26,7 +25,8 @@ export function ShortcutsSection(): React.ReactElement {
   const t = useT();
   const platform = usePlatform();
   const shortcutScope = useShortcutScopeDescription();
-  const client = { windowChrome: platform.windowChrome !== undefined, nativeMenu: platform.appMenu !== undefined };
+  const { host } = platform;
+  const client = clientCapabilities(platform);
   const bindings = useBindings();
   const customised = Object.keys(shortcutOverrides.useValue()).length > 0;
   const [recording, setRecording] = useState<CommandId>();
@@ -48,7 +48,7 @@ export function ShortcutsSection(): React.ReactElement {
   };
   const name = (id: string) => t(ALL_COMMANDS.find((command) => command.id === id)!.label);
   const problemText = (found: ShortcutProblem) => {
-    const modifier = IS_MAC ? "⌘" : "Ctrl";
+    const modifier = host.modifier === "meta" ? "⌘" : "Ctrl";
     switch (found.reason) {
       case "conflict": {
         const holder = ALL_COMMANDS.find((command) => command.id === found.with)!;
@@ -77,7 +77,7 @@ export function ShortcutsSection(): React.ReactElement {
         return "consumed";
       }
       // Tab moves on as it always does (⌥Tab too, which on macOS is how a button is reached), which
-      // ends the recording; it is not a key to bind. ⌃Tab is: it is the console-session switch's key.
+      // ends the recording; it is not a key to bind. Control with Tab is: it is the console-session switch's key.
       if (event.key === "Tab" && !event.ctrlKey && !event.metaKey) {
         setRecording(undefined);
         setProblem(undefined);
@@ -87,8 +87,8 @@ export function ShortcutsSection(): React.ReactElement {
       if ((event.key === "Enter" || event.key === " ") && plain && !event.shiftKey) return "passed";
       // A modifier on its own is the start of a combination.
       if (isModifierCode(event.code)) return "consumed";
-      const binding = bindingOf(event);
-      const found = setBinding(recording, binding);
+      const binding = bindingOf(event, host);
+      const found = setBinding(recording, binding, host);
       if (found) {
         const text = problemText(found);
         setProblem({ id: recording, text });
@@ -96,11 +96,11 @@ export function ShortcutsSection(): React.ReactElement {
       } else {
         setRecording(undefined);
         setProblem(undefined);
-        speak(t("settings.shortcuts.announce.saved", { command: name(recording), keys: describeBinding(binding, t) }));
+        speak(t("settings.shortcuts.announce.saved", { command: name(recording), keys: describeBinding(binding, t, host) }));
       }
       return "consumed";
     });
-  }, [recording, t]);
+  }, [recording, t, host]);
 
   const startRecording = (id: CommandId) => {
     setProblem(undefined);
@@ -110,7 +110,7 @@ export function ShortcutsSection(): React.ReactElement {
 
   // Puts one command's default back, or says what another command holds of it.
   const reset = (id: CommandId): boolean => {
-    const found = restoreBinding(id);
+    const found = restoreBinding(id, host);
     if (found) {
       const text = problemText(found);
       setProblem({ id, text });
@@ -118,7 +118,7 @@ export function ShortcutsSection(): React.ReactElement {
       return false;
     }
     setProblem(undefined);
-    speak(t("settings.shortcuts.announce.reset", { command: name(id), keys: describeBinding(defaultBinding(id), t) }), true);
+    speak(t("settings.shortcuts.announce.reset", { command: name(id), keys: describeBinding(defaultBinding(id), t, host) }), true);
     return true;
   };
 
@@ -193,11 +193,12 @@ function ShortcutRow({
   onReset: (id: CommandId) => boolean;
 }): React.ReactElement {
   const t = useT();
+  const { host } = usePlatform();
   const problemId = useId();
   const changeRef = useRef<HTMLButtonElement>(null);
   const label = t(command.label);
   const id = command.id as CommandId;
-  const differs = command.rebindable && !bindingsEqual(binding, command.binding);
+  const differs = command.rebindable && !sameKeys(binding, command.binding, host);
   return (
     <SettingRow
       // A step below the group heading above it, so the heading reads as what the rows belong to.

@@ -9,15 +9,20 @@ use super::{
     long_running, ASK_AFTER, ASK_AFTER_OVERRIDE, COUNT_WAIT_OVERRIDE, LIST_FLOOR_OVERRIDE,
 };
 use crate::coordinator::handle;
+use crate::platform::proc::ProcessIdentity;
+use crate::processes::ledger::AGENT_CONSOLE_OVERRIDE;
 use crate::protocol::{
-    error_code, AgentId, Event, ProcessTarget, ProcessTree, RequestBody, SessionStatus,
+    error_code, AgentId, CodedError, Event, ProcessTarget, ProcessTree, RequestBody, SessionStatus,
 };
 use crate::state::AppState;
+#[cfg(windows)]
+use crate::test_support::fixture::Steps;
 use crate::test_support::{
-    assert_stops_running, code_of, console_with_project_and_accounts, detached_in,
-    fake_live_session, is_running, perl_write, project_session, wait_for_pid, KillOnDrop, StandIn,
-    PATIENCE,
+    assert_stops_running, code_of, console_with_project_and_accounts, is_running, kill,
+    project_session, stand_in_starting, wait_for_pid, Background, KillOnDrop, StandIn, PATIENCE,
 };
+#[cfg(unix)]
+use crate::test_support::{detached_sleep_in, perl_write};
 
 /// A stand-in agent for session `id` (with a stored record) that runs, in the background, one
 /// command per file in `pid_files`: a process in a terminal session of its own that writes its pid
@@ -27,21 +32,12 @@ fn agent_with(state: &Arc<AppState>, id: &str, pid_files: &[&Path]) -> (StandIn,
         .store
         .insert_session(&project_session(id, AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
-    let commands: String = pid_files
-        .iter()
-        .map(|file| {
-            format!(
-                "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n",
-                perl_write(file, "$$")
-            )
-        })
-        .collect();
-    let live = fake_live_session(
+    let live = stand_in_starting(
         id,
-        AgentId::CLAUDE,
-        80,
-        24,
-        &format!("{commands}exec sleep 300"),
+        pid_files
+            .iter()
+            .map(|file| Background::sleeper(file))
+            .collect(),
     );
     state.register_live(live.clone());
     let pids = pid_files.iter().map(|file| wait_for_pid(file)).collect();
@@ -82,8 +78,9 @@ fn project_1() -> ProcessTarget {
 }
 
 /// A `sleep` working in `cwd`, which a test then removes, detached as an agent's leftover is.
+#[cfg(unix)]
 fn sleeper_in(cwd: &Path) -> i32 {
-    detached_in(cwd, "/bin/sleep", &["60"], &[])
+    detached_sleep_in(cwd, 60)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -126,6 +123,9 @@ async fn a_session_lists_its_trees_and_a_session_without_a_process_or_a_record_i
 }
 
 #[tokio::test(flavor = "multi_thread")]
+// Unix only: a leftover is a process working in a removed directory, which Windows never lets a
+// process's directory be.
+#[cfg(unix)]
 async fn a_project_lists_its_running_sessions_trees_and_its_leftovers_without_a_session() {
     let (state, dir) = console_with_project_and_accounts("process-requests-project");
     let (_live, pids) = agent_with(&state, "s1", &[&dir.join("one")]);
@@ -165,13 +165,39 @@ async fn a_project_lists_its_running_sessions_trees_and_its_leftovers_without_a_
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stop_ends_the_named_trees_alone_and_names_only_those_it_stopped() {
     let (state, dir) = console_with_project_and_accounts("process-requests-stop");
+    // Besides the session's two trees, one no session owns: a leftover on Unix; on Windows, where
+    // a directory a process works in cannot be removed and nothing is left behind in one, a
+    // third tree of the session that the user keeps.
+    #[cfg(unix)]
     let (_live, pids) = agent_with(&state, "s1", &[&dir.join("one"), &dir.join("two")]);
+    #[cfg(windows)]
+    let (_live, pids) = agent_with(
+        &state,
+        "s1",
+        &[&dir.join("one"), &dir.join("two"), &dir.join("three")],
+    );
     let _guard = KillOnDrop(pids.clone());
-    let gone = dir.join("no-such-project").join("gone");
-    std::fs::create_dir_all(&gone).unwrap();
-    let left = sleeper_in(&gone);
-    let _left = KillOnDrop(vec![left]);
-    std::fs::remove_dir(&gone).unwrap();
+    #[cfg(unix)]
+    let (left, _left) = {
+        let gone = dir.join("no-such-project").join("gone");
+        std::fs::create_dir_all(&gone).unwrap();
+        let left = sleeper_in(&gone);
+        let guard = KillOnDrop(vec![left]);
+        std::fs::remove_dir(&gone).unwrap();
+        (left, guard)
+    };
+    #[cfg(windows)]
+    let left = {
+        let trees = trees_when(&state, session_s1, 3).await;
+        let kept = trees
+            .iter()
+            .find(|tree| tree.id.starts_with(&format!("{}:", pids[2])))
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(super::keep(&state, vec![kept]).await.unwrap().len(), 1);
+        pids[2]
+    };
     let trees = trees_when(&state, project_1, 3).await;
     let by_pid = |pid: u32| {
         trees
@@ -192,11 +218,17 @@ async fn a_stop_ends_the_named_trees_alone_and_names_only_those_it_stopped() {
     )
     .await
     .unwrap();
-    let Some(Event::ProcessesStopped { id, ids }) = reply else {
+    let Some(Event::ProcessesStopped {
+        id,
+        ids,
+        not_stopped,
+    }) = reply
+    else {
         panic!("not processes_stopped");
     };
     assert_eq!(id.as_deref(), Some("r"));
     assert_eq!(ids, vec![first, leftover]);
+    assert!(not_stopped.is_empty(), "{not_stopped:?}");
     assert_stops_running(pids[0]);
     assert_stops_running(left);
     assert!(is_running(pids[1]), "a tree not named was stopped");
@@ -243,7 +275,10 @@ async fn a_kept_tree_is_listed_under_its_project_as_no_sessions() {
     assert!(unowned[0].kept && !unowned[0].cwd_missing);
     assert!(is_running(pids[0]));
 
-    assert_eq!(super::stop(&state, vec![kept]).await.unwrap().len(), 1);
+    assert_eq!(
+        super::stop(&state, vec![kept]).await.unwrap().stopped.len(),
+        1
+    );
     assert_stops_running(pids[0]);
     assert!(is_running(pids[1]));
 }
@@ -311,20 +346,25 @@ async fn a_tree_whose_top_exited_since_it_was_listed_is_kept_by_its_listed_id() 
         .insert_session(&project_session("s1", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let (top_file, child_file, go) = (dir.join("top"), dir.join("child"), dir.join("go"));
-    let wrapper = format!(
-        "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} my $c = fork(); if ($c == 0) {{ exec \"/bin/sleep\", \"300\" }} {} \
-         select(undef, undef, undef, 0.02) until -e \"{}\"; exit 0;' &",
+    #[cfg(unix)]
+    let wrapper = Background::perl(&format!(
+        "{} my $c = fork(); if ($c == 0) {{ exec \"/bin/sleep\", \"300\" }} {} \
+         select(undef, undef, undef, 0.02) until -e \"{}\"; exit 0;",
         perl_write(&top_file, "$$"),
         perl_write(&child_file, "$c"),
         go.display()
+    ));
+    #[cfg(windows)]
+    let wrapper = Background::process(
+        "top",
+        Steps::new()
+            .write_pid(&top_file)
+            .spawn("sleep", Steps::new().sleep(300))
+            .write_child_pid(&child_file)
+            .wait_for(&go)
+            .exit(),
     );
-    let live = fake_live_session(
-        "s1",
-        AgentId::CLAUDE,
-        80,
-        24,
-        &format!("{wrapper}\nexec sleep 300"),
-    );
+    let live = stand_in_starting("s1", vec![wrapper]);
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(&state, (*live).clone());
     let (top, child) = (wait_for_pid(&top_file), wait_for_pid(&child_file));
@@ -377,6 +417,9 @@ async fn a_tree_whose_top_exited_since_it_was_listed_is_kept_by_its_listed_id() 
 /// A process left behind is kept like a tree of a running launch, and still listed under the
 /// project it was left in, as kept, until the user stops it.
 #[tokio::test(flavor = "multi_thread")]
+// Unix only: a leftover is a process working in a removed directory, which Windows never lets a
+// process's directory be.
+#[cfg(unix)]
 async fn a_leftover_is_kept_and_listed_as_kept() {
     let (state, dir) = console_with_project_and_accounts("process-requests-keep-leftover");
     let gone = dir.join("no-such-project").join(".worktrees").join("gone");
@@ -407,10 +450,36 @@ async fn a_leftover_is_kept_and_listed_as_kept() {
     assert_eq!(trees[0].session_id, None);
     assert!(is_running(left));
     assert_eq!(
-        super::stop(&state, vec![leftover.clone()]).await.unwrap(),
+        super::stop(&state, vec![leftover.clone()])
+            .await
+            .unwrap()
+            .stopped,
         vec![leftover]
     );
     assert_stops_running(left);
+}
+
+/// A process no launch has, working in a directory under a project's, is no leftover on Windows:
+/// the directory cannot be removed from under it, so the project lists nothing but the trees of its
+/// sessions.
+#[tokio::test(flavor = "multi_thread")]
+#[cfg(windows)]
+async fn a_process_working_in_a_project_directory_is_no_leftover_for_it_cannot_be_removed() {
+    let (state, dir) = console_with_project_and_accounts("process-requests-no-leftover");
+    let (_live, pids) = agent_with(&state, "s1", &[&dir.join("one")]);
+    let project = dir.join("no-such-project").join(".worktrees").join("gone");
+    std::fs::create_dir_all(&project).unwrap();
+    let left = crate::test_support::detached_sleep_in(&project, 60);
+    let _guard = KillOnDrop(vec![pids[0], left]);
+
+    assert!(
+        std::fs::remove_dir(&project).is_err(),
+        "a directory a process works in was removed"
+    );
+    let trees = trees_when(&state, project_1, 1).await;
+    assert_eq!(trees[0].session_id.as_deref(), Some("s1"));
+    assert!(trees[0].id.starts_with(&format!("{}:", pids[0])));
+    assert!(is_running(left));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -450,6 +519,56 @@ async fn an_archive_keeps_the_trees_the_user_chose_and_stops_the_rest() {
     assert!(in_project[0].kept);
 }
 
+/// A keep, alone or with an archive, naming a tree with a process on its agent's own console is
+/// refused with the process named, keeping nothing and archiving nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_keep_of_a_tree_on_its_agent_s_console_is_refused_and_nothing_is_archived() {
+    let (state, dir) = console_with_project_and_accounts("process-requests-agent-console");
+    let (_live, pids) = agent_with(&state, "s1", &[&dir.join("one")]);
+    let _guard = KillOnDrop(pids.clone());
+    let trees = trees_when(&state, session_s1, 1).await;
+    let tree = trees[0].id.clone();
+    let shared = ProcessIdentity::parse(&tree).unwrap();
+    AGENT_CONSOLE_OVERRIDE.lock().unwrap().push(shared);
+
+    let keep = handle(
+        &state,
+        None,
+        RequestBody::KeepProcesses {
+            ids: vec![tree.clone()],
+        },
+    )
+    .await;
+    let archive = handle(
+        &state,
+        None,
+        RequestBody::ArchiveSession {
+            session: "s1".to_string(),
+            force_remove: Vec::new(),
+            keep: Vec::new(),
+            keep_process_ids: vec![tree],
+        },
+    )
+    .await;
+    AGENT_CONSOLE_OVERRIDE
+        .lock()
+        .unwrap()
+        .retain(|kept| *kept != shared);
+
+    for refused in [keep, archive] {
+        let err = refused.expect_err("a tree on its agent's console was kept");
+        let coded = CodedError::of(&err);
+        assert_eq!(coded.code, error_code::PROCESS_SHARES_AGENT_CONSOLE);
+        assert_eq!(coded.params.get("pid"), Some(&pids[0].to_string()));
+        assert!(coded.params.contains_key("name"));
+    }
+    assert_ne!(
+        state.session_record("s1").unwrap().status,
+        SessionStatus::Archived
+    );
+    assert!(is_running(pids[0]));
+}
+
 /// A list of the same target computed a moment ago answers again, so clients polling it do not
 /// each read the table; a keep through the daemon makes the next list read it.
 #[tokio::test(flavor = "multi_thread")]
@@ -475,8 +594,7 @@ async fn a_list_polled_again_at_once_is_answered_from_the_last_one_until_a_keep(
     };
     assert_eq!(listed(&state).await.len(), 2);
 
-    // SAFETY: the test's own fixture, still running.
-    unsafe { libc::kill(pids[1], libc::SIGKILL) };
+    kill(pids[1]);
     assert_stops_running(pids[1]);
     assert_eq!(listed(&state).await.len(), 2, "the table was read again");
     assert_eq!(super::keep(&state, vec![kept]).await.unwrap().len(), 1);
@@ -496,17 +614,7 @@ fn console_agent(state: &Arc<AppState>, pid_file: &Path) -> (StandIn, i32) {
             SessionStatus::Idle,
         ))
         .unwrap();
-    let live = fake_live_session(
-        "hub",
-        AgentId::CLAUDE,
-        80,
-        24,
-        &format!(
-            "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
-             exec sleep 300",
-            perl_write(pid_file, "$$")
-        ),
-    );
+    let live = stand_in_starting("hub", vec![Background::sleeper(pid_file)]);
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(state, live.clone());
     let pid = wait_for_pid(pid_file);
@@ -595,7 +703,10 @@ async fn the_global_count_has_an_entry_per_project_and_console_session() {
         (Some("hub"), 1)
     );
 
-    assert_eq!(super::stop(&state, vec![kept]).await.unwrap().len(), 1);
+    assert_eq!(
+        super::stop(&state, vec![kept]).await.unwrap().stopped.len(),
+        1
+    );
     assert_stops_running(pids[0]);
     // However long the floor, a stop makes the next count read the table.
     let deadline = Instant::now() + PATIENCE;
@@ -625,11 +736,19 @@ async fn removing_a_project_stops_its_processes() {
     let (state, dir) = console_with_project_and_accounts("process-requests-project-removal");
     let (live, pids) = agent_with(&state, "s1", &[&dir.join("one")]);
     crate::coordinator::exit_watch::watch_exit(&state, (*live).clone());
-    let gone = dir.join("no-such-project").join(".worktrees").join("gone");
-    std::fs::create_dir_all(&gone).unwrap();
-    let left = sleeper_in(&gone);
-    std::fs::remove_dir(&gone).unwrap();
-    let _guard = KillOnDrop(vec![pids[0], left]);
+    // What is left behind in a removed directory exists only where a directory a process works in
+    // can be removed.
+    #[cfg(unix)]
+    let left = {
+        let gone = dir.join("no-such-project").join(".worktrees").join("gone");
+        std::fs::create_dir_all(&gone).unwrap();
+        let left = sleeper_in(&gone);
+        std::fs::remove_dir(&gone).unwrap();
+        vec![left]
+    };
+    #[cfg(windows)]
+    let left: Vec<i32> = Vec::new();
+    let _guard = KillOnDrop([vec![pids[0]], left.clone()].concat());
     let trees = trees_when(&state, session_s1, 1).await;
     assert_eq!(
         super::keep(&state, vec![trees[0].id.clone()])
@@ -661,7 +780,8 @@ async fn removing_a_project_stops_its_processes() {
         })
         .collect();
     listed.sort();
-    let mut expected = vec![(pids[0], true), (left, false)];
+    let mut expected = vec![(pids[0], true)];
+    expected.extend(left.iter().map(|left| (*left, false)));
     expected.sort();
     assert_eq!(listed, expected);
     assert!(processes.iter().all(|tree| tree.session_id.is_none()));
@@ -680,7 +800,9 @@ async fn removing_a_project_stops_its_processes() {
     .await
     .unwrap();
     assert_stops_running(pids[0]);
-    assert_stops_running(left);
+    for left in left {
+        assert_stops_running(left);
+    }
 }
 
 /// The global count computed a moment ago answers again, so clients polling it do not each read

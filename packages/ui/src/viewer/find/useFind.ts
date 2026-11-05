@@ -4,6 +4,8 @@ import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useLatest } from "../../components/hooks/useLatest";
 import { isImeKey } from "../../input/imeKey";
 import { isPrimaryModifier } from "../../input/keys";
+import type { HostFacts } from "../../platform/host";
+import { useHost } from "../../platform/react";
 import { DEFAULT_FIND_OPTIONS, findPattern, MAX_FIND_MATCHES, stepMatch, type FindOptions } from "./find";
 import type { FindBar, FindStatus } from "./FindBar";
 import { clearMatches, findMatches, findRegions, hasPlaceholder, paintMatches, revealMatch } from "./findDom";
@@ -36,8 +38,8 @@ const NO_RANGES: Range[] = [];
 /** Whether a press is Find: the physical F key with ⌘ on an Apple keyboard, Ctrl elsewhere. It is the
  * shortcut list's `FIND_BINDING` (`shortcuts/commands.ts`), not read from it, as the viewer does not
  * import `shortcuts/`; the viewer's tests press the key from that entry, so they fail if the two part. */
-function isFind(event: Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">): boolean {
-  return event.code === "KeyF" && !event.altKey && !event.shiftKey && isPrimaryModifier(event);
+function isFind(event: Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">, host: Pick<HostFacts, "modifier">): boolean {
+  return event.code === "KeyF" && !event.altKey && !event.shiftKey && isPrimaryModifier(event, host);
 }
 
 /** The gap each region leaves for the open bar, in pixels: `--find-bar-gap` (`style.css`), which is
@@ -133,6 +135,7 @@ export function useFind({
   /** The header's find toggle, while the viewer shows text to search. */
   toggle: { open: boolean; onToggle: () => void; ref: React.RefObject<HTMLButtonElement | null> } | null;
 } {
+  const host = useHost();
   const [open, setOpen] = useState(false);
   const searchable = useSearchable(contentRef);
   const [query, setQuery] = useState("");
@@ -277,7 +280,7 @@ export function useFind({
     if (!dialog) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (isImeKey(event)) return;
-      if (isFind(event)) {
+      if (isFind(event, host)) {
         const container = contentRef.current;
         // With the bar up already the key is the bar's, though nothing is drawn to search yet.
         if (!latest.current.open && (!container || findRegions(container).length === 0)) return;
@@ -310,7 +313,7 @@ export function useFind({
     };
     dialog.addEventListener("keydown", onKeyDown);
     return () => dialog.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [host]);
 
   const toggle = searchable || visible ? { open: visible, onToggle: () => (visible ? close("toggle") : openBar()), ref: toggleRef } : null;
   if (!visible) return { bar: null, toggle };

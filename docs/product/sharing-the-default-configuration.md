@@ -34,6 +34,19 @@ that failed because the default directory has moved (`default_moved`), which a r
 offers the opposite (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). Asking for the
 value recorded on an account whose last change is complete does nothing.
 
+**Sharing needs a host that can make file links.** The machine the daemon runs on tells every client whether it can
+(`file_links` in the daemon's host facts). macOS and Linux always can; Windows can only where the daemon is allowed to
+create symbolic links, which Developer Mode allows. The daemon finds this out once per run, so turning Developer Mode
+on takes effect when the daemon next starts. Where the host cannot, turning sharing on is refused with
+`sharing_unavailable_on_host`, with nothing recorded. Turning sharing off is not refused, so an account that already
+shares can still stop sharing there, but cannot then share again until the host can. The window locks a switch that is
+off, with the refusal's message under it, and leaves the switch of an account that shares free, with nothing under it
+about the host, unless its sessions or a sign-in lock it, which it then says (see "Sharing the default configuration"
+in `docs/product/agent-accounts.md`). The refusal's message says that the computer running the daemon cannot share the
+default configuration because it cannot create the file links sharing needs, and to turn on Developer Mode in that
+computer's settings app — named as its own system names it, Settings on Windows — and then to quit Octoboard and open
+it again, or restart the daemon.
+
 Each link leads to the default entry's fully resolved target, not to the entry itself: when the default directory's
 own `settings.json` is a link to a dotfiles copy, say, the account's link leads to the dotfiles copy, so a save made
 through the account keeps that copy updated.
@@ -45,7 +58,7 @@ A fixed list of entries per agent, directly inside the config directory. There i
 | Agent | Configuration | Conversation history |
 |---|---|---|
 | Claude Code | `settings.json`, `CLAUDE.md`, `keybindings.json`, `loop.md`; `agents/`, `commands/`, `skills/`, `output-styles/`, `rules/`, `plugins/`, `workflows/`, `routines/`, `themes/`, `hooks/`, `agent-memory/` | `projects/`, `file-history/`, `paste-cache/`, `image-cache/`, `session-env/`, `todos/`, `tasks/`, `history.jsonl` |
-| Codex | `config.toml`, `AGENTS.md`, `AGENTS.override.md`, `hooks.json`; `rules/`, `skills/`, `prompts/`, `plugins/`, `themes/`, `agents/` | `sessions/`, `archived_sessions/`, `session_index.jsonl`, `history.jsonl`, `state_5.sqlite` |
+| Codex | `config.toml`, `AGENTS.md`, `AGENTS.override.md`, `hooks.json`; `rules/`, `skills/`, `prompts/`, `plugins/`, `themes/`, `agents/` | `sessions/`, `archived_sessions/`, `session_index.jsonl`, `history.jsonl`, `state_5.sqlite` (not on Windows) |
 | Grok Build | `config.toml`, `AGENTS.md`, `pager.toml`, `lsp.json`, `settings.json`, `sandbox.toml`, `statusline.sh`, `disabled-hooks`; `rules/`, `skills/`, `commands/`, `agents/`, `personas/`, `workflows/`, `plugins/`, `hooks/`, `installed-plugins/` | `sessions/` |
 
 Nothing else is shared. In particular:
@@ -68,6 +81,13 @@ Codex names its thread database by its schema generation; `state_5.sqlite` is th
 another generation makes a database of its own in each account, which is not shared (see "Repair before every launch"
 below).
 
+On Windows, Codex's thread database is not shared: each account keeps a `state_5.sqlite` of its own, and the rest of
+Codex's list is shared as elsewhere. There, a database opened through a link keeps a write-ahead log apart from the one
+kept by whoever opens it directly, so sessions of two accounts writing the one database would not see each other's
+writes, and some of them would be lost. Turning sharing on or off, and the repair before every launch, leave the
+account's own database where it is, linked to nothing: its thread rows are not carried into the default directory's
+database, so turning sharing off has none there to rewrite or remove.
+
 ## Turning sharing on
 
 Before anything is touched, the change records a stamp, the UTC time it started (`20261021T093000Z`), and the default
@@ -82,12 +102,13 @@ An account directory that does not exist yet is created. Then each entry of the 
   `<entry>.bak-<stamp>/` in the account's directory (two identical copies keep one).
 - **Prompt histories** (`history.jsonl`) and **Codex's thread-name index** (`session_index.jsonl`) are appended to the
   default directory's copy rather than set aside, so the account's recall and its thread names survive.
-- **Codex's state database**: when the default directory has none, the account's is moved there with its `-wal` and
-  `-shm` and linked. When it has one, the account's is set aside under its backup name together with its `-wal` and
-  `-shm`, and its thread rows are carried into the shared database: a thread the shared database does not know is
-  added, and one it knows keeps the shared row, which is pointed at the account's rollout only when the account's row
-  was updated later. Either way the rows are pointed at where the rollouts now are, in the default directory. The rows
-  are carried once: a retry before turning sharing on has ever completed redoes it, a later one does not.
+- **Codex's state database** (not on Windows; see "What is shared" above): when the default directory has none, the
+  account's is moved there with its `-wal` and `-shm` and linked. When it has one, the account's is set aside under its
+  backup name together with its `-wal` and `-shm`, and its thread rows are carried into the shared database: a thread
+  the shared database does not know is added, and one it knows keeps the shared row, which is pointed at the account's
+  rollout only when the account's row was updated later. Either way the rows are pointed at where the rollouts now
+  are, in the default directory. The rows are carried once: a retry before turning sharing on has ever completed
+  redoes it, a later one does not.
 - **A directory the default directory lacks** is created there, empty, then linked, so whatever any account installs
   later lands where every sharing account sees it. A configuration file the default directory lacks is skipped: the
   account keeps it as it is, unlinked.
@@ -111,13 +132,14 @@ An account whose sharing was never carried out has nothing to undo, and the chan
    installed through the account stays usable for the others: Claude Code's `plugins/installed_plugins.json` and
    `plugins/known_marketplaces.json`, and Grok Build's `installed-plugins/registry.json`. An entry whose records could
    not be rewritten stays linked and is reported; for Codex's database that keeps `sessions/` and `archived_sessions/`
-   linked too.
+   linked too. On Windows, where the database is not shared, Codex has no rows to rewrite.
 2. **The links are removed.** A link counts as sharing's when it leads into the default directory recorded when
    sharing was turned on, even when that directory has moved since or is gone, or into the current default directory.
    Any other entry — a file of the account's own, a link of the user's — is left alone.
 3. **The backups made when sharing was turned on are restored.** A configuration entry with none is left absent. The
    account gets empty conversation-history directories of its own; the history files (`history.jsonl`, Codex's
-   `session_index.jsonl` and state database) are left absent.
+   `session_index.jsonl` and state database) are left absent. On Windows, Codex's state database was never shared and
+   stays as it is.
 4. **The conversations of the account's own sessions are taken back.** Every Octoboard session on record in the
    account's directory, archived ones included, has its conversation moved from the default directory back into the
    account, so it stays resumable there: every file the agent keeps of it goes to the same path in the account's
@@ -133,9 +155,9 @@ An account whose sharing was never carried out has nothing to undo, and the chan
      `<directory>.bak-<stamp>/` in the account's directory.
    - A conversation that another Octoboard session outside the account also records is copied rather than moved, and
      stays in the default directory for that session.
-   - For Codex, the shared database forgets a thread moved out of it (not one copied), the thread's names are copied
-     into the account's `session_index.jsonl`, and a database the account has of its own is pointed at the thread's
-     head.
+   - For Codex, the shared database, where there is one, forgets a thread moved out of it (not one copied), the
+     thread's names are copied into the account's `session_index.jsonl`, and a database the account has of its own is
+     pointed at the thread's head.
 
 Every other conversation — one run from a terminal, or by another account — stays in the default directory.
 
@@ -377,8 +399,9 @@ session was opened) takes nothing from the account's sharing.
 clients as an `account_sharing_repair_failed` notice about the session, carrying a `cause` and listing the entries as
 `account_sharing_failed` does (none when the directory could not be checked at all, or when the default directory has
 moved, with the cause `default_moved`), and the session launches all the same. A Codex `state_<n>.sqlite` in the
-account's directory other than the one shared is told on every launch as an `unshared_state_database` notice: that
-account's threads are kept apart from the other accounts' from then on.
+account's directory of another schema generation than `state_5.sqlite` is told on every launch as an
+`unshared_state_database` notice: that account's threads are kept apart from the other accounts' from then on. The
+account's own `state_5.sqlite` on Windows, which is not shared by design, is not told.
 
 The window presents a repair failure as an error alert titled "Could not repair sharing links", its first line naming
 the session (see "The error alert" in `docs/product/error-alerts.md`), explaining that the session started with the

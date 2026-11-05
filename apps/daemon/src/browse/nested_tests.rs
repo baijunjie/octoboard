@@ -12,7 +12,7 @@ use super::tests::{code, Fixture};
 use super::*;
 use crate::protocol::{ChangeGroup, SideKind, SideRead};
 use crate::test_support::{
-    fixture_git, git, git_dir_state, git_stdin, move_modification_time_back, repo_with,
+    fixture_git, git, git_dir_state, git_stdin, move_modification_time_back, repo_with, symlink,
 };
 
 /// Twelve lines headed `tag`, those of `changed` marked.
@@ -124,7 +124,7 @@ fn a_compared_rename_below_or_above_itself_is_one_diff_between_its_versions() {
 fn the_shapes_git_writes_for_a_pair_pass_through_as_they_are() {
     let fixture = Fixture::new();
     let binary: Vec<u8> = b"\0binary one\n".to_vec();
-    let link = |target: &str, at: &Path| std::os::unix::fs::symlink(target, at).unwrap();
+    let link = |target: &str, at: &Path| symlink(target, at).unwrap();
     let repo = repo_with(
         "nested-shapes",
         &[
@@ -255,6 +255,8 @@ fn a_submodule_side_and_an_absent_side_keep_the_route_that_cuts_the_patch_down()
     assert!(patch.contains("deleted file mode"), "{patch}");
 }
 
+/// Only where the host takes a `:` in a name, which Windows forbids.
+#[cfg(unix)]
 #[test]
 fn a_file_named_like_an_operand_is_never_taken_for_the_path_of_the_diff() {
     let fixture = Fixture::new();

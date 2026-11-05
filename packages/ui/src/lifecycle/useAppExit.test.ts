@@ -9,6 +9,7 @@ import type { ExitCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { SessionStatus, ShellTerminal } from "../protocol";
 import { quitHolders, useAppExit } from "./useAppExit";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,7 +78,7 @@ describe("restarting", () => {
       act(() => root.unmount());
       container.remove();
     });
-    act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", exit } }, createElement(Host))));
+    act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", host: BROWSER_HOST, exit } }, createElement(Host))));
     return { exit, requestShutdown, hook: () => current, quit: () => quitGesture() };
   }
 
@@ -153,7 +154,7 @@ describe("the daemon exiting by itself", () => {
       act(() => root.unmount());
       container.remove();
     });
-    act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", exit } }, createElement(Host))));
+    act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", host: BROWSER_HOST, exit } }, createElement(Host))));
     act(() => exited("signal 9"));
     const [alert] = errorAlerts.getSnapshot();
     onTestFinished(() => act(() => errorAlerts.acknowledge()));

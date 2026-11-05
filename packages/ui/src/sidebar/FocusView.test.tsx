@@ -12,7 +12,7 @@ import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { sessionColourHex } from "../sessions/sessionColours";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
-import { IS_MAC } from "../input/keys";
+import { IS_MAC } from "../test/hosts";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import type { SidebarHandlers } from "./types";

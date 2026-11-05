@@ -7,7 +7,8 @@ import { consoleOf, sessionOf } from "../fixtures/builders";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { Session } from "../protocol";
-import { IS_MAC } from "../input/keys";
+import type { HostFacts } from "../platform/host";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import type { FocusTarget } from "./types";
 import { useSwitchShortcut } from "./switchShortcut";
 
@@ -15,7 +16,7 @@ import { useSwitchShortcut } from "./switchShortcut";
 
 const main = consoleOf("c-1", "Main");
 const hubs = ["a", "b", "c"].map((id) => sessionOf(`s-${id}`, main.id, undefined, id, "idle", { colour: "teal" }));
-const desktop: PlatformAdapter = { kind: "tauri", windowChrome: { leftInset: () => 0, subscribe: () => () => {} } };
+const desktop: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST };
 
 let root: Root | undefined;
 let container: HTMLElement | undefined;
@@ -45,14 +46,52 @@ function mount({
   return { onSwitch, move: (backward: boolean) => move(backward) };
 }
 
-// The key the shortcut means by "Control" in the desktop app: Ctrl on macOS, where it exists.
-const control = IS_MAC ? { ctrlKey: true } : { metaKey: true };
+// The key the shortcut takes: Control, on every keyboard.
+const control = { ctrlKey: true };
 
-const press = (init: KeyboardEventInit) => {
+const press = (init: KeyboardEventInit, target: EventTarget = document.body) => {
   const event = new KeyboardEvent("keydown", { key: "Tab", code: "Tab", bubbles: true, cancelable: true, ...init });
-  act(() => void document.body.dispatchEvent(event));
+  act(() => void target.dispatchEvent(event));
   return event;
 };
+
+describe.each<[string, HostFacts]>([["macOS", MAC_HOST], ["Windows", WINDOWS_HOST]])("useSwitchShortcut in the desktop app on %s", (_name, host) => {
+  // The Windows app has no window chrome and no native menu: the switch exists in it all the same.
+  const app: PlatformAdapter = { kind: "tauri", host };
+
+  it("moves on Ctrl+Tab and Ctrl+Shift+Tab", () => {
+    const { onSwitch } = mount({ platform: app });
+    expect(press(control).defaultPrevented).toBe(true);
+    expect(onSwitch).toHaveBeenLastCalledWith(hubs[1]);
+    press({ ...control, shiftKey: true });
+    expect(onSwitch).toHaveBeenLastCalledWith(hubs[2]);
+  });
+
+  it("leaves Tab with ⌘ or the Windows key alone", () => {
+    const { onSwitch } = mount({ platform: app });
+    expect(press({ metaKey: true }).defaultPrevented).toBe(false);
+    expect(press({ metaKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(onSwitch).not.toHaveBeenCalled();
+  });
+
+  it("takes the key before a focused terminal sees it", () => {
+    const { onSwitch } = mount({ platform: app });
+    // xterm.js listens on its helper textarea, which holds focus while the terminal does.
+    const terminal = document.body.appendChild(document.createElement("textarea"));
+    const reached = vi.fn();
+    terminal.addEventListener("keydown", reached);
+    terminal.focus();
+    expect(press(control, terminal).defaultPrevented).toBe(true);
+    expect(reached).not.toHaveBeenCalled();
+    expect(onSwitch).toHaveBeenCalledWith(hubs[1]);
+  });
+
+  it("leaves the key to the page in a browser on the same system, which keeps it for its own tabs", () => {
+    const { onSwitch } = mount({ platform: { kind: "browser", host } });
+    expect(press(control).defaultPrevented).toBe(false);
+    expect(onSwitch).not.toHaveBeenCalled();
+  });
+});
 
 describe("useSwitchShortcut", () => {
   it("moves to the next console session on Ctrl+Tab and the previous on Ctrl+Shift+Tab, going round", () => {
@@ -65,7 +104,7 @@ describe("useSwitchShortcut", () => {
 
   it("leaves the key alone where it does not exist", () => {
     for (const options of [
-      { platform: { kind: "browser" } as PlatformAdapter },
+      { platform: { kind: "browser", host: BROWSER_HOST } as PlatformAdapter },
       { focus: { project: {} } as FocusTarget },
       { strip: hubs.slice(0, 1) },
       { shown: false },
@@ -112,7 +151,7 @@ describe("useSwitchShortcut", () => {
 
   it("returns a move that does nothing where the shortcut does not exist", () => {
     for (const options of [
-      { platform: { kind: "browser" } as PlatformAdapter },
+      { platform: { kind: "browser", host: BROWSER_HOST } as PlatformAdapter },
       { focus: { project: {} } as FocusTarget },
       { strip: hubs.slice(0, 1) },
       { shown: false },

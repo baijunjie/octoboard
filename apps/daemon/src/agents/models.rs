@@ -239,6 +239,11 @@ pub(crate) fn run_catalogue_command(
                 refused.detail(),
                 &[("binary", binary)],
             ),
+            NotRun::BinaryRefused(refusal) => ModelsUnavailable {
+                code: refusal.code,
+                params: refusal.params,
+                message: refusal.message,
+            },
         },
         QueryFailure::Bounded(BoundedFailure::TimedOut(_)) => ModelsUnavailable::new(
             code::TIMED_OUT,

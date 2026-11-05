@@ -45,10 +45,14 @@ error alert whose remedy follows why it was refused (see "Recovery and unexpecte
 wherever the user takes it; the recorded directory does not follow.
 
 **What runs.** The shell is the user's login shell, `$SHELL` (`/bin/zsh` when that is unset), started as a login shell
-(`-l`).
+(`-l`). On a Windows daemon host it is the first of PowerShell 7 (`pwsh.exe`), Windows PowerShell (`powershell.exe`)
+and `cmd.exe` found on the `PATH`, `cmd.exe` when none is, started with no arguments. A PowerShell 7 installed from the
+Microsoft Store is started too, and what it runs stays among the shell's own processes, for the busy reading and the
+close below.
 
 **Its environment** is the environment an agent launch takes: the captured environment of the user's login +
-interactive shell, reused under the same rules and filtered the same way (see "The launch environment" in
+interactive shell — on a Windows daemon host the environment built from the system's and the user's variables —
+reused under the same rules and filtered the same way (see "The launch environment" in
 `docs/product/launching-agents.md`). Unlike an agent launch, **a capture that fails does not refuse the shell**: it
 starts instead in the daemon's own environment, less the variables that mark a process as running inside an agent
 session, and loads the user's profile itself as any login shell does. Either way the terminal is declared as
@@ -60,7 +64,8 @@ session (its session id, the daemon's port, the git hook path, an agent's config
 A shell terminal's title follows the title the shell sets with OSC 0 or OSC 2, read by the same rules as a session's
 terminal title: surrounding whitespace is trimmed, the leading activity glyphs are dropped (see "Leading activity
 glyphs" in `docs/product/session-titles.md`), and a title holding a control character is ignored. Before the shell
-sets a title, and whenever what it sets is blank under those rules, the title is the shell's name, such as `zsh`.
+sets a title, and whenever what it sets is blank under those rules, the title is the shell's name, such as `zsh`
+(`pwsh.exe` on Windows).
 
 **Renaming** gives the terminal the user's own title, stored trimmed; a blank title is refused. From then on the
 shell's titles no longer change it.
@@ -78,6 +83,12 @@ with only its output redirected (`npm run dev > dev.log 2>&1 &`) still holds the
 shell sitting at its prompt with nothing started is not busy, and neither is one that has exited. The daemon checks
 this twice a second while the shell runs and carries the result on the terminal's record.
 
+**On a Windows daemon host the reading is coarser.** A Windows console has no foreground job to ask about, and its
+processes hold no terminal device to look for, so the shell is busy while any process it started, directly or through
+another, is still running, whatever its streams are redirected to — a helper the prompt keeps beside the shell
+included — other than the console hosts the terminal runs on. When the shell's processes cannot be listed, the shell
+reads as busy, as on every host: what cannot be ruled out is asked about.
+
 ## When the shell exits on its own
 
 A shell that exits by itself (`exit`, a crash) does not take its terminal with it: the terminal stays, marked exited
@@ -93,7 +104,9 @@ way. Every client attached to it is let go.
 A shell still running is sent `SIGHUP`, the hangup a terminal closing sends, which an interactive shell passes on to
 its jobs. A shell still there 3 seconds later is killed together with its process group. Then the terminal itself is
 hung up, so a job still on it — one a shell that exited left running, or one sent off with `nohup` or `disown` — loses
-its terminal. Nothing of a closed terminal is kept, its output included. Closing answers once the shell is gone.
+its terminal. On a Windows daemon host the hangup is the closing of the shell's console, which asks every process on it
+to end, as closing a console window does; a shell still there 3 seconds later is ended. Nothing of a closed terminal
+is kept, its output included. Closing answers once the shell is gone.
 
 A close can be conditional on the terminal being idle. The daemon checks whether the shell is busy at that close,
 under "Busy shells" above, rather than trusting its periodically refreshed record. A busy shell, or one whose idle

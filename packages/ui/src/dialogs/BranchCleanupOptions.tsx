@@ -3,10 +3,10 @@ import React, { useId, useState } from "react";
 import { BranchGroups, type BranchGroup, type BranchRow } from "../components/alerts/BranchGroups";
 import { StatusMark } from "../components/status/StatusMark";
 import { Message, useT } from "../i18n/react";
-import { abbreviateHome } from "../format/pathDisplay";
+import { display } from "../format/hostPath";
 import { type SessionBranchItem } from "../protocol";
 import { isProjectFolderUnknown } from "../errors/branchCleanupItems";
-import { useDaemonStore } from "../store";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { displayWirePath } from "../format/wirePath";
 import type { ConsequenceLine } from "../components/dialog/ConfirmConsequences";
 import { ConfirmOption } from "../components/form/ConfirmOption";
@@ -18,11 +18,11 @@ import { useProjectRemovalBranches } from "./useBranchInspections";
 /** `items` as rows of a cleanup list, in display form; `tagChanges` marks a worktree with
  * uncommitted changes where the group it is in does not say so already. */
 function useRows(): (items: SessionBranchItem[], tagChanges?: boolean) => BranchRow[] {
-  const homeDir = useDaemonStore((s) => s.homeDir);
+  const paths = useHostPaths();
   return (items, tagChanges = false) => items.map((item) => ({
     id: `${item.kind}:${item.repository}:${item.path ?? item.branch}`,
     worktree: item.kind === "worktree",
-    path: abbreviateHome(displayWirePath(item.path ?? ""), homeDir),
+    path: display(displayWirePath(item.path ?? ""), paths),
     branch: item.branch === null ? null : displayWirePath(item.branch),
     uncommitted: tagChanges && item.uncommitted,
   }));

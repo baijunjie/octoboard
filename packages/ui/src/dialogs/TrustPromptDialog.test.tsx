@@ -10,6 +10,7 @@ import { PlatformProvider } from "../platform/react";
 import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { type TrustPrompt } from "../store";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -106,7 +107,7 @@ it("a folder that could not be checked in time is refused with the trust dialog'
     act(() => root.unmount());
     container.remove();
   });
-  act(() => root.render(<PlatformProvider value={{ kind: "browser" }}><ErrorAlerts /></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ErrorAlerts /></PlatformProvider>));
   const alert = [...document.body.querySelectorAll("[role=alertdialog]")].map((node) => node.textContent ?? "").find((text) => text.includes("did not respond in time"));
   expect(alert).toContain("Uncheck the folder option to trust this project on its own");
   expect(alert).not.toContain("Browse");

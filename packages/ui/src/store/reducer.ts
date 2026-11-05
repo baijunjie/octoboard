@@ -140,6 +140,7 @@ export function reducer(state: State, action: Action): State {
             loginsStartedHere: state.loginsStartedHere.filter((key) => event.account_logins.some((login) => accountKey(login.agent, login.account) === key)),
             accountSharing: keepSame(state.accountSharing, event.account_sharing.filter(hasSharingState), (sharing) => sharing.account),
             homeDir: event.home_dir,
+            host: sameValue(state.host, event.host) ? state.host : event.host,
             shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
           };
         case "trusted_directories_updated":

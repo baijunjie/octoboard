@@ -16,6 +16,7 @@ import { FrameSurface } from "../FrameSurface";
 import { hasHunks, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
 import { FIND_REGION } from "../find/findDom";
 import { focusFirstSeparatorControl, scrollTextToLine, scrollToLine } from "./rendererDom";
+import { useHost } from "../../platform/react";
 import { isSelectAll, selectCode } from "../selectAll";
 import { FileNotice, type NoticeTone } from "../notices";
 import { LoadingOverlay, Unreadable } from "../viewerStates";
@@ -79,6 +80,7 @@ export function PlainText({
  * itself named `label`, Select All taking the code alone (`selectCode`), left to the browser's own
  * where that cannot, and Tab entering the controls among a diff's collapsed lines. */
 function useCodeFrame(label: string): { region: FadeRegion; onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void } {
+  const host = useHost();
   return {
     region: useFadeRegion({ label, always: true }),
     onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
@@ -89,7 +91,7 @@ function useCodeFrame(label: string): { region: FadeRegion; onKeyDown: (event: R
         event.stopPropagation();
         return;
       }
-      if (!isSelectAll(event)) return;
+      if (!isSelectAll(event, host)) return;
       if (selectCode(event.currentTarget)) event.preventDefault();
     },
   };

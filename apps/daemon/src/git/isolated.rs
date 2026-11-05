@@ -14,8 +14,8 @@
 //! outgrow. What browse then sets on top of the shared non-interactive, read-only base is fixed:
 //!
 //! - `GIT_LITERAL_PATHSPECS=1`: a path is a path; `*`, `?`, `[` and `:(magic)` in a filename are
-//!   never patterns. [`IsolatedGit::run_exact`] is the one exception: it spells its paths out with
-//!   `:(literal)` magic itself, to keep what lies below them out.
+//!   never patterns. [`IsolatedGit::run_pathspecs`] and [`IsolatedGit::run_exact`] are the
+//!   exception: they spell their paths out with magic of their own (see [`super::pathspec`]).
 //! - `GIT_NO_REPLACE_OBJECTS=1`: an object id names the object stored under it, not a replacement,
 //!   so the id a reply reports is the content it carries.
 //! - `GIT_NO_LAZY_FETCH=1`: a partial clone's missing object fails the read instead of reaching
@@ -47,51 +47,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::git::pathspec;
 use crate::git::run::{self, Access, GitError, Limits, Policy, UserGit, WorkDir};
-
-/// Pathspecs that match each of `paths` exactly: the path itself, literally, and nothing below
-/// it (`<path>/**` excluded, the path's own glob characters escaped). A plain path would also match
-/// everything under it when it is a directory on one side — a file replaced by a directory — and
-/// excluding `<path>/` instead would exclude a submodule at the path itself, which a pathspec takes
-/// for a directory. `git` applies an exclusion to every path of the command, so a path with another
-/// of `paths` below it (a rename from `foo` to `foo/bar`) gets none: that would take the other path
-/// out too. What then lies below it is matched as well, and the caller sorts it out.
-fn exact_pathspecs(paths: &[&[u8]]) -> Vec<Vec<u8>> {
-    let mut specs: Vec<Vec<u8>> = Vec::new();
-    for path in paths {
-        let exact = [b":(literal)".as_slice(), path].concat();
-        if specs.contains(&exact) {
-            continue;
-        }
-        specs.push(exact);
-        if holds_another(path, paths) {
-            continue;
-        }
-        let mut below = b":(exclude,glob)".to_vec();
-        for &byte in *path {
-            if matches!(byte, b'*' | b'?' | b'[' | b']' | b'\\') {
-                below.push(b'\\');
-            }
-            below.push(byte);
-        }
-        below.extend_from_slice(b"/**");
-        specs.push(below);
-    }
-    specs
-}
-
-/// Whether another of `paths` lies below `path`.
-fn holds_another(path: &[u8], paths: &[&[u8]]) -> bool {
-    paths.iter().any(|other| {
-        other.len() > path.len() + 1 && other.starts_with(path) && other[path.len()] == b'/'
-    })
-}
-
-/// Whether one of `paths` lies below another (a rename from `foo` to `foo/bar`): the one case
-/// [`exact_pathspecs`] cannot keep what lies below a path out of a command.
-pub(crate) fn paths_nest(paths: &[&[u8]]) -> bool {
-    paths.iter().any(|path| holds_another(path, paths))
-}
 
 /// The subcommands whose output a configured diff driver can change.
 ///
@@ -170,8 +127,6 @@ impl IsolatedGit {
         subcommand: &str,
         args: &[&[u8]],
     ) -> Command {
-        use std::os::unix::ffi::OsStrExt;
-
         let mut command = self.git.command(&ISOLATED, Access::Read, WorkDir::At(dir));
         if let Some(ceiling) = &self.ceiling {
             command.env("GIT_CEILING_DIRECTORIES", ceiling);
@@ -186,7 +141,7 @@ impl IsolatedGit {
             command.args(GREP_SAFETY);
         }
         for arg in args {
-            command.arg(std::ffi::OsStr::from_bytes(arg));
+            command.arg(super::run::arg_from_bytes(arg));
         }
         command
     }
@@ -246,11 +201,27 @@ impl IsolatedGit {
         run::run_checked(command, limits, Some(cancel))
     }
 
+    /// Runs `git <subcommand> <args> -- <pathspecs>`, each of `pathspecs` spelled with its own magic
+    /// ([`super::pathspec`]), and so out of the literal-pathspec mode, under which the magic would
+    /// be read as part of the name.
+    pub fn run_pathspecs(
+        &self,
+        dir: &Path,
+        subcommand: &str,
+        args: &[&[u8]],
+        pathspecs: &[&[u8]],
+        stdout_limit: usize,
+        cancel: &AtomicBool,
+    ) -> Result<Vec<u8>, GitError> {
+        let mut command = self.pathspec_command(dir, subcommand, args, pathspecs);
+        self.run_command(&mut command, stdout_limit, GIT_READ_TIMEOUT, cancel)
+    }
+
     /// Runs `git <subcommand> <args> -- <paths>` with each of `paths` (relative to the repository's
-    /// root) matched exactly and nothing below it, as [`exact_pathspecs`] writes them — except where
-    /// `paths` nest ([`paths_nest`]): there everything below the outer path is matched too, and the
-    /// caller keeps only what is its own (an index lookup by its exact match, a patch by its
-    /// sections).
+    /// root) matched exactly and nothing below it, as [`pathspec::exact`] writes them — except where
+    /// `paths` nest ([`pathspec::paths_nest`]): there everything below the outer path is matched
+    /// too, and the caller keeps only what is its own (an index lookup by its exact match, a patch by
+    /// its sections).
     pub fn run_exact(
         &self,
         dir: &Path,
@@ -272,13 +243,23 @@ impl IsolatedGit {
         args: &[&[u8]],
         paths: &[&[u8]],
     ) -> Command {
-        let pathspecs = exact_pathspecs(paths);
+        let pathspecs = pathspec::exact(paths);
+        let pathspecs: Vec<&[u8]> = pathspecs.iter().map(Vec::as_slice).collect();
+        self.pathspec_command(dir, subcommand, args, &pathspecs)
+    }
+
+    /// The command [`IsolatedGit::run_pathspecs`] runs.
+    fn pathspec_command(
+        &self,
+        dir: &Path,
+        subcommand: &str,
+        args: &[&[u8]],
+        pathspecs: &[&[u8]],
+    ) -> Command {
         let mut all = args.to_vec();
         all.push(b"--");
-        all.extend(pathspecs.iter().map(Vec::as_slice));
+        all.extend_from_slice(pathspecs);
         let mut command = self.command(dir, subcommand, &all);
-        // The magic below spells out literal matching itself; under `GIT_LITERAL_PATHSPECS` it
-        // would be read as part of the name.
         command.env_remove("GIT_LITERAL_PATHSPECS");
         command
     }
@@ -396,7 +377,7 @@ pub(crate) mod tests {
             line(&env.exact_command(dir, "diff", &[b"-z"], &[b"a*"])),
             pinned(
                 &["diff", "--no-ext-diff", "--no-textconv", "--no-color"],
-                &["-z", "--", ":(literal)a*", ":(exclude,glob)a\\*/**"],
+                &["-z", "--", ":(top,literal)a*", ":(top,exclude,glob)a\\*/**"],
                 &["GIT_LITERAL_PATHSPECS"]
             )
         );
@@ -473,34 +454,54 @@ pub(crate) mod tests {
 
     #[test]
     fn a_filename_is_never_read_as_a_pathspec_pattern() {
-        let repo = repo_with(
-            "git-pathspec",
-            &[
-                (b"a*.txt", b"star\n"),
-                (b"ab.txt", b"plain\n"),
-                (b":(glob)x", b"magic\n"),
-            ],
-        );
+        // Read as a pattern, `a*.txt` and `[a]b.txt` would match `ab.txt` too and `:(glob)x`
+        // would name `x`; `*` and `:` only where the host takes them in a name (Windows does not).
+        let names: Vec<&[u8]> = [&b"a*.txt"[..], b":(glob)x", b"[a]b.txt"]
+            .into_iter()
+            .filter(|name| crate::test_support::creatable(std::str::from_utf8(name).unwrap()))
+            .collect();
+        let files: Vec<(&[u8], &[u8])> = names
+            .iter()
+            .map(|name| (*name, &b"named\n"[..]))
+            .chain([(&b"ab.txt"[..], &b"plain\n"[..])])
+            .collect();
+        let repo = repo_with("git-pathspec", &files);
         let env = test_env(&[]);
+        for name in names {
+            let listed = env
+                .run(&repo, "ls-files", &[b"-z", b"--", name], 1024, &never())
+                .unwrap();
+            assert_eq!(listed, [name, b"\0"].concat());
+        }
+    }
+
+    /// An exact path is taken from the repository's root as given, never checked for an absolute
+    /// one: what this host takes for one (a leading `/`; on Windows also a leading `a:`, which a
+    /// name such as `a:b` has) would otherwise fail the command as outside the repository. The
+    /// positive control is the same path with the magic `top` takes out.
+    #[test]
+    fn an_exact_path_is_never_taken_for_an_absolute_one() {
+        let absolute: &[u8] = if cfg!(windows) { b"a:b" } else { b"/a" };
+        let repo = repo_with("git-exact-absolute", &[(b"a.txt", b"plain\n")]);
+        let blob = git(&repo, &["hash-object", "-w", "a.txt"]);
+        let entry = format!("100644,{},a:b", String::from_utf8(blob).unwrap().trim());
+        git(&repo, &["update-index", "--add", "--cacheinfo", &entry]);
+        let env = test_env(&[]);
+
         let listed = env
-            .run(
-                &repo,
-                "ls-files",
-                &[b"-z", b"--", b"a*.txt"],
-                1024,
-                &never(),
-            )
+            .run_exact(&repo, "ls-files", &[b"-z"], &[b"a:b"], 1024, &never())
             .unwrap();
-        assert_eq!(listed, b"a*.txt\0");
+        assert_eq!(listed, b"a:b\0");
         let listed = env
-            .run(
-                &repo,
-                "ls-files",
-                &[b"-z", b"--", b":(glob)x"],
-                1024,
-                &never(),
-            )
+            .run_exact(&repo, "ls-files", &[b"-z"], &[absolute], 1024, &never())
             .unwrap();
-        assert_eq!(listed, b":(glob)x\0");
+        assert!(listed.is_empty(), "{listed:?}");
+
+        let unchecked = [b":(literal)".as_slice(), absolute].concat();
+        let mut control = env.command(&repo, "ls-files", &[b"--", &unchecked]);
+        control.env_remove("GIT_LITERAL_PATHSPECS");
+        let control = control.output().unwrap();
+        let stderr = String::from_utf8_lossy(&control.stderr);
+        assert!(stderr.contains("outside repository"), "{stderr}");
     }
 }

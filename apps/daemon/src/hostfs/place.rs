@@ -20,8 +20,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::identity::{self, Identity};
-use super::lexically_normalise;
+use super::identity::Identity;
+use super::lexical_key;
 use crate::blocking_pass::StalledPasses;
 
 /// How many paths are looked at at once.
@@ -47,6 +47,7 @@ fn looks_at_once() -> usize {
 pub struct Place {
     own: Identity,
     within: HashSet<Identity>,
+    root: bool,
 }
 
 impl Place {
@@ -58,18 +59,19 @@ impl Place {
 
     /// [`Place::of`], with the real path `path` resolved to.
     pub fn resolved(path: &Path) -> Option<(Place, PathBuf)> {
-        let path = lexically_normalise(path);
+        let path = lexical_key(path);
         if !path.is_absolute() {
             return None;
         }
-        let real = std::fs::canonicalize(&path).ok()?;
+        let real = super::canonical(&path).ok()?;
         let own = resolved_directory_identity(&real)?;
         // An ancestor that cannot be read only loses the match it could have made.
         let within = real
             .ancestors()
             .filter_map(resolved_directory_identity)
             .collect();
-        Some((Place { own, within }, real))
+        let root = real.parent().is_none();
+        Some((Place { own, within, root }, real))
     }
 
     /// Whether this place is `directory` or lies below it.
@@ -80,6 +82,12 @@ impl Place {
     /// Whether this place is `other`.
     pub fn is(&self, other: &Place) -> bool {
         self.own == other.own
+    }
+
+    /// Whether this place is the root of a file system's namespace, which nothing lies above: `/`, a
+    /// drive's root, a network share's root.
+    pub fn is_root(&self) -> bool {
+        self.root
     }
 
     /// Whether this place is one of `identities`.
@@ -98,7 +106,7 @@ impl Place {
 /// directory and gives nothing; the components before it are followed as usual. `None` too where
 /// it cannot be read or the file system reports no inode (0).
 fn resolved_directory_identity(path: &Path) -> Option<Identity> {
-    identity::directory(&std::fs::symlink_metadata(path).ok()?)
+    crate::platform::fs::directory_identity(path, crate::platform::fs::Links::Keep)
 }
 
 /// What a look at a path does while an earlier look at it, which outran its deadline, is still
@@ -185,7 +193,7 @@ pub async fn looked_within_stuck<T: Send + 'static>(
     }
     let (stuck, ready): (HashSet<PathBuf>, HashSet<PathBuf>) = unique
         .into_iter()
-        .partition(|path| stalled.is_stuck(&lexically_normalise(path)));
+        .partition(|path| stalled.is_stuck(&lexical_key(path)));
     let waiting = async {
         let left = waited_for_stuck(stalled, &stuck, looking.deadline).await;
         if left.is_zero() {
@@ -222,7 +230,7 @@ async fn looked_at<T: Send + 'static>(
     let mut running = tokio::task::JoinSet::new();
     let mut found = HashMap::new();
     for path in paths {
-        let key = lexically_normalise(&path);
+        let key = lexical_key(&path);
         if stalled.is_stuck(&key) {
             continue;
         }
@@ -274,7 +282,7 @@ async fn waited_for_stuck(
     let stuck = || {
         paths
             .iter()
-            .any(|path| stalled.is_stuck(&lexically_normalise(path)))
+            .any(|path| stalled.is_stuck(&lexical_key(path)))
     };
     while stuck() && started.elapsed() < deadline {
         tokio::time::sleep(STUCK_POLL.min(deadline.saturating_sub(started.elapsed()))).await;
@@ -297,9 +305,27 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    use super::{looked_within, looked_within_stuck, Looking, Stuck, LOOKS_AT_ONCE_OVERRIDE};
+    use super::{
+        looked_within, looked_within_stuck, Looking, Place, Stuck, LOOKS_AT_ONCE_OVERRIDE,
+    };
     use crate::blocking_pass::StalledPasses;
-    use crate::test_support::PATIENCE;
+    use crate::test_support::{disk_root, ScratchDir, PATIENCE};
+
+    /// Every root a path can be on is one, whichever disk or share it is, and no directory below
+    /// one is.
+    #[test]
+    fn a_disks_root_is_a_root_and_a_directory_below_it_is_not() {
+        let dir = ScratchDir::new("place-root");
+        assert!(Place::of(&disk_root()).expect("the root").is_root());
+        assert!(!Place::of(&dir).expect("a directory").is_root());
+        let drives = (b'A'..=b'Z').map(|letter| PathBuf::from(format!("{}:\\", letter as char)));
+        // A drive that cannot be looked at (no medium, a share that does not answer) has no place.
+        for root in drives.filter(|_| cfg!(windows)) {
+            if let Some(place) = Place::of(&root) {
+                assert!(place.is_root(), "{}", root.display());
+            }
+        }
+    }
 
     fn skipping(deadline: Duration) -> Looking {
         Looking::within(deadline)
@@ -403,7 +429,7 @@ mod tests {
             .map(|n| PathBuf::from(format!("/octoboard-test/{n}")))
             .collect();
         for path in &paths[..3] {
-            stalled.record(super::lexically_normalise(path), Arc::downgrade(&guard));
+            stalled.record(super::lexical_key(path), Arc::downgrade(&guard));
         }
         let ending = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -434,7 +460,7 @@ mod tests {
         let stalled = StalledPasses::default();
         let path = PathBuf::from("/octoboard-test/waited");
         let guard = Arc::new(());
-        stalled.record(super::lexically_normalise(&path), Arc::downgrade(&guard));
+        stalled.record(super::lexical_key(&path), Arc::downgrade(&guard));
 
         let skipped = looked_within_stuck(&stalled, vec![path.clone()], skipping(PATIENCE), |_| {
             Some(())
@@ -481,7 +507,7 @@ mod tests {
         let stalled = StalledPasses::default();
         let stuck = PathBuf::from("/octoboard-test/stuck");
         let healthy = PathBuf::from("/octoboard-test/healthy");
-        let key = super::lexically_normalise(&stuck);
+        let key = super::lexical_key(&stuck);
         let guard = Arc::new(());
         stalled.record(key.clone(), Arc::downgrade(&guard));
         // The stuck look ends only once the healthy path has been looked at, so the call can
@@ -560,7 +586,7 @@ mod tests {
                 "no attempt was checked within the threshold"
             );
             let slow = PathBuf::from(format!("/octoboard-test/slow-{attempt}"));
-            let key = super::lexically_normalise(&slow);
+            let key = super::lexical_key(&slow);
             let (release, held) = std::sync::mpsc::channel::<()>();
             let held = Mutex::new(held);
             let begun = Instant::now();

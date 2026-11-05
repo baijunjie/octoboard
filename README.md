@@ -11,7 +11,7 @@
       src="https://img.shields.io/github/package-json/v/baijunjie/octoboard?filename=apps%2Fdesktop%2Fpackage.json&amp;style=plastic&amp;label=version&amp;labelColor=0369a1&amp;color=15803d"
       alt="Desktop package version"
     /></a>
-  <a href="#platform-support"><img src="https://img.shields.io/badge/platform-macOS-0284c7?style=plastic&amp;labelColor=0369a1" alt="Platform: macOS" /></a>
+  <a href="#platform-support"><img src="https://img.shields.io/badge/platform-macOS_%7C_Windows-0284c7?style=plastic&amp;labelColor=0369a1" alt="Platform: macOS | Windows" /></a>
   <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/built_with-Tauri_2-15803d?style=plastic&amp;labelColor=0369a1" alt="Built with Tauri 2" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0284c7?style=plastic&amp;labelColor=0369a1" alt="License: MIT" /></a>
 </p>
@@ -67,7 +67,8 @@ to a coordinator, let each project agent work with its own context, and follow t
 **Octoboard is in beta, still in development.** Features and workflows are still being refined.
 
 1. Install and configure the coding-agent CLIs you want to use: Claude Code, Codex, or Grok Build.
-2. Check the [macOS releases](https://github.com/baijunjie/octoboard/releases) for an available build, or use the
+2. Download the app from the [releases](https://github.com/baijunjie/octoboard/releases): the `.dmg` for macOS, or
+   the Windows installer (see [Installing on Windows](#installing-on-windows)). Or use the
    [development setup](#develop) below to run from source.
 3. Add an existing project folder without moving your code. The default account uses your existing CLI configuration;
    additional accounts use separate configurations with optional sharing of supported settings.
@@ -82,14 +83,29 @@ or billing terms of the providers you choose. If your agent supports a self-host
 | Form | Status |
 |---|---|
 | macOS app (Apple silicon and Intel, macOS 11 or later) | Beta, still in development |
+| Windows app (x64, Windows 10 21H2 or later) | Beta, still in development |
 | Linux server — the daemon on a headless server, the interface in a browser on the network | Planned |
-| Windows app | Planned |
 | iOS app | Planned |
 | Android app | Planned |
 
 The desktop window, daemon, and projects currently share one machine. Linux is planned as a server for one person
 accessing their own daemon through a browser; there is no Linux desktop app planned. Server deployment and running
 project agents on remote hosts are not available yet. Multiple users sharing one daemon are outside this design.
+
+### Installing on Windows
+
+- **Download**: `Octoboard_<version>_x64-setup.exe` from a [release](https://github.com/baijunjie/octoboard/releases).
+  It installs Octoboard for your user account only; later versions arrive through the app's own updates.
+- **Requirements**: Windows 10 version 21H2 or later on x64; Windows 11 is the version it has been tested on. There is no
+  native ARM64 build yet: on Windows 11 on Arm the x64 app runs under emulation. The installer downloads and installs
+  Microsoft Edge WebView2 if it is missing, which needs an internet connection.
+- **Agents**: install the agent CLIs you want to use yourself, as on macOS; Claude Code and Codex also need
+  [Git for Windows](https://gitforwindows.org/). Sharing the default account's configuration with additional accounts
+  needs Windows' Developer Mode turned on (then quit Octoboard and open it again); without it, sharing is unavailable
+  and each additional account keeps a configuration of its own.
+- **Unsigned for now**: the first Windows releases are not code-signed, so Microsoft Defender SmartScreen may show
+  "Windows protected your PC" when you run the installer. Select **More info**, then **Run anyway** to install it.
+  Code signing is planned for a later release.
 
 ## FAQ
 
@@ -133,7 +149,7 @@ Each part has its own entry doc with the rest of its first-time flow:
 
 | Part | What it is | Entry doc |
 |---|---|---|
-| `apps/desktop/` | The macOS desktop application (Tauri 2 shell) | [apps/desktop/README.md](apps/desktop/README.md) |
+| `apps/desktop/` | The desktop application for macOS and Windows (Tauri 2 shell) | [apps/desktop/README.md](apps/desktop/README.md) |
 | `apps/daemon/` | `octoboardd`, the Rust daemon that owns agent processes and data | [apps/daemon/README.md](apps/daemon/README.md) |
 | `packages/ui/` | The React + HeroUI interface, also runnable in a browser | [packages/ui/README.md](packages/ui/README.md) |
 | `apps/web/` | The public website at octoboard.dev (Nuxt) | [apps/web/README.md](apps/web/README.md) |

@@ -840,14 +840,20 @@ async fn the_prompt_that_carries_a_switched_session_on_lists_the_trees_the_resta
     assert!(notice.contains("switched you to `Work A`"), "{prompt}");
     let (ended, words) = rest.split_once("\n\n").expect("the words come last");
     assert!(
-        ended.starts_with("The restart ended these processes you had started: `/usr/bin/perl"),
+        ended.starts_with(&format!(
+            "The restart ended these processes you had started: `{}",
+            crate::test_support::doomed_command_starts()
+        )),
         "{prompt}"
     );
     assert!(
         ended.ends_with("Start again any you still need."),
         "{prompt}"
     );
-    assert!(!ended.contains("/bin/sleep"), "{prompt}");
+    assert!(
+        !ended.contains(&crate::test_support::survivor_command_starts()),
+        "{prompt}"
+    );
     assert_eq!(words, crate::messaging::texts::CONTINUE_AFTER_NOTICE);
     assert!(crate::test_support::is_running(children[0]), "kept running");
 }

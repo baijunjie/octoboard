@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  developedPlatform,
+  availablePlatforms,
   developerSections,
   heroAgents,
   homeQuestions,
@@ -17,9 +17,9 @@ const releasesUrl = `${config.public.repositoryUrl}/releases`;
 useSectionReveal(page);
 useSeoMeta({
   title: () => t("codingAgentsSeoTitle"),
-  description: () => t("codingAgentsSeoDescription"),
+  description: () => t("workspaceSeoDescription"),
   ogTitle: () => t("codingAgentsSeoTitle"),
-  ogDescription: () => t("codingAgentsSeoDescription"),
+  ogDescription: () => t("workspaceSeoDescription"),
 });
 </script>
 
@@ -60,7 +60,7 @@ useSeoMeta({
             }}<span class="link-arrow" aria-hidden="true"
             /></a>
           </div>
-          <p class="hero-note">{{ t("heroPlatformNote") }}</p>
+          <p class="hero-note">{{ t("heroPlatformsNote") }}</p>
         </div>
         <div class="hero-art">
           <HeroMascot :paused="paused" />
@@ -194,14 +194,14 @@ useSeoMeta({
       </article>
       <div id="platforms" class="platform-intro">
         <h3>{{ t("platformsTitle") }}</h3>
-        <p>{{ t("platformsDescription") }}</p>
+        <p>{{ t("platformsSupportDescription") }}</p>
       </div>
       <ul class="platform-list">
-        <li class="platform-current">
-          <SiteIcon :name="developedPlatform.icon" />
+        <li v-for="platform in availablePlatforms" :key="platform.name" class="platform-current">
+          <SiteIcon :name="platform.icon" />
           <div>
-            <h4>{{ developedPlatform.name }}</h4>
-            <p>{{ t("platformsMacStatus") }}</p>
+            <h4>{{ platform.name }}</h4>
+            <p>{{ t(platform.status) }}</p>
           </div>
         </li>
         <li v-for="platform in plannedPlatforms" :key="platform.name">
@@ -212,6 +212,7 @@ useSeoMeta({
           </div>
         </li>
       </ul>
+      <p class="platform-note">{{ t("platformsWindowsInstall") }}</p>
     </section>
 
     <section id="questions" class="faq-section wrap section-space" data-reveal>

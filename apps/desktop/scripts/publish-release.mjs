@@ -1,20 +1,29 @@
 #!/usr/bin/env node
 // Publishes the build `pnpm release` made, for the in-app updates to find: creates the versioned GitHub release
-// `desktop-v<version>` with the disk image and the signed update archive, then writes the manifests the application
-// reads (`beta.json`, and `stable.json` too unless the version has a prerelease suffix) to the `updater`
-// release. Run `pnpm release` first, with a signed build. Outward-facing, so it is a separate, explicit step:
-// nothing else calls it.
+// `desktop-v<version>` with each platform's files (macOS: the disk image and the signed update archive; Windows: the
+// installer), each update file with its signature, then writes the manifests the application reads to the `updater`
+// release: per platform, `beta.json` and `stable.json` for macOS and `beta-windows.json` and `stable-windows.json`
+// for Windows, the beta one always and the stable one unless the version has a prerelease suffix. Run `pnpm release`
+// first, with a signed build. Outward-facing, so it is a separate, explicit step: nothing else calls it.
 //
-//   pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path) [--dry-run]
+//   pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path)
+//     [--platforms macos|windows|macos,windows] [--windows-dir <dir>] [--dry-run]
+//
+// A release carries both platforms unless `--platforms` selects one, and a platform not selected is neither needed
+// nor touched: its files are not looked for and its manifests are not read or written. The macOS build is
+// `target/universal-apple-darwin/release/bundle`, checked with macOS tools (`PlistBuddy`, `stapler`), so a macOS
+// publish runs on a Mac. The Windows build comes as `--windows-dir`, required with Windows: a directory holding the
+// installer `Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build made and signed them.
 //
 // The version is the one in `apps/desktop/package.json` (which `tauri.conf.json` reads), which must be the one of
-// the universal build in `target/universal-apple-darwin/release/bundle`. The release's tag is created on the current
-// commit, which has to be pushed. `--dry-run` prints what would be published and calls nothing outside this machine.
+// the builds. The release's tag is created on the current commit, which has to be pushed. `--dry-run` prints what
+// would be published and calls nothing outside this machine.
 //
-// The versioned release is created before the manifests are written, so a manifest never names an archive that
-// is not there yet. The build is universal, so one archive serves both platforms of the manifest. A run that
-// failed after creating the release resumes from the manifests when run again (if it is the same build), and a
-// manifest that already announces a newer version than this one is left alone, so a channel never moves backwards.
+// The versioned release is shared by the platforms: a later run for the other platform adds its missing files to the
+// release a first one created, and a published file is never replaced. The release is created or extended before
+// the platform's manifests are written, so a manifest never names a file that is not there yet. A run that failed
+// after creating the release resumes from the manifests when run again (if it is the same build), and a manifest that
+// already announces a newer version than this one is left alone, so a channel never moves backwards.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -23,28 +32,42 @@ import { parseArgs } from "node:util";
 import { gitChecked } from "../../../scripts/lib/git.mjs";
 import { appDir, appVersion, findBundle, repoRoot, universalBundleDir as bundleDir } from "./bundle.mjs";
 import {
-  archiveName,
   buildManifest,
   isPrerelease,
   manifestFiles,
   manifestVersion,
   MANIFEST_RELEASE_TAG,
+  parsePlatforms,
   planManifestWrites,
-  PLATFORMS,
+  planReleaseAssets,
   releaseAssetUrl,
+  releaseAssets,
+  releaseLayout,
   repositorySlug,
   tag,
 } from "./release-manifest.mjs";
+import { windowsReleaseFiles } from "./windows-release.mjs";
 
 const { values: options } = parseArgs({
   options: {
     notes: { type: "string" },
     "notes-file": { type: "string" },
+    platforms: { type: "string" },
+    "windows-dir": { type: "string" },
     "dry-run": { type: "boolean", default: false },
   },
 });
 if ((options.notes === undefined) === (options["notes-file"] === undefined)) {
   throw new Error('Give the release notes once, as --notes "text" or --notes-file path.');
+}
+const platforms = parsePlatforms(options.platforms);
+const selected = (platform) => platforms.includes(platform);
+if (selected("windows") !== (options["windows-dir"] !== undefined)) {
+  throw new Error(
+    selected("windows")
+      ? "Give the directory of the Windows build as --windows-dir <dir>, or leave Windows out with --platforms macos."
+      : "--windows-dir belongs to the Windows platform, which --platforms leaves out.",
+  );
 }
 const notes = (options.notes ?? readFileSync(options["notes-file"], "utf8")).trim();
 if (!notes) throw new Error("The release notes are empty.");
@@ -56,47 +79,88 @@ const appConfig = JSON.parse(readFileSync(path.join(repoRoot, "config", "app.jso
 const prerelease = isPrerelease(version);
 const repo = repositorySlug(appConfig.repositoryUrl);
 
-// The files `pnpm release` made, which must be this version's, signed and notarized: the archive's name carries no
-// version, so a leftover of an earlier build would be published under the new version's name.
-const macosDir = path.join(bundleDir, "macos");
-const app = findBundle(macosDir, ".app");
-const dmg = findBundle(path.join(bundleDir, "dmg"), ".dmg");
-const archive = findBundle(macosDir, ".app.tar.gz");
-const signatureFile = findBundle(macosDir, ".app.tar.gz.sig");
-const rebuild = "Run `pnpm release` again.";
-if (appVersion(app) !== version) {
-  throw new Error(`${app} is a ${appVersion(app)} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
-}
-if (!path.basename(dmg).includes(`_${version}_`)) {
-  throw new Error(`${dmg} is not a ${version} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
-}
-for (const file of [archive, signatureFile]) {
-  if (statSync(file).mtimeMs < statSync(app).mtimeMs) {
-    throw new Error(`${file} is older than ${app}, so it is left over from an earlier build. ${rebuild}`);
+// What each selected platform publishes, under the names `releaseLayout` gives: `files` go out as they are, under
+// `name` (copied there when the file's own name differs), `update` is the file the manifest points to, with its
+// signature, published as `signatureName`, and `assets` all of their names, as `planReleaseAssets` knows them.
+const publishing = {};
+
+if (selected("macos")) {
+  // The files `pnpm release` made, which must be this version's, signed and notarized: the archive's name carries no
+  // version, so a leftover of an earlier build would be published under the new version's name.
+  const macosDir = path.join(bundleDir, "macos");
+  const app = findBundle(macosDir, ".app");
+  const dmg = findBundle(path.join(bundleDir, "dmg"), ".dmg");
+  const archive = findBundle(macosDir, ".app.tar.gz");
+  const signatureFile = findBundle(macosDir, ".app.tar.gz.sig");
+  const rebuild = "Run `pnpm release` again.";
+  if (appVersion(app) !== version) {
+    throw new Error(`${app} is a ${appVersion(app)} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
   }
+  if (!path.basename(dmg).includes(`_${version}_`)) {
+    throw new Error(`${dmg} is not a ${version} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
+  }
+  for (const file of [archive, signatureFile]) {
+    if (statSync(file).mtimeMs < statSync(app).mtimeMs) {
+      throw new Error(`${file} is older than ${app}, so it is left over from an earlier build. ${rebuild}`);
+    }
+  }
+  try {
+    execFileSync("xcrun", ["stapler", "validate", dmg], { stdio: "ignore" });
+  } catch {
+    throw new Error(`${dmg} is not notarized and stapled, which a published disk image has to be. ${rebuild}`);
+  }
+  const names = { productName, version, dmgName: path.basename(dmg) };
+  const layout = releaseLayout("macos", names);
+  const sources = { [path.basename(dmg)]: dmg, [layout.update]: archive };
+  publishing.macos = {
+    files: layout.files.map((name) => ({ name, file: sources[name] })),
+    update: {
+      name: layout.update,
+      file: archive,
+      signatureName: layout.signature,
+      signature: readFileSync(signatureFile, "utf8"),
+    },
+    assets: releaseAssets("macos", names),
+  };
 }
-try {
-  execFileSync("xcrun", ["stapler", "validate", dmg], { stdio: "ignore" });
-} catch {
-  throw new Error(`${dmg} is not notarized and stapled, which a published disk image has to be. ${rebuild}`);
+if (selected("windows")) {
+  const windows = windowsReleaseFiles(path.resolve(options["windows-dir"]), productName, version);
+  const names = { productName, version };
+  const layout = releaseLayout("windows", names);
+  const sources = { [layout.update]: windows.installer };
+  publishing.windows = {
+    files: layout.files.map((name) => ({ name, file: sources[name] })),
+    update: {
+      name: layout.update,
+      file: windows.installer,
+      signatureName: layout.signature,
+      signature: readFileSync(windows.signature, "utf8"),
+    },
+    assets: releaseAssets("windows", names),
+  };
 }
-const signature = readFileSync(signatureFile, "utf8");
 
-const archiveAsset = archiveName(productName, version);
-const manifest = buildManifest({
-  version,
-  notes,
-  pubDate: new Date().toISOString(),
-  url: releaseAssetUrl(appConfig.repositoryUrl, version, archiveAsset),
-  signature,
-});
-const manifests = manifestFiles(version);
-const assetNames = [path.basename(dmg), archiveAsset, `${archiveAsset}.sig`];
+const pubDate = new Date().toISOString();
+for (const platform of platforms) {
+  const { update } = publishing[platform];
+  publishing[platform].manifest = buildManifest({
+    version,
+    notes,
+    pubDate,
+    platform,
+    update: { url: releaseAssetUrl(appConfig.repositoryUrl, version, update.name), signature: update.signature },
+  });
+  publishing[platform].manifests = manifestFiles(version, platform);
+}
+const assetsOf = (platform) => publishing[platform].assets;
 
-console.log(`version ${version} (${prerelease ? "prerelease" : "stable"}), universal: ${PLATFORMS.join(", ")}`);
-console.log(`release ${tag(version)} gets ${assetNames.join(", ")}`);
-console.log(`manifests ${manifests.join(", ")} go to the "${MANIFEST_RELEASE_TAG}" release, unless one announces a newer version:`);
-console.log(JSON.stringify(manifest, null, 2));
+console.log(`version ${version} (${prerelease ? "prerelease" : "stable"}), platforms: ${platforms.join(", ")}`);
+console.log(`release ${tag(version)} gets ${platforms.flatMap(assetsOf).join(", ")}`);
+for (const platform of platforms) {
+  const { manifests, manifest } = publishing[platform];
+  console.log(`${platform} manifests ${manifests.join(", ")} go to the "${MANIFEST_RELEASE_TAG}" release, unless one announces a newer version:`);
+  console.log(JSON.stringify(manifest, null, 2));
+}
 if (dryRun) {
   console.log("--dry-run: nothing was published.");
   process.exit(0);
@@ -140,25 +204,41 @@ const neverReplaced = (detail) =>
       `Delete the release (\`gh release delete ${tag(version)} --cleanup-tag\`) only if nobody has downloaded it.`,
   );
 
-// A release that has this build's assets, the same archive and the same signature is the one an earlier run of this
-// script created before it failed: it resumes from the manifests. Any other is a published version. A rebuild of the
-// same version signs differently, and manifests carrying its signature over the old archive's address would fail
-// every client's verification.
+// A platform whose files are all in the release already, the same update file and the same signature, is the one an
+// earlier run of this script uploaded before it failed: it resumes from the manifests. Any other release is a
+// published version. A rebuild of the same version signs differently, and manifests carrying its signature over the
+// old file's address would fail every client's verification.
 const existing = releaseInfo(tag(version));
+const plan = planReleaseAssets({
+  platforms,
+  assets: Object.fromEntries(platforms.map((platform) => [platform, assetsOf(platform)])),
+  existing: existing === null ? null : existing.assets.map((asset) => asset.name),
+  productName,
+  version,
+});
 if (existing !== null) {
-  const names = existing.assets.map((asset) => asset.name);
   if (existing.isDraft) {
     throw new Error(
       `The release ${tag(version)} exists as a draft, which clients cannot download from. Publish it ` +
         `(\`gh release edit ${tag(version)} --draft=false\`) or delete it (\`gh release delete ${tag(version)} --cleanup-tag\`), then publish again.`,
     );
   }
-  if ([...names].sort().join("\n") !== [...assetNames].sort().join("\n")) {
-    throw neverReplaced(`with other assets (${names.join(", ") || "none"})`);
+  if (plan.conflict !== null) throw neverReplaced(plan.conflict);
+  for (const platform of plan.resume) {
+    const { update } = publishing[platform];
+    const size = existing.assets.find((asset) => asset.name === update.name).size;
+    if (
+      size !== statSync(update.file).size ||
+      downloadAsset(tag(version), update.signatureName)?.trim() !== update.signature.trim()
+    ) {
+      throw neverReplaced(`with a different ${platform} build of this version`);
+    }
   }
-  const archiveSize = existing.assets.find((asset) => asset.name === archiveAsset).size;
-  if (archiveSize !== statSync(archive).size || downloadAsset(tag(version), `${archiveAsset}.sig`)?.trim() !== signature.trim()) {
-    throw neverReplaced("with a different build of this version");
+  if (plan.add.length > 0 && existing.isImmutable) {
+    throw new Error(
+      `The release ${tag(version)} is immutable, so the ${plan.add.join(" and ")} files cannot be added to it. ` +
+        "Turn off immutable releases for the repository.",
+    );
   }
 }
 
@@ -171,7 +251,7 @@ if (updaterRelease?.isImmutable) {
   );
 }
 const current = Object.fromEntries(
-  manifests.map((name) => {
+  platforms.flatMap((platform) => publishing[platform].manifests).map((name) => {
     const content = updaterRelease === null ? undefined : downloadAsset(MANIFEST_RELEASE_TAG, name);
     try {
       return [name, content === undefined ? undefined : manifestVersion(content)];
@@ -183,25 +263,37 @@ const current = Object.fromEntries(
 
 const staging = mkdtempSync(path.join(os.tmpdir(), "octoboard-publish-"));
 try {
-  // The archive and its signature go out under the names the manifest uses.
-  const stagedArchive = path.join(staging, archiveAsset);
-  const stagedSignature = `${stagedArchive}.sig`;
-  copyFileSync(archive, stagedArchive);
-  writeFileSync(stagedSignature, signature);
+  // The files go out under the names the manifests use, the signatures written beside them.
+  const stage = (platform) => {
+    const { files, update } = publishing[platform];
+    const staged = files.map(({ name, file }) => {
+      if (path.basename(file) === name) return file;
+      const copy = path.join(staging, name);
+      copyFileSync(file, copy);
+      return copy;
+    });
+    const signature = path.join(staging, update.signatureName);
+    writeFileSync(signature, update.signature);
+    return [...staged, signature];
+  };
   const notesFile = path.join(staging, "notes.md");
   writeFileSync(notesFile, `${notes}\n`);
 
-  if (existing !== null) {
-    console.log(`the release ${tag(version)} already has this build's assets: resuming from the manifests.`);
-  } else {
+  if (plan.create) {
     console.log(`creating the release ${tag(version)}:`);
     gh(
-      "release", "create", tag(version), dmg, stagedArchive, stagedSignature,
+      "release", "create", tag(version), ...platforms.flatMap(stage),
       "--title", `${productName} ${version}`,
       "--notes-file", notesFile,
       "--target", git("rev-parse", "HEAD"),
       ...(prerelease ? ["--prerelease"] : []),
     );
+  } else {
+    for (const platform of plan.resume) console.log(`the release ${tag(version)} already has this build's ${platform} files: resuming from the manifests.`);
+    if (plan.add.length > 0) {
+      console.log(`adding the ${plan.add.join(" and ")} files to the release ${tag(version)}:`);
+      gh("release", "upload", tag(version), ...plan.add.flatMap(stage));
+    }
   }
 
   // Created once, as a prerelease so it is never the repository's "latest" release, which is the newest versioned one.
@@ -210,26 +302,29 @@ try {
     gh(
       "release", "create", MANIFEST_RELEASE_TAG,
       "--title", "Update manifests",
-      "--notes", `What the application's in-app updates read: ${manifests.join(", ")} name the newest version of each channel. Rewritten by every release.`,
+      "--notes", "What the application's in-app updates read: the manifests name the newest version of each channel, one set per platform. Rewritten by every release.",
       "--prerelease",
     );
   }
-  const { write, skipped } = planManifestWrites(version, current);
-  for (const { name, announced } of skipped) {
-    console.log(`not writing ${name}: it announces ${announced}, which is newer than ${version}.`);
-  }
-  if (write.length > 0) {
+  const written = [];
+  for (const platform of platforms) {
+    const { write, skipped } = planManifestWrites(version, platform, current);
+    for (const { name, announced } of skipped) {
+      console.log(`not writing ${name}: it announces ${announced}, which is newer than ${version}.`);
+    }
+    if (write.length === 0) continue;
     const manifestPaths = write.map((name) => {
       const file = path.join(staging, name);
-      writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+      writeFileSync(file, `${JSON.stringify(publishing[platform].manifest, null, 2)}\n`);
       return file;
     });
-    console.log(`writing the manifests ${write.join(", ")}:`);
+    console.log(`writing the ${platform} manifests ${write.join(", ")}:`);
     gh("release", "upload", MANIFEST_RELEASE_TAG, ...manifestPaths, "--clobber");
+    written.push(...write);
   }
   console.log(
-    write.length > 0
-      ? `published ${tag(version)}; ${write.join(" and ")} now announce it.`
+    written.length > 0
+      ? `published ${tag(version)}; ${written.join(" and ")} now announce it.`
       : `published ${tag(version)}; no manifest announces it, as every channel has a newer version.`,
   );
 } finally {

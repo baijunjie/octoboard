@@ -197,7 +197,7 @@ receive a hover background; an expanded question and its answer share a uniform 
 
 The primary action in the header, hero, and closing section uses the same localized label for viewing releases and opens
 the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies macOS on
-Apple silicon and Intel and labels the app as a beta. The closing note repeats that status beside the MIT License. Other
+Apple silicon and Intel and Windows on x64, and labels the apps as beta. The closing note repeats that status beside the MIT License. Other
 repository links open GitHub; the footer links to the developer's motivation at the localized homepage's
 `#developer-intent` and to the localized privacy page, explicitly names the MIT License in its license link, provides
 the operator's email address, and ends with the analytics settings button described in
@@ -266,18 +266,25 @@ remains localized text rather than part of the wordmark artwork.
 ## Platform availability
 
 Platform availability appears within the local-data and open-source section, before the questions. Its five entries have
-equal visual weight in a desktop row and become a compact list of icons and text on small screens. The macOS entry uses
-brighter text and identifies the version as a beta. The section introduction describes the macOS app as a beta still in
-development. The site does not give an installer date.
+equal visual weight in a desktop row and become a compact list of icons and text on small screens, in the order macOS,
+Windows, Linux, iOS, Android. The macOS and Windows entries use brighter text and identify those apps as beta. The
+section introduction describes the macOS and Windows apps as betas still in development. The site does not give an
+installer date.
 
-Status: not implemented — the Linux server and the Windows, iOS and Android apps. Each appears with a platform icon
-and no download or availability date.
+After the list, a note in the visitor's language tells Windows visitors how to install: download the installer whose
+name ends in `x64-setup.exe` from a release; it needs Windows 10 version 21H2 or later, installs for the user's account
+only, and downloads Microsoft Edge WebView2 when it is missing; on Windows 11 on Arm the x64 app runs under emulation;
+and the Windows app is not code-signed yet, so Microsoft Defender SmartScreen may show "Windows protected your PC",
+which "More info", then "Run anyway" passes. The note is plain text, without links.
 
-Linux is a planned server, not another app version beside Windows, iOS, and Android, and not a Linux desktop app. The
-platform introduction describes it as a server accessed from another machine's browser. It is not available. The Linux
-row has its own server-specific planned status. Windows, iOS, and Android remain planned and not available, and those
-rows use the shared planned badge. The homepage Markdown includes the same introduction and the same status for each
-row.
+Status: not implemented — the Linux server and the iOS and Android apps. Each appears with a platform icon and no
+download or availability date.
+
+Linux is a planned server, not another app version beside iOS and Android, and not a Linux desktop app. The platform
+introduction describes it as a server accessed from another machine's browser. It is not available. The Linux row has
+its own server-specific planned status. iOS and Android remain planned and not available, and those rows use the shared
+planned badge. The homepage Markdown includes the same introduction, the same status for each row and the Windows
+install note.
 
 ## Motion and accessibility
 

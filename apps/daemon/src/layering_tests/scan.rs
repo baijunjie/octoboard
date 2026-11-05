@@ -1,7 +1,9 @@
 //! Reads the crate's source into the edges the rule in the parent module checks: the module tree
 //! walked from `main.rs`, each production file with its comments and literals blanked, tokenised,
 //! and its `use` trees and paths read off the tokens. No parser crate: the rule needs paths only,
-//! and a lexical scan reads code that does not yet compile the same way it reads the rest.
+//! and a lexical scan reads code that does not yet compile the same way it reads the rest. The same
+//! pass finds the OS-specific tokens the platform rule looks for (`OsSite`), so "production code"
+//! means the same thing for both rules.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -39,10 +41,33 @@ pub(super) struct Edge {
     pub(super) path: Vec<String>,
 }
 
+/// One OS-specific token in production code. The kinds are listed in the doc of the
+/// `os_tokens` module.
+pub(super) struct OsSite {
+    pub(super) line: usize,
+    pub(super) kind: &'static str,
+}
+
 pub(super) struct Scan {
     /// The top-level modules production code is built from.
     pub(super) modules: BTreeSet<String>,
     pub(super) edges: Vec<Edge>,
+    /// Every OS-specific token in production code, with the file (relative to the crate's `src`)
+    /// it is in.
+    pub(super) os_sites: Vec<(String, OsSite)>,
+}
+
+/// What `blank_non_code` leaves in place of the `/` that opens a `/bin/sh` inside a string
+/// literal, and which `tokenize` turns into a mark rather than a token.
+const BIN_SH_MARKER: char = '\u{1}';
+
+/// `path`, relative to `src`, with `/` between its components on every host, as the rules name
+/// files.
+fn slashed(path: &Path) -> String {
+    path.components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// Walks the module tree from `main.rs` along its `mod` declarations, so a file counts as
@@ -59,6 +84,11 @@ pub(super) fn scan_crate() -> Scan {
         .collect();
     let mut reached = BTreeSet::from([src.join("main.rs")]);
     let mut edges = Vec::new();
+    let mut os_sites: Vec<(String, OsSite)> = root
+        .os_sites
+        .into_iter()
+        .map(|site| ("main.rs".to_string(), site))
+        .collect();
     let mut pending: Vec<(PathBuf, Vec<String>, bool)> = root
         .children
         .iter()
@@ -84,7 +114,8 @@ pub(super) fn scan_crate() -> Scan {
         if test_only {
             continue;
         }
-        let rel = file.strip_prefix(&src).unwrap().display().to_string();
+        let rel = slashed(file.strip_prefix(&src).unwrap());
+        os_sites.extend(parsed.os_sites.into_iter().map(|site| (rel.clone(), site)));
         for found in parsed.refs {
             if let Some((to, rest)) = found.path.split_first() {
                 edges.push(Edge {
@@ -100,7 +131,7 @@ pub(super) fn scan_crate() -> Scan {
     let mut unreached = Vec::new();
     collect_rs(&src, &mut |file| {
         if !reached.contains(file) {
-            unreached.push(file.strip_prefix(&src).unwrap().display().to_string());
+            unreached.push(slashed(file.strip_prefix(&src).unwrap()));
         }
     });
     assert!(
@@ -108,7 +139,11 @@ pub(super) fn scan_crate() -> Scan {
         "the dependency-direction scan did not reach these files through `mod` declarations from \
          main.rs, so it cannot tell whether they are production code: {unreached:?}"
     );
-    Scan { modules, edges }
+    Scan {
+        modules,
+        edges,
+        os_sites,
+    }
 }
 
 fn read(file: &Path) -> String {
@@ -136,7 +171,8 @@ fn collect_rs(dir: &Path, found: &mut dyn FnMut(&Path)) {
 }
 
 /// Replaces comments and the contents of string and character literals with spaces, keeping
-/// newlines so line numbers survive.
+/// newlines so line numbers survive. Each `/bin/sh` inside a string literal leaves `BIN_SH_MARKER`
+/// where its first character was, so the platform rule can see it.
 fn blank_non_code(src: &str) -> String {
     let chars: Vec<char> = src.chars().collect();
     let mut out = String::with_capacity(src.len());
@@ -182,37 +218,33 @@ fn blank_non_code(src: &str) -> String {
             }
         } else if let Some((hashes, open)) = raw_string(i).filter(|_| !after_ident) {
             out.extend(&chars[i..=open]);
-            i = open + 1;
-            while i < chars.len() {
-                let closes = chars[i] == '"'
-                    && chars[i + 1..]
+            let start = open + 1;
+            let close = (start..chars.len()).find(|&k| {
+                chars[k] == '"'
+                    && chars[k + 1..]
                         .iter()
                         .take(hashes)
                         .filter(|&&h| h == '#')
                         .count()
-                        == hashes;
-                if closes {
+                        == hashes
+            });
+            blank_literal(&mut out, &chars[start..close.unwrap_or(chars.len())]);
+            match close {
+                Some(close) => {
                     out.push('"');
                     out.push_str(&"#".repeat(hashes));
-                    i += 1 + hashes;
-                    break;
+                    i = close + 1 + hashes;
                 }
-                blank(&mut out, chars[i]);
-                i += 1;
+                None => i = chars.len(),
             }
         } else if c == '"' {
             out.push('"');
             i += 1;
+            let start = i;
             while i < chars.len() && chars[i] != '"' {
-                if chars[i] == '\\' {
-                    blank(&mut out, chars[i]);
-                    i += 1;
-                }
-                if i < chars.len() {
-                    blank(&mut out, chars[i]);
-                    i += 1;
-                }
+                i += if chars[i] == '\\' { 2 } else { 1 };
             }
+            blank_literal(&mut out, &chars[start..i.min(chars.len())]);
             out.push('"');
             i += 1;
         } else if c == '\'' {
@@ -247,6 +279,20 @@ fn blank_non_code(src: &str) -> String {
     out
 }
 
+/// Blanks the contents of a literal, marking where a `/bin/sh` starts in it.
+fn blank_literal(out: &mut String, literal: &[char]) {
+    let needle: Vec<char> = "/bin/sh".chars().collect();
+    for (k, &c) in literal.iter().enumerate() {
+        out.push(if literal[k..].starts_with(&needle) {
+            BIN_SH_MARKER
+        } else if c == '\n' {
+            '\n'
+        } else {
+            ' '
+        });
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum Tok {
     Ident(String),
@@ -257,9 +303,16 @@ enum Tok {
     Punct(char),
 }
 
-fn tokenize(code: &str) -> Vec<(Tok, usize)> {
+/// A token-less finding of the tokenizer: the index of the token that follows it, its line, and
+/// its kind.
+type Mark = (usize, usize, &'static str);
+
+/// The tokens of `code`, and the marks the tokenizer leaves out of them: an octal literal
+/// (numbers are not tokens) and a `/bin/sh` the blanking marked inside a string.
+fn tokenize(code: &str) -> (Vec<(Tok, usize)>, Vec<Mark>) {
     let chars: Vec<char> = code.chars().collect();
     let mut toks = Vec::new();
+    let mut marks = Vec::new();
     let mut line = 1;
     let mut i = 0;
     while i < chars.len() {
@@ -279,9 +332,16 @@ fn tokenize(code: &str) -> Vec<(Tok, usize)> {
                 i += 1;
             }
             toks.push((Tok::Ident(chars[start..i].iter().collect()), line));
+        } else if c == BIN_SH_MARKER {
+            marks.push((toks.len(), line, "/bin/sh"));
+            i += 1;
         } else if c.is_ascii_digit() {
+            let start = i;
             while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
                 i += 1;
+            }
+            if chars[start] == '0' && chars.get(start + 1) == Some(&'o') {
+                marks.push((toks.len(), line, "mode bits"));
             }
         } else if c == ':' && chars.get(i + 1) == Some(&':') {
             toks.push((Tok::Path, line));
@@ -294,7 +354,7 @@ fn tokenize(code: &str) -> Vec<(Tok, usize)> {
             i += 1;
         }
     }
-    toks
+    (toks, marks)
 }
 
 struct Child {
@@ -319,12 +379,13 @@ struct Import {
 struct Parsed {
     children: Vec<Child>,
     refs: Vec<Found>,
+    os_sites: Vec<OsSite>,
 }
 
 /// Reads one file. `depth` is how many modules deep the file sits (0 for `main.rs`), which decides
 /// whether a run of `super::` climbs out of its top-level module.
 fn parse(src: &str, depth: usize) -> Parsed {
-    let toks = tokenize(&blank_non_code(src));
+    let (toks, marks) = tokenize(&blank_non_code(src));
     let mut p = Parser {
         toks: &toks,
         at: 0,
@@ -334,8 +395,10 @@ fn parse(src: &str, depth: usize) -> Parsed {
         refs: Vec::new(),
         imports: Vec::new(),
         relative: Vec::new(),
+        test_only: Vec::new(),
     };
     p.run();
+    let os_sites = os_sites(&toks, &marks, &p.test_only);
     // A path starting with an imported name continues the import's path. An imported module seen
     // through such paths is left to them, so an edge carries the item it reaches.
     let mut refs = p.refs;
@@ -363,7 +426,112 @@ fn parse(src: &str, depth: usize) -> Parsed {
     Parsed {
         children: p.children,
         refs,
+        os_sites,
     }
+}
+
+/// The OS-specific tokens among `toks`, outside the `test_only` ranges, with the `marks` the
+/// tokenizer found. Reading the whole token stream rather than what `Parser::run` visits keeps
+/// the tokens inside attributes, `use` trees and macro calls in view.
+fn os_sites(toks: &[(Tok, usize)], marks: &[Mark], test_only: &[(usize, usize)]) -> Vec<OsSite> {
+    let live = |k: usize| !test_only.iter().any(|&(from, to)| from <= k && k < to);
+    let ident = |k: usize| match toks.get(k) {
+        Some((Tok::Ident(word), _)) => Some(word.as_str()),
+        _ => None,
+    };
+    let is_path = |k: usize| matches!(toks.get(k), Some((Tok::Path, _)));
+    let punct = |k: usize, c: char| matches!(toks.get(k), Some((Tok::Punct(p), _)) if *p == c);
+    let mut sites: Vec<OsSite> = marks
+        .iter()
+        .filter(|(at, _, _)| live(*at))
+        .map(|&(_, line, kind)| OsSite { line, kind })
+        .collect();
+    for (k, (_, line)) in toks.iter().enumerate() {
+        let (Some(word), true) = (ident(k), live(k)) else {
+            continue;
+        };
+        // Whether the word continues a path or a receiver (`a::libc`, `x.mode`) rather than
+        // starting one; a leading `::` starts one.
+        let inner =
+            k > 0 && (punct(k - 1, '.') || (is_path(k - 1) && k > 1 && ident(k - 2).is_some()));
+        let mut found = |kind: &'static str| sites.push(OsSite { line: *line, kind });
+        match word {
+            "libc" if !inner && is_path(k + 1) => found("libc"),
+            "windows_sys" if !inner && is_path(k + 1) => found("windows_sys"),
+            "portable_pty" if !inner && is_path(k + 1) => found("portable_pty"),
+            "tokio"
+                if !inner
+                    && is_path(k + 1)
+                    && ident(k + 2) == Some("signal")
+                    && is_path(k + 3)
+                    && matches!(ident(k + 4), Some("unix" | "windows")) =>
+            {
+                found("tokio::signal")
+            }
+            "std" if !inner && is_path(k + 1) && ident(k + 2) == Some("os") => found("std::os"),
+            "std" if !inner && is_path(k + 1) && punct(k + 2, '{') => {
+                // `use std::{fs, os::unix::fs::PermissionsExt}`: an `os` at the top of the group.
+                let mut depth = 0;
+                for j in k + 2..toks.len() {
+                    if punct(j, '{') {
+                        depth += 1;
+                    } else if punct(j, '}') {
+                        depth -= 1;
+                    } else if depth == 1
+                        && ident(j) == Some("os")
+                        && (punct(j - 1, '{') || punct(j - 1, ','))
+                    {
+                        found("std::os");
+                    }
+                    if depth == 0 {
+                        break;
+                    }
+                }
+            }
+            "cfg" | "cfg_attr" => {
+                let attribute = k > 0 && punct(k - 1, '[') && punct(k + 1, '(');
+                let call = word == "cfg" && punct(k + 1, '!') && punct(k + 2, '(');
+                if attribute || call {
+                    // The predicate of a `cfg_attr` ends at its first comma.
+                    let mut depth = 0;
+                    for j in (if call { k + 2 } else { k + 1 })..toks.len() {
+                        if punct(j, '(') {
+                            depth += 1;
+                        } else if punct(j, ')') {
+                            depth -= 1;
+                        } else if punct(j, ',') && depth == 1 && word == "cfg_attr" {
+                            break;
+                        } else if matches!(ident(j), Some("target_os" | "unix" | "windows"))
+                            && !is_path(j - 1)
+                        {
+                            found("cfg(os)");
+                            break;
+                        }
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+            "symlink" | "symlink_file" | "symlink_dir" => found("symlink"),
+            "canonicalize" => found("canonicalize"),
+            "set_mode" | "from_mode" if punct(k + 1, '(') => found("mode bits"),
+            // `OpenOptionsExt::mode(0o700)`, and `Permissions::mode()`; a bare `x.mode()` is left
+            // alone, since `alacritty_terminal`'s `Term::mode()` has the same shape.
+            "mode" if k > 0 && punct(k - 1, '.') && punct(k + 1, '(') => {
+                let permissions = k >= 4
+                    && ident(k - 4) == Some("permissions")
+                    && punct(k - 3, '(')
+                    && punct(k - 2, ')');
+                if !punct(k + 2, ')') || permissions {
+                    found("mode bits");
+                }
+            }
+            _ => {}
+        }
+    }
+    sites.sort_by_key(|site| site.line);
+    sites
 }
 
 /// What an open `{` belongs to.
@@ -386,6 +554,9 @@ struct Parser<'a> {
     imports: Vec<Import>,
     /// Paths starting with a plain name, to be matched against `imports` once the file is read.
     relative: Vec<(Vec<String>, usize)>,
+    /// The token ranges of test-only items, attributes included, and of a whole file under
+    /// `#![cfg(test)]`; `os_sites` leaves them out.
+    test_only: Vec<(usize, usize)>,
 }
 
 impl Parser<'_> {
@@ -411,6 +582,7 @@ impl Parser<'_> {
     fn run(&mut self) {
         while self.at < self.toks.len() {
             if self.is(self.at, '#') {
+                let start = self.at;
                 let inner = self.is(self.at + 1, '!');
                 let test_only = self.attributes();
                 if test_only && inner {
@@ -419,10 +591,12 @@ impl Parser<'_> {
                     self.imports.clear();
                     self.relative.clear();
                     self.children.clear();
+                    self.test_only.push((0, self.toks.len()));
                     return;
                 }
                 if test_only {
                     self.skip_item();
+                    self.test_only.push((start, self.at));
                 }
                 continue;
             }
@@ -829,6 +1003,183 @@ fn g<'a>(x: &'a str) -> &'a str {
                 "paths::home_dir",
                 "wire_path"
             ]
+        );
+    }
+
+    /// The (line, kind) of every OS token `parse` finds.
+    fn os_tokens(src: &str) -> Vec<(usize, &'static str)> {
+        parse(src, 1)
+            .os_sites
+            .into_iter()
+            .map(|s| (s.line, s.kind))
+            .collect()
+    }
+
+    #[test]
+    fn cfg_predicates_naming_an_os_are_found_at_any_nesting_and_in_every_form() {
+        let src = r#"
+#[cfg(unix)]
+fn a() {}
+#[cfg(all(not(windows), feature = "x"))]
+fn b() {}
+#[cfg(any(feature = "x", all(target_os = "macos", debug_assertions)))]
+fn c() {}
+#![cfg(feature = "x")]
+#[cfg_attr(unix, derive(Debug))]
+struct S;
+#[cfg_attr(feature = "x", derive(unix))]
+struct T;
+fn d() -> bool {
+    cfg!(any(windows, feature = "x"))
+}
+#[cfg(feature = "x")]
+fn e() {}
+"#;
+        assert_eq!(
+            os_tokens(src),
+            [
+                (2, "cfg(os)"),
+                (4, "cfg(os)"),
+                (6, "cfg(os)"),
+                (9, "cfg(os)"),
+                (14, "cfg(os)")
+            ]
+        );
+    }
+
+    #[test]
+    fn std_os_paths_and_os_crates_are_found_in_uses_groups_and_inline() {
+        let src = r#"
+use std::os::unix::fs::PermissionsExt;
+use std::{fs, os::fd::AsRawFd};
+use std::{fs, io};
+fn f() {
+    let _ = libc::getpid();
+    let _ = windows_sys::Win32::Foo;
+    let _ = portable_pty::native_pty_system();
+    let _: tokio::signal::unix::Signal;
+    let _ = tokio::signal::ctrl_c();
+    let _ = crate::platform::libc::x();
+    let _ = state.libc;
+}
+"#;
+        assert_eq!(
+            os_tokens(src),
+            [
+                (2, "std::os"),
+                (3, "std::os"),
+                (6, "libc"),
+                (7, "windows_sys"),
+                (8, "portable_pty"),
+                (9, "tokio::signal")
+            ]
+        );
+    }
+
+    #[test]
+    fn bin_sh_counts_in_a_literal_and_not_in_a_comment() {
+        let src = r##"
+// "/bin/sh" in a comment
+/* /bin/sh */
+const A: &str = "/bin/sh";
+const B: &str = r#"
+    #!/bin/sh
+"#;
+const C: &str = "/bin/shell-less";
+const D: &str = "/usr/bin/env";
+"##;
+        assert_eq!(
+            os_tokens(src),
+            [(4, "/bin/sh"), (6, "/bin/sh"), (8, "/bin/sh")]
+        );
+    }
+
+    #[test]
+    fn mode_bits_are_octal_literals_and_the_mode_methods() {
+        let src = r#"
+fn f(p: &Path, t: &Term) {
+    let a = 0o644;
+    let b = 0b101 + 0x1f + 0;
+    OpenOptions::new().mode(0o600);
+    std::fs::Permissions::from_mode(m);
+    perms.set_mode(m);
+    let c = meta.permissions().mode();
+    let d = t.mode();
+    let e = state.mode;
+    opts.mode(m);
+}
+"#;
+        assert_eq!(
+            os_tokens(src),
+            [
+                (3, "mode bits"),
+                (5, "mode bits"),
+                (6, "mode bits"),
+                (7, "mode bits"),
+                (8, "mode bits"),
+                (11, "mode bits"),
+            ]
+        );
+    }
+
+    #[test]
+    fn symlink_and_canonicalize_are_found_but_the_portable_neighbours_are_not() {
+        let src = r#"
+fn f(p: &Path) {
+    symlink(a, b);
+    symlink_file(a, b);
+    symlink_dir(a, b);
+    p.symlink_metadata();
+    p.is_symlink();
+    std::fs::read_link(p);
+    std::fs::canonicalize(p);
+    p.canonicalize();
+    p.canonicalized();
+}
+"#;
+        assert_eq!(
+            os_tokens(src),
+            [
+                (3, "symlink"),
+                (4, "symlink"),
+                (5, "symlink"),
+                (9, "canonicalize"),
+                (10, "canonicalize"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_test_only_item_hides_the_tokens_inside_it() {
+        let src = r#"
+#[cfg(test)]
+use std::os::unix::fs::symlink;
+#[cfg(test)]
+mod tests {
+    fn f() {
+        let _ = libc::getpid();
+        let _ = "/bin/sh";
+        let _ = 0o644;
+    }
+}
+#[cfg(all(test, unix))]
+fn g() {}
+#[cfg(any(test, unix))]
+fn h() {}
+fn k() {
+    #[cfg(test)]
+    let _ = libc::getuid();
+    let _ = libc::getgid();
+}
+"#;
+        assert_eq!(os_tokens(src), [(14, "cfg(os)"), (19, "libc")]);
+    }
+
+    #[test]
+    fn a_file_under_an_inner_cfg_test_has_no_os_tokens() {
+        assert_eq!(
+            os_tokens("#![cfg(test)]\nuse std::os::unix::io::RawFd;\n"),
+            []
         );
     }
 }

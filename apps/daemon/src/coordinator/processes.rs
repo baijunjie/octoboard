@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::processes::ledger::{SharesAgentConsole, TreesStopped};
 use crate::protocol::{error_code, CodedError, ProcessCount, ProcessTarget, ProcessTree, Project};
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
@@ -265,8 +266,8 @@ fn leftover_dirs(state: &AppState) -> Result<Vec<PathBuf>> {
 }
 
 /// Stops the trees `ids` name that are still a tree of a running launch, a leftover of a project
-/// or a tree the user kept; returns the ids it stopped.
-pub async fn stop(state: &Arc<AppState>, ids: Vec<String>) -> Result<Vec<String>> {
+/// or a tree the user kept; returns the ids it stopped, and the processes it left running.
+pub async fn stop(state: &Arc<AppState>, ids: Vec<String>) -> Result<TreesStopped> {
     let dirs = leftover_dirs(state)?;
     let state = Arc::clone(state);
     Ok(tokio::task::spawn_blocking(move || state.process_ledger.stop_trees(&ids, &dirs)).await?)
@@ -274,7 +275,8 @@ pub async fn stop(state: &Arc<AppState>, ids: Vec<String>) -> Result<Vec<String>
 
 /// Makes the trees `ids` name that are still a tree of a running launch, or a leftover of a
 /// project, the user's, so the ledger never stops them unless asked to; they stay listed among
-/// the trees of their project that no session owns. Returns the ids it kept.
+/// the trees of their project that no session owns. Returns the ids it kept; refused, with nothing
+/// kept, when a tree named has a process on its agent's own console.
 pub async fn keep(state: &Arc<AppState>, ids: Vec<String>) -> Result<Vec<String>> {
     let projects = local_projects(state)?;
     let session_projects: HashMap<String, String> = state
@@ -284,12 +286,20 @@ pub async fn keep(state: &Arc<AppState>, ids: Vec<String>) -> Result<Vec<String>
         .filter_map(|session| Some((session.id, session.project_id?)))
         .collect();
     let state = Arc::clone(state);
-    Ok(tokio::task::spawn_blocking(move || {
+    let kept = tokio::task::spawn_blocking(move || {
         state
             .process_ledger
             .keep_trees(&ids, &projects, &session_projects)
     })
-    .await?)
+    .await?;
+    kept.map_err(|SharesAgentConsole { pid, name }| {
+        CodedError::raised(
+            error_code::PROCESS_SHARES_AGENT_CONSOLE,
+            "This process runs in the agent's own terminal, so it ends with the session and \
+             cannot be kept. Start it in a window of its own to keep it running.",
+            &[("pid", &pid.0.to_string()), ("name", &name)],
+        )
+    })
 }
 
 /// The trees of `sessions` whose top has run for at least `min_age`: what an archive of them

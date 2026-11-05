@@ -41,3 +41,11 @@ describe("nameCollision", () => {
     expect(nameCollision("home", "claude", accounts, "Default", "a")).toEqual({ kind: "account", name: "Home" });
   });
 });
+
+it.each([
+  [[], "~\\.claude-1"],
+  [["C:\\Users\\dev\\.claude-1", "~\\.claude-3\\"], "~\\.claude-2"],
+  [["c:/users/dev/.claude-1", "~/.claude-2"], "~\\.claude-3"],
+])("uses the smallest free positive suffix for %j on a Windows host", (occupied, expected) => {
+  expect(nextConfigDir("~\\.claude", occupied, "C:\\Users\\dev", "windows")).toBe(expected);
+});

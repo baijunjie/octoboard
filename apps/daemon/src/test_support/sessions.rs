@@ -90,7 +90,9 @@ impl CodexChain {
 pub(crate) fn codex_chain(home: &Path, thread: &str, compressed: bool) -> CodexChain {
     let suffix = if compressed { ".jsonl.zst" } else { ".jsonl" };
     let path = |day: &str, time: &str, name: &str| {
-        home.join("sessions/2026/10")
+        home.join("sessions")
+            .join("2026")
+            .join("10")
             .join(day)
             .join(format!("rollout-2026-10-{day}T{time}-{name}{suffix}"))
     };

@@ -24,7 +24,7 @@ test("generates all native purposes with the configured identity and valid bundl
     const appName = 'Test & <App> "Name"';
     generateNativeLocalizations({ appName, catalogs, outputDir, basePlist });
     assert.equal(Object.keys(catalogs.en).length, 15);
-    const config = JSON.parse(read("../src-tauri/tauri.conf.json"));
+    const config = JSON.parse(read("../src-tauri/tauri.macos.conf.json"));
     assert.equal(config.bundle.macOS.infoPlist, "Info.plist");
     for (const language of Object.keys(catalogs)) {
       const resource = `${language}.lproj/InfoPlist.strings`;
@@ -75,7 +75,7 @@ test("the CLI writes the same permission plist for Tauri dev embedding and bundl
       assert.ok(!generated.includes("{appName}"));
     }
     const developmentPlist = path.join(desktop, "src-tauri/Info.plist");
-    const config = JSON.parse(read("../src-tauri/tauri.conf.json"));
+    const config = JSON.parse(read("../src-tauri/tauri.macos.conf.json"));
     assert.equal(path.join(desktop, "src-tauri", config.bundle.macOS.infoPlist), developmentPlist);
     const content = readFileSync(developmentPlist, "utf8");
     for (const [key, template] of Object.entries(catalogs.en)) {

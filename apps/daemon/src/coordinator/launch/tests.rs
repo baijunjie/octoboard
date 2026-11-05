@@ -466,6 +466,65 @@ async fn a_relaunch_for_a_switch_never_reopens_an_archived_session() {
     );
 }
 
+/// A console session's launch writes its console's instruction files before the agent starts, as
+/// regular files where the host makes no file links, in place of the links an earlier run left.
+#[tokio::test]
+async fn a_console_session_launch_writes_its_instruction_files_without_file_links() {
+    use crate::test_support::{console_session, stand_in_launch, Launched, StandIn};
+    use std::sync::Mutex;
+    let (state, dir) = crate::test_support::app_state("coordinator-launch-no-file-links");
+    let workdir = crate::coordinator::test_support::console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(AgentId::CODEX, &workdir))
+        .unwrap();
+    std::fs::write(workdir.join("AGENTS.md"), "an earlier run's text").unwrap();
+    crate::test_support::symlink("AGENTS.md", workdir.join("CLAUDE.md")).unwrap();
+    state
+        .store
+        .insert_session(&Session {
+            agent: AgentId::CODEX,
+            ..console_session("hub", SessionStatus::Interrupted)
+        })
+        .unwrap();
+    crate::coordinator::console_workdir::FILE_LINKS_OVERRIDE.set(Some(false));
+    let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+    let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+    let claim = state.begin_launch("hub").unwrap();
+    relaunch_session_with(
+        &state,
+        &claim,
+        "hub",
+        None,
+        false,
+        None,
+        None,
+        stand_in_launch(&started, &launches, || {}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(launches.lock().unwrap().len(), 1);
+    let regular_file = |name: &str| {
+        let path = workdir.join(name);
+        assert!(
+            std::fs::symlink_metadata(&path).unwrap().is_file(),
+            "{name}"
+        );
+        std::fs::read_to_string(path).unwrap()
+    };
+    assert_eq!(
+        regular_file("AGENTS.md"),
+        crate::session_tools::console_instructions::console_session_instructions(
+            None,
+            &crate::session_tools::role::RoleOptions {
+                ask_as_choices: true,
+                ..Default::default()
+            },
+        )
+    );
+    assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+}
+
 /// A Claude Code resume takes the instruction as its launch prompt, shaped as a written message
 /// is, and queues nothing: written into the session it would meet the "Resume this
 /// conversation?" dialog. Another agent has it queued, as before.

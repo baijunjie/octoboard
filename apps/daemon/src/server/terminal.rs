@@ -40,13 +40,13 @@ impl Terminal {
         }
     }
 
-    fn write_input(&self, data: &[u8]) -> Result<(), crate::terminal::ptyio::PartialWrite> {
+    fn write_input(&self, data: &[u8]) -> Result<(), crate::platform::term::PartialWrite> {
         match self {
             Terminal::Session(session) => session.write_terminal_input(data),
             Terminal::Shell(shell) => shell.write(data),
         }
     }
-    fn write_reply(&self, data: &[u8]) -> Result<(), crate::terminal::ptyio::PartialWrite> {
+    fn write_reply(&self, data: &[u8]) -> Result<(), crate::platform::term::PartialWrite> {
         match self {
             Terminal::Session(session) => session.write_terminal_reply(data),
             Terminal::Shell(shell) => shell.write(data),
@@ -124,8 +124,8 @@ impl DeferredInput {
     fn complete(
         &mut self,
         frame: InputFrame,
-        result: Result<(), crate::terminal::ptyio::PartialWrite>,
-    ) -> Result<bool, crate::terminal::ptyio::PartialWrite> {
+        result: Result<(), crate::platform::term::PartialWrite>,
+    ) -> Result<bool, crate::platform::term::PartialWrite> {
         match (frame, result) {
             (InputFrame::User(data), Err(error))
                 if error.written == 0 && error.error.kind() == std::io::ErrorKind::WouldBlock =>
@@ -151,9 +151,9 @@ impl DeferredInput {
     fn write_task_failed(
         &mut self,
         error: tokio::task::JoinError,
-    ) -> crate::terminal::ptyio::PartialWrite {
+    ) -> crate::platform::term::PartialWrite {
         self.typing_lost = true;
-        crate::terminal::ptyio::PartialWrite {
+        crate::platform::term::PartialWrite {
             written: 0,
             error: std::io::Error::other(format!("the terminal input task failed: {error}")),
         }
@@ -167,7 +167,7 @@ impl DeferredInput {
     }
 }
 
-type InputWrite = (InputFrame, Result<(), crate::terminal::ptyio::PartialWrite>);
+type InputWrite = (InputFrame, Result<(), crate::platform::term::PartialWrite>);
 
 fn start_input_write(terminal: Terminal, frame: InputFrame) -> tokio::task::JoinHandle<InputWrite> {
     tokio::task::spawn_blocking(move || {
@@ -280,7 +280,7 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
                                 }
                             }
                             Ok(TermControl::Reply { data, offset }) => {
-                                if !pty.admit_reply(client, offset) {
+                                if !pty.admit_reply(client, offset, data.as_bytes()) {
                                     continue;
                                 }
                                 deferred.push_reply(data.into_bytes());
@@ -386,7 +386,7 @@ mod tests {
         pending
             .complete(
                 second,
-                Err(crate::terminal::ptyio::PartialWrite {
+                Err(crate::platform::term::PartialWrite {
                     written: 0,
                     error: std::io::Error::from(std::io::ErrorKind::WouldBlock),
                 }),
@@ -432,7 +432,7 @@ mod tests {
         let error = pending
             .complete(
                 first,
-                Err(crate::terminal::ptyio::PartialWrite {
+                Err(crate::platform::term::PartialWrite {
                     written: 2,
                     error: std::io::Error::from(std::io::ErrorKind::BrokenPipe),
                 }),
@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn deferred_terminal_reports_are_not_lost_typing() {
         let refused = || {
-            Err(crate::terminal::ptyio::PartialWrite {
+            Err(crate::platform::term::PartialWrite {
                 written: 0,
                 error: std::io::Error::from(std::io::ErrorKind::BrokenPipe),
             })
@@ -475,18 +475,37 @@ mod tests {
         assert!(pending.lost_typing(), "a refused key is typing");
     }
 
-    #[tokio::test]
-    async fn a_terminal_write_keeps_draining_echo_while_the_input_is_in_flight() {
-        use tokio_tungstenite::tungstenite::Message as Frame;
-
-        let (state, dir) = app_state("server-input-echo");
-        let live = crate::test_support::fake_live_session(
-            "echo",
+    /// A stand-in session `id` that writes `READY` and then echoes what it reads, byte for byte:
+    /// a native process on Windows (`test_support::fixture`), whose echo is the console host's
+    /// pace alone.
+    fn raw_echo(id: &str) -> crate::test_support::StandIn {
+        #[cfg(unix)]
+        return crate::test_support::fake_live_session(
+            id,
             AgentId::CLAUDE,
             80,
             24,
             "stty raw -echo; printf READY; cat",
         );
+        #[cfg(windows)]
+        return crate::test_support::fake_live_session_running(
+            id,
+            AgentId::CLAUDE,
+            80,
+            24,
+            &crate::test_support::fixture::Steps::new()
+                .print("READY")
+                .echo_raw()
+                .program("echo"),
+        );
+    }
+
+    #[tokio::test]
+    async fn a_terminal_write_keeps_draining_echo_while_the_input_is_in_flight() {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = app_state("server-input-echo");
+        let live = raw_echo("echo");
         crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         state.register_live(live.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -537,13 +556,7 @@ mod tests {
         use tokio_tungstenite::tungstenite::Message as Frame;
 
         let (state, dir) = app_state("server-input-held");
-        let live = crate::test_support::fake_live_session(
-            "held",
-            AgentId::CLAUDE,
-            80,
-            24,
-            "stty raw -echo; printf READY; cat",
-        );
+        let live = raw_echo("held");
         crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         state.register_live(live.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

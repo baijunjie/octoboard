@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatPrivacyDate } from "./privacy-date.ts";
 import {
-  developedPlatform,
+  availablePlatforms,
   developerSections,
   githubPrivacyUrl,
   heroAgents,
@@ -125,7 +125,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     text("brandSloganMeaning"),
     text("workspaceIntroduction"),
     text("heroStatus"),
-    text("heroPlatformNote"),
+    text("heroPlatformsNote"),
     link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
     link(text("heroSecondary"), copy.repositoryUrl),
     text("workspaceAgentLabel"),
@@ -184,13 +184,13 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     link(text("proofRepository"), copy.repositoryUrl),
     link(text("proofLicense"), licenseUrl(copy.repositoryUrl)),
     heading(3, text("platformsTitle")),
-    text("platformsDescription"),
+    text("platformsSupportDescription"),
     [
-      `- ${developedPlatform.name}: ${text("platformsMacStatus")}`,
-      ...plannedPlatforms.map(
+      ...[...availablePlatforms, ...plannedPlatforms].map(
         (platform) => `- ${platform.name}: ${text(platform.status)}`,
       ),
     ].join("\n"),
+    text("platformsWindowsInstall"),
     heading(2, text("faqTitle")),
     ...homeQuestions.flatMap((question) => [
       heading(3, text(`faq${question}Question`)),
@@ -238,9 +238,11 @@ function llmsTxt(copy: AgentCopy): string {
   const text = (key: string) => flatten(message(english, key, params));
   const notes = [
     text("workspaceIntroduction"),
-    text("heroPlatformNote"),
-    `${developedPlatform.name}: ${text("platformsMacStatus")}`,
-    ...plannedPlatforms.map((platform) => `${platform.name}: ${text(platform.status)}`),
+    text("heroPlatformsNote"),
+    ...[...availablePlatforms, ...plannedPlatforms].map(
+      (platform) => `${platform.name}: ${text(platform.status)}`,
+    ),
+    text("platformsWindowsInstall"),
     link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
     text("proofFreeCaption"),
     text("localDescription"),
@@ -256,7 +258,7 @@ function llmsTxt(copy: AgentCopy): string {
     const messages = catalog(copy, code);
     const titleKey = page === "" ? "codingAgentsSeoTitle" : "privacySeoTitle";
     const descriptionKey =
-      page === "" ? "codingAgentsSeoDescription" : "privacySeoDescription";
+      page === "" ? "workspaceSeoDescription" : "privacySeoDescription";
     const title = flatten(message(messages, titleKey, params));
     const description = truncate(
       message(messages, descriptionKey, params),
@@ -275,7 +277,7 @@ function llmsTxt(copy: AgentCopy): string {
   });
   return document([
     heading(1, copy.appName),
-    `> ${text("codingAgentsSeoDescription")}`,
+    `> ${text("workspaceSeoDescription")}`,
     `Canonical Origin: ${copy.siteUrl}`,
     ["**Notes:**", ...notes].join("\n\n"),
     ["## Available Languages on Website", "", ...languages].join("\n"),
@@ -305,7 +307,7 @@ function llmsFull(
   code = "en",
 ): string {
   const description = flatten(
-    message(catalog(copy, code), "codingAgentsSeoDescription", valuesFor(copy)),
+    message(catalog(copy, code), "workspaceSeoDescription", valuesFor(copy)),
   );
   const header = document([
     heading(1, copy.appName),
@@ -405,7 +407,7 @@ export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
       const description = flatten(
         message(
           catalog(copy, locale.code),
-          page === "" ? "codingAgentsSeoDescription" : "privacySeoDescription",
+          page === "" ? "workspaceSeoDescription" : "privacySeoDescription",
           params,
         ),
       );

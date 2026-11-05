@@ -8,10 +8,10 @@ import type { PanelKind } from "../layout/panelKind";
 import type { AccountQuota, Agent, AgentAvailability, Event as DaemonEvent, GitStatus } from "../protocol";
 import { statusLabel } from "../sessions/sessionLabel";
 import { type ShownStatusKind } from "../sessions/sessionStatus";
-import { eventKey, type Binding } from "../shortcuts/binding";
+import { eventKey, type Binding, type ModifierHost } from "../shortcuts/binding";
 import type { Daemon, State } from "../store";
 import type { TerminalElement } from "../terminal/terminalTextView";
-import { IS_MAC } from "../input/keys";
+import { readHost } from "../platform/host";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 import { partSelector } from "../primitives";
 
@@ -439,7 +439,9 @@ export interface Ui {
   clickTerminalLink: (text: string) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
-   * pressed next goes to it: for a row of a list, which a press would open rather than focus. */
+   * pressed next goes to it: for a row of a list, which a press would open rather than focus. A control marked
+   * `aria-disabled` (unavailable, yet focusable, with its reason as a tooltip) is found too, after the enabled ones,
+   * since focusing presses nothing. */
   focusControl: (matcher: Matcher) => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
@@ -538,7 +540,9 @@ export async function settleMotion(doc: Document, limit: number): Promise<void> 
   }
 }
 
-export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui {
+/** The steps' driver for the page `doc`. `host` says which key is the shortcut modifier for a step that presses it (a chord, a
+ * click that carries it): the machine the page runs on by default, the scenario's own host in the gallery. */
+export function createUi(doc: Document, language: Language, daemon?: Daemon, host: ModifierHost = readHost()): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   /** Whether the window uses the single-panel tablet layout. A document whose stylesheet does not declare the
@@ -592,7 +596,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
   const clickWhenFound = async (look: () => HTMLElement | undefined, missing: string, modifier = false): Promise<void> => {
     const element = await waitFor(look, missing);
     if (modifier) {
-      element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0, metaKey: IS_MAC, ctrlKey: !IS_MAC }));
+      element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0, metaKey: host.modifier === "meta", ctrlKey: host.modifier === "control" }));
     } else element.click();
     // A submenu a click opens closes again shortly unless the pointer is on its trigger, which a
     // click never places. Put it there afterwards — before the click, the same events do not hold
@@ -843,7 +847,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await wait(300);
     },
     async chord(binding) {
-      const { code, ...modifiers } = eventKey(binding);
+      const { code, ...modifiers } = eventKey(binding, host);
       const key = /^Key[A-Z]$/.test(code) ? (binding.shift ? code.slice(3) : code.slice(3).toLowerCase()) : code;
       const target = doc.activeElement ?? doc.body;
       for (const type of ["keydown", "keyup"]) {
@@ -852,7 +856,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await wait(300);
     },
     async focusControl(matcher) {
-      const control = await waitFor(() => find(matcher), `Nothing to focus matching ${String(matcher)}`);
+      const unavailable = () =>
+        Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) =>
+          element.getAttribute("aria-disabled") === "true" && !element.hasAttribute("disabled") && !element.closest("[inert]") && matches(matcher, nameOf(element)));
+      const control = await waitFor(() => find(matcher) ?? unavailable(), `Nothing to focus matching ${String(matcher)}`);
       // react-aria reads what the focus came from off the last key event, so Tab is sent first.
       (doc.activeElement ?? doc.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
       control.focus();

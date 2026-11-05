@@ -96,7 +96,7 @@ test("Open Graph locales use a territory, including Simplified Chinese", () => {
   }
 });
 
-test("structured data describes the macOS app without claiming it can be installed", () => {
+test("structured data describes the desktop app without claiming it can be installed", () => {
   const homeGraph = buildJsonLd({
     page: "home",
     canonical: "https://octoboard.dev/ja/",
@@ -126,7 +126,7 @@ test("structured data describes the macOS app without claiming it can be install
   assert.equal(Object.hasOwn(app ?? {}, "description"), false);
   assert.match(home, /"@type":"FAQPage"/);
   assert.match(home, /"@type":"SoftwareApplication"/);
-  assert.match(home, /"operatingSystem":"macOS"/);
+  assert.match(home, /"operatingSystem":"macOS, Windows"/);
   assert.equal(home.includes("offers"), false);
   assert.equal(home.includes("aggregateRating"), false);
   assert.equal(home.includes("installUrl"), false);
@@ -173,7 +173,12 @@ test("agent documents follow the pages and do not publish a download that does n
   const home = files["index.md"];
   const llms = files["llms.txt"];
   assert.match(home, /Canonical: https:\/\/octoboard\.dev\//);
-  assert.match(home, /macOS on Apple silicon and Intel · Beta/);
+  assert.match(home, /macOS on Apple silicon and Intel · Windows on x64 · Beta/);
+  assert.match(home, /- macOS: Beta/);
+  assert.match(home, /- Windows: Beta/);
+  assert.equal(home.includes("Windows: Planned"), false);
+  assert.match(home, /On Windows, download the installer whose name ends in x64-setup\.exe/);
+  assert.match(home, /select “More info”, then “Run anyway”/);
   assert.match(home, /The app is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
   assert.match(home, /Switch accounts\. Continue the task\./);
@@ -225,10 +230,12 @@ test("agent documents follow the pages and do not publish a download that does n
   assert.match(llms, /Support: support@octoboard\.dev/);
   assert.match(llms, /https:\/\/octoboard\.dev\/index\.md/);
   assert.match(llms, /https:\/\/octoboard\.dev\/ja\.md/);
-  assert.match(llms, /macOS on Apple silicon and Intel · Beta/);
+  assert.match(llms, /macOS on Apple silicon and Intel · Windows on x64 · Beta/);
   assert.match(llms, /macOS: Beta/);
+  assert.match(llms, /Windows: Beta/);
+  assert.match(llms, /x64-setup\.exe/);
   assert.match(llms, /Linux: Server · Planned/);
-  assert.match(llms, /Windows: Planned/);
+  assert.equal(llms.includes("Windows: Planned"), false);
   assert.match(llms, /iOS: Planned/);
   assert.match(llms, /Android: Planned/);
   assert.match(llms, /\[View releases\]\(https:\/\/github\.com\/baijunjie\/octoboard\/releases\)/);
@@ -268,12 +275,12 @@ test("agent entry links resolve and language bundles contain only their own two 
         assert.ok(bundle.includes(files[markdownFile(`/${prefix}${path}`)].trim()), file);
       }
       const catalog = messages[locale.code];
-      assert.ok(bundle.includes(catalog.codingAgentsSeoDescription), file);
+      assert.ok(bundle.includes(catalog.workspaceSeoDescription), file);
       for (const name of ["Claude Code", "Codex"]) {
         assert.ok(catalog.codingAgentsSeoTitle.includes(name), `${locale.code}: ${name}`);
       }
-      for (const name of ["Claude Code", "Codex", "Grok Build", "macOS"]) {
-        assert.ok(catalog.codingAgentsSeoDescription.includes(name), `${locale.code}: ${name}`);
+      for (const name of ["Claude Code", "Codex", "Grok Build", "macOS", "Windows"]) {
+        assert.ok(catalog.workspaceSeoDescription.includes(name), `${locale.code}: ${name}`);
       }
     }
     for (const [file, body] of Object.entries(files)) {

@@ -21,7 +21,7 @@
 //! user's hook with the hook's own environment.
 
 use std::collections::HashMap;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::{Command, Output};
 use std::sync::atomic::AtomicBool;
@@ -31,7 +31,9 @@ use anyhow::Result;
 
 use crate::env_shell;
 use crate::git::env::{self as git_env, SshConfiguration};
-use crate::processes::subprocess::{self, BoundedFailure, Bounds, Reach};
+use crate::platform::names;
+use crate::platform::proc::Reach;
+use crate::processes::subprocess::{self, BoundedFailure, Bounds};
 
 /// The user's `git` binary and the shell environment it runs with.
 #[derive(Debug, Clone)]
@@ -49,7 +51,7 @@ impl UserGit {
 
     /// The `git` that `env`'s `PATH` resolves, run in `env`.
     pub fn from_env(env: HashMap<String, String>) -> Result<Self> {
-        let program = env_shell::resolve_binary("git", &env)?;
+        let program = env_shell::resolve_program("git", &env)?;
         Ok(Self { program, env })
     }
 
@@ -337,6 +339,16 @@ impl Runner {
     }
 }
 
+/// `bytes` as one command-line argument of `git`: the file name they stand for, or, on a host that
+/// cannot spell them (Windows, for bytes that are not WTF-8), their text with replacement
+/// characters, which names nothing there, so that git is asked for a path that does not exist
+/// rather than for a different one. On Windows an unpaired surrogate in WTF-8 bytes reaches `git`
+/// as that surrogate in its UTF-16 command line.
+pub(crate) fn arg_from_bytes(bytes: &[u8]) -> OsString {
+    names::name_from_bytes(bytes)
+        .unwrap_or_else(|| OsString::from(String::from_utf8_lossy(bytes).into_owned()))
+}
+
 /// Runs `command` to completion within `limits`, and hands back what it printed and how it
 /// exited, whatever the status. `cancel`, when there is one, stops the run once it is set.
 pub fn run(
@@ -349,7 +361,7 @@ pub fn run(
         timeout: limits.timeout,
         stdout_limit: limits.stdout,
         stderr_limit: limits.stderr,
-        reach: Reach::ProcessGroup,
+        reach: Reach::Group,
         term_grace: Duration::ZERO,
     };
     subprocess::run_bounded(command, &bounds, cancel.unwrap_or(&NEVER))
@@ -375,8 +387,8 @@ pub fn run_checked(
 mod tests {
     use super::*;
     use crate::test_support::{
-        git, isolated_git_env, pinned_shell_env, repo_with, CommandLine, ScratchDir, PATIENCE,
-        SYSTEM_GIT,
+        git, isolated_git_env, make_executable, pinned_shell_env, repo_with, CommandLine,
+        ScratchDir, PATIENCE, SYSTEM_GIT,
     };
 
     /// A policy with a leading option and a variable of its own, to show where each goes.
@@ -440,8 +452,6 @@ mod tests {
     /// the user's configuration for the hooks it runs, and not by a read.
     #[test]
     fn a_read_starts_no_configured_filesystem_monitor_and_a_write_keeps_it() {
-        use std::os::unix::fs::PermissionsExt;
-
         let repo = repo_with("run-fsmonitor", &[(b"a.txt", b"one\n")]);
         let bin = ScratchDir::new("run-fsmonitor-hook");
         let marker = bin.join("ran");
@@ -451,11 +461,10 @@ mod tests {
             format!("#!/bin/sh\ntouch '{}'\nexit 1\n", marker.display()),
         )
         .unwrap();
-        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
-        git(
-            &repo,
-            &["config", "core.fsmonitor", &hook.to_string_lossy()],
-        );
+        make_executable(&hook);
+        // Git runs the hook through its shell, which takes a path the POSIX way.
+        let hook = crate::platform::shell::posix_path(&hook);
+        git(&repo, &["config", "core.fsmonitor", &hook]);
         let runner = Runner::new(
             UserGit::new(SYSTEM_GIT, isolated_git_env()),
             Policy::PLAIN,
@@ -512,8 +521,6 @@ mod tests {
     /// A program named `ssh` in a scratch directory that writes the arguments it was started with,
     /// one a line, to `args` beside it, and fails as an unreachable host would.
     fn recording_ssh(dir: &Path) -> std::path::PathBuf {
-        use std::os::unix::fs::PermissionsExt;
-
         let ssh = dir.join("ssh");
         std::fs::write(
             &ssh,
@@ -523,7 +530,7 @@ mod tests {
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        make_executable(&ssh);
         ssh
     }
 
@@ -533,14 +540,11 @@ mod tests {
     fn a_fetch_runs_the_repositorys_ssh_command_unable_to_prompt() {
         let repo = repo_with("remote-ssh-repo", &[(b"a.txt", b"one\n")]);
         let bin = ScratchDir::new("remote-ssh-bin");
-        let ssh = recording_ssh(&bin);
+        // Git runs the command through its shell, which takes a path the POSIX way.
+        let ssh = crate::platform::shell::posix_path(&recording_ssh(&bin));
         git(
             &repo,
-            &[
-                "config",
-                "core.sshCommand",
-                &format!("{} -i /k", ssh.display()),
-            ],
+            &["config", "core.sshCommand", &format!("{ssh} -i /k")],
         );
         git(
             &repo,
@@ -550,7 +554,7 @@ mod tests {
         let configured = user.ssh_configuration(&repo);
         assert_eq!(
             configured,
-            SshConfiguration::Command(format!("{} -i /k", ssh.display()))
+            SshConfiguration::Command(format!("{ssh} -i /k"))
         );
         let mut fetch = user.remote_command(
             &Policy::PLAIN,

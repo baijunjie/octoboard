@@ -11,11 +11,11 @@ import { raiseError } from "../components/alerts/raiseError";
 import { Button } from "../primitives";
 
 /** Whether Octoboard may notify when a session raises its hand, with the ask where the platform
- * wants it made from a user gesture (a browser). Pressing the Enable button is that gesture. The macOS
- * app has a button to the system's notification settings instead. */
+ * wants it made from a user gesture (a browser). Pressing the Enable button is that gesture. Where the system
+ * has a pane for the app's notifications (the desktop app, `notificationSettings`) there is a button to it instead. */
 export function NotificationsSection(): React.ReactElement {
   const t = useT();
-  const { notifications } = usePlatform();
+  const { notifications, host } = usePlatform();
   const { status, request } = useNotificationPermission();
   useSectionRefocus([status]);
 
@@ -31,9 +31,11 @@ export function NotificationsSection(): React.ReactElement {
   else if (status === "granted") state = t("settings.notifications.allowed");
   else if (status === "denied") state = t("settings.notifications.blocked");
   else if (status === "undecided") state = t("settings.notifications.undecided");
-  // The macOS app: the notification plugin reports "granted" there without ever prompting and the
-  // app keeps no switch of its own, so the only switch is the system's, which the button opens.
-  else state = <Message id="settings.notifications.managedBySystem" />;
+  // Where the system has a pane of its own for the app's notifications (the desktop app): the notification plugin
+  // reports "granted" there without ever prompting and the app keeps no switch of its own, so the only switch is
+  // the system's, which the button opens. Elsewhere nothing is asked or managed and notifications are simply on.
+  else if (host.notificationSettings === "system-pane") state = <Message id="settings.notifications.managedBySystem" />;
+  else state = t("settings.notifications.allowed");
 
   return (
     <SettingRow compact label={t("settings.notifications.label")} description={state}>

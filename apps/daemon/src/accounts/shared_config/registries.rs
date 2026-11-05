@@ -40,7 +40,7 @@ pub(super) fn repoint(registry: &Path, from: &[PathBuf], to: &Path) -> io::Resul
     let mut written = serde_json::to_string_pretty(&value).map_err(io::Error::other)?;
     written.push('\n');
     // A registry that is itself a link is written where it leads, keeping the link.
-    let target = std::fs::canonicalize(registry)?;
+    let target = crate::hostfs::canonical(registry)?;
     replace_beside(&target, written.as_bytes(), Permissions::KeptOrDefault)
 }
 

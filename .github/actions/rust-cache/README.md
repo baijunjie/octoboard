@@ -14,11 +14,14 @@ toolchain before invoking it so the compiler identity contributes to the cache k
 | `checks` | The macOS native quality job | `pnpm clippy:rust`, then `pnpm test:rust --no-run`. |
 | `release` | The macOS universal release build | `pnpm --filter @octoboard/desktop release`, unsigned and without signing credentials. |
 | `linux-check` | The Linux compilation job | `node scripts/cargo.mjs check --locked`, after installing the Linux prerequisites. |
+| `windows-check` | The Windows compilation job | None: the job saves its own cache when it runs on main. |
+| `windows-release` | The Windows release builds (`release.yml`'s Windows jobs) and the Windows installer build of the quality workflow (`windows-bundle`) | `WINDOWS_SIGNING=none pnpm --filter @octoboard/desktop release --no-sign-update`, unsigned and without the update key. |
 
-The platform component hashes `xcodebuild -version` on macOS and uses the distribution ID and version from
-`/etc/os-release` on Linux. The cache keys also distinguish runner OS, architecture, compiler, dependency manifests
-and compilation settings, including `SDKROOT`, `DEVELOPER_DIR` and `MACOSX_DEPLOYMENT_TARGET`. Profiles keep the check,
-universal-build and Linux compilation artifacts separate. Cargo's registry and dependency build artifacts are reused;
+The platform component hashes `xcodebuild -version` on macOS, uses the distribution ID and version from
+`/etc/os-release` on Linux, and is the runner OS's name on Windows. The cache keys also distinguish runner OS,
+architecture, compiler, dependency manifests and compilation settings, including `SDKROOT`, `DEVELOPER_DIR` and
+`MACOSX_DEPLOYMENT_TARGET`. Profiles keep the check, universal-build, Linux compilation, Windows compilation and Windows
+release artifacts separate. Cargo's registry and dependency build artifacts are reused;
 installed Cargo binaries, workspace crates and application bundles are excluded.
 The [pinned source](https://github.com/Swatinem/rust-cache/tree/d1527c8f67ef9af357290475d4af4b0fab8f12e0)
 defines the action's key and cleanup behavior.
@@ -37,9 +40,9 @@ Once the workflow has landed on main, use **Actions → Warm Rust caches → Run
 gh workflow run warm-rust-cache.yml --ref main
 ```
 
-The workflow rejects other refs. It runs the three profiles on GitHub-hosted macOS and Ubuntu runners, without signing
-secrets or publishing. The macOS release profile builds both architectures; the checks profile compiles its tests
-without executing them. Warming does not replace the full checks in the quality workflow.
+The workflow rejects other refs. It runs the `checks`, `release`, `linux-check` and `windows-release` profiles on
+GitHub-hosted macOS, Ubuntu and Windows runners, without signing secrets or publishing. The macOS release profile builds
+both architectures; the checks profile compiles its tests without executing them. Warming does not replace the full checks in the quality workflow.
 
 Warm before the first release and after dependency or toolchain changes; repeat when eviction leaves useful caches
 unavailable. It is an explicit operation rather than a build on every main push. A warm run does not guarantee the

@@ -156,7 +156,7 @@ with `Reach::Session` (`Bounds::agent_query` for a short query through `run_boun
 `adapter::account_cli`, never by hand, see `docs/structure/daemon.md`, "Shared entry points" — or
 `Bounds { reach: Reach::Session, .. }` for `run_exchange`), and where it
 cannot go through there (it runs on a PTY, or a flow reads it while it runs), build on
-`apps/daemon/src/processes/leader.rs`. Anything that is not an agent CLI, such as `git`, keeps `Reach::ProcessGroup`
+`apps/daemon/src/platform/proc/` (`lead_session`, `kill_group`, `kill_members`). Anything that is not an agent CLI, such as `git`, keeps `Reach::Group`
 (`run_with_timeout`): a session sweep lists every process on the system.
 
 `Reach::Session` sweeps the session when the CLI ends by itself too. Where the CLI can start something the user goes

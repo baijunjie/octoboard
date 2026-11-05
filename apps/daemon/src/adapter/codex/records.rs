@@ -173,7 +173,7 @@ impl RecordStore for CodexRecords {
             |name: &str, kind: FileType| is_rollout_of(kind, &name.to_ascii_lowercase(), &agent_id);
         let found = |dir: &Path| {
             let dir = if is_link(dir) {
-                match std::fs::canonicalize(dir) {
+                match crate::hostfs::canonical(dir) {
                     Ok(resolved) => resolved,
                     Err(_) => return Located::Uncertain,
                 }
@@ -271,7 +271,7 @@ impl RecordStore for CodexRecords {
     /// below it are still skipped. This read-only lookup does not populate the account index used
     /// for destructive record discovery.
     fn opening_file(&self, locator: &mut Locator, root: &Path, agent_id: &str) -> Option<PathBuf> {
-        let records = records_dir(AgentId::CODEX, root).canonicalize().ok()?;
+        let records = crate::hostfs::canonical(records_dir(AgentId::CODEX, root)).ok()?;
         locator
             .index_at(AgentId::CODEX, &records)
             .records

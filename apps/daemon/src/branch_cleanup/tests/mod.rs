@@ -4,7 +4,6 @@ mod project_removal;
 mod removal;
 mod requests;
 
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

@@ -3,12 +3,15 @@
 
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::{is_running, perl_write, wait_for_pid, within, PATIENCE};
+use super::background::Background;
+#[cfg(unix)]
+use super::perl_write;
+use super::{is_running, wait_for_pid, within, PATIENCE};
 use crate::protocol::AgentId;
 use crate::session::{LiveSession, NewSession};
 use crate::state::AppState;
@@ -42,13 +45,39 @@ pub(crate) fn show_agents_view(live: &LiveSession) {
         .is_some_and(|dialog| dialog.is_agents_view()));
 }
 
-/// A sleeping stand-in lives until its guard terminates it. A fixed lifetime can expire while
-/// a process-heavy test is still preparing the messages it expects the stand-in to receive.
-pub(crate) const IDLE_STAND_IN_SCRIPT: &str = "exec /usr/bin/perl -e 'sleep 3600 while 1'";
+/// The idle stand-in's process: one process and nothing it started, as an agent at rest is, so
+/// that what a restart lists as the processes the agent started is only what a test started. It
+/// lives until its guard terminates it: a fixed lifetime can expire while a process-heavy test is
+/// still preparing the messages it expects the stand-in to receive.
+///
+/// On Windows what is written into a console shows only once a process reads it, where a Unix
+/// terminal echoes it as it arrives, so the stand-in reads its input. It is a native process
+/// rather than a Git Bash script: Git Bash starting under load can fail to set up its mount table
+/// and end at once, which a test reads as a session that never took its message.
+fn idle_command() -> crate::platform::term::Command {
+    #[cfg(unix)]
+    {
+        let mut cmd = crate::platform::term::Command::new(super::bash());
+        cmd.args(["-c", "exec /usr/bin/perl -e 'sleep 3600 while 1'"]);
+        cmd
+    }
+    #[cfg(windows)]
+    super::fixture::Steps::new()
+        .read_input()
+        .program("idle")
+        .term_command()
+}
 
 /// A stand-in live session that stays idle on a PTY until its guard drops, with nothing reading it.
 pub(crate) fn idle_stand_in(id: &str) -> StandIn {
-    fake_live_session(id, AgentId::CLAUDE, 80, 24, IDLE_STAND_IN_SCRIPT)
+    idle_stand_in_of(id, AgentId::CLAUDE)
+}
+
+/// [`idle_stand_in`] standing in for `agent`.
+pub(crate) fn idle_stand_in_of(id: &str, agent: AgentId) -> StandIn {
+    let live = stand_in_of(id, agent, 80, 24, idle_command(), None, None);
+    live.trust.end_watch();
+    live
 }
 
 /// A stand-in session for `id` that is registered with `state` and has its output read, so a test
@@ -60,26 +89,74 @@ pub(crate) fn running(state: &Arc<AppState>, id: &str) -> StandIn {
     live
 }
 
+/// A stand-in agent for session `id` that starts `commands` in the background and then stays up
+/// until its guard ends it.
+pub(crate) fn stand_in_starting(id: &str, commands: Vec<Background>) -> StandIn {
+    #[cfg(unix)]
+    {
+        let lines: String = commands.iter().map(Background::line).collect();
+        fake_live_session(
+            id,
+            AgentId::CLAUDE,
+            80,
+            24,
+            &format!("{lines}exec sleep 300"),
+        )
+    }
+    #[cfg(windows)]
+    {
+        let steps = commands
+            .into_iter()
+            .fold(super::fixture::Steps::new(), |steps, command| {
+                command.start(steps)
+            });
+        stand_in_running_steps(id, steps.read_input())
+    }
+}
+
+/// A stand-in agent for session `id` that runs `steps`, as a Windows process of its own.
+#[cfg(windows)]
+pub(crate) fn stand_in_running_steps(id: &str, steps: super::fixture::Steps) -> StandIn {
+    fake_live_session_running(id, AgentId::CLAUDE, 80, 24, &steps.program("agent"))
+}
+
 /// A stand-in process for the stored session `id` whose shell command leaves one process running
 /// in a terminal session of its own, as an agent's dev server is; registered and watched as a
 /// launched session's is. Answers the stand-in and that process's pid.
 pub(crate) fn running_leaving_one(state: &Arc<AppState>, dir: &Path, id: &str) -> (StandIn, i32) {
     let pid_file = dir.join(format!("{id}-child"));
-    let live = fake_live_session(
-        id,
-        AgentId::CLAUDE,
-        80,
-        24,
-        &format!(
-            "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
-             exec sleep 300",
-            perl_write(&pid_file, "$$")
-        ),
-    );
+    let live = stand_in_starting(id, vec![Background::sleeper(&pid_file)]);
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(state, live.clone());
     let child = wait_for_pid(&pid_file);
     (live, child)
+}
+
+/// What the restart's list of the processes it ended starts with after "started: ", for the
+/// process [`running_leaving_two`] has it end.
+pub(crate) fn doomed_command_starts() -> String {
+    if cfg!(windows) {
+        fixture_command_starts("doomed")
+    } else {
+        "/usr/bin/perl".to_string()
+    }
+}
+
+/// What the command of the process [`running_leaving_two`] leaves running starts with, which the
+/// restart's list of what it ended does not hold.
+pub(crate) fn survivor_command_starts() -> String {
+    if cfg!(windows) {
+        fixture_command_starts("survivor")
+    } else {
+        "/bin/sleep".to_string()
+    }
+}
+
+/// What the command of a Windows fixture process called `name` starts with: the test binary and
+/// the name, which a command cut to the length a notice quotes still holds.
+fn fixture_command_starts(name: &str) -> String {
+    let exe = std::env::current_exe().expect("the test binary");
+    format!("{} {name}", exe.display())
 }
 
 /// [`running_leaving_one`] with a second process, in a terminal session of its own as well, that
@@ -88,10 +165,10 @@ pub(crate) fn running_leaving_one(state: &Arc<AppState>, dir: &Path, id: &str) -
 ///
 /// The stand-in takes `SIGTERM`, the signal a restart stops it with, by ending that process and
 /// reaping it before it exits itself, so the process is gone by the time the stand-in's end is
-/// recorded. A process left to notice the end by itself can still be running when the stand-in's
-/// end is observed. It is ready only once its handler is in place, which it says by writing
-/// a file. The process still exits by itself once the stand-in is gone some other way, so it
-/// never outlives the test.
+/// recorded (on Windows, the close of its console). A process left to notice the end by itself can
+/// still be running when the stand-in's end is observed. It is ready only once its handler is in
+/// place, which it says by writing a file. The process still exits by itself once the stand-in is
+/// gone some other way, so it never outlives the test.
 pub(crate) fn running_leaving_two(
     state: &Arc<AppState>,
     dir: &Path,
@@ -100,6 +177,7 @@ pub(crate) fn running_leaving_two(
     let survivor_file = dir.join(format!("{id}-survivor"));
     let doomed_file = dir.join(format!("{id}-doomed"));
     let ready_file = dir.join(format!("{id}-ready"));
+    #[cfg(unix)]
     let live = fake_live_session(
         id,
         AgentId::CLAUDE,
@@ -117,6 +195,26 @@ pub(crate) fn running_leaving_two(
             perl_write(&ready_file, "$$"),
         ),
     );
+    #[cfg(windows)]
+    let live = {
+        use super::fixture::Steps;
+        let steps = Steps::new()
+            .spawn(
+                "survivor",
+                Steps::new().write_pid(&survivor_file).sleep(300),
+            )
+            .spawn(
+                "doomed",
+                Steps::new()
+                    .end_with_parent()
+                    .write_pid(&doomed_file)
+                    .sleep(300),
+            )
+            .end_child_on_close()
+            .write_pid(&ready_file)
+            .read_input();
+        stand_in_running_steps(id, steps)
+    };
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(state, live.clone());
     let survivor = wait_for_pid(&survivor_file);
@@ -147,12 +245,33 @@ pub(crate) async fn exit_settled(live: &Arc<LiveSession>) {
     );
 }
 
-/// Polls a stand-in session's output until it holds `needle`.
+/// What a stand-in has printed, from the last `max_bytes` of its output: without what the host
+/// wrote of its own accord before the stand-in printed anything, while that is still in them.
+pub(crate) fn printed(live: &LiveSession, max_bytes: usize) -> Vec<u8> {
+    let output = live.recent_output(max_bytes);
+    match output.strip_prefix(crate::platform::term::host_preamble()) {
+        Some(printed) => printed.to_vec(),
+        None => output,
+    }
+}
+
+/// How long [`output_containing`] waits, once its needle is there, for the rest of what came with
+/// it.
+const REST_OF_THE_ECHO: Duration = Duration::from_secs(2);
+
+/// Polls a stand-in session's output until it holds `needle`, and then until it has gone quiet,
+/// so that the rest of what was written with the needle is there too: on a Windows console what is
+/// written shows only as the process reads it, in pieces, where a Unix terminal echoes a write
+/// whole as it arrives.
 pub(crate) fn output_containing(live: &LiveSession, needle: &str) -> String {
     let deadline = Instant::now() + PATIENCE;
     loop {
         let output = String::from_utf8_lossy(&live.recent_output(8 * 1024)).into_owned();
-        if output.contains(needle) || Instant::now() >= deadline {
+        if output.contains(needle) {
+            crate::session::wait::wait_quiet(live, REST_OF_THE_ECHO);
+            return String::from_utf8_lossy(&live.recent_output(8 * 1024)).into_owned();
+        }
+        if Instant::now() >= deadline {
             return output;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -236,6 +355,19 @@ pub(crate) fn fake_live_session(
     live
 }
 
+/// [`fake_live_session`] running `program` rather than a Bash script.
+pub(crate) fn fake_live_session_running(
+    id: &str,
+    agent: AgentId,
+    cols: u16,
+    rows: u16,
+    program: &crate::test_support::programs::Program,
+) -> StandIn {
+    let live = stand_in_of(id, agent, cols, rows, program.term_command(), None, None);
+    live.trust.end_watch();
+    live
+}
+
 /// What a stand-in launch was asked for: the session, its owner and its opening prompt.
 pub(crate) type Launched = (String, Option<crate::session_tools::Owner>, Option<String>);
 
@@ -253,7 +385,7 @@ pub(crate) fn stand_in_launch(
 ) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
        + Send
        + 'static {
-    stand_in_launch_running(started, launches, IDLE_STAND_IN_SCRIPT, during)
+    launch_with(started, launches, idle_command, during)
 }
 
 /// [`stand_in_launch`] with a stand-in that runs `script`.
@@ -265,15 +397,63 @@ pub(crate) fn stand_in_launch_running(
 ) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
        + Send
        + 'static {
-    let (started, launches, script) = (started.clone(), launches.clone(), script.to_string());
+    let script = script.to_string();
+    launch_with(started, launches, move || bash_command(&script), during)
+}
+
+/// [`stand_in_launch`] with a stand-in that says `ready` and then reads everything written to it,
+/// which shows in its output as it is read: one process that starts nothing, so what the ledger
+/// lists for its launch is only what a test started. On Unix it reads raw, as an agent drains a
+/// prompt longer than the cooked terminal's echo buffer; on Windows it is a native process, since
+/// under Git Bash a program a script runs, `exec`'d or not, is a process of its own, as is the
+/// shell Git's `bin\bash.exe` launcher starts.
+pub(crate) fn stand_in_launch_echoing(
+    started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
+    launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
+    ready: &str,
+    during: impl FnOnce() + Send + 'static,
+) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
+       + Send
+       + 'static {
+    #[cfg(unix)]
+    let command = {
+        let script = format!("stty raw -echo; printf '{ready}\\n'; exec cat");
+        move || bash_command(&script)
+    };
+    #[cfg(windows)]
+    let command = {
+        let program = super::fixture::Steps::new()
+            .say(ready)
+            .read_input()
+            .program("echoing");
+        move || program.term_command()
+    };
+    launch_with(started, launches, command, during)
+}
+
+/// The launch [`stand_in_launch`] and [`stand_in_launch_running`] make, of a stand-in running
+/// `command`.
+fn launch_with(
+    started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
+    launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
+    command: impl FnOnce() -> crate::platform::term::Command + Send + 'static,
+    during: impl FnOnce() + Send + 'static,
+) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
+       + Send
+       + 'static {
+    let (started, launches) = (started.clone(), launches.clone());
     move |request| {
         during();
-        let live = tagged_live_session(
+        let live = stand_in_of(
             &request.session_id,
             request.agent,
-            &script,
-            &request.process_tag,
+            80,
+            24,
+            command(),
+            None,
+            Some(&request.process_tag),
         );
+        live.trust.end_watch();
         crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         let process = (*live).clone();
         started.lock().unwrap().push(live);
@@ -324,14 +504,44 @@ fn stand_in(
     carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
     tag: Option<&crate::processes::ledger::ProcessTag>,
 ) -> StandIn {
+    stand_in_of(
+        id,
+        agent,
+        cols,
+        rows,
+        bash_command(script),
+        carried_trust,
+        tag,
+    )
+}
+
+/// [`super::bash`] running `script`.
+fn bash_command(script: &str) -> crate::platform::term::Command {
     // Bash rather than `/bin/sh`: callers' scripts may use bash builtins and syntax that dash, the
     // `/bin/sh` of Debian and Ubuntu, lacks.
-    let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
+    let mut cmd = crate::platform::term::Command::new(super::bash());
     cmd.args(["-c", script]);
+    cmd
+}
+
+fn stand_in_of(
+    id: &str,
+    agent: AgentId,
+    cols: u16,
+    rows: u16,
+    mut cmd: crate::platform::term::Command,
+    carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
+    tag: Option<&crate::processes::ledger::ProcessTag>,
+) -> StandIn {
     if let Some(tag) = tag {
-        cmd.env(crate::processes::ledger::TAG_VARIABLE, tag.value());
+        tag.containment().prepare(&mut cmd);
     }
-    let spawned = crate::terminal::pty::spawn(cmd, rows, cols).expect("the stand-in");
+    let spawned = crate::platform::term::spawn(
+        cmd,
+        crate::platform::term::Size { rows, cols },
+        tag.map(|tag| tag.containment().as_ref()),
+    )
+    .expect("the stand-in");
     StandIn(Arc::new(LiveSession::new(NewSession {
         id: id.to_string(),
         agent,
@@ -354,16 +564,20 @@ fn stand_in(
 /// companion file next to the symlink (`$0.body`), which is where each fake's behaviour lives.
 /// Installed by writing a file of the process's own and renaming it into place, since a test
 /// binary of another worktree may be executing it.
+#[cfg(unix)]
 fn fake_agent_dispatcher() -> &'static Path {
-    static DISPATCHER: OnceLock<PathBuf> = OnceLock::new();
+    static DISPATCHER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     DISPATCHER.get_or_init(|| {
         let path = std::env::temp_dir().join("octoboardd-fake-agent-dispatcher");
         let staging = path.with_extension(format!("{}", std::process::id()));
         std::fs::write(&staging, "#!/bin/sh\n. \"$0.body\"\n")
             .expect("write fake agent dispatcher");
-        let mut perms = std::fs::metadata(&staging).unwrap().permissions();
-        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o700);
-        std::fs::set_permissions(&staging, perms).expect("chmod fake agent dispatcher");
+        #[cfg(unix)]
+        {
+            let mut perms = std::fs::metadata(&staging).unwrap().permissions();
+            std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o700);
+            std::fs::set_permissions(&staging, perms).expect("chmod fake agent dispatcher");
+        }
         std::fs::rename(&staging, &path).expect("install fake agent dispatcher");
         path
     })
@@ -372,16 +586,39 @@ fn fake_agent_dispatcher() -> &'static Path {
 /// Makes `dir/<binary>` a fake agent CLI that runs `body` as shell script (sourced, so `exit`
 /// ends it and `$@` are its arguments), and returns an environment whose `PATH` is `dir` and the
 /// system directories and whose `HOME` is `dir`.
+#[cfg(unix)]
 pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String, String> {
     let path = dir.join(binary);
     std::fs::write(dir.join(format!("{binary}.body")), body).expect("write fake agent body");
     std::fs::remove_file(&path).ok();
-    std::os::unix::fs::symlink(fake_agent_dispatcher(), &path).expect("symlink fake agent");
+    crate::test_support::symlink(fake_agent_dispatcher(), &path).expect("symlink fake agent");
     HashMap::from([
         (
             "PATH".to_string(),
             format!("{}:/usr/bin:/bin", dir.display()),
         ),
+        ("HOME".to_string(), dir.to_string_lossy().into_owned()),
+    ])
+}
+
+/// On Windows the fake is `dir/<binary>.cmd`, which runs the body with Git Bash, and the `PATH`
+/// is `dir` and the system directories.
+#[cfg(windows)]
+pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String, String> {
+    std::fs::write(dir.join(format!("{binary}.body")), body).expect("write fake agent body");
+    std::fs::write(
+        dir.join(format!("{binary}.cmd")),
+        format!(
+            "@\"{}\" \"%~dp0{binary}.body\" %*\r\n",
+            crate::test_support::bash().display()
+        ),
+    )
+    .expect("write fake agent");
+    let system = std::path::PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"));
+    let path =
+        std::env::join_paths([dir.to_path_buf(), system.join("System32"), system]).expect("a PATH");
+    HashMap::from([
+        ("PATH".to_string(), path.to_string_lossy().into_owned()),
         ("HOME".to_string(), dir.to_string_lossy().into_owned()),
     ])
 }

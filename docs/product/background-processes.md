@@ -26,7 +26,9 @@ connected to it was not started by the launch: it is not the session's, and the 
 
 The user's way to spare a process the launch started is to keep it: **Keep** on its card in the Processes panel (see
 "Stop and Keep" in `docs/product/processes-panel.md`), or unchecking it in an archive confirmation to keep it running
-(see "Processes in an archive confirmation" below). Nothing else exempts a process. What Octoboard keeps without being
+(see "Processes in an archive confirmation" below). Nothing else exempts a process, and on a Windows daemon host a
+process on the agent's own console cannot be kept at all (see "Processes on the agent's own console" below). What
+Octoboard keeps without being
 asked, after a restart that fails or when its saved records cannot be read, and the processes outside these rules
 altogether (the daemon's own, the user's shell terminals, the agent's own terminal session), are in "Automatic stopping
 and its boundaries" below.
@@ -36,6 +38,12 @@ binary such as `/bin/sleep` or `/usr/bin/tail`) that a command left running in t
 started it exits within one process-table scan, about **2 seconds**: such a process is neither listed nor stopped with
 the launch. A limit that concerns kept processes is described with keeping, in "Automatic stopping and its boundaries"
 below.
+
+**On a Windows daemon host** no process's environment is read, so the launch's tag attributes nothing there, and a
+process has no terminal session. A process is the launch's when its chain of parents reaches the agent or another
+process of the launch, or when it is a member of the launch's job object, which everything the launch starts lands in
+wherever it goes (or of the job of a launch whose processes were carried over to it), except for what a Store
+PowerShell takes out of it (see "Automatic stopping and its boundaries" below).
 
 ## Automatic stopping and its boundaries
 
@@ -76,17 +84,64 @@ console session's, which keeps nothing, is stopped, and so is a session's that w
 whose agent had already exited on its own before the restart ended anything keeps nothing either: what it left is
 stopped, as for any agent that exits on its own.
 
-Stopping first sends `SIGTERM` and allows **3 seconds** to exit, then sends `SIGKILL` to survivors. A process's identity
-includes its start time: a reused process ID is not permission to stop its replacement. A process still alive after
-`SIGKILL`, for example in an uninterruptible sleep, may remain; automatic cleanup retries it after **5 minutes**, or
-when another launch ends. Cleanup is not proof that every process has already disappeared.
+Except on a Windows daemon host (below), stopping first sends `SIGTERM` and allows **3 seconds** to exit, then sends
+`SIGKILL` to survivors. A process's identity includes its start time: a reused process ID is not permission to stop its
+replacement. A process still alive after `SIGKILL`, for example in an uninterruptible sleep, or one the system refuses
+to end, such as another user's or one running with more rights than the daemon, may remain; automatic cleanup retries
+it after **5 minutes**, or when another launch ends, and a stop naming its tree retries it at once. Cleanup is not
+proof that every process has already disappeared, and an automatic stop does not tell the user what it left running (see
+the known limit below).
+
+**On a Windows daemon host** there are no signals. A process that runs on a terminal the daemon started (a pseudo
+console, as an agent's own process does) is asked to end through that terminal. Where its agent declares quit keys,
+those are pressed first: Codex's are Ctrl-C, then, if it has not quit within **650 milliseconds**, Ctrl-C again, after
+which it has up to **6 seconds** to finish quitting. Then the pseudo console is closed (`ClosePseudoConsole`), which asks
+every process attached to it to end; an agent that declares no quit keys (Claude Code, Grok Build) gets this at once.
+A process still running **3 seconds** after that is terminated. Every other process a cleanup or a stop reaches, the
+launch's remaining processes among them, takes no polite request on Windows and is terminated at once, without a grace:
+its process ID is opened once, the start time of the process behind that handle is compared with the one recorded, and
+it is terminated through the same handle, so a process ID that has passed to another process is taken as the process
+having gone, not stopped. A process still running after it was terminated, or one Windows refused to terminate, is
+retried as above.
 
 After a daemon restart, Octoboard uses its saved process records and launch identities to stop what its previous run
 left behind, while preserving kept processes. A terminal session it saved, which reaches the processes in it that it
 never saw, is taken back only while a process it saved is still running in it: a session's ID is a process ID, and
 once every process of the session has exited it can pass to unrelated processes. Records written before the system
 last started name nothing. If those records cannot be read, it does not assume that a process was not kept: it leaves
-the processes identified only by their launch tag running and records them as kept.
+the processes identified only by their launch tag running and records them as kept. On a Windows daemon host a sign-out
+or a shutdown ends the daemon without any of the cleanup above (see "Crashes and forced termination" in
+`docs/product/application-lifecycle.md`); what it leaves is handled by this cleanup at the next start, though the system
+has normally ended the user's processes by then, kept ones included.
+
+**On a Windows daemon host, a Store PowerShell leaves the launch's job.** A `pwsh` installed from the Microsoft Store
+that one of the agent's own tools or hook commands starts takes itself, and everything it runs, out of the launch's job
+object. Such a tree is the launch's only through its chain of parents. Once a process-table scan — one about every
+**2 seconds**, and one more just before the agent is ended — has seen that chain reach the agent, the tree is the
+launch's like any other, and stays so when the chain later breaks: it is listed under the session, stopped when the
+agent's process ends (archiving included), and stopped by the next daemon start's cleanup when the saved records name
+it. The daemon's own kill on an internal failure, which reaches only the job's members, does not end it, so it runs on
+until that next start. A tree whose chain to the agent is broken before any scan has seen it — the process of the
+launch that started it exits first — is not the launch's: it is neither listed under the session nor stopped with
+it, and can be left running after the session ends. Which PowerShell runs a tool call is the agent's choice; Octoboard accepts this limit.
+
+**On a Windows daemon host, a process the system will not let the daemon end is left running.** With User Account
+Control on, the daemon does not run elevated; a process of the same account an agent started through a User Account
+Control prompt runs elevated, and Windows still lets the daemon end it, so the cleanup when its launch ends, a daemon
+restart's and **Stop** in the Processes panel end it like any other. A process whose security refuses the daemon that
+right is out of its reach: none of those stops ends it, and Stop then tells the user that the process could not be
+stopped for lack of permission (see "Stop and Keep" in `docs/product/processes-panel.md`), and a kept process it leaves
+running stays kept; the automatic stops do not tell the user (see the next paragraph). Such a process keeps running
+until it exits by itself or is ended from a program with the rights to end it. The working directory of a process
+running elevated may not be readable, and where it is not, no directory is shown for it; its command is still read.
+
+**An automatic stop does not tell the user what it left running**, a known limit accepted for this release. This holds
+for every stop the user did not ask for with **Stop** in the Processes panel: when an agent's process ends, when a
+session is archived, when a project is removed or a console deleted, when a working directory is removed, and the
+cleanup after a daemon restart. A process such a stop leaves running — one still alive after it was killed, or one the
+system refused to end — is recorded only as a warning in the daemon's log, and is tried again only as described above:
+after **5 minutes**, or when another launch ends. Only Stop in the Processes panel reports the processes it left running
+(see "Process information and actions" below).
 
 The daemon, its ancestors and its direct children are protected. Processes in terminal sessions led by those direct
 children are excluded from the background-process lists and Stop and Keep controls. Tool commands that start a
@@ -96,8 +151,14 @@ The user's shell terminals and the processes in their terminal sessions are excl
 and cleanup described here; closing those terminals still follows "Closing a shell terminal" in
 `docs/product/shell-terminals.md`.
 
-The agent itself and processes in its own terminal session are not offered in these lists. That terminal's remaining
-processes are killed outright when the agent exits and cannot be kept through the controls described here.
+Except on a Windows daemon host, the agent itself and processes in its own terminal session are not offered in these
+lists; that terminal's remaining processes are killed outright when the agent exits and cannot be kept through the
+controls described here. On a Windows daemon host, where a process has no terminal session, only the agent itself is
+left out: its own internals, the
+MCP servers and other helpers the agent's CLI starts as its children, reach the agent through their chain of parents
+and are listed among that launch's process trees in the Processes panel, where the user can see and stop them like
+any other background process, and keep them unless they are on the agent's own console (see "Processes on the agent's
+own console" below).
 
 **Keeping a tree transfers its management to the user.** No session owns it any more: it leaves its session's list, is
 no longer stopped automatically, and remains kept across daemon restarts. It stays listed in its project's list among
@@ -109,7 +170,33 @@ was kept, or kept because the saved records could not be read after a restart, b
 nowhere. There is no action to undo Keep. Octoboard follows descendants of kept processes, and processes found in a kept
 process's terminal session, as kept too, listed under the same project, with one limit: a helper that both double-forks
 away from its parent and detaches into a new terminal session between process-table scans, about **2 seconds** apart,
-can escape that relationship. If it still carries the launch's identity, it can be stopped with the launch.
+can escape that relationship. If it still carries the launch's identity, it can be stopped with the launch. On a
+Windows daemon host a kept process's descendants are followed by their chain of parents alone: a child whose parent
+exits before the next scan has seen it loses that chain, is pulled back to the launch by the job it is still a member
+of (see "Which processes belong to a launch" above), and is stopped with the launch instead of being kept.
+
+## Processes on the agent's own console
+
+On a Windows daemon host the agent runs on a pseudo console, and ending its launch closes that console, which ends every
+process attached to it whatever keeps it (see "Automatic stopping and its boundaries" above). So a session's tree with a
+process attached to the agent's own console cannot be kept:
+
+- **It is listed as not keepable**: in the daemon's process list it carries `keepable: false` and
+  `unkeepable_reason: "agent_console"`, the one reason there is; every other tree carries `keepable: true` and no
+  reason. Only `keepable` sent as `false` marks a tree not keepable: a tree from a daemon that does not send the field
+  can be kept. The Processes panel shows its Keep as unavailable (see "Stop and Keep" in
+  `docs/product/processes-panel.md`), and an archive confirmation lists it with no choice (see "Processes in an archive
+  confirmation" below).
+- **A keep naming it is refused** with `process_shares_agent_console`, whose parameters name the process (`pid`, and
+  `name`, empty when unknown): a `keep_processes` keeps none of the trees it names, and an `archive_session` whose
+  `keep_process_ids` names it keeps nothing and does not archive. Its message, also the reason shown ahead of the
+  choice, says the process runs in the agent's own terminal, so it ends with the session and cannot be kept, and that
+  to keep it running it is to be started in a window of its own.
+- **A process whose console cannot be told** — it cannot be opened, or the system does not say which console it is
+  on — is taken not to be on the agent's console, so its tree stays keepable.
+
+This never applies on macOS or Linux, where what sits in the agent's own terminal session is not listed at all (see
+"Automatic stopping and its boundaries" above).
 
 ## Processes a restart ended
 
@@ -171,11 +258,19 @@ age, the tree's resident memory, its process count and the TCP ports it listens 
 may be unavailable. Trees within a session are oldest first. Requests for the same scope within **2 seconds** may share
 a daemon answer; a stop or keep invalidates that cached answer.
 
-Stopping a tree applies the stopping rules in "Automatic stopping and its boundaries" above; a kept tree the user stops
-is the user's no more, and what is left of it is stopped as a finished launch's. Keeping it transfers its management to
-the user under that section's rules. Both actions check what still qualifies when the request arrives:
-a tree that has already gone is ignored. If its original top process has exited, the action can still reach its
-remembered surviving members and descendants.
+Stopping a tree applies the stopping rules in "Automatic stopping and its boundaries" above. A kept tree the user stops
+is the user's no more while the stop runs: what starts from it meanwhile is stopped as a finished launch's. Each of its
+kept processes still running once the stop is through — one the system refused to end, or one that outlived being
+killed — is kept again under the same project: it stays listed among that project's processes, marked kept, and
+automatic cleanup does not retry it. Keeping it transfers its management to the user under that section's rules. Both
+actions check what still qualifies when the request arrives: a tree that has already gone is ignored. If its original
+top process has exited, the action can still reach its remembered surviving members and descendants.
+
+A stop the user asks for answers which processes are still running once it is through, each with why: **access
+denied**, the system refused to end it for lack of permission (another user's process, or one running with more rights
+than the daemon), or **other**, refused for another reason or still running after it was killed. A tree with such a
+process is not reported as stopped. Only this stop reports them (see the known limit on automatic stops in "Automatic
+stopping and its boundaries" above).
 
 ## Processes left behind in a project
 
@@ -216,7 +311,12 @@ shows the tree's working directory and its facts, as on a Processes panel card (
 Each checkbox starts **checked, meaning Stop**. Unchecking it means Keep running. A newly listed tree starts checked;
 existing choices follow the tree across inspections. **A console session's trees**, which cannot be kept, are listed
 apart, after a line saying that a console session's processes are always stopped, each as a plain row with the
-crossed-out glyph and its own Details disclosure, and no checkbox. Under the trees, lines say how many processes are
+crossed-out glyph and its own Details disclosure, and no checkbox. **A tree listed as not keepable** (see "Processes on
+the agent's own console" above) is such a row too, always stopped, with the reason under its command, and no line of
+its own leading it. Beside trees that can be kept, these rows close the list of checkboxes, set in so that their glyph
+and command line up with the checkboxes' glyphs and commands; with no tree that can be kept they stand alone. Either
+way they come before a console session's trees. A reason this window
+does not know reads only that the process cannot be kept. Under the trees, lines say how many processes are
 stopped and, while any is unchecked, that the ones kept stay running. Younger trees are not offered, but are still
 stopped when the launch ends unless already kept. Keeping a process does not keep its working directory or prevent the
 archive's branch and worktree cleanup.

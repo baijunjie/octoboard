@@ -20,6 +20,8 @@ export interface ErrorAlertRequest {
   /** The name to call the session by where the store does not hold it: the one a failed launch's notice carries, the
    * session being gone. */
   sessionName?: string;
+  /** The daemon notice the alert shows, which a later withdrawal of it (`errorAlerts.withdraw`) takes back. */
+  notice?: { session: string; code: string };
   error?: unknown;
   recovery?: ErrorRecovery;
   failures?: readonly ErrorAlertFailure[];
@@ -101,9 +103,24 @@ export const errorAlerts = {
   acknowledge(): void {
     queue = queue.slice(1);
     notify();
-    // An alert that came when a dialog closed itself has no control to give focus back to, so it is left on
-    // `<body>`: it goes to the window's fallback instead.
-    if (queue.length === 0) focusAfterModalCloses();
-    else cancelFocusAfterModalCloses();
+    afterShownLeft();
+  },
+  /** Takes back the alerts for the daemon notice of `code` about `session`, which no longer holds: one queued leaves the
+   * queue, and the one shown closes as if acknowledged. Nothing happens when none is there. */
+  withdraw(session: string, code: string): void {
+    const stays = (item: QueuedAlert) => item.notice?.session !== session || item.notice.code !== code;
+    const shownLeft = queue.length > 0 && !stays(queue[0]);
+    const rest = queue.filter(stays);
+    if (rest.length === queue.length) return;
+    queue = rest;
+    notify();
+    if (shownLeft) afterShownLeft();
   },
 };
+
+function afterShownLeft(): void {
+  // An alert that came when a dialog closed itself has no control to give focus back to, so it is left on
+  // `<body>`: it goes to the window's fallback instead.
+  if (queue.length === 0) focusAfterModalCloses();
+  else cancelFocusAfterModalCloses();
+}

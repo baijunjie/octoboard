@@ -277,7 +277,7 @@ async fn add_project_refuses_a_directory_spelled_another_way() {
     let real = dir.join("Real");
     std::fs::create_dir(&real).unwrap();
     let link = dir.join("link");
-    std::os::unix::fs::symlink(&real, &link).unwrap();
+    crate::test_support::symlink(&real, &link).unwrap();
     add("console-1", &link).await.unwrap();
     assert!(is_already_added(add("console-1", &real).await.unwrap_err()));
     // The path is stored as it was given.
@@ -298,7 +298,7 @@ async fn add_project_associates_a_linked_repository_of_a_parent_once() {
         .unwrap();
     let parent = dir.join("parent");
     std::fs::create_dir_all(parent.join("repo").join(".git")).unwrap();
-    std::os::unix::fs::symlink(parent.join("repo"), parent.join("repo-link")).unwrap();
+    crate::test_support::symlink(parent.join("repo"), parent.join("repo-link")).unwrap();
 
     let added = add_project(
         &state,

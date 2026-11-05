@@ -33,8 +33,9 @@ export function InlineReference({
 }: InlineReferenceProps): React.ReactElement {
   const resolvedColor = useCodeColor(color);
   const nativeColor = resolvedColor === "help" ? "default" : resolvedColor;
-  const text = wrap && typeof children === "string" ? children.split("/").map((part, i) => (
-    <React.Fragment key={i}>{i > 0 && <>/<wbr /></>}{part}</React.Fragment>
+  // A wrapping reference may break after each path separator, a Windows path's `\` as much as `/`.
+  const text = wrap && typeof children === "string" ? children.split(/(?<=[/\\])/).map((part, i) => (
+    <React.Fragment key={i}>{i > 0 && <wbr />}{part}</React.Fragment>
   )) : children;
   return (
     <Chip

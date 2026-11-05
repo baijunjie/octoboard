@@ -9,7 +9,7 @@ import { consoleOf } from "../fixtures/builders";
 import type { State } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
-import { IS_MAC } from "../input/keys";
+import { IS_MAC } from "../test/hosts";
 import { NewSessionButton } from "./NewSessionButton";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

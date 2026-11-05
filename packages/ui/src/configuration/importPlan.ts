@@ -14,8 +14,9 @@ import type {
 } from "../protocol";
 import type { ReplyOf } from "../requests";
 import { isKnownAgent } from "../agents/providers";
+import { isAbsolute, isHomeRelative, type PathStyle } from "../format/hostPath";
 import type { PlainMessageKey } from "../i18n/catalog";
-import { bindingsEqual, type Binding } from "../shortcuts/binding";
+import { sameKeys, type Binding, type ModifierHost } from "../shortcuts/binding";
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
 import { effectiveBindings, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 import type { Region } from "./RegionTabs";
@@ -121,26 +122,26 @@ export function hasRecordedPath(path: string): boolean {
   return /[\\/]/.test(path);
 }
 
-/** Whether `path` is one the daemon takes as a directory the user pointed at: absolute, or starting
- * with `~/`, which it expands. Only the shape is judged. */
-export function isUsableDirectory(path: string): boolean {
-  return path.startsWith("/") || path.startsWith("~/");
+/** Whether `path` is one the daemon takes as a directory the user pointed at: absolute on its host, or starting
+ * with `~` and a separator, which it expands. Only the shape is judged. */
+export function isUsableDirectory(path: string, style: PathStyle = "unix"): boolean {
+  return isAbsolute(path, style) || (path !== "~" && isHomeRelative(path, style));
 }
 
 /** What is wrong with a directory typed for a project or an account. */
 export type DirectoryProblem = "empty" | "not_absolute";
 
 /** What is wrong with the directory typed for a project that is placed in one, if anything. */
-export function directoryProblem(row: Pick<RowState, "directory"> & { choice: string }): DirectoryProblem | undefined {
+export function directoryProblem(row: Pick<RowState, "directory"> & { choice: string }, style: PathStyle = "unix"): DirectoryProblem | undefined {
   if (row.choice !== "directory") return undefined;
   const path = row.directory;
   if (path === "") return "empty";
-  return isUsableDirectory(path) ? undefined : "not_absolute";
+  return isUsableDirectory(path, style) ? undefined : "not_absolute";
 }
 
 /** Whether any project's row still has a directory the daemon would refuse. */
-export function hasDirectoryProblem(review: ReviewState): boolean {
-  return review.some((rows) => rows.some((row) => directoryProblem(row) !== undefined));
+export function hasDirectoryProblem(review: ReviewState, style: PathStyle = "unix"): boolean {
+  return review.some((rows) => rows.some((row) => directoryProblem(row, style) !== undefined));
 }
 
 /** The directory a row would place its project in, for the review to show before anything is
@@ -193,6 +194,13 @@ export function hasNameProblem(account: InspectedAccount): boolean {
   return error.code === "account_name_taken" || (error.code === "field_required" && error.params.field === "name");
 }
 
+/** Whether an account cannot be created because the document's directory for it was written on another operating
+ * system, which no reason of the daemon's says better (it only says the directory is not absolute). An account that is
+ * invalid for its name is not: another directory would not fix that. */
+export function hasForeignDirectoryProblem(account: InspectedAccount): boolean {
+  return account.status === "invalid" && account.foreign_directory && !hasNameProblem(account);
+}
+
 /** The choices an account's status allows, in the order the review lists them; none for an account that exists
  * already, which is used as it is. A directory in use or a directory the form would refuse can be put right with
  * another directory; an account whose name is the problem can only be left out. */
@@ -220,8 +228,8 @@ export function withAccountRow(review: AccountReviewState, agent: number, accoun
 }
 
 /** Whether any account that would be created has a typed directory the daemon would refuse. */
-export function hasAccountDirectoryProblem(review: AccountReviewState): boolean {
-  return review.some((rows) => rows.some((row) => directoryProblem(row) !== undefined));
+export function hasAccountDirectoryProblem(review: AccountReviewState, style: PathStyle = "unix"): boolean {
+  return review.some((rows) => rows.some((row) => directoryProblem(row, style) !== undefined));
 }
 
 /** The resolutions to send: one per account the user moved to another directory or left out; an account created as
@@ -374,12 +382,13 @@ export function documentShortcuts(document: unknown): Record<string, unknown> | 
 export function shortcutsReview(
   shortcuts: Record<string, unknown>,
   current: Overrides,
+  host: ModifierHost,
 ): { count: number; changed: { label: PlainMessageKey; binding: Binding; current: Binding }[] } {
-  const { overrides } = sanitizeOverrides(shortcuts);
+  const { overrides } = sanitizeOverrides(shortcuts, host);
   const wanted = effectiveBindings(overrides);
   const now = effectiveBindings(current);
   const changed = REBINDABLE_COMMANDS
-    .filter((command) => !bindingsEqual(wanted[command.id], now[command.id]))
+    .filter((command) => !sameKeys(wanted[command.id], now[command.id], host))
     .map((command) => ({ label: command.label, binding: wanted[command.id], current: now[command.id] }));
   return { count: Object.keys(overrides).length, changed };
 }

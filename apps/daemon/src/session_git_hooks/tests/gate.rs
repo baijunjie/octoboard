@@ -9,18 +9,18 @@
 
 use std::collections::BTreeSet;
 use std::net::TcpListener;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::Ordering;
 
+use crate::platform::shell::posix_interpreter;
 use crate::protocol::{GitDevelopment, GitWorkflowSettingsChanges, SessionKind};
 use crate::session_git_hooks::fixture::{
     commit_file, gated_fixture, numbered, project, project_with_remote, rev, session_record,
     set_revert_gate, succeeds, system_exec_path, write_hook, Daemon, Fixture,
 };
 use crate::session_git_hooks::gate_inputs::{inputs, GateRequest};
-use crate::session_git_hooks::{interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS};
+use crate::session_git_hooks::{render, write_dir, Rendering, BUILT_IN_HOOKS};
 use crate::test_support::{fixture_git, git, ScratchDir, PATIENCE, TEST_KEY};
 use crate::wire_path;
 
@@ -85,7 +85,7 @@ fn ok(fixture: &Fixture, args: &[&str]) {
 
 fn request(dir: &Path) -> GateRequest {
     GateRequest {
-        cwd: wire_path::encode(dir.as_os_str().as_bytes()),
+        cwd: wire_path::encode(&crate::platform::names::name_bytes(dir.as_os_str())),
         git_dir: None,
     }
 }
@@ -512,7 +512,7 @@ fn a_gate_that_cannot_start_lets_the_update_through() {
     let state = fixture.dir.join("state");
     std::fs::create_dir(&state).unwrap();
     let script = render(&Rendering {
-        interpreter: interpreter(),
+        interpreter: posix_interpreter(),
         self_exe: "/nonexistent/octoboardd",
         exec_path: &system_exec_path(),
         state: &state,

@@ -16,6 +16,7 @@ use crate::agents::availability;
 use crate::config_document::export;
 use crate::coordinator::{self, settings::SettingsChanges};
 use crate::hostfs::dir_key;
+use crate::platform::names;
 use crate::protocol::{
     error_code, AccountOutcome, AccountResolution, AccountStatus, AgentId, CodedError,
     DocumentAccount, DocumentAccounts, DocumentAgentSettings, ImportFailure, ImportItem,
@@ -211,6 +212,7 @@ pub(super) fn inspect_accounts(
             accounts.push(InspectedAccount {
                 name: account.name.clone(),
                 directory: account.directory.clone(),
+                foreign_directory: names::is_foreign_absolute(account.directory.trim()),
                 proposed_directory,
                 status,
                 in_use_by,
@@ -591,7 +593,7 @@ fn place_after_existing(state: &Arc<AppState>, agent: AgentId, created: &[String
 #[cfg(test)]
 mod tests {
     use super::super::tests::{
-        account, at, console, directory, document, project, stored_projects,
+        account, at, console, directory, document, foreign_path, project, stored_projects,
     };
     use super::super::{apply, apply_reporting, inspect, ApplyOptions, Inspection};
     use super::*;
@@ -741,6 +743,34 @@ mod tests {
         assert_eq!(claude.accounts[1].directory, path_text(&area.join("fresh")));
         // Nothing was created by looking.
         assert_eq!(state.store.list_accounts().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_directory_written_on_another_operating_system_is_marked_and_proposes_nothing() {
+        let area = ScratchDir::new("import-foreign-account-area");
+        let (state, _state_dir) = account_state("import-foreign-account", &area);
+        let document = with_accounts(
+            document(Vec::new()),
+            &[],
+            vec![agent_entry(
+                "claude",
+                None,
+                vec![
+                    doc_account("Foreign", foreign_path()),
+                    doc_account("Own", &path_text(&area.join("own"))),
+                    doc_account("Relative", "a/b"),
+                    doc_account("Home", "~/.claude-home"),
+                ],
+            )],
+        );
+
+        let inspection = inspected_accounts(&state, &document).await;
+
+        let rows = &inspection.accounts.unwrap().agents[0].accounts;
+        let marks: Vec<bool> = rows.iter().map(|row| row.foreign_directory).collect();
+        assert_eq!(marks, [true, false, false, false]);
+        assert_eq!(rows[0].status, AccountStatus::Invalid);
+        assert_eq!(rows[0].proposed_directory, None);
     }
 
     #[tokio::test]

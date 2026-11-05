@@ -61,8 +61,10 @@ export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protoc
 export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
 // A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's Info.plist template.
 export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.template.plist"];
-// Desktop script tests read the native permission catalogs, template and bundle resource mappings.
-export const DESKTOP_READS_NATIVE = ["apps/desktop/src-tauri/localizations/", "apps/desktop/src-tauri/Info.template.plist", "apps/desktop/src-tauri/tauri.conf.json"];
+// Desktop script tests read the native permission catalogs, the template and the macOS overlay's bundle resource
+// mappings (`native-localizations.test.mjs`). No desktop script test reads the base `tauri.conf.json`; the scripts that
+// do (`install-app.mjs`, `publish-release.mjs`) are not run by a test.
+export const DESKTOP_READS_NATIVE = ["apps/desktop/src-tauri/localizations/", "apps/desktop/src-tauri/Info.template.plist", "apps/desktop/src-tauri/tauri.macos.conf.json"];
 // A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
 export const UI_READS_ELSEWHERE = ["LICENSE"];
 // UI tests (`daemonCodes.test.ts`, `fixtureProviders.test.ts`) read the provider modules' sources, where each provider
@@ -97,6 +99,7 @@ export const RULES = [
   { match: ["scripts/cargo.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the command the Rust check steps run (and the Linux CI job), linted with the scripts" },
   { match: ["scripts/verify/environment.mjs"], consumers: ["verify", "desktop"], why: "verification entry points and foreign Git fixtures, including desktop release tests, refuse inherited repository locations" },
   { match: ["scripts/sync-identity.mjs", "scripts/sync-identity.test.mjs"], consumers: ["verify"], why: "generates and checks the LICENSE and Cargo author fields from config/app.json" },
+  { match: ["scripts/fetch-conpty.mjs", "scripts/fetch-conpty.test.mjs"], consumers: ["verify", "desktop"], why: "fetches the bundled ConPTY the Windows daemon tests and CI run on, tested with the scripts; the desktop Windows release scripts import it (`windows-release.mjs` takes the installer layout from it), so their tests run too" },
   { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },
   { match: [".gitignore"], consumers: ["verify"], why: "decides which files the working-tree snapshot (`tree.mjs`) counts; no other check reads it" },
   { match: ["config/"], consumers: ALL_PACKAGES, builds: ["ui"], why: "`config/app.json` is the product identity every package reads, and `vite.config.ts` bakes it into the UI build" },
@@ -112,7 +115,7 @@ export const RULES = [
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },
   { match: UI_READS_DAEMON, consumers: ["verify", "ui", "daemon"], why: "a UI test reads them" },
   { match: UI_READS_NATIVE, consumers: ["verify", "ui", "native"], why: "a UI test reads it" },
-  { match: DESKTOP_READS_NATIVE, consumers: ["verify", "desktop", "native"], why: "desktop script tests read the native permission catalogs, template and bundle resource mappings" },
+  { match: DESKTOP_READS_NATIVE, consumers: ["verify", "desktop", "native"], why: "desktop script tests read the native permission catalogs, template and the macOS bundle resource mappings" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
   { match: ["apps/daemon/src/adapter/claude/compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },

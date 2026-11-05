@@ -1,20 +1,49 @@
 name: Release
 
-# Pushing an annotated tag `desktop-v<version>` builds, signs, notarizes and publishes that version. Application
-# checks run locally before tagging. The tag's message is the release notes, which the in-app update notice shows too. What
-# runs is `pnpm release --no-sign-update`, `sign-update` and `publish-release`, as on a Mac by hand
-# (apps/desktop/scripts/README.md's "Release builds" and "Publishing a release" sections); this workflow only supplies
-# their credentials from the repository's secrets.
+# Pushing an annotated tag `desktop-v<version>` builds, signs, notarizes and publishes that version for both platforms,
+# or for the one a `Platforms: macos` or `Platforms: windows` last line of the tag's message selects. Running the
+# workflow by hand releases an existing tag the same way, for the platform(s) its `platforms` input names: how a
+# platform that a version's tag left out is added later. Application checks run locally before tagging. The tag's
+# message is the release notes, which the in-app update notice shows too.
+# The macOS and Windows builds run in parallel, each only for a selected platform: `macos` builds, signs and notarizes
+# the universal build and signs the update archive; the Windows build makes the x64 installer, code-signs it as the
+# repository variable `WINDOWS_SIGNING` says (none, command or signpath; unset is none) and signs the update, in the
+# one job `windows` for none and command and in the `windows-signpath-*` jobs for signpath. Each uploads its signed
+# output as an artifact. `publish` runs once every selected platform's build has succeeded (an unselected, skipped one
+# does not stop it, a failed selected one does) and publishes what they uploaded. What runs is
+# `pnpm release --no-sign-update`, `sign-update` and `publish-release`, as by hand (apps/desktop/scripts/README.md's
+# "Release builds" and "Publishing a release" sections); this workflow only supplies their credentials from the
+# repository's secrets and variables. The update key is given to the `sign-update` steps of the build jobs alone;
+# `publish` holds only the workflow's own token.
 on:
   push:
     tags:
       - "desktop-v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The version tag to release, such as desktop-v0.1.0"
+        required: true
+        type: string
+      platforms:
+        description: "The platforms to build and publish"
+        required: true
+        type: choice
+        options:
+          - both
+          - macos
+          - windows
+        default: both
+
+env:
+  # The tag the run releases, whichever way it started.
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: read
 
 # One release at a time across tags: `publish-release` reads the channel manifests and then writes them, and two
-# releases interleaving could move a channel backwards. GitHub keeps one pending run per group, so a third tag pushed
+# releases interleaving could move a channel backwards. GitHub keeps one pending run per group, so a third run started
 # while one runs and one waits replaces the waiting one, which then has to be re-run.
 concurrency:
   group: release
@@ -25,14 +54,43 @@ jobs:
   # notarization: a missing signing identity would make an unsigned build, refused only at publishing.
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.platforms.outputs.platforms }}
+      # The Windows signing mode, `none` when the variable is unset, which picks the Windows jobs.
+      windows_signing: ${{ steps.platforms.outputs.windows_signing }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
           persist-credentials: false
+      # `.github/release-notes.sh` reads the version and the tag message with Node.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      # `macos`, `windows` or `macos,windows`: the input of a manual run, else the tag message's `Platforms:` line. Also
+      # the Windows signing mode, which the next step checks.
+      - name: Read the platforms
+        id: platforms
+        env:
+          SELECTION: ${{ inputs.platforms }}
+          WINDOWS_SIGNING: ${{ vars.WINDOWS_SIGNING }}
+        run: |
+          echo "windows_signing=${WINDOWS_SIGNING:-none}" >> "$GITHUB_OUTPUT"
+          case "$SELECTION" in
+            "") platforms=$(sh .github/release-notes.sh "$TAG" --platforms) ;;
+            both) platforms=macos,windows ;;
+            macos | windows) platforms=$SELECTION ;;
+            *)
+              echo "::error::The platforms input is \"$SELECTION\"; it is both, macos or windows."
+              exit 1
+              ;;
+          esac
+          echo "Releasing $TAG for $platforms"
+          echo "platforms=$platforms" >> "$GITHUB_OUTPUT"
       - name: Check the tag and the secrets
         env:
-          TAG: ${{ github.ref_name }}
+          PLATFORMS: ${{ steps.platforms.outputs.platforms }}
           # Only whether each secret is set reaches the step, never its value.
           HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' }}
           HAS_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
@@ -41,20 +99,55 @@ jobs:
           HAS_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
           HAS_APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY != '' }}
           HAS_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          # The Windows code-signing mode and what it needs; variables are not secret, but are passed the same way.
+          WINDOWS_SIGNING: ${{ vars.WINDOWS_SIGNING }}
+          HAS_WINDOWS_SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND != '' }}
+          HAS_SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+          HAS_SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+          HAS_SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG != '' }}
+          HAS_SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG != '' }}
+          HAS_SIGNPATH_BINARIES_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_BINARIES_CONFIGURATION_SLUG != '' }}
+          HAS_SIGNPATH_INSTALLER_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION_SLUG != '' }}
         run: |
           sh .github/release-notes.sh "$TAG" > /dev/null
           # Only what has landed on main is released.
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+          if ! git merge-base --is-ancestor HEAD origin/main; then
             echo "::error::$TAG is on a commit that is not on main. Merge it into main and tag it there."
             exit 1
           fi
+          # Both platforms sign their update with the update key; only the selected ones need their own credentials.
+          needed="TAURI_SIGNING_PRIVATE_KEY"
+          case ",$PLATFORMS," in
+            *,macos,*) needed="$needed APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY APPLE_API_ISSUER APPLE_API_PRIVATE_KEY" ;;
+          esac
           missing=""
-          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY \
-            APPLE_API_ISSUER APPLE_API_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY; do
+          for name in $needed; do
             if [ "$(printenv "HAS_$name")" != "true" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
             echo "::error::These repository secrets are not set:$missing. See the \"Releasing by tag\" section of apps/desktop/scripts/README.md."
+            exit 1
+          fi
+          needed=""
+          case ",$PLATFORMS," in
+            *,windows,*)
+              case "${WINDOWS_SIGNING:-none}" in
+                none) needed="" ;;
+                command) needed="WINDOWS_SIGN_COMMAND" ;;
+                signpath) needed="SIGNPATH_API_TOKEN SIGNPATH_ORGANIZATION_ID SIGNPATH_PROJECT_SLUG SIGNPATH_SIGNING_POLICY_SLUG SIGNPATH_BINARIES_CONFIGURATION_SLUG SIGNPATH_INSTALLER_CONFIGURATION_SLUG" ;;
+                *)
+                  echo "::error::The repository variable WINDOWS_SIGNING is \"$WINDOWS_SIGNING\"; it is none, command or signpath."
+                  exit 1
+                  ;;
+              esac
+              ;;
+          esac
+          missing=""
+          for name in $needed; do
+            if [ "$(printenv "HAS_$name")" != "true" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::WINDOWS_SIGNING=$WINDOWS_SIGNING needs these repository secrets or variables, which are not set:$missing. See the \"Releasing by tag\" section of apps/desktop/scripts/README.md."
             exit 1
           fi
       # The release builds `--locked`; a `Cargo.lock` that no longer matches the manifests would otherwise fail only
@@ -63,22 +156,260 @@ jobs:
       - name: Check that Cargo.lock is up to date
         run: cargo metadata --locked --format-version 1 > /dev/null
 
-  release:
+  # The x64 installer for `none` and `command`, built on its own runner, in parallel with the macOS build. The update key
+  # is given to the `sign-update` step alone, as on macOS. `publish` takes the installer from the artifact.
+  windows:
     needs: validate
-    runs-on: macos-26
+    if: contains(needs.validate.outputs.platforms, 'windows') && needs.validate.outputs.windows_signing != 'signpath'
+    runs-on: windows-latest
     timeout-minutes: 120
-    permissions:
-      contents: write
+    env:
+      WINDOWS_SIGNING: ${{ needs.validate.outputs.windows_signing }}
+    defaults:
+      run:
+        shell: bash
     steps:
-      # No credential stays in `.git/config` for the build to read: nothing after this step pushes, and `gh` takes
-      # its token from the environment.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
-      - name: Read the release notes
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: windows-release
+      - run: pnpm install --frozen-lockfile
+      # `none` and `command` are one build; `command` signs every file the bundler bundles by calling the command
+      # line in the variable `WINDOWS_SIGN_COMMAND`. A provider's own credentials are added to this step's `env`
+      # when one is chosen.
+      - name: Build and sign
         env:
-          TAG: ${{ github.ref_name }}
-        run: sh .github/release-notes.sh "$TAG" > "$RUNNER_TEMP/notes.md"
+          WINDOWS_SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND }}
+        run: pnpm --filter @octoboard/desktop release --no-sign-update
+      - name: Sign the update
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm --filter @octoboard/desktop sign-update
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-installer
+          path: |
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
+          if-no-files-found: error
+
+  # `signpath`: SignPath signs only uploaded artifacts, and each of its two requests waits for an approval given by
+  # hand, which can take longer than the six hours a GitHub-hosted job may run. So the route is five jobs, each well
+  # under that, passing artifacts on: build the executables, have SignPath sign them, bundle the installer from them,
+  # have SignPath sign that, then finish it and sign the update. The waits run on Linux, where nothing is built. The
+  # bundling job builds the tree the bundler reads again, from the same commit, rather than carrying it over: the
+  # signed executables then replace the ones it built.
+  windows-signpath-build:
+    needs: validate
+    if: contains(needs.validate.outputs.platforms, 'windows') && needs.validate.outputs.windows_signing == 'signpath'
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      WINDOWS_SIGNING: signpath
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: windows-release
+      - run: pnpm install --frozen-lockfile
+      - name: Build the executables
+        run: pnpm --filter @octoboard/desktop release --stage build --no-sign-update
+      - name: Upload the executables
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-binaries
+          path: target/signpath/binaries/*
+          if-no-files-found: error
+
+  # The request's wait is capped at four hours (`wait-for-completion-timeout-in-seconds`), inside the job's own limit.
+  # SignPath reads the artifact and this run's details with the job's token, hence `actions: read`.
+  windows-signpath-sign-binaries:
+    needs: windows-signpath-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Sign the executables
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_BINARIES_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ needs.windows-signpath-build.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 14400
+          output-artifact-directory: signed-binaries
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-binaries
+          path: signed-binaries/*
+          if-no-files-found: error
+
+  # Builds the tree again and bundles the installer from the signed executables. The installer goes to SignPath as
+  # `unsigned-installer`, and once more under the name the bundler gave it, which the finishing job puts the signed
+  # one under.
+  windows-signpath-bundle:
+    needs: windows-signpath-sign-binaries
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      WINDOWS_SIGNING: signpath
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: windows-release
+      - run: pnpm install --frozen-lockfile
+      - name: Build the executables again
+        run: pnpm --filter @octoboard/desktop release --stage build --no-sign-update
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed-binaries
+          path: target/signpath/signed-binaries
+      - name: Bundle the installer
+        run: pnpm --filter @octoboard/desktop release --stage bundle --signed target/signpath/signed-binaries --no-sign-update
+      - name: Upload the installer
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-installer
+          path: target/signpath/installer/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-nsis
+          path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+
+  windows-signpath-sign-installer:
+    needs: windows-signpath-bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Sign the installer
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ needs.windows-signpath-bundle.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 14400
+          output-artifact-directory: signed-installer
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-installer
+          path: signed-installer/*
+          if-no-files-found: error
+
+  # Puts the signed installer in the bundle directory under the bundler's name, checks it against the ConPTY files
+  # fetched again, and signs the update with the update key, given to that step alone.
+  windows-signpath-finish:
+    needs: windows-signpath-sign-installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      WINDOWS_SIGNING: signpath
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch the ConPTY files the installer is checked against
+        run: node scripts/fetch-conpty.mjs --installer
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned-nsis
+          path: target/x86_64-pc-windows-msvc/release/bundle/nsis
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed-installer
+          path: target/signpath/signed-installer
+      - name: Finish the installer
+        run: pnpm --filter @octoboard/desktop release --stage finish --signed target/signpath/signed-installer --no-sign-update
+      - name: Sign the update
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm --filter @octoboard/desktop sign-update
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-installer
+          path: |
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
+          if-no-files-found: error
+
+  # The universal build, signed and notarized, on its own runner, in parallel with the Windows build. `publish` takes
+  # it from the artifact, and its macOS tools check the disk image there.
+  macos:
+    needs: validate
+    if: contains(needs.validate.outputs.platforms, 'macos')
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      # No credential stays in `.git/config` for the build to read: nothing after this step pushes.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
       # The layered app icon needs Xcode 26's `actool`, which the build would only find missing at its end.
       - name: Check the Xcode version
         run: |
@@ -145,7 +476,73 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm --filter @octoboard/desktop sign-update
+      # One tar keeps what the publishing looks at (the `.app` the version is read from, the disk image, the archive and
+      # its signature) as built, symlinks, permissions and modification times included, which an artifact's zip would
+      # not.
+      - name: Pack the signed build
+        run: tar -C target/universal-apple-darwin/release -cf "$RUNNER_TEMP/macos-bundle.tar" bundle/macos bundle/dmg
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-bundle
+          path: ${{ runner.temp }}/macos-bundle.tar
+          compression-level: 0
+          if-no-files-found: error
+
+  # Publishes what the build jobs of the selected platforms uploaded. It runs when `validate` succeeded and every
+  # selected platform's build did: a platform that was not selected leaves its jobs skipped, which must not stop it,
+  # and a failed one must. Windows is built by `windows` or by the `signpath` route, which ends in
+  # `windows-signpath-finish`; the other one is skipped. The macOS tools that check the disk image are needed only with macOS in the release, so a
+  # Windows-only publish runs on Linux. Nothing here is built, so the update key is not given to it.
+  publish:
+    needs: [validate, macos, windows, windows-signpath-finish]
+    if: >-
+      ${{ !cancelled() && needs.validate.result == 'success'
+      && needs.macos.result == (contains(needs.validate.outputs.platforms, 'macos') && 'success' || 'skipped')
+      && needs.windows.result == (contains(needs.validate.outputs.platforms, 'windows')
+        && needs.validate.outputs.windows_signing != 'signpath' && 'success' || 'skipped')
+      && needs.windows-signpath-finish.result == (contains(needs.validate.outputs.platforms, 'windows')
+        && needs.validate.outputs.windows_signing == 'signpath' && 'success' || 'skipped') }}
+    runs-on: ${{ contains(needs.validate.outputs.platforms, 'macos') && 'macos-26' || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      PLATFORMS: ${{ needs.validate.outputs.platforms }}
+    steps:
+      # No credential stays in `.git/config`: `gh` takes its token from the environment.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+      # The publishing script uses Node's built-in modules only, so nothing is installed.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Read the release notes
+        run: sh .github/release-notes.sh "$TAG" > "$RUNNER_TEMP/notes.md"
+      - name: Download the macOS build
+        if: contains(needs.validate.outputs.platforms, 'macos')
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: macos-bundle
+          path: ${{ runner.temp }}/macos
+      - name: Unpack the macOS build
+        if: contains(needs.validate.outputs.platforms, 'macos')
+        run: |
+          mkdir -p target/universal-apple-darwin/release
+          tar -C target/universal-apple-darwin/release -xf "$RUNNER_TEMP/macos/macos-bundle.tar"
+      - name: Download the Windows installer
+        if: contains(needs.validate.outputs.platforms, 'windows')
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-installer
+          path: ${{ runner.temp }}/windows
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pnpm --filter @octoboard/desktop publish-release --notes-file "$RUNNER_TEMP/notes.md"
+        run: |
+          case ",$PLATFORMS," in
+            *,windows,*) set -- --windows-dir "$RUNNER_TEMP/windows" ;;
+            *) set -- ;;
+          esac
+          node apps/desktop/scripts/publish-release.mjs --notes-file "$RUNNER_TEMP/notes.md" --platforms "$PLATFORMS" "$@"

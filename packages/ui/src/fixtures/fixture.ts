@@ -3,7 +3,7 @@ import type { Translate } from "../i18n/catalog";
 import type { ReplyOf } from "../requests";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence } from "../protocol";
+import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
 import type { MessageParams } from "../errors/codedError";
 import type { PathLinkRefusedCause } from "../errors/causes";
 import type { State } from "../store";
@@ -79,8 +79,9 @@ export interface ProcessesFixture {
    * first ask of each: the list is answered at first and its next poll (the panel, and the rail's list while it is
    * open, ask again every few seconds) is refused, so the panel shows the trees with the refresh failure over them. */
   listLater?: FixtureError;
-  /** What `stop_processes` answers instead of stopping: never answered, or refused. */
-  stop?: "pending" | FixtureError;
+  /** What `stop_processes` answers instead of stopping: never answered, refused, or answered with the trees left
+   * running for the reason given (`not_stopped` names each one, `ids` leaves them out, and they stay listed). */
+  stop?: "pending" | FixtureError | { leavesRunning: UnstoppedReason };
   /** What `keep_processes` answers instead of keeping: never answered, or refused. */
   keep?: "pending" | FixtureError;
 }

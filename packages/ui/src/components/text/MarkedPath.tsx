@@ -1,8 +1,8 @@
 import { Folder, type LucideIcon } from "lucide-react";
 import React from "react";
 
-import { abbreviateHome } from "../../format/pathDisplay";
-import { useDaemonStore } from "../../store";
+import { display } from "../../format/hostPath";
+import { useHostPaths } from "../hooks/useHostPaths";
 import { PathText } from "./PathText";
 
 /** A path set apart from the prose around it (a setting's description, a file viewer's header): an
@@ -37,6 +37,6 @@ export function PlainMarkedPath({
  * reads the store for that home directory, which is why it is a component of its own rather than
  * an option on the plain path label. */
 export function MarkedPath({ path, size }: { path: string; size?: "sm" | "md" }): React.ReactElement {
-  const home = useDaemonStore((s) => s.homeDir);
-  return <PlainMarkedPath path={path} shown={abbreviateHome(path, home)} size={size} />;
+  const paths = useHostPaths();
+  return <PlainMarkedPath path={path} shown={display(path, paths)} size={size} />;
 }

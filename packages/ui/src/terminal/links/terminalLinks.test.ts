@@ -2,26 +2,33 @@
 import type { Terminal } from "@xterm/xterm";
 import { describe, expect, it, vi } from "vitest";
 
-import { IS_MAC } from "../../input/keys";
+import type { HostFacts } from "../../platform/host";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import type { TerminalRow } from "./terminalLines";
 import { brokenUrlsAt, cellAtPoint, linkBox, linkSegmentsIn, rangeHasCell, TERMINAL_URL_REGEX, terminalLinkHandler, type TerminalGrid, visibleLinkSegments } from "./terminalLinks";
 
 it("opens a link with a plain click", () => {
   const open = vi.fn(async () => {});
-  const onClick = terminalLinkHandler(open, () => false);
+  const onClick = terminalLinkHandler(open, () => false, BROWSER_HOST);
   const event = new MouseEvent("click");
   onClick(event, "https://example.com");
   expect(open).toHaveBeenCalledWith("https://example.com", event);
 });
 
-it.each<[string, MouseEventInit, boolean]>([
-  ["a text selection", {}, true],
-  ["a secondary button", { button: 2 }, false],
-  ...(IS_MAC ? [["macOS Control-click", { ctrlKey: true }, false] as [string, MouseEventInit, boolean]] : []),
-])("does not open a link for %s", (_name, options, selected) => {
+it.each<[string, MouseEventInit, boolean, HostFacts]>([
+  ["a text selection", {}, true, BROWSER_HOST],
+  ["a secondary button", { button: 2 }, false, BROWSER_HOST],
+  ["macOS Control-click", { ctrlKey: true }, false, MAC_HOST],
+])("does not open a link for %s", (_name, options, selected, host) => {
   const open = vi.fn(async () => {});
-  terminalLinkHandler(open, () => selected)(new MouseEvent("mouseup", options), "https://example.com");
+  terminalLinkHandler(open, () => selected, host)(new MouseEvent("mouseup", options), "https://example.com");
   expect(open).not.toHaveBeenCalled();
+});
+
+it("opens a link with Control held off macOS, where it is no right-click", () => {
+  const open = vi.fn(async () => {});
+  terminalLinkHandler(open, () => false, WINDOWS_HOST)(new MouseEvent("mouseup", { ctrlKey: true }), "https://example.com");
+  expect(open).toHaveBeenCalledOnce();
 });
 
 it("boxes a link from the cell grid", () => {

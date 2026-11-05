@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { REVIEW } from "../fixtures/configurationReview";
 import type { ImportedConsole, InspectedAccount, InspectedAccounts, InspectedConsole } from "../protocol";
 import { defaultBinding } from "../shortcuts/commands";
+import { BROWSER_HOST } from "../test/hosts";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import {
   accountChoicesFor,
@@ -23,11 +24,13 @@ import {
   resolutionsOf,
   reviewForOffers,
   shortcutsRecord,
-  shortcutsReview,
+  shortcutsReview as shortcutsReviewFor,
   targetOf,
   withEffectiveFallbacks,
   withRow,
 } from "./importPlan";
+
+const shortcutsReview = (shortcuts: Record<string, unknown>, current: Parameters<typeof shortcutsReviewFor>[1]) => shortcutsReviewFor(shortcuts, current, BROWSER_HOST);
 
 const consoles = REVIEW.consoles;
 const [website, searchApi, designSystem, notes] = consoles[0].projects;
@@ -215,6 +218,7 @@ describe("accounts", () => {
   const account = (name: string, status: InspectedAccount["status"]): InspectedAccount => ({
     name,
     directory: `~/.${name}`,
+    foreign_directory: false,
     proposed_directory: `/home/.${name}`,
     status,
     in_use_by: null,
@@ -326,4 +330,21 @@ describe("the regions of a document", () => {
     expect(importedRegions(["accounts"], checked)).toEqual(["accounts"]);
     expect(importedRegions(["consoles", "accounts"], { ...checked, consoles: false })).toEqual([]);
   });
+});
+
+it.each([
+  { directory: "relative\\dir", problem: "not_absolute" },
+  { directory: "/srv/web", problem: "not_absolute" },
+  { directory: "C:web", problem: "not_absolute" },
+  { directory: "~", problem: "not_absolute" },
+  { directory: "C:\\web", problem: undefined },
+  { directory: "\\\\server\\share\\web", problem: undefined },
+  { directory: "~\\code\\web", problem: undefined },
+  { directory: "~/code/web", problem: undefined },
+])("judges the directory typed for a project on a Windows host: $directory", ({ directory, problem }) => {
+  expect(directoryProblem({ choice: "directory", directory }, "windows")).toBe(problem);
+});
+
+it("takes a Windows path as no directory on a Unix host", () => {
+  expect(directoryProblem({ choice: "directory", directory: "C:\\web" })).toBe("not_absolute");
 });

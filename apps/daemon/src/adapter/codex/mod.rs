@@ -69,6 +69,7 @@ mod conversation;
 mod hooks;
 mod login;
 pub(crate) mod models;
+mod native_binary;
 pub(crate) mod quota;
 pub(crate) mod records;
 mod reset_credit;
@@ -85,7 +86,8 @@ mod unarchive;
 use serde_json::json;
 
 use super::files::canonical_project;
-use super::{AgentProvider, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use super::{AgentProvider, LaunchPlan, LaunchSpec, COMMAND_HOOK_TIMEOUT_SECS};
+use crate::platform::shell::{self, ResolvedBinary};
 use crate::protocol::{error_code, AgentId, CodedError};
 use crate::providers::{codex, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
@@ -141,6 +143,17 @@ const HOOK_EVENTS: &[&str] = &[
     "Stop",
 ];
 
+/// Timeout registered for `event`'s hook, in seconds. `Interrupt` keeps 3 s on every host: Codex
+/// is recorded to clamp it to 3 s and warn visibly about a longer one (from an earlier comment, not
+/// verified), and it is never the cold first hook of a launch. The rest take the host's allowance.
+fn hook_timeout_secs(event: &str) -> u32 {
+    if event == "Interrupt" {
+        COMMAND_HOOK_TIMEOUT_SECS.min(3)
+    } else {
+        COMMAND_HOOK_TIMEOUT_SECS
+    }
+}
+
 pub struct CodexProvider;
 
 /// What the user typed, from one parsed line of a rollout: the `user_message` event of older Codex,
@@ -194,6 +207,10 @@ impl AgentProvider for CodexProvider {
 
     fn records(&self) -> &'static dyn crate::records::RecordStore {
         &records::CodexRecords
+    }
+
+    fn native_binary(&self, binary: &ResolvedBinary) -> anyhow::Result<Option<ResolvedBinary>> {
+        native_binary::of(binary)
     }
 
     /// Codex's title is a list of items joined by ` | `: a spinner, a status such as `[ ! ] Action
@@ -284,13 +301,14 @@ impl AgentProvider for CodexProvider {
         }
         args.push("--dangerously-bypass-hook-trust".to_string());
 
-        let command = spec.hook_script.to_string_lossy().into_owned();
+        // Codex runs the command through the host's own shell, whose language it is written in.
+        let command = shell::script_command(spec.hook_script, shell::hook_dialect());
         for event in HOOK_EVENTS {
             args.push("-c".to_string());
             args.push(format!(
                 "hooks.{event}=[{{hooks=[{{type=\"command\",command={},timeout={},async=true}}]}}]",
                 toml_string(&command),
-                HOOK_TIMEOUT_SECS
+                hook_timeout_secs(event)
             ));
         }
 

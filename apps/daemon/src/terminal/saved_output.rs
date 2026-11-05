@@ -130,6 +130,7 @@ mod tests {
         assert_eq!(saved.read("s"), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_saved_file_is_readable_by_its_owner_alone() {
         use std::os::unix::fs::PermissionsExt;

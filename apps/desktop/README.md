@@ -1,11 +1,17 @@
 # Octoboard desktop application
 
-The macOS desktop application: a Tauri 2 shell around the Octoboard interface. It opens the window and the native menu,
-starts the `octoboardd` daemon as a sidecar, keeps running behind a menu bar icon when you choose that, and installs its
-own updates. The interface itself is [`packages/ui/`](../../packages/ui/README.md), bundled into the application at
+The desktop application for macOS and Windows: a Tauri 2 shell around the Octoboard interface. It opens the window and,
+on macOS, the native menu, starts the `octoboardd` daemon as a sidecar, keeps running behind a menu bar icon (in the
+notification area on Windows) when you choose that, and installs its own updates. The interface itself is [`packages/ui/`](../../packages/ui/README.md), bundled into the application at
 build time; it talks to the daemon ([`apps/daemon/`](../daemon/README.md)) only over the daemon's own protocol.
 
-It runs on macOS 11 or later; the release build is one universal bundle for Apple silicon and Intel.
+Both are in beta. On macOS it runs on macOS 11 or later, and the release build is one universal bundle for Apple
+silicon and Intel. On Windows it runs on Windows 10 version 21H2 or later, and the release build is an x64 NSIS installer,
+`Octoboard_<version>_x64-setup.exe`, which installs per user and downloads Microsoft Edge WebView2 if it is missing; on
+Windows 11 on Arm the x64 app runs under emulation, and there is no native ARM64 build yet. The Windows installer is not
+code-signed yet, so Microsoft Defender SmartScreen may show "Windows protected your PC" on a downloaded copy; "More
+info", then "Run anyway" installs it. Installing it as a user is described in the
+[root README](../../README.md#installing-on-windows).
 
 ## Develop
 
@@ -30,7 +36,8 @@ root with `pnpm test:rust`, which needs no sidecar.
   [`.env.local.example`](../../.env.local.example) to `.env.local` and set `OCTOBOARD_INSTALL_DIR` to an absolute
   directory, quit any running Octoboard, then run it. It needs Xcode 26 selected as the developer directory.
 - `pnpm release:version <version> --notes-file <path>` — prepare and push a version from the clean main checkout;
-  CI builds, signs, notarizes and publishes it. The notes path is relative to the repository root, or absolute.
+  CI builds, signs, notarizes and publishes the macOS app, and builds and publishes the Windows installer (unsigned
+  until a Windows signing provider is set). The notes path is relative to the repository root, or absolute.
   Add `--dry-run` to preview the release without changing files or refs.
 - `pnpm release` and `pnpm publish-release` — build and publish a signed release manually.
 

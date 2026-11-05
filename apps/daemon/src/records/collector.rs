@@ -1325,7 +1325,7 @@ mod tests {
         let chain = crate::test_support::codex_chain(&shared, ID, false);
         let root = directory.join("account");
         std::fs::create_dir_all(&root).unwrap();
-        std::os::unix::fs::symlink(shared.join("sessions"), root.join("sessions")).unwrap();
+        crate::test_support::symlink(shared.join("sessions"), root.join("sessions")).unwrap();
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
             "host_id":"local","kind":"console","origin":"user","title":"Session",
@@ -1367,7 +1367,7 @@ mod tests {
         let year = shared.join("sessions/2026");
         let outside = directory.join("outside");
         std::fs::rename(&year, &outside).unwrap();
-        std::os::unix::fs::symlink(&outside, &year).unwrap();
+        crate::test_support::symlink(&outside, &year).unwrap();
         assert!(
             codex
                 .opening_file(&mut Locator::default(), &root, ID)

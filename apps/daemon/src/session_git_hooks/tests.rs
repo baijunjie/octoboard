@@ -1,6 +1,8 @@
 mod gate;
 mod reread;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
 use super::fixture::{
@@ -89,6 +91,7 @@ fn the_dispatchers_are_written_for_the_installed_git_and_found_again() {
     let env = isolated_git_env();
     let dir = prepare(&root, SYSTEM_GIT, &env, "/opt/octo'boardd").unwrap();
 
+    #[cfg(unix)]
     for name in BUILT_IN_HOOKS {
         let meta = fs::metadata(dir.join(name)).unwrap();
         assert_eq!(meta.permissions().mode() & 0o777, 0o555, "{name}");
@@ -104,12 +107,22 @@ fn the_dispatchers_are_written_for_the_installed_git_and_found_again() {
     ] {
         assert!(!script.contains(placeholder), "{placeholder}");
     }
+    // Back-dated, so a directory written again would show a time of now.
+    let written = SystemTime::now() - Duration::from_secs(3600);
+    crate::platform::fs::set_dir_modified(&dir, written).unwrap();
+    let identity = crate::platform::fs::identity(&dir, crate::platform::fs::Links::Keep).unwrap();
     assert_eq!(
         prepare(&root, SYSTEM_GIT, &env, "/opt/octo'boardd").unwrap(),
         dir
     );
+    assert_eq!(
+        crate::platform::fs::identity(&dir, crate::platform::fs::Links::Keep).unwrap(),
+        identity
+    );
+    assert_eq!(fs::metadata(&dir).unwrap().modified().unwrap(), written);
     assert!(root.join(STATE_DIR).is_dir());
     // Read-only, so the scratch directory can go.
+    #[cfg(unix)]
     fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
 }
 
@@ -129,15 +142,19 @@ fn the_hook_names_a_git_documents_are_read_from_its_manual_or_html_page() {
 /// `core.hooksPath` could sit in like any other.
 #[test]
 fn a_configuration_file_outside_the_users_and_repositorys_scopes_is_scanned() {
-    let listing = b"unknown\0file:/Xcode/gitconfig\0credential.helper\nosxkeychain\0\
-                    system\0file:/etc/gitconfig\0a.b\nc\0\
-                    global\0file:/home/u/.gitconfig\0user.name\nu\0\
-                    command\0command line:\0x.y\nz\0";
+    // A path is absolute with a drive letter on Windows.
+    let root = if cfg!(windows) { "C:" } else { "" };
+    let listing = format!(
+        "unknown\0file:{root}/Xcode/gitconfig\0credential.helper\nosxkeychain\0\
+         system\0file:{root}/etc/gitconfig\0a.b\nc\0\
+         global\0file:{root}/home/u/.gitconfig\0user.name\nu\0\
+         command\0command line:\0x.y\nz\0"
+    );
     assert_eq!(
-        other_scope_files(listing),
+        other_scope_files(listing.as_bytes()),
         [
-            PathBuf::from("/Xcode/gitconfig"),
-            PathBuf::from("/etc/gitconfig")
+            PathBuf::from(format!("{root}/Xcode/gitconfig")),
+            PathBuf::from(format!("{root}/etc/gitconfig"))
         ]
     );
 }
@@ -210,10 +227,10 @@ fn a_state_directory_that_cannot_be_written_costs_only_the_report() {
 
     assert!(output.status.success());
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
-    assert_eq!(
-        std::fs::read_to_string(&seen).unwrap(),
-        "prepared\ncommitted\n"
-    );
+    // A git that has a `preparing` state of its own runs the hook for it too.
+    let seen = std::fs::read_to_string(&seen).unwrap();
+    let states: Vec<&str> = seen.lines().filter(|state| *state != "preparing").collect();
+    assert_eq!(states, ["prepared", "committed"]);
 }
 
 /// A transaction of hundreds of references is spooled rather than read line by line, and the
@@ -329,7 +346,7 @@ fn anything_that_could_move_the_hooks_has_git_asked() {
     let system = installed(
         "octoboardd-test-system-gitconfig",
         "[core]\n\thooksPath = .git/hooks\n",
-        0o644,
+        false,
     );
     let other_build = dispatchers_for("/elsewhere/libexec/git-core", &[]);
     let with_system = dispatchers_for(&system_exec_path(), std::slice::from_ref(&system));
@@ -417,7 +434,9 @@ fn a_push_to_checkout_with_no_hook_of_the_users_updates_the_worktree() {
     git(&theirs, &["fetch", "-q", "origin"]);
 
     let git_dir = theirs.join(".git");
-    let output = Command::new(dispatchers().join("push-to-checkout"))
+    let runner = shell::command_runner(shell::Dialect::Posix);
+    let output = Command::new(&runner.program)
+        .arg(shell::posix_path(&dispatchers().join("push-to-checkout")))
         .arg(pushed.trim())
         .current_dir(&git_dir)
         .env_clear()
@@ -433,4 +452,147 @@ fn a_push_to_checkout_with_no_hook_of_the_users_updates_the_worktree() {
         std::fs::read_to_string(theirs.join("pushed")).unwrap(),
         "pushed"
     );
+}
+
+/// `git --exec-path` prints a drive-letter path under git for Windows, and the dispatcher compares
+/// what is kept with the `GIT_EXEC_PATH` it is given, so the text stays as printed.
+#[test]
+fn an_exec_path_is_a_posix_or_a_drive_letter_absolute_path_kept_as_printed() {
+    for path in [
+        "/usr/libexec/git-core",
+        "C:/Program Files/Git/mingw64/libexec/git-core",
+        "z:/git",
+    ] {
+        assert_eq!(parse_exec_path(&format!("{path}\n")).unwrap(), path);
+    }
+    for path in [
+        "",
+        "git-core",
+        "./git-core",
+        "C:",
+        "C:git",
+        r"C:\git",
+        "1:/git",
+    ] {
+        assert!(parse_exec_path(path).is_err(), "{path:?}");
+    }
+}
+
+/// A drive-letter path from `git rev-parse --git-path` is absolute: it is run as it is, not as
+/// `./C:/…`, which names another file.
+#[cfg(unix)]
+#[test]
+fn a_drive_letter_hooks_path_is_run_as_it_is() {
+    let fixture = Fixture::new();
+    let hooks = fixture.repo.join("C:/hooks");
+    let seen = fixture.dir.join("seen");
+    write_hook(
+        &hooks.join("pre-commit"),
+        &format!("echo \"$0\" >>'{}'", seen.display()),
+    );
+    git(&fixture.repo, &["config", "core.hooksPath", "C:/hooks"]);
+
+    fixture.as_session("a", &["commit", "-q", "--allow-empty", "-m", "one"]);
+
+    assert_eq!(
+        std::fs::read_to_string(&seen).unwrap(),
+        "C:/hooks/pre-commit\n"
+    );
+}
+
+/// Runs the dispatcher of the hook `hook` from this very process, as the session `a`'s git would,
+/// from `fixture`'s repository: with `args` and `input` on its stdin, and `hooks` its directory.
+fn run_dispatcher(fixture: &Fixture, hooks: &Path, hook: &str, args: &[&str], input: &str) {
+    let runner = shell::command_runner(shell::Dialect::Posix);
+    let mut command = Command::new(&runner.program);
+    command
+        .arg(shell::posix_path(&hooks.join(hook)))
+        .args(args)
+        .current_dir(&fixture.repo)
+        .env_clear()
+        .envs(isolated_git_env())
+        .envs(injected(0, hooks, "a", 1, TEST_KEY))
+        .env("OCTOBOARD_TEST_REPORTS", &*fixture.reports)
+        .env("OCTOBOARD_TEST_GATES", &*fixture.gates)
+        .stdin(std::process::Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    std::io::Write::write_all(&mut child.stdin.take().unwrap(), input.as_bytes()).unwrap();
+    assert!(child.wait().unwrap().success());
+}
+
+/// One state of a transaction creating `branch` at `oid`.
+fn run_transaction_state(fixture: &Fixture, state: &str, branch: &str, oid: &str) {
+    let line = format!("{} {oid} refs/heads/{branch}\n", "0".repeat(oid.len()));
+    run_dispatcher(
+        fixture,
+        dispatchers(),
+        "reference-transaction",
+        &[state],
+        &line,
+    );
+}
+
+/// Two transactions in one repository that run at once, from one parent process (every hook of a
+/// git for Windows has the same one), each report the branch they created: what a prepared call
+/// leaves for its committed call is not shared between them.
+#[test]
+fn transactions_in_one_repository_at_once_do_not_share_state() {
+    let fixture = Fixture::new();
+    let head = String::from_utf8(git(&fixture.repo, &["rev-parse", "HEAD"])).unwrap();
+    let head = head.trim();
+
+    run_transaction_state(&fixture, "prepared", "one", head);
+    run_transaction_state(&fixture, "prepared", "two", head);
+    run_transaction_state(&fixture, "committed", "one", head);
+    run_transaction_state(&fixture, "committed", "two", head);
+
+    let reports = fixture.reports(2);
+    let mut created: Vec<_> = reports
+        .iter()
+        .flat_map(|(_, report)| report.refs.iter().map(|created| created.name.clone()))
+        .collect();
+    created.sort();
+    assert_eq!(created, ["refs/heads/one", "refs/heads/two"]);
+}
+
+/// A long list of updates or pushed refs is spooled to a file of the run's own, not of its
+/// parent's, which a git for Windows gives every hook alike.
+#[test]
+fn runs_from_one_parent_spool_to_files_of_their_own() {
+    let fixture = Fixture::new();
+    let state = fixture.dir.join("state");
+    std::fs::create_dir(&state).unwrap();
+    let hooks = dispatchers_with(&system_exec_path(), &[], &state);
+    let head = String::from_utf8(git(&fixture.repo, &["rev-parse", "HEAD"])).unwrap();
+    let head = head.trim();
+    let updates: String = (0..300)
+        .map(|n| format!("{} {head} refs/heads/bulk-{n:03}\n", "0".repeat(head.len())))
+        .collect();
+    let pushes: String = (0..300)
+        .map(|n| {
+            format!(
+                "refs/heads/bulk-{n:03} {head} refs/heads/bulk-{n:03} {}\n",
+                "0".repeat(head.len())
+            )
+        })
+        .collect();
+
+    for _ in 0..2 {
+        run_dispatcher(
+            &fixture,
+            &hooks,
+            "reference-transaction",
+            &["committed"],
+            &updates,
+        );
+        run_dispatcher(&fixture, &hooks, "pre-push", &["origin", "url"], &pushes);
+    }
+
+    let mut spools: Vec<String> = std::fs::read_dir(&state)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".in") || name.ends_with(".push"))
+        .collect();
+    spools.sort();
+    assert_eq!(spools.len(), 4, "{spools:?}");
 }

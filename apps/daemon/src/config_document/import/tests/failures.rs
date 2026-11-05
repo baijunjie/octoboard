@@ -7,14 +7,14 @@ async fn a_project_that_cannot_be_placed_is_reported_and_the_rest_are_imported()
     let area = ScratchDir::new("import-partial-area");
     let (state, _dir) = app_state("import-partial");
     let good = directory(&area, "good");
-    let mut no_remote = project("no-remote", "/gone/no-remote");
+    let mut no_remote = project("no-remote", &host_path("/gone/no-remote"));
     no_remote.remote_url = None;
-    let mut bad_remote = project("bad-remote", "/gone/bad-remote");
+    let mut bad_remote = project("bad-remote", &host_path("/gone/bad-remote"));
     bad_remote.remote_url = Some("ext::sh -c true".to_string());
     let hub = console(
         "Hub",
         vec![
-            project("missing", "/gone/missing"),
+            project("missing", &host_path("/gone/missing")),
             no_remote,
             bad_remote,
             project("good", &good.to_string_lossy()),
@@ -237,7 +237,7 @@ async fn a_clone_whose_target_directory_exists_fails_that_project_alone() {
     let (state, _dir) = state_cloning_into("import-clone-exists", &clone_dir);
     directory(&clone_dir, "taken");
     let good = directory(&area, "good");
-    let mut cloned = project("cloned", "/gone/cloned");
+    let mut cloned = project("cloned", &host_path("/gone/cloned"));
     cloned.remote_url = Some("https://example.invalid/o/taken.git".to_string());
     let hub = console(
         "Hub",
@@ -262,4 +262,38 @@ async fn a_clone_whose_target_directory_exists_fails_that_project_alone() {
     );
     assert_eq!(imported[0].projects[1].status, ImportStatus::Created);
     assert_eq!(stored_projects(&state).len(), 1);
+}
+
+#[tokio::test]
+async fn a_path_written_on_another_operating_system_offers_nothing_to_import_from() {
+    let area = ScratchDir::new("import-foreign-choice-area");
+    let clone_dir = directory(&area, "projects");
+    let (state, _dir) = state_cloning_into("import-foreign-choice", &clone_dir);
+    // What the foreign path's last segment names exists, and must not be taken for it.
+    directory(&clone_dir, "app");
+    let hub = console("Hub", vec![project("foreign", foreign_path())]);
+
+    let imported = import(
+        &state,
+        &document(vec![hub.clone()]),
+        vec![at(0, 0, DirectoryChoice::ExportedPath)],
+    )
+    .await
+    .expect("a failing project does not fail the import");
+    let other = import(
+        &state,
+        &document(vec![hub]),
+        vec![at(0, 0, DirectoryChoice::DefaultCloneDir)],
+    )
+    .await
+    .expect("a failing project does not fail the import");
+
+    for imported in [imported, other] {
+        assert_eq!(imported[0].projects[0].status, ImportStatus::Failed);
+        assert_eq!(
+            imported[0].projects[0].error.as_ref().map(|e| e.code),
+            Some(error_code::IMPORT_CHOICE_UNAVAILABLE)
+        );
+    }
+    assert!(stored_projects(&state).is_empty());
 }

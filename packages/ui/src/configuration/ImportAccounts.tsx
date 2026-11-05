@@ -13,10 +13,11 @@ import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, InspectedAccount, InspectedAccounts } from "../protocol";
 import { useProviders } from "../store";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { ProviderName } from "../components/text/ProviderName";
 import { AgentSettingsCard, type CurrentAgentSettings } from "./AgentSettingsCard";
 import { useFailureNode } from "./failureText";
-import { accountChoicesFor, directoryProblem, hasNameProblem, withAccountRow, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
+import { accountChoicesFor, directoryProblem, hasForeignDirectoryProblem, hasNameProblem, withAccountRow, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
 import { AgentList, Card, CardHeading, CardRows, DirectoryChoiceField, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
 
 const CHOICE_LABEL: Record<AccountRowState["choice"], PlainMessageKey> = {
@@ -114,7 +115,8 @@ function UnusableMark({ account }: { account: InspectedAccount }): React.ReactEl
   const t = useT();
   const language = useCurrentLanguage();
   const failureNode = useFailureNode();
-  const failure = account.error;
+  // The mark says why a directory of another operating system cannot be used, so the daemon's "not absolute" stays out.
+  const failure = hasForeignDirectoryProblem(account) ? null : account.error;
   const remedy = failure && failureNode(failure, "remedy");
   return (
     <StatusMark
@@ -126,6 +128,8 @@ function UnusableMark({ account }: { account: InspectedAccount }): React.ReactEl
           <Message id="configuration.import.accounts.status.directoryInUse" params={{ name: <InlineReference dir="auto" wrap>{accountNameText(language, account.in_use_by ?? "")}</InlineReference> }} />
         ) : failure ? (
           <Message id="configuration.import.accounts.status.invalidReason" params={{ reason: failureNode(failure, "summary") }} />
+        ) : hasForeignDirectoryProblem(account) ? (
+          t("configuration.import.accounts.status.foreignDirectory")
         ) : (
           t("configuration.import.accounts.status.invalid")
         )}
@@ -231,6 +235,7 @@ function AgentCard({
 }): React.ReactElement {
   const t = useT();
   const providers = useProviders();
+  const { style } = useHostPaths();
   return (
     <Card header={(headingId) => <CardHeading id={headingId}>{providerLabel(t, providers, agent)}</CardHeading>}>
       <CardRows>
@@ -240,7 +245,7 @@ function AgentCard({
             agent={agent}
             account={account}
             row={review[i]}
-            problem={shown(directoryProblem(review[i]))}
+            problem={shown(directoryProblem(review[i], style))}
             onChange={(row) => onRow(i, row)}
           />
         ))}

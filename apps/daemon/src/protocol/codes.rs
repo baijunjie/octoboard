@@ -318,6 +318,11 @@ pub mod error_code {
     /// in time, and no counts had been noted to answer with. Nothing was counted; the next request
     /// asks again. No `params`.
     pub const PROCESS_COUNT_TIMED_OUT: Code = Code("process_count_timed_out");
+    /// A `keep_processes`, or an `archive_session` with `keep_process_ids`, named a tree with a
+    /// process attached to its agent's own console, which ends with the session whatever keeps it
+    /// (`ProcessTree.unkeepable_reason` `agent_console`). Nothing was kept, and the archive did not
+    /// go ahead. `params` names the process's `pid` and `name`.
+    pub const PROCESS_SHARES_AGENT_CONSOLE: Code = Code("process_shares_agent_console");
     /// A `use_reset_credit` for an account whose use of a credit is already running. Nothing
     /// was sent. `params` names `agent`.
     pub const RESET_CREDIT_IN_PROGRESS: Code = Code("reset_credit_in_progress");
@@ -341,6 +346,9 @@ pub mod error_code {
     /// accounts share, or turning sharing on for an account whose directory resolves to the
     /// default account's. `params` names the `account` and its `name` when one was named.
     pub const DEFAULT_ACCOUNT_NOT_SHAREABLE: Code = Code("default_account_not_shareable");
+    /// A `set_account_sharing` turning sharing on, on a host that cannot make the file links it
+    /// needs (`snapshot.host.file_links` is false). No `params`; nothing was recorded.
+    pub const SHARING_UNAVAILABLE_ON_HOST: Code = Code("sharing_unavailable_on_host");
     /// An account's change of sharing did not complete — asked for by `set_account_sharing`, or
     /// turning sharing off before `delete_account` or `update_account` pointing it at another
     /// directory, which it then refuses. Nothing is rolled back: the account is left marked

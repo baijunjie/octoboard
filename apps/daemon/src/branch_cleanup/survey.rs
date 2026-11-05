@@ -2,7 +2,6 @@
 //! checks behind that.
 
 use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -16,6 +15,7 @@ use crate::git::run::Runner;
 use crate::git::tree_entries::entries;
 use crate::git::worktrees::{changes, worktrees, Listed};
 use crate::hostfs::place::Looking;
+use crate::platform::names;
 use crate::protocol::{
     Session, SessionBranchCause, SessionBranchItem, SessionBranchKind, SessionBranchState,
 };
@@ -412,7 +412,9 @@ pub(super) fn survey(
                 &bound.repo,
                 SessionBranchKind::Worktree,
                 Some(branch.branch.clone()),
-                Some(wire_path::encode(worktree.root.as_os_str().as_bytes())),
+                Some(wire_path::encode(&names::name_bytes(
+                    worktree.root.as_os_str(),
+                ))),
                 &branch.project,
                 Some(&branch.session),
                 state,
@@ -491,7 +493,7 @@ pub(super) fn survey(
 
 /// The object id the branch `name` points at, `None` where it cannot be read.
 pub(super) fn tip(git: &Runner, repo: &Path, name: &[u8]) -> Option<String> {
-    let reference = [b"refs/heads/".as_slice(), name].concat();
+    let reference = names::name_from_bytes(&[b"refs/heads/".as_slice(), name].concat())?;
     let stdout = git
         .read(
             repo,
@@ -499,7 +501,7 @@ pub(super) fn tip(git: &Runner, repo: &Path, name: &[u8]) -> Option<String> {
                 OsStr::new("rev-parse"),
                 OsStr::new("--verify"),
                 OsStr::new("--quiet"),
-                OsStr::from_bytes(&reference),
+                &reference,
             ],
         )
         .ok()?;
@@ -509,14 +511,17 @@ pub(super) fn tip(git: &Runner, repo: &Path, name: &[u8]) -> Option<String> {
 
 /// Whether the branch `name` exists.
 pub(super) fn exists(git: &Runner, repo: &Path, name: &[u8]) -> bool {
-    let reference = [b"refs/heads/".as_slice(), name].concat();
+    let Some(reference) = names::name_from_bytes(&[b"refs/heads/".as_slice(), name].concat())
+    else {
+        return false;
+    };
     git.read(
         repo,
         &[
             OsStr::new("show-ref"),
             OsStr::new("--verify"),
             OsStr::new("--quiet"),
-            OsStr::from_bytes(&reference),
+            &reference,
         ],
     )
     .is_ok()
@@ -541,23 +546,25 @@ fn has_submodules(git: &Runner, root: &Path) -> bool {
     };
     let mut gitlinks = entries(&stdout).filter(|entry| entry.is_gitlink);
     gitlinks.any(|entry| {
-        root.join(OsStr::from_bytes(entry.path))
-            .join(".git")
-            .exists()
+        names::path_from_name_bytes(entry.path)
+            .is_some_and(|path| root.join(path).join(".git").exists())
     })
 }
 
 /// Whether `git branch -d` would take the branch `name` as merged: into its upstream when that
 /// exists, into `HEAD` otherwise. Anything that cannot be told counts as not merged.
 pub(super) fn is_merged(git: &Runner, repo: &Path, name: &[u8]) -> bool {
-    let reference = [b"refs/heads/".as_slice(), name].concat();
+    let Some(reference) = names::name_from_bytes(&[b"refs/heads/".as_slice(), name].concat())
+    else {
+        return false;
+    };
     let upstream = git
         .read(
             repo,
             &[
                 OsStr::new("for-each-ref"),
                 OsStr::new("--format=%(upstream)"),
-                OsStr::from_bytes(&reference),
+                &reference,
             ],
         )
         .ok()
@@ -566,26 +573,33 @@ pub(super) fn is_merged(git: &Runner, repo: &Path, name: &[u8]) -> bool {
             (!first.is_empty()).then_some(first)
         })
         .filter(|upstream| {
-            let commit = [upstream.as_slice(), b"^{commit}"].concat();
+            let Some(commit) =
+                names::name_from_bytes(&[upstream.as_slice(), b"^{commit}"].concat())
+            else {
+                return false;
+            };
             git.read(
                 repo,
                 &[
                     OsStr::new("rev-parse"),
                     OsStr::new("--verify"),
                     OsStr::new("--quiet"),
-                    OsStr::from_bytes(&commit),
+                    &commit,
                 ],
             )
             .is_ok()
         });
     let against = upstream.unwrap_or_else(|| b"HEAD".to_vec());
+    let Some(against) = names::name_from_bytes(&against) else {
+        return false;
+    };
     git.read(
         repo,
         &[
             OsStr::new("merge-base"),
             OsStr::new("--is-ancestor"),
-            OsStr::from_bytes(&reference),
-            OsStr::from_bytes(&against),
+            &reference,
+            &against,
         ],
     )
     .is_ok()

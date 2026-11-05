@@ -13,17 +13,22 @@ async function start(): Promise<void> {
   const language = isLanguage(requestedLanguage) ? requestedLanguage : "en";
   localStorage.setItem(PREFERENCE_KEYS.language, language);
   localStorage.setItem("heroui-theme", "dark");
-  const [{ createRoot }, { FeatureView }, { LanguageProvider }, { PlatformProvider }, { ThemeProvider }] = await Promise.all([
+  const [{ createRoot }, { FeatureView }, { LanguageProvider }, { announceHost }, { browserHost }, { PlatformProvider }, { ThemeProvider }] = await Promise.all([
     import("react-dom/client"),
     import("./views"),
     import("../../i18n/react"),
+    import("../../i18n/platformTerms"),
+    import("../../platform/host"),
     import("../../platform/react"),
     import("../../preferences/theme"),
   ]);
   await import("../../style.css");
   await import("./style.css");
+  // The platform words follow the visitor's system, as the key caps do, before the first message is read.
+  const host = browserHost();
+  announceHost(host);
   createRoot(document.getElementById("root")!).render(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host }}>
       <LanguageProvider><ThemeProvider><FeatureView feature={feature} /></ThemeProvider></LanguageProvider>
     </PlatformProvider>,
   );

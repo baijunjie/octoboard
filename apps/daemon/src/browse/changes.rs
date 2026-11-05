@@ -10,7 +10,6 @@
 //! paths it reads.
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
@@ -25,6 +24,7 @@ use crate::browse::scope::Located;
 use crate::browse::source::{self, ProjectRoot};
 use crate::browse::{git_error, git_failed, line_counts, live};
 use crate::git::isolated::IsolatedGit;
+use crate::platform::fs::{self as platform, Links};
 use crate::protocol::{
     error_code, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, CodedError, ConflictKind,
     ContentSource, SideKind, SideRef,
@@ -378,12 +378,12 @@ impl LiveSides {
         let Some(path) = self.exact_path(rel) else {
             return ChangeSide::Absent;
         };
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
+        let Ok(stat) = platform::stat(&path, Links::Keep) else {
             return ChangeSide::Absent;
         };
-        let kind = kind.unwrap_or(if metadata.file_type().is_symlink() {
+        let kind = kind.unwrap_or(if stat.metadata.file_type().is_symlink() {
             SideKind::Symlink
-        } else if metadata.is_dir() {
+        } else if stat.metadata.is_dir() {
             SideKind::Submodule
         } else {
             SideKind::File
@@ -398,7 +398,7 @@ impl LiveSides {
             kind,
             source: ContentSource::Live {
                 root_id,
-                version: live::version(&metadata),
+                version: live::version(&stat),
             },
         }
     }

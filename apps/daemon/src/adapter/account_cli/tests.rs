@@ -96,3 +96,36 @@ fn a_binary_off_the_path_is_named() {
         "`grok` was not found on PATH in the shell environment"
     );
 }
+
+/// A launcher whose native program is missing is refused as a launch refuses it, so an account's
+/// queries and sign-in report the provider's code rather than a binary that was not found.
+#[cfg(windows)]
+#[test]
+fn a_launcher_without_its_native_program_is_refused_with_the_providers_code() {
+    use crate::protocol::Code;
+    use crate::providers::codex::NATIVE_PROGRAM_MISSING;
+
+    let dir = ScratchDir::new("cli-run-shim");
+    let env = crate::test_support::codex_shim_without_native_program(&dir);
+    let refused = admitted_command(AgentId::CODEX, &env, Some(&dir), &[])
+        .err()
+        .expect("refused");
+    let NotRun::BinaryRefused(refusal) = &refused else {
+        panic!("refused for another reason: {refused:?}");
+    };
+    assert_eq!(refusal.code, Code::of_provider(NATIVE_PROGRAM_MISSING));
+    assert!(matches!(
+        super::resolve_account_binary(AgentId::CODEX, &env),
+        Err(super::Unstartable::Refused(_))
+    ));
+    let listing = crate::agents::models::list(
+        AgentId::CODEX,
+        &env,
+        Some(&dir),
+        std::time::Duration::from_secs(5),
+    );
+    assert_eq!(
+        listing.unavailable.map(|reason| reason.code),
+        Some(Code::of_provider(NATIVE_PROGRAM_MISSING))
+    );
+}

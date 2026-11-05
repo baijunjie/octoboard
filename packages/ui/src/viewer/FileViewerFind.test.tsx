@@ -5,7 +5,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { IS_MAC } from "../input/keys";
+import { BROWSER_HOST, IS_MAC } from "../test/hosts";
 import { eventKey } from "../shortcuts/binding";
 import { FIND_BINDING } from "../shortcuts/commands";
 import { ThemeProvider } from "../preferences/theme";
@@ -108,7 +108,7 @@ function press(target: Element, key: string, init: KeyboardEventInit = {}): Keyb
   });
   return event;
 }
-const find = (target: Element = dialog()) => press(target, "f", eventKey(FIND_BINDING));
+const find = (target: Element = dialog()) => press(target, "f", eventKey(FIND_BINDING, BROWSER_HOST));
 
 function type(value: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;

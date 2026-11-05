@@ -301,6 +301,33 @@ it.each([
 });
 
 
+it.each([
+  [undefined, "C:\\work\\app", "C:\\work\\app\\src\\café.ts"],
+  [undefined, "C:\\", "C:\\src\\café.ts"],
+  ["worktree-id", "C:\\work\\app", "D:\\worktrees\\topic\\packages\\app\\src\\café.ts"],
+] as const)("copies the absolute path in the Windows host's spelling for worktree %s", async (worktree, root, expected) => {
+  const writeText = vi.fn(async () => {});
+  const request = vi.fn(async () => ({
+    type: "project_source" as const, id: null,
+    source: {
+      project: "p", root: "C:\\stored\\app", resolved_root: root, root_id: "root",
+      git: { repository: "repo", common_dir: "C:\\work\\app\\.git", worktree: "main", scope: "packages/app", worktrees: [
+        { id: "worktree-id", root: "D:\\worktrees\\topic", main: false, head: "head", branch: "topic", scope_present: true },
+      ] }, git_error: null,
+    },
+  }));
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p", worktree }}><RowActions path="src/caf%C3%A9.ts" name="café.ts" /></RowPathScope.Provider>,
+    { request, clipboard: { writeText }, notifications, state: { host: { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings" } } },
+  );
+  act(() => actionsOf(container).click());
+  openCopy();
+  await flush();
+  act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy absolute path")!.click());
+  await flush();
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(expected);
+});
+
 it("keeps relative copying available when the absolute path cannot be resolved", async () => {
   const writeText = vi.fn(async () => {});
   const container = mountRows(

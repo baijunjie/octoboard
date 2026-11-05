@@ -3,8 +3,9 @@
 //! conversation history (they are brought under the shared directory differently). Each provider
 //! lists its own (`AccountOps::shared_items`); anything not listed is never shared: credentials,
 //! the agent's own caches and process registries, and files the agent replaces rather than writes
-//! through when a link stands in for them. The measurements are in `docs/agent-cli-reference.md`'s
-//! "Sharing a configuration directory between accounts" section.
+//! through when a link stands in for them. A host may share less than the catalog lists
+//! ([`shared_items`]). The measurements are in `docs/agent-cli-reference.md`'s "Sharing a
+//! configuration directory between accounts" section.
 
 use crate::adapter::provider;
 use crate::protocol::AgentId;
@@ -92,11 +93,34 @@ pub(crate) const fn thread_database(name: &'static str) -> SharedItem {
     }
 }
 
-/// The items `agent` shares between accounts.
-pub fn shared_items(agent: AgentId) -> &'static [SharedItem] {
+/// The items `agent` shares between accounts on this host: its catalog ([`catalogued_items`]) but
+/// for a thread database where SQLite does not follow a file link to the database's write-ahead
+/// log ([`SQLITE_FOLLOWS_FILE_ALIASES`](crate::platform::fs::SQLITE_FOLLOWS_FILE_ALIASES)). A
+/// session opening the database through the account's link and one opening it through the
+/// default directory would each keep a log of their own over the one file, and one's writes
+/// would be lost to the other's; there, every account keeps a thread database of its own.
+pub fn shared_items(agent: AgentId) -> Vec<SharedItem> {
+    on_host(
+        catalogued_items(agent),
+        crate::platform::fs::SQLITE_FOLLOWS_FILE_ALIASES,
+    )
+}
+
+/// Every item `agent`'s provider lists as shareable, whether or not this host shares it.
+pub fn catalogued_items(agent: AgentId) -> &'static [SharedItem] {
     provider(agent)
         .accounts()
         .map_or(&[], |ops| ops.shared_items())
+}
+
+/// The items of `catalog` a host shares, given whether its SQLite follows a file link to a
+/// database's write-ahead log.
+fn on_host(catalog: &[SharedItem], databases_through_links: bool) -> Vec<SharedItem> {
+    catalog
+        .iter()
+        .filter(|item| databases_through_links || item.class != ItemClass::ThreadDatabase)
+        .copied()
+        .collect()
 }
 
 #[cfg(test)]
@@ -109,7 +133,7 @@ mod tests {
     use ItemKind::{Directory as D, File as F};
 
     fn listed(agent: AgentId) -> Vec<(&'static str, ItemKind, ItemClass)> {
-        shared_items(agent)
+        catalogued_items(agent)
             .iter()
             .map(|item| (item.name, item.kind, item.class))
             .collect()
@@ -118,7 +142,9 @@ mod tests {
     fn assert_absent(agent: AgentId, never_shared: &[&str]) {
         for name in never_shared {
             assert!(
-                shared_items(agent).iter().all(|item| item.name != *name),
+                catalogued_items(agent)
+                    .iter()
+                    .all(|item| item.name != *name),
                 "{agent:?} must not share {name}"
             );
         }
@@ -129,7 +155,7 @@ mod tests {
     #[test]
     fn a_thread_database_is_catalogued_only_with_a_registry_for_its_rows() {
         for agent in AgentId::ALL {
-            let has_database = shared_items(agent)
+            let has_database = catalogued_items(agent)
                 .iter()
                 .any(|item| item.class == ItemClass::ThreadDatabase);
             if has_database {
@@ -140,9 +166,26 @@ mod tests {
             }
         }
         assert!(provider(AgentId::TEST).accounts().is_none());
-        assert!(shared_items(AgentId::TEST).is_empty());
+        assert!(catalogued_items(AgentId::TEST).is_empty());
         assert!(crate::accounts::thread_registry::thread_registry(AgentId::TEST).is_none());
         assert!(super::super::registries::registries(AgentId::TEST).is_empty());
+    }
+
+    /// A thread database is shared only where SQLite follows a link to its write-ahead log; the
+    /// rest of the catalog is shared either way.
+    #[test]
+    fn a_thread_database_is_shared_only_where_sqlite_follows_a_link_to_its_log() {
+        let catalog = catalogued_items(AgentId::CODEX);
+        assert_eq!(on_host(catalog, true), catalog);
+        let without = on_host(catalog, false);
+        assert_eq!(without.len(), catalog.len() - 1);
+        assert!(without
+            .iter()
+            .all(|item| item.class != ItemClass::ThreadDatabase));
+        assert_eq!(
+            shared_items(AgentId::CODEX),
+            on_host(catalog, crate::platform::fs::SQLITE_FOLLOWS_FILE_ALIASES)
+        );
     }
 
     #[test]

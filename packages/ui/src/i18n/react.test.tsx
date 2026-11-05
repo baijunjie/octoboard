@@ -7,6 +7,8 @@ import { InlineReference } from "./InlineReference";
 import { format, globalParam } from "./catalog";
 import { currentLanguage, setLanguage } from "./language";
 import { Message } from "./react";
+import { announceHost } from "./platformTerms";
+import { MAC_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -80,4 +82,33 @@ it.each(["en", "zh-Hans"] as const)("joins two sentences without a whitespace-on
   // A separator before an element that is not a message cannot be merged, but the text stays the same.
   act(() => root.render(<Message id="daemon.sharing.withFix" params={{ cause, fix: <b>fixed</b> }} />));
   expect(container.textContent).toBe(`${format(language, "daemon.sharing.reason.busy")}${language === "en" ? " " : ""}fixed`);
+});
+
+it("sets a settings app asked for in a grammatical form as a chip, as the plain one is", () => {
+  const before = currentLanguage();
+  setLanguage("ru");
+  announceHost(MAC_HOST);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); setLanguage(before); });
+  act(() => root.render(<Message id="settings.notifications.managedBySystem" />));
+  // Russian asks for `{systemSettingsIn}`, the prepositional form of the macOS name.
+  expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["macOS", "Системных настройках"]);
+  expect(container.textContent).toBe(bare(format("ru", "settings.notifications.managedBySystem")));
+});
+
+it("lets a wrapping chip break after either path separator", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  for (const [path, parts] of [
+    ["C:\\Users\\dev\\project", ["C:\\", "Users\\", "dev\\", "project"]],
+    ["/Users/dev/project", ["/", "Users/", "dev/", "project"]],
+  ] as const) {
+    act(() => root.render(<InlineReference monospace wrap>{path}</InlineReference>));
+    const code = container.querySelector("code")!;
+    expect(code.textContent).toBe(path);
+    expect(code.querySelectorAll("wbr")).toHaveLength(parts.length - 1);
+    expect([...code.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent)).toEqual(parts);
+  }
 });

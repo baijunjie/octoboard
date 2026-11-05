@@ -1,7 +1,7 @@
-import { IS_MAC } from "../input/keys";
+import { readHost, type HostFacts } from "../platform/host";
 
 /**
- * Holds the shortcut modifier (⌘ on an Apple keyboard, Ctrl elsewhere) down for the page, so that
+ * Holds the shortcut modifier (⌘ on an Apple keyboard, Ctrl elsewhere; the scenario's `host` says which, the browser's own when it has none) down for the page, so that
  * the new-session "+" buttons show their quick-create form without anyone keeping a key pressed.
  * `useQuickCreateModifier` reads the modifier off every key and pointer event and lets go on a
  * plain one, so a pointer moving over the window would end the state at once; this stamps the
@@ -9,19 +9,20 @@ import { IS_MAC } from "../input/keys";
  * holds it again. Call it before the app mounts, so that it is the first window listener. Nothing
  * is held until `press`.
  */
-export function holdPrimaryModifier(): { press: () => void } {
+export function holdPrimaryModifier(host: Pick<HostFacts, "modifier"> = readHost()): { press: () => void } {
+  const apple = host.modifier === "meta";
   let pressed = false;
   const stamp = (event: Event) => {
     if (!pressed) return;
-    Object.defineProperty(event, IS_MAC ? "metaKey" : "ctrlKey", { value: true });
-    Object.defineProperty(event, IS_MAC ? "ctrlKey" : "metaKey", { value: false });
+    Object.defineProperty(event, apple ? "metaKey" : "ctrlKey", { value: true });
+    Object.defineProperty(event, apple ? "ctrlKey" : "metaKey", { value: false });
   };
   window.addEventListener("pointermove", stamp, { capture: true });
   return {
     press: () => {
       pressed = true;
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: IS_MAC ? "Meta" : "Control", metaKey: IS_MAC, ctrlKey: !IS_MAC }),
+        new KeyboardEvent("keydown", { key: apple ? "Meta" : "Control", metaKey: apple, ctrlKey: !apple }),
       );
     },
   };

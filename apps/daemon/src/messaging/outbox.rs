@@ -22,10 +22,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::platform::term::PartialWrite;
 use crate::session::dialogs::Sighting;
 use crate::session::term;
 use crate::session::LiveSession;
-use crate::terminal::ptyio::PartialWrite;
 
 /// How long draft preservation may delay an automatic message before combined delivery is allowed.
 pub(crate) const DRAFT_WAIT: Duration = Duration::from_secs(3);
@@ -76,6 +76,10 @@ pub trait PromptSignal {
     fn wait_past(&self, before: u64) -> bool;
     /// Records that a message written when the count stood at `before` was not sent.
     fn mark_unsent(&self, before: u64);
+    /// Records that a message written when the count stood at `before` was left in the input box,
+    /// its submit key pressed or held back by the write itself (`crate::session::NotSubmitted`), so
+    /// no later retry presses it.
+    fn mark_not_submitted(&self, before: u64);
     /// Whether a message marked unsent still holds delivery before acknowledgement or submit retry.
     fn unsent_waiting(&self) -> bool;
     /// Looks at the agent's screen now: whether it shows a dialog only the user can answer, which
@@ -386,6 +390,19 @@ impl Outbox {
                     prompts.mark_unsent(before);
                     return Drain::Unsent(ticket);
                 }
+                // Written in full, but its submit key left it in the input box
+                // (`crate::session::NotSubmitted`): an unsent message, whatever the agent reports.
+                Err(partial)
+                    if partial
+                        .error
+                        .get_ref()
+                        .is_some_and(|error| error.is::<crate::session::NotSubmitted>()) =>
+                {
+                    tracing::warn!(session = %id, "a written message was left in the input box");
+                    self.mark_written(ticket);
+                    prompts.mark_not_submitted(before);
+                    return Drain::Unsent(ticket);
+                }
                 // Nothing went in, so the session simply could not take it — most likely a modal its
                 // reported state does not show. Put it back at the front and stop: letting the next
                 // one through would reorder them.
@@ -634,6 +651,9 @@ mod tests {
         fn mark_unsent(&self, _before: u64) {
             unreachable!("nothing is checked mid-turn")
         }
+        fn mark_not_submitted(&self, _before: u64) {
+            unreachable!("nothing is checked mid-turn")
+        }
         fn unsent_waiting(&self) -> bool {
             false
         }
@@ -664,6 +684,9 @@ mod tests {
         fn mark_unsent(&self, _before: u64) {
             unreachable!("nothing is written while the input is held")
         }
+        fn mark_not_submitted(&self, _before: u64) {
+            unreachable!("nothing is written while the input is held")
+        }
         fn unsent_waiting(&self) -> bool {
             false
         }
@@ -689,6 +712,8 @@ mod tests {
         sends: Cell<bool>,
         waits: Cell<u32>,
         unsent: Cell<Option<u64>>,
+        /// The message marked unsent was left in the box, its submit key pressed or held back.
+        not_submitted: Cell<bool>,
         busy: Cell<bool>,
         dialog: Cell<Option<Dialog>>,
         /// What the screen has shown so far.
@@ -710,6 +735,7 @@ mod tests {
                 sends: Cell::new(sends),
                 waits: Cell::new(0),
                 unsent: Cell::new(None),
+                not_submitted: Cell::new(false),
                 busy: Cell::new(false),
                 dialog: Cell::new(None),
                 sighting: Cell::new(Sighting::default()),
@@ -760,6 +786,10 @@ mod tests {
         }
         fn mark_unsent(&self, before: u64) {
             self.unsent.set(Some(before));
+        }
+        fn mark_not_submitted(&self, before: u64) {
+            self.unsent.set(Some(before));
+            self.not_submitted.set(true);
         }
         fn unsent_waiting(&self) -> bool {
             self.unsent
@@ -1156,6 +1186,44 @@ mod tests {
         agent.sends.set(true);
         assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Clear);
         assert_eq!(written, vec!["first", "second", "third"]);
+    }
+
+    /// A message the write itself left in the input box, its submit key pressed or held back, is
+    /// unsent, for an agent whose prompts the outbox does not wait on as for one it does: not lost,
+    /// and the queue behind it held until a prompt is sent.
+    #[test]
+    fn a_message_left_in_the_box_by_its_submit_key_is_unsent_and_holds_the_queue() {
+        let outbox = Outbox::default();
+        let first = outbox.push("s", "first");
+        outbox.push("s", "second");
+        let agent = AtPrompt::new(false);
+        agent.busy.set(true);
+        let mut written = Vec::new();
+        let mut write = |_: Ticket, text: &str, _: bool| {
+            written.push(text.to_string());
+            if text == "first" {
+                return Err(PartialWrite {
+                    written: 20,
+                    error: std::io::Error::other(crate::session::NotSubmitted),
+                });
+            }
+            Ok(())
+        };
+        assert_eq!(
+            outbox.drain_with("s", &mut write, &agent),
+            Drain::Unsent(first)
+        );
+        assert!(agent.unsent_waiting());
+        assert!(
+            agent.not_submitted.get(),
+            "a message left in its input box by the write is marked so, for no retry to press it"
+        );
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Pending);
+        assert_eq!(outbox.len("s"), 1);
+
+        agent.prompt_sent();
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Clear);
+        assert_eq!(written, vec!["first", "second"]);
     }
 
     /// Nothing is written while a dialog is up, and the queue goes on once it is gone.

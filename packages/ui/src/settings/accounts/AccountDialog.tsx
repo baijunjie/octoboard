@@ -14,13 +14,14 @@ import { useDialogAction, useRefocusIfLost, useSubmitValidation } from "../../co
 import { useDirectoryBrowse } from "../../components/dialog/DirectoryPicker";
 import { OptionSelect } from "../../components/form/OptionSelect";
 import { TextInput } from "../../components/form/TextInput";
-import { isAbsoluteOrHomePath } from "../../format/pathDisplay";
+import { isAbsoluteOrHome } from "../../format/hostPath";
 import type { MessageKey } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
 import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../../store";
+import { useHostPaths } from "../../components/hooks/useHostPaths";
 import { ProviderName } from "../../components/text/ProviderName";
 import { nameCollision, nextConfigDir, type NameCollision } from "./agentAccounts";
 
@@ -49,6 +50,7 @@ export function AccountDialog({
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
+  const { style } = useHostPaths();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -90,7 +92,7 @@ export function AccountDialog({
       ...directoryListing.paths,
       ...accounts.map((account) => account.config_dir),
       ...Array.from(agentAvailability.values()).flatMap((availability) => availability.default_account_dir ? [availability.default_account_dir] : []),
-    ], directoryListing.home)
+    ], directoryListing.home, style)
     : "");
   const directoryBrowse = useDirectoryBrowse(configDir, setConfigDir);
 
@@ -100,7 +102,7 @@ export function AccountDialog({
   const nameError = !name && !renameDefault
     ? t("dialog.nameRequired")
     : collision && t(COLLISION_MESSAGE[collision.kind], { name: isolate(collision.name), agent: isolate(providerLabel(t, providers, agent)) });
-  const dirError = isAbsoluteOrHomePath(configDir) ? undefined : "notAbsolute";
+  const dirError = isAbsoluteOrHome(configDir, style) ? undefined : "notAbsolute";
 
   const submit = () => {
     if (!attempt(nameError, renameDefault ? undefined : dirError)) return;

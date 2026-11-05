@@ -164,7 +164,7 @@ describe("handledImportItems", () => {
     accounts: {
       agents_to_add: [],
       agent_settings: agentSettings,
-      agents: [{ agent: "claude", default_name: null, default_name_applies: false, default_disabled: false, default_disabled_applies: false, accounts: ["W", "X", "Y"].map((name) => ({ name, directory: `~/.${name}`, proposed_directory: `/h/.${name}`, status: name === "Y" ? ("existing" as const) : ("new" as const), in_use_by: null, error: null, share_default_config: false, disabled: false })) }],
+      agents: [{ agent: "claude", default_name: null, default_name_applies: false, default_disabled: false, default_disabled_applies: false, accounts: ["W", "X", "Y"].map((name) => ({ name, directory: `~/.${name}`, foreign_directory: false, proposed_directory: `/h/.${name}`, status: name === "Y" ? ("existing" as const) : ("new" as const), in_use_by: null, error: null, share_default_config: false, disabled: false })) }],
     },
   });
   const request = { type: "import_configuration" as const, document: {}, import_id: "i" };

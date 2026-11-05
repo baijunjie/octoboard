@@ -9,8 +9,9 @@ import { InlineReference } from "../i18n/InlineReference";
 import { CodedError } from "../errors/codedError";
 import { Message, useT } from "../i18n/react";
 import { CODE, TRUST_REFUSED_CODES } from "../errors/codes";
-import { abbreviateHome } from "../format/pathDisplay";
-import { useDaemon, useDaemonStore, type TrustPrompt, useProviders } from "../store";
+import { display } from "../format/hostPath";
+import { useDaemon, type TrustPrompt, useProviders } from "../store";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { ProviderName } from "../components/text/ProviderName";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
 import { Checkbox } from "../primitives";
@@ -32,15 +33,15 @@ function TrustPromptMessage({
 }): React.ReactElement {
   // Shown as Settings lists trusted folders, with the home directory as `~`, so the folder named
   // here reads the same as the row it adds there.
-  const home = useDaemonStore((s) => s.homeDir);
+  const paths = useHostPaths();
   const providers = useProviders();
   const agent = <ProviderName agent={prompt.agent} />;
   return (
     <>
       <p>
         {sessionTitle
-          ? <Message id="dialog.trust.questionForSession" params={{ agent, session: <InlineReference dir="auto" wrap>{sessionTitle}</InlineReference>, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />
-          : <Message id="dialog.trust.question" params={{ agent, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />}
+          ? <Message id="dialog.trust.questionForSession" params={{ agent, session: <InlineReference dir="auto" wrap>{sessionTitle}</InlineReference>, path: <Path>{display(prompt.path, paths)}</Path> }} />
+          : <Message id="dialog.trust.question" params={{ agent, path: <Path>{display(prompt.path, paths)}</Path> }} />}
       </p>
       <p><Message id="dialog.trust.behavior" params={{ agent }} /></p>
       {providerMessageKey(prompt.agent, "trustScope") && <p><ProviderMessage providers={providers} id={prompt.agent} name="trustScope" /></p>}
@@ -112,7 +113,7 @@ export function useTrustPromptDialogProps(
   const { request, dismissTrustPrompt } = useDaemon();
   // Written as Settings lists trusted folders, with the home directory as `~`, so the folder the
   // checkbox names reads the same as the row it adds there.
-  const home = useDaemonStore((s) => s.homeDir);
+  const paths = useHostPaths();
   // Held against the session it was ticked for, so the next prompt in the queue starts unticked
   // without an effect watching the one dialog that serves them all in turn.
   const [trustDirFor, setTrustDirFor] = useState<string>();
@@ -171,7 +172,7 @@ export function useTrustPromptDialogProps(
     onConfirm: () => answer(trustDir),
     extraControl: prompt.trustDir !== null && (
       <TrustDirCheckbox
-        directory={abbreviateHome(prompt.trustDir, home)}
+        directory={display(prompt.trustDir, paths)}
         checked={trustDir}
         onChange={(checked) => setTrustDirFor(checked ? prompt.session : undefined)}
       />

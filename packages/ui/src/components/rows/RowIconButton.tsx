@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import React, { useId } from "react";
+import React from "react";
 
 import { ROW_ICON_BUTTON_BASE_CLASS, ROW_ICON_BUTTON_CLASS } from "../controls/RowControls";
 import { TitledControl } from "../hint/TitledControl";
@@ -27,17 +27,15 @@ export function RowIconButton({
   onPress: (event: ButtonPress) => void;
   isDisabled?: boolean;
   /** Why the action cannot be done now, for a button that looks disabled but stays focusable and under
-   * the pointer so that the reason is reachable: it is the tooltip and the button's description, while
-   * the name stays the action. HeroUI's disabled style turns pointer events off for `aria-disabled`, so
-   * they are turned back on, and the hover tint and press shrink are left off. A press still reaches
-   * `onPress`, which answers it. */
+   * the pointer so that the reason is reachable: it is the tooltip and, through `Button`'s `unavailable`, the button's
+   * description, while the name stays the action. The row's hover tint is left off. A press still reaches `onPress`,
+   * which answers it. */
   unavailable?: string;
   /** Extra classes on the glyph itself, such as a right-to-left mirror. */
   iconClassName?: string;
   /** The element around the button, for focus to be handed to. */
   ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
-  const reasonId = useId();
   return (
     <div ref={ref} className="flex" onClick={(e) => e.stopPropagation()}>
       <TitledControl title={unavailable ?? title ?? label}>
@@ -46,14 +44,13 @@ export function RowIconButton({
           size="xs"
           variant="ghost"
           label={ariaLabel}
-          describedBy={unavailable ? reasonId : title && ariaLabel === label ? "" : undefined}
-          unavailable={!!unavailable}
+          describedBy={title && ariaLabel === label ? "" : undefined}
+          unavailable={unavailable || undefined}
           focusOnPress={false}
           onPress={onPress}
           disabled={isDisabled}
-          className={unavailable ? `${ROW_ICON_BUTTON_BASE_CLASS} pointer-events-auto ui-pressed:[transform:none] active:[transform:none]` : ROW_ICON_BUTTON_CLASS}
+          className={unavailable ? ROW_ICON_BUTTON_BASE_CLASS : ROW_ICON_BUTTON_CLASS}
         >
-          {unavailable && <span id={reasonId} className="sr-only">{unavailable}</span>}
           <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
         </Button>
       </TitledControl>

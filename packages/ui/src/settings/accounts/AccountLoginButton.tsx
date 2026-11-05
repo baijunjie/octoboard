@@ -1,5 +1,5 @@
 import { LogIn } from "lucide-react";
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { ICON_TRIGGER_BASE_CLASS, ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
 import { TitledControl } from "../../components/hint/TitledControl";
@@ -82,11 +82,6 @@ function useLoginFocusReturn(
   };
 }
 
-/** `ICON_TRIGGER_CLASS` without its hover tint and press shrink, for the button while it is unavailable. HeroUI turns
- * pointer events off for `aria-disabled`, so they are turned back on for the tooltip to open (as `RowIconButton`'s
- * unavailable state does), and the ghost button's own hover and pressed fills are covered by a transparent one. */
-const UNAVAILABLE_CLASS = `${ICON_TRIGGER_BASE_CLASS} bg-transparent pointer-events-auto ui-pressed:[transform:none] active:[transform:none]`;
-
 /** The Log in button of an account: an icon with a tooltip and a name that says whose account, looking as the row's
  * actions menu button does, shown in the table row's Status cell while the account reads as not logged in and is not
  * turned off (`turnedOff`, where the cell says "Disabled" instead), and nothing otherwise. While a login of the account
@@ -107,7 +102,6 @@ export function AccountLoginButton({ agent, account, name, quota, turnedOff, onL
   const login = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, account));
   const active = loginIsActive(login);
   const button = useRef<HTMLButtonElement>(null);
-  const reasonId = useId();
   const returnFocus = useLoginFocusReturn(button, fallback, { active, succeeded: login?.status === "succeeded" });
   if (turnedOff || loginStateOf(quota) !== "out") return null;
   return (
@@ -116,17 +110,15 @@ export function AccountLoginButton({ agent, account, name, quota, turnedOff, onL
         ref={button}
         variant="ghost"
         focusOnPress={false}
-        unavailable={active}
-        describedBy={active ? reasonId : undefined}
+        unavailable={active ? t("settings.accounts.login.starting") : undefined}
         label={t("settings.accounts.login.open", { name: isolate(name) })}
-        className={active ? UNAVAILABLE_CLASS : ICON_TRIGGER_CLASS}
+        className={active ? ICON_TRIGGER_BASE_CLASS : ICON_TRIGGER_CLASS}
         onPress={() => {
           if (active) return;
           const focused = document.activeElement;
           onLogin(focused === document.body || button.current?.contains(focused) ? returnFocus : () => {});
         }}
       >
-        {active && <span id={reasonId} className="sr-only">{t("settings.accounts.login.starting")}</span>}
         <LogIn aria-hidden="true" className="size-4" />
       </Button>
     </TitledControl>

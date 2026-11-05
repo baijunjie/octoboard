@@ -1,11 +1,14 @@
 //! Codex's descriptor, with its on-disk layout and the names in it only its own modules use.
 
+use std::time::Duration;
+
 use super::layout::AgentLayout;
 use super::{
     AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, ModelDisplay, ProviderCode,
     ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingChoice,
     SettingDescriptor, SettingKind, SwitchDefault,
 };
+use crate::platform::term::{Input, QuitKeys};
 
 /// A `start_account_login` for a Codex account while another Codex account is being signed in:
 /// Codex's browser flow holds one fixed local port. No `params`.
@@ -13,6 +16,11 @@ pub const LOGIN_BUSY: ProviderCode = ProviderCode::error("provider.codex.login_b
 /// Reopening a Codex session was refused because `codex unarchive` could not bring its archived
 /// rollout back. The session is left as it was. `params` names `detail`.
 pub const UNARCHIVE_FAILED: ProviderCode = ProviderCode::error("provider.codex.unarchive_failed");
+
+/// Launching Codex was refused because its binary is an npm shim whose package ships no native
+/// program to start in its place. No `params`.
+pub const NATIVE_PROGRAM_MISSING: ProviderCode =
+    ProviderCode::error("provider.codex.native_program_missing");
 
 impl AgentId {
     pub const CODEX: AgentId = AgentId(DESCRIPTOR.id);
@@ -81,9 +89,18 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         generic: &["AGENTS.md", ".agents"],
     },
     instruction_file: "AGENTS.md",
+    instruction_import_prefix: None,
     tool_name_prefix: "mcp__",
     // Its structured-question features are off in the measured version.
     ask_question_tool: None,
+    // Ending its console ends it at once, the turn lost and no `SessionEnd`; a Ctrl-C quits a turn
+    // and the second Ctrl-C the CLI, which then finishes in up to about five seconds.
+    quit_keys: Some(QuitKeys {
+        key: &[Input::Ctrl('c')],
+        presses: 2,
+        apart: Duration::from_millis(650),
+        wait: Duration::from_secs(6),
+    }),
     capabilities: Capabilities {
         // Its id becomes known from the first hook payload.
         preallocates_session_id: false,
@@ -140,7 +157,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             compatibility_with: Some("claude"),
         },
     ],
-    codes: &[LOGIN_BUSY, UNARCHIVE_FAILED],
+    codes: &[LOGIN_BUSY, UNARCHIVE_FAILED, NATIVE_PROGRAM_MISSING],
 };
 
 #[cfg(test)]
@@ -179,7 +196,17 @@ mod tests {
     #[test]
     fn its_codes_are_of_the_kind_they_are_used_with() {
         use super::super::ProviderCodeKind::Error;
-        assert_eq!((LOGIN_BUSY.kind, UNARCHIVE_FAILED.kind), (Error, Error));
-        assert_eq!(DESCRIPTOR.codes, [LOGIN_BUSY, UNARCHIVE_FAILED]);
+        assert_eq!(
+            [
+                LOGIN_BUSY.kind,
+                UNARCHIVE_FAILED.kind,
+                NATIVE_PROGRAM_MISSING.kind
+            ],
+            [Error; 3]
+        );
+        assert_eq!(
+            DESCRIPTOR.codes,
+            [LOGIN_BUSY, UNARCHIVE_FAILED, NATIVE_PROGRAM_MISSING]
+        );
     }
 }

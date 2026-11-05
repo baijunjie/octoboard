@@ -15,6 +15,7 @@ import type { Project } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -76,7 +77,7 @@ function mountApp() {
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
   });
   return mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );

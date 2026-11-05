@@ -1,6 +1,7 @@
 //! The HTTP routes the daemon's own helper processes and the agents' hooks call: the hook events
 //! (queued here, applied by `crate::hooks::apply`), the branches a session's git created, the
-//! revert gate's question, the context window a status line reports, and the MCP tool calls.
+//! revert gate's question, the context window a status line reports, the MCP tool calls, and the
+//! request to shut down.
 
 use std::sync::Arc;
 
@@ -164,6 +165,15 @@ struct McpCall {
     tool: String,
     #[serde(default)]
     arguments: serde_json::Value,
+}
+
+/// The request to shut the daemon down, which takes the path a termination signal takes: `main`
+/// stops every process the daemon runs, then exits. It answers `202` at once and does not wait
+/// for that, so the caller learns the daemon is gone from the daemon being gone. The application
+/// sends it where it has no signal to send.
+pub(super) async fn shutdown(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    state.request_shutdown();
+    axum::http::StatusCode::ACCEPTED
 }
 
 #[cfg(test)]

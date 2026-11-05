@@ -157,7 +157,10 @@ pub(crate) async fn use_reset_credit(
     }
     // The credit may have been used even when the answer did not arrive, so the reading is taken
     // again after any run of the CLI; a probe that began before it is dropped by `make_due`.
-    if !matches!(outcome, Err(Failure::BinaryNotFound(_))) {
+    if !matches!(
+        outcome,
+        Err(Failure::BinaryNotFound(_) | Failure::BinaryRefused(_))
+    ) {
         quotas.make_due(agent, account.as_deref());
         let (state, shell, scope) = (
             state.clone(),
@@ -177,6 +180,7 @@ pub(crate) async fn use_reset_credit(
                 format!("`{binary}` was not found on PATH in the shell environment."),
                 &[("binary", &binary)],
             ),
+            Failure::BinaryRefused(refusal) => anyhow::Error::new(refusal),
             Failure::NotSignedIn => {
                 let name = state
                     .store

@@ -1,20 +1,26 @@
 import type { ReactElement } from "react";
 
+import { useT } from "../i18n/react";
+import { useHost } from "../platform/react";
 import { Kbd, KbdAbbr, KbdContent } from "../primitives";
 
-import { bindingParts, type Binding } from "./binding";
+import { bindingParts, describeBinding, type Binding } from "./binding";
 import type { CommandId } from "./commands";
 import { useBinding } from "./store";
 
 /**
- * A key combination as HeroUI draws one. `dir` holds the caps in the order the shortcut is written
+ * A key combination as HeroUI draws one: macOS symbols on an Apple host, the key names (Ctrl, Shift) elsewhere,
+ * where those symbols mean nothing to the user. `dir` holds the caps in the order the shortcut is written
  * in: the notation is the same sequence in every language, and a right-to-left interface would
- * otherwise reverse it.
+ * otherwise reverse it. Its accessible name is the combination as `describeBinding` says it, each key named in the UI's
+ * language (see "Keyboard" in `docs/ui-standard.md`).
  */
 export function BindingKbd({ binding, className, slot }: { binding: Binding; className?: string; slot?: string }): ReactElement {
+  const host = useHost();
+  const t = useT();
   return (
-    <Kbd dir="ltr" slot={slot} className={className}>
-      {bindingParts(binding).map((part) => (part.abbr ? <KbdAbbr key={part.abbr} keyValue={part.abbr} /> : <KbdContent key={part.text}>{part.text}</KbdContent>))}
+    <Kbd dir="ltr" spelled={host.modifier !== "meta"} label={describeBinding(binding, t, host)} slot={slot} className={className}>
+      {bindingParts(binding, host).map((part) => (part.abbr && !part.display ? <KbdAbbr key={part.abbr} keyValue={part.abbr} /> : <KbdContent key={part.abbr ?? part.text}>{part.display ?? part.text}</KbdContent>))}
     </Kbd>
   );
 }

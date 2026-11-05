@@ -5,7 +5,9 @@
 //! `rebuild_query`, `budget_spent_detail`) so the rules can be tested without a process. A daemon
 //! that keeps dying must not be restarted forever: at most `MAX_RESTARTS` relaunches in any
 //! `RESTART_WINDOW`, after which the window is told, through the same `daemon-exited` event as any
-//! daemon that ended for good, and the user restarts the application or reports the issue. The same goes once an update is installed.
+//! daemon that ended for good, and the user restarts the application or reports the issue. The same
+//! goes once an update has replaced the application's files on disk (macOS); a Windows update that
+//! is only downloaded leaves the running version's files in place, so the daemon is still restarted.
 
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -85,16 +87,18 @@ pub fn budget_spent_detail(ended: &str, restarts: usize) -> String {
 
 /// Why the daemon is left alone instead of relaunched while an update is installed and waits for its
 /// restart: the installer has replaced the bundle under the running shell, so a relaunch would pair
-/// the new daemon with the old UI.
+/// the new daemon with the old UI. Only where the install replaces the files in place
+/// (`updater::replaced_on_disk`), so "installed" is what happened.
 pub fn update_installed_detail(ended: &str) -> String {
     format!(
         "{ended}. An update is installed and is not applied until {APP_NAME} restarts; the daemon is not restarted before then."
     )
 }
 
-/// Gives up on the daemon, and says so, when an update is installed; whether it did.
+/// Gives up on the daemon, and says so, when an update has replaced its executable on disk; whether
+/// it did.
 fn give_up_if_updated(app: &AppHandle, ended: &str) -> bool {
-    if !updater::is_installed(app) {
+    if !updater::replaced_on_disk(app) {
         return false;
     }
     let detail = update_installed_detail(ended);
@@ -105,7 +109,7 @@ fn give_up_if_updated(app: &AppHandle, ended: &str) -> bool {
 
 /// The window's query once it is pointed at a restarted daemon: `daemon_params` in place of what
 /// `current` held of the daemon's (its port and key, or the error a window opened without one got),
-/// the rest of it (the languages) kept as it was, and `recovered=1` added so the page knows it was
+/// the rest of it (the languages and the host facts) kept as it was, and `recovered=1` added so the page knows it was
 /// reloaded rather than opened (`resolveRecovered` in `packages/ui/src/daemon.ts`).
 pub fn rebuild_query(current: Option<&str>, daemon_params: &str) -> String {
     let kept = current

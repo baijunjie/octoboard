@@ -56,7 +56,8 @@ function CloneDirLine({
  * Settings dialog groups them (see `SettingsGroups`), saying what applying each setting would change here. The git
  * workflow lists, when applying would change it, the items that would change with what each is now. The General card
  * takes the settings only this client holds (`clientSettings`, each with the value this client has), the Git card the
- * default clone directory with the choice to keep this machine's own (`cloneDir`) and the Keyboard shortcuts card
+ * default clone directory with the choice to keep this machine's own (`cloneDir`; for a directory written on another
+ * operating system, only a line saying it is not used here) and the Keyboard shortcuts card
  * `shortcuts`, what the document's keyboard shortcuts would do on this device; each is absent when the document carries
  * none.
  */
@@ -81,7 +82,13 @@ export function ImportSettings({
       current={currentSettings(settings)}
       clientSettings={clientSettings}
       clientLine={(setting) => <ClientSettingLine setting={setting} />}
-      cloneDir={settings.default_clone_dir !== null ? <CloneDirLine dir={settings.default_clone_dir} current={settings.current_default_clone_dir} use={cloneDir.use} onUse={cloneDir.onUse} /> : undefined}
+      cloneDir={
+        settings.default_clone_dir !== null
+          ? <CloneDirLine dir={settings.default_clone_dir} current={settings.current_default_clone_dir} use={cloneDir.use} onUse={cloneDir.onUse} />
+          : settings.foreign_default_clone_dir
+            ? <SettingLine label={t("settings.cloneDir.label")} badge={t("configuration.import.settings.badge.same")}>{t("configuration.import.cloneDir.foreign")}</SettingLine>
+            : undefined
+      }
       shortcuts={
         shortcuts &&
         (shortcutChanges.length === 0

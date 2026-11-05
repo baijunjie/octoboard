@@ -1,9 +1,13 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 import { isPrimaryModifier } from "../input/keys";
+import type { HostFacts } from "../platform/host";
+import { useHost } from "../platform/react";
 
 const listeners = new Set<() => void>();
 let held = false;
+// The facts of the page's one host, as the latest reader gave them: the listeners below are shared by all readers.
+let host: Pick<HostFacts, "modifier"> | undefined;
 
 function setHeld(next: boolean): void {
   if (next === held) return;
@@ -11,8 +15,8 @@ function setHeld(next: boolean): void {
   listeners.forEach((notify) => notify());
 }
 
-const onKey = (event: KeyboardEvent) => setHeld(isPrimaryModifier(event));
-const onPointerMove = (event: PointerEvent) => setHeld(isPrimaryModifier(event));
+const onKey = (event: KeyboardEvent) => setHeld(isPrimaryModifier(event, host!));
+const onPointerMove = (event: PointerEvent) => setHeld(isPrimaryModifier(event, host!));
 const release = () => setHeld(false);
 const onVisibilityChange = () => {
   if (document.visibilityState === "hidden") release();
@@ -33,7 +37,8 @@ function install(): void {
   document.addEventListener("visibilitychange", onVisibilityChange);
 }
 
-function subscribe(listener: () => void): () => void {
+function subscribe(facts: Pick<HostFacts, "modifier">, listener: () => void): () => void {
+  host = facts;
   install();
   listeners.add(listener);
   return () => void listeners.delete(listener);
@@ -44,5 +49,7 @@ function subscribe(listener: () => void): () => void {
  * listeners, installed on the first read and kept, serves every reader, so the hold survives a
  * view being swapped for another while the key stays down. */
 export function useQuickCreateModifier(): boolean {
-  return useSyncExternalStore(subscribe, () => held);
+  const facts = useHost();
+  const subscribeWith = useCallback((listener: () => void) => subscribe(facts, listener), [facts]);
+  return useSyncExternalStore(subscribeWith, () => held);
 }

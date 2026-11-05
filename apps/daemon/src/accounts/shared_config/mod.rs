@@ -176,6 +176,20 @@ pub(crate) fn not_shareable(account: Option<&Account>) -> anyhow::Error {
     }
 }
 
+/// Refuses turning sharing on where `file_links` says the host cannot make the file links it is
+/// made of (`sharing_unavailable_on_host`).
+pub(crate) fn require_file_links(file_links: bool) -> Result<()> {
+    if file_links {
+        return Ok(());
+    }
+    Err(CodedError::raised(
+        error_code::SHARING_UNAVAILABLE_ON_HOST,
+        "this host cannot make the file links that sharing the default configuration needs; \
+         Developer Mode allows them once the daemon restarts",
+        &[],
+    ))
+}
+
 pub(crate) fn sharing_failed(
     account: &Account,
     share: bool,

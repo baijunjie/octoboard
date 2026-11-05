@@ -22,29 +22,16 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::hostfs;
-use crate::hostfs::identity::{self, Identity};
-use crate::hostfs::lexically_normalise;
+use crate::hostfs::identity::Identity;
 use crate::hostfs::place::{looked_within_stuck, Looking, Place};
+use crate::hostfs::{lexically_normalise, lexically_within};
+use crate::platform::fs::Links;
 use crate::state::AppState;
 
 /// How long looking at one path on the file system may take. Past it the path counts as one that
 /// cannot be told apart, which refuses the move rather than let it take what belongs to something
 /// else, and as stuck while its look is still running.
 pub(crate) const TRASH_LOOK_DEADLINE: Duration = Duration::from_secs(5);
-
-/// Whether `directory` is the root of a disk: `/`, or a mount point such as `/Volumes/Backup`,
-/// which sits on a different device from its parent. A directory or parent that cannot be read
-/// counts as one, since unknown never destroys.
-fn is_disk_root(directory: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let Some(parent) = directory.parent() else {
-        return true;
-    };
-    match (std::fs::metadata(directory), std::fs::metadata(parent)) {
-        (Ok(this), Ok(above)) => this.dev() != above.dev(),
-        _ => true,
-    }
-}
 
 /// What the path to be moved leads to, as moving that path to the Trash, or removing the worktree
 /// there, would take it.
@@ -82,13 +69,15 @@ impl TrashedEntry {
         if !path.is_absolute() {
             return Err(Failure::Unresolved);
         }
-        let own = match std::fs::symlink_metadata(&path) {
+        // The entry's identity is taken from this one read, so it is the identity of what was
+        // looked at, not of whatever a later open of the path finds there.
+        let entry = match crate::platform::fs::stat(&path, Links::Keep) {
             Err(err) if hostfs::is_not_found(&err) => return Ok(None),
             Err(err) => return Err(refused(&err)),
-            Ok(metadata) => metadata,
+            Ok(stat) => stat,
         };
         if let Some((place, real)) = Place::resolved(&path) {
-            let disk_root = is_disk_root(&real);
+            let disk_root = crate::platform::fs::is_volume_root(&real);
             return Ok(Some(Self::Directory {
                 place,
                 real,
@@ -107,7 +96,7 @@ impl TrashedEntry {
             .ok_or(Failure::Unresolved)?;
         Ok(Some(Self::Entry {
             parent,
-            identity: identity::known(&own),
+            identity: Some(entry.identity).filter(Identity::is_known),
         }))
     }
 }
@@ -168,27 +157,27 @@ impl Seen {
         if !path.is_absolute() {
             return None;
         }
-        let metadata = match std::fs::metadata(&path) {
-            Ok(metadata) => metadata,
+        let resolved = match crate::platform::fs::stat(&path, Links::Follow) {
+            Ok(stat) => stat,
             Err(err)
                 if hostfs::is_not_found(&err)
                     || err.kind() == std::io::ErrorKind::PermissionDenied =>
             {
-                let real = std::fs::canonicalize(&path).ok();
+                let real = crate::hostfs::canonical(&path).ok();
                 return Some(Self::Text {
                     paths: [path].into_iter().chain(real).collect(),
                 });
             }
             Err(_) => return None,
         };
-        if !metadata.is_dir() {
-            let real = std::fs::canonicalize(&path).ok()?;
-            let own = std::fs::symlink_metadata(&path).ok()?;
+        if !resolved.metadata.is_dir() {
+            let real = crate::hostfs::canonical(&path).ok()?;
+            let entry = crate::platform::fs::stat(&path, Links::Keep).ok()?;
             return Some(Self::Entry {
                 parents: [Place::of(path.parent()?)?, Place::of(real.parent()?)?],
-                identities: [&own, &metadata]
+                identities: [entry.identity, resolved.identity]
                     .into_iter()
-                    .filter_map(identity::known)
+                    .filter(Identity::is_known)
                     .collect(),
                 paths: [path, real],
             });
@@ -217,7 +206,7 @@ impl Seen {
             }
             (Self::Text { paths }, _) => paths
                 .iter()
-                .any(|ours| texts.iter().any(|theirs| ours.starts_with(theirs))),
+                .any(|ours| texts.iter().any(|theirs| lexically_within(ours, theirs))),
             (_, None) => false,
         }
     }
@@ -253,9 +242,9 @@ impl<'a> Trashed<'a> {
     /// holds it.
     fn text_overlaps(&self, paths: &[PathBuf], holding: bool) -> bool {
         paths.iter().any(|theirs| {
-            self.texts
-                .iter()
-                .any(|ours| theirs.starts_with(ours) || (holding && ours.starts_with(theirs)))
+            self.texts.iter().any(|ours| {
+                lexically_within(theirs, ours) || (holding && lexically_within(ours, theirs))
+            })
         })
     }
 
@@ -659,15 +648,6 @@ mod tests {
     use super::*;
     use crate::test_support::{app_state, git, repo_with};
 
-    /// A directory whose device cannot be read is not told apart from a disk root, so it is
-    /// protected; an ordinary directory in the same place is not.
-    #[test]
-    fn an_unreadable_directory_counts_as_a_disk_root() {
-        let dir = crate::test_support::ScratchDir::new("trash-safety-disk-root");
-        assert!(is_disk_root(&dir.join("missing")));
-        assert!(!is_disk_root(&dir));
-    }
-
     /// A directory whose linked worktree lives elsewhere keeps its repository in it: that is in
     /// the way for [`Overlap::Whole`], which looks for the repository, and not for
     /// [`Overlap::Nested`], which does not.
@@ -701,6 +681,46 @@ mod tests {
                     })
                 ),
                 blocked
+            );
+        }
+    }
+    /// A path that is not absolute on this host is never moved, and as another path it is in the
+    /// way of every move: a relative path, and on Windows `/`, `\` and `C:dir`, which lead
+    /// wherever the current drive and directory are.
+    #[tokio::test]
+    async fn a_path_that_is_not_absolute_is_never_moved_nor_let_past() {
+        let (state, dir) = app_state("trash-safety-relative");
+        let moved = dir.join("moved");
+        std::fs::create_dir(&moved).unwrap();
+        let mut relative = vec![PathBuf::from("relative/dir")];
+        if cfg!(windows) {
+            relative.extend(["/", "\\", "C:relative"].map(PathBuf::from));
+        }
+        let (home, data) = (Some(dir.join("no-home")), dir.join("no-data"));
+        let looking = Looking::within(TRASH_LOOK_DEADLINE);
+        for path in &relative {
+            let result =
+                looked_at_for_trash(&state, looking, path, &[], home.clone(), data.clone()).await;
+            assert!(
+                matches!(
+                    result,
+                    Err(Blocked::Unlooked(Unresolved::Folder, Failure::Unresolved))
+                ),
+                "{path:?}"
+            );
+            let others = [(path.clone(), Overlap::Nested)];
+            let result =
+                looked_at_for_trash(&state, looking, &moved, &others, home.clone(), data.clone())
+                    .await;
+            assert!(
+                matches!(
+                    result,
+                    Err(Blocked::InTheWay {
+                        unresolved: Some(Failure::Unresolved),
+                        ..
+                    })
+                ),
+                "{path:?}"
             );
         }
     }

@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type Console, type GitStatus, type Host, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type Console, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A session waiting at its agent's folder-trust confirmation for the user's say-so. */
@@ -87,9 +87,12 @@ export interface State {
    * keyed by account id, as the last `snapshot` or `account_sharing` said. An account with no entry is free. */
   accountSharing: Map<string, AccountSharing>;
   /** The daemon host's home directory as the last `snapshot` said, for showing paths under it as
-   * `~/...` (see `abbreviateHome`). Null until the first snapshot, and when the daemon cannot
+   * `~/...` (see `display` in `format/hostPath`). Null until the first snapshot, and when the daemon cannot
    * determine one. */
   homeDir: string | null;
+  /** The daemon host's own facts as the last `snapshot` said (see `HostInfo`): its operating system, how it writes a
+   * path and whether it can make file links. Null until the first snapshot. */
+  host: HostInfo | null;
   /** Every shell terminal the daemon holds, running or exited, keyed by id, in the order the
    * daemon lists them (oldest first) and then as created. Live state of the daemon: a `snapshot`
    * names them all again, and one goes only on `shell_terminal_deleted` or with its project. */
@@ -122,6 +125,7 @@ const initialState: State = {
   loginsStartedHere: [],
   accountSharing: new Map(),
   homeDir: null,
+  host: null,
   shellTerminals: new Map(),
   queuedAccountSwitches: new Set(),
 };

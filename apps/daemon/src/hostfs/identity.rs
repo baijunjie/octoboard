@@ -1,20 +1,22 @@
-//! The device and inode that tell files and directories apart whatever their paths look like.
+//! What tells files and directories apart whatever their paths look like: their identity on the
+//! file system.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use super::lexically_normalise;
+use super::lexical_key;
 
-/// A file or directory told apart by what it is on the file system: its device and inode.
-pub type Identity = (u64, u64);
+use crate::platform::fs::{self, Links};
+
+pub use crate::platform::fs::Identity;
 
 /// A set of directories, told apart by what they are on the file system and not by how their
 /// paths are written, so a symbolic link, a case-only respelling on a case-insensitive file
-/// system and the plain path all name one member. A directory is its device and inode, which
+/// system and the plain path all name one member. A directory is its file system identity, which
 /// settles both without assuming how a given file system folds case (`canonicalize` does return
 /// the on-disk spelling on APFS, but that is the file system's doing, not a promise). A path with
 /// nothing at it, or that cannot be read, has no identity and is told apart lexically
-/// ([`lexically_normalise`]) instead; every member is also kept by its text. Blocking: every call
+/// ([`lexical_key`]) instead; every member is also kept by its text. Blocking: every call
 /// reads the file system.
 #[derive(Default)]
 pub struct DirectoryIdentities {
@@ -38,7 +40,7 @@ impl DirectoryIdentities {
             inodes: HashSet::new(),
             lexical: paths
                 .into_iter()
-                .map(|path| lexically_normalise(Path::new(path)))
+                .map(|path| lexical_key(Path::new(path)))
                 .collect(),
         }
     }
@@ -49,7 +51,7 @@ impl DirectoryIdentities {
 
     /// [`Self::insert`] for a path already looked at: reads nothing.
     pub fn insert_resolved(&mut self, candidate: &Resolved) {
-        self.lexical.insert(lexically_normalise(&candidate.path));
+        self.lexical.insert(lexical_key(&candidate.path));
         if let Some(inode) = candidate.inode {
             self.inodes.insert(inode);
         }
@@ -65,7 +67,7 @@ impl DirectoryIdentities {
 
     /// What `contains` answers, for a path already looked at: reads nothing.
     pub fn contains_resolved(&self, candidate: &Resolved) -> bool {
-        self.lexical.contains(&lexically_normalise(&candidate.path))
+        self.lexical.contains(&lexical_key(&candidate.path))
             || candidate
                 .inode
                 .is_some_and(|inode| self.inodes.contains(&inode))
@@ -88,39 +90,22 @@ impl Resolved {
     }
 }
 
-/// The device and inode `metadata` gives a file, as they are: the inode is 0 where the file system
-/// reports none, which the caller decides what to make of.
-pub fn raw(metadata: &std::fs::Metadata) -> Identity {
-    use std::os::unix::fs::MetadataExt;
-    (metadata.dev(), metadata.ino())
-}
-
-/// The device and inode `metadata` gives, or `None` where the file system reports no inode (0), so
-/// there is nothing to tell the file apart by.
-pub fn known(metadata: &std::fs::Metadata) -> Option<Identity> {
-    let identity = raw(metadata);
-    (identity.1 != 0).then_some(identity)
-}
-
-/// The device and inode of what `path` leads to, following links; `None` where it cannot be read
-/// or the file system reports no inode (0).
+/// The identity of what `path` leads to, following links; `None` where it cannot be read or the
+/// file system reports no file number (see [`Identity::is_known`]).
 fn of_path(path: &Path) -> Option<Identity> {
-    known(&std::fs::metadata(path).ok()?)
+    known(path, Links::Follow)
 }
 
-/// The device and inode of the directory `path` leads to, following links; `None` where it cannot
-/// be read, is not a directory or the file system reports no inode (0).
+/// The identity of the directory `path` leads to, following links; `None` where it cannot be
+/// read, is not a directory or the file system reports no file number.
 pub fn of_directory(path: &Path) -> Option<Identity> {
-    directory(&std::fs::metadata(path).ok()?)
+    fs::directory_identity(path, Links::Follow)
 }
 
-/// [`known`] for a directory; `None` for anything else.
-pub(crate) fn directory(metadata: &std::fs::Metadata) -> Option<Identity> {
-    if metadata.is_dir() {
-        known(metadata)
-    } else {
-        None
-    }
+/// The identity of the file `path` leads to, or of the link itself with [`Links::Keep`]; `None`
+/// where it cannot be read or the file system reports no file number.
+pub fn known(path: &Path, links: Links) -> Option<Identity> {
+    fs::identity(path, links).ok().filter(Identity::is_known)
 }
 
 #[cfg(test)]
@@ -136,7 +121,7 @@ mod tests {
         let dir = ScratchDir::new("hostfs-identities-link");
         let real = dir.join("real");
         std::fs::create_dir(&real).expect("real");
-        std::os::unix::fs::symlink(&real, dir.join("link")).expect("link");
+        crate::test_support::symlink(&real, dir.join("link")).expect("link");
         std::fs::create_dir(dir.join("other")).expect("other");
 
         let identities = DirectoryIdentities::from_paths([real.to_str().unwrap()]);

@@ -10,6 +10,7 @@ import { tryEachFrame } from "../components/focus/tryEachFrame";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
+import { useHost } from "../platform/react";
 import { useIsNarrow } from "../components/hooks/breakpoint";
 import { AboutSection } from "./AboutSection";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
@@ -98,6 +99,10 @@ export function SettingsDialog({
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
+  const host = useHost();
+  // The privacy grants are the system's own on macOS alone: managed in the app there (`permissionsPane`), and in a
+  // browser on a Mac the section says they are managed in the app.
+  const sectionIds = SETTINGS_SECTION_IDS.filter((id) => id !== "permissions" || host.permissionsPane || host.os === "macos");
   const isNarrow = useIsNarrow();
   const fullScreen = isNarrow;
   const [sectionId, setSectionId] = useState<string>(navigation?.section ?? initialSection);
@@ -189,7 +194,7 @@ export function SettingsDialog({
                   tabs read from the start like any list of names rather than centred. */}
           <TabList label={t("settings.sections")} className="max-tablet:min-w-0 max-tablet:p-1.5 tablet:w-full">
             {/* Hovered labels take the foreground colour for clear feedback. */}
-            {SETTINGS_SECTION_IDS.map((id) => {
+            {sectionIds.map((id) => {
               const { label, Icon } = SECTIONS[id];
               return (
                 <Tab
@@ -206,7 +211,7 @@ export function SettingsDialog({
             })}
           </TabList>
         </TabListContainer>
-        {SETTINGS_SECTION_IDS.map((id) => {
+        {sectionIds.map((id) => {
           const { label, Content, stickyHeadingHeight } = SECTIONS[id];
           return (
             <SectionPanel key={id} id={id} stickyHeadingHeight={stickyHeadingHeight}>

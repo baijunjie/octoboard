@@ -6,6 +6,7 @@ import { LanguageProvider } from "../../i18n/react";
 import { PlatformProvider } from "../../platform/react";
 import { activate, mountForTooltip } from "../hint/tooltipTestSupport";
 import { DiagnosticBlock, DiagnosticLabelContext } from "./DiagnosticBlock";
+import { BROWSER_HOST } from "../../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,7 +16,7 @@ function mount({ text = TEXT, labelledBy, disclosure }: { text?: string; labelle
   const writeText = vi.fn(async (_text: string) => {});
   // No daemon: diagnostics must still work when startup fails before a connection exists.
   const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser", clipboard: { writeText } }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST, clipboard: { writeText } }}>
       <LanguageProvider>
         <DiagnosticLabelContext.Provider value={disclosure}>
           <DiagnosticBlock labelledBy={labelledBy}>{text}</DiagnosticBlock>

@@ -4,7 +4,7 @@
 //! status line in its place.
 //!
 //! Everything the user sees has to be what their own status line would show: it is run with the
-//! very bytes read from stdin, through `/bin/sh -c` as Claude Code runs one on Unix, with the
+//! very bytes read from stdin, through a POSIX shell as Claude Code runs one on Unix, with the
 //! environment and working directory Claude Code gave this process, its stdout and stderr this
 //! process's own, and its exit status returned as this process's. No status line of their own
 //! prints nothing and exits 0. Which one is theirs is read from their settings files on every run,
@@ -18,6 +18,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use crate::adapter::StatusLine;
+use crate::platform::shell::{self, Dialect};
 
 /// Bound on each step of the post. The daemon answers before doing anything with the report, so
 /// this is only ever reached by one that is wedged.
@@ -88,8 +89,9 @@ fn user_command(config_dir: &Path, cwd: &Path) -> Option<String> {
 /// returns its exit status: 1 when it was ended by a signal or could not be started, which is what
 /// Claude Code makes of either.
 fn pass_through(command: &str, input: &[u8], stdout: Stdio) -> i32 {
-    let Ok(mut child) = Command::new("/bin/sh")
-        .arg("-c")
+    let runner = shell::command_runner(Dialect::Posix);
+    let Ok(mut child) = Command::new(&runner.program)
+        .args(&runner.args)
         .arg(command)
         .stdin(Stdio::piped())
         .stdout(stdout)
@@ -154,6 +156,8 @@ mod tests {
         // One that never reads its input is not held up by it.
         let large = vec![b'x'; 1 << 20];
         assert_eq!(pass_through("exit 0", &large, file().into()), 0);
+        // Where a signal ends a process the status says so; Git for Windows' bash gives a code.
+        #[cfg(unix)]
         assert_eq!(pass_through("kill -9 $$", b"", file().into()), 1);
     }
 
@@ -237,6 +241,7 @@ mod tests {
         drop(gone);
         let started = std::time::Instant::now();
         report(port, "k", "session-1", 200_000).join().unwrap();
-        assert!(started.elapsed() < TIMEOUT);
+        // Bounded by the timeout, which a refused connection on Windows takes up in full.
+        assert!(started.elapsed() < TIMEOUT * 4);
     }
 }

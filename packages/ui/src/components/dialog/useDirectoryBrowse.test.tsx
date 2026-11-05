@@ -11,6 +11,7 @@ import { focusAfterLoss, setFocusAfterModalLoss } from "../focus/modalFocus";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
 import { Dialog } from "./Dialog";
 import { useDirectoryBrowse } from "./DirectoryPicker";
+import { BROWSER_HOST } from "../../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,7 +30,7 @@ function deferred<T>() {
 function setup() {
   const result = deferred<string | undefined>();
   const pick = vi.fn(() => result.promise);
-  const platform: PlatformAdapter = { kind: "tauri", directoryPicker: { pick } };
+  const platform: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, directoryPicker: { pick } };
   const daemon = testDaemon({ isLocal: true });
   return { result, pick, platform, daemon };
 }
@@ -74,7 +75,7 @@ it.each([
 ])("keeps daemon browsing for $kind, local=$local, capability=$capability", async ({ kind, local, capability }) => {
   const pick = vi.fn();
   const request = vi.fn(async () => ({ type: "dir_listing" as const, id: null, path: "/remote", entries: [] }));
-  const host = mountHost(<Field />, { daemon: testDaemon({ isLocal: local, request }), platform: { kind, directoryPicker: capability ? { pick } : undefined } });
+  const host = mountHost(<Field />, { daemon: testDaemon({ isLocal: local, request }), platform: { kind, host: BROWSER_HOST, directoryPicker: capability ? { pick } : undefined } });
   await act(async () => host.querySelector("button")!.click());
   expect(pick).not.toHaveBeenCalled();
   expect(request).toHaveBeenCalledWith({ type: "list_dir", path: "~/code" });

@@ -44,9 +44,11 @@ export const SWITCH_MESSAGE_SOURCE = "octoboard-page-switch";
  *
  * CSP does not govern `RTCPeerConnection` or `<link rel="preconnect">` / `rel="dns-prefetch"`, nor
  * does a parent's `frame-src` stop a nested `<iframe srcdoc>`; those are closed by the bridge
- * never rendering a script, a `<link>` or a frame at all. The nonce-only `script-src` is the second
- * layer for scripts, so a script the sanitizer missed still cannot reach WebRTC; for the links it is
- * the window's content rule list (`apps/desktop/src-tauri/src/page_isolation.rs`).
+ * never rendering a script, a `<link>`, a `rel` attribute or a frame at all. The nonce-only
+ * `script-src` is the second layer for scripts, so a script the sanitizer missed still cannot reach
+ * WebRTC. For resource hints there is no second layer to count on: the window's request block
+ * (`apps/desktop/src-tauri/src/page_isolation/`) sees requests, and a hint may open its connection
+ * before any request.
  *
  * A `<meta>`-delivered CSP cannot carry `frame-ancestors`, and nothing here needs it. */
 function pageCsp(nonce: string): string {
@@ -112,8 +114,8 @@ export interface PageDocumentOptions {
  * window. `historyKeys` makes it relay the window's Back and Forward keys, as they are bound
  * now (⌘[ and ⌘] by default), and keep them from the page, where the window has those shortcuts (the
  * macOS app); the browser's own meaning of the keys is left alone elsewhere. `switchKeys` does the
- * same for the window's shortcut between console sessions (⌃Tab and ⌃⇧Tab by default), where it
- * has that one (the same window).
+ * same for the window's shortcut between console sessions (Control with Tab and with Shift+Tab by
+ * default), where it has that one (the desktop app on any system).
  */
 export function composePageDocument(
   html: string,

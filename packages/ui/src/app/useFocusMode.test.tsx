@@ -15,6 +15,7 @@ import { bindingFor, restoreAllBindings, setBinding } from "../shortcuts/store";
 import { SessionRow } from "../sidebar/SessionRow";
 import { FocusModeContext } from "../sidebar/focusModeContext";
 import type { FocusTarget, SidebarHandlers } from "../sidebar/types";
+import { BROWSER_HOST } from "../test/hosts";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { useFocusMode } from "./useFocusMode";
@@ -53,7 +54,7 @@ function mount(selected: Session = nested) {
     return menuOfTrigger(trigger) as HTMLElement;
   };
   const press = (target: EventTarget = terminal, init: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(bindingFor("focusMode")), ...init });
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(bindingFor("focusMode"), BROWSER_HOST), ...init });
     act(() => { target.dispatchEvent(event); });
     return event;
   };
@@ -91,7 +92,7 @@ it.each([independent, direct, nested, hub])("offers Focus mode only on the selec
   const menu = await open();
   const item = focusItem(menu)!;
   expect(item).toBeDefined();
-  expect(item.getAttribute("aria-keyshortcuts")).toBe(ariaBinding(defaultBinding("focusMode")));
+  expect(item.getAttribute("aria-keyshortcuts")).toBe(ariaBinding(defaultBinding("focusMode"), BROWSER_HOST));
   expect(item.querySelector("kbd")?.textContent?.endsWith("F")).toBe(true);
   expect(item.querySelector("kbd")?.textContent).not.toBe("F");
   act(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true, cancelable: true })));
@@ -127,10 +128,10 @@ it("updates the open item's hint and activation when the global binding changes"
   const menu = await open();
   const old = defaultBinding("focusMode");
   const binding = { code: "KeyG", primary: true, alt: true };
-  act(() => { expect(setBinding("focusMode", binding)).toBeUndefined(); });
-  expect(focusItem(menu)?.getAttribute("aria-keyshortcuts")).toBe(ariaBinding(binding));
+  act(() => { expect(setBinding("focusMode", binding, BROWSER_HOST)).toBeUndefined(); });
+  expect(focusItem(menu)?.getAttribute("aria-keyshortcuts")).toBe(ariaBinding(binding, BROWSER_HOST));
   expect(focusItem(menu)?.querySelector("kbd")?.textContent?.endsWith("G")).toBe(true);
-  press(menu, eventKey(old));
+  press(menu, eventKey(old, BROWSER_HOST));
   expect(focused).not.toHaveBeenCalled();
   press(menu);
   expect(focused).toHaveBeenCalledExactlyOnceWith({ consoleSession: hub });

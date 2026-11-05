@@ -12,6 +12,7 @@ use crate::adapter::files::{
     SMALL_FILE_LIMIT,
 };
 use crate::adapter::LaunchSpec;
+use crate::platform::policy::Policy;
 use crate::protocol::{AgentId, Code, Notice};
 use crate::providers::claude;
 
@@ -28,16 +29,19 @@ fn explicit_config_dir(
 
 /// A settings file Claude Code reads: one the project keeps, read through `browse::live`, or one
 /// it does not (the user's, the managed ones), read as a regular file wherever it lies, since a
-/// home directory opened as the project holds the user's own.
+/// home directory opened as the project holds the user's own. Or settings that are not a file: the
+/// text of a policy the host keeps elsewhere.
 pub(super) enum SettingsFile {
     Project(PathBuf),
     Other(PathBuf),
+    Policy(String),
 }
 
 impl SettingsFile {
-    fn path(&self) -> &Path {
+    fn path(&self) -> Option<&Path> {
         match self {
-            Self::Project(path) | Self::Other(path) => path,
+            Self::Project(path) | Self::Other(path) => Some(path),
+            Self::Policy(_) => None,
         }
     }
 
@@ -46,6 +50,7 @@ impl SettingsFile {
         match self {
             Self::Project(path) => read_bounded_text(path, project, SMALL_FILE_LIMIT),
             Self::Other(path) => read_regular_text(path, SMALL_FILE_LIMIT),
+            Self::Policy(text) => Ok(text.clone()),
         }
     }
 }
@@ -93,8 +98,8 @@ pub fn user_status_line(
 }
 
 /// The settings files whose `allowedHttpHookUrls` this launch's Claude Code would merge: the
-/// user's, the project's two, and the managed file and drop-in directory. Policy delivered through
-/// an MDM profile or the claude.ai console is in none of them and cannot be read from here.
+/// user's, the project's two, and the managed settings (see [`managed_layers`]). Policy delivered
+/// through an MDM profile or the claude.ai console is in none of them and cannot be read from here.
 /// `project` is the canonical working directory.
 pub(super) fn settings_files(
     spec: &LaunchSpec<'_>,
@@ -105,20 +110,46 @@ pub(super) fn settings_files(
         &crate::adapter::account_dir(AgentId::CLAUDE, pinned, spec.shell_env),
         project,
     ));
-    files.extend(managed_settings_files(managed_settings_dir()));
+    files.extend(managed_layers(&managed_settings_dir(), &registry_policy()));
     files
 }
 
 /// Where Claude Code reads the settings an administrator manages; under test, a directory that
 /// does not exist, so that no test reads the managed settings of the machine it runs on.
-fn managed_settings_dir() -> &'static Path {
-    Path::new(if cfg!(test) {
-        "/nonexistent/octoboard-test-managed"
-    } else if cfg!(target_os = "macos") {
-        "/Library/Application Support/ClaudeCode"
+fn managed_settings_dir() -> PathBuf {
+    if cfg!(test) {
+        PathBuf::from("/nonexistent/octoboard-test-managed")
     } else {
-        "/etc/claude-code"
-    })
+        crate::platform::policy::managed_dir("ClaudeCode", "claude-code")
+    }
+}
+
+/// The registry policy this host holds for Claude Code; under test, none, as with the managed
+/// directory.
+fn registry_policy() -> Policy {
+    if cfg!(test) {
+        Policy::default()
+    } else {
+        crate::platform::policy::registry_policy("ClaudeCode")
+    }
+}
+
+/// The managed settings Claude Code applies, lowest precedence first. It takes the first source
+/// that has a policy, in this order: the machine's registry policy, the managed files in
+/// `managed`, then the user's registry policy, which is writable by the user and so counts only
+/// when nothing above it exists. Sources do not merge, so a lower one is dropped whole.
+fn managed_layers(managed: &Path, policy: &Policy) -> Vec<SettingsFile> {
+    if let Some(text) = &policy.machine {
+        return vec![SettingsFile::Policy(text.clone())];
+    }
+    let files = managed_settings_files(managed);
+    let present = files
+        .iter()
+        .any(|file| file.path().is_some_and(|path| path.exists()));
+    match &policy.user {
+        Some(text) if !present => vec![SettingsFile::Policy(text.clone())],
+        _ => files,
+    }
 }
 
 /// The managed settings in `managed`, lowest precedence first: `managed-settings.json`, then the
@@ -161,7 +192,7 @@ pub(crate) fn configured_model(
     pinned: Option<&Path>,
     cwd: Option<&Path>,
 ) -> Option<String> {
-    configured_model_in(shell_env, pinned, cwd, managed_settings_dir())
+    configured_model_in(shell_env, pinned, cwd, &managed_settings_dir())
 }
 
 /// [`configured_model`] with the managed settings directory given.
@@ -193,7 +224,7 @@ fn configured_model_in(
             )],
         ),
     };
-    files.extend(managed_settings_files(managed));
+    files.extend(managed_layers(managed, &registry_policy()));
     // Highest precedence first.
     let settings: Vec<serde_json::Value> = files
         .iter()
@@ -224,7 +255,11 @@ pub(super) fn http_hooks_allowed(url: &str, files: &[SettingsFile], project: &Pa
         let text = match file.read(project) {
             Ok(text) => text,
             // `metadata` does not open the file, so a FIFO cannot block it.
-            Err(_) if std::fs::metadata(file.path()).is_ok_and(|meta| meta.is_file()) => {
+            Err(_)
+                if file.path().is_some_and(|path| {
+                    std::fs::metadata(path).is_ok_and(|meta| meta.is_file())
+                }) =>
+            {
                 return false
             }
             Err(_) => continue,
@@ -375,7 +410,7 @@ mod tests {
         fixture
             .shell_env
             .insert("HOME".to_string(), home.to_string_lossy().into_owned());
-        let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
+        let canonical = crate::hostfs::canonical(&fixture.cwd).expect("canonical path");
         let config = home.join(".claude.json");
 
         assert!(ClaudeProvider
@@ -441,7 +476,7 @@ mod tests {
         fixture
             .shell_env
             .insert("HOME".to_string(), home.to_string_lossy().into_owned());
-        let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
+        let canonical = crate::hostfs::canonical(&fixture.cwd).expect("canonical path");
         let write = |dir: &std::path::Path, trusted: bool| {
             let config = serde_json::json!({
                 "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": trusted } }
@@ -487,6 +522,7 @@ mod tests {
 
     /// What sits in a project or a config directory is whatever was put there: a FIFO at a settings
     /// or config path counts as unreadable instead of holding the launch until a writer appears.
+    #[cfg(unix)]
     #[test]
     fn a_fifo_at_a_settings_or_config_path_does_not_hold_the_launch() {
         let mut fixture = spec_fixture();
@@ -504,8 +540,7 @@ mod tests {
             home.join(".claude/settings.json"),
             home.join(".claude.json"),
         ] {
-            let c = std::ffi::CString::new(path.into_os_string().into_encoded_bytes()).unwrap();
-            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+            crate::test_support::mkfifo(&path);
         }
 
         let (done, finished) = std::sync::mpsc::channel();
@@ -648,6 +683,59 @@ mod tests {
         );
     }
 
+    /// The machine's registry policy stands in for the managed files; the user's only where no
+    /// managed file exists; both are what `allowedHttpHookUrls` and the model are read from.
+    #[test]
+    fn registry_policy_ranks_with_the_managed_files() {
+        let dir = crate::test_support::ScratchDir::new("managed-layers");
+        let managed = dir.join("managed");
+        let policy = |machine: Option<&str>, user: Option<&str>| Policy {
+            machine: machine.map(str::to_owned),
+            user: user.map(str::to_owned),
+        };
+        let texts = |files: Vec<SettingsFile>| -> Vec<String> {
+            files
+                .iter()
+                .map(|file| match file {
+                    SettingsFile::Policy(text) => format!("policy {text}"),
+                    SettingsFile::Other(path) => format!("file {}", path.display()),
+                    SettingsFile::Project(_) => unreachable!("not a managed layer"),
+                })
+                .collect()
+        };
+        let base = format!("file {}", managed.join("managed-settings.json").display());
+
+        // Nothing set: the files are named, absent as they are.
+        assert_eq!(
+            texts(managed_layers(&managed, &policy(None, None))),
+            [base.as_str()]
+        );
+        // The user's policy is read only while no managed file is there.
+        assert_eq!(
+            texts(managed_layers(&managed, &policy(None, Some("u")))),
+            ["policy u"]
+        );
+        std::fs::create_dir_all(&managed).expect("managed dir");
+        std::fs::write(managed.join("managed-settings.json"), "{}").expect("managed file");
+        assert_eq!(
+            texts(managed_layers(&managed, &policy(None, Some("u")))),
+            [base]
+        );
+        // The machine's policy outranks the files and the user's, which are then not read.
+        assert_eq!(
+            texts(managed_layers(&managed, &policy(Some("m"), Some("u")))),
+            ["policy m"]
+        );
+        let allowed = [SettingsFile::Policy(
+            r#"{"allowedHttpHookUrls":["https://example.com/*"]}"#.to_owned(),
+        )];
+        assert!(!http_hooks_allowed(
+            "http://127.0.0.1:1/hook",
+            &allowed,
+            Path::new("")
+        ));
+    }
+
     /// A home directory opened as the project holds the user's own settings and global config,
     /// which a dotfiles manager may link elsewhere: they are read as Claude Code reads them, not
     /// refused as links out of the project.
@@ -673,8 +761,8 @@ mod tests {
             .to_string(),
         )
         .expect("global config");
-        std::os::unix::fs::symlink(dotfiles.join("claude"), home.join(".claude")).expect("link");
-        std::os::unix::fs::symlink(dotfiles.join(".claude.json"), home.join(".claude.json"))
+        crate::test_support::symlink(dotfiles.join("claude"), home.join(".claude")).expect("link");
+        crate::test_support::symlink(dotfiles.join(".claude.json"), home.join(".claude.json"))
             .expect("link");
 
         assert!(user_status_line(&home.join(".claude"), &home).is_some());

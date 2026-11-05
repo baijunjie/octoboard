@@ -31,7 +31,6 @@
 //! looked at again.
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
@@ -42,8 +41,10 @@ use crate::browse::content::{file_content, line_count};
 use crate::browse::scope::Located;
 use crate::browse::source::{self, ProjectRoot};
 use crate::browse::{budget, git_error, git_failed, live};
-use crate::git::isolated::{paths_nest, IsolatedGit};
+use crate::git::isolated::IsolatedGit;
+use crate::git::pathspec::{self, paths_nest};
 use crate::git::run::GitError;
+use crate::platform::fs::{self as platform, Links};
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{
     error_code, ChangeRef, ChangeSide, CodedError, ContentSource, SideKind, SideRead, SideRef,
@@ -88,17 +89,18 @@ pub(super) fn head_side(head: Option<&str>, mode: &[u8], oid: &[u8], rel: &RelPa
 }
 
 /// `rel` joined onto `scope`, when the directory holding it is exactly that directory, reached
-/// through no symbolic link; `dirs` remembers the directories already asked about.
+/// through no symbolic link; `dirs` remembers the directories already asked about. `None` for a
+/// path this host cannot name, which `git` may hold but the disk never does.
 pub(super) fn exact_path(
     scope: &ProjectRoot,
     rel: &RelPath,
     dirs: &mut HashMap<PathBuf, bool>,
 ) -> Option<PathBuf> {
-    let joined = scope.canonical.join(rel.as_path());
+    let joined = scope.canonical.join(rel.host_path()?);
     let parent = joined.parent()?.to_path_buf();
     let exact = *dirs
         .entry(parent.clone())
-        .or_insert_with(|| fs::canonicalize(&parent).is_ok_and(|real| real == parent));
+        .or_insert_with(|| crate::hostfs::canonical(&parent).is_ok_and(|real| real == parent));
     exact.then_some(joined)
 }
 
@@ -449,12 +451,12 @@ impl Reader<'_> {
         let Some(path) = scope.and_then(|scope| exact_path(scope, rel, &mut HashMap::new())) else {
             return Found::Absent;
         };
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
+        let Ok(stat) = platform::stat(&path, Links::Keep) else {
             return Found::Absent;
         };
-        let kind = if metadata.file_type().is_symlink() {
+        let kind = if stat.metadata.file_type().is_symlink() {
             SideKind::Symlink
-        } else if metadata.is_dir() {
+        } else if stat.metadata.is_dir() {
             if !repository_dir {
                 return Found::Absent;
             }
@@ -464,7 +466,7 @@ impl Reader<'_> {
         };
         Found::Disk {
             kind,
-            version: live::version(&metadata),
+            version: live::version(&stat),
         }
     }
 
@@ -936,8 +938,9 @@ impl Reader<'_> {
     /// Both reads leave the repository alone: `check-attr` reads the attribute files and the index,
     /// `config` the configuration files.
     fn clean_filter(&self, rel: &RelPath) -> Result<Option<String>> {
-        let full = self.full(rel);
-        let args: &[&[u8]] = &[b"-z", b"filter", b"--", full.as_bytes()];
+        // `check-attr` takes paths, not pathspecs, so no magic is read.
+        let spec = pathspec::relative(self.full(rel).as_bytes());
+        let args: &[&[u8]] = &[b"-z", b"filter", b"--", &spec];
         let stdout = self
             .env
             .run(

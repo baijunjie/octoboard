@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { ConfigurationFileError } from "./configurationFileError";
+import { browserHost } from "./host";
 import { tauriPlatform } from "./tauri";
 import { UpdaterError } from "./updaterError";
 
@@ -23,9 +25,47 @@ vi.mock("@tauri-apps/api/event", () => ({
 const readText = vi.fn();
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: () => readText() }));
 
+/** Puts the shell's `host` query parameter on the page, as the desktop shell does when it opens the window. */
+function reportHost(facts: unknown): void {
+  window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(facts))}`);
+}
+
+beforeEach(() => reportHost(MAC_HOST));
+
 afterEach(() => {
   invoke.mockReset();
   listeners.clear();
+  window.history.replaceState(null, "", "/");
+});
+
+describe("the host facts", () => {
+  it("are read from the window's query", () => {
+    reportHost(WINDOWS_HOST);
+    expect(tauriPlatform().host).toEqual(WINDOWS_HOST);
+    reportHost(MAC_HOST);
+    expect(tauriPlatform().host).toEqual(MAC_HOST);
+  });
+
+  it("fall back to what the browser says when the shell reported none, or something that is not a set of them", () => {
+    for (const search of ["/", "/?host=", "/?host=%7Bnot-json", `/?host=${encodeURIComponent(JSON.stringify({ ...MAC_HOST, chrome: "wide" }))}`, `/?host=${encodeURIComponent(JSON.stringify({ ...MAC_HOST, terms: undefined }))}`]) {
+      window.history.replaceState(null, "", search);
+      expect(tauriPlatform().host).toEqual(browserHost());
+    }
+  });
+
+  it("decide which capabilities the adapter has: the traffic lights' inset, the material, the menu, the status item, the badge, background running, the updater, the notification pane", () => {
+    const mac = tauriPlatform();
+    expect(mac.windowChrome?.leftInset()).toBe(MAC_HOST.trafficLightInset);
+    expect(mac.translucentWindow).toBe(true);
+    expect([mac.appMenu, mac.statusItem, mac.badge, mac.backgroundRun, mac.updater, mac.notifications?.openSystemSettings].map((capability) => capability !== undefined)).toEqual([true, true, true, true, true, true]);
+
+    reportHost(WINDOWS_HOST);
+    const windows = tauriPlatform();
+    expect(windows.windowChrome).toBeUndefined();
+    expect(windows.translucentWindow).toBe(false);
+    expect([windows.appMenu, windows.badge, windows.notifications?.openSystemSettings].map((capability) => capability !== undefined)).toEqual([false, false, true]);
+    expect([windows.statusItem, windows.backgroundRun, windows.updater].map((capability) => capability !== undefined)).toEqual([true, true, true]);
+  });
 });
 
 it.each([

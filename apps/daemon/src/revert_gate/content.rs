@@ -4,12 +4,13 @@
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
-use std::os::unix::ffi::OsStringExt;
 
 use anyhow::{Context, Result};
 
 use super::git::{is_ancestor, is_null, is_space, lossy, Git};
 use crate::git::object_id::is_object_id;
+use crate::git::pathspec;
+use crate::platform::names;
 
 /// How many commits to look back. A revert usually comes from a branch developed in parallel in
 /// the same period, so its base is not far behind; too large a value reads many more blobs on
@@ -148,10 +149,6 @@ fn ratio(part: &Lines, whole: &Lines) -> f64 {
     } else {
         part.total() as f64 / whole.total() as f64
     }
-}
-
-fn os(path: &[u8]) -> OsString {
-    OsString::from_vec(path.to_vec())
 }
 
 /// One file change starting at field `i` of `-z --raw` output, and the index after it.
@@ -546,9 +543,12 @@ fn base_artifacts(
         let (at_old, at_new) = &touched[path];
         // Attribute it to the commit that last changed this file on the target branch: a
         // deliberate revert should carry a `Reverts:` naming it. Literal, so that a path with a
-        // glob character in it is that file.
+        // glob character in it is that file, and from the root (`git diff` names it from there)
+        // with `top`, so that Windows does not take one named like `a:b` for a drive: `git` would
+        // die, and the empty read would pass the file unflagged. The magic is read only out of the
+        // literal-pathspec mode, which the environment a hook inherits may have turned on.
         let out = git.line_lenient([
-            OsString::from("--literal-pathspecs"),
+            OsString::from("--no-literal-pathspecs"),
             "log".into(),
             "-1".into(),
             "--no-show-signature".into(),
@@ -556,7 +556,8 @@ fn base_artifacts(
             "--format=%H %s".into(),
             old.into(),
             "--".into(),
-            os(path),
+            names::name_from_bytes(&pathspec::literal(path))
+                .context("a path this host cannot pass to git")?,
         ])?;
         if out.is_empty() {
             continue;

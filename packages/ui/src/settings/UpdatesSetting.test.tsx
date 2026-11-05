@@ -13,6 +13,7 @@ import { updateChannel } from "../updates/updateChannel";
 import type { UpdateStore } from "../updates/updateStore";
 import { UpdatesProvider, useUpdates } from "../updates/UpdatesProvider";
 import { UpdatesSetting } from "./UpdatesSetting";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,7 +72,7 @@ const failedMark = (container: HTMLElement) => container.querySelector<HTMLEleme
 
 it("shows a check that did not finish as a warning mark before the button, its popover holding the sentences, not as an alert under the row", async () => {
   const check = vi.fn(async () => { throw new Error("offline"); });
-  const { container } = mount({ kind: "tauri", updater: updaterOf(check) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
   await act(async () => void button(container, "Check for updates")!.click());
   expect(container.querySelector(".alert")).toBeNull();
   const mark = failedMark(container)!;
@@ -93,7 +94,7 @@ it("hands focus to the Check for updates button when the mark that holds it goes
   let fail = true;
   let finish: () => void = () => {};
   const check = vi.fn(() => (fail ? Promise.reject(new Error("offline")) : new Promise<undefined>((resolve) => (finish = () => resolve(undefined)))));
-  const { container, store } = mount({ kind: "tauri", updater: updaterOf(check) });
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
   await act(async () => void button(container, "Check for updates")!.click());
   fail = false;
   act(() => failedMark(container)!.focus());
@@ -115,7 +116,7 @@ it("hands focus to the Check for updates button when the mark that holds it goes
 });
 
 it("leaves a check pressed here to the error alert dialog: the mark appears without being spoken", async () => {
-  const { container } = mount({ kind: "tauri", updater: updaterOf(async () => { throw new Error("offline"); }) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => { throw new Error("offline"); }) });
   await act(async () => void button(container, "Check for updates")!.click());
   expect(failedMark(container)).not.toBeNull();
   expect(await spoken(container)).toBe("");
@@ -124,7 +125,7 @@ it("leaves a check pressed here to the error alert dialog: the mark appears with
 
 it("speaks an automatic check that does not finish, though an earlier check was pressed here", async () => {
   let fail = false;
-  const { container, store } = mount({ kind: "tauri", updater: updaterOf(async () => { if (fail) throw new Error("offline"); return undefined; }) });
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => { if (fail) throw new Error("offline"); return undefined; }) });
   await act(async () => void button(container, "Check for updates")!.click());
   expect(failedMark(container)).toBeNull();
   fail = true;
@@ -134,13 +135,13 @@ it("speaks an automatic check that does not finish, though an earlier check was 
 });
 
 it("has no update rows without the capability", () => {
-  const container = mount({ kind: "browser" }).container;
+  const container = mount({ kind: "browser", host: BROWSER_HOST }).container;
   expect(textOf(container)).not.toContain("Update channel");
 });
 
 it("checks the chosen channel on request, saying how it ended", async () => {
   const check = vi.fn(async () => undefined);
-  const { container } = mount({ kind: "tauri", updater: updaterOf(check) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
   await act(async () => {});
   expect(textOf(container)).toContain("You are using version 0.1.0.");
   await act(async () => button(container, "Check for updates")!.click());
@@ -149,7 +150,7 @@ it("checks the chosen channel on request, saying how it ended", async () => {
 });
 
 it("offers the download once a newer version is found", async () => {
-  const { container } = mount({ kind: "tauri", updater: updaterOf(async () => FOUND) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND) });
   await act(async () => {});
   await act(async () => button(container, "Check for updates")!.click());
   expect(textOf(container)).toContain("Version 0.2.0 is available. You are using version 0.1.0.");
@@ -160,7 +161,7 @@ it("offers the download once a newer version is found", async () => {
 it("downloads from Settings, then offers the restart, which asks the window's exit flow", async () => {
   let finish: () => void = () => {};
   const install = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
-  const { container, store } = mount({ kind: "tauri", updater: updaterOf(async () => FOUND, install) });
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, install) });
   await act(async () => {});
   await act(async () => button(container, "Check for updates")!.click());
   await act(async () => button(container, "Download and install")!.click());
@@ -177,7 +178,7 @@ it("downloads from Settings, then offers the restart, which asks the window's ex
 it("keeps the install button enabled while a check runs, so focus on it is not dropped", async () => {
   let settle: (found: AvailableUpdate | undefined) => void = () => {};
   const check = vi.fn<UpdaterCapability["check"]>().mockResolvedValueOnce(FOUND).mockImplementation(() => new Promise((resolve) => (settle = resolve)));
-  const { container, store } = mount({ kind: "tauri", updater: updaterOf(check) });
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
   await act(async () => {});
   await act(async () => store().check("automatic"));
   act(() => void store().check("automatic"));
@@ -188,7 +189,7 @@ it("keeps the install button enabled while a check runs, so focus on it is not d
 });
 
 it("speaks the result of a check pressed here", async () => {
-  const { container } = mount({ kind: "tauri", updater: updaterOf(async () => FOUND) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND) });
   expect(await spoken(container)).toBe("");
   await act(async () => button(container, "Check for updates")!.click());
   expect(await spoken(container)).toContain("Version 0.2.0 is available.");
@@ -197,7 +198,7 @@ it("speaks the result of a check pressed here", async () => {
 it("says nothing of an update found before Settings opened, until the user acts on it", async () => {
   let finish: () => void = () => {};
   const install = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
-  const { container, store, open } = mount({ kind: "tauri", updater: updaterOf(async () => FOUND, install) }, { opened: false });
+  const { container, store, open } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, install) }, { opened: false });
   await act(async () => {});
   await act(async () => store().check("automatic"));
   open();
@@ -209,7 +210,7 @@ it("says nothing of an update found before Settings opened, until the user acts 
 });
 
 it("speaks the result of a check that starts while Settings is open, an automatic one included", async () => {
-  const { container, store } = mount({ kind: "tauri", updater: updaterOf(async () => undefined) });
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => undefined) });
   await act(async () => {});
   expect(await spoken(container)).toBe("");
   await act(async () => store().check("automatic"));
@@ -218,7 +219,7 @@ it("speaks the result of a check that starts while Settings is open, an automati
 
 it("keeps the channel the user picks and looks again on the new one", async () => {
   const check = vi.fn(async () => undefined);
-  const { container } = mount({ kind: "tauri", updater: updaterOf(check) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
   await act(async () => {});
   expect(updateChannel.get()).toBe("beta");
   expect(check).not.toHaveBeenCalled();
@@ -229,7 +230,7 @@ it("keeps the channel the user picks and looks again on the new one", async () =
 });
 
 it("keeps focus on the one button, now Download and install, once a check pressed from it finds an update", async () => {
-  const { container } = mount({ kind: "tauri", updater: updaterOf(async () => FOUND) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND) });
   await act(async () => {});
   const check = button(container, "Check for updates")!;
   act(() => check.focus());
@@ -242,7 +243,7 @@ it("keeps focus on the one button, now Download and install, once a check presse
 it("speaks an install that finishes while Settings is open, though the notice started it before", async () => {
   let finish: () => void = () => {};
   const install = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
-  const { container, store, open } = mount({ kind: "tauri", updater: updaterOf(async () => FOUND, install) }, { opened: false });
+  const { container, store, open } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, install) }, { opened: false });
   await act(async () => {});
   await act(async () => store().check("automatic"));
   act(() => void store().install());
@@ -254,7 +255,7 @@ it("speaks an install that finishes while Settings is open, though the notice st
 
 it("speaks the result of a check that was already running when Settings opened", async () => {
   let settle: (found: AvailableUpdate | undefined) => void = () => {};
-  const { container, store, open } = mount({ kind: "tauri", updater: updaterOf(() => new Promise((resolve) => (settle = resolve))) }, { opened: false });
+  const { container, store, open } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(() => new Promise((resolve) => (settle = resolve))) }, { opened: false });
   await act(async () => {});
   act(() => void store().check("automatic"));
   open();
@@ -269,7 +270,7 @@ const releaseOf = (version: string) => `https://github.com/baijunjie/octoboard/r
 it("links What is new to the GitHub release of the version the row is about, before the warning mark and the button", async () => {
   let finish: () => void = () => {};
   const check = vi.fn<UpdaterCapability["check"]>().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(FOUND);
-  const { container } = mount({ kind: "tauri", updater: updaterOf(check, () => new Promise<void>((resolve) => (finish = resolve))) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check, () => new Promise<void>((resolve) => (finish = resolve))) });
   await act(async () => {});
   expect(notesLink(container)!.href).toBe(releaseOf("0.1.0"));
   await act(async () => button(container, "Check for updates")!.click());
@@ -286,13 +287,13 @@ it("links What is new to the GitHub release of the version the row is about, bef
 });
 
 it("leaves What is new out while the running version is not known", async () => {
-  const { container } = mount({ kind: "tauri", updater: { ...updaterOf(async () => undefined), currentVersion: () => new Promise<string>(() => {}) } });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: { ...updaterOf(async () => undefined), currentVersion: () => new Promise<string>(() => {}) } });
   await act(async () => {});
   expect(notesLink(container)).toBeUndefined();
 });
 
 it("leaves What is new out for an installed update whose version is not known, rather than pointing at the running one", async () => {
-  const { container } = mount({ kind: "tauri", updater: updaterOf(async () => { throw new UpdaterError("installed"); }) });
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => { throw new UpdaterError("installed"); }) });
   await act(async () => {});
   await act(async () => button(container, "Check for updates")!.click());
   expect(textOf(container)).toContain("An update is installed.");
@@ -300,7 +301,7 @@ it("leaves What is new out for an installed update whose version is not known, r
 });
 
 it("moves focus held on What is new to the row's action when an installed update of no known version takes the link away", async () => {
-  const { container, store } = mount({ kind: "tauri", updater: updaterOf(async () => { throw new UpdaterError("installed"); }) });
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => { throw new UpdaterError("installed"); }) });
   await act(async () => {});
   act(() => notesLink(container)!.focus());
   await act(async () => void store().check("automatic"));
@@ -309,11 +310,26 @@ it("moves focus held on What is new to the row's action when an installed update
 });
 
 it("leaves focus to the dialog when the whole row goes while What is new holds it", async () => {
-  const { container, close } = mount({ kind: "tauri", updater: updaterOf(async () => undefined) });
+  const { container, close } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => undefined) });
   await act(async () => {});
   act(() => notesLink(container)!.focus());
   const check = button(container, "Check for updates")!;
   const focus = vi.spyOn(check, "focus");
   await act(async () => close());
   expect(focus).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["installer", WINDOWS_HOST, "Version 0.2.0 is downloaded. It is installed when Octoboard quits or restarts.", "An update is downloaded. It is installed when Octoboard quits or restarts."],
+  ["in-place", MAC_HOST, "Version 0.2.0 is installed. It takes effect after Octoboard restarts.", "An update is installed. It takes effect after Octoboard restarts."],
+])("words a finished download as the %s updater leaves it, with and without a known version", async (_updater, host, known, unknown) => {
+  const found = mount({ kind: "tauri", host, updater: updaterOf(async () => FOUND) });
+  await act(async () => {});
+  await act(async () => button(found.container, "Check for updates")!.click());
+  await act(async () => button(found.container, "Download and install")!.click());
+  expect(textOf(found.container)).toContain(known);
+  const blind = mount({ kind: "tauri", host, updater: updaterOf(async () => { throw new UpdaterError("installed"); }) });
+  await act(async () => {});
+  await act(async () => button(blind.container, "Check for updates")!.click());
+  expect(textOf(blind.container)).toContain(unknown);
 });

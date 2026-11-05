@@ -19,29 +19,32 @@ import type {
   UpdateProgress,
   WindowChromeCapability,
 } from "./index";
+import { tauriHost, type HostFacts } from "./host";
 import { UpdaterError } from "./updaterError";
 
 // Every Tauri module is loaded with a dynamic `import()` and only from here, so a plain browser
 // never fetches them.
 
 export function tauriPlatform(): PlatformAdapter {
+  const host = tauriHost();
   return {
     kind: "tauri",
+    host,
     exit: tauriExit(),
-    notifications: tauriNotifications(),
-    badge: tauriBadge(),
+    notifications: tauriNotifications(host),
+    badge: host.badge ? tauriBadge() : undefined,
     nativeWindow: tauriNativeWindow(),
-    windowChrome: tauriWindowChrome(),
-    translucentWindow: onMac(),
-    appMenu: tauriAppMenu(),
-    statusItem: tauriStatusItem(),
+    windowChrome: host.chrome === "overlay-left" ? tauriWindowChrome(host.trafficLightInset ?? 0) : undefined,
+    translucentWindow: host.translucent,
+    appMenu: host.appMenu ? tauriAppMenu() : undefined,
+    statusItem: host.statusItem === "none" ? undefined : tauriStatusItem(),
     clipboard: tauriClipboard(),
     configurationFile: tauriConfigurationFile(),
     directoryPicker: tauriDirectoryPicker(),
     links: tauriLinks(),
     macosPermissions: tauriMacosPermissions(),
-    backgroundRun: tauriBackgroundRun(),
-    updater: tauriUpdater(),
+    backgroundRun: host.runInBackground ? tauriBackgroundRun() : undefined,
+    updater: host.updater === "none" ? undefined : tauriUpdater(),
   };
 }
 
@@ -80,21 +83,12 @@ function shellFailure(err: unknown): { kind?: string; detail?: string } {
   return (typeof err === "object" && err !== null ? err : {}) as { kind?: string; detail?: string };
 }
 
-/** The shell hides the native titlebar and puts a translucent material behind the page on macOS
- * alone (`open_main_window` in `apps/desktop/src-tauri/src/lib.rs`). */
-function onMac(): boolean {
-  return navigator.userAgent.includes("Mac");
-}
-
-/** What the traffic lights cover at the bar's leading edge: `TRAFFIC_LIGHT_X` in
- * `apps/desktop/src-tauri/src/lib.rs` plus three buttons and a gap. */
-const TRAFFIC_LIGHT_INSET = 80;
-
-/** Present only on macOS, where `lib.rs` hides the native titlebar and floats the traffic lights
- * over the page; they leave the bar in fullscreen, and with them the inset. */
-function tauriWindowChrome(): WindowChromeCapability | undefined {
-  if (!onMac()) return undefined;
-  let inset = TRAFFIC_LIGHT_INSET;
+/** Present only where the shell hides the native titlebar and floats the window controls over the page
+ * (`chrome: "overlay-left"`, the traffic lights on macOS: `decorate` in
+ * `apps/desktop/src-tauri/src/chrome/macos.rs`); `controlsInset` is what they cover at the bar's leading edge, as the shell
+ * reports it. They leave the bar in fullscreen, and with them the inset. */
+function tauriWindowChrome(controlsInset: number): WindowChromeCapability {
+  let inset = controlsInset;
   const callbacks = new Set<() => void>();
   return {
     leftInset: () => inset,
@@ -104,7 +98,7 @@ function tauriWindowChrome(): WindowChromeCapability | undefined {
       void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
         const win = getCurrentWindow();
         const sync = async () => {
-          const next = (await win.isFullscreen()) ? 0 : TRAFFIC_LIGHT_INSET;
+          const next = (await win.isFullscreen()) ? 0 : controlsInset;
           if (next === inset) return;
           inset = next;
           for (const notify of callbacks) notify();
@@ -210,7 +204,7 @@ function tauriExit(): ExitCapability {
  * the user grants the permission later. */
 let permissionRequest: Promise<boolean> | undefined;
 
-function tauriNotifications(): NotificationCapability {
+function tauriNotifications(host: HostFacts): NotificationCapability {
   return {
     ensurePermission() {
       if (!permissionRequest) {
@@ -229,10 +223,10 @@ function tauriNotifications(): NotificationCapability {
       const { sendNotification } = await import("@tauri-apps/plugin-notification");
       sendNotification(notification);
     },
-    ...(onMac() && {
+    ...(host.notificationSettings === "system-pane" && {
       async openSystemSettings() {
         const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("macos_open_notification_settings");
+        await invoke("open_notification_settings");
       },
     }),
   };
@@ -320,15 +314,15 @@ function tauriMacosPermissions(): MacosPermissionsCapability {
   return {
     async status() {
       const { invoke } = await import("@tauri-apps/api/core");
-      return (await invoke<MacosPermissionsStatus | null>("macos_permissions_status")) ?? undefined;
+      return (await invoke<MacosPermissionsStatus | null>("permissions_status")) ?? undefined;
     },
     async request(kind) {
       const { invoke } = await import("@tauri-apps/api/core");
-      return invoke<boolean>("macos_request_permission", { kind });
+      return invoke<boolean>("request_permission", { kind });
     },
     async openSystemSettings(kind) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("macos_open_privacy_settings", { kind });
+      await invoke("open_privacy_settings", { kind });
     },
   };
 }
@@ -342,7 +336,7 @@ function tauriBackgroundRun(): BackgroundRunCapability {
   };
 }
 
-/** Through the shell's own commands (`updater.rs`), which carry a channel's name in and a version, its notes and
+/** Through the shell's own commands (`updater/`), which carry a channel's name in and a version, its notes and
  * the download's progress out. The shell rejects with `{ kind, detail? }`. */
 function tauriUpdater(): UpdaterCapability {
   const failure = (err: unknown): UpdaterError => {

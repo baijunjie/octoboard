@@ -20,7 +20,13 @@
 //! exposes. A test-only field of a tuple struct or tuple variant whose type holds a comma inside
 //! angle brackets (`HashMap<K, V>`) is cut short at that comma, so the rest of its type is read as
 //! production code: this can only add an edge, never hide one.
+//!
+//! Two more rules read the same scan. `platform` uses nothing else in the crate: an edge from it to
+//! any other top-level module, or to an item of the crate root, fails. And the OS-specific tokens
+//! may appear in production code only under `src/platform/`, with no exceptions; that rule is
+//! documented in `os_tokens` and in `docs/structure/daemon.md`, section "Dependency direction".
 
+mod os_tokens;
 mod scan;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -29,6 +35,7 @@ use scan::{scan_crate, Scan};
 
 const RULE_DOC: &str = "docs/structure/daemon.md, section \"Dependency direction\"";
 const THIS_FILE: &str = "apps/daemon/src/layering_tests/mod.rs";
+const OS_TOKENS_FILE: &str = "apps/daemon/src/layering_tests/os_tokens.rs";
 
 /// The layers, lowest first. A module may use its own layer and the layers below it.
 const LAYERS: &[(&str, &[&str])] = &[
@@ -38,6 +45,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "blocking_pass",
             "interface_language",
             "loopback",
+            "platform",
             "text",
             "time",
             "wire_path",
@@ -104,6 +112,9 @@ const ROOT_ITEMS: &[&str] = &["APP_NAME"];
 /// outside the entry layer, and their associated items (`Outbox::new`), whatever the layer;
 /// anything else it reaches upward goes through `UPWARD`.
 const STATE: &str = "state";
+
+/// The module that holds every OS-specific token, and so may use nothing else in the crate.
+const PLATFORM: &str = "platform";
 
 /// The layer of the ways into the daemon, which nothing the daemon holds may name.
 const ENTRY: &str = "entry";
@@ -182,6 +193,21 @@ fn every_top_level_module_depends_only_downward_or_as_listed() {
     );
 }
 
+#[test]
+fn os_tokens_appear_only_in_the_platform_layer() {
+    let scan = scan_crate();
+    let mut problems = Vec::new();
+    os_tokens::check(&scan, &mut problems);
+    assert!(
+        problems.is_empty(),
+        "OS-specific tokens outside the platform layer, or an allow-list out of step with them:\n  \
+         {}\n\nOS-specific code belongs under `src/platform/` ({RULE_DOC}). Move the site there; \
+         the allow-list in {OS_TOKENS_FILE} is transitional and only shrinks, so a new entry is \
+         not the way out, and a stale one is removed.",
+        problems.join("\n  ")
+    );
+}
+
 /// Every production module in exactly one layer, and every layered module a production one.
 /// Returns each layered module's layer.
 fn check_layers(scan: &Scan, problems: &mut Vec<String>) -> BTreeMap<&'static str, usize> {
@@ -239,6 +265,13 @@ fn check_edges(
         } else {
             format!("crate::{}::{}", edge.to, edge.path.join("::"))
         };
+        if edge.from == PLATFORM {
+            problems.push(format!(
+                "{here}: `{PLATFORM}` uses `{named}`; the platform layer depends on nothing else \
+                 in the crate"
+            ));
+            continue;
+        }
         if !scan.modules.contains(&edge.to) {
             if !ROOT_ITEMS.contains(&edge.to.as_str()) {
                 problems.push(format!(

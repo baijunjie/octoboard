@@ -67,8 +67,12 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
     },
     // Claude Code reads only this spelling, not `AGENTS.md`.
     instruction_file: "CLAUDE.md",
+    // A line `@AGENTS.md` loads that file's text, with no confirmation for a file inside the
+    // working directory (Claude Code 2.1.319).
+    instruction_import_prefix: Some("@"),
     tool_name_prefix: "mcp__",
     ask_question_tool: Some("AskUserQuestion"),
+    quit_keys: None,
     capabilities: Capabilities {
         preallocates_session_id: true,
         hook_script: false,

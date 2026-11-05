@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
-import { appDir, tauriBin } from "./bundle.mjs";
+import { runTauri } from "./bundle.mjs";
 
 // The system `tar` (bsdtar) by path: its flags below are bsdtar's, and a GNU `tar` earlier on the PATH rejects them.
 const TAR = "/usr/bin/tar";
@@ -34,9 +34,10 @@ export function createUpdateArchive(app) {
   return archive;
 }
 
-// Signs the update archive with the update key from `TAURI_SIGNING_PRIVATE_KEY` (the key file's path or the key
-// itself) and, when the key has a password, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, by `tauri signer sign`: the one step
-// that reads the key. It writes `<archive>.sig` and returns its path. For a key made with an empty password the
+// Signs the update artifact (the archive, or on Windows the NSIS `setup.exe`) with the update key from
+// `TAURI_SIGNING_PRIVATE_KEY` (the key file's path or the key itself) and, when the key has a password,
+// `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, by `tauri signer sign`: the one step that reads the key. It writes
+// `<archive>.sig` and returns its path. For a key made with an empty password the
 // variable is set but empty, which the CLI counts as given (checked: it signs without prompting).
 export function signUpdateArchive(archive, version) {
   const key = process.env.TAURI_SIGNING_PRIVATE_KEY;
@@ -48,11 +49,7 @@ export function signUpdateArchive(archive, version) {
   };
   const keyArgs = existsSync(key) ? ["--private-key-path", key] : [];
   if (keyArgs.length > 0) delete env.TAURI_SIGNING_PRIVATE_KEY;
-  execFileSync(tauriBin, ["signer", "sign", ...keyArgs, "--app-version", version, archive], {
-    cwd: appDir,
-    env,
-    stdio: "inherit",
-  });
+  runTauri(["signer", "sign", ...keyArgs, "--app-version", version, archive], { env });
   // The signature was removed above, so its existence means this run wrote it.
   if (!existsSync(signature)) throw new Error(`\`tauri signer sign\` did not write ${signature}.`);
   return signature;

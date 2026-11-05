@@ -167,11 +167,15 @@ fn the_package_of_each_agent_holds_the_conversation() {
         if agent == AgentId::GROK {
             // The record was rewritten at a compaction: the summary stands in for the rest, and
             // the files holding the rest are named.
+            let segment = |n: u8| {
+                let separator = std::path::MAIN_SEPARATOR;
+                format!("{separator}compaction{separator}segment_00{n}.md\n")
+            };
             for expected in [
                 "most of the earlier conversation is in the files",
                 "### The agent's summary of the conversation before it compacted its history",
-                "/compaction/segment_000.md\n",
-                "/compaction/segment_001.md\n",
+                &segment(0),
+                &segment(1),
             ] {
                 assert!(
                     text.contains(expected),
@@ -316,7 +320,7 @@ fn each_branch_a_session_is_responsible_for_shows_its_worktree_head_and_changes_
     assert_eq!(
         feature.worktree,
         Worktree::CheckedOut {
-            path: std::fs::canonicalize(&checkout).unwrap(),
+            path: crate::hostfs::canonical(&checkout).unwrap(),
             uncommitted: Some(true)
         }
     );
@@ -403,11 +407,14 @@ fn a_package_is_written_whole_to_a_file_of_its_key_and_removed_with_it() {
     let path = write_in(&handoffs, "session-1", "the package").unwrap();
     assert_eq!(path, handoffs.join("session-1.md"));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "the package");
-    use std::os::unix::fs::PermissionsExt;
-    assert_eq!(
-        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
-        0o600
-    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
     assert_eq!(std::fs::read_dir(&handoffs).unwrap().count(), 1);
     write_in(&handoffs, "session-1", "again").unwrap();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "again");

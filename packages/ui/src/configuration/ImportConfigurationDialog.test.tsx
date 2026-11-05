@@ -111,8 +111,8 @@ it("groups the projects under a card for their console, with the console's name 
 
 /** Opens the warning mark inside `scope` the way a press from assistive technology does, gives the popover's
  * text and closes it again. */
-async function fallbackSentences(scope: Element): Promise<string> {
-  const mark = scope.querySelector<HTMLElement>("button[data-status-mark]")!;
+async function fallbackSentences(scope: Element, selector = "button[data-status-mark]"): Promise<string> {
+  const mark = scope.querySelector<HTMLElement>(selector)!;
   pressElement(mark);
   const dialog = document.body.querySelector(`[role="dialog"][aria-label="${mark.getAttribute("aria-label")}"]`)!;
   const sentences = dialog.textContent ?? "";
@@ -160,6 +160,37 @@ it("shows a row for every project with where it was found and the labelled paths
   expect(popover).toContain("The Codex account Personal is not set up here");
   // Leaving a project out places it nowhere: only the exported path is left to show.
   expect(fields("Notes")).toEqual({ "Exported path": "/Users/ana/Documents/Work/Clients/Northwind/Archive/2019/Quarterly-Reports/final-notes" });
+});
+
+it("tells a project whose path is from another operating system so, whatever else its row shows, and no other", async () => {
+  const foreign = (body: ClientRequestBody): Promise<Event> =>
+    body.type === "inspect_configuration"
+      ? Promise.resolve({
+        type: "configuration_inspected",
+        ...REVIEW,
+        consoles: REVIEW.consoles.map((c) => ({
+          ...c,
+          projects: c.projects.map((p) =>
+            p.name === "Notes" ? { ...p, path: "C:\\Users\\ana\\notes", foreign_path: true } : p.name === "Design System" ? { ...p, foreign_path: true } : p,
+          ),
+        })),
+      })
+      : reply(body);
+  await reviewing({ reply: foreign });
+  const notice = "The exported path was written on another operating system, so it cannot be used here.";
+  const note = (name: string) => `button[aria-label='Exported path of ${isolate(name)} cannot be used']`;
+  // One problem, one presentation: never a loose line in the row.
+  for (const name of ["Notes", "Design System", "Website", "Search API"]) expect(row(name).textContent).not.toContain(notice);
+  // Found nowhere: the not-found mark says why, with its remedy.
+  const notFound = await fallbackSentences(row("Notes"));
+  expect(notFound).toContain(notice);
+  expect(notFound).toContain("It is skipped unless you choose a directory for it.");
+  expect(notFound).not.toContain("No matching project folder was found.");
+  expect(row("Notes").querySelector(note("Notes"))).toBeNull();
+  // Cloned from its remote: a note after the exported path, with no remedy, as nothing more is needed.
+  expect(await fallbackSentences(row("Design System"), note("Design System"))).toBe(notice);
+  expect(row("Website").querySelector(note("Website"))).toBeNull();
+  expect(row("Search API").querySelector(note("Search API"))).toBeNull();
 });
 
 it("names only the missing project in its mark when no account of it is missing", async () => {
@@ -279,7 +310,7 @@ it("says what the document's keyboard shortcuts would do on this device", async 
   expect(settingLines()["Changed shortcuts"]).toEqual({
     badge: "Set to the file's",
     note: "1 of the file's shortcuts differs from the default. Shortcut changes apply only to this browser.",
-    values: ["Toggle focus mode: ⇧⌃K (now ⇧⌃F)"],
+    values: ["Toggle focus mode: CtrlShiftK (now CtrlShiftF)"],
   });
 });
 
@@ -308,7 +339,7 @@ it("replaces this device's keyboard shortcuts with the document's once the setti
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   await openTab("Application settings");
   const applied = resultSettingLines();
-  expect(applied["Changed shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Toggle focus mode: ⇧⌃K"] });
+  expect(applied["Changed shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Toggle focus mode: CtrlShiftK"] });
 });
 
 it("leaves this device's keyboard shortcuts alone unless the settings are included", async () => {
@@ -329,7 +360,7 @@ it("puts every shortcut back to its default when the document carries an empty s
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ quickCreate: QUICK_CREATE });
   await reviewingSettings({ text: withShortcuts({}), reply: echoing() });
-  expect(settingLines()["Changed shortcuts"]).toEqual({ badge: "Back to defaults", note: "Shortcut changes apply only to this browser.", values: ["New session with defaults: ⇧⌃N (now ⇧⌃J)"] });
+  expect(settingLines()["Changed shortcuts"]).toEqual({ badge: "Back to defaults", note: "Shortcut changes apply only to this browser.", values: ["New session with defaults: CtrlShiftN (now CtrlShiftJ)"] });
   expect(text()).not.toContain("0 of them");
   await press("Import");
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
@@ -500,6 +531,16 @@ describe("the default clone directory", () => {
     expect(settingLines()["Default clone directory"]).toBeUndefined();
   });
 
+  it("says a directory written on another operating system is not used here, with no choice to make", async () => {
+    const foreign = { ...REVIEW, settings: { ...REVIEW.settings!, default_clone_dir: null, foreign_default_clone_dir: true } };
+    await reviewingSettings({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...foreign }) : reply(body)) });
+    expect(settingLines()["Default clone directory"]).toEqual({
+      badge: "No change",
+      note: "The file's default clone directory was written on another operating system, so it cannot be used here. The current default clone directory is kept.",
+    });
+    expect(cloneBox()).toBeUndefined();
+  });
+
   describe("the targets the review offers", () => {
     // "Search API" is found under this machine's clone directory only, "Dotfiles" under the file's only.
     const inspecting = (body: ClientRequestBody) => {
@@ -598,7 +639,7 @@ describe("the accounts region on opening", () => {
     await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve<Event>({ type: "configuration_inspected", ...REVIEW, accounts }) : reply(body)) });
     return regionBox("Accounts").checked;
   };
-  const rows = [{ name: "Work", directory: "~/.work", proposed_directory: "/Users/dev/.work", status: "new" as const, in_use_by: null, error: null, disabled: false }];
+  const rows = [{ name: "Work", directory: "~/.work", foreign_directory: false, proposed_directory: "/Users/dev/.work", status: "new" as const, in_use_by: null, error: null, disabled: false }];
 
   it.each([
     ["an agent to add", { agents_to_add: ["codex" as const], agents: [], agent_settings: null }],

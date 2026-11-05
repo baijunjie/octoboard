@@ -14,6 +14,7 @@ import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { replaceOverrides, shortcutOverrides, type Overrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
 import { applyClientSettings, clientSettingsOf, clientSettingValues, documentClientSettings, type ClientSettings } from "./clientSettings";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { fileFailure } from "./failureText";
 import {
   accountResolutionsOf,
@@ -116,7 +117,8 @@ function checkedOnOpening(inspection: Inspection): Record<Region, boolean> {
 export function ImportConfigurationDialog({ onClose }: { onClose: () => void }): React.ReactElement {
   const t = useT();
   const { request, onImportProgress } = useDaemon();
-  const { configurationFile, backgroundRun } = usePlatform();
+  const { style } = useHostPaths();
+  const { configurationFile, backgroundRun, host } = usePlatform();
   const { choice: appearance, setChoice: setAppearance } = useOctoboardTheme();
   const language = useCurrentLanguage();
   const markdown = markdownStyle.useValue();
@@ -248,8 +250,8 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     if (regions.length === 0) return;
     const importingConsoles = regions.includes("consoles");
     const creatingAccounts = regions.includes("accounts") && !!accounts;
-    const consolesProblem = importingConsoles && hasDirectoryProblem(review);
-    const accountsProblem = creatingAccounts && hasAccountDirectoryProblem(accountReview);
+    const consolesProblem = importingConsoles && hasDirectoryProblem(review, style);
+    const accountsProblem = creatingAccounts && hasAccountDirectoryProblem(accountReview, style);
     if (!attempt(consolesProblem || accountsProblem ? "directory" : undefined)) {
       setTab(consolesProblem ? "consoles" : "accounts");
       setStopped((count) => count + 1);
@@ -285,7 +287,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       // The daemon applied the settings it knows and echoed the ones it passes through, which are this client's own
       // to apply: it does so only for what the daemon says it applied.
       const carried = shortcutsRecord(result.settings_applied?.keyboard_shortcuts);
-      const applied = carried && replaceOverrides(carried);
+      const applied = carried && replaceOverrides(carried, host);
       const clientApplied = clientSettingsOf(result.settings_applied, { backgroundRun: backgroundRun !== undefined });
       applyClientSettings(clientApplied, setAppearance);
       setStage({ kind: "result", result, shortcuts: applied, clientSettings: clientApplied });
@@ -357,7 +359,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
             onChecked={(region, on) => changeBasis({ ...checked, [region]: on }, useCloneDir)}
             tab={tab}
             onTab={setTab}
-            shortcuts={shortcuts && shortcutsReview(shortcuts, currentShortcuts)}
+            shortcuts={shortcuts && shortcutsReview(shortcuts, currentShortcuts, host)}
             clientSettings={clientSettings}
             cloneDir={{ use: useCloneDir, onUse: (use) => changeBasis(checked, use) }}
             shown={shown}

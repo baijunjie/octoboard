@@ -1,11 +1,11 @@
 //! Switching a project's own worktree to an existing local branch at the user's request.
 
-use std::ffi::{OsStr, OsString};
-use std::os::unix::ffi::OsStrExt;
+use std::ffi::OsString;
 use std::path::Path;
 
 use crate::git::layout::is_git_repo;
 use crate::git::run::WorkDir;
+use crate::platform::names;
 use crate::project_git::header;
 use crate::project_git::project_git;
 use crate::protocol::{error_code, CodedError, Project};
@@ -86,7 +86,8 @@ fn switch_args(branch: &str) -> Result<Vec<OsString>, String> {
         "switch".into(),
         "--no-guess".into(),
         "--".into(),
-        OsStr::from_bytes(name.as_bytes()).to_owned(),
+        names::name_from_bytes(name.as_bytes())
+            .ok_or_else(|| "the local branch name is invalid.".to_string())?,
     ])
 }
 
@@ -153,6 +154,19 @@ mod tests {
         assert!(run(&repo, "feature").is_err());
         assert_eq!(git(&repo, &["branch", "--show-current"]), b"main\n");
     }
+    /// A branch name `git` takes is switched to whatever this host could name as a file:
+    /// Windows has no file `CON` or `a|b`, yet such a branch arrives in packed refs.
+    #[test]
+    fn a_branch_name_the_host_cannot_name_as_a_file_is_still_switched_to() {
+        for branch in ["feature/CON", "a|b", "x<y"] {
+            let args = switch_args(branch).expect("a git branch name is accepted");
+            assert_eq!(
+                args.last().map(OsString::as_os_str),
+                Some(std::ffi::OsStr::new(branch))
+            );
+        }
+    }
+
     #[test]
     fn only_literal_local_refs_can_be_selected() {
         let repo = repo_with("switch-validation", &[(b"a", b"one")]);

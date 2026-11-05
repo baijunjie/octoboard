@@ -3,10 +3,9 @@ use super::*;
 /// Records a look at `path` as still stuck for as long as `stuck` lives, so the path counts as one
 /// whose look outran its deadline.
 fn stall(state: &AppState, path: &Path, stuck: &Arc<()>) {
-    state.directory_looks.record(
-        crate::hostfs::lexically_normalise(path),
-        Arc::downgrade(stuck),
-    );
+    state
+        .directory_looks
+        .record(crate::hostfs::lexical_key(path), Arc::downgrade(stuck));
 }
 
 /// [`project::plan`] of `p1`'s removal, on a blocking thread as the daemon runs it.
@@ -29,7 +28,7 @@ async fn worktree_stands(
     sessions: &[Session],
     root: &Path,
 ) -> (SessionBranchState, Option<String>) {
-    let path = wire_path::encode(root.as_os_str().as_bytes());
+    let path = wire_path::encode(&crate::platform::names::name_bytes(root.as_os_str()));
     let item = fixture
         .inspect(sessions)
         .await
@@ -42,7 +41,7 @@ async fn worktree_stands(
 /// How a project's removal with its folder lists the worktree at `root`: the item, `None` where it
 /// is not listed.
 async fn removal_lists(fixture: &Fixture, root: &Path) -> Option<SessionBranchItem> {
-    let path = wire_path::encode(root.as_os_str().as_bytes());
+    let path = wire_path::encode(&crate::platform::names::name_bytes(root.as_os_str()));
     plan_now(&fixture.state, project::Reads::Inspection, Vec::new())
         .await?
         .items()
@@ -67,7 +66,7 @@ fn is_untold(item: &SessionBranchItem) -> bool {
 async fn a_worktree_holding_another_projects_folder_by_another_path_is_never_removed() {
     let fixture = Fixture::new("cleanup-holds-other");
     let archived = [fixture.store("s1", SessionStatus::Archived)];
-    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
     std::fs::create_dir(root.join("inner")).unwrap();
 
     let mut spellings = Vec::new();
@@ -77,15 +76,12 @@ async fn a_worktree_holding_another_projects_folder_by_another_path_is_never_rem
         None => {}
     }
     let link = fixture.worktrees.join("link");
-    std::os::unix::fs::symlink(&root, &link).unwrap();
+    crate::test_support::symlink(&root, &link).unwrap();
     spellings.push(("link", link.join("inner")));
     let name = root.file_name().unwrap().to_string_lossy().to_uppercase();
     let respelled = root.with_file_name(name);
-    let identity = |path: &Path| {
-        std::fs::metadata(path)
-            .ok()
-            .map(|m| crate::hostfs::identity::raw(&m))
-    };
+    let identity =
+        |path: &Path| crate::platform::fs::identity(path, crate::platform::fs::Links::Follow).ok();
     if identity(&respelled) == identity(&root) {
         spellings.push(("case", respelled.join("INNER")));
     } else {
@@ -116,7 +112,7 @@ async fn a_worktree_holding_another_projects_folder_by_another_path_is_never_rem
 async fn a_worktree_whose_holding_cannot_be_told_is_kept_and_reported() {
     let fixture = Fixture::new("cleanup-holds-untold");
     let archived = [fixture.store("s1", SessionStatus::Archived)];
-    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
     let elsewhere = fixture.worktrees.join("elsewhere");
     std::fs::create_dir(&elsewhere).unwrap();
     other_project_at(&fixture.state, &elsewhere);
@@ -191,7 +187,7 @@ async fn a_worktree_whose_holding_cannot_be_told_is_kept_and_reported() {
 async fn another_project_with_nothing_there_or_unreadable_is_compared_by_its_text() {
     let fixture = Fixture::new("cleanup-holds-text");
     let archived = [fixture.store("s1", SessionStatus::Archived)];
-    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
     let stands = |path: PathBuf| {
         let (fixture, archived, root) = (&fixture, &archived, &root);
         async move {
@@ -207,23 +203,26 @@ async fn another_project_with_nothing_there_or_unreadable_is_compared_by_its_tex
         clear
     );
 
-    if unsafe { libc::geteuid() } != 0 {
-        use std::os::unix::fs::PermissionsExt;
-        let elsewhere = std::fs::canonicalize(&*fixture.worktrees).unwrap();
-        let locked = [root.join("locked"), elsewhere.join("locked")];
-        for path in &locked {
-            std::fs::create_dir_all(path.join("project")).unwrap();
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    #[cfg(unix)]
+    {
+        if unsafe { libc::geteuid() } != 0 {
+            use std::os::unix::fs::PermissionsExt;
+            let elsewhere = crate::hostfs::canonical(&*fixture.worktrees).unwrap();
+            let locked = [root.join("locked"), elsewhere.join("locked")];
+            for path in &locked {
+                std::fs::create_dir_all(path.join("project")).unwrap();
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o000)).unwrap();
+            }
+            let inside = stands(locked[0].join("project")).await;
+            let outside = stands(locked[1].join("project")).await;
+            for path in &locked {
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+                std::fs::remove_dir_all(path).unwrap();
+            }
+            assert_eq!((inside, outside), (held, clear));
+        } else {
+            eprintln!("skipped the unreadable paths: root reads a folder whatever its permissions");
         }
-        let inside = stands(locked[0].join("project")).await;
-        let outside = stands(locked[1].join("project")).await;
-        for path in &locked {
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-            std::fs::remove_dir_all(path).unwrap();
-        }
-        assert_eq!((inside, outside), (held, clear));
-    } else {
-        eprintln!("skipped the unreadable paths: root reads a folder whatever its permissions");
     }
 
     let sibling = fixture.worktrees.join("mine-2");
@@ -243,7 +242,7 @@ async fn a_removal_after_an_inspection_that_held_a_worktree_back_leaves_it() {
         let fixture = Fixture::new(&format!("cleanup-held-back-{with_token}"));
         let state = &fixture.state;
         fixture.store("s1", SessionStatus::Archived);
-        let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+        let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
         let elsewhere = fixture.worktrees.join("elsewhere");
         std::fs::create_dir(&elsewhere).unwrap();
         other_project_at(state, &elsewhere);
@@ -304,7 +303,7 @@ async fn a_retried_removal_still_holds_back_what_its_inspection_held_back() {
     let fixture = Fixture::new("cleanup-held-back-retry");
     let state = &fixture.state;
     fixture.store("s1", SessionStatus::Archived);
-    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
     let elsewhere = fixture.worktrees.join("elsewhere");
     std::fs::create_dir(&elsewhere).unwrap();
     other_project_at(state, &elsewhere);
@@ -373,7 +372,7 @@ async fn a_removal_that_cannot_run_git_keeps_why_it_held_a_worktree_back() {
     let fixture = Fixture::new("cleanup-held-back-no-git");
     let state = &fixture.state;
     fixture.store("s1", SessionStatus::Archived);
-    let held = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let held = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
     fixture.worktree("going", "s1");
     let elsewhere = fixture.worktrees.join("elsewhere");
     std::fs::create_dir(&elsewhere).unwrap();
@@ -390,7 +389,7 @@ async fn a_removal_that_cannot_run_git_keeps_why_it_held_a_worktree_back() {
     });
     let left =
         project::carry_out_once_stopped(state.clone(), Vec::new(), removal, Vec::new()).await;
-    let path = wire_path::encode(held.as_os_str().as_bytes());
+    let path = wire_path::encode(&crate::platform::names::name_bytes(held.as_os_str()));
     let (kept, others): (Vec<_>, Vec<_>) = left
         .iter()
         .partition(|item| item.path.as_deref() == Some(path.as_str()));
@@ -412,7 +411,7 @@ async fn a_removal_leaves_a_worktree_that_came_to_hold_a_project_folder_after_it
     let folder = fixture.worktree("folder", "s1");
     insert_project(&fixture.state, &folder);
     fixture.store("s1", SessionStatus::Archived);
-    let outside = std::fs::canonicalize(fixture.worktree("outside", "s1")).unwrap();
+    let outside = crate::hostfs::canonical(fixture.worktree("outside", "s1")).unwrap();
     let removal = plan_now(&fixture.state, project::Reads::Removal, Vec::new())
         .await
         .unwrap();
@@ -447,7 +446,7 @@ async fn a_removal_holds_back_a_worktree_it_can_no_longer_tell_about() {
     let folder = fixture.worktree("folder", "s1");
     insert_project(&fixture.state, &folder);
     fixture.store("s1", SessionStatus::Archived);
-    let outside = std::fs::canonicalize(fixture.worktree("outside", "s1")).unwrap();
+    let outside = crate::hostfs::canonical(fixture.worktree("outside", "s1")).unwrap();
     let elsewhere = fixture.worktrees.join("elsewhere");
     std::fs::create_dir(&elsewhere).unwrap();
     other_project_at(&fixture.state, &elsewhere);
@@ -480,7 +479,7 @@ async fn a_removal_holds_back_a_worktree_it_can_no_longer_tell_about() {
 async fn a_worktree_holding_another_projects_repository_is_never_removed() {
     let fixture = Fixture::new("cleanup-holds-repository");
     let archived = [fixture.store("s1", SessionStatus::Archived)];
-    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
     let nested = root.join("nested");
     std::fs::create_dir(&nested).unwrap();
     git(&nested, &["init", "-q", "-b", "main"]);
@@ -513,7 +512,7 @@ async fn a_worktree_holding_another_projects_repository_is_never_removed() {
 async fn a_worktree_inside_another_projects_folder_goes() {
     let fixture = Fixture::new("cleanup-inside-other");
     let archived = [fixture.store("s1", SessionStatus::Archived)];
-    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
     other_project_at(&fixture.state, &fixture.worktrees);
     let left = fixture.remove(&archived, &[]).await;
     assert!(left.is_empty(), "{left:?}");
@@ -543,7 +542,7 @@ fn a_worktree_that_is_home_or_holds_octoboards_data_is_never_removed() {
     for case in ["home", "data"] {
         let fixture = Fixture::new(&format!("cleanup-protected-{case}"));
         let archived = [fixture.store("s1", SessionStatus::Archived)];
-        let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+        let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
         std::fs::create_dir(root.join("data")).unwrap();
         let elsewhere = fixture.worktrees.join("elsewhere");
         let (home, data) = match case {
@@ -587,7 +586,7 @@ fn a_worktree_is_kept_while_home_or_octoboards_data_cannot_be_looked_at() {
     ] {
         let fixture = Fixture::new(&format!("cleanup-unlooked-{case}"));
         let archived = [fixture.store("s1", SessionStatus::Archived)];
-        let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+        let root = crate::hostfs::canonical(fixture.worktree("mine", "s1")).unwrap();
         let (home, data) = (
             fixture.worktrees.join("home"),
             fixture.worktrees.join("data"),
@@ -624,7 +623,7 @@ fn a_projects_removal_never_takes_a_worktree_that_is_home() {
     let folder = fixture.worktree("folder", "s1");
     insert_project(&fixture.state, &folder);
     fixture.store("s1", SessionStatus::Archived);
-    let outside = std::fs::canonicalize(fixture.worktree("outside", "s1")).unwrap();
+    let outside = crate::hostfs::canonical(fixture.worktree("outside", "s1")).unwrap();
     let (elsewhere, data) = (
         fixture.worktrees.join("home"),
         fixture.worktrees.join("data"),

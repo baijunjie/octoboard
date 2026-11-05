@@ -20,7 +20,9 @@ use super::moves::{
 };
 use super::registries;
 use super::take_back::{take_back, Conversation};
-use crate::accounts::shared_config::items::{shared_items, ItemClass, ItemKind, SharedItem};
+use crate::accounts::shared_config::items::{
+    catalogued_items, shared_items, ItemClass, ItemKind, SharedItem,
+};
 use crate::accounts::thread_registry::{thread_registry, Repoint, ThreadRegistry};
 use crate::protocol::{AgentId, SharingCause, SharingItemFailure, SharingLeft};
 
@@ -76,7 +78,7 @@ impl Dirs {
     /// an account that has never run; otherwise a missing account directory is `None`, there
     /// being nothing in it to bring in line.
     pub fn new(account: &Path, default: &Path, create: bool) -> Result<Option<Self>, DirsError> {
-        let default = std::fs::canonicalize(default).map_err(|err| {
+        let default = crate::hostfs::canonical(default).map_err(|err| {
             io::Error::new(
                 err.kind(),
                 format!("the default directory `{}`: {err}", default.display()),
@@ -335,7 +337,7 @@ fn bring_in(
     // From here the account's own entry is what is in the way.
     let mut left = SharingLeft::Unchanged;
     if sharing_link {
-        std::fs::remove_file(&entry).map_err(unchanged)?;
+        crate::platform::fs::remove_file_or_link(&entry).map_err(unchanged)?;
         left = SharingLeft::Absent;
     } else if is_link(&present) {
         std::fs::rename(&entry, backup_path(&entry, stamp)).map_err(unchanged)?;
@@ -569,7 +571,7 @@ fn take_out(item: &SharedItem, dirs: &Dirs, stamp: &str) -> Result<(), SharingIt
         };
     match &present {
         Some(_) if is_link(&present) && (has_backup || is_sharing_link(&entry, item, dirs)) => {
-            std::fs::remove_file(&entry)
+            crate::platform::fs::remove_file_or_link(&entry)
                 .map_err(|err| SharingItemFailure::io(item, SharingLeft::Linked, err))?;
         }
         // The account's own entry, or a link of the user's.
@@ -596,7 +598,8 @@ pub(super) struct Repaired {
     pub failures: Vec<SharingItemFailure>,
     /// Thread databases in the account's directory that the catalog does not name: a provider
     /// that moved to a new schema generation creates one of its own in every account, and from
-    /// then on the shared database is no longer used.
+    /// then on the shared database is no longer used. A database the catalog names but this host
+    /// does not share is the account's own by design, and not among them.
     pub unshared_databases: Vec<PathBuf>,
 }
 
@@ -608,7 +611,7 @@ pub(super) struct Repaired {
 pub(super) fn repair(agent: AgentId, dirs: &Dirs, stamp: &str) -> Repaired {
     let mut failures = Vec::new();
     let threads = thread_registry(agent);
-    for item in shared_items(agent) {
+    for item in &shared_items(agent) {
         let entry = dirs.account.join(item.name);
         let present = match lstat(&entry) {
             Ok(present) => present,
@@ -644,7 +647,7 @@ pub(super) fn repair(agent: AgentId, dirs: &Dirs, stamp: &str) -> Repaired {
 }
 
 fn unshared_databases(agent: AgentId, dirs: &Dirs, threads: &dyn ThreadRegistry) -> Vec<PathBuf> {
-    let catalogued: Vec<&str> = shared_items(agent)
+    let catalogued: Vec<&str> = catalogued_items(agent)
         .iter()
         .filter(|item| item.class == ItemClass::ThreadDatabase)
         .map(|item| item.name)

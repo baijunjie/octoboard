@@ -10,13 +10,14 @@ import { TEST_AGENTS } from "./test/testProviders";
 import { DaemonProvider, type State } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { WelcomeScreen } from "./WelcomeScreen";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** A platform that can save and open a file, which is what puts the import action on the screen. */
-const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", configurationFile: { save: vi.fn(), open: vi.fn() } };
+const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", host: BROWSER_HOST, configurationFile: { save: vi.fn(), open: vi.fn() } };
 
-function mount(onOpenDialog = vi.fn(), state: Partial<State> = {}, platform: PlatformAdapter = { kind: "browser" }): HTMLElement {
+function mount(onOpenDialog = vi.fn(), state: Partial<State> = {}, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }): HTMLElement {
   const daemon = testDaemon({ state, request: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

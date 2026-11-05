@@ -200,6 +200,7 @@ mod tests {
             account_logins: vec![],
             account_sharing: vec![],
             home_dir: None,
+            host: crate::platform::HostFacts::current().into(),
             shell_terminals: vec![],
         })
         .unwrap();

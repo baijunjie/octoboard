@@ -9,6 +9,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errors/errorPresentation";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { createStateStore, DaemonProvider, errorNotification, type Daemon } from "../store";
+import { broadcastNotification } from "../store/notifications";
 import { testDaemon } from "../test/testDaemon";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -41,7 +42,7 @@ it.each(["model_change_did_not_stop", "model_change_did_not_come_up"])("names th
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]) }),
@@ -118,7 +119,7 @@ it("renders a coded shell timeout with a separate title and command while plain 
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -155,7 +156,7 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -184,7 +185,7 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -214,7 +215,7 @@ it("tells a failed automatic switch's user to copy out the older item it kept as
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -242,7 +243,7 @@ it("adds the remedy for what the system said to the copy-out advice of a failed 
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -271,7 +272,7 @@ it("adds the remedy for what the system said to a failed automatic switch with a
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -304,7 +305,7 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -334,7 +335,7 @@ it("sets the path of a coded daemon error as code in its acknowledgement dialog"
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -357,7 +358,7 @@ it("shows a coded notice under the session's location, the path as code in the d
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", undefined, "Hub", "idle")]]) }),
@@ -386,7 +387,7 @@ it.each<{ code: string; params: Record<string, string>; title: string; sentence:
   { code: "account_sharing_repair_failed", params: { account: "a1", name: "Work", items: "[]", cause: "permission_denied" }, title: "Could not repair sharing links", sentence: "You do not have permission to change the account’s directory.", raw: "plain fallback" },
 ])("shows a $code notice as an error alert, not a toast, its sentence the body and the system's text behind Error details, under a plain title", ({ code, params, title, sentence, raw }) => {
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", undefined, "Hub", "idle")]]) }),
@@ -421,7 +422,7 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -449,7 +450,7 @@ it("shows the error heading above a structured error's details when the alert ha
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const session = { id: "s1", console_id: "c1", project_id: "p1" } as unknown as import("../protocol").Session;
   const source: Daemon = {
     ...daemon,
@@ -481,7 +482,7 @@ it.each([
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({
@@ -520,7 +521,7 @@ it("titles a failed launch's alert for the failure, never with the session's nam
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({
@@ -561,7 +562,7 @@ it("titles the toast of an automatic account switch with the session's project a
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
     ...daemon,
     store: createStateStore({
@@ -592,7 +593,7 @@ it("preserves a failed launch's name and nested path, and renders rich notices f
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
-  let deliver!: (request: import("../store").NotificationRequest) => void;
+  let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -615,4 +616,75 @@ it("preserves a failed launch's name and nested path, and renders rich notices f
     act(() => root.unmount());
     container.remove();
   }
+});
+
+/** Mounts the toasts and the alert over a daemon whose notifications `deliver` sends, and gives the daemon's two
+ * broadcasts about a session's `code` as notifications. */
+function mountForWithdrawal() {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").WindowNotification) => void;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")], ["s2", sessionOf("s2", "c1", "p1", "Add filters", "idle")]]) }),
+    onNotification: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+  onTestFinished(() => {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  });
+  const state = source.store.getState();
+  return {
+    notice: (session: string, code = "message_not_sent") => act(() => deliver(broadcastNotification({ type: "session_notice", session, code, params: {}, message: "raw" }, state, "en"))),
+    withdraw: (session: string, code = "message_not_sent") => act(() => deliver(broadcastNotification({ type: "session_notice_withdrawn", session, code }, state, "en"))),
+  };
+}
+const shownAlert = () => document.querySelector('[role="alertdialog"]');
+
+it("closes the shown alert of a notice the daemon withdraws, and shows the one queued behind it", () => {
+  const { notice, withdraw } = mountForWithdrawal();
+  notice("s1");
+  notice("s2");
+  expect(shownAlert()?.textContent).toContain("Fix login");
+  withdraw("s1");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(shownAlert()?.textContent).toContain("Add filters");
+  withdraw("s2");
+  expect(errorAlerts.getSnapshot()).toHaveLength(0);
+  expect(shownAlert()).toBeNull();
+});
+
+it("takes a queued alert out of the queue when its notice is withdrawn, leaving the one shown", () => {
+  const { notice, withdraw } = mountForWithdrawal();
+  notice("s1");
+  notice("s2");
+  withdraw("s2");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(shownAlert()?.textContent).toContain("Fix login");
+});
+
+it("leaves the alerts of another session or another code alone when a notice is withdrawn", () => {
+  const { notice, withdraw } = mountForWithdrawal();
+  notice("s1");
+  notice("s1", "queued_messages_dropped");
+  withdraw("s2");
+  withdraw("s1", "draft_save_unconfirmed");
+  expect(errorAlerts.getSnapshot()).toHaveLength(2);
+  expect(shownAlert()?.textContent).toContain("Fix login");
+});
+
+it("ignores the withdrawal of a notice nothing shows, and of one already acknowledged", () => {
+  const { notice, withdraw } = mountForWithdrawal();
+  withdraw("s1");
+  expect(errorAlerts.getSnapshot()).toHaveLength(0);
+  notice("s1");
+  act(() => errorAlerts.acknowledge());
+  withdraw("s1");
+  expect(errorAlerts.getSnapshot()).toHaveLength(0);
+  expect(document.querySelector('[data-slot="toast-title"]')).toBeNull();
 });

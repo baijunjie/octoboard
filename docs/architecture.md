@@ -21,7 +21,7 @@ the retention and cleanup of session data follows each agent's own rules.
 
 Octoboard is deployed in one of two forms, and the other documents name them as here:
 
-- **The desktop form**: the macOS application. The window, the daemon and the projects are on one machine, used by
+- **The desktop form**: the macOS and Windows applications. The window, the daemon and the projects are on one machine, used by
   one person, and the daemon starts and stops with the application.
 - **The server form**: the daemon alone, on a machine without a display — a Linux server, Ubuntu say — started and
   kept running there, listening on a port, and reached by its owner from a browser on another machine over the
@@ -104,7 +104,7 @@ with no status and no automatic reporting.
 A client — the desktop application's window, or a browser — is only that: it renders terminals, shows status and
 forwards input.
 
-The UI is not part of the desktop shell. It is its own package, built once, which the macOS shell bundles and loads and
+The UI is not part of the desktop shell. It is its own package, built once, which the desktop shell bundles and loads and
 which also runs in a plain browser; that is what the server form rests on — a Linux server has no shell and offers the
 same UI to a browser. To keep one build working in both places, the UI reaches native capabilities (the quit flow and
 exit heartbeat, system notifications, the Dock badge, the native window's own appearance and visibility, the window
@@ -160,14 +160,103 @@ confirmations, settings and sessions would each need an owner and an authorizati
 | Layer | Choice | Why |
 |---|---|---|
 | Daemon | Rust + `tokio` | A single binary that can be deployed straight to a Linux server, which is the whole server form. |
-| PTY | `portable-pty` | From the WezTerm project, cross-platform. |
+| PTY | `portable-pty` on Unix; a pseudoconsole (ConPTY) backend of the daemon's own on Windows | `portable-pty` is from the WezTerm project. On Windows it gives no process handle before the process runs and takes no second thread attribute, so the process could not be placed in its job before its first instruction (see "Running on more than one operating system"). |
 | MCP server | `rmcp` | A stdio child process per session, bridging to the daemon over loopback HTTP; see below. |
-| Desktop application | Tauri 2 | The daemon ships as a sidecar; native macOS APIs are callable from the Rust side. |
+| Desktop application | Tauri 2 | The daemon ships as a sidecar; native macOS and Windows APIs are callable from the Rust side. |
 | Frontend | React + HeroUI + Tailwind CSS + TypeScript, state in a Zustand store | One component library for the whole UI; a vanilla Zustand store can be read and subscribed to outside React. |
 | Terminal | `xterm.js` | macOS cannot embed a Terminal.app or iTerm window in another application; PTY + `xterm.js` is the standard approach and terminal compatibility is its job. |
 | Report panel | sandboxed iframe (`srcdoc`) + `postMessage` | Independent of the desktop framework. |
 | File viewer | `@pierre/diffs` (Shiki on its JavaScript regex engine) | One library for files and diffs; loads offline in the packaged WebView under the app's CSP, no WebAssembly. Behind an application-owned interface. |
 | Storage | SQLite (`rusqlite`, coordinator side) | — |
+
+## Running on more than one operating system
+
+The desktop form runs on macOS and Windows and the server form on Linux, from one daemon code base. These decisions keep
+it that way, with the reasons that are not visible in the code.
+
+- **Every OS-specific token lives under the daemon's `platform` layer**, and under per-platform modules of the desktop
+  crate; a test enforces it (`docs/structure/daemon.md`, "OS-specific tokens"). Scattered OS code cannot be audited, and
+  a rule a test can check cannot erode. The Windows port was built by moving each piece behind a neutral signature on
+  macOS first with behaviour unchanged, so the existing suites verified each extraction on a platform that already
+  worked, and with a Windows compile check from the first step, so the signatures were shaped against a real second
+  target before any Windows code was written.
+- **Business code branches on a declared fact, never on the OS.** Where behaviour must differ by host, the platform
+  layer states a fact and business code reads it, the rule providers already follow with declared capabilities:
+  `HostFacts` (the host's OS, path style, file links and the words it uses) goes to clients in the snapshot, the desktop
+  shell reports the client's own to the UI, and `TermFacts` describes the terminal backend. A fact belongs to whatever
+  decides, which need not be the OS: `TermFacts` is the facts of the console host that started, because Windows has two
+  of them. A needed branch on the OS in business code means the platform signature was wrong, and the signature is what
+  gets fixed.
+- **A trait appears only where a test needs a fake.** Platform modules are chosen at module level, as the process-table
+  reader always was, so a platform has no dynamic dispatch and no second implementation to keep in step.
+- **Semantics over bytes.** Where the host renders the stream (Windows' system console host), terminal state is read
+  from the parsed screen, the title event and the agent's hooks, and where the stream is the program's own bytes each
+  reader keeps what it reads today. The daemon's own writes into a terminal are semantic inputs (a paste, a key) that
+  each backend encodes. The stream of the system's console host is its repaint of a screen, not the program's bytes:
+  titles collapse and repeats drop, the alternate screen is not passed, frames between two paints are lost, and a phrase
+  is split by cursor moves, so only the parsed screen holds what is drawn.
+- **One normalisation point per boundary for paths.** Paths on the wire are made and validated in one place
+  (`platform::names`); an absolute path of the daemon's host travels in that host's native spelling with the host's path
+  style announced once in the snapshot, and clients only show it or split it for display; the UI has one path module. A
+  name is its bytes in the host's native encoding, which on Windows is the WTF-8 of the UTF-16 name, so a name with an
+  unpaired surrogate survives the trip. A Windows host shows full paths and never `~`: it is a PowerShell habit that
+  Windows' own tools do not share.
+- **The data directory is `%USERPROFILE%\.octoboard` on Windows**, the same place relative to the home as `~/.octoboard`
+  elsewhere. The agents keep `~/.claude` and `~/.codex` under the home on Windows too, so one rule covers every host and
+  nothing is split between `%APPDATA%` and `%LOCALAPPDATA%`.
+- **The Windows window uses the system's title bar and frame, and has no application menu.** The native frame gives
+  snap, maximise and accessibility for free (an overlay variant is polish that is not scheduled). Settings, About and
+  Quit are reachable from the rail and the notification-area menu, whose plain text items come from the same model as
+  the macOS menu bar icon's, and the shortcuts are registered by the page, which also handles them wherever there is no
+  native menu.
+- **Windows 10 21H2 is the floor and Windows 11 the verified target.** ConPTY needs Windows 10 1809 and WebView2
+  Evergreen is required. Windows 11 is where the ConPTY behaviours the terminal layer depends on were fixed and
+  measured, and the bundled console host (below) is what takes the terminal's behaviour out of the OS version's hands.
+  Nothing was measured on Windows 10 or on x64 hardware. Windows builds are x64 only, and on Windows on Arm the app and
+  the daemon run under emulation. Git for Windows is a requirement, since both Claude Code and Codex need it for their
+  own shell tooling and Octoboard's git hooks run under its `sh`.
+- **Windows is checked from a Mac and on a Windows runner.** `pnpm check:windows` cross-checks both crates through
+  `cargo xwin` against the MSVC target, and the `windows-check` job of `quality.yml` lints and tests them natively on
+  `windows-latest`; a `windows-bundle` job builds the unsigned installer as the release builds it. Spikes and debugging
+  run in a Windows 11 virtual machine, and a native x64 machine is what a release is spot-checked on.
+
+### The two Windows console hosts
+
+The daemon bundles Windows Terminal's `conpty.dll` and `OpenConsole.exe` (MIT-licensed, as VS Code and WezTerm do) and
+loads them from beside its executable, with the system's pseudoconsole as the fallback. The system's host changes
+behaviour from one Windows version to the next, and the bundled one passes the program's own bytes through, so every
+reader that works on the byte stream elsewhere works unchanged. The two hosts need opposite `TermFacts`, which are
+decided once from the files present before any terminal starts:
+
+- The **system's host** (`conhost.exe`) repaints: its paints come about every 16 ms and the frames between are dropped,
+  the alternate screen (1049) is not passed, a title becomes OSC 0 with repeats dropped and, before the program sets
+  one, the program's path, and it answers device-attribute, status and cursor-position queries itself. A resize repaints
+  the screen, and `ClosePseudoConsole` blocks while its output pipe is not drained. This is the fallback, read off the
+  parsed screen.
+- The **bundled host** is byte-identical and in order, one read per program write. It forwards every query to the output
+  and holds the console, about half a second for each, until it is answered; its own start-up queries and its requests
+  for focus events and win32 input mode (`ESC[1t ESC[c ESC[?1004h ESC[?9001h`, sent again after a program turns them
+  off) are for the client side. A query nobody answers stalls the agent, and Codex then loses the submit of every
+  message sent to it, so while no client is attached the daemon answers the device attributes and the cursor position
+  from its own emulator (`TermFacts::host_waits_on_queries`), and with one attached it leaves the answer to that client.
+- A `conpty.dll` with no `OpenConsole.exe` in its own directory or in the subdirectory named for the machine's native
+  architecture silently starts the system's host instead and behaves exactly as it. The daemon therefore looks at which
+  host it started and warns when it is not the one the facts were decided for. The layout the installer ships is in
+  `docs/structure/daemon.md`.
+
+### A polite stop on Windows
+
+A stop asks the agent to end before it ends it: the quit keys its provider declares, pressed through the terminal, then
+`ClosePseudoConsole` on a thread of its own, then each member of the launch's job terminated by handle, skipping what
+was kept and the console hosts, and never by `TerminateJobObject`, which would take the kept trees with it. The keys are
+part of the provider's description (`quit_keys` on the descriptor, not on the capabilities that go on the wire), so no
+provider's name appears in the shared stop path. They exist because closing the console is only a `CTRL_CLOSE_EVENT`,
+which Claude Code answers with a polite exit (its partial reply flushed, `SessionEnd` fired) and Codex does not answer
+at all: it dies at once with no `SessionEnd`, no `turn_aborted` and the turn in flight lost, so Codex declares Ctrl-C
+twice, 650 ms apart, and a wait of six seconds ("Stopping an agent on a pseudoconsole" in
+`docs/agent-cli-reference.md`). `CTRL_BREAK_EVENT` is not sent: it behaves like the close, and it needs the daemon to
+attach to the console, which is process-wide state in a multi-threaded process. macOS ignores the keys and keeps its
+signal.
 
 ## Orchestration design decisions
 
@@ -290,9 +379,107 @@ Each has an established solution unless noted; any outstanding manual verificati
   overriding the application delegate. That selector is also how a logout, restart or shutdown arrives, with nothing to
   tell them apart, so holding a confirmation up in front of a logout is the unavoidable price of asking before the
   Dock's Quit.
-- **WebView differences.** Tauri uses the system WebView (WKWebView on macOS). There is no Linux shell to pick one:
+- **WebView differences.** Tauri uses the system WebView (WKWebView on macOS, WebView2 on Windows). There is no Linux shell to pick one:
   Linux is the server form, reached from whichever browser the user has, which the UI treats as a plain browser like
   any other.
+- **Windows refuses to replace or delete a file another process holds open.** Unless the holder opened it with
+  delete sharing, a rename over it or a removal fails with a sharing violation, where Unix would unlink the name and let
+  the holder keep its file. A dying process can hold its files a moment after it is reported gone, so cleanup that runs
+  at start (the data directory's `run/`) tolerates the violation and leaves the file for the next start, and code that
+  replaces a file in place must expect the failure on Windows rather than treat it as a broken disk.
+- **File links on Windows need Developer Mode or elevation.** A directory alias is a junction, which any user can make,
+  but a file symlink needs the `SeCreateSymbolicLinkPrivilege` that only Developer Mode or an elevated process grants.
+  The daemon probes once per run whether it can make one (`platform::fs::file_links_available`) and announces it as the
+  host's `file_links`; configuration sharing, which links files, is reported unavailable where it is false, and a
+  console's `CLAUDE.md` is written as the line `@AGENTS.md`, which Claude Code expands, instead of a link. A copy of the
+  text was rejected because Grok Build reads both names and loads two separate files twice; a hard link both for that
+  and because a replace-by-rename write breaks it silently. SQLite's Windows layer names a database's `-wal` and
+  `-shm` from the path as given, so a database opened through a file link and through its target keeps two logs and
+  loses writes; Windows therefore never shares a database through a link (`SQLITE_FOLLOWS_FILE_ALIASES`).
+- **Agents keep their credentials in the Keychain on macOS and in a file on Windows.** Claude Code on Windows stores its
+  OAuth tokens in `.credentials.json` under its configuration directory rather than in a system credential store, so
+  on Windows an account's configuration directory carries its login, and what is shared or copied between accounts
+  there is a credential.
+- **A Windows launch's processes are held in a named job without kill-on-close.** Each launch's processes are
+  members of a job object named for the launch, which is how the daemon lists and stops them (Windows has no process
+  group to signal, and another process's environment cannot be read cheaply). Kill-on-close was rejected because a
+  process cannot leave a job, so the kept and carried-over process trees would die whenever the daemon exits. A job's
+  name disappears with its last handle, so the daemon duplicates the job's handle into each child it launches; a
+  restarted daemon reopens the job by name while such a member lives, and otherwise falls back to the ledger's process
+  id, creation time and parent chain.
+- **Closing a pseudoconsole is what ends its processes, and the host's pipe never ends by itself.** The console's output
+  pipe stays open after every process on it has exited, so the daemon closes the console itself once the process is gone
+  and a reader waiting for the end would wait for ever. The close blocks (the system's host) or leaves the host and its
+  processes alive (the bundled one) while output is unread, so it runs on a thread of its own with a drainer reading
+  meanwhile, and a reader is never paused or joined first. A closed console sends every process attached to it
+  `CTRL_CLOSE_EVENT`, which ends it however it is held (a process that handles the event is ended by the system after
+  about five seconds, the attached processes one by one). So a terminal launch does not survive the daemon, and neither
+  does a process an agent's tool starts on the agent's own console when its launch ends. Such a process is therefore
+  listed as not keepable (`process_shares_agent_console`), and only what a user starts on a console of its own can be
+  kept. A headless child gets a hidden console host of its own, which is a member of the launch's job, so a member list
+  holds console hosts.
+- **Input to a pseudoconsole never stalls, but it is slow, and some of it is changed on the way.** The host reads its
+  input pipe continuously and queues what it reads without a bound, so there is no macOS-style stall after a fixed
+  number of bytes; a writer is slowed instead (the system's host takes 0.24 to 0.75 MB/s, one 4 KiB write took up to 1.2
+  s), so a write has a deadline per slice rather than for the whole. A NUL byte is dropped on the way to a program. The
+  host hands a program that reads console input records, as Codex does, the paste's text as typed keys and an Enter
+  written behind it as one more key of the same burst, so the daemon writes the Enter apart, once the paste is drawn.
+  Win32 input mode sequences are never written: once one has been, the bundled host holds a lone Escape until the next
+  key and joins the two. And Windows' per-process "ignore Ctrl-C" flag is inherited, so a daemon started from a session
+  that set it (over ssh, say) would hand it to every terminal process, none of which would then raise `CTRL_C_EVENT` for
+  a written `0x03`; the daemon clears it on itself before its first terminal process, which also makes Ctrl-C on a
+  console of its own reach the daemon as a request to end.
+- **A daemon inside a kill-on-close job loses its launches when that job closes.** The job a terminal or a remote
+  session puts its programs in does, and nesting a launch's own jobs under it raises no error. A launch can leave it
+  only where the outer job allows breakaway and otherwise fails to start with access denied, so launches never ask for
+  it. The desktop app's sidecar is started with a hidden console of its own, because the daemon's group leaders share
+  the daemon's console. A job's `Local\` name is per logon session, so a process of another session does not find it.
+- **A Store PowerShell leaves the launch's job.** A PowerShell 7 installed from the Store is reached through an app
+  execution alias (a reparse point of tag `IO_REPARSE_TAG_APPEXECLINK` in `WindowsApps`). While any process of its
+  package runs for the user, creating it with the job list is refused as access denied, and what a packaged desktop app
+  starts leaves every job it is in (the desktop app breakaway). The daemon therefore creates such a shell, whichever
+  alias it is, suspended and without the job list, puts it in its jobs, and then lets it run, with the desktop app
+  policy `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_DISABLE_PROCESS_TREE` so that what the shell runs stays in them: the
+  shell is in its jobs before its first instruction, which keeps the busy reading and the end of the jobs whole. The
+  price is that what it runs carries PowerShell's package identity, which changed nothing visible in Git, Node, npm,
+  Claude Code, Codex or writes to `%APPDATA%`, `%LOCALAPPDATA%` and `HKCU\Software`, and where it did cause trouble the
+  fallback is to skip Store aliases for the login shell. Other routes were set aside: skipping the alias loses the
+  PowerShell the user installed, and starting the package's program around its activation is not what the alias starts.
+  The boundary is what the daemon does not start: a Store `pwsh` that an agent's tool or hook starts (the agent chooses
+  its PowerShell) is outside the launch's job with its descendants, and carries a package identity. Such a tree was
+  listed under the launch through its parent chain, ending the session ended it, and the next daemon after a kill of the
+  old one ended a surviving one. A tree whose chain to the agent breaks before any scan attributed it has nothing left
+  that ties it to the launch (no tag is read on Windows, and it is in no job of the launch), so it is neither listed nor
+  stopped; and the clean-up inside a panicking daemon reaches only job members.
+- **Git for Windows runs a hook through a fresh MSYS `sh`, so a commit pays for every hook, and every hook has the same
+  parent.** A commit runs 11 hooks (`pre-commit`, `prepare-commit-msg`, `commit-msg`, seven `reference-transaction`,
+  `post-commit`); a bare `sh -c 'exit 0'` costs about 40 ms there, a commit through Octoboard's dispatcher measured
+  about 0.7 s in the final run and 2.3 to 3.2 s in a loaded virtual machine, against 0.1 s with no hooks. A session
+  still registers the full hook set, as on macOS: naming only the hooks a session needs saves about 0.2 s (git runs
+  `reference-transaction` for 7 of the 11), and would silently skip the user's own hooks in other repositories an agent
+  touches and any hook installed after the launch. Because git for Windows' `git.exe` is not an MSYS process, `$PPID` is
+  1 in every hook of every repository, so the dispatcher cannot pair a transaction's `prepared` call with its
+  `committed` one by process id; it keys them on a hash of the working directory, `GIT_DIR` and the transaction's own
+  refs, and its completeness check turns away a pair two transactions wrote to. A hook that backgrounds the daemon's
+  recorder must redirect all three of its streams, as it does, or git, or a caller capturing git's output, waits for it.
+- **A Windows daemon is not told of a sign-out or a shutdown.** It handles Ctrl-C, Ctrl-Break and a closing console
+  (closing its window ends its children and it exits with code 0), but a process that has loaded `user32.dll` or
+  `gdi32.dll`, as the daemon has, is sent neither the logoff nor the shutdown notice (Microsoft's documentation of
+  `SetConsoleCtrlHandler` says so, and Windows 11 behaved as documented in a real logoff and a real shutdown). The
+  system ends the user's processes, the daemon's log shows no orderly stop, and the sidecar of the desktop app ends the
+  same way: whether it stopped its sessions in order cannot be shown. What is left is dealt with at the next start, as
+  after a crash ("Crashes and forced termination" in `docs/product/application-lifecycle.md`), and the process ledger's
+  start-up reconciliation stops the attributed processes its records name that are still running. A held update is not
+  installed at such an exit, and the next start offers it again.
+- **Reading another process on Windows is cheaper than it looks, and weaker.** A full scan of the same user's processes
+  (a toolhelp snapshot, the token's user, times and memory, the listening ports from `GetExtendedTcpTable`) costs 10 to
+  25 ms. A command line comes from `NtQueryInformationProcess(ProcessCommandLineInformation)`, which needs no read
+  access to the process and works across bitness and for an elevated process of the same user; a working directory needs
+  a read of the process parameters, which is denied for an elevated process to a daemon that is not elevated, so it is
+  unknown there. A process's environment is not read, so nothing is attributed by its tag and the job and the parent
+  chain do it; pids are reused and never reparented, so a parent must have started no later than its child.
+- **MSYS programs are slow through a pseudoconsole.** A Git for Windows `cat` of a large echo took 28 s for 4 MiB, with
+  one stall of 12.5 s, where a native echo through the same host took 0.6 s.
 - **End-to-end terminal latency was never measured.** Only the daemon-to-WebSocket path was (well under a
   millisecond); the time from key press to glyph on screen was not.
 - **PTY output backpressure.** Under heavy output the daemon's PTY reader must take backpressure from the broadcast

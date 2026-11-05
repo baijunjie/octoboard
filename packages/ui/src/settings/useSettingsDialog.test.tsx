@@ -1,17 +1,23 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { setFocusAfterModalLoss } from "../components/focus/modalFocus";
+import { browserHost } from "../platform/host";
 import { PlatformProvider } from "../platform/react";
-import type { UpdaterCapability } from "../platform";
+import type { PlatformAdapter, UpdaterCapability } from "../platform";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { useSettingsDialog } from "./useSettingsDialog";
+import { bindingFor, restoreAllBindings, setBinding } from "../shortcuts/store";
+import { eventKey, type Binding } from "../shortcuts/binding";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function mount(otherModalOpen: boolean, focusTerminal: () => void) {
+function mount(otherModalOpen: boolean, focusTerminal: () => void, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }) {
   let hook!: ReturnType<typeof useSettingsDialog>;
   function Probe() {
     hook = useSettingsDialog({ ready: true, otherModalOpen, focusTerminal });
@@ -19,7 +25,7 @@ function mount(otherModalOpen: boolean, focusTerminal: () => void) {
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={{ kind: "browser" }}><Probe /></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={platform}><Probe /></PlatformProvider>));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
@@ -216,7 +222,7 @@ function mountWithMenu(options: { otherModalOpen?: boolean; ready?: boolean; upd
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={{ kind: "tauri", appMenu: menu, statusItem, updater: options.updater }}><UpdatesProvider firstCheckDelayMs={null}><Probe /></UpdatesProvider></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={{ kind: "tauri", host: BROWSER_HOST, appMenu: menu, statusItem, updater: options.updater }}><UpdatesProvider firstCheckDelayMs={null}><Probe /></UpdatesProvider></PlatformProvider>));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
@@ -265,4 +271,84 @@ it("ignores the tray update request before readiness or behind another modal", a
     expect(hook().settingsOpen).toBe(false);
     expect(check).not.toHaveBeenCalled();
   }
+});
+
+describe("the Settings shortcut where there is no native menu", () => {
+  const WINDOWS: PlatformAdapter = { kind: "tauri", host: WINDOWS_HOST };
+  const MAC: PlatformAdapter = { kind: "tauri", host: MAC_HOST, appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} } };
+  const comma: Binding = { code: "Comma", primary: true };
+
+  afterEach(() => {
+    restoreAllBindings();
+    localStorage.clear();
+  });
+
+  function press(binding: Binding, host: PlatformAdapter["host"], target: EventTarget = document.body) {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(binding, host) });
+    act(() => { target.dispatchEvent(event); });
+    return event;
+  }
+
+  it("opens Settings on the Windows app, and on a browser, with the user's current binding", () => {
+    // A browser on a Mac takes ⌘, and has no native menu to leave it to.
+    const macBrowser: PlatformAdapter = { kind: "browser", host: browserHost("MacIntel") };
+    for (const platform of [WINDOWS, { kind: "browser", host: BROWSER_HOST } as PlatformAdapter, macBrowser]) {
+      const hook = mount(false, () => {}, platform);
+      const event = press(comma, platform.host);
+      expect(event.defaultPrevented, platform.host.os).toBe(true);
+      expect(hook().settingsOpen, platform.host.os).toBe(true);
+      act(() => hook().closeSettings());
+    }
+    expect(eventKey(comma, macBrowser.host)).toMatchObject({ metaKey: true, ctrlKey: false });
+    const hook = mount(false, () => {}, WINDOWS);
+    expect(setBinding("openSettings", { code: "KeyK", primary: true, shift: true }, WINDOWS_HOST)).toBeUndefined();
+    press(comma, WINDOWS_HOST);
+    expect(hook().settingsOpen).toBe(false);
+    press(bindingFor("openSettings"), WINDOWS_HOST);
+    expect(hook().settingsOpen).toBe(true);
+  });
+
+  it("shows the focus ring on what Settings focuses once the key opens it, and not when it does nothing", () => {
+    const before = getInteractionModality();
+    onTestFinished(() => act(() => setInteractionModality(before as Parameters<typeof setInteractionModality>[0])));
+    act(() => setInteractionModality("pointer"));
+    const blocked = mount(true, () => {}, WINDOWS);
+    press(comma, WINDOWS_HOST);
+    expect(blocked().settingsOpen).toBe(false);
+    expect(getInteractionModality()).toBe("pointer");
+    const hook = mount(false, () => {}, WINDOWS);
+    press(comma, WINDOWS_HOST);
+    expect(hook().settingsOpen).toBe(true);
+    expect(getInteractionModality()).toBe("keyboard");
+  });
+
+  it("leaves the key to the native menu on the macOS app, so nothing fires twice", () => {
+    const hook = mount(false, () => {}, MAC);
+    const event = press(comma, MAC_HOST);
+    expect(event.defaultPrevented).toBe(false);
+    expect(hook().settingsOpen).toBe(false);
+  });
+
+  it("takes the key from the terminal and leaves its other keys to it", () => {
+    const hook = mount(false, () => {}, WINDOWS);
+    const terminal = document.body.appendChild(document.createElement("div"));
+    terminal.className = "xterm";
+    const input = terminal.appendChild(document.createElement("textarea"));
+    onTestFinished(() => terminal.remove());
+    input.focus();
+    const reached = vi.fn();
+    terminal.addEventListener("keydown", reached);
+    expect(press({ code: "KeyC", primary: true }, WINDOWS_HOST, input).defaultPrevented).toBe(false);
+    expect(reached).toHaveBeenCalledOnce();
+    expect(press(comma, WINDOWS_HOST, input).defaultPrevented).toBe(true);
+    expect(reached).toHaveBeenCalledOnce();
+    expect(hook().settingsOpen).toBe(true);
+  });
+
+  it("is ignored while another modal holds the user's attention, and still consumes the key", () => {
+    const hook = mount(true, () => {}, WINDOWS);
+    const event = press(comma, WINDOWS_HOST);
+    expect(event.defaultPrevented).toBe(true);
+    expect(hook().settingsOpen).toBe(false);
+  });
 });

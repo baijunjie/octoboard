@@ -9,6 +9,7 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { InspectedConsole, InspectedProject } from "../protocol";
+import { useHostPathsOrEmpty } from "../components/hooks/useHostPaths";
 import {
   applyToAll,
   availableFor,
@@ -72,9 +73,16 @@ function ProjectRow({
   const inPlace = row.choice === "exported_path" && target === project.path;
   const recordedPath = hasRecordedPath(project.path);
   const state = project.default ? STATE[project.default] : undefined;
+  // A path written on another operating system says so once: in the not-found mark where the project has no way in,
+  // and otherwise in a note after the exported path, with no remedy, since the way it has needs no directory.
+  const foreignNote = project.foreign_path && state !== undefined && (
+    <StatusMark inline tone="note" label={t("configuration.import.project.state.foreignPathMark", { project: isolate(project.name) })}>
+      <p dir="auto">{t("configuration.import.project.state.foreignPath")}</p>
+    </StatusMark>
+  );
   // Placed where it was exported, the 'Placed in' line alone says both.
-  const fields: [string, string][] = [];
-  if (recordedPath && !inPlace) fields.push([t("configuration.import.project.field.exportedPath"), project.path]);
+  const fields: [string, string, React.ReactNode?][] = [];
+  if (recordedPath && !inPlace) fields.push([t("configuration.import.project.field.exportedPath"), project.path, foreignNote]);
   if (row.choice === "clone") {
     fields.push([t("configuration.import.project.field.cloneFrom"), project.remote_url ?? ""], [t("configuration.import.project.field.cloneInto"), target ?? ""]);
   } else if (row.choice !== "skip" && row.choice !== "directory") {
@@ -93,7 +101,7 @@ function ProjectRow({
                   tone="warning"
                   label={t(project.account_fallbacks.length > 0 ? "configuration.import.project.state.noneAndFallbacksMark" : "configuration.import.project.state.noneMark", { project: isolate(project.name) })}
                 >
-                  <p dir="auto"><Message id="configuration.import.project.state.folderNotFound" /></p>
+                  <p dir="auto">{project.foreign_path ? t("configuration.import.project.state.foreignPath") : <Message id="configuration.import.project.state.folderNotFound" />}</p>
                   <p dir="auto">{t("configuration.import.project.state.noneRemedy")}</p>
                   <FallbackLines fallbacks={project.account_fallbacks} />
                 </StatusMark>
@@ -121,8 +129,8 @@ function ProjectRow({
     >
       {fields.length > 0 && (
         <FieldList>
-          {fields.map(([label, value]) => (
-            <Field key={label} label={label} value={value} />
+          {fields.map(([label, value, mark]) => (
+            <Field key={label} label={label} value={value} mark={mark} />
           ))}
         </FieldList>
       )}
@@ -154,6 +162,7 @@ function ConsoleGroup({
   onReview: (review: ReviewState) => void;
 }): React.ReactElement {
   const t = useT();
+  const { style } = useHostPathsOrEmpty();
   return (
     <Card
       header={(headingId) => (
@@ -176,7 +185,7 @@ function ConsoleGroup({
                 key={p}
                 project={project}
                 row={row}
-                problem={shown(directoryProblem(row))}
+                problem={shown(directoryProblem(row, style))}
                 onChange={(next) => onReview(withRow(review, index, p, next))}
               />
             );

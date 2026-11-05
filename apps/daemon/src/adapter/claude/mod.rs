@@ -63,9 +63,10 @@ use serde_json::json;
 
 use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
 use super::{
-    hook_command, hook_url, shell_quote, AgentProvider, AgentVersion, LaunchPlan, LaunchSpec,
-    NamedTitle, HOOK_TIMEOUT_SECS,
+    hook_command, hook_url, AgentProvider, AgentVersion, LaunchPlan, LaunchSpec, NamedTitle,
+    COMMAND_HOOK_TIMEOUT_SECS, HTTP_HOOK_TIMEOUT_SECS,
 };
+use crate::platform::shell::{self, Arg, Stderr};
 use crate::protocol::AgentId;
 use crate::providers::{claude, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
@@ -144,12 +145,12 @@ impl ClaudeProvider {
                 spec.daemon_key,
             ),
             "async": true,
-            "timeout": HOOK_TIMEOUT_SECS,
+            "timeout": COMMAND_HOOK_TIMEOUT_SECS,
         });
         let http_handler = json!({
             "type": "http",
             "url": url,
-            "timeout": HOOK_TIMEOUT_SECS,
+            "timeout": HTTP_HOOK_TIMEOUT_SECS,
         });
         let mut hooks = serde_json::Map::new();
         for event in HOOK_EVENTS {
@@ -193,22 +194,33 @@ impl ClaudeProvider {
     fn status_line(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> serde_json::Value {
         let user_dir = super::account_dir(AgentId::CLAUDE, pinned, spec.shell_env);
         let own = user_status_line(&user_dir, spec.cwd).unwrap_or_default();
+        let (port, cwd, user_dir) = (
+            spec.daemon_port.to_string(),
+            spec.cwd.to_string_lossy(),
+            user_dir.to_string_lossy(),
+        );
+        let command = shell::command_line(
+            Path::new(spec.self_exe),
+            &[
+                Arg::Word("status-line"),
+                Arg::Word("--provider"),
+                Arg::Word(AgentId::CLAUDE.descriptor().id),
+                Arg::Word("--session"),
+                Arg::Value(spec.session_id),
+                Arg::Word("--port"),
+                Arg::Word(&port),
+                Arg::Word("--key"),
+                Arg::Value(spec.daemon_key),
+                Arg::Word("--cwd"),
+                Arg::Value(&cwd),
+                Arg::Word("--config-dir"),
+                Arg::Value(&user_dir),
+            ],
+            Stderr::Keep,
+        );
         let mut line = serde_json::Map::new();
         line.insert("type".to_owned(), json!("command"));
-        line.insert(
-            "command".to_owned(),
-            json!(format!(
-                "exec {} status-line --provider {} --session {} --port {} --key {} --cwd {} \
-                 --config-dir {}",
-                shell_quote(spec.self_exe),
-                AgentId::CLAUDE.descriptor().id,
-                shell_quote(spec.session_id),
-                spec.daemon_port,
-                shell_quote(spec.daemon_key),
-                shell_quote(&spec.cwd.to_string_lossy()),
-                shell_quote(&user_dir.to_string_lossy()),
-            )),
-        );
+        line.insert("command".to_owned(), json!(command));
         for key in ["padding", "refreshInterval", "hideVimModeIndicator"] {
             let valid = |value: &serde_json::Value| match key {
                 "padding" => value.is_number(),
@@ -280,7 +292,7 @@ impl AgentProvider for ClaudeProvider {
     /// no further out than the enclosing `node_modules`. Any other layout, or a path that cannot be
     /// followed, is `None`.
     fn installed_version(&self, binary: &str) -> Option<AgentVersion> {
-        let resolved = std::fs::canonicalize(binary).ok()?;
+        let resolved = crate::hostfs::canonical(binary).ok()?;
         let parent = resolved.parent()?;
         if parent.file_name().is_some_and(|name| name == "versions") {
             return super::parse_version(resolved.file_name()?.to_str()?);
@@ -774,7 +786,7 @@ mod tests {
         std::fs::create_dir_all(&versions).expect("versions");
         std::fs::write(versions.join("2.1.301"), "").expect("binary");
         let native = root.join("bin/claude");
-        std::os::unix::fs::symlink(versions.join("2.1.301"), &native).expect("link");
+        crate::test_support::symlink(versions.join("2.1.301"), &native).expect("link");
         assert_eq!(version_of(&native), Some((2, 1, 301)));
 
         // A file in a directory of another name, or one that is not named exactly for a version,
@@ -793,7 +805,7 @@ mod tests {
         std::fs::write(package.join("package.json"), r#"{"version":"2.1.100"}"#).expect("manifest");
         std::fs::write(package.join("bin/claude.js"), "").expect("entry");
         let npm = root.join("bin/claude-npm");
-        std::os::unix::fs::symlink(package.join("bin/claude.js"), &npm).expect("link");
+        crate::test_support::symlink(package.join("bin/claude.js"), &npm).expect("link");
         assert_eq!(version_of(&npm), Some((2, 1, 100)));
 
         // The walk stops at `node_modules`, so another package's manifest further out is not read.
@@ -831,8 +843,8 @@ mod tests {
             );
             for event in HOOK_EVENTS {
                 let handler = &hooks[*event][0]["hooks"][0];
-                assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);
                 if http && *event != "SessionStart" {
+                    assert_eq!(handler["timeout"], HTTP_HOOK_TIMEOUT_SECS);
                     assert_eq!(handler["type"], "http", "{version:?}");
                     assert_eq!(
                         handler["url"], "http://127.0.0.1:4321/hook/session-1?key=feedface",
@@ -844,6 +856,7 @@ mod tests {
                     // `SessionStart` among them, which Claude Code runs no HTTP handler for: it is
                     // the one hook a launch or resume with no prompt sends.
                     assert_eq!(handler["type"], "command", "{event} {version:?}");
+                    assert_eq!(handler["timeout"], COMMAND_HOOK_TIMEOUT_SECS);
                     assert_eq!(handler["async"], true, "{event} {version:?}");
                     assert_eq!(
                         handler["command"],
@@ -1077,7 +1090,7 @@ mod tests {
         use crate::adapter::tests::{agent_file, bounded_file_cases};
         bounded_file_cases(
             "adapter::claude::tests::bounded_agent_files_allow_claude_launch_planning",
-            &["regular", "linked", "fifo", "oversized"],
+            crate::adapter::tests::FILE_CASES,
             |case| {
                 let mut fixture = spec_fixture();
                 fixture.config_dir = Some(fixture.scratch.join("claude-home"));

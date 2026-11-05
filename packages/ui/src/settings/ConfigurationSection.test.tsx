@@ -9,13 +9,14 @@ import { ThemeProvider } from "../preferences/theme";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { ConfigurationSection } from "./ConfigurationSection";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The sidebar's chosen console is read when its module loads, so it is set before the imports run.
 vi.hoisted(() => localStorage.setItem("octoboard.sidebarConsole", "c-docs"));
 
-const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", configurationFile: { save: vi.fn(), open: vi.fn() } };
+const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", host: BROWSER_HOST, configurationFile: { save: vi.fn(), open: vi.fn() } };
 
 function mount(consoles: ReturnType<typeof consoleOf>[], platform: PlatformAdapter = WITH_CONFIGURATION_FILE): HTMLElement {
   // The dialogs it opens read the appearance, so they are under the theme provider, which asks the window for the
@@ -55,7 +56,7 @@ it("asks the window to open the import from its own button, and opens none itsel
 });
 
 it("has nothing to press where the platform cannot save or open a file", () => {
-  const container = mount([main], { kind: "browser" });
+  const container = mount([main], { kind: "browser", host: BROWSER_HOST });
   expect(container.querySelectorAll("button")).toHaveLength(0);
   expect(container.textContent).toContain("not available here");
 });

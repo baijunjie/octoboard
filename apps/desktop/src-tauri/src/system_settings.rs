@@ -1,19 +1,16 @@
 //! Opening panes of System Settings: the address tables of the panes the shell links to, and the
-//! one way they are opened.
+//! one way they are opened. macOS only.
 
 /// The pane of System Settings (macOS 13 and later) every app's notification settings live in.
-#[cfg(any(target_os = "macos", test))]
 const SETTINGS_PANE_URL: &str =
     "x-apple.systempreferences:com.apple.Notifications-Settings.extension";
 
 /// The same pane in System Preferences (macOS 11 and 12).
-#[cfg(any(target_os = "macos", test))]
 const PREFERENCES_PANE_URL: &str = "x-apple.systempreferences:com.apple.preference.notifications";
 
 /// The address of the pane for `bundle_id`, as the macOS `major_version` names it, or of the pane's
 /// generic page when there is no identifier (a binary run outside a bundle, such as `tauri dev`,
 /// has none to select). Both panes take `?id=` to select one app.
-#[cfg(any(target_os = "macos", test))]
 pub fn notifications_pane_url(major_version: isize, bundle_id: Option<&str>) -> String {
     let pane = if major_version >= 13 {
         SETTINGS_PANE_URL
@@ -27,12 +24,10 @@ pub fn notifications_pane_url(major_version: isize, bundle_id: Option<&str>) -> 
 }
 
 /// The pane holding the Screen Recording grant.
-#[cfg(target_os = "macos")]
 pub const SCREEN_RECORDING_PANE_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 
 /// The pane holding the Accessibility grant.
-#[cfg(target_os = "macos")]
 pub const ACCESSIBILITY_PANE_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
@@ -41,7 +36,6 @@ pub const ACCESSIBILITY_PANE_URL: &str =
 /// Goes through `NSWorkspace`, not `tauri-plugin-shell`: the plugin's `open` only accepts `http:`,
 /// `https:`, `mailto:` and `tel:` addresses and would reject this scheme. Fails with a message when
 /// the address cannot be built or the system declines to open it.
-#[cfg(target_os = "macos")]
 pub fn open_system_settings(url: &str) -> Result<(), String> {
     use objc2_app_kit::NSWorkspace;
     use objc2_foundation::{NSString, NSURL};

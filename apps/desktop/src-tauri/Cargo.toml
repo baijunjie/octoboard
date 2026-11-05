@@ -21,7 +21,7 @@ serde_json = "1"
 
 [dependencies]
 # `macos-private-api` is what lets the window be transparent on macOS, which the native sidebar
-# material behind the page needs (`open_main_window` in `src/lib.rs`); `app.macOSPrivateApi` in
+# material behind the page needs (`src/chrome/macos.rs`); `app.macOSPrivateApi` in
 # `tauri.conf.json` has to say the same, or `tauri-build` refuses the pair. The private API rules out
 # Mac App Store distribution; the app ships as a notarized DMG. `image-png` is what lets `Image::from_bytes`
 # decode the PNG icons the UI hands over for the tray menu's lines (`tray/`).
@@ -38,15 +38,12 @@ tauri-plugin-notification = "~2.7.0"
 tauri-plugin-clipboard-manager = "~2.5.0"
 # The system's save and open dialogs, raised from `configuration_file.rs` for the configuration export and import.
 tauri-plugin-dialog = "2.8"
-# In-app updates, driven from `updater.rs` (the UI has no NPM counterpart, so there is no JS release line to
+# In-app updates, driven from `updater/` (the UI has no NPM counterpart, so there is no JS release line to
 # hold it to). `rustls-tls` is the plugin's default TLS; the check and the download never leave the two
 # manifest URLs and the release assets they name.
 tauri-plugin-updater = "2.14"
 anyhow = "1"
-# For `sidecar::terminate`, which sends the daemon SIGTERM so it stops its sessions' processes before a restart
-# kills it. The release line `octoboardd` and `tauri` already resolve.
-libc = "0.2"
-# For the one request `updater.rs` makes to tell a missing manifest from a failing server, which the updater plugin
+# For the one request `updater/` makes to tell a missing manifest from a failing server, which the updater plugin
 # reports alike. The release line, and the TLS setup, the plugin already brings: it installs the TLS provider
 # the request relies on.
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
@@ -64,29 +61,51 @@ serde_json = "1"
 # the crate's defaults pull a whole codec set (AV1 encoding among it) the icon never uses.
 image = { version = "0.25", default-features = false, features = ["png"] }
 
+# macOS keeps one instance through LaunchServices and the daemon's instance lock; elsewhere a second
+# launch has to be turned back by the plugin (`lifecycle/windows.rs`), which brings the running window forward.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+tauri-plugin-single-instance = "2.5"
+
+# For `notification_settings.rs`, which opens the Settings page of notifications with `ShellExecuteW`, for
+# `chrome/windows.rs`, which measures the system frame with `AdjustWindowRectExForDpi`, and for `tray/windows.rs`,
+# which follows the tray menu's modal loop through a subclass of tray-icon's window and reads the theme its menu
+# is drawn in (the registry, high contrast and its colours) to colour the menu's single-colour pictures. The
+# version the lockfile already resolves for other dependencies.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_UI_Accessibility", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+# For the request filter `page_isolation/windows.rs` puts on the window's WebView2 and the browser accelerator
+# keys `chrome/windows.rs` turns off on it, and `windows` for the string and interface types their calls take.
+# Pinned to the exact versions `tauri` and `wry` already resolve, so promoting them to direct dependencies does
+# not shift anything else this crate depends on.
+webview2-com = "=0.39.1"
+windows = { version = "=0.62.2", default-features = false }
+
 # The macOS-only bindings; the other platforms build without them.
 [target.'cfg(target_os = "macos")'.dependencies]
-# For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
-# (see the comment there), in `background.rs` for hiding and unhiding the app, the Dock badge, the
-# window's Cmd+H and the notification that the app became active, in `permissions.rs` and
-# `notification_settings.rs` for the System Settings deep link `NSWorkspace` opens, and in `tray/`
-# for the notifications that a menu began and ended tracking, the template flag on the tray menu's
-# pictures and the view that draws the menu bar icon's raised hand over its status item's button,
-# and in `tray/lines.rs` for the views of the menu's rows (`NSImageView` for a section heading's
-# picture). Pinned to the exact versions already resolved transitively through `tauri-runtime-wry`,
-# so promoting them to direct dependencies does not shift anything else this crate depends on.
+# For the `applicationShouldTerminate:` override in `lifecycle/macos.rs` that catches the Dock icon's
+# own Quit (see the comment there), and there too for hiding and unhiding the app, the Dock badge, the
+# window's Cmd+H and the notification that the app became active, in `system_settings.rs` for the
+# System Settings deep link `NSWorkspace` opens, and in `tray/macos/` for the notifications that a
+# menu began and ended tracking, the template flag on the tray menu's pictures and the view that draws
+# the menu bar icon's raised hand over its status item's button, and in `tray/macos/lines.rs` for the
+# views of the menu's rows (`NSImageView` for a section heading's picture). Pinned to the exact
+# versions already resolved transitively through `tauri-runtime-wry`, so promoting them to direct
+# dependencies does not shift anything else this crate depends on.
 objc2 = "=0.6.5"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSButton", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSGraphics", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSStringDrawing", "NSTextAttachment", "block2", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
-# For the system's preferred languages in `lib.rs`, the notification observers in `background.rs`
-# and `tray/` (and the main queue the latter applies a held menu on, and the bytes of the raised
-# hand's picture), the content rule list in `page_isolation.rs`, and in `permissions.rs` the
-# Accessibility prompt's options dictionary and the System Settings URL, and in
-# `notification_settings.rs` the bundle identifier and the OS version that picks the pane's address,
-# pinned like `objc2-app-kit` above.
+# For the system's preferred languages in `languages.rs`, the notification observers in
+# `lifecycle/macos.rs` and `tray/macos/` (and the main queue the latter applies a held menu on, and the
+# bytes of the raised hand's picture), the content rule list in `page_isolation/macos.rs`, in
+# `permissions/macos.rs` the Accessibility prompt's options dictionary, in `system_settings.rs` the
+# System Settings URL, and in `notification_settings.rs` the bundle identifier and the OS version that
+# picks the pane's address, pinned like `objc2-app-kit` above.
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSBundle", "NSData", "NSDictionary", "NSGeometry", "NSLocale", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL", "NSValue"] }
-# For the content rule list `page_isolation.rs` puts on the window's webview, and the block its
+# For the content rule list `page_isolation/macos.rs` puts on the window's webview, and the block its
 # compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this
 # crate's type. Pinned like `objc2-app-kit` above, `block2` to the version already resolved
 # through `objc2-web-kit`.
 objc2-web-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "WKContentRuleList", "WKContentRuleListStore", "WKUserContentController", "WKWebViewConfiguration"] }
 block2 = "=0.6.2"
+# For the macOS half of `sidecar::terminate`, which sends the daemon SIGTERM so it stops its sessions' processes
+# before a restart kills it. The release line `octoboardd` and `tauri` already resolve.
+libc = "0.2"

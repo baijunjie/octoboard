@@ -9,7 +9,8 @@ use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use crate::processes::subprocess::{run_bounded, Bounds, Reach};
+use crate::platform::proc::Reach;
+use crate::processes::subprocess::{run_bounded, Bounds};
 
 pub mod paths;
 pub mod terminal;
@@ -20,7 +21,7 @@ const OPEN_BOUNDS: Bounds = Bounds {
     timeout: Duration::from_secs(15),
     stdout_limit: 16 * 1024,
     stderr_limit: 16 * 1024,
-    reach: Reach::ProcessGroup,
+    reach: Reach::Group,
     term_grace: Duration::ZERO,
 };
 

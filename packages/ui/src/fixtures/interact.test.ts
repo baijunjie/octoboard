@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createUi, stuckExit, type Matcher } from "./interact";
 import { format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { IS_MAC } from "../input/keys";
+import { IS_MAC, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -141,6 +141,18 @@ it("pressEach presses every control of that name once, in document order", async
   await vi.advanceTimersByTimeAsync(1000);
   await done;
   expect(pressed).toEqual(["a", "b"]);
+});
+
+it("focusControl focuses an unavailable control (aria-disabled), and presses none", async () => {
+  document.body.innerHTML = '<button id="keep" aria-disabled="true">Keep</button><button id="off" disabled>Off</button>';
+  const ui = createUi(document, "en");
+  const focused = ui.focusControl("Keep");
+  await vi.advanceTimersByTimeAsync(500);
+  await focused;
+  expect(document.activeElement?.id).toBe("keep");
+  const refused = expect(ui.focusControl("Off")).rejects.toThrow(/Nothing to focus matching Off/);
+  await vi.advanceTimersByTimeAsync(10_000);
+  await refused;
 });
 
 it("changeRow names a change row by its file and status in the window's language, whatever follows", () => {
@@ -292,6 +304,17 @@ it("chord presses a portable binding with this platform's modifiers on the focus
   await vi.advanceTimersByTimeAsync(400);
   await done;
   expect(seen).toEqual([`KeyF:F:${IS_MAC}:${!IS_MAC}:true`]);
+});
+
+it.each([[WINDOWS_HOST, false], [MAC_HOST, true]])("chord presses the modifiers of the host it is given, not the browser's (%#)", async (host, apple) => {
+  document.body.innerHTML = "<button id=\"target\"></button>";
+  document.getElementById("target")!.focus();
+  const seen: string[] = [];
+  document.addEventListener("keydown", (event) => seen.push([event.code, event.metaKey, event.ctrlKey, event.shiftKey].join(":")));
+  const done = createUi(document, "en", undefined, host).chord({ code: "KeyF", primary: true, shift: true });
+  await vi.advanceTimersByTimeAsync(400);
+  await done;
+  expect(seen).toEqual([`KeyF:${apple}:${!apple}:true`]);
 });
 
 // The sidebar's drawer, a panel's toggle and the breakpoints they hang on, below: the stylesheet declares the

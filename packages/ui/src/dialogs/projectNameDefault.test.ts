@@ -31,3 +31,24 @@ it("does not guess an unknown host home or a batch's project names", () => {
   expect(projectNameDefault("local", "~/..", "", null)).toBeUndefined();
   expect(projectNameDefault("parent", "/work", "", "/home/dev")).toBeUndefined();
 });
+
+it.each([
+  ["C:\\work\\site\\", "site"],
+  ["C:/work/site/../other/./", "other"],
+  ["\\\\server\\share\\site", "site"],
+  ["~\\site\\..", "dev"],
+  ["~", "dev"],
+  ["~\\D:\\elsewhere\\site", "site"],
+  ["C:\\..\\..", "C:\\"],
+  ["\\\\server\\share\\..", "\\\\server\\share\\"],
+  ["/work/site", undefined],
+  ["relative\\site", undefined],
+  ["C:site", undefined],
+  ["", undefined],
+])("shows the daemon's normalized directory name for %s on a Windows host", (path, expected) => {
+  expect(projectNameDefault("local", path, "", "C:\\Users\\dev", "windows")).toBe(expected);
+});
+
+it("does not guess an unknown Windows host home", () => {
+  expect(projectNameDefault("local", "~\\site", "", null, "windows")).toBeUndefined();
+});

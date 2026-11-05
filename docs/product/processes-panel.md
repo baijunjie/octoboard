@@ -103,6 +103,17 @@ or "Keep *command*", so the cards' buttons can be told apart. A mouse or touch p
 belongs to no session, so their cards offer Stop alone (see "Automatic stopping and its boundaries" in
 `docs/product/background-processes.md`).
 
+**A tree that cannot be kept** — on a Windows daemon host, one with a process on the agent's own console (see
+"Processes on the agent's own console" in `docs/product/background-processes.md`) — still shows Keep, unavailable: it
+can take keyboard focus and shows no hover or press feedback. Hovering or focusing it shows the reason as its tooltip,
+which is also its description for assistive technology: the same sentences as the refusal of a keep, or, for a reason
+this window does not know, that the process cannot be kept. Pressing it explains rather than acts: it asks for no
+confirmation and sends no request, and raises the error alert a refused keep raises, titled that the process could not
+be kept, with the daemon's refusal (`process_shares_agent_console`) as its body — the process runs in the agent's own
+terminal, so it ends with the session and cannot be kept, with the remedy of starting it in a window of its own to keep
+it running — or, for a reason this window does not know, only that the process cannot be kept (see "The error alert"
+in `docs/product/error-alerts.md`).
+
 **Each asks for confirmation first**, showing the tree's command whole, wrapped rather than cut, and its working
 directory and facts:
 
@@ -115,10 +126,18 @@ While a confirmation is open every card's buttons are unavailable. A tree that l
 is confirmed closes the confirmation. What the two actions do is in "Process information and actions" in
 `docs/product/background-processes.md`.
 
-- **Once confirmed**, the tree leaves the list at once, the list is read again, and a toast says the process was
+- **Once confirmed and done**, the tree leaves the list at once, the list is read again, and a toast says the process was
   stopped or kept (see `docs/product/toasts.md`); a tree that had already gone by then raises no notice.
 - **A failure** is shown in an error alert over the confirmation, titled that the process could not be stopped or kept,
-  and the confirmation stays open (see "The error alert" in `docs/product/error-alerts.md`).
+  and the confirmation stays open (see "The error alert" in `docs/product/error-alerts.md`); the tree stays listed and
+  no toast is shown.
+- **A stop that left processes running** is such a failure: where the daemon answers that processes of the tree are
+  still running (see "Process information and actions" in `docs/product/background-processes.md`), the alert is titled
+  that the process could not be stopped, and its body is worded by why the first of them was left. For lack of
+  permission, it says Octoboard does not have permission to stop the process or some of its child processes, so they
+  are still running, with the remedy of running Octoboard with the same permissions as those processes; for any other
+  reason, it says the process or some of its child processes are still running after Octoboard tried to stop them,
+  with the remedy of trying again in a moment.
 - **Keyboard focus**: where the confirmation was opened from the keyboard, so the card's button held focus, and the
   tree has left the list, focus goes, with its focus ring, to the first button of the card that followed it, or, with
   none, to where `F6` lands in the panel. A card that goes away while it or one of its buttons holds focus hands focus

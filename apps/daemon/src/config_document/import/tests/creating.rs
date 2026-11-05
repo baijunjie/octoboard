@@ -158,8 +158,8 @@ async fn each_choice_places_the_project_in_its_own_directory() {
         "Hub",
         vec![
             project("recorded", &recorded.to_string_lossy()),
-            project("derived", "/gone/layout/derived"),
-            project("pointed", "/gone/layout/pointed"),
+            project("derived", &host_path("/gone/layout/derived")),
+            project("pointed", &host_path("/gone/layout/pointed")),
         ],
     );
 
@@ -213,7 +213,7 @@ async fn a_remote_carrying_a_credential_is_not_cloned_from_nor_shown_with_it() {
     let area = ScratchDir::new("import-credential-area");
     let clone_dir = directory(&area, "projects");
     let (state, _dir) = state_cloning_into("import-credential", &clone_dir);
-    let mut planted = project("planted", "/gone/planted");
+    let mut planted = project("planted", &host_path("/gone/planted"));
     planted.remote_url = Some("https://user:token@example.com/o/planted.git".to_string());
     let doc = document(vec![console("Hub", vec![planted])]);
 

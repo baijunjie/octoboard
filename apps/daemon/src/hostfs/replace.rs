@@ -1,22 +1,13 @@
 //! Replacing a file whole, so that a reader sees the old content or the new and never part of
-//! either, and a crash mid-write leaves the old file in place.
+//! either, and a crash mid-write leaves the old file in place. What permissions the file gets
+//! is the platform layer's ([`Permissions`]).
 
 use std::io::{self, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-/// The permissions [`replace_file`] gives the file it writes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Permissions {
-    /// The owner's alone (`0o600`), whatever the file had: for content that can hold secrets.
-    Private,
-    /// The permissions of the file being replaced, and the owner's alone for a new one.
-    KeptOrPrivate,
-    /// The permissions of the file being replaced, and for a new one what the process's umask
-    /// leaves of `0o666`, as for any file a program creates. Unlike the others, a failure to set
-    /// the kept mode past the umask is ignored: a file that cannot be given it is still written.
-    KeptOrDefault,
-}
+use crate::platform::fs as platform;
+
+pub use platform::Privacy as Permissions;
 
 /// Replaces the file at `target` with `bytes`: written whole to `staged` with the permissions
 /// `permissions` says, flushed to the disk, then renamed over `target`. Without the flush a crash
@@ -30,37 +21,8 @@ pub fn replace_file(
     bytes: &[u8],
     permissions: Permissions,
 ) -> io::Result<()> {
-    let kept = || {
-        std::fs::metadata(target)
-            .ok()
-            .map(|metadata| metadata.permissions().mode() & 0o7777)
-    };
-    // The mode an open applies is cut by the umask and ignored for a file already there, so a mode
-    // that must hold exactly is set again once the file is open.
-    let (create_mode, exact_mode) = match permissions {
-        Permissions::Private => (0o600, Some(0o600)),
-        Permissions::KeptOrPrivate => {
-            let mode = kept().unwrap_or(0o600);
-            (mode, Some(mode))
-        }
-        Permissions::KeptOrDefault => match kept() {
-            Some(mode) => (mode, Some(mode)),
-            None => (0o666, None),
-        },
-    };
     let written = (|| {
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(create_mode)
-            .open(staged)?;
-        if let Some(mode) = exact_mode {
-            let set = file.set_permissions(std::fs::Permissions::from_mode(mode));
-            if permissions != Permissions::KeptOrDefault {
-                set?;
-            }
-        }
+        let mut file = platform::create_replacement(staged, target, permissions)?;
         file.write_all(bytes)?;
         file.sync_all()?;
         drop(file);
@@ -88,13 +50,18 @@ fn staged_beside(target: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
     use super::*;
     use crate::test_support::ScratchDir;
 
+    #[cfg(unix)]
     fn mode_of(path: &Path) -> u32 {
         std::fs::metadata(path).unwrap().permissions().mode() & 0o7777
     }
 
+    #[cfg(unix)]
     fn set_mode(path: &Path, mode: u32) {
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
     }
@@ -122,6 +89,7 @@ mod tests {
 
     /// The owner's alone holds over the mode the file had, and over a staged file a crash left
     /// behind with a looser one, which the open alone would keep.
+    #[cfg(unix)]
     #[test]
     fn a_private_file_is_the_owners_alone_whatever_was_there() {
         let dir = ScratchDir::new("replace-file-private");
@@ -135,6 +103,7 @@ mod tests {
         assert_eq!(mode_of(&target), 0o600);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_kept_mode_is_the_replaced_files_and_a_new_file_gets_its_default() {
         let dir = ScratchDir::new("replace-file-kept");

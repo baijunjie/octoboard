@@ -9,6 +9,7 @@ import { defaultBinding } from "../../shortcuts/commands";
 import { matchesCommand } from "../../shortcuts/store";
 import { recordKeys } from "../../shortcuts/recording";
 import { useWindowShortcut } from "../../shortcuts/useWindowShortcut";
+import { BROWSER_HOST } from "../../test/hosts";
 import { mountHost } from "../../test/mountHost";
 import { MenuItems } from "./MenuItems";
 import { MenuShortcutScope } from "./menuShortcutScope";
@@ -19,7 +20,7 @@ async function mount(disabled = false) {
   const command = vi.fn();
   const childCommand = vi.fn();
   const windowCommand = vi.fn();
-  const matches = (event: KeyboardEvent) => matchesCommand("focusMode", event);
+  const matches = (event: KeyboardEvent) => matchesCommand("focusMode", event, BROWSER_HOST);
   const shortcut = { label: "Shift+Control+F", matches };
   let deactivate!: () => void;
   function View() {
@@ -27,7 +28,7 @@ async function mount(disabled = false) {
     const [active, setActive] = useState(true);
     deactivate = () => setActive(false);
     useWindowShortcut((event) => matches(event) ? true : undefined, windowCommand);
-    useWindowShortcut((event) => matchesCommand("openSettings", event) ? true : undefined, windowCommand);
+    useWindowShortcut((event) => matchesCommand("openSettings", event, BROWSER_HOST) ? true : undefined, windowCommand);
     return <Menu open={open} onOpenChange={setOpen}>
       <MenuTrigger label="Actions">Open</MenuTrigger>
       <MenuPopover>
@@ -45,7 +46,7 @@ async function mount(disabled = false) {
   const menu = document.querySelector<HTMLElement>("[role=menu]")!;
   act(() => menu.focus());
   const press = (target: EventTarget = menu, init: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(defaultBinding("focusMode")), ...init });
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...eventKey(defaultBinding("focusMode"), BROWSER_HOST), ...init });
     act(() => { target.dispatchEvent(event); });
     return event;
   };
@@ -54,7 +55,7 @@ async function mount(disabled = false) {
 
 it("lets only an advertised matching window command activate the root item", async () => {
   const { menu, command, windowCommand, press } = await mount();
-  expect(press(menu, eventKey(defaultBinding("openSettings"))).defaultPrevented).toBe(true);
+  expect(press(menu, eventKey(defaultBinding("openSettings"), BROWSER_HOST)).defaultPrevented).toBe(true);
   expect(command).not.toHaveBeenCalled();
   expect(windowCommand).not.toHaveBeenCalled();
   expect(press().defaultPrevented).toBe(true);

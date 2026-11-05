@@ -28,6 +28,21 @@ pub struct ProcessTree {
     pub memory_bytes: u64,
     /// The TCP ports the tree's processes listen on, sorted.
     pub ports: Vec<u16>,
+    /// A `keep_processes` naming the tree can keep it; when not, `unkeepable_reason` says why.
+    pub keepable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub unkeepable_reason: Option<UnkeepableReason>,
+}
+
+/// Why a tree cannot be kept.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnkeepableReason {
+    /// A process of the tree is attached to its agent's own console, which ends it with the
+    /// session whatever keeps it.
+    AgentConsole,
 }
 
 /// How many trees there are under one project, or for one console session, in the count of
@@ -46,4 +61,29 @@ pub struct ProcessCount {
     pub session_id: Option<String>,
     /// How many trees, at least one.
     pub trees: usize,
+}
+
+/// A process a `stop_processes` left running: still running once the stop was through with it.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UnstoppedProcess {
+    /// The tree the process was stopped with, as the request named it.
+    pub tree_id: String,
+    pub pid: u32,
+    /// The process's name; empty when it cannot be read.
+    pub name: String,
+    pub reason: UnstoppedReason,
+}
+
+/// Why a process is still running after a stop.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnstoppedReason {
+    /// The system refused to end it for lack of permission: a process of another user, or one
+    /// running with more rights than the daemon.
+    AccessDenied,
+    /// Anything else: the system refused to end it for another reason, or it outlived being
+    /// ended.
+    Other,
 }

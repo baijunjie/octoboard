@@ -15,6 +15,7 @@ import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { matchesWidthQuery } from "./test/viewport";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const renders = vi.hoisted(() => ({ app: 0, rows: 0 }));
@@ -49,7 +50,7 @@ async function mountApp(phone: boolean) {
   const console_ = consoleOf("c-poll", "Main");
   const project = projectOf("p-poll", console_.id, "Website");
   const session = sessionOf("s-poll", console_.id, project.id, "Fix header", "idle");
-  let trees: ProcessTree[] = [{ id: "1:1", session_id: session.id, command: "npm run dev", cwd: "/work/site", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 120_000_000, ports: [3000] }];
+  let trees: ProcessTree[] = [{ id: "1:1", session_id: session.id, command: "npm run dev", cwd: "/work/site", cwd_missing: false, kept: false, keepable: true, started_at: Date.now(), process_count: 1, memory_bytes: 120_000_000, ports: [3000] }];
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [session] }),
     request: vi.fn(async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: structuredClone(trees) } : { type: "ack", id: null }) as Daemon["request"],
@@ -59,7 +60,7 @@ async function mountApp(phone: boolean) {
   function StackReset() { stacks = usePanelStacks(); return null; }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={{ kind: "browser" }}><ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider></PlatformProvider>));
   onTestFinished(async () => {
     act(() => { stacks.setStack("project", defaultStack("project")); stacks.setStack("report", defaultStack("report")); root.unmount(); });
     container.remove();

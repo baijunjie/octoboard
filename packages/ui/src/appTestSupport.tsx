@@ -13,11 +13,12 @@ import { usePanelStacks } from "./panels/usePanelStacks";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import type { Event, ClientRequestBody } from "./protocol";
-import { applyDaemonEvent, DaemonProvider, type Daemon, type State } from "./store";
+import { applyDaemonEvent, DaemonHostAnnouncement, DaemonProvider, type Daemon, type State } from "./store";
 import { ThemeProvider } from "./preferences/theme";
 import { testDaemon } from "./test/testDaemon";
 import { matchesWidthQuery } from "./test/viewport";
 import { partSelector } from "./primitives";
+import { BROWSER_HOST } from "./test/hosts";
 
 const CSS_VARS = { "--rail-width": "48px", "--breakpoint-tablet": "768px", "--breakpoint-phone": "390px" };
 
@@ -57,7 +58,7 @@ export function fakeDaemon(state: Partial<State>, answer: (body: ClientRequestBo
 
 /** Mounts the whole window over `daemon` until the test ends, inside `wrap` where given (a provider the window needs
  * above it). The panel stacks and the current console it leaves are put back, as they outlive the mount. */
-export function mountApp(daemon: Daemon, { platform = { kind: "browser" }, wrap = (app) => app }: { platform?: PlatformAdapter; wrap?: (app: React.ReactElement) => React.ReactElement } = {}): HTMLElement {
+export function mountApp(daemon: Daemon, { platform = { kind: "browser", host: BROWSER_HOST }, wrap = (app) => app }: { platform?: PlatformAdapter; wrap?: (app: React.ReactElement) => React.ReactElement } = {}): HTMLElement {
   let stacks!: ReturnType<typeof usePanelStacks>;
   function StackReset() {
     stacks = usePanelStacks();
@@ -70,7 +71,7 @@ export function mountApp(daemon: Daemon, { platform = { kind: "browser" }, wrap 
   }));
   return mountForTooltip(
     <PlatformProvider value={platform}>
-      <ThemeProvider><DaemonProvider value={daemon}><StackReset />{wrap(<App />)}</DaemonProvider></ThemeProvider>
+      <ThemeProvider><DaemonProvider value={daemon}><DaemonHostAnnouncement /><StackReset />{wrap(<App />)}</DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
 }

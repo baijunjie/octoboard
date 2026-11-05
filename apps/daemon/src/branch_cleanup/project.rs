@@ -32,7 +32,6 @@
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -48,6 +47,7 @@ use crate::git::repo_files::repository_of;
 use crate::git::run::Runner;
 use crate::git::worktrees::{changes, worktrees, Listed};
 use crate::hostfs::trash::TrashFailure;
+use crate::platform::names;
 use crate::protocol::{
     Project, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
 };
@@ -200,7 +200,7 @@ pub(super) fn plan_with(
     let Some(repo) = repository_of(Path::new(&project.path)) else {
         return Ok(None);
     };
-    let folder = std::fs::canonicalize(&project.path)?;
+    let folder = crate::hostfs::canonical(&project.path)?;
     let survives = !repo.starts_with(&folder);
     let sessions: Vec<_> = state
         .store
@@ -259,7 +259,9 @@ pub(super) fn plan_with(
                 &repo,
                 SessionBranchKind::Worktree,
                 worktree.branch.as_deref().map(wire_path::encode),
-                Some(wire_path::encode(worktree.root.as_os_str().as_bytes())),
+                Some(wire_path::encode(&names::name_bytes(
+                    worktree.root.as_os_str(),
+                ))),
                 bound_by.map_or(&project.id, |branch| &branch.project),
                 bound_by.map(|branch| branch.session.as_str()),
                 state,
@@ -495,11 +497,18 @@ pub(crate) fn carry_out(
             left.push(item);
             continue;
         };
+        let Some(branch) = names::name_from_bytes(&name) else {
+            left.push(failed(
+                item,
+                "the branch name is not one this host can pass to git",
+            ));
+            continue;
+        };
         let args = [
             OsStr::new("branch"),
             OsStr::new(flag),
             OsStr::new("--"),
-            OsStr::from_bytes(&name),
+            &branch,
         ];
         if let Err(detail) = git.write(&removal.repo, &args) {
             if exists(git, &removal.repo, &name) {

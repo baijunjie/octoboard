@@ -149,6 +149,8 @@ subdirectory is refused. The other refusals are:
 - A tracked path blocked by a directory, or an ancestor blocked by a file or symbolic link; or a path in `HEAD`
   removed from the index but still present on disk: `git_restore_failed`. These collisions are refused before
   restoration to preserve untracked or ignored content; move the obstruction aside first.
+- On a Windows daemon host, a tracked path Windows cannot name (one with a colon, a reserved device name such as
+  `CON`, or a trailing dot), which Git for Windows cannot write to the disk: the restore is refused.
 - Git cannot inspect or restore the files: `git_restore_failed`, with the reason as `detail`. Each Git call has at
   most two minutes, 16 MiB of standard output and 64 KiB of standard error; an inspection exceeding a bound fails
   before restoration.

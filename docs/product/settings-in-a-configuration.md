@@ -163,8 +163,11 @@ made in Settings, and the result of the import reports what was applied. So:
 
 The inspection gives the document's default clone directory as it comes to on the daemon's host (`~/` expanded) beside
 the host's own. One that is neither absolute nor starts with `~/` is left out of the import rather than refusing the
-settings. An import that applies the settings can be told to **keep the host's own** instead; then the document's is
-not applied, and everything else of the settings is.
+settings, and so is one that is absolute in the other operating system's style (see "A path written on another operating
+system" under "Where an imported project goes" in `docs/product/configuration-export-and-import.md`), which names
+nothing on the daemon's host; the inspection says when that is why, and the host's own directory stays. An import that
+applies the settings can be told to **keep the host's own** instead; then the document's is not applied, and everything
+else of the settings is.
 
 Applied, the document's directory is written **before any account, console or project is created**, so a project the
 same import places under the default clone directory or clones (see "Where an imported project goes" in

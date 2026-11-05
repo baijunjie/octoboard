@@ -1,11 +1,12 @@
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use super::*;
 use crate::protocol::PathLinkView;
-use crate::test_support::ScratchDir;
+use crate::test_support::{symlink, ScratchDir};
 
 fn canonical(dir: &Path) -> PathBuf {
-    std::fs::canonicalize(dir).unwrap()
+    crate::hostfs::canonical(dir).unwrap()
 }
 
 fn project_roots(dirs: &[&Path]) -> ProjectRoots {
@@ -97,7 +98,7 @@ fn a_path_outside_every_root_is_refused_even_through_a_link() {
     let project = ScratchDir::new("path-links-outside");
     let elsewhere = ScratchDir::new("path-links-elsewhere");
     std::fs::write(elsewhere.join("secret.txt"), "x").unwrap();
-    std::os::unix::fs::symlink(elsewhere.join("secret.txt"), project.join("link.txt")).unwrap();
+    symlink(elsewhere.join("secret.txt"), project.join("link.txt")).unwrap();
     let roots = project_roots(&[&project]);
     let at = |raw: &str| kind(raw, None, &no_temp(), &roots);
     assert_eq!(at(elsewhere.join("secret.txt").to_str().unwrap()), None);
@@ -117,14 +118,16 @@ fn a_refusal_says_why_the_path_is_not_shown() {
     let elsewhere = ScratchDir::new("path-links-refusal-elsewhere");
     let second = ScratchDir::new("path-links-refusal-second");
     std::fs::write(elsewhere.join("secret.txt"), "x").unwrap();
-    std::os::unix::fs::symlink(elsewhere.join("secret.txt"), project.join("link.txt")).unwrap();
+    symlink(elsewhere.join("secret.txt"), project.join("link.txt")).unwrap();
     std::fs::write(project.join("both.ts"), "x").unwrap();
     std::fs::write(second.join("both.ts"), "x").unwrap();
-    std::fs::write(project.join("tool"), "x").unwrap();
-    std::fs::set_permissions(project.join("tool"), std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fifo = std::ffi::CString::new(project.join("pipe").as_os_str().as_bytes()).unwrap();
-    // SAFETY: `fifo` is a valid NUL-terminated path.
-    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    #[cfg(unix)]
+    {
+        std::fs::write(project.join("tool"), "x").unwrap();
+        std::fs::set_permissions(project.join("tool"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+        crate::test_support::mkfifo(&project.join("pipe"));
+    }
     let roots = project_roots(&[&project, &second]);
     let at = |raw: &str| refusal(raw, &no_temp(), &roots);
     assert_eq!(at("link.txt"), Refusal::Outside);
@@ -132,22 +135,26 @@ fn a_refusal_says_why_the_path_is_not_shown() {
     assert_eq!(at("/etc/hosts"), Refusal::Outside);
     assert_eq!(at("both.ts"), Refusal::Ambiguous);
     // Launchable files are reachable in a project, so only a temp root refuses them.
-    let temp = temp_of(&project);
-    let absolute = canonical(&project);
-    assert_eq!(
-        refusal(
-            absolute.join("tool").to_str().unwrap(),
-            &temp,
-            &ProjectRoots::default()
-        ),
-        Refusal::Launchable
-    );
-    assert_eq!(
-        refusal(absolute.join("pipe").to_str().unwrap(), &no_temp(), &roots),
-        Refusal::NotAFileOrFolder
-    );
+    #[cfg(unix)]
+    {
+        let temp = temp_of(&project);
+        let absolute = canonical(&project);
+        assert_eq!(
+            refusal(
+                absolute.join("tool").to_str().unwrap(),
+                &temp,
+                &ProjectRoots::default()
+            ),
+            Refusal::Launchable
+        );
+        assert_eq!(
+            refusal(absolute.join("pipe").to_str().unwrap(), &no_temp(), &roots),
+            Refusal::NotAFileOrFolder
+        );
+    }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_temp_path_others_can_change_is_refused_as_not_private() {
     let temp = ScratchDir::new("path-links-not-private");
@@ -168,6 +175,7 @@ fn a_temp_path_others_can_change_is_refused_as_not_private() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_denied_read_is_refused_with_the_systems_text() {
     // SAFETY: a plain query of this process's effective user.
@@ -226,6 +234,7 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
         "sheet.png",
         "run.command",
         "Loud.COMMAND",
+        #[cfg(unix)]
         "tool",
         "x.fileloc",
         "tool.py",
@@ -237,6 +246,7 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
     ] {
         std::fs::write(dir.join(name), "x").unwrap();
     }
+    #[cfg(unix)]
     std::fs::set_permissions(dir.join("tool"), std::fs::Permissions::from_mode(0o755)).unwrap();
     std::fs::create_dir_all(dir.join("Thing.app/Contents")).unwrap();
     std::fs::write(dir.join("Thing.app/Contents/info.txt"), "x").unwrap();
@@ -244,6 +254,7 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
     let launchable = [
         "run.command",
         "Loud.COMMAND",
+        #[cfg(unix)]
         "tool",
         "x.fileloc",
         "tool.py",
@@ -313,8 +324,6 @@ fn an_interpreter_or_installer_extension_counts_only_on_a_regular_files_own_name
         "vendor/github.com/notes.txt",
         "pkg.py/inner/notes.txt",
         "setup.exe/inner/notes.txt",
-        "a.js",
-        "a.lnk",
     ] {
         assert_eq!(
             at(file).map(|r| (r.kind, r.launchable)),
@@ -322,8 +331,58 @@ fn an_interpreter_or_installer_extension_counts_only_on_a_regular_files_own_name
             "{file}"
         );
     }
+    // Windows runs a `.js` file through Windows Script Host (`PATHEXT` lists it); elsewhere it is
+    // text an editor opens.
+    assert_eq!(
+        at("a.js").map(|r| (r.kind, r.launchable)),
+        Some((PathLinkKind::File, cfg!(windows)))
+    );
     for file in files {
         assert_eq!(at(file).map(|r| r.launchable), Some(true), "{file}");
+    }
+    // Explorer follows a shortcut; elsewhere a `.lnk` file is data.
+    assert_eq!(
+        at("a.lnk").map(|r| (r.kind, r.launchable)),
+        Some((PathLinkKind::File, cfg!(windows)))
+    );
+}
+
+/// The types the host's shell launches are refused like any other: a file of one is kept for the
+/// viewer in a project and unreachable in a temp root, and as a folder name one launches nothing.
+#[test]
+fn the_hosts_own_launched_types_are_refused_on_a_files_own_name() {
+    let dir = ScratchDir::new("path-links-host-launched");
+    for extension in crate::platform::open::LAUNCHED_FILE_EXTENSIONS {
+        std::fs::write(
+            dir.join(format!("a.{}", extension.to_ascii_uppercase())),
+            "x",
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.join(format!("d.{extension}"))).unwrap();
+    }
+    let roots = project_roots(&[&dir]);
+    for extension in crate::platform::open::LAUNCHED_FILE_EXTENSIONS {
+        let file = canonical(&dir).join(format!("a.{}", extension.to_ascii_uppercase()));
+        let folder = canonical(&dir).join(format!("d.{extension}"));
+        let in_project =
+            |path: &Path| resolve(path.to_str().unwrap(), None, &no_temp(), &|| roots.clone());
+        assert_eq!(
+            in_project(&file).map(|r| (r.kind, r.launchable)),
+            Some((PathLinkKind::File, true)),
+            "{extension}"
+        );
+        assert_eq!(
+            in_project(&folder).map(|r| (r.kind, r.launchable)),
+            Some((PathLinkKind::Directory, false)),
+            "{extension}"
+        );
+        let in_temp = resolve(
+            file.to_str().unwrap(),
+            None,
+            &temp_of(&dir),
+            &ProjectRoots::default,
+        );
+        assert_eq!(in_temp, None, "{extension}");
     }
 }
 
@@ -372,7 +431,7 @@ fn only_a_regular_file_directly_in_the_directory_is_its_entry() {
     std::fs::create_dir(dir.join("sub")).unwrap();
     std::fs::write(dir.join("sub/README.md"), "x").unwrap();
     std::fs::write(dir.join("outside.md"), "x").unwrap();
-    std::os::unix::fs::symlink(dir.join("outside.md"), dir.join("index.md")).unwrap();
+    symlink(dir.join("outside.md"), dir.join("index.md")).unwrap();
     assert_eq!(entry_file(&dir), None);
     assert_eq!(entry_file(&dir.join("missing")), None);
 }
@@ -382,7 +441,7 @@ fn an_absolute_path_must_start_with_a_root_as_written_not_only_resolve_into_one(
     let project = ScratchDir::new("path-links-spelled");
     let elsewhere = ScratchDir::new("path-links-spelled-link");
     std::fs::write(project.join("a.ts"), "x").unwrap();
-    std::os::unix::fs::symlink(&*project, elsewhere.join("alias")).unwrap();
+    symlink(&*project, elsewhere.join("alias")).unwrap();
     let roots = project_roots(&[&project]);
     let written = canonical(&elsewhere).join("alias/a.ts");
     assert_eq!(
@@ -401,7 +460,7 @@ fn a_link_from_a_temp_root_to_outside_it_is_refused() {
     let temp = ScratchDir::new("path-links-temp-link");
     let elsewhere = ScratchDir::new("path-links-temp-target");
     std::fs::write(elsewhere.join("a.txt"), "x").unwrap();
-    std::os::unix::fs::symlink(elsewhere.join("a.txt"), temp.join("a.txt")).unwrap();
+    symlink(elsewhere.join("a.txt"), temp.join("a.txt")).unwrap();
     let path = canonical(&temp).join("a.txt");
     assert_eq!(
         kind(
@@ -414,6 +473,7 @@ fn a_link_from_a_temp_root_to_outside_it_is_refused() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_temp_path_must_be_the_daemons_users_and_closed_to_writes_by_others() {
     let temp = ScratchDir::new("path-links-owner");
@@ -540,30 +600,33 @@ fn a_project_file_spelled_under_a_temp_root_is_still_the_projects() {
     assert!(!resolved.viewer_only());
     // A folder of the project that others could have written into is not handed out, as in any
     // other place under a temp root.
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::create_dir(dir.join("sub/open")).unwrap();
-    std::fs::set_permissions(dir.join("sub/open"), std::fs::Permissions::from_mode(0o777)).unwrap();
-    let path = canonical(&dir).join("sub/open");
-    assert_eq!(
-        refusal(path.to_str().unwrap(), &temp, &roots),
-        Refusal::NotPrivate
-    );
-    // The same however the folder is spelled.
-    assert_eq!(refusal("sub/open", &temp, &roots), Refusal::NotPrivate);
-    // One closed to others is handed out, and is not left to the viewer.
-    std::fs::create_dir(dir.join("sub/closed")).unwrap();
-    std::fs::set_permissions(
-        dir.join("sub/closed"),
-        std::fs::Permissions::from_mode(0o755),
-    )
-    .unwrap();
-    for raw in [
-        canonical(&dir).join("sub/closed").to_str().unwrap(),
-        "sub/closed",
-    ] {
-        let resolved = resolve(raw, None, &temp, &|| roots.clone()).unwrap();
-        assert_eq!(resolved.kind, PathLinkKind::Directory, "{raw}");
-        assert!(!resolved.viewer_only(), "{raw}");
+    #[cfg(unix)]
+    {
+        std::fs::create_dir(dir.join("sub/open")).unwrap();
+        std::fs::set_permissions(dir.join("sub/open"), std::fs::Permissions::from_mode(0o777))
+            .unwrap();
+        let path = canonical(&dir).join("sub/open");
+        assert_eq!(
+            refusal(path.to_str().unwrap(), &temp, &roots),
+            Refusal::NotPrivate
+        );
+        // The same however the folder is spelled.
+        assert_eq!(refusal("sub/open", &temp, &roots), Refusal::NotPrivate);
+        // One closed to others is handed out, and is not left to the viewer.
+        std::fs::create_dir(dir.join("sub/closed")).unwrap();
+        std::fs::set_permissions(
+            dir.join("sub/closed"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        for raw in [
+            canonical(&dir).join("sub/closed").to_str().unwrap(),
+            "sub/closed",
+        ] {
+            let resolved = resolve(raw, None, &temp, &|| roots.clone()).unwrap();
+            assert_eq!(resolved.kind, PathLinkKind::Directory, "{raw}");
+            assert!(!resolved.viewer_only(), "{raw}");
+        }
     }
 }
 
@@ -572,7 +635,7 @@ fn dots_are_folded_lexically_before_the_file_system_sees_the_path() {
     let project = ScratchDir::new("path-links-fold");
     let elsewhere = ScratchDir::new("path-links-fold-target");
     std::fs::write(project.join("a.txt"), "x").unwrap();
-    std::os::unix::fs::symlink(&*elsewhere, project.join("link")).unwrap();
+    symlink(&*elsewhere, project.join("link")).unwrap();
     let roots = project_roots(&[&project]);
     // The file system would take `link/..` to the directory above `elsewhere`; written lexically it
     // is the project's own directory.
@@ -649,8 +712,10 @@ mod with_state {
         let project = fixture.project("gone-project", &missing);
         let scratch = ScratchDir::new("path-links-gone-temp");
         // Owned and closed to others whatever the umask.
+        #[cfg(unix)]
         std::fs::set_permissions(&*scratch, std::fs::Permissions::from_mode(0o755)).unwrap();
         std::fs::write(scratch.join("a.png"), "x").unwrap();
+        #[cfg(unix)]
         std::fs::set_permissions(
             scratch.join("a.png"),
             std::fs::Permissions::from_mode(0o644),
@@ -996,14 +1061,14 @@ mod with_state {
         std::fs::write(directory.join("notes.txt"), "x").unwrap();
         std::fs::create_dir(directory.join("src")).unwrap();
         std::fs::write(directory.join("src/inner.txt"), "x").unwrap();
-        std::os::unix::fs::symlink("notes.txt", directory.join("file-link")).unwrap();
-        std::os::unix::fs::symlink("src", directory.join("folder-link")).unwrap();
-        std::os::unix::fs::symlink("inner.txt", directory.join("src/inner-link")).unwrap();
-        std::os::unix::fs::symlink(directory.join("src"), directory.join("via")).unwrap();
+        crate::test_support::symlink("notes.txt", directory.join("file-link")).unwrap();
+        crate::test_support::symlink("src", directory.join("folder-link")).unwrap();
+        crate::test_support::symlink("inner.txt", directory.join("src/inner-link")).unwrap();
+        crate::test_support::symlink(directory.join("src"), directory.join("via")).unwrap();
         // A folder linked out of the root, holding a link back into it.
-        std::os::unix::fs::symlink(&*outside, directory.join("out")).unwrap();
-        std::os::unix::fs::symlink(directory.join("notes.txt"), outside.join("back")).unwrap();
-        std::os::unix::fs::symlink(outside.join("secret.txt"), directory.join("leak")).unwrap();
+        crate::test_support::symlink(&*outside, directory.join("out")).unwrap();
+        crate::test_support::symlink(directory.join("notes.txt"), outside.join("back")).unwrap();
+        crate::test_support::symlink(outside.join("secret.txt"), directory.join("leak")).unwrap();
         std::fs::write(outside.join("secret.txt"), "x").unwrap();
         let project = fixture.project("reveal-link-project", &directory);
         let absolute = |name: &str| base.join(name).to_string_lossy().into_owned();
@@ -1047,9 +1112,9 @@ mod with_state {
         let aliases = ScratchDir::new("path-links-reveal-root-alias");
         let base = canonical(&directory);
         let alias = canonical(&aliases).join("alias");
-        std::os::unix::fs::symlink(&*directory, &alias).unwrap();
+        crate::test_support::symlink(&*directory, &alias).unwrap();
         std::fs::write(directory.join("notes.txt"), "x").unwrap();
-        std::os::unix::fs::symlink("notes.txt", directory.join("file-link")).unwrap();
+        crate::test_support::symlink("notes.txt", directory.join("file-link")).unwrap();
         let project = fixture.project("reveal-root-project", &alias);
         for (path, expected) in [
             // The root itself, spelled as stored: not the alias in its parent.
@@ -1086,8 +1151,8 @@ mod with_state {
             ],
         );
         let main = canonical(&repository);
-        std::os::unix::fs::symlink("a.ts", main.join("main-link")).unwrap();
-        std::os::unix::fs::symlink("a.ts", linked.join("tree-link")).unwrap();
+        crate::test_support::symlink("a.ts", main.join("main-link")).unwrap();
+        crate::test_support::symlink("a.ts", linked.join("tree-link")).unwrap();
         let project = fixture.project("reveal-two-project", &repository);
         for (path, expected) in [
             ("main-link".to_string(), main.join("main-link")),
@@ -1105,6 +1170,7 @@ mod with_state {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn revealing_selects_a_link_in_a_temp_root_only_when_it_is_private() {
         let fixture = Fixture::new();
@@ -1112,13 +1178,13 @@ mod with_state {
         let base = canonical(&scratch);
         std::fs::create_dir(scratch.join("mine")).unwrap();
         std::fs::write(scratch.join("mine/a.txt"), "x").unwrap();
-        std::os::unix::fs::symlink("a.txt", scratch.join("mine/own")).unwrap();
+        crate::test_support::symlink("a.txt", scratch.join("mine/own")).unwrap();
         // A folder others can write to, as another user's would be, holding a link into the
         // private one.
         std::fs::create_dir(scratch.join("evil")).unwrap();
         std::fs::set_permissions(scratch.join("evil"), std::fs::Permissions::from_mode(0o777))
             .unwrap();
-        std::os::unix::fs::symlink("../mine/a.txt", scratch.join("evil/l")).unwrap();
+        crate::test_support::symlink("../mine/a.txt", scratch.join("evil/l")).unwrap();
         for (path, expected) in [
             ("mine/own", base.join("mine/own")),
             ("evil/l", base.join("mine/a.txt")),
@@ -1176,8 +1242,8 @@ mod with_state {
             ],
         );
         // A link in the project to a file of the worktree below it, and the reverse.
-        std::os::unix::fs::symlink(".worktrees/w/a.ts", main.join("down")).unwrap();
-        std::os::unix::fs::symlink("../../a.ts", linked.join("up")).unwrap();
+        crate::test_support::symlink(".worktrees/w/a.ts", main.join("down")).unwrap();
+        crate::test_support::symlink("../../a.ts", linked.join("up")).unwrap();
         let project = fixture.project("reveal-nested-project", &repository);
         for (path, expected) in [
             ("down".to_string(), main.join("down")),
@@ -1195,6 +1261,7 @@ mod with_state {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn revealing_clears_a_folder_link_in_a_project_under_a_temp_root_when_its_folder_is_open() {
         let fixture = Fixture::new();
@@ -1207,8 +1274,8 @@ mod with_state {
             std::fs::Permissions::from_mode(0o777),
         )
         .unwrap();
-        std::os::unix::fs::symlink("../src", directory.join("shared/folder-link")).unwrap();
-        std::os::unix::fs::symlink("../src/a.txt", directory.join("shared/file-link")).unwrap();
+        crate::test_support::symlink("../src", directory.join("shared/folder-link")).unwrap();
+        crate::test_support::symlink("../src/a.txt", directory.join("shared/file-link")).unwrap();
         std::fs::write(directory.join("src/a.txt"), "x").unwrap();
         let project = fixture.project("reveal-open-folder-project", &directory);
         for (path, expected) in [

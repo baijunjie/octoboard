@@ -110,6 +110,7 @@ fn an_off_environment_outranks_a_sandbox_in_the_users_config() {
 
 /// A FIFO at the user's or a system-wide config path counts as unreadable instead of holding the
 /// launch until a writer appears.
+#[cfg(unix)]
 #[test]
 fn a_fifo_at_a_config_path_does_not_hold_the_launch() {
     let mut fixture = spec_fixture();
@@ -122,8 +123,7 @@ fn a_fifo_at_a_config_path_does_not_hold_the_launch() {
         system.join("requirements.toml"),
         system.join("managed_config.toml"),
     ] {
-        let c = std::ffi::CString::new(path.into_os_string().into_encoded_bytes()).unwrap();
-        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        crate::test_support::mkfifo(&path);
     }
     let (done, finished) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -270,7 +270,8 @@ fn a_resumed_session_follows_the_profile_saved_with_it() {
     save_session_profile(&home, SAVED_OFF, "off");
 
     let saved = home
-        .join("sessions/%2Fsome%2Fcwd")
+        .join("sessions")
+        .join("%2Fsome%2Fcwd")
         .join(SAVED_ON)
         .join("summary.json");
     assert_eq!(
@@ -364,6 +365,6 @@ fn a_summary_that_is_a_link_is_not_read() {
     std::fs::write(&target, "{\"sandbox_profile\":\"workspace\"}").expect("target");
     let dir = home.join("sessions/%2Fsome%2Fcwd").join(SAVED_ON);
     std::fs::create_dir_all(&dir).expect("session directory");
-    std::os::unix::fs::symlink(&target, dir.join("summary.json")).expect("link");
+    crate::test_support::symlink(&target, dir.join("summary.json")).expect("link");
     assert_eq!(refused_profile(&fixture, Some(SAVED_ON)), None);
 }

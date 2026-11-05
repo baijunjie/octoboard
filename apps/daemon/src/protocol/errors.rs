@@ -22,7 +22,7 @@ pub(super) fn params(pairs: &[(&str, &str)]) -> Params {
 /// An error that carries a code and its params, so a client can word it in its own language and
 /// branch on it without matching prose. Travels inside `anyhow::Error` and is recovered by
 /// downcasting where the reply is built.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CodedError {
     pub code: Code,
     pub message: String,
@@ -38,6 +38,16 @@ impl CodedError {
             message: message.into(),
             params: params(pairs),
         })
+    }
+
+    /// `err` as a client is told it ([`error_parts`]).
+    pub fn of(err: &anyhow::Error) -> Self {
+        let (code, params, message) = error_parts(err);
+        Self {
+            code,
+            message,
+            params,
+        }
     }
 
     /// The `error` reply to the request `id` that failed with this.

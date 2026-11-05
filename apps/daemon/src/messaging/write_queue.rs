@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use super::outbox::{Drain, FirstTicket, PromptSignal, Ticket};
-use crate::protocol::{notice_code, Notice, SessionStatus};
+use crate::protocol::{notice_code, Event, Notice, SessionStatus};
 use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
 use crate::state::AppState;
@@ -192,6 +192,18 @@ impl HookPrompts<'_> {
     }
 }
 
+/// How long a message written when `before` prompts had been reported is given to be reported
+/// sent, `wait` being what a later prompt of a launch is given: the first prompt's report comes
+/// from the launch's first hook, which some hosts start cold
+/// (`platform::shell::FIRST_HOOK_SLOWDOWN`).
+fn send_wait(wait: Duration, before: u64) -> Duration {
+    if before == 0 {
+        wait * crate::platform::shell::FIRST_HOOK_SLOWDOWN
+    } else {
+        wait
+    }
+}
+
 impl PromptSignal for HookPrompts<'_> {
     fn input_recovery_pending(&self) -> bool {
         self.live.input_recovery_pending().is_some()
@@ -234,7 +246,7 @@ impl PromptSignal for HookPrompts<'_> {
                 on_wait();
             }
         });
-        let deadline = Instant::now() + self.wait().unwrap_or_default();
+        let deadline = Instant::now() + send_wait(self.wait().unwrap_or_default(), before);
         while self.live.prompts_sent() <= before {
             if Instant::now() >= deadline {
                 return false;
@@ -246,6 +258,10 @@ impl PromptSignal for HookPrompts<'_> {
 
     fn mark_unsent(&self, before: u64) {
         self.live.mark_unsent(before);
+    }
+
+    fn mark_not_submitted(&self, before: u64) {
+        self.live.mark_not_submitted(before);
     }
 
     fn unsent_waiting(&self) -> bool {
@@ -276,6 +292,17 @@ impl PromptSignal for HookPrompts<'_> {
 }
 
 impl AppState {
+    /// Counts a prompt the agent of `live` reported sending ([`LiveSession::note_prompt_sent`]),
+    /// and withdraws the `message_not_sent` notice of a message it confirms was sent after all.
+    pub fn note_prompt_sent(&self, live: &LiveSession, prompt: Option<&str>) {
+        if live.note_prompt_sent(prompt) {
+            self.broadcast(Event::SessionNoticeWithdrawn {
+                session: live.id.clone(),
+                code: notice_code::MESSAGE_NOT_SENT,
+            });
+        }
+    }
+
     /// Accepts a message for a session, to be written as soon as it can take one. Queued rather
     /// than written even when the session looks ready, so order is structural rather than something
     /// each caller has to get right.
@@ -399,21 +426,38 @@ impl AppState {
             .is_some_and(|current| Arc::ptr_eq(&current, &live));
         if matches!(outcome, Drain::Unsent(_)) && still_running {
             // The user can inspect a retry that submits the current composer, including any new
-            // edits they made. A later message must not repeat the already written payload.
-            self.broadcast(
-                Notice::new(
-                    notice_code::MESSAGE_NOT_SENT,
-                    format!(
-                        "{} wrote a message into this session, but {} has not confirmed sending it. \
-                         After three seconds its submit key is retried once, without repeating \
-                         the text, and later messages may proceed. Answer pending dialogs first.",
-                        crate::APP_NAME,
-                        live.agent.label()
-                    ),
-                    &[("agent", live.agent.label()), ("submit_retry", "once")],
-                )
-                .about(id),
-            );
+            // edits they made. A later message must not repeat the already written payload. A
+            // prompt reported after the message withdraws the notice.
+            live.notice_unsent(|retry| {
+                let notice = if retry {
+                    Notice::new(
+                        notice_code::MESSAGE_NOT_SENT,
+                        format!(
+                            "{} wrote a message into this session, but {} has not confirmed \
+                             sending it. After three seconds its submit key is retried once, \
+                             without repeating the text, and later messages may proceed. Answer \
+                             pending dialogs first.",
+                            crate::APP_NAME,
+                            live.agent.label()
+                        ),
+                        &[("agent", live.agent.label()), ("submit_retry", "once")],
+                    )
+                } else {
+                    Notice::new(
+                        notice_code::MESSAGE_NOT_SENT,
+                        format!(
+                            "{} did not send a message {} wrote into this session, so it is \
+                             waiting in the session's input box. {} writes nothing more into the \
+                             session until a prompt is sent.",
+                            live.agent.label(),
+                            crate::APP_NAME,
+                            crate::APP_NAME
+                        ),
+                        &[("agent", live.agent.label())],
+                    )
+                };
+                self.broadcast(notice.about(id));
+            });
         }
         if matches!(outcome, Drain::Diverted(_)) && still_running {
             self.broadcast(
@@ -646,10 +690,27 @@ impl AppState {
 mod tests {
     use super::*;
     use crate::messaging::outbox::Drain;
-    use crate::protocol::{AgentId, Event, SessionStatus};
+    use crate::protocol::{AgentId, Code, Event, SessionStatus};
     use crate::state::test_support::{insert_record, session_record};
     use crate::test_support::{app_state, fake_live_session, PATIENCE};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn the_first_prompt_of_a_launch_is_waited_on_as_its_host_starts_a_first_hook() {
+        let wait = Duration::from_secs(3);
+        assert_eq!(
+            send_wait(wait, 0),
+            wait * crate::platform::shell::FIRST_HOOK_SLOWDOWN
+        );
+        assert_eq!(send_wait(wait, 1), wait);
+        assert_eq!(send_wait(wait, 7), wait);
+        assert_eq!(send_wait(Duration::ZERO, 0), Duration::ZERO);
+        assert_eq!(
+            crate::platform::shell::FIRST_HOOK_SLOWDOWN == 1,
+            !cfg!(windows),
+            "only Windows starts a first hook cold"
+        );
+    }
 
     #[test]
     fn submit_retry_respects_hook_permissions_and_lifecycle_holds() {
@@ -886,6 +947,66 @@ mod tests {
         assert!(live.unsent_waiting());
         assert_eq!(state.write_hold("s"), Some(WriteHold::UnsentMessage));
         assert_eq!(live.look_for_dialog().current, None);
+    }
+
+    /// The user is told a message was not sent, and a prompt the agent reports after it, which
+    /// says it was sent after all, withdraws that; a later prompt withdraws nothing more.
+    #[test]
+    fn a_late_report_of_an_unsent_message_withdraws_its_notice() {
+        let (state, dir) = app_state("state-unsent-withdrawn");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        *state.send_wait.lock().unwrap() = Some(Duration::ZERO);
+        let mut events = state.subscribe();
+        state.queue_message("s", "go on");
+
+        assert_eq!(
+            state.flush_outbox("s", SessionStatus::Idle),
+            Drain::Unsent(0)
+        );
+        let mut drained = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            drained.push(event);
+        }
+        let notice = drained.iter().find_map(|event| match event {
+            Event::SessionNotice {
+                session,
+                code,
+                params,
+                ..
+            } => Some((
+                session.clone(),
+                code.as_str(),
+                params.get("submit_retry").cloned(),
+            )),
+            _ => None,
+        });
+        assert_eq!(
+            notice,
+            Some((
+                "s".to_string(),
+                "message_not_sent",
+                Some("once".to_string())
+            ))
+        );
+
+        state.note_prompt_sent(&live, Some("go on"));
+        let withdrawn: Vec<(String, Code)> = std::iter::from_fn(|| events.try_recv().ok())
+            .filter_map(|event| match event {
+                Event::SessionNoticeWithdrawn { session, code } => Some((session, code)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            withdrawn,
+            vec![("s".to_string(), notice_code::MESSAGE_NOT_SENT)]
+        );
+        assert!(!live.unsent_waiting());
+
+        state.note_prompt_sent(&live, Some("later"));
+        assert!(std::iter::from_fn(|| events.try_recv().ok())
+            .all(|event| !matches!(event, Event::SessionNoticeWithdrawn { .. })));
     }
 
     /// A view of background agents takes the message it is written while it comes up: the message

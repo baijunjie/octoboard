@@ -144,15 +144,16 @@ The arguments and files through which each agent is given these are in "How each
 `docs/product/per-agent-launch-specifics.md`.
 
 The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception below),
-never fail the turn, and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a fraction of a
-second rather than stalling it. A Claude Code that can post hooks itself (2.1.63 or later) is given the daemon's address
-instead of a command, so its hooks start no process; an older one, or one whose version Octoboard cannot tell from where
-it is installed, gets the command. So does one whose settings restrict the addresses hooks may post to
-(`allowedHttpHookUrls`, in the user's, the project's or the managed settings files) to a list that leaves out the
-daemon's loopback address, since Claude Code would skip such hooks silently; a restriction delivered by other means than
-those files is not seen. The one exception to printing nothing is the address form with a daemon that cannot be reached
-or does not answer in time: Claude Code shows its own non-blocking notice about the failed hook, where the command form
-stays silent.
+never fail the turn, and carry a short timeout (3 seconds; a command hook gets 15 on Windows, where an agent's first
+hook of a launch starts cold and slowly, except Codex's `Interrupt`, which keeps 3) so a daemon that is unreachable costs a turn a fraction of a second rather than stalling it. A
+Claude Code that can post hooks itself (2.1.63 or later) is given the daemon's address instead of a command, so its
+hooks start no process; an older one, or one whose version Octoboard cannot tell from where it is installed, gets the
+command. So does one whose settings restrict the addresses hooks may post to (`allowedHttpHookUrls`, in the user's, the
+project's or the managed settings, read where "The default model" in `docs/product/model-and-reasoning-effort.md` says)
+to a list that leaves out the daemon's loopback address, since Claude Code would skip such hooks silently; a
+restriction delivered by other means than those is not seen. The one exception to printing nothing is the address form
+with a daemon that cannot be reached or does not answer in time: Claude Code shows its own non-blocking notice about
+the failed hook, where the command form stays silent.
 
 **The launch description can remain in the conversation after the role changes.** Two of the three agents record that
 text on the first turn and replay it on every resume. The coordinator or worker role and reporting relationship can
@@ -178,8 +179,11 @@ separate from the injected capabilities.
 ### The console session's instruction file
 
 Octoboard writes one instruction file into the console's working directory, `AGENTS.md`, with `CLAUDE.md` beside it as
-a relative symbolic link to it; a regular `CLAUDE.md` found there is replaced by the link. Claude Code reads
-`CLAUDE.md`, Codex reads `AGENTS.md`, and Grok Build reads both and loads the linked pair once — a console's working
+a relative symbolic link to it; a regular `CLAUDE.md` found there is replaced by the link. Where the host makes no file
+links (Windows without Developer Mode, not elevated), `CLAUDE.md` is instead a regular file holding the single line
+`@AGENTS.md`, which Claude Code expands into the text, replacing a link an earlier run left; a host that makes links
+again gets the link back. Claude Code reads `CLAUDE.md`, Codex reads `AGENTS.md`, and Grok Build reads both and loads
+the text once, from the linked pair or past the import line, which it takes as written — a console's working
 directory is not a git repository, and Grok reads the instruction files there once the folder is trusted, which
 Octoboard's press of a console session's trust confirmation sees to (see `docs/product/folder-trust.md`). So console
 sessions of every agent, running together or not, read the same text, and the file names Octoboard's tools without any
@@ -332,6 +336,13 @@ it. A change to the user's shell configuration is therefore picked up without a 
 the very next launch: in steady use by the one after it, and in any case once the capture in hand is ten minutes old.
 When there is no usable capture the launch waits for a fresh one, as below.
 
+**On a Windows daemon host there is no login shell to capture.** The environment is instead built as Windows builds a
+new sign-in's: the daemon's own environment, with the system's environment variables and then the user's, as the
+system stores them, laid over it, and `PATH` the system's followed by the user's. Building it starts nothing and cannot
+time out or fail, so the refusals and the clean-up below do not arise there; a variable the user changes in the
+system's settings is picked up under the same reuse rules. An agent's binary is looked up on that `PATH` with the
+extensions `PATHEXT` lists.
+
 A new session is listed before any of that has happened: it is recorded and shown as *starting* immediately, and the
 launch — the environment capture, the injected files and the agent process — carries on behind it, so a slow capture
 holds up nothing the user sees. What a *starting* session allows, and what happens to it when the launch is refused for
@@ -367,7 +378,7 @@ Two groups of variables are removed from that snapshot:
   and mouse handling; the session's terminal is declared as `xterm-256color` instead;
 - the variables that mark a process as *running inside an agent session*. Without this, an Octoboard started from
   inside an agent session would hand that session's identity to every agent it launches, which silently changes their
-  behaviour. Authentication is unaffected — credentials live in the macOS Keychain, not in these variables.
+  behaviour. Authentication is unaffected — credentials are not kept in these variables.
 
 Besides the terminal type, the variables set over the snapshot are:
 
@@ -383,6 +394,9 @@ Besides the terminal type, the variables set over the snapshot are:
   else;
 - for every Grok Build session, `GROK_HOME`, set to the session's own Grok home (see "The per-session Grok home" in
   `docs/product/per-agent-launch-specifics.md`). A Grok Build config directory is not passed as `GROK_HOME` itself;
+- for a Grok Build session on a host that makes no file links, `GROK_AUTH_PATH`, set to the source home's `auth.json`
+  unless the environment snapshot already holds it (see "On a host without file links" in
+  `docs/product/per-agent-launch-specifics.md`);
 - for every Grok Build session, `GROK_THEME`, which picks Grok's own colour theme to match the session terminal (see
   "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`);
 - for a Grok Build session while Grok Build's Claude compatibility is on, the five `GROK_CLAUDE_*_ENABLED` variables, set

@@ -19,6 +19,7 @@ import { usePlatform } from "../platform/react";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { eventKey } from "../shortcuts/binding";
+import { commandExists } from "../shortcuts/commands";
 import { useStableBinding } from "../shortcuts/store";
 import { listPages } from "./listPages";
 import { PageDocumentTransform } from "./pageDocumentTransform";
@@ -325,14 +326,17 @@ function PageFrame({
   const previous = useStableBinding("previousConsoleSession");
   const srcDoc = useMemo(
     () => {
-      const inWindow = platform.windowChrome !== undefined;
+      // The page relays the window's keys on the clients that have those commands: Back and Forward in the macOS app,
+      // the console-session switch in the desktop app on any system.
+      const history = commandExists("back", platform);
+      const switching = commandExists("nextConsoleSession", platform);
       return transformDocument(composePageDocument(page.html, isHistory, nonce, {
         noContextMenu: platform.kind === "tauri",
-        historyKeys: inWindow ? { back: eventKey(back), forward: eventKey(forward) } : undefined,
-        switchKeys: inWindow ? { next: eventKey(next), previous: eventKey(previous) } : undefined,
+        historyKeys: history ? { back: eventKey(back, platform.host), forward: eventKey(forward, platform.host) } : undefined,
+        switchKeys: switching ? { next: eventKey(next, platform.host), previous: eventKey(previous, platform.host) } : undefined,
       }));
     },
-    [page.html, isHistory, nonce, platform.kind, platform.windowChrome, back, forward, next, previous, transformDocument],
+    [page.html, isHistory, nonce, platform.kind, platform.appMenu, platform.host, back, forward, next, previous, transformDocument],
   );
 
   useEffect(() => {

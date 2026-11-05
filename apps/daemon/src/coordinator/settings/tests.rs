@@ -12,12 +12,15 @@ fn update_settings_applies_all_or_nothing_and_a_blank_clone_dir_clears_it() {
     update_settings(
         &state,
         SettingsChanges {
-            default_clone_dir: Some("/work/repos/".to_string()),
+            default_clone_dir: Some(crate::test_support::host_path("/work/repos/")),
             ..SettingsChanges::default()
         },
     )
     .unwrap();
-    assert_eq!(state.store.default_clone_dir().unwrap(), "/work/repos");
+    assert_eq!(
+        state.store.default_clone_dir().unwrap(),
+        crate::test_support::host_path("/work/repos")
+    );
 
     // A refused directory leaves the other field of the same request unapplied too.
     assert!(update_settings(
@@ -30,7 +33,10 @@ fn update_settings_applies_all_or_nothing_and_a_blank_clone_dir_clears_it() {
     )
     .is_err());
     assert!(!state.store.get_settings().unwrap().auto_pull_repositories);
-    assert_eq!(state.store.default_clone_dir().unwrap(), "/work/repos");
+    assert_eq!(
+        state.store.default_clone_dir().unwrap(),
+        crate::test_support::host_path("/work/repos")
+    );
 
     update_settings(
         &state,
@@ -212,7 +218,7 @@ async fn the_codex_approval_reviewer_applies_to_every_codex_account_and_only_to_
         &state,
         AgentId::CODEX,
         "Work".into(),
-        "/tmp/codex-work".into(),
+        crate::test_support::host_path("/tmp/codex-work"),
     )
     .unwrap();
     assert_eq!(
@@ -274,7 +280,7 @@ async fn the_claude_approval_mode_applies_to_every_claude_account_and_only_to_cl
         &state,
         AgentId::CLAUDE,
         "Work".into(),
-        "/tmp/claude-work".into(),
+        crate::test_support::host_path("/tmp/claude-work"),
     )
     .unwrap();
     assert_eq!(

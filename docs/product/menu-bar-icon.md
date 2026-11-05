@@ -4,7 +4,9 @@ The macOS application puts an icon in the system menu bar: an octopus, which car
 for the user or is dormant, with a quota indicator for the selected session when one is available (see "The icon's look" below). It is
 there for as long as the application runs — while the window is shown, while it is closed into the background, and on
 the screen shown when the daemon failed to start — and whatever the user chose about keeping Octoboard running when the
-window is closed (see "Closing the window" in `docs/product/application-lifecycle.md`). A browser has no such icon.
+window is closed (see "Closing the window" in `docs/product/application-lifecycle.md`). The Windows application puts
+the same icon, with the same menu, in the taskbar's notification area, drawn and behaving as the system's notification
+area items do; what differs there is in "The notification-area icon on Windows" below. A browser has no such icon.
 
 ## The icon's look
 
@@ -37,8 +39,8 @@ The attention dot stays at the upper right, clear of the bars. Without a readabl
 attention or a quota the original octopus returns.
 
 The account, the windows drawn and the hiding rules are the same as "The selected session's quota indicator" in
-`docs/product/account-quotas.md`. The icon has **no tooltip**. With a quota, its accessible name identifies the agent
-and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one it
+`docs/product/account-quotas.md`. On macOS the icon has **no tooltip**. With a quota, its accessible name identifies the
+agent and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one it
 names only Octoboard. Selecting another session updates the indicator even if no session data changed, and a session's
 account switch, account edits, availability changes and new readings update it too, as does a window's reset time
 passing, after which that window is drawn full (see "How an account's quota is shown" in
@@ -55,8 +57,8 @@ the octopus alone.
 A click on the icon, left or right, opens the icon's menu, described below. A click does nothing else: the window
 comes back through the menu's **Open Octoboard**, its update entry or one of its sessions.
 
-For about the first 0.6 seconds after the window is closed from native fullscreen, a click on the icon, left or right,
-is lost and opens nothing; macOS swallows it while it leaves fullscreen.
+On macOS, for about the first 0.6 seconds after the window is closed from native fullscreen, a click on the icon, left
+or right, is lost and opens nothing; macOS swallows it while it leaves fullscreen.
 
 ## The icon's menu
 
@@ -222,3 +224,35 @@ opened only brings the window back.
 Quit Octoboard is a quit like `Cmd+Q`: while a session or a busy shell terminal holds a quit up it asks the same
 confirmation, bringing a window closed into the background back to ask it, and otherwise it quits at once (see
 "Quitting" in `docs/product/application-lifecycle.md`, which says what holds a quit up).
+
+## The notification-area icon on Windows
+
+In the Windows application the icon and its menu hold what the sections above describe, with these differences, which
+follow from the system's own notification-area icons and plain menus:
+
+- **The icon** is Octoboard's application icon in its own colours, not a monochrome octopus tinted for the bar. While
+  a session waits for the user or is dormant it carries the orange dot in its corner, by the same rule as above. No
+  quota bars are drawn on it.
+- **The icon's label is its tooltip**: what macOS gives as the icon's accessible name — the selected session's agent,
+  account and remaining percentages, or Octoboard's name alone — shows when the pointer rests on the icon, and is what
+  the notification area reads out as the icon's name.
+- **A click**, left or right, opens the menu when the button is released. That opening asks the daemon for a fresh
+  quota reading, as opening the menu does on macOS.
+- **The menu's lines are the system's plain menu items.** They carry the same text: the group headings, the session
+  lines, the quota submenus and Check for updates, Open Octoboard and Quit Octoboard. The headings and every line of a
+  quota submenu cannot be chosen, and are drawn as the system draws an item that cannot be chosen. Each line of a
+  quota submenu is the words assistive technology reads for that line on macOS — an account's header with its plan,
+  reached-limit words and age ("Default · Max · updated 3 minutes ago"), a window's phrase ("5h 82% remaining · resets
+  in 1h 57m"), the joined phrase of a five-hour and weekly meter, a note's text — with no bars and no pill, and a
+  submenu's opening line carries no remaining-quota bars.
+- The marks the UI sets around names and values to keep their reading order in right-to-left text are taken out of
+  the menu's lines and the tooltip, since the system's menu would draw them as boxes; the order of a left-to-right
+  value inside right-to-left text is then the system's to decide.
+- **The marks the sidebar draws in the text colour (Codex, Grok)**, which macOS tints as template images, are drawn
+  here in one colour for the theme the menu is drawn in: white on a dark menu and black on a light one, following the
+  user's default app mode in Windows' colour settings rather than the Windows mode or Octoboard's own appearance, and
+  in the menu's text colour while high contrast is on. When the system's light or dark mode changes, the menu is built
+  again in the new colours. The other pictures are as on macOS.
+- **A change waits while the menu is open**, as above: the latest menu the window sends meanwhile is applied once the
+  menu closes. A menu opened again within 10 ms of closing counts as still open, so a menu sent
+  meanwhile stays held until that menu closes.

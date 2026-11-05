@@ -282,10 +282,12 @@ fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts>
 }
 
 /// An account directory as the document writes it: `~/<relative>` under `home`, otherwise the
-/// path itself. Home is matched segment by segment through [`dir_key`], so a directory
-/// spelled in another letter case than home on a case-insensitive file system still reads as under
-/// it, and the absolute path with the user name in it is not exported; the relative part keeps its
-/// own spelling.
+/// path itself. The relative part is written with `/` whatever the host's separator is, since
+/// the document moves between machines and the importing host translates it (`hostfs::expand`).
+/// Home is matched segment by segment through [`dir_key`], so a directory spelled in another
+/// letter case than home on a case-insensitive file system still reads as under it, and the
+/// absolute path with the user name in it is not exported; the relative part keeps its own
+/// spelling.
 fn document_directory(dir: &str, home: &Path) -> String {
     if home == Path::new("/") {
         return dir.to_string();
@@ -301,7 +303,11 @@ fn document_directory(dir: &str, home: &Path) -> String {
     if relative.as_os_str().is_empty() {
         "~".to_string()
     } else {
-        format!("~/{}", relative.to_string_lossy())
+        let parts: Vec<_> = relative
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy())
+            .collect();
+        format!("~/{}", parts.join("/"))
     }
 }
 
@@ -1260,6 +1266,10 @@ mod tests {
 
         assert_eq!(document_directory(&home().to_string_lossy(), &home()), "~");
         assert_eq!(document_directory("/srv/a", Path::new("/")), "/srv/a");
+        assert_eq!(
+            document_directory(&home().join("a").join("b").to_string_lossy(), &home()),
+            "~/a/b"
+        );
     }
 
     #[test]
@@ -1268,7 +1278,7 @@ mod tests {
 
         // The relative part keeps the spelling it was stored with.
         let recased = document_directory("/users/me/.Claude-X", home);
-        if cfg!(target_os = "macos") {
+        if crate::platform::names::FOLDS_CASE {
             assert_eq!(recased, "~/.Claude-X");
             assert_eq!(document_directory("/USERS/ME", home), "~");
         } else {

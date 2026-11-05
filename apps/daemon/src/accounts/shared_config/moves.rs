@@ -26,7 +26,7 @@ pub(super) fn is_link(metadata: &Option<std::fs::Metadata>) -> bool {
 
 /// `path` with every link resolved, `None` when it does not lead to anything.
 pub(super) fn resolve(path: &Path) -> io::Result<Option<PathBuf>> {
-    match std::fs::canonicalize(path) {
+    match crate::hostfs::canonical(path) {
         Ok(resolved) => Ok(Some(resolved)),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(err) => Err(err),
@@ -53,7 +53,7 @@ pub(super) fn resolve_or_spelled(path: &Path) -> PathBuf {
 
 /// Where the link `entry` leads, made absolute.
 pub(super) fn link_target(entry: &Path) -> Option<PathBuf> {
-    let target = std::fs::read_link(entry).ok()?;
+    let target = crate::platform::fs::read_alias(entry).ok()??;
     Some(match entry.parent() {
         Some(parent) if target.is_relative() => parent.join(target),
         _ => target,
@@ -62,7 +62,7 @@ pub(super) fn link_target(entry: &Path) -> Option<PathBuf> {
 
 /// Puts at `entry` a link to `target`.
 pub(super) fn link(entry: &Path, target: &Path) -> io::Result<()> {
-    std::os::unix::fs::symlink(target, entry)
+    crate::hostfs::alias(target, entry, target.is_dir())
 }
 
 /// The exact name `entry` is backed up under by the operation stamped `stamp`:
@@ -128,7 +128,9 @@ pub(super) fn copy_path(from: &Path, to: &Path) -> io::Result<()> {
 fn copy_any(from: &Path, to: &Path) -> io::Result<()> {
     let metadata = std::fs::symlink_metadata(from)?;
     if metadata.file_type().is_symlink() {
-        let target = std::fs::read_link(from)?;
+        let target = crate::platform::fs::read_alias(from)?.ok_or_else(|| {
+            io::Error::other(format!("`{}` is not a link any more", from.display()))
+        })?;
         if target.is_relative() {
             return Err(io::Error::other(format!(
                 "`{}` is a relative link",
@@ -370,10 +372,12 @@ mod tests {
         append_lines(&from, &into).unwrap();
         assert_eq!(std::fs::read_to_string(&into).unwrap(), "a\nb\nc\n");
 
-        let fifo = dir.join("fifo");
-        let path = std::ffi::CString::new(fifo.to_string_lossy().as_bytes()).unwrap();
-        assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
-        assert!(append_lines(&fifo, &into).is_err());
-        assert!(append_lines(&from, &fifo).is_err());
+        #[cfg(unix)]
+        {
+            let fifo = dir.join("fifo");
+            crate::test_support::mkfifo(&fifo);
+            assert!(append_lines(&fifo, &into).is_err());
+            assert!(append_lines(&from, &fifo).is_err());
+        }
     }
 }

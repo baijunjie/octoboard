@@ -8,12 +8,13 @@ import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { IncompatibleDaemonScreen } from "./IncompatibleDaemonScreen";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(() => act(() => setLanguage("en")));
 
-const desktop = { kind: "tauri", exit: {}, updater: { currentVersion: () => Promise.resolve("1.3.0") } } as unknown as PlatformAdapter;
+const desktop = { kind: "tauri", host: BROWSER_HOST, exit: {}, updater: { currentVersion: () => Promise.resolve("1.3.0") } } as unknown as PlatformAdapter;
 const button = (container: HTMLElement, name: string) => Array.from(container.querySelectorAll("button")).find((b) => b.textContent === name);
 
 it("names both versions and quits on the desktop", async () => {

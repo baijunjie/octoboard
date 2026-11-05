@@ -49,14 +49,13 @@ export function homeQuestionAnswerKey(question: typeof homeQuestions[number]): s
   return `faq${question}Answer`;
 }
 
-export const developedPlatform = {
-  name: "macOS",
-  icon: "apple-logo",
-} as const;
+export const availablePlatforms = [
+  { name: "macOS", icon: "apple-logo", status: "platformsBetaStatus" },
+  { name: "Windows", icon: "windows-logo", status: "platformsBetaStatus" },
+] as const;
 
 export const plannedPlatforms = [
   { name: "Linux", icon: "linux-logo", status: "platformsLinuxStatus" },
-  { name: "Windows", icon: "windows-logo", status: "remoteBadge" },
   { name: "iOS", icon: "apple-logo", status: "remoteBadge" },
   { name: "Android", icon: "android-logo", status: "remoteBadge" },
 ] as const;

@@ -1,4 +1,5 @@
 import { appConfig } from "../appConfig";
+import { browserHost } from "../platform/host";
 import { installPreviewStorage } from "./storage";
 import { installPreviewKeyboardGuard } from "./keyboard";
 import { installPreviewFocusGuard } from "./focus";
@@ -84,7 +85,7 @@ async function start(): Promise<void> {
   const daemon = createPreviewDaemon(scenario);
   createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      <AppRoot platform={{ kind: "browser" }} daemon={daemon} nativeSync={false}>
+      <AppRoot platform={{ kind: "browser", host: browserHost() }} daemon={daemon} nativeSync={false}>
         {!embedded && <div className="website-preview-label groove-b">{copy.demo}</div>}
         <div className="website-preview-app">
           <PageDocumentTransform value={reportDocument}>

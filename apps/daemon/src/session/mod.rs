@@ -6,13 +6,15 @@
 //! about its turns and `title_interrupt` a cancel that left no other trace off that title,
 //! `dialogs` finds the dialogs only a person can answer, `trust/` presses the folder-trust
 //! confirmation, `input_box` reads what the agent's input box holds off its screen, `draft` mirrors
-//! the input to match the prompts that were submitted, and `swap` handles the native composer
-//! stashes that keep editor state inside the CLI while a message uses the input.
+//! the input to match the prompts that were submitted, `swap` handles the native composer
+//! stashes that keep editor state inside the CLI while a message uses the input, and
+//! `paste_apart` submits a message whose Enter has to wait until the agent has taken its paste.
 
 pub(crate) mod dialogs;
 mod draft;
 pub(crate) mod input_box;
 pub(crate) mod interrupt;
+mod paste_apart;
 pub(crate) mod screen;
 mod swap;
 pub(crate) mod term;
@@ -21,28 +23,28 @@ pub(crate) mod title_interrupt;
 pub(crate) mod trust;
 pub(crate) mod wait;
 
+#[cfg(test)]
+mod rendered_tests;
+
 use draft::Draft;
+pub(crate) use paste_apart::NotSubmitted;
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 pub(crate) use swap::{HeldFragment, RecoveryPhase};
 
+use crate::platform::proc::Polite;
+use crate::platform::term::{Input, PartialWrite, Spawned};
 use crate::protocol::AgentId;
 use crate::session::trust::{TrustCarrier, TrustState};
 use crate::terminal::input_class::is_terminal_protocol;
-use crate::terminal::pty::{NewPty, PtyCore, PtyOwner, Spawned};
-use crate::terminal::ptyio;
+use crate::terminal::pty::{NewPty, PtyCore, PtyOwner};
+use crate::terminal::title::names_an_executable;
 use dialogs::{Dialog, Sighting};
 use title_activity::TitleActivity;
 
 pub use crate::terminal::pty::spawn_reader_thread;
-
-/// Graceful teardown: agents are asked to exit with `SIGTERM` and only killed if they do not.
-/// This is not politeness — Grok's `Stop` hook fires with `reason: "shutdown"` on a `SIGTERM`
-/// teardown and not at all on a kill, and repeatedly killing Claude Code mid-startup trips its own
-/// renderer-fallback counter, which is machine-level state it keeps about itself.
-const AGENT_STOP_SIGNAL: libc::c_int = libc::SIGTERM;
 
 /// How long an agent's error holds its session's writes ([`LiveSession::agent_error`]). Every flush
 /// looks at the screen afresh, so this covers what a look can miss: the PTY reader getting the
@@ -94,6 +96,9 @@ pub struct LiveSession {
     pty: PtyCore,
     pub(crate) checks_composer: bool,
     title: Mutex<TitleObserver>,
+    /// Whether the session's terminal is read as a host that renders what the program draws has it
+    /// read ([`Self::host_renders`]).
+    host_renders: AtomicBool,
     action_required: AtomicBool,
     /// Permission hooks can describe automatic reviews without a dialog. Visible action prompts
     /// are observed separately, since this setting does not rule out manual approvals.
@@ -114,10 +119,16 @@ pub struct LiveSession {
     /// once the event's status has been applied. What the outbox waits on to know that a message
     /// it wrote was sent rather than left in the input box.
     prompts_sent: AtomicU64,
-    /// The acknowledgement count and grace-period start of an unconfirmed message. A prompt
-    /// acknowledgement or one bounded submit-key retry releases its hold for this process.
-    unsent_at: Mutex<Option<(u64, Instant)>>,
+    /// The acknowledgement count and grace-period start of an unconfirmed message, and whether its
+    /// submit key is still to be retried. A prompt acknowledgement or one bounded submit-key retry
+    /// releases its hold for this process; a message left in its input box, its submit key pressed
+    /// or held back by the write ([`NotSubmitted`]), is released by an acknowledgement alone.
+    unsent_at: Mutex<Option<(u64, Instant, bool)>>,
     unsent_retry_scheduled: AtomicBool,
+    /// The acknowledgement count of the unconfirmed message the user was told was not sent, until a
+    /// prompt reported after it withdraws that ([`Self::note_prompt_sent`]). Taken before
+    /// `unsent_at` where both are.
+    unsent_notice: Mutex<Option<u64>>,
     /// When the agent stopped on an error. It holds the session's writes for [`AGENT_ERROR_SETTLE`]
     /// after that, or until the next prompt is sent; gone with the process.
     agent_error_at: Mutex<Option<Instant>>,
@@ -184,19 +195,30 @@ pub struct NewSession {
 
 impl LiveSession {
     pub fn new(session: NewSession) -> Self {
+        let pty = PtyCore::new(NewPty {
+            label: session.id.clone(),
+            spawned: session.spawned,
+            scratch_dir: session.scratch_dir,
+            kill_session_leftovers: true,
+            before_scratch_removal: session.before_scratch_removal,
+        });
+        let host_renders = crate::platform::term::facts().host_renders;
+        if host_renders {
+            pty.report_titles();
+        }
+        // Where a paste reaches the agent as keys, a query its host holds it up on delays its
+        // taking the paste in, which is when a message's submit key waits (`paste_apart`).
+        if crate::platform::term::facts().paste_as_keys {
+            pty.log_queries();
+        }
         Self {
-            pty: PtyCore::new(NewPty {
-                label: session.id.clone(),
-                spawned: session.spawned,
-                scratch_dir: session.scratch_dir,
-                kill_session_leftovers: true,
-                before_scratch_removal: session.before_scratch_removal,
-            }),
+            pty,
             checks_composer: session.checks_composer,
             id: session.id,
             agent: session.agent,
             launch_id: session.launch_id,
             title: Mutex::new(TitleObserver::default()),
+            host_renders: AtomicBool::new(host_renders),
             action_required: AtomicBool::new(false),
             resolves_approvals_itself: session.resolves_approvals_itself,
             trust: TrustState::new(session.agent, session.carried_trust),
@@ -208,6 +230,7 @@ impl LiveSession {
             prompts_sent: AtomicU64::new(0),
             unsent_at: Mutex::new(None),
             unsent_retry_scheduled: AtomicBool::new(false),
+            unsent_notice: Mutex::new(None),
             agent_error_at: Mutex::new(None),
             dialogs: Mutex::new(Sighting::default()),
             screen_watchers: AtomicU32::new(0),
@@ -215,6 +238,26 @@ impl LiveSession {
             watched_under_claim: AtomicBool::new(false),
             exit_settled: AtomicBool::new(false),
         }
+    }
+
+    /// Whether the session's terminal is read as a host that renders what the program draws has it
+    /// read (`TermFacts::host_renders`): the output is the host's repaint, so the titles are the
+    /// parsed screen's title changes rather than what the output's own title sequences say, and an
+    /// input box that shows the provider's placeholder text is empty whatever the attributes it is
+    /// drawn with. The trust screen and the agent's readiness follow the same fact
+    /// ([`TrustState::reads_screen`]).
+    pub(crate) fn host_renders(&self) -> bool {
+        self.host_renders.load(Ordering::Relaxed)
+    }
+
+    /// Reads the session's terminal from now on as a host that renders what the program draws has
+    /// it read ([`Self::host_renders`], [`TrustState::read_the_screen`]), for a test of that
+    /// reading on a host that does not. Called before any output, as a host's own reading starts.
+    #[cfg(test)]
+    pub(crate) fn read_as_rendered(&self) {
+        self.host_renders.store(true, Ordering::Relaxed);
+        self.pty.report_titles();
+        self.trust.read_the_screen();
     }
 
     /// Output may already have arrived before the launch is registered. Bind and publish the
@@ -325,32 +368,24 @@ impl LiveSession {
     /// Called from the PTY reader thread for every chunk read. Blocks while a slow client catches
     /// up; see [`PtyCore::push_output`].
     pub fn on_output(&self, data: &[u8]) {
-        let titled = {
-            let mut observer = self.title.lock().expect("title observer lock poisoned");
-            let completed = observer.parser.feed(data);
-            if let Some(title) = &completed {
-                let glyph = observer.parser.leading_glyph();
-                // A title of nothing but a spinner reaches here empty, and still shows a turn.
-                let empty = title.is_none() && glyph.is_none();
-                let shown = title_activity::shown(self.agent, glyph, empty);
-                observer.activity.note(shown, Instant::now());
+        // Where the host renders, the title the chunk completes is known once the parsed screen
+        // has taken it in, which is still before any client is handed the chunk.
+        let rendered = self.host_renders();
+        let mut titled = !rendered && self.observe_title(|parser| parser.feed(data));
+        self.pty.push_output(data, |total, mut titles| {
+            if rendered {
+                // The host's own title naming the agent's executable is not the agent's.
+                titles.retain(|title| !title.as_deref().is_some_and(names_an_executable));
+                titled = self.observe_title(|parser| parser.take(&titles));
             }
-            if let Some(title) = &completed {
-                // A title that only spun since the last one changes nothing, so it does not reach
-                // the store's lock.
-                let changed = observer.latest.as_ref() != Some(title);
-                observer.latest = Some(title.clone());
-                if changed {
-                    observer.publish(self);
-                }
-            }
-            completed.is_some()
-        };
-        self.pty.push_output(data, |total| {
             // The count without its lock: a writer holds that lock while the agent may be waiting
             // for this very thread to drain its output.
-            self.trust
-                .feed(data, self.input_writes.load(Ordering::Acquire), total);
+            self.trust.on_output(
+                data,
+                || self.pty.screen_text(),
+                self.input_writes.load(Ordering::Acquire),
+                total,
+            );
             // Run outside the output's lock, as a look takes that after the sighting's.
             if self.screen_watchers.load(Ordering::Acquire) > 0 {
                 self.look_for_dialog();
@@ -358,11 +393,68 @@ impl LiveSession {
             if self.trust.follows_paste_mode() {
                 self.trust.note_paste_mode(self.pty.bracketed_paste_on());
             }
+            self.look_for_input_box();
         });
         if titled {
             self.trust.note_title();
         }
         self.schedule_input_recovery();
+    }
+
+    /// The rows of the agent's input box as `screen` (the visible rows, faint cells blanked) shows
+    /// them ([`input_box::input_box_rows`]); where the host renders what the program draws
+    /// ([`Self::host_renders`]), a box that shows only the provider's placeholder is an empty one
+    /// whatever it is drawn with ([`input_box::placeholder_as_empty`]).
+    pub(crate) fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
+        let rows = input_box::input_box_rows(self.agent, screen)?;
+        Some(if self.host_renders() {
+            input_box::placeholder_as_empty(self.agent, rows)
+        } else {
+            rows
+        })
+    }
+
+    /// The text in the agent's input box as `screen` shows it, read as [`Self::input_box_rows`]
+    /// reads its rows: empty for an empty box, `None` where no input box is recognised.
+    pub(crate) fn input_box(&self, screen: &str) -> Option<String> {
+        self.input_box_rows(screen).map(input_box::text_of)
+    }
+
+    /// Looks at the parsed screen for the agent's input box while the trust watch asks for it
+    /// ([`TrustState::watches_input_box`]): where the host renders what the program draws, the box
+    /// drawn after the agent's `SessionStart` hook says that it reads its input.
+    pub(crate) fn look_for_input_box(&self) {
+        if self.trust.watches_input_box() {
+            let shown = input_box::input_box_rows(self.agent, &self.pty.screen_text()).is_some();
+            self.trust.note_input_box(shown);
+        }
+    }
+
+    /// Takes the title `read` completes, if any, as the agent's latest: what it says about its
+    /// turns, and, when it changed, the session's terminal title. Says whether one was completed.
+    fn observe_title(
+        &self,
+        read: impl FnOnce(&mut crate::terminal::title::Parser) -> Option<Option<String>>,
+    ) -> bool {
+        let mut observer = self.title.lock().expect("title observer lock poisoned");
+        let completed = read(&mut observer.parser);
+        if let Some(title) = &completed {
+            let glyph = observer.parser.leading_glyph();
+            // A title of nothing but a spinner reaches here empty, and still shows a turn.
+            let empty = title.is_none() && glyph.is_none();
+            let shown = title_activity::shown(self.agent, glyph, empty);
+            observer.activity.note(shown, Instant::now());
+        }
+        if let Some(title) = &completed {
+            // A title that only spun since the last one changes nothing, so it does not reach the
+            // store's lock.
+            let changed = observer.latest.as_ref() != Some(title);
+            observer.latest = Some(title.clone());
+            if changed {
+                observer.publish(self);
+            }
+        }
+        completed.is_some()
     }
 
     /// Writes raw input. The error says how many bytes went in, because a caller deciding whether
@@ -379,18 +471,18 @@ impl LiveSession {
     /// is the person acting. Where mouse reporting is off, as at Codex's trust screen, the wheel
     /// arrives as arrow keys, which are counted too.
     #[cfg(test)]
-    pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
+    pub fn write_input(&self, data: &[u8]) -> Result<(), PartialWrite> {
         self.write_raw_input(data, false)
     }
 
-    pub(crate) fn write_terminal_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
+    pub(crate) fn write_terminal_input(&self, data: &[u8]) -> Result<(), PartialWrite> {
         if self.buffer_terminal_input(data)? {
             return Ok(());
         }
         self.write_raw_input(data, true)
     }
 
-    pub(crate) fn write_terminal_reply(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
+    pub(crate) fn write_terminal_reply(&self, data: &[u8]) -> Result<(), PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
             return Err(swap::archived_refusal());
@@ -398,7 +490,7 @@ impl LiveSession {
         self.pty.write_locked(&input, data)
     }
 
-    fn write_raw_input(&self, data: &[u8], user: bool) -> Result<(), ptyio::PartialWrite> {
+    fn write_raw_input(&self, data: &[u8], user: bool) -> Result<(), PartialWrite> {
         let input = self.pty.lock_input();
         let track_draft = if user {
             match self.route_terminal_input(data)? {
@@ -429,10 +521,10 @@ impl LiveSession {
     /// An expired protection budget bypasses editor checks but never dialogs or process lifetime.
     fn write_empty_message_input(
         &self,
-        data: &[u8],
+        message: &[Input],
         prompt: &str,
         allow_mixed: bool,
-    ) -> Result<(), ptyio::PartialWrite> {
+    ) -> Result<(), PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
             return Err(swap::archived_refusal());
@@ -453,10 +545,9 @@ impl LiveSession {
             && !allow_mixed
             && (self.stash_shown()
                 || draft.holds()
-                || input_box::input_box(self.agent, &self.screen_text_undimmed()).as_deref()
-                    != Some(""))
+                || self.input_box(&self.screen_text_undimmed()).as_deref() != Some(""))
         {
-            return Err(ptyio::PartialWrite {
+            return Err(PartialWrite {
                 written: 0,
                 error: io::Error::new(
                     io::ErrorKind::WouldBlock,
@@ -464,13 +555,18 @@ impl LiveSession {
                 ),
             });
         }
+        let (now, rest) = paste_apart::split(message, self.submits_paste_apart());
         draft.submission(None, prompt.to_string());
         self.input_writes.fetch_add(1, Ordering::AcqRel);
-        let written = self.pty.write_locked(&input, data);
+        let written = self.pty.write_input_locked(&input, now);
         if written.is_ok() {
             self.note_message_written();
         }
-        written
+        drop(draft);
+        drop(input);
+        written?;
+        // Only a box found empty above has to show the message alone.
+        self.submit_rest(now, rest, self.checks_composer && !allow_mixed)
     }
 
     pub(crate) fn note_launch_prompt(&self, prompt: String) {
@@ -486,13 +582,13 @@ impl LiveSession {
     pub(crate) fn write_input_if_untouched(
         &self,
         expected: u64,
-        data: &[u8],
-    ) -> Result<bool, ptyio::PartialWrite> {
+        keys: &[Input],
+    ) -> Result<bool, PartialWrite> {
         let input = self.pty.lock_input();
         if self.input_swap_active() || self.input_writes.load(Ordering::Acquire) != expected {
             return Ok(false);
         }
-        self.pty.write_locked(&input, data).map(|()| true)
+        self.pty.write_input_locked(&input, keys).map(|()| true)
     }
 
     /// Writes `keys` only if nobody else has written into the input since the count read as
@@ -504,8 +600,8 @@ impl LiveSession {
         &self,
         expected: u64,
         gate: impl FnOnce() -> bool,
-        keys: &[u8],
-    ) -> Result<bool, ptyio::PartialWrite> {
+        keys: &[Input],
+    ) -> Result<bool, PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
             return Err(swap::archived_refusal());
@@ -517,7 +613,7 @@ impl LiveSession {
             return Ok(false);
         }
         self.input_writes.fetch_add(1, Ordering::AcqRel);
-        self.pty.write_locked(&input, keys).map(|()| true)
+        self.pty.write_input_locked(&input, keys).map(|()| true)
     }
 
     /// How many writes anyone else has made into this session's input so far.
@@ -529,8 +625,9 @@ impl LiveSession {
 
     /// Counts a prompt the agent's hooks reported it sending, which also ends the hold an agent
     /// error put on the session's writes, and, for a prompt submitted after a partly written
-    /// message, the hold a takeover keeps on them.
-    pub fn note_prompt_sent(&self, prompt: Option<&str>) {
+    /// message, the hold a takeover keeps on them. Returns whether the prompt confirms a message
+    /// the user was told was not sent ([`Self::notice_unsent`]), whose notice is then withdrawn.
+    pub fn note_prompt_sent(&self, prompt: Option<&str>) -> bool {
         let after_fragment = {
             let mut draft = self.draft.lock().expect("draft lock poisoned");
             draft.prompt_sent(prompt, self.agent);
@@ -544,6 +641,11 @@ impl LiveSession {
             .agent_error_at
             .lock()
             .expect("agent error lock poisoned") = None;
+        self.unsent_notice
+            .lock()
+            .expect("unsent notice lock poisoned")
+            .take_if(|before| self.prompts_sent() > *before)
+            .is_some()
     }
 
     /// Records that the agent stopped on an error.
@@ -574,7 +676,38 @@ impl LiveSession {
 
     /// Records that a message written when the count stood at `before` was not sent.
     pub fn mark_unsent(&self, before: u64) {
-        *self.unsent_at.lock().expect("unsent mark lock poisoned") = Some((before, Instant::now()));
+        *self.unsent_at.lock().expect("unsent mark lock poisoned") =
+            Some((before, Instant::now(), true));
+    }
+
+    /// Records that a message written when the count stood at `before` was left in the input box,
+    /// its submit key pressed or held back by the write ([`NotSubmitted`]): it is unsent as
+    /// [`Self::mark_unsent`] records, but no retry presses the key once more, which could answer
+    /// whatever has come up in the box's place.
+    pub fn mark_not_submitted(&self, before: u64) {
+        *self.unsent_at.lock().expect("unsent mark lock poisoned") =
+            Some((before, Instant::now(), false));
+    }
+
+    /// Has `tell` tell the user that the message marked unsent was not sent, given whether its
+    /// submit key is still to be retried, and records that it did, so that a prompt reported
+    /// after the message withdraws that ([`Self::note_prompt_sent`]). Nothing when a prompt has
+    /// been reported since. `tell` runs under the lock the withdrawal is decided under, so the
+    /// notice goes out before its withdrawal can.
+    pub fn notice_unsent(&self, tell: impl FnOnce(bool)) {
+        let mut noticed = self
+            .unsent_notice
+            .lock()
+            .expect("unsent notice lock poisoned");
+        let unsent = *self.unsent_at.lock().expect("unsent mark lock poisoned");
+        let Some((before, _, retry)) = unsent else {
+            return;
+        };
+        if self.prompts_sent() > before {
+            return;
+        }
+        *noticed = Some(before);
+        tell(retry);
     }
 
     /// Whether a message marked unsent is still taken to be waiting in the input box: until the
@@ -582,7 +715,7 @@ impl LiveSession {
     pub fn unsent_waiting(&self) -> bool {
         let mut unsent_at = self.unsent_at.lock().expect("unsent mark lock poisoned");
         match *unsent_at {
-            Some((before, _)) if self.prompts_sent() <= before => true,
+            Some((before, _, _)) if self.prompts_sent() <= before => true,
             Some(_) => {
                 *unsent_at = None;
                 false
@@ -594,7 +727,7 @@ impl LiveSession {
     fn retry_unsent_submit(
         &self,
         permits_submit: impl FnOnce() -> bool,
-    ) -> Result<bool, ptyio::PartialWrite> {
+    ) -> Result<bool, PartialWrite> {
         let input = self.pty.lock_input();
         if self.is_frozen()
             || self.poll_exit()
@@ -607,14 +740,14 @@ impl LiveSession {
             return Ok(false);
         }
         let mut unsent = self.unsent_at.lock().expect("unsent mark lock poisoned");
-        let Some((before, started)) = *unsent else {
+        let Some((before, started, retry)) = *unsent else {
             return Ok(false);
         };
         if self.prompts_sent() > before {
             *unsent = None;
             return Ok(false);
         }
-        if started.elapsed() < crate::messaging::outbox::DRAFT_WAIT {
+        if !retry || started.elapsed() < crate::messaging::outbox::DRAFT_WAIT {
             return Ok(false);
         }
         // The payload was already written. Retry only its submit key, once, rather than appending
@@ -623,7 +756,7 @@ impl LiveSession {
         drop(unsent);
         self.native_stash.store(false, Ordering::Release);
         self.input_writes.fetch_add(1, Ordering::AcqRel);
-        self.pty.write_locked(&input, b"\r")?;
+        self.pty.write_input_locked(&input, &[Input::Enter])?;
         Ok(true)
     }
 
@@ -632,7 +765,9 @@ impl LiveSession {
             .unsent_at
             .lock()
             .expect("unsent mark lock poisoned")
-            .is_some_and(|(_, started)| started.elapsed() >= crate::messaging::outbox::DRAFT_WAIT);
+            .is_some_and(|(_, started, retry)| {
+                retry && started.elapsed() >= crate::messaging::outbox::DRAFT_WAIT
+            });
         if !due || self.unsent_retry_scheduled.swap(true, Ordering::AcqRel) {
             return;
         }
@@ -674,7 +809,11 @@ impl LiveSession {
             return;
         }
         self.pty.freeze_output();
-        self.pty.stop(AGENT_STOP_SIGNAL);
+        // Graceful teardown: the agent is asked to terminate and only killed if it does not. This
+        // is not politeness — Grok's `Stop` hook fires with `reason: "shutdown"` on that request
+        // and not at all on a kill, and repeatedly killing Claude Code mid-startup trips its own
+        // renderer-fallback counter, which is machine-level state it keeps about itself.
+        self.pty.stop(Polite::Terminate);
     }
 
     /// [`Self::terminate`] for an operation that ends the process on purpose (an archive, an
@@ -727,6 +866,8 @@ impl LiveSession {
 
 #[cfg(test)]
 mod tests {
+    use crate::platform::term::Input;
+
     #[test]
     fn a_submit_retry_waits_for_a_dialog_without_resetting_its_deadline() {
         let live = crate::test_support::fake_live_session(
@@ -740,6 +881,7 @@ mod tests {
         *live.unsent_at.lock().unwrap() = Some((
             0,
             std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+            true,
         ));
         live.on_output(
             b"\x1b[2J\x1b[1;1HResume this conversation?\r\nEnter to confirm - Esc to dismiss",
@@ -767,6 +909,7 @@ mod tests {
         *live.unsent_at.lock().unwrap() = Some((
             0,
             std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+            true,
         ));
         let before = live.input_writes();
         assert!(!live.retry_unsent_submit(|| false).unwrap());
@@ -782,10 +925,62 @@ mod tests {
         *live.unsent_at.lock().unwrap() = Some((
             0,
             std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+            true,
         ));
         live.note_prompt_sent(None);
         assert!(!live.retry_unsent_submit(|| true).unwrap());
         assert_eq!(live.input_writes(), before + 1);
+    }
+
+    /// A message the write left in its input box, its submit key pressed or held back, holds
+    /// the queue as any unsent message does, but no retry presses the key once more, however long
+    /// it waits: only a prompt the agent reports releases it.
+    #[test]
+    fn a_message_not_submitted_gets_no_further_enter() {
+        let live = crate::test_support::fake_live_session(
+            "unsent-not-submitted",
+            crate::protocol::AgentId::CODEX,
+            120,
+            40,
+            "sleep 30",
+        );
+        live.mark_not_submitted(0);
+        *live.unsent_at.lock().unwrap() = Some((
+            0,
+            std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+            false,
+        ));
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        live.schedule_unsent_submit_retry();
+        assert!(!live
+            .unsent_retry_scheduled
+            .load(std::sync::atomic::Ordering::Acquire));
+        assert_eq!(live.input_writes(), before);
+        assert!(live.unsent_waiting());
+
+        live.note_prompt_sent(None);
+        assert!(!live.unsent_waiting());
+    }
+
+    /// A prompt reported after its message was marked unsent, as a first hook started cold reports
+    /// it, ends the hold on the queue and leaves the submit key unpressed.
+    #[test]
+    fn a_late_report_of_the_prompt_ends_the_unsent_hold_without_a_retry() {
+        let live = crate::test_support::fake_live_session(
+            "unsent-late",
+            crate::protocol::AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        );
+        live.mark_unsent(0);
+        assert!(live.unsent_waiting());
+        live.note_prompt_sent(Some("late"));
+        assert!(!live.unsent_waiting());
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before);
     }
 
     /// A submit-key retry whose write fails is told as a notice about the session, not as an error.
@@ -803,12 +998,27 @@ mod tests {
                 crate::protocol::SessionKind::Project,
             ))
             .unwrap();
+        #[cfg(unix)]
         let live = crate::test_support::fake_live_session(
             "submit-retry-failed",
             crate::protocol::AgentId::CLAUDE,
             120,
             40,
             "trap '' HUP; echo ready; exec sleep 30",
+        );
+        // On Windows the console's close is what a hang-up is, which ends a process once the host's
+        // grace is over; this one holds on past it.
+        #[cfg(windows)]
+        let live = crate::test_support::fake_live_session_running(
+            "submit-retry-failed",
+            crate::protocol::AgentId::CLAUDE,
+            120,
+            40,
+            &crate::test_support::fixture::Steps::new()
+                .hold_on_close()
+                .say("ready")
+                .sleep(30)
+                .program("hold-on-close"),
         );
         // The stand-in announces itself only once it ignores SIGHUP, so hanging up cannot end it.
         crate::terminal::pty::spawn_reader_thread((*live).clone(), 8 * 1024);
@@ -821,6 +1031,7 @@ mod tests {
         *live.unsent_at.lock().unwrap() = Some((
             0,
             std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+            true,
         ));
         live.schedule_unsent_submit_retry();
         let notice = tokio::time::timeout(crate::test_support::PATIENCE, async {
@@ -869,27 +1080,35 @@ mod tests {
         live.write_terminal_input(b"unrendered draft").unwrap();
         let before = live.input_writes();
         let error = live
-            .write_message_input(b"must not be written", "program", false)
+            .write_message_input(
+                &[Input::Text("must not be written".into())],
+                "program",
+                false,
+            )
             .unwrap_err();
         assert_eq!(error.written, 0);
         assert_eq!(live.input_writes(), before);
         live.note_prompt_sent(None);
         assert!(
-            live.write_message_input(b"still held", "program", false)
+            live.write_message_input(&[Input::Text("still held".into())], "program", false)
                 .is_err(),
             "a hook without a user submission candidate does not clear edits"
         );
         live.write_terminal_input(b"\rnext").unwrap();
         live.note_prompt_sent(Some("unrendered draft"));
         assert!(
-            live.write_message_input(b"still held", "program", false)
+            live.write_message_input(&[Input::Text("still held".into())], "program", false)
                 .is_err(),
             "a hook for Enter cannot clear later input"
         );
         live.write_terminal_input(b"\r").unwrap();
         live.note_prompt_sent(Some("next"));
-        live.write_message_input(b"now empty and acknowledged", "program", false)
-            .unwrap();
+        live.write_message_input(
+            &[Input::Text("now empty and acknowledged".into())],
+            "program",
+            false,
+        )
+        .unwrap();
     }
 
     #[test]
@@ -913,11 +1132,13 @@ mod tests {
                 crate::test_support::fake_live_session("composer-gate", agent, 140, 45, "sleep 30")
                     .with_composer();
             assert!(live
-                .write_message_input(b"unknown", "unknown", false)
+                .write_message_input(&[Input::Text("unknown".into())], "unknown", false)
                 .is_err());
             live.on_output(draft);
             let before = live.input_writes();
-            assert!(live.write_message_input(b"draft", "draft", false).is_err());
+            assert!(live
+                .write_message_input(&[Input::Text("draft".into())], "draft", false)
+                .is_err());
             assert_eq!(live.input_writes(), before);
         }
     }

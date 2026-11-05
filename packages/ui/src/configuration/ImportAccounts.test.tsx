@@ -15,6 +15,7 @@ import { mountDialog, openTab, press, settingLinesOf } from "./testSupport";
 
 const account = (fields: Partial<InspectedAccount> & Pick<InspectedAccount, "name">): InspectedAccount => ({
   directory: `~/.${fields.name.toLowerCase()}`,
+  foreign_directory: false,
   proposed_directory: `/Users/dev/.${fields.name.toLowerCase()}`,
   status: "new",
   in_use_by: null,
@@ -59,6 +60,7 @@ const DOCUMENT = { format: "octoboard-configuration", version: 1 };
 const project = {
   name: "Site",
   path: "/a/site",
+  foreign_path: false,
   remote_url: null,
   offers: { exported_path: "/a/site", default_clone_dir: null, clone: null },
   default: "exported_path" as const,
@@ -209,6 +211,30 @@ it("says why an account cannot be created in a warning mark after its name, not 
   expect(invalid.name).toBe("⁨Odd⁩ cannot be created");
   expect(invalid.text).toContain("This account cannot be created: ");
   expect(invalid.text).toContain("rel is not an absolute path");
+});
+
+it("tells an account whose directory is from another operating system so, and never that it is not absolute", async () => {
+  const foreign = account({
+    name: "Win",
+    directory: "C:\\Users\\ana\\.claude-win",
+    foreign_directory: true,
+    proposed_directory: null,
+    status: "invalid",
+    error: { code: "config_dir_not_absolute", params: { agent: "claude" }, message: "m" },
+  });
+  const named = account({ name: "Dup", foreign_directory: true, proposed_directory: null, status: "invalid", error: NAME_TAKEN });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...ACCOUNTS.agents[0], accounts: [foreign, named] }] }, consoles: [], id: null, settings: null });
+  const notice = "The directory in the file was written on another operating system, so it cannot be used here.";
+  // In the account's mark, never a loose line in the row.
+  expect(row("Win").textContent).not.toContain(notice);
+  const { text } = await markPopover(row("Win"));
+  expect(text).toContain(notice);
+  expect(text).toContain("The account is left out unless you choose another directory for it.");
+  expect(text).not.toContain("absolute");
+  expect((await markPopover(row("Dup"))).text).not.toContain(notice);
+  expect(row("Win").querySelector("button[aria-haspopup=listbox]")!.textContent).toBe("Leave out");
+  await choose("Win", "Another directory");
+  expect((await markPopover(row("Win"))).text).toContain(notice);
 });
 
 it("words the default account that holds a directory in the current language", async () => {

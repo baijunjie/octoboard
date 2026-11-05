@@ -256,7 +256,7 @@ const koMessages = {
   "provider.claude.setting.approval_mode.confirm.bypass.consequence": "모든 {agent} 계정의 세션에서 도구가 일반적인 권한 확인 없이 파일을 변경하거나 삭제할 수 있습니다. 명시적인 권한 규칙과 기본 보호 기능은 계속 적용됩니다.",
   "provider.claude.workspace_untrusted": "{claude}에서 아직 이 디렉터리를 신뢰하지 않아 신뢰 확인에 응답하기 전까지 이 프로젝트 자체의 {allow} 권한 규칙을 무시합니다. {deny} 규칙은 계속 적용되므로 세션의 제한은 더 엄격해질 뿐 완화되지 않습니다. 동의하면 {appName}에서 대신 신뢰 확인을 누릅니다.",
   "provider.claude.setting.approval_mode.inheritSummary": "기본 설정 및 재개 규칙 사용",
-  "provider.claude.setting.approval_mode.choice.auto.summary": "{claudeShort}가 권한 결정을 처리",
+  "provider.claude.setting.approval_mode.choice.auto.summary": "{claudeShort}이(가) 권한 결정을 처리",
   "provider.claude.setting.approval_mode.choice.manual.summary": "변경하기 전에 항상 확인",
   "provider.claude.setting.approval_mode.choice.accept_edits.summary": "모든 파일 편집을 자동으로 수락",
   "provider.claude.setting.approval_mode.choice.plan.summary": "변경하기 전에 계획 수립",

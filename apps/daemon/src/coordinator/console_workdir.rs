@@ -1,6 +1,6 @@
 //! A console's working directory: the console session's instruction file written into it,
-//! `AGENTS.md` with each provider's other spelling (`CLAUDE.md`) a symlink to it, and its removal
-//! with the console. The text is
+//! `AGENTS.md` with each provider's other spelling (`CLAUDE.md`) a symlink to it, or a file that
+//! takes it in where the host makes no file links, and its removal with the console. The text is
 //! built elsewhere; this puts it on disk.
 
 use std::path::{Path, PathBuf};
@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 
 use crate::hostfs::replace::{replace_file, Permissions};
+use crate::platform::fs as platform;
 use crate::protocol::Console;
 use crate::session_tools::console_instructions::{console_session_instructions, INSTRUCTION_FILE};
 use crate::session_tools::role::RoleOptions;
@@ -63,34 +64,69 @@ pub fn write_console_session_instructions_from_settings(
 /// Writes the console's instruction file into its working directory: `AGENTS.md`, with every other
 /// instruction file a registered provider reads (`CLAUDE.md`) a relative symlink to it, so every
 /// provider reads the one text, and one that reads several of the spellings (Grok) loads it once.
-/// Each is replaced atomically, so concurrent launches never read a truncated file, including when
-/// they run different agents in the same console. Not locked: a console no one has been told of yet
-/// has no other writer, and every other caller goes through
-/// [`refresh_console_session_instructions`]. The working directory must exist: it is created with
-/// the console and removed with it, never recreated by a write. `options` carries the application
-/// settings that add to the text; its worktrees are ignored.
+/// Where the host makes no file links ([`file_links_available`]), each other name is a regular file
+/// instead: the provider's import line naming `AGENTS.md` (`@AGENTS.md` for Claude Code), not a
+/// copy of the text, because Grok reads `CLAUDE.md` as well and loads a copy as a second file while
+/// it takes the line as written. A provider with no import line gets a copy, written again with
+/// every write of `AGENTS.md`. Each form replaces what the other left, so a host that gains or
+/// loses file links between runs leaves no stale name. Each is replaced atomically, so concurrent
+/// launches never read a truncated file, including when they run different agents in the same
+/// console. Not locked: a console no one has been told of yet has no other writer, and every other
+/// caller goes through [`refresh_console_session_instructions`]. The working directory must exist:
+/// it is created with the console and removed with it, never recreated by a write. `options`
+/// carries the application settings that add to the text; its worktrees are ignored.
 fn write_console_session_instructions(console: &Console, options: &RoleOptions) -> Result<()> {
     let workdir = Path::new(&console.workdir);
-
-    let path = workdir.join(INSTRUCTION_FILE);
     let text = console_session_instructions(console.console_session_prompt.as_deref(), options);
-    replace_file(
-        &path,
-        &temp_name_beside(workdir, INSTRUCTION_FILE),
-        text.as_bytes(),
-        Permissions::KeptOrDefault,
-    )
-    .with_context(|| format!("writing {}", path.display()))?;
+    write_instruction_file(workdir, INSTRUCTION_FILE, &text)?;
 
-    let mut linked: Vec<&str> = Vec::new();
+    let file_links = file_links_available();
+    let mut written: Vec<&str> = Vec::new();
     for descriptor in crate::providers::descriptors() {
         let name = descriptor.instruction_file;
-        if name != INSTRUCTION_FILE && !linked.contains(&name) {
-            linked.push(name);
+        if name == INSTRUCTION_FILE || written.contains(&name) {
+            continue;
+        }
+        written.push(name);
+        if file_links {
             link_instruction_file(workdir, name)?;
+        } else if let Some(prefix) = descriptor.instruction_import_prefix {
+            write_instruction_file(workdir, name, &format!("{prefix}{INSTRUCTION_FILE}\n"))?;
+        } else {
+            write_instruction_file(workdir, name, &text)?;
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// [`platform::file_links_available`] for a test, on the test's own thread.
+    pub(super) static FILE_LINKS_OVERRIDE: std::cell::Cell<Option<bool>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Whether the host makes file links ([`platform::file_links_available`]), or a test's override of
+/// it. Read on the thread that writes the files.
+fn file_links_available() -> bool {
+    #[cfg(test)]
+    if let Some(available) = FILE_LINKS_OVERRIDE.get() {
+        return available;
+    }
+    platform::file_links_available()
+}
+
+/// Writes `text` to `name` in `workdir`, replacing whatever is there (a link included) in one
+/// rename, and keeping the permissions the file had.
+fn write_instruction_file(workdir: &Path, name: &str, text: &str) -> Result<()> {
+    let path = workdir.join(name);
+    replace_file(
+        &path,
+        &temp_name_beside(workdir, name),
+        text.as_bytes(),
+        Permissions::KeptOrDefault,
+    )
+    .with_context(|| format!("writing {}", path.display()))
 }
 
 /// Points `name` in `workdir` at [`INSTRUCTION_FILE`]. A symlink that already points at the file
@@ -99,11 +135,16 @@ fn write_console_session_instructions(console: &Console, options: &RoleOptions) 
 /// never goes missing.
 fn link_instruction_file(workdir: &Path, name: &str) -> Result<()> {
     let link = workdir.join(name);
-    if std::fs::read_link(&link).is_ok_and(|target| target == Path::new(INSTRUCTION_FILE)) {
+    if platform::read_alias(&link)
+        .ok()
+        .flatten()
+        .is_some_and(|target| target == Path::new(INSTRUCTION_FILE))
+    {
         return Ok(());
     }
     let temp_link = temp_name_beside(workdir, name);
-    std::os::unix::fs::symlink(INSTRUCTION_FILE, &temp_link)
+    platform::alias_file(Path::new(INSTRUCTION_FILE), &temp_link)
+        .map(drop)
         .with_context(|| format!("linking {}", temp_link.display()))?;
     rename_over(&temp_link, &link).inspect_err(|_| {
         std::fs::remove_file(&temp_link).ok();
@@ -188,7 +229,7 @@ mod tests {
             assert_eq!(workdir.read_dir().unwrap().count(), names.len());
         }
         std::fs::remove_file(workdir.join("CLAUDE.md")).unwrap();
-        std::os::unix::fs::symlink("elsewhere", workdir.join("CLAUDE.md")).unwrap();
+        crate::test_support::symlink("elsewhere", workdir.join("CLAUDE.md")).unwrap();
         write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
         assert_eq!(
             std::fs::read_link(workdir.join("CLAUDE.md")).unwrap(),
@@ -196,7 +237,55 @@ mod tests {
         );
     }
 
+    /// Where the host makes no file links, every instruction file is a regular file, in place of the
+    /// links a run that made them left: `CLAUDE.md` is Claude Code's import line for `AGENTS.md`,
+    /// and the test provider's file, a provider with no import line, a copy of the text rewritten
+    /// with it. Once the host makes file links again, links replace them.
+    #[test]
+    fn a_console_without_file_links_writes_regular_instruction_files() {
+        let workdir = ScratchDir::new("console-instructions-copied");
+        let mut console = console(AgentId::CLAUDE, &workdir);
+        let others = ["CLAUDE.md", "TEST_AGENT.md"];
+        for name in others {
+            crate::test_support::symlink("AGENTS.md", workdir.join(name)).unwrap();
+        }
+        let regular_file = |name: &str| {
+            let path = workdir.join(name);
+            assert!(
+                std::fs::symlink_metadata(&path).unwrap().is_file(),
+                "{name}"
+            );
+            std::fs::read_to_string(path).unwrap()
+        };
+        let names: std::collections::HashSet<_> = crate::providers::descriptors()
+            .map(|descriptor| descriptor.instruction_file)
+            .chain([INSTRUCTION_FILE])
+            .collect();
+
+        FILE_LINKS_OVERRIDE.set(Some(false));
+        for prompt in [None, Some("Be brief.")] {
+            console.console_session_prompt = prompt.map(str::to_string);
+            write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
+            let expected = console_session_instructions(prompt, &RoleOptions::default());
+            assert_eq!(regular_file("AGENTS.md"), expected);
+            assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+            assert_eq!(regular_file("TEST_AGENT.md"), expected);
+            assert_eq!(workdir.read_dir().unwrap().count(), names.len());
+        }
+
+        FILE_LINKS_OVERRIDE.set(Some(true));
+        write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
+        for name in others {
+            assert_eq!(
+                std::fs::read_link(workdir.join(name)).unwrap(),
+                Path::new("AGENTS.md")
+            );
+        }
+        assert_eq!(workdir.read_dir().unwrap().count(), names.len());
+    }
+
     /// Rewriting the instruction file keeps the permissions the user gave it.
+    #[cfg(unix)]
     #[test]
     fn a_rewritten_instruction_file_keeps_its_permissions() {
         use std::os::unix::fs::PermissionsExt;

@@ -52,6 +52,8 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> 
 /// Archives `session` and what is bound to it as an `archive_session` request asks: the process
 /// trees in `keep_process_ids` are kept from being stopped with it, and its branches are removed
 /// once it is down, the locked worktrees in `force_remove` included and those in `keep` left.
+/// Refused, with nothing kept or archived, when one of those trees cannot be kept because a
+/// process of it is on its agent's own console ([`super::processes::keep`]).
 pub(super) async fn archive_requested(
     state: &Arc<AppState>,
     session: String,

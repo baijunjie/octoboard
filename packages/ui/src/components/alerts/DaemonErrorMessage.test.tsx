@@ -16,6 +16,7 @@ import { errorPresentation, hasCodeParams } from "../../errors/errorPresentation
 import { ActionableError } from "../../errors/actionableError";
 import { useDialogAction } from "../dialog/dialogHooks";
 import { currentLanguage, setLanguage } from "../../i18n/language";
+import { announceDaemonHost } from "../../i18n/platformTerms";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { TEST_PROVIDERS, UNPRESENTED_PROVIDER } from "../../test/testProviders";
@@ -606,7 +607,7 @@ it("retains a named quota window as a rich name and a plain isolated value", () 
   expect(daemonMessage("en", "account_quota_exhausted", params, "fallback", createStateStore({}).getState())).toContain(`\u2068${params.window}\u2069`);
 });
 
-it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost", "queued_messages_lost.held"])("keeps %s recovery visible as the remedy, with only its own further explanation for Details, and preserves the complete plain wording", (entry) => {
+it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost", "queued_messages_lost.held", "process_shares_agent_console"])("keeps %s recovery visible as the remedy, with only its own further explanation for Details, and preserves the complete plain wording", (entry) => {
   // `queued_messages_lost.held` is that code with `fragment: "held"`, worded as a variant with further explanation of its own.
   const [code, variant] = entry.split(".");
   const params = { path: "/tmp/مراجعة", project: "Docs", agent: "Codex", reason_code: "screen_gone", session: "missing", reason: "fallback reason", ...(variant ? { fragment: variant } : {}) };
@@ -727,6 +728,34 @@ it("routes the operating-system reference in directory recovery through the shar
   const plain = daemonMessage("en", "directory_unreadable", params, "fallback", createStateStore({}).getState());
   expect(plain).toContain("\u2068macOS\u2069 asks for permission per volume");
   expect(plain).not.toMatch(/\{\w+\}/);
+});
+
+it("words an unreadable or unreachable directory by the daemon host's system, and anew when the host changes", () => {
+  const params = { path: "/home/dev/code", detail: "permission denied" };
+  const text = (code: string, part?: "summary" | "remedy" | "details") => mount(<DaemonErrorMessage error={new CodedError("fallback", code, params)} part={part} />).textContent;
+  const plain = (code: string) => daemonMessage("en", code, params, "fallback", createStateStore({}).getState()).replace(/[\u2066-\u2069]/g, "");
+  onTestFinished(() => act(() => announceDaemonHost(undefined)));
+  // A macOS daemon host keeps the per-volume wording.
+  act(() => announceDaemonHost({ os: "macos", terms: {} }));
+  expect(text("directory_unreadable", "remedy")).toBe("Grant the application access to that volume, then try again.");
+  expect(plain("directory_unreachable")).toContain("A packaged application needs file access granted per volume");
+  // A Windows or Linux one says nothing of volumes, whichever system the client runs on.
+  for (const os of ["windows", "linux"] as const) {
+    act(() => announceDaemonHost({ os, terms: {} }));
+    const name = os === "windows" ? "Windows" : "Linux";
+    expect(text("directory_unreadable", "summary")).toBe("/home/dev/code could not be read.");
+    expect(text("directory_unreadable", "remedy")).toBe("Check that the user account the daemon runs as can read the folder, then try again.");
+    expect(text("directory_unreadable", "details")).toContain(`On ${name}, the daemon reads folders with the permissions of the user account it runs as.`);
+    expect(text("directory_unreadable", "details")).not.toContain("per volume");
+    expect(plain("directory_unreadable")).toBe(`/home/dev/code could not be read. On ${name}, the daemon reads folders with the permissions of the user account it runs as. Check that this account can read the folder, then try again: permission denied`);
+    expect(plain("directory_unreachable")).toBe("/home/dev/code is not a directory the daemon can reach.");
+  }
+  // A message already shown is worded anew when the daemon host changes.
+  act(() => announceDaemonHost({ os: "macos", terms: {} }));
+  const shown = mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} part="remedy" />);
+  expect(shown.textContent).toBe("Grant the application access to that volume, then try again.");
+  act(() => announceDaemonHost({ os: "windows", terms: {} }));
+  expect(shown.textContent).toBe("Check that the user account the daemon runs as can read the folder, then try again.");
 });
 
 it("retains a named key inside a structured trust reason as a technical chip", () => {

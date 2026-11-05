@@ -135,12 +135,15 @@ On macOS this asks Finder to open the directory through the system directory ope
 to finish, for at most 15 seconds, with at most 16 KiB each of standard output and standard error. It does not wait for
 the Finder window to close.
 
+On Windows it asks the system to open the directory as a double-click would, which opens it in File Explorer, and
+fails when the system says it could not.
+
 On Linux it uses `xdg-open`, looked up in the user's login-shell environment. The launcher is detached, and the request
 succeeds once it has been started. It does not wait for the launcher or file-manager window to close; a later launcher
 failure is not reported to the client.
 
 A project that no longer exists is refused with `unknown_project`. Otherwise the request is refused with
 `directory_unavailable` when its directory is missing, is not a directory, or has a relative path; when the operating
-system is neither macOS nor Linux; when the Linux launcher or its login-shell environment cannot be obtained; or when
+system is none of macOS, Linux and Windows; when the Linux launcher or its login-shell environment cannot be obtained; or when
 the process cannot be started. On macOS the request also fails if the launcher exceeds its time or output bound or exits
 unsuccessfully. The refusal carries the reason as `detail`.

@@ -184,7 +184,7 @@ mod tests {
         .unwrap();
         assert!(!supported(&fixture.spec(), &plan));
         std::fs::remove_file(actual.join("keybindings.json")).unwrap();
-        std::os::unix::fs::symlink(actual.join("missing"), actual.join("keybindings.json"))
+        crate::test_support::symlink(actual.join("missing"), actual.join("keybindings.json"))
             .unwrap();
         assert!(!supported(&fixture.spec(), &plan));
     }

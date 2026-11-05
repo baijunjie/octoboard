@@ -225,6 +225,15 @@ describe("gallery scenarios", () => {
     }
   });
 
+  it("say the same of the daemon's machine as of the host a scenario gives, so paths are spelt as that machine writes them", () => {
+    const hosted = SCENARIOS.filter((scenario) => scenario.host);
+    expect(hosted.map(({ id }) => id)).toContain("settings-notifications-windows");
+    for (const { id, host, state } of hosted) {
+      expect(state?.host?.os ?? host!.os, id).toBe(host!.os);
+      expect(state?.host?.path_style ?? "unix", id).toBe(host!.os === "windows" ? "windows" : "unix");
+    }
+  });
+
   it("write no width the gallery already opens at, which would be a scenario carrying nothing", () => {
     expect(SCENARIOS.filter((s) => s.width === DEFAULT_WIDTH).map((s) => s.id)).toEqual([]);
   });

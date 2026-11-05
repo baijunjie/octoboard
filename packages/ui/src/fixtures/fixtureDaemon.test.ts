@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { currentLanguage, t } from "../i18n/language";
-import type { State, NotificationRequest } from "../store";
+import type { NotificationRequest, State, WindowNotification } from "../store";
 import { broadcastNotification } from "../store/notifications";
 
 import type { Agent, ClientRequestBody, Settings } from "../protocol";
@@ -20,6 +20,14 @@ import { SAMPLE_GIT } from "./sampleGit";
 import { quotaFailure, quotaOf, quotaWindow, resetCreditOf, resetCreditsOf } from "./quotas";
 import { accountOf, accountSharingOf, branchItemOf, broadcastErrorNotification, consoleOf, gitStatusOf, keptOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionNoticeNotification, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
+
+/** A listener that adds each notification to `list`, a scenario's notifications being shown ones, never withdrawals. */
+function shownInto(list: NotificationRequest[]): (notification: WindowNotification) => void {
+  return (notification) => {
+    if (notification.kind === "withdrawn") throw new Error("a scenario withdrew a notice");
+    list.push(notification);
+  };
+}
 
 describe("the fixture daemon's session archiving", () => {
   it("archives running and interrupted descendants and supports reopening", async () => {
@@ -1085,7 +1093,7 @@ describe("the fixture daemon's structured notices", () => {
       void daemon.scenarioNotificationsRaised.then(raised);
       await vi.advanceTimersByTimeAsync(10_000);
       expect(raised).not.toHaveBeenCalled();
-      const unsubscribe = daemon.onNotification((notification) => notifications.push(notification));
+      const unsubscribe = daemon.onNotification(shownInto(notifications));
       await vi.advanceTimersByTimeAsync(299);
       expect(raised).not.toHaveBeenCalled();
       expect(notifications).toEqual([]);
@@ -1104,7 +1112,7 @@ describe("the fixture daemon's structured notices", () => {
       const params = { title: "Release notes", reason_code: "config_dir_unreachable", agent: "Claude Code", path: "/Users/dev/.claude-work", reason: "Permission denied" };
       const daemon = createFixtureDaemon({ ...scenario, notifications: [sessionNoticeNotification("s-gone", "launch_failed", params)] });
       const notifications: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification((notification) => notifications.push(notification));
+      const unsubscribe = daemon.onNotification(shownInto(notifications));
       await vi.runAllTimersAsync();
       expect(notifications).toHaveLength(1);
       expect(notifications[0]?.daemonTitle).toMatchObject({ code: "launch_failed.title", params });
@@ -1128,7 +1136,7 @@ describe("the fixture daemon's scenario notifications", () => {
     try {
       const daemon = createFixtureDaemon({ state: state(), notifications });
       const got: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification((notification) => got.push(notification));
+      const unsubscribe = daemon.onNotification(shownInto(got));
       await vi.runAllTimersAsync();
       unsubscribe();
       return { got, records: daemon.store.getState() };
@@ -1188,7 +1196,7 @@ describe("the fixture daemon's error titles", () => {
         ],
       });
       const notifications: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification((notification) => notifications.push(notification));
+      const unsubscribe = daemon.onNotification(shownInto(notifications));
       await vi.runAllTimersAsync();
       expect(notifications.map((notification) => notification.title)).toEqual(["Could not open the folder", t("settings.saveFailedTitle")]);
       unsubscribe();
@@ -2493,6 +2501,20 @@ describe("the fixture daemon's process ledger", () => {
     await expect(list(daemon, { session_id: hub.id })).resolves.toEqual(["7:1"]);
   });
 
+  it("refuses a keep, or an archive that keeps, naming a tree that cannot be kept, before anything is kept or ended", async () => {
+    const shared = processTreeOf("8:1", running, "/usr/bin/node serve.mjs", 40, { keepable: false, unkeepable_reason: "agent_console" });
+    const withShared = { ...scenario, processes: { ...scenario.processes, trees: [...scenario.processes.trees, shared] } };
+    const refusal = { code: "process_shares_agent_console", params: { pid: "8", name: "node" } };
+    const kept = createFixtureDaemon(withShared);
+    await expect(kept.request({ type: "keep_processes", ids: ["1:1", "8:1"] })).rejects.toMatchObject(refusal);
+    await expect(list(kept, { session_id: running.id })).resolves.toEqual(["1:1", "8:1", "2:1"]);
+    const archived = createFixtureDaemon(withShared);
+    await expect(archived.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1", "8:1"] })).rejects.toMatchObject(refusal);
+    expect(archived.store.getState().sessions.get(running.id)?.status).toBe("idle");
+    await expect(list(archived, { session_id: running.id })).resolves.toEqual(["1:1", "8:1", "2:1"]);
+    await expect(archived.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] })).resolves.toEqual({ type: "ack", id: null });
+  });
+
   it("ends an archived session's trees but the ones the user keeps, which stay kept when the archive is refused", async () => {
     const archived = createFixtureDaemon(scenario);
     await archived.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] });
@@ -2521,6 +2543,13 @@ describe("the fixture daemon's process ledger", () => {
     const daemon = createFixtureDaemon({ ...scenario, processes: { ...scenario.processes, projectList: { [project.id]: error } } });
     await expect(daemon.request({ type: "list_processes", project_id: project.id })).rejects.toMatchObject({ code: "internal_error" });
     await expect(list(daemon, { project_id: other.id })).resolves.toEqual(["4:1"]);
+    await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
+  });
+
+  it("answers a stop that leaves trees running with each one named as not stopped, and keeps them listed", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, processes: { ...scenario.processes, stop: { leavesRunning: "access_denied" } } });
+    const reply = await daemon.request({ type: "stop_processes", ids: ["1:1"] });
+    expect(reply).toMatchObject({ type: "processes_stopped", ids: [], not_stopped: [{ tree_id: "1:1", pid: 1, reason: "access_denied" }] });
     await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
   });
 

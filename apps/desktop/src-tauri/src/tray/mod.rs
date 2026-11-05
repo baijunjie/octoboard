@@ -14,25 +14,32 @@
 //! accessible name (the icon has no tooltip). The octopus and capsule are always one template
 //! image, so macOS keeps drawing them for the menu bar's light or dark look; a template image
 //! cannot carry a colour, so the dot is a view of its own laid over the button, in place of the
-//! octopus's cut-out corner (`show_dot`).
+//! octopus's cut-out corner (`show_dot`). On Windows the icon is the app icon in its own colours,
+//! the dot is part of the picture, a quota is not drawn, and the label is the icon's tooltip.
 //!
 //! Replacing the menu closes it if it is open, so a menu the UI sends while a menu is open is held
-//! back and applied once it closes (`MenuTracking`). The UI is told when this menu begins to open
-//! (`MENU_OPENED_EVENT`) so it can ask for fresh quotas, which reach the menu on its next update.
+//! back and applied once it closes (`MenuTracking`), which macOS's menu tracking and, on Windows,
+//! the menu loop of tray-icon's window report (`follow_menu_tracking`). The UI
+//! is told when this menu begins to open (`MENU_OPENED_EVENT`: macOS's menu tracking, the click
+//! that opens it on Windows) so it can ask for fresh quotas, which reach the menu on its next update.
 //!
 //! Muda gives a menu item's picture no template flag, which is what makes a monochrome one follow
 //! the menu's light or dark look. So the pictures flagged template get it set on their
 //! `NSMenuItem`s, line by line (`finish_menu`). Tauri does not hand out a menu's `NSMenu`, and
 //! tray-icon puts it on the status item (`NSStatusItem::menu`) only while it is open, so the
 //! pass waits for the menu to begin tracking, whose notification carries it, and runs once for
-//! each menu built (`finish::unfinished`). The same pass gives the headings of the sessions'
+//! each menu built (`macos/finish.rs`). The same pass gives the headings of the sessions'
 //! sections and the lines of each submenu their rows (`lines.rs`), as a line that cannot be
 //! chosen is drawn in a grey that nothing but a view of its own can darken.
+//!
+//! All of that native work is the platform module's (`macos/`, `windows.rs`); this module and the
+//! files beside it hold what every platform shares: the model, the plain items, the icon's pictures
+//! and when a menu is held back.
 
-// The quota bars, the attention dot (`icon::dot_png`), the submenus' rows and the menu tracking are
-// drawn and driven by macOS-only code; elsewhere the menu the UI sends is still parsed whole, so
-// those parts are read by nothing. The allow reaches dead items, not unused imports: an import only
-// macOS code uses carries the same `cfg` itself.
+// The quota bars, the attention dot (`icon::dot_png`) and the submenus' rows are drawn by
+// macOS-only code, and the menu tracking is followed on macOS and Windows only; elsewhere the menu
+// the UI sends is still parsed whole, so those parts are read by nothing. The allow reaches dead items, not unused imports: the imports
+// only macOS code uses are in `macos/`.
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
 use std::sync::Mutex;
@@ -42,29 +49,32 @@ use tauri::{AppHandle, Emitter};
 
 use crate::background::show_main_window;
 use crate::exit::request_quit;
-#[cfg(target_os = "macos")]
 use crate::menu::APP_NAME;
 
 mod finish;
 mod icon;
 mod items;
-#[cfg(target_os = "macos")]
-mod lines;
 mod menu_tracking;
 mod model;
-#[cfg(target_os = "macos")]
-mod openers;
 mod status_item;
 
 #[cfg(target_os = "macos")]
-use finish::{finish_order, unfinished, MenuFinish};
-use items::build_menu;
+mod macos;
 #[cfg(target_os = "macos")]
-use menu_tracking::follow_menu_tracking;
+use macos as platform;
+
+#[cfg(not(target_os = "macos"))]
+mod windows;
+#[cfg(not(target_os = "macos"))]
+use windows as platform;
+
+use items::build_menu;
 use menu_tracking::{tracking, MenuTracking};
 use model::TrayMenu;
-#[cfg(target_os = "macos")]
-use status_item::set_icon_label;
+use platform::{
+    customize, finish_when_opened, follow_menu_tracking, picture, set_icon_label, Unfinished,
+    TEMPLATE,
+};
 use status_item::{show_icon, IconState};
 
 const TRAY_ID: &str = "main";
@@ -93,27 +103,24 @@ pub struct TrayState {
     icon_shown: Mutex<IconState>,
     /// What `finish_menu` is to do to the menu last set, until the menu first opens. It is replaced
     /// in the same pass as the menu, and taken only for a menu `is_tray_menu` matched, so it never
-    /// finishes a menu other than the one it was made for.
-    #[cfg(target_os = "macos")]
-    unfinished: Mutex<Option<MenuFinish>>,
+    /// finishes a menu other than the one it was made for. Nothing off macOS, where no menu is
+    /// finished.
+    unfinished: Unfinished,
 }
 
-/// Puts the icon in the menu bar. It is a template image, so macOS tints it for a light or dark
-/// menu bar itself.
+/// Puts the icon in the menu bar. Its picture and whether it is a template image, which macOS
+/// tints for a light or dark menu bar itself, are the platform's.
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let tray = TrayIconBuilder::with_id(TRAY_ID)
-        .icon(icon::octopus(false, None))
-        .icon_as_template(true)
-        .menu(&build_menu(app, &TrayMenu::default())?)
-        .show_menu_on_left_click(true)
-        .build(app)?;
-    #[cfg(not(target_os = "macos"))]
-    let _ = tray;
-    #[cfg(target_os = "macos")]
-    {
-        set_icon_label(&tray, APP_NAME);
-        follow_menu_tracking(app);
-    }
+    let tray = customize(
+        TrayIconBuilder::with_id(TRAY_ID)
+            .icon(picture(false, None))
+            .icon_as_template(TEMPLATE)
+            .menu(&build_menu(app, &TrayMenu::default())?)
+            .show_menu_on_left_click(true),
+    )
+    .build(app)?;
+    set_icon_label(&tray, APP_NAME);
+    follow_menu_tracking(app);
     Ok(())
 }
 
@@ -126,24 +133,28 @@ pub fn set_tray_menu(app: AppHandle, menu: TrayMenu) -> Result<(), String> {
     apply(&app, &menu)
 }
 
+/// Takes the icon out of the notification area now, for a process that is about to end without
+/// the exit event, which is what otherwise removes it: an icon left behind stays drawn until the
+/// pointer passes over it. Hiding waits for the main thread to have done it, which dropping the
+/// icon would not.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub(crate) fn remove(app: &AppHandle) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_visible(false);
+    }
+}
+
 fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     let tray = app
         .tray_by_id(TRAY_ID)
         .ok_or_else(|| "the menu bar icon does not exist".to_string())?;
     let built = build_menu(app, menu).map_err(|err| err.to_string())?;
     tray.set_menu(Some(built)).map_err(|err| err.to_string())?;
-    #[cfg(target_os = "macos")]
-    {
-        *unfinished(app) = Some(MenuFinish {
-            lines: finish_order(menu),
-            submenus: menu.submenus.clone(),
-        });
-    }
+    finish_when_opened(app, menu);
     let quota = menu.quota_remaining.map(|remaining| icon::Quota {
         main: remaining.min(100),
         thin: menu.quota_weekly_remaining.map(|weekly| weekly.min(100)),
     });
-    #[cfg(target_os = "macos")]
     set_icon_label(
         &tray,
         quota.and(menu.quota_label.as_deref()).unwrap_or(APP_NAME),

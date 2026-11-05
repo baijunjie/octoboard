@@ -97,6 +97,12 @@ Apart from the `._` prefix, names are matched whole and ignoring the case of the
 `.ds_store` and `.GIT` are left out too, while a name differing in any other character is listed. The list is fixed; no
 setting changes it. A folder holding only left-out entries shows as empty.
 
+**On a Windows daemon host**, a name holding an unpaired UTF-16 surrogate, which Windows allows although it is not
+valid Unicode, is listed, opened and found by a search like any other, shown with a replacement character in the
+surrogate's place. A name Windows' path rules reject — one ending in a dot or a space, or a reserved device name such
+as `CON` — which only a program that bypasses those rules can create, is listed but cannot be opened by its path, and a
+search leaves it out and is marked incomplete (see "Filtering by file name" below).
+
 Folders start collapsed and each is read only when it is first shown, so a large folder costs nothing until it is
 expanded.
 
@@ -399,7 +405,13 @@ On macOS the system opener handles Default application; for File manager it asks
 folder that is opened, to open it in Finder. When the system opener fails because no application claims the file's type
 (an unregistered extension such as `.env.secret`), a regular file whose first 8 KiB contain no NUL byte and are valid
 UTF-8 is opened in the user's default text editor instead, as Finder does; any other file, or any other failure, is
-still reported. On Linux Default application uses `xdg-open`; File manager requires `gdbus` and a desktop file manager
+still reported. On Windows Default application asks the system to open the entry as a double-click would, and
+reports what the system answered; a file whose type has no application associated opens the system's "Open with"
+chooser, and the request is answered as opened once 3 seconds pass without an answer, so neither the request nor the
+daemon's exit waits on the chooser (the "no associated application" message is reached only for a type registered
+without an `open` verb, or where the chooser is unavailable); and File manager
+starts File Explorer, selecting an entry or opening a folder; File Explorer is started without waiting for it, so the
+request succeeds once it has started. On Linux Default application uses `xdg-open`; File manager requires `gdbus` and a desktop file manager
 providing `org.freedesktop.FileManager1`, whose `ShowItems` selects an entry and `ShowFolders` opens a folder. The Linux
 tools are looked up in the user's login-shell environment. On macOS, and for Linux File manager, the request
 waits for the launcher to finish, at most **15 seconds** with at most **16 KiB** each of output and error, rather than

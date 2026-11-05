@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, PhysicalRect, WebviewWindow, WindowEvent};
 
+use crate::chrome::SystemFrame;
 use crate::diagnostics::diagnostic;
 
 /// The window's size on a first launch, and when the saved frame has nowhere visible to be.
@@ -41,7 +42,9 @@ const MIN_VISIBLE_TOP_STRIP: (f64, f64) = (200.0, 20.0);
 /// How long a frame has to stand before a maximize can no longer discard it; see `Tracker`.
 const SETTLE: Duration = Duration::from_millis(500);
 
-/// A rectangle in logical points; for the window, its outer top-left and its inner size.
+/// A rectangle in logical points; for the window, its outer top-left and its inner size. The
+/// outer size is the inner size plus what the system frame adds (`SystemFrame::extra`), which is
+/// nothing where the titlebar overlays the page.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Rect {
     pub x: f64,
@@ -99,18 +102,23 @@ impl InitialWindow {
 }
 
 /// Decides the frame the window opens with. `displays` are the work areas of the connected
-/// displays (each without its menu bar and Dock); `main_display` is the main display's.
+/// displays (each without its menu bar and Dock or taskbar); `main_display` is the main display's;
+/// `system_frame` is what the system frame adds around the inner size, so the window's outer frame,
+/// not just its inner size, is what gets held inside a work area.
 ///
-/// - No saved state, or one that is not a usable rectangle: the default size, placed by the OS.
+/// - No saved state, or one that is not a usable rectangle: the default size, placed by the OS. Where
+///   the system does not fit a new window onto its screen itself and the main display's work area is
+///   smaller than the default size plus the system frame, the size is fitted to the work area
+///   instead (never below `MIN_SIZE`) and the window is centred on it.
 /// - A saved frame whose top strip (`TOP_STRIP_HEIGHT`) has at least `MIN_VISIBLE_TOP_STRIP` on
 ///   some display is restored, held inside the bounding box of all the displays: its size first
-///   (never below `MIN_SIZE`), then its position. A frame spanning displays that are all still
-///   connected therefore comes back unchanged, while one that reached onto a display since
-///   unplugged is pulled back onto the ones left. A frame straddling two displays passes on the
-///   strength of either part.
+///   (never below `MIN_SIZE`), then its position, both counting the system frame. A frame spanning
+///   displays that are all still connected therefore comes back unchanged, while one that reached
+///   onto a display since unplugged is pulled back onto the ones left. A frame straddling two
+///   displays passes on the strength of either part.
 /// - Otherwise, or when the frame held inside the box no longer has its top strip on a display (the
-///   box also spans the gaps between displays): the default size, centred on the main display's
-///   work area.
+///   box also spans the gaps between displays): the default size, fitted as above, centred on the
+///   main display's work area.
 ///
 /// A saved maximized state is kept either way; the window maximizes on whichever display its
 /// normal frame lands on.
@@ -118,11 +126,22 @@ pub fn initial_window(
     saved: Option<&SavedState>,
     displays: &[Rect],
     main_display: Option<Rect>,
+    system_frame: SystemFrame,
 ) -> InitialWindow {
+    let extra = system_frame.extra;
     let Some(saved) = saved.filter(|saved| saved.frame.is_well_formed()) else {
+        let size = default_size(system_frame, main_display);
+        // An unfitted default is left to the OS to place; a fitted one has to be centred here, as
+        // the OS would not know the size was cut down for the work area.
+        let position = match main_display {
+            Some(display) if size != DEFAULT_SIZE => {
+                Some(centred((size.0 + extra.0, size.1 + extra.1), display))
+            }
+            _ => None,
+        };
         return InitialWindow {
-            position: None,
-            size: DEFAULT_SIZE,
+            position,
+            size,
             maximized: false,
         };
     };
@@ -130,10 +149,17 @@ pub fn initial_window(
     let frame = saved.frame;
     if let Some(bounds) = bounding_box(displays) {
         if top_strip_reachable(frame.x, frame.y, frame.width.max(MIN_SIZE.0), displays) {
-            let width = frame.width.min(bounds.width).max(MIN_SIZE.0);
-            let height = frame.height.min(bounds.height).max(MIN_SIZE.1);
-            let x = frame.x.min(bounds.x + bounds.width - width).max(bounds.x);
-            let y = frame.y.min(bounds.y + bounds.height - height).max(bounds.y);
+            let width = frame.width.min(bounds.width - extra.0).max(MIN_SIZE.0);
+            let height = frame.height.min(bounds.height - extra.1).max(MIN_SIZE.1);
+            let (outer_width, outer_height) = (width + extra.0, height + extra.1);
+            let x = frame
+                .x
+                .min(bounds.x + bounds.width - outer_width)
+                .max(bounds.x);
+            let y = frame
+                .y
+                .min(bounds.y + bounds.height - outer_height)
+                .max(bounds.y);
             if top_strip_reachable(x, y, width, displays) {
                 return InitialWindow {
                     position: Some((x, y)),
@@ -144,11 +170,32 @@ pub fn initial_window(
         }
     }
 
+    let size = default_size(system_frame, main_display);
     InitialWindow {
-        position: main_display.map(|display| centred(DEFAULT_SIZE, display)),
-        size: DEFAULT_SIZE,
+        position: main_display
+            .map(|display| centred((size.0 + extra.0, size.1 + extra.1), display)),
+        size,
         maximized: saved.maximized,
     }
+}
+
+/// `DEFAULT_SIZE`, cut down to fit the main display's work area together with the system frame
+/// when the system does not fit a new window itself (never below `MIN_SIZE`); unchanged when the
+/// system does, when the work area is not known, or when it is big enough.
+fn default_size(system_frame: SystemFrame, main_display: Option<Rect>) -> (f64, f64) {
+    let Some(display) = main_display.filter(|_| !system_frame.fits_new_window) else {
+        return DEFAULT_SIZE;
+    };
+    (
+        DEFAULT_SIZE
+            .0
+            .min(display.width - system_frame.extra.0)
+            .max(MIN_SIZE.0),
+        DEFAULT_SIZE
+            .1
+            .min(display.height - system_frame.extra.1)
+            .max(MIN_SIZE.1),
+    )
 }
 
 /// Whether a window at `x`, `y`, `width` wide, has at least `MIN_VISIBLE_TOP_STRIP` of its top
@@ -466,6 +513,28 @@ mod tests {
         height: 1080.0,
     };
 
+    /// What macOS reports: the overlay titlebar adds nothing around the inner size, and the system
+    /// fits a new window onto its screen itself.
+    const MACOS: SystemFrame = SystemFrame {
+        extra: (0.0, 0.0),
+        fits_new_window: true,
+    };
+
+    /// A Windows-like frame: a titlebar and borders around the inner size, and no help from the
+    /// system in fitting a new window onto its screen.
+    const WINDOWS: SystemFrame = SystemFrame {
+        extra: (16.0, 39.0),
+        fits_new_window: false,
+    };
+
+    /// A 1024×720 work area: a 1024×768 screen less a 48-point taskbar.
+    const SMALL_SCREEN: Rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 1024.0,
+        height: 720.0,
+    };
+
     fn saved(x: f64, y: f64, width: f64, height: f64, maximized: bool) -> SavedState {
         SavedState {
             frame: Rect {
@@ -514,7 +583,7 @@ mod tests {
     #[test]
     fn first_launch_leaves_the_placement_to_the_os() {
         assert_eq!(
-            initial_window(None, &[LAPTOP, EXTERNAL], Some(LAPTOP)),
+            initial_window(None, &[LAPTOP, EXTERNAL], Some(LAPTOP), MACOS),
             InitialWindow {
                 position: None,
                 size: DEFAULT_SIZE,
@@ -531,7 +600,7 @@ mod tests {
             saved(100.0, 100.0, 1200.0, f64::INFINITY, true),
         ] {
             assert_eq!(
-                initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
+                initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), MACOS),
                 InitialWindow {
                     position: None,
                     size: DEFAULT_SIZE,
@@ -545,17 +614,17 @@ mod tests {
     fn frame_on_a_display_above_and_left_of_the_main_one_is_restored() {
         let state = saved(-700.0, -1000.0, 1200.0, 760.0, true);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP, ABOVE_LEFT], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP, ABOVE_LEFT], Some(LAPTOP), MACOS),
             restored(-700.0, -1000.0, 1200.0, 760.0, true)
         );
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), MACOS),
             fallback(true)
         );
         // A frame pulled back onto the displays left keeps its maximized state too.
         let reaching = saved(-1800.0, 100.0, 2400.0, 760.0, true);
         assert_eq!(
-            initial_window(Some(&reaching), &[LAPTOP], Some(LAPTOP)),
+            initial_window(Some(&reaching), &[LAPTOP], Some(LAPTOP), MACOS),
             restored(0.0, 100.0, 1512.0, 760.0, true)
         );
     }
@@ -565,7 +634,7 @@ mod tests {
         // Saved reaching past the bottom right of the displays connected now.
         let state = saved(1600.0, 50.0, 2400.0, 1400.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP), MACOS),
             restored(1032.0, 0.0, 2400.0, 1080.0, false)
         );
         // The minimum still wins over displays smaller than it.
@@ -577,7 +646,7 @@ mod tests {
         };
         let state = saved(0.0, 0.0, 1200.0, 760.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[tiny], Some(tiny)),
+            initial_window(Some(&state), &[tiny], Some(tiny), MACOS),
             restored(0.0, 0.0, 1168.0, 600.0, false)
         );
     }
@@ -586,7 +655,7 @@ mod tests {
     fn absurd_saved_size_is_held_to_the_displays() {
         let state = saved(100.0, 100.0, 100_000.0, 100_000.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP), MACOS),
             restored(0.0, 0.0, 3432.0, 1080.0, false)
         );
     }
@@ -610,7 +679,12 @@ mod tests {
         };
         let state = saved(0.0, 1600.0, 1100.0, 1500.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[top_right, bottom_left], Some(top_right)),
+            initial_window(
+                Some(&state),
+                &[top_right, bottom_left],
+                Some(top_right),
+                MACOS
+            ),
             restored(1400.0, 120.0, 1200.0, 760.0, false)
         );
     }
@@ -619,7 +693,7 @@ mod tests {
     fn fallback_without_a_main_display_leaves_the_placement_to_the_os() {
         let state = saved(1700.0, 100.0, 1400.0, 900.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[], None),
+            initial_window(Some(&state), &[], None, MACOS),
             InitialWindow {
                 position: None,
                 size: DEFAULT_SIZE,
@@ -632,12 +706,12 @@ mod tests {
     fn frame_below_the_minimum_is_grown_to_it() {
         let state = saved(100.0, 100.0, 600.0, 380.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), MACOS),
             restored(100.0, 100.0, 1168.0, 600.0, false)
         );
         let state = saved(100.0, 100.0, 1300.0, 380.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)).size,
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), MACOS).size,
             (1300.0, 600.0)
         );
     }
@@ -647,7 +721,7 @@ mod tests {
         // Most of the window is on the laptop, but its top bar is above every display.
         let above = saved(100.0, -30.0, 1200.0, 760.0, false);
         assert_eq!(
-            initial_window(Some(&above), &[LAPTOP, EXTERNAL], Some(LAPTOP)),
+            initial_window(Some(&above), &[LAPTOP, EXTERNAL], Some(LAPTOP), MACOS),
             fallback(false)
         );
         // Only the window's left corner of the top bar is on the laptop: too little to grab.
@@ -657,7 +731,7 @@ mod tests {
             ..LAPTOP
         };
         assert_eq!(
-            initial_window(Some(&sideways), &[laptop_tall], Some(LAPTOP)),
+            initial_window(Some(&sideways), &[laptop_tall], Some(LAPTOP), MACOS),
             fallback(false)
         );
     }
@@ -666,7 +740,7 @@ mod tests {
     fn top_strip_partly_above_a_display_is_reachable_and_pulled_onto_it() {
         let state = saved(100.0, 20.0, 1200.0, 760.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), MACOS),
             restored(100.0, 33.0, 1200.0, 760.0, false)
         );
     }
@@ -675,11 +749,11 @@ mod tests {
     fn maximized_state_is_kept_with_its_normal_frame() {
         let state = saved(1700.0, 100.0, 1200.0, 760.0, true);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP), MACOS),
             restored(1700.0, 100.0, 1200.0, 760.0, true)
         );
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), MACOS),
             fallback(true)
         );
     }
@@ -688,13 +762,13 @@ mod tests {
     fn frame_straddling_two_displays_is_restored() {
         let state = saved(1000.0, 100.0, 1200.0, 760.0, false);
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP), MACOS),
             restored(1000.0, 100.0, 1200.0, 760.0, false)
         );
         // With the external display gone, the part left on the laptop still carries enough of
         // the top bar, and the frame is pulled back onto the laptop.
         assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), MACOS),
             restored(312.0, 100.0, 1200.0, 760.0, false)
         );
     }
@@ -708,6 +782,74 @@ mod tests {
             height: 700.0,
         };
         assert_eq!(centred(DEFAULT_SIZE, small), (0.0, 25.0));
+    }
+
+    #[test]
+    fn saved_frame_keeps_its_outer_frame_inside_the_work_area_with_a_system_frame() {
+        let state = saved(100.0, 100.0, 1200.0, 760.0, false);
+        let initial = initial_window(Some(&state), &[SMALL_SCREEN], Some(SMALL_SCREEN), WINDOWS);
+        // The width cannot fit and stops at the minimum; the height gives up the frame's 39.
+        assert_eq!(initial, restored(0.0, 0.0, 1168.0, 720.0 - 39.0, false));
+        let (x, y) = initial.position.unwrap();
+        assert!(y + initial.size.1 + WINDOWS.extra.1 <= SMALL_SCREEN.height);
+        assert_eq!((x, y), (0.0, 0.0));
+
+        // A frame already inside the work area, outer frame included, comes back unchanged.
+        let state = saved(100.0, 100.0, 1200.0, 760.0, false);
+        assert_eq!(
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), WINDOWS),
+            restored(100.0, 100.0, 1200.0, 760.0, false)
+        );
+        // The position leaves room for the frame below the inner size.
+        let state = saved(100.0, 300.0, 1200.0, 760.0, false);
+        assert_eq!(
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), WINDOWS),
+            restored(100.0, 982.0 - 760.0 - 39.0, 1200.0, 760.0, false)
+        );
+    }
+
+    #[test]
+    fn first_launch_is_fitted_and_centred_where_the_system_does_not_fit_the_window() {
+        assert_eq!(
+            initial_window(None, &[SMALL_SCREEN], Some(SMALL_SCREEN), WINDOWS),
+            InitialWindow {
+                position: Some((0.0, 0.0)),
+                size: (1168.0, 681.0),
+                maximized: false,
+            }
+        );
+        // A work area with room for the default size and the frame keeps today's placement.
+        assert_eq!(
+            initial_window(None, &[LAPTOP], Some(LAPTOP), WINDOWS),
+            InitialWindow {
+                position: None,
+                size: DEFAULT_SIZE,
+                maximized: false,
+            }
+        );
+        // Where the system fits the window itself, a small work area changes nothing.
+        assert_eq!(
+            initial_window(None, &[SMALL_SCREEN], Some(SMALL_SCREEN), MACOS),
+            InitialWindow {
+                position: None,
+                size: DEFAULT_SIZE,
+                maximized: false,
+            }
+        );
+    }
+
+    #[test]
+    fn fallback_is_fitted_and_centred_with_a_system_frame() {
+        let state = saved(5000.0, 100.0, 1200.0, 760.0, true);
+        assert_eq!(
+            initial_window(Some(&state), &[SMALL_SCREEN], Some(SMALL_SCREEN), WINDOWS),
+            restored(0.0, 0.0, 1168.0, 681.0, true)
+        );
+        // Centred by its outer size: 1200 + 16 wide and 760 + 39 high in a 1512 × 949 work area.
+        assert_eq!(
+            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP), WINDOWS),
+            restored(148.0, 33.0 + 75.0, 1200.0, 760.0, true)
+        );
     }
 
     fn frame(x: f64) -> Rect {

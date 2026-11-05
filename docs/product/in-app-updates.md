@@ -1,6 +1,6 @@
 # In-app updates
 
-The macOS application updates itself: it looks for a newer version on the release channel the user follows, tells the
+The desktop application, on macOS and on Windows, updates itself: it looks for a newer version on the release channel the user follows, tells the
 user when it finds one, downloads and installs it only when the user asks, and the new version takes effect the next
 time Octoboard starts. Nothing is ever installed, and Octoboard never restarts, without the user asking. A browser has
 none of this: no checks, no update notice, and no Updates or Update channel rows in Settings (see "About" in
@@ -32,23 +32,40 @@ alert (see "When something fails" below).
 
 ## Where updates come from
 
-Each channel is one static manifest, in the format of Tauri's updater, kept on a release of the public repository
-under the fixed tag `updater`, whatever version it announces:
+Each channel has one static manifest per platform, in the format of Tauri's updater, kept on a release of the public
+repository under the fixed tag `updater`, whatever version it announces. The application reads the one of its own
+platform:
 
-- Beta: `https://github.com/baijunjie/octoboard/releases/download/updater/beta.json`
-- Stable: `https://github.com/baijunjie/octoboard/releases/download/updater/stable.json`
+| Channel | macOS | Windows |
+|---|---|---|
+| Beta | `https://github.com/baijunjie/octoboard/releases/download/updater/beta.json` | `https://github.com/baijunjie/octoboard/releases/download/updater/beta-windows.json` |
+| Stable | `https://github.com/baijunjie/octoboard/releases/download/updater/stable.json` | `https://github.com/baijunjie/octoboard/releases/download/updater/stable-windows.json` |
 
-A manifest holds the version it announces, its release notes, its publication date and, under both `darwin-aarch64`
-and `darwin-x86_64`, the address and signature of the same update archive: a release is one universal build serving
-both Mac architectures. Every release is written to `beta.json`, and a release without a prerelease suffix to
-`stable.json` too, which is what puts stable releases on the Beta channel (see "Update channels" above). A channel never
-moves backwards: a release of an older version published after a newer one leaves a manifest that already announces
-the newer version as it is. The `updater` release is itself marked a prerelease, so it is never the repository's
-latest release.
+The macOS addresses are the ones every released macOS build has built in, so `beta.json` and `stable.json` stay the Mac
+manifests for good: they hold only the `darwin` entries, and existing users never lose their updates — a macOS version
+released before the Windows application existed is offered later releases from them as any other is. Windows, which
+has its own pair, is never mixed into them.
 
-Each version is published once, as the release `desktop-v<version>` — marked a prerelease when the version has a
-suffix — with the `.dmg` and the update archive `Octoboard_<version>_universal.app.tar.gz` with its signature beside it
-as `.sig`. A published version's files are never replaced; a changed build ships as a new version.
+A manifest holds the version it announces, its release notes, its publication date and the address and signature of
+the update for its platform: the macOS manifests, under both `darwin-aarch64` and `darwin-x86_64`, those of the same
+update archive (a release is one universal build serving both Mac architectures); the Windows manifests, under
+`windows-x86_64`, those of the NSIS installer, which is the Windows update itself. The update's address is its file on
+the versioned release (below), fetched over HTTPS as the manifest is, and its signature is checked against the update
+key built into the application, one key for both platforms (see "Downloading and installing" below). Every release is written to a
+platform's beta manifest, and a release without a prerelease suffix to its stable manifest too, which is what puts
+stable releases on the Beta channel (see "Update channels" above). A manifest never moves backwards: a release of an
+older version published after a newer one leaves a manifest that already announces the newer version as it is, and
+each platform's manifests are judged on their own. The `updater` release is itself marked a prerelease, so it is never
+the repository's latest release.
+
+The platforms share one version, and by default a release publishes both together. A version can be published for one
+platform only (a platform left out of its tag, or run by hand later for the other one): only that platform's manifests
+are written, so the other platform's users are offered nothing for that version until it is published for them. Each
+version is one release `desktop-v<version>` — marked a prerelease when the version has a suffix — which holds, for
+each platform published, the `.dmg` and the update archive `Octoboard_<version>_universal.app.tar.gz`, or the Windows
+installer `Octoboard_<version>_x64-setup.exe`, each update file with its signature beside it as `.sig`. A platform
+published later adds its missing files to the release; a published file is never replaced, and a changed build ships
+as a new version.
 
 ## When the application checks
 
@@ -65,7 +82,7 @@ for a UI that failed and its Try again (see "The window chrome and the content p
 A check ends in one of three ways:
 
 - **Up to date**: the channel offers no version newer than the one running. A channel with no release published yet,
-  and a release with no build for this Mac, count as up to date too.
+  and a release with no build for this platform, count as up to date too.
 - **A newer version is available**: it is offered in the update notice (see "The update notice" below) and in
   Settings, with a link to its release page, and named in the menu bar icon's update entry (see "The menu bar update
   entry" below).
@@ -121,11 +138,12 @@ no buttons and cannot be hidden.
 
 ### Installed, waiting for a restart
 
-The notice says the version is installed and takes effect after Octoboard restarts, with **Restart now** (see
-"Restarting to apply an update" below) and **Later**, which hides the notice for the rest of this run; Settings still
-shows the pending restart. When the application reports an update as already installed that this window never saw
-being installed, the notice and Settings say an update is installed without naming its
-version.
+On macOS the notice says the version is installed and takes effect after Octoboard restarts; on Windows, where the
+installer has not run yet, it says the version is downloaded and is installed when Octoboard quits or restarts, never
+that it is installed. Either way it has **Restart now** (see "Restarting to apply an update" below) and **Later**, which
+hides the notice for the rest of this run; Settings still shows the pending restart. When the application reports an
+update as already installed that this window never saw being installed, the notice and Settings say the same without
+naming its version.
 
 ### Keyboard focus and announcements
 
@@ -146,14 +164,30 @@ it was announced is never announced.
 
 **Download and install**, in the notice or in Settings, downloads the update the last check found and installs it. The
 download is checked against the release's signature before anything is installed; one that does not verify is not
-installed and the install fails. A download may take up to **30 minutes** before it fails. The new version replaces the
-application in place while Octoboard keeps running; the running application, its daemon and every session carry on
-unchanged until Octoboard next starts. The notice and Settings then say it takes effect after a restart. Until then a
-daemon that ends unexpectedly is not started again; the window says so and asks for the restart (see "Starting up" in
-`docs/product/application-lifecycle.md`).
+installed and the install fails. A download may take up to **30 minutes** before it fails. On macOS the new version
+replaces the application in place while Octoboard keeps running. On Windows the downloaded installer is kept and runs
+when Octoboard quits: the installer cannot replace the running application, and starting it ends Octoboard at once.
+Either way the running application, its daemon and every session carry on unchanged until Octoboard next starts. From
+then on the update counts as installed on both platforms, though on Windows its installer has not run yet: what this
+document says of an installed update (the notice, Settings, **Restart now**, no further checks) applies to it, but
+the notice and Settings say it is downloaded, not installed (see "Installed, waiting for a restart" above).
+
+On macOS, until the restart a daemon that ends unexpectedly is not started again, since the application's files are
+already the new version's; the window says so and asks for the restart (see "Starting up" in
+`docs/product/application-lifecycle.md`). On Windows the files stay the running version's until the installer runs, so
+a daemon that ends unexpectedly is started again under the same rules as when no update is waiting.
 
 The restart is suggested, never forced: **Restart now** applies it at once, and quitting Octoboard in any ordinary way
-and starting it again later applies it just the same.
+and starting it again later applies it just the same. On Windows every quit of Octoboard while it holds a downloaded
+update installs it on the way out, without starting Octoboard again: a quit it confirms itself (its Quit, or closing the
+window when it does not run in the background), and equally a quit that skips the confirmation — one made while the
+daemon is not running, the second quit gesture within 2 seconds that forces a quit through (see "Quitting when the
+window has stopped responding" in `docs/product/application-lifecycle.md`), or one made before the window has loaded far
+enough to ask. Each stops the daemon first, then runs the installer in its passive mode, which shows its progress; a quit
+made while the installer is being started waits for it. If the installer cannot be started, Octoboard just ends and the
+update stays unapplied, offered again by a later check. The system ending the user's session — signing out or shutting
+down Windows — is not a quit and installs nothing: Octoboard just ends, and the update is offered again by the
+automatic check after the next start (see "When the application checks" above).
 
 An update is never installed twice: Download and install does nothing while a check or a download is under way, or once
 an update is installed.
@@ -162,7 +196,8 @@ an update is installed.
 
 **Restart now**, in the notice or in Settings, exists only once an update is installed. It ends Octoboard the way a
 confirmed quit does, asking the same confirmation when sessions or busy terminals would be ended, and starts it again
-(see "Restarting" in `docs/product/application-lifecycle.md`).
+(see "Restarting" in `docs/product/application-lifecycle.md`). On Windows the daemon is stopped first and the passive
+installer then starts the new version itself.
 
 ## When something fails
 
@@ -189,12 +224,14 @@ nothing.
 
 ## The Updates and Update channel rows
 
-Settings' About section holds two rows for updates, in the macOS application only (see "About" in
+Settings' About section holds two rows for updates, in the desktop application only (see "About" in
 `docs/product/settings.md`).
 
 **Updates** says in a sentence where the application's updates stand, the first that applies of:
 
-1. an update installed, which takes effect after Octoboard restarts (naming its version where it is known);
+1. an update installed, which takes effect after Octoboard restarts — on Windows, an update downloaded, which is
+   installed when Octoboard quits or restarts (see "Installed, waiting for a restart" above) — naming its version where
+   it is known;
 2. a version being downloaded;
 3. a check under way;
 4. a newer version available, with the version running;

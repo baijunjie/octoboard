@@ -3,19 +3,27 @@ import React, { useMemo, useSyncExternalStore } from "react";
 import { LocaleProvider, type PrimitiveLabels, PrimitiveLabelsProvider } from "../primitives";
 import { InlineReference } from "./InlineReference";
 
-import { globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, translatorFor, type Translate } from "./catalog";
+import { globalParam, isReferenceParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, translatorFor, type Translate } from "./catalog";
 import { currentLanguage, subscribeLanguage } from "./language";
 import type { Language } from "./languages";
+import { currentDaemonHost, type DaemonHost, subscribeDaemonHost } from "./platformTerms";
 
 /** The language the UI renders, re-rendering the caller when it changes. */
 export function useCurrentLanguage(): Language {
   return useSyncExternalStore(subscribeLanguage, currentLanguage);
 }
 
-/** The message lookup bound to the current language; the caller re-renders when it changes. */
+/** The daemon host the daemon's words come from (`announceDaemonHost`), re-rendering the caller when it changes. */
+function useDaemonHost(): DaemonHost | undefined {
+  return useSyncExternalStore(subscribeDaemonHost, currentDaemonHost);
+}
+
+/** The message lookup bound to the current language; the caller re-renders when it changes, or when the daemon host
+ * its words come from does. */
 export function useT(): Translate {
   const language = useCurrentLanguage();
-  return useMemo(() => translatorFor(language), [language]);
+  const daemonHost = useDaemonHost();
+  return useMemo(() => translatorFor(language, daemonHost), [language, daemonHost]);
 }
 
 /**
@@ -40,6 +48,7 @@ export function Message<K extends MessageKey>({
   ? { params?: never }
   : { params: MessageArgs<K, React.ReactNode>[0] })): React.ReactElement {
   const language = useCurrentLanguage();
+  const daemonHost = useDaemonHost();
   const values = params as Record<string, React.ReactNode> | undefined;
   const parts = splitPlaceholders(messageText(language, id, values));
   const nodes: React.ReactNode[] = [];
@@ -53,7 +62,7 @@ export function Message<K extends MessageKey>({
       }
       return;
     }
-    nodes.push(<React.Fragment key={index}>{withLead(fill(values?.[part] ?? richGlobalParam(part, language), part, language), carry)}</React.Fragment>);
+    nodes.push(<React.Fragment key={index}>{withLead(fill(values?.[part] ?? richGlobalParam(part, language, daemonHost), part, language), carry)}</React.Fragment>);
     carry = "";
   });
   if (carry) nodes.push(carry);
@@ -71,9 +80,10 @@ function withLead(node: React.ReactNode, lead: string): React.ReactNode {
   return <>{lead}{node}</>;
 }
 
-function richGlobalParam(name: string, language: Language): React.ReactNode {
-  const value = globalParam(name, language);
-  return value === undefined ? undefined : <InlineReference dir="auto" wrap>{value}</InlineReference>;
+function richGlobalParam(name: string, language: Language, daemonHost: DaemonHost | undefined): React.ReactNode {
+  const value = globalParam(name, language, daemonHost);
+  if (value === undefined || !isReferenceParam(name)) return value;
+  return <InlineReference dir="auto" wrap>{value}</InlineReference>;
 }
 
 function fill(value: React.ReactNode, name: string, language: Language): React.ReactNode {

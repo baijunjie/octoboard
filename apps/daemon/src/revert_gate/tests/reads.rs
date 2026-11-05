@@ -3,6 +3,8 @@ use crate::revert_gate::git::{
     busy_branches, creation_point, remote_refs, remote_tips, tips_at, upstream_of,
 };
 
+/// Only where the host takes a newline in a name, which Windows forbids.
+#[cfg(unix)]
 #[test]
 fn branches_checked_out_in_a_worktree_whose_path_holds_a_newline_are_busy() {
     let repo = base_repo();

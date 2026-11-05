@@ -15,7 +15,6 @@
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -25,7 +24,7 @@ use super::bound::bound_in;
 use super::transfer::branch_name;
 use crate::browse::compare;
 use crate::git::isolated::IsolatedGit;
-use crate::git::run::{GitError, Policy, Runner};
+use crate::git::run::{arg_from_bytes, GitError, Policy, Runner};
 use crate::git::worktrees::{changes, worktrees, Listed, WORKTREE_GIT_LIMITS};
 use crate::protocol::{Session, UpstreamInfo};
 use crate::state::AppState;
@@ -300,11 +299,15 @@ fn read_branch(
         ..BranchState::default()
     };
     let reference = [b"refs/heads/", name].concat();
-    let reference = OsStr::from_bytes(&reference);
+    let reference_arg = arg_from_bytes(&reference);
     match text(
         git,
         repo,
-        &[OsStr::new("rev-parse"), OsStr::new("--verify"), reference],
+        &[
+            OsStr::new("rev-parse"),
+            OsStr::new("--verify"),
+            &reference_arg,
+        ],
     ) {
         Ok(head) => state.head = Some(head),
         Err(detail) => {
@@ -343,7 +346,7 @@ fn read_branch(
         }
     };
     state.base = Some(shortened(&base));
-    compare(git, repo, &mut state, OsStr::from_bytes(&base), reference);
+    compare(git, repo, &mut state, &base, &reference);
     state
 }
 
@@ -358,16 +361,15 @@ fn shortened(reference: &[u8]) -> String {
 
 /// Fills in the commits and changed files of `branch` against `base`: what it has done since the
 /// two forked, as `git diff base...branch` takes it.
-fn compare(git: &Runner, repo: &Path, state: &mut BranchState, base: &OsStr, branch: &OsStr) {
-    let range = [base.as_bytes(), b"..", branch.as_bytes()].concat();
-    let range = OsStr::from_bytes(&range);
+fn compare(git: &Runner, repo: &Path, state: &mut BranchState, base: &[u8], branch: &[u8]) {
+    let range = arg_from_bytes(&[base, b"..", branch].concat());
     let count = text(
         git,
         repo,
         &[
             OsStr::new("rev-list"),
             OsStr::new("--count"),
-            range,
+            &range,
             OsStr::new("--"),
         ],
     );
@@ -388,7 +390,7 @@ fn compare(git: &Runner, repo: &Path, state: &mut BranchState, base: &OsStr, bra
             OsStr::new("--no-show-signature"),
             OsStr::new("--format=%h%x09%s"),
             OsStr::new(&limit),
-            range,
+            &range,
             OsStr::new("--"),
         ],
     ) {
@@ -403,7 +405,7 @@ fn compare(git: &Runner, repo: &Path, state: &mut BranchState, base: &OsStr, bra
             .problems
             .push(format!("its commits could not be listed: {detail}")),
     }
-    let triple = [base.as_bytes(), b"...", branch.as_bytes()].concat();
+    let triple = arg_from_bytes(&[base, b"...", branch].concat());
     match git.read(
         repo,
         &[
@@ -413,7 +415,7 @@ fn compare(git: &Runner, repo: &Path, state: &mut BranchState, base: &OsStr, bra
             OsStr::new("--ignore-submodules=all"),
             OsStr::new("--name-status"),
             OsStr::new("-z"),
-            OsStr::from_bytes(&triple),
+            &triple,
             OsStr::new("--"),
         ],
     ) {

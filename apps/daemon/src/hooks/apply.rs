@@ -110,6 +110,11 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // past it. A Grok screen the person answered in the terminal has its trust entry carried over
     // from here (`trust::on_hook`).
     if let Some(live) = state.live_session(session_id) {
+        // Noted first, so that the hook releases at once what waits for the agent to read its
+        // input when its input box is already up.
+        if !is_subagent && event.as_deref() == Some("SessionStart") {
+            crate::session::trust::on_session_start(&live);
+        }
         crate::session::trust::on_hook(state, &live);
     }
 
@@ -261,7 +266,7 @@ fn apply_status(
     // the outbox sees the count move.
     if prompt_sent {
         if let Some(live) = state.live_session(session_id) {
-            live.note_prompt_sent(interpreter.submitted_prompt(payload));
+            state.note_prompt_sent(&live, interpreter.submitted_prompt(payload));
         }
     }
     // Releasing a message queued while the session could not take one writes into its PTY, which

@@ -51,3 +51,5 @@ and the UI is served from that same origin.
 - The bind policy: every interface, or one chosen at start (an overlay's, where one is used).
 - How the certificate for the external surface is provisioned — one the server's administrator supplies, a private CA,
   or a name with a public certificate — and what a browser is told to trust.
+- Settings' Permissions section (`permissionsPane`) shows the client app's macOS privacy grants, which reach agents only
+  while the daemon is the app's local child: whether to hide it, or say it does not apply, when the daemon is remote.

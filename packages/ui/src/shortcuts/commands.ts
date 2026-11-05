@@ -1,26 +1,37 @@
 import type { PlainMessageKey } from "../i18n/catalog";
-import { IS_MAC } from "../input/keys";
+import type { HostFacts } from "../platform/host";
 import type { Binding } from "./binding";
 
 /** Where the shortcuts are listed under, in the order of the list. */
 export const SHORTCUT_GROUPS = ["navigation", "focus", "application", "editing", "window"] as const;
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
-/** Which clients a shortcut exists on: `app` is the desktop app (`windowChrome`), `macApp` that on
- * macOS, and `nativeMenu` where the shell has a native menu bar. */
+/** Which clients a shortcut exists on: `app` is the desktop app on any system, `macApp` that on macOS, and
+ * `nativeMenu` where the shell has a native menu bar, whose items the page cannot take over: the system's editing and
+ * window commands. A command both the menu and the page can handle (Open settings) is `always`. */
 export type ShortcutAvailability = "always" | "app" | "macApp" | "nativeMenu";
 
-/** What the current client has, which `isAvailable` tests a shortcut against. */
+/** What the current client has, which `isAvailable` tests a shortcut against: whether it is the desktop app (the
+ * platform adapter's `kind`), with a native menu or not. */
 export interface ClientCapabilities {
-  windowChrome: boolean;
+  desktopApp: boolean;
   nativeMenu: boolean;
+  host: Pick<HostFacts, "os">;
+}
+
+/** What `clientCapabilities` reads of the platform adapter. */
+type ClientPlatform = { kind: "tauri" | "browser"; appMenu?: object; host: Pick<HostFacts, "os"> };
+
+/** The capabilities of the client `platform` (the platform adapter) is, for `isAvailable`. */
+export function clientCapabilities(platform: ClientPlatform): ClientCapabilities {
+  return { desktopApp: platform.kind === "tauri", nativeMenu: platform.appMenu !== undefined, host: platform.host };
 }
 
 export function isAvailable(availability: ShortcutAvailability, client: ClientCapabilities): boolean {
   switch (availability) {
     case "always": return true;
-    case "app": return client.windowChrome;
-    case "macApp": return client.windowChrome && IS_MAC;
+    case "app": return client.desktopApp;
+    case "macApp": return client.desktopApp && client.host.os === "macos";
     case "nativeMenu": return client.nativeMenu;
   }
 }
@@ -37,16 +48,18 @@ export interface ShortcutCommand {
 
 const primary = (code: string, modifiers: Omit<Binding, "code" | "primary"> = {}): Binding => ({ code, primary: true, ...modifiers });
 
-/** The commands the user can rebind, in the order they are listed in, with their defaults. */
+/** The commands the user can rebind, in the order they are listed in, with their defaults. The console-session
+ * switch's are Control with Tab on every keyboard (`ctrl`): ⌃Tab on an Apple one, Ctrl+Tab elsewhere, where the
+ * platform's other modifier, the Windows key, has Tab for the system's Task View. */
 const REBINDABLE = [
   { id: "back", label: "settings.shortcuts.command.back", group: "navigation", binding: primary("BracketLeft"), availability: "macApp" },
   { id: "forward", label: "settings.shortcuts.command.forward", group: "navigation", binding: primary("BracketRight"), availability: "macApp" },
-  { id: "nextConsoleSession", label: "settings.shortcuts.command.nextConsoleSession", group: "navigation", binding: { code: "Tab", other: true }, availability: "app" },
-  { id: "previousConsoleSession", label: "settings.shortcuts.command.previousConsoleSession", group: "navigation", binding: { code: "Tab", other: true, shift: true }, availability: "app" },
+  { id: "nextConsoleSession", label: "settings.shortcuts.command.nextConsoleSession", group: "navigation", binding: { code: "Tab", ctrl: true }, availability: "app" },
+  { id: "previousConsoleSession", label: "settings.shortcuts.command.previousConsoleSession", group: "navigation", binding: { code: "Tab", ctrl: true, shift: true }, availability: "app" },
   { id: "focusMode", label: "settings.shortcuts.command.focusMode", group: "focus", binding: primary("KeyF", { shift: true }), availability: "always" },
   { id: "newSession", label: "settings.shortcuts.command.newSession", group: "focus", binding: primary("KeyN"), availability: "always" },
   { id: "quickCreate", label: "settings.shortcuts.command.quickCreate", group: "focus", binding: primary("KeyN", { shift: true }), availability: "always" },
-  { id: "openSettings", label: "settings.shortcuts.command.openSettings", group: "application", binding: primary("Comma"), availability: "nativeMenu" },
+  { id: "openSettings", label: "settings.shortcuts.command.openSettings", group: "application", binding: primary("Comma"), availability: "always" },
 ] as const satisfies readonly Omit<ShortcutCommand, "rebindable">[];
 
 export type CommandId = (typeof REBINDABLE)[number]["id"];
@@ -87,4 +100,11 @@ export function isCommandId(id: string): id is CommandId {
 
 export function defaultBinding(id: CommandId): Binding {
   return REBINDABLE_COMMANDS.find((command) => command.id === id)!.binding;
+}
+
+/** Whether the command `id` exists on the client `platform` (the platform adapter) is: the one rule every place that
+ * takes a command's keys itself goes by. */
+export function commandExists(id: CommandId, platform: ClientPlatform): boolean {
+  const { availability } = REBINDABLE_COMMANDS.find((command) => command.id === id)!;
+  return isAvailable(availability, clientCapabilities(platform));
 }

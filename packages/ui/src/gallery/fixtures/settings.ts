@@ -5,7 +5,9 @@ import { describing, type Ui, type Step } from "../../fixtures/interact";
 import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability } from "../../protocol";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
+import { accountOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { browserHost } from "../../platform/host";
+import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import { noneAddedState } from "./empty";
 import { accountLoginSucceeded, accountQuotaUpdated, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
@@ -441,6 +443,31 @@ const sharingInUseState: Scenario["state"] = {
   accountSharing: accountSharingOf([{ account: "a-work", in_use: { sessions: 2, signing_in: true } }]),
 };
 
+/** A Windows daemon host that cannot make file links (Developer Mode is off), with Work sharing or not as `share` says.
+ * The paths are the Windows ones the daemon reports. */
+function sharingUnlinkableState(share: boolean): Scenario["state"] {
+  return snapshotState({
+    consoles: [console_],
+    projects: [web, api],
+    sessions,
+    settings: {
+      ...DEFAULT_SETTINGS,
+      added_agents: ["claude"],
+      default_clone_dir: "C:\\Users\\dev\\Projects",
+      accounts: [accountOf("a-work", "claude", "Work", "C:\\Users\\dev\\.claude-work", { share_default_config: share })],
+    },
+    accountQuotas: [quotaOf("claude", "a-work", "pro", [quotaWindow("session", 38, 150), quotaWindow("weekly", 66, 2 * 24 * 60 + 5 * 60)], { email: WORK_EMAIL })],
+    host: { ...WINDOWS_MACHINE.host, file_links: false },
+    homeDir: WINDOWS_MACHINE.homeDir,
+  });
+}
+
+/** Work does not share: its switch is locked, with the reason under it. */
+const sharingUnavailableState = sharingUnlinkableState(false);
+
+/** Work already shares: its switch can be turned off, and its line says turning it on again is not possible there. */
+const sharingUnlinkableOnState = sharingUnlinkableState(true);
+
 /** Work is changing entries, turning sharing on, 3 of 9 done. A change under way has its choice recorded and is
  * incomplete until it ends. */
 const sharingProgressState: Scenario["state"] = {
@@ -634,6 +661,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Permissions",
     description: "Neither Screen Recording nor Accessibility has been granted, so each row ends in a Grant button and no badge. Press each Grant to see the refused request point at System Settings; revisiting the section offers Grant again.",
     state,
+    host: MAC_HOST,
     macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -647,7 +675,21 @@ export const settingsScenarios: Scenario[] = [
     title: "Permissions, granted since launch",
     description: "Both permissions are granted, each marked by a soft success Granted badge at the right end of its row, where the Grant button would be, and its description no longer says Granted. Screen Recording was not granted when the process started, so its row still says a restart is owed.",
     state,
+    host: MAC_HOST,
     macosPermissions: { screenRecording: true, accessibility: true, screenRecordingAtLaunch: false },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.permissions")),
+    ],
+  },
+  {
+    id: "settings-permissions-browser-on-mac",
+    group: GROUP,
+    category: "normal",
+    title: "Permissions, a browser on a Mac",
+    description: "A browser on a Mac has no grants to manage, but the Permissions section is still listed, so the list is the macOS app's. Its page is the section heading and one muted line, \"Permissions can only be managed in the macOS app.\", with no rows and no Grant button. A Windows browser and the Windows app do not list the section (see Keyboard shortcuts in the Windows app for the Windows app's list).",
+    state,
+    host: browserHost("MacIntel"),
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.permissions")),
@@ -660,6 +702,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Permissions, the shell cannot be asked",
     description: "What a broken IPC looks like: the grants could not be read, on the platform that has them. The failure is a danger Alert in place of the table of grants, titled \"Could not read the permissions\" with one line under it.",
     state,
+    host: MAC_HOST,
     macosPermissions: "unreadable",
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -673,6 +716,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Permissions, System Settings did not open",
     description: "After Grant is refused on Screen Recording and its Open System Settings is pressed, the system does not open the pane: an error alert titled \"Could not open System Settings\" says it did not open and to open it yourself, choose Privacy & Security, then choose Screen & System Audio Recording. The title is plain text; System Settings, Privacy & Security and Screen & System Audio Recording in the body are each a chip. OK is its only button: no recovery action and no Error details. The Notifications pane failing to open reads alike.",
     state,
+    host: MAC_HOST,
     macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
     macosSettingsOpenError: "the system did not open x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
     steps: [
@@ -699,7 +743,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: git",
-    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Permissions, Notifications, Keyboard shortcuts, Configuration, About. Git has three headed groups holding seven rows. Repository: Default clone directory (its explanation describes when the chosen directory is used, and the path appears in the input), then Automatically pull repositories, off, whose description starts with \"Once this is on\" and says a project's branch is pulled when it is behind its upstream and can be fast-forwarded, with a small muted \"?\" after the label holding the sentence about the remote being checked. Development: Where sessions develop reads In a worktree of its own, with the explanation for that choice; Squash commits before delivery is off, its explanation saying what turning it on would do; Rebase before delivery is on, with the explanation that says what being on does; Delivery, last, reads Ask each time in a select at the end of its row. Protection: Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\". Choose Phone (390px) to see the Default clone directory field with its Browse button, and the selects, stretch across their rows beneath the labels, the Browse button keeping its size.",
+    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Notifications, Keyboard shortcuts, Configuration, About. Git has three headed groups holding seven rows. Repository: Default clone directory (its explanation describes when the chosen directory is used, and the path appears in the input), then Automatically pull repositories, off, whose description starts with \"Once this is on\" and says a project's branch is pulled when it is behind its upstream and can be fast-forwarded, with a small muted \"?\" after the label holding the sentence about the remote being checked. Development: Where sessions develop reads In a worktree of its own, with the explanation for that choice; Squash commits before delivery is off, its explanation saying what turning it on would do; Rebase before delivery is on, with the explanation that says what being on does; Delivery, last, reads Ask each time in a select at the end of its row. Protection: Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\". Choose Phone (390px) to see the Default clone directory field with its Browse button, and the selects, stretch across their rows beneath the labels, the Browse button keeping its size.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1378,6 +1422,26 @@ export const settingsScenarios: Scenario[] = [
     steps: accountSettings("Client"),
   },
   {
+    id: "settings-accounts-sharing-unavailable-windows",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, no sharing where the daemon's computer cannot make file links",
+    description: "Work's Account settings with the daemon on a Windows computer whose Developer Mode is off, so it cannot create the file links sharing needs: Share default configuration is still the row above Disable account, with its label and help button, but its switch is off and unavailable (faded, still focusable), and under the row's description a line says why: the computer running the daemon cannot create the file links sharing needs, to turn on Developer Mode in Settings on that computer, then quit Octoboard and open it again, or restart the daemon, with Developer Mode and Settings as chips. The refusal the daemon would give is never reached, since the switch cannot be turned.",
+    state: sharingUnavailableState,
+    host: WINDOWS_HOST,
+    steps: accountSettings("Work"),
+  },
+  {
+    id: "settings-accounts-sharing-on-unlinkable-windows",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, sharing already on where the daemon's computer cannot make file links",
+    description: "Work's Account settings with the daemon on a Windows computer whose Developer Mode is off, and Work already sharing: unlike the locked off switch of the scenario above, Share default configuration is on and free (not faded), so it can be turned off. Nothing stands under the switch's description: the host's missing file links are not warned about while sharing is on, and only the in-use reasons would appear there. Turn it off to see the locked-off reason of the scenario above.",
+    state: sharingUnlinkableOnState,
+    host: WINDOWS_HOST,
+    steps: accountSettings("Work"),
+  },
+  {
     id: "settings-accounts-sharing-in-use",
     group: GROUP,
     category: "normal",
@@ -1786,7 +1850,22 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: notifications, managed by macOS (desktop app)",
     description: "The row has no switch: its description says the app has none and macOS manages these notifications, with the app name, macOS and System Settings each a chip, and a secondary Open System Settings button sits at the row's end. Look at how the longer copy wraps beside the button and how the two align.",
     state: browserState,
-    systemNotifications: true,
+    host: MAC_HOST,
+    desktopNotifications: true,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.notifications")),
+    ],
+  },
+  {
+    id: "settings-notifications-windows",
+    group: GROUP,
+    category: "normal",
+    title: "Settings on a Windows host: notifications, no Permissions section",
+    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Notifications, Keyboard shortcuts, Configuration, About: Permissions is not listed, which only macOS has. The Notifications row has no switch: its description says Windows manages these notifications and they are turned off or restyled in Settings, with no separate in-app switch, and a secondary Open Settings button sits at the row's end, which opens the Windows Settings notifications page. Look for Windows and Settings as chips, and for the plain name Settings, not System Settings, on the line and the button.",
+    state: { ...browserState, ...WINDOWS_MACHINE },
+    host: WINDOWS_HOST,
+    desktopNotifications: true,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.notifications")),

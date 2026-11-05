@@ -142,6 +142,11 @@ pub(super) fn probe(
                 refused.detail(),
                 &[("binary", binary)],
             ),
+            NotRun::BinaryRefused(refusal) => QuotaUnavailable {
+                code: refusal.code,
+                params: refusal.params,
+                message: refusal.message,
+            },
         })?;
     let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
     // The reply that is read, and the part of another reply that says who is signed in: the two

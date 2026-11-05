@@ -13,7 +13,7 @@ use crate::protocol::{
     SideRead, SideRef,
 };
 use crate::test_support::{
-    fixture_git, git, git_has_show_ref_exists, git_stdin, repo_with, ScratchDir,
+    fixture_git, git, git_has_show_ref_exists, git_stdin, repo_with, symlink, ScratchDir,
 };
 use crate::wire_path;
 
@@ -460,7 +460,7 @@ fn renames_type_changes_and_binary_changes_keep_their_sides() {
     write(repo.join("r2.txt"), format!("{lines}line 20\n").as_bytes());
     git(&repo, &["add", "r2.txt"]);
     std::fs::remove_file(repo.join("t.txt")).unwrap();
-    std::os::unix::fs::symlink("r2.txt", repo.join("t.txt")).unwrap();
+    symlink("r2.txt", repo.join("t.txt")).unwrap();
     git(&repo, &["add", "t.txt"]);
     write(repo.join("i.png"), &png(2));
     let project = fixture.project("p", &repo);
@@ -1525,7 +1525,7 @@ fn an_unstaged_type_change_and_a_submodule_replaced_by_a_directory_keep_their_si
     git(&repo, &["commit", "-q", "-m", "with lib"]);
     // On disk only: the file becomes a link.
     std::fs::remove_file(repo.join("t.txt")).unwrap();
-    std::os::unix::fs::symlink("elsewhere", repo.join("t.txt")).unwrap();
+    symlink("elsewhere", repo.join("t.txt")).unwrap();
     // Staged: the submodule gives way to a directory of files.
     git(&repo, &["rm", "-q", "--cached", "lib"]);
     std::fs::remove_dir_all(&inner).unwrap();
@@ -1577,10 +1577,13 @@ fn a_staged_rename_into_or_out_of_a_path_below_itself_is_the_diff_between_its_tw
             })
             .collect()
     };
-    // One of them needs quoting in a patch header.
-    let names: [&str; 2] = ["foo", "q\t\"x"];
+    // One of them needs quoting in a patch header, where the host takes it (Windows does not).
+    let names: Vec<&str> = ["foo", "q\t\"x"]
+        .into_iter()
+        .filter(|name| crate::test_support::creatable(name))
+        .collect();
     let mut files: Vec<(String, String)> = Vec::new();
-    for name in names {
+    for name in names.iter().copied() {
         files.push((name.to_string(), lines(name, &[])));
         files.push((format!("up-{name}/bar"), lines(&format!("up {name}"), &[])));
         // A neighbour below the path that moves up, deleted with it.
@@ -1591,7 +1594,7 @@ fn a_staged_rename_into_or_out_of_a_path_below_itself_is_the_diff_between_its_tw
         .map(|(n, b)| (n.as_bytes(), b.as_bytes()))
         .collect();
     let repo = repo_with("changes-nested", &files);
-    for name in names {
+    for name in names.iter().copied() {
         // `name` moves down into a directory of its own name, changed a little, beside a
         // neighbour.
         git(&repo, &["mv", name, "tmp"]);
@@ -1667,4 +1670,98 @@ fn a_staged_rename_into_or_out_of_a_path_below_itself_is_the_diff_between_its_tw
             }
         }
     }
+}
+
+/// A path `git` holds but Windows cannot create (`CON`, `a:b`) is listed and read from `git` on
+/// every host; only a read of it from the disk is refused there, as nothing on that disk has it.
+/// `a:b` is also what Windows `git` takes for a drive when it is handed over as given, so every
+/// read that names it to `git` — the index, a commit, each group's change — is made here.
+#[test]
+fn a_path_the_host_cannot_name_is_listed_and_read_from_git() {
+    let fixture = Fixture::new();
+    let repo = ScratchDir::new("changes-unnameable");
+    git(&repo, &["init", "-q"]);
+    let held = ScratchDir::new("changes-unnameable-blob");
+    write(held.join("text"), b"held by git\n");
+    let oid = String::from_utf8(git(
+        &repo,
+        &["hash-object", "-w", held.join("text").to_str().unwrap()],
+    ))
+    .unwrap();
+    for path in ["CON", "a:b"] {
+        let entry = format!("100644,{},{path}", oid.trim());
+        git(&repo, &["update-index", "--add", "--cacheinfo", &entry]);
+    }
+    let project = fixture.project("p", &repo);
+    let (_, changes, _) = fixture.changes(&project, None).unwrap();
+    assert_eq!(
+        summary(&changes),
+        [
+            "staged - CON",
+            "staged - a:b",
+            "unstaged CON -",
+            "unstaged a:b -"
+        ]
+    );
+    let diff = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Staged,
+            SideRef::Absent,
+            present("a:b"),
+        )
+        .unwrap();
+    assert!(diff.patch.unwrap().contains("+held by git\n"));
+    let diff = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Unstaged,
+            present("a:b"),
+            SideRef::Absent,
+        )
+        .unwrap();
+    assert!(diff.patch.unwrap().contains("-held by git\n"));
+    for path in ["CON", "a:b"] {
+        let (_, file) = fixture
+            .read(&project, None, path, crate::protocol::ReadFrom::Index)
+            .unwrap();
+        assert_eq!(bytes_of(&file), b"held by git\n", "{path}");
+    }
+
+    // A commit's version, both read alone and as the old side of a staged change.
+    git(&repo, &["commit", "-q", "-m", "held"]);
+    write(held.join("text"), b"staged over it\n");
+    let staged = String::from_utf8(git(
+        &repo,
+        &["hash-object", "-w", held.join("text").to_str().unwrap()],
+    ))
+    .unwrap();
+    let entry = format!("100644,{},a:b", staged.trim());
+    git(&repo, &["update-index", "--cacheinfo", &entry]);
+    let branch = String::from_utf8(git(&repo, &["symbolic-ref", "--short", "HEAD"])).unwrap();
+    let from = crate::protocol::ReadFrom::Branch {
+        branch: branch.trim().to_string(),
+    };
+    let (_, file) = fixture.read(&project, None, "a:b", from).unwrap();
+    assert_eq!(bytes_of(&file), b"held by git\n");
+    let diff = fixture
+        .change(
+            &project,
+            None,
+            ChangeGroup::Staged,
+            present("a:b"),
+            present("a:b"),
+        )
+        .unwrap();
+    let patch = diff.patch.unwrap();
+    assert!(patch.contains("-held by git\n+staged over it\n"), "{patch}");
+    let live = fixture.read(&project, None, "CON", crate::protocol::ReadFrom::Live);
+    let expected = if cfg!(windows) {
+        crate::protocol::error_code::INVALID_PATH
+    } else {
+        crate::protocol::error_code::FILE_NOT_FOUND
+    };
+    assert_eq!(code(live), expected);
 }

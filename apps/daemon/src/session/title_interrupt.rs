@@ -186,7 +186,7 @@ mod tests {
     use crate::session::LiveSession;
     use crate::state::TurnClose;
     use crate::test_support::{
-        app_state, console, console_session, fake_live_session, idle_stand_in, output_containing,
+        app_state, console, console_session, idle_stand_in, idle_stand_in_of, output_containing,
         within, ScratchDir, StandIn,
     };
 
@@ -292,7 +292,7 @@ mod tests {
                 ..console_session("s", SessionStatus::Working)
             })
             .expect("session");
-        let live = fake_live_session("s", AgentId::GROK, 80, 24, "sleep 30");
+        let live = idle_stand_in_of("s", AgentId::GROK);
         state.register_live(live.clone());
         crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         state.turn_started("s", None);
@@ -347,6 +347,19 @@ mod tests {
             fixture.state.last_turn_abnormal("s"),
             "a cancelled turn leaves it paused"
         );
+    }
+
+    /// The same cancel read off the parsed screen's titles, as a host that renders what the program
+    /// draws has them read, puts the session back at its prompt as well.
+    #[tokio::test]
+    async fn a_cancel_only_the_parsed_screen_s_title_shows_puts_the_session_at_its_prompt() {
+        let fixture = fixture("cancel-rendered", SessionStatus::Working);
+        fixture.live.read_as_rendered();
+        fixture.live.on_output(b"$ ");
+        armed(&fixture);
+        replay(&fixture.live, CANCEL_TITLES);
+        assert!(reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(fixture.state.last_turn_abnormal("s"));
     }
 
     /// The title left at the prompt by the turn before is no cancel of this one.

@@ -1,4 +1,4 @@
-import { abbreviateHome } from "../format/pathDisplay";
+import { display, type PathStyle } from "../format/hostPath";
 import { format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
@@ -69,8 +69,8 @@ export function leftBranchDetail(item: LeftBranchItem): string | null {
 
 /** How an item of a `session_branches_not_removed` alert is named to a person: a worktree's path
  * with the daemon host's home written as `~`, a branch's name as it is. */
-export function leftBranchName(item: LeftBranchItem, homeDir: string | null | undefined): string {
-  return item.kind === "worktree" ? abbreviateHome(item.name, homeDir) : item.name;
+export function leftBranchName(item: LeftBranchItem, homeDir: string | null | undefined, style: PathStyle = "unix"): string {
+  return item.kind === "worktree" ? display(item.name, { home: homeDir, style }) : item.name;
 }
 
 /** The items of a `session_branches_not_removed` alert, which travel as one JSON param so a name
@@ -90,8 +90,8 @@ export function leftBranchItems(code: string, params: MessageParams): LeftBranch
 
 /** An item of a `session_branches_not_removed` alert in plain text: its name, the branch a worktree
  * has checked out, and a locked worktree's uncommitted changes or the reason a removal failed. */
-function leftBranchText(language: Language, item: LeftBranchItem, homeDir: string | null | undefined): string {
-  const path = isolate(leftBranchName(item, homeDir));
+function leftBranchText(language: Language, item: LeftBranchItem, homeDir: string | null | undefined, style: PathStyle): string {
+  const path = isolate(leftBranchName(item, homeDir, style));
   let name = item.kind === "branch"
     ? path
     : item.branch === null
@@ -104,14 +104,14 @@ function leftBranchText(language: Language, item: LeftBranchItem, homeDir: strin
 
 /** The items of a `session_branches_not_removed` alert in plain text, group by group, each group's lead saying once
  * why its items are still there, and the groups' notes after the list. */
-export function leftBranchesText(language: Language, items: LeftBranchItem[], homeDir: string | null | undefined): string {
+export function leftBranchesText(language: Language, items: LeftBranchItem[], homeDir: string | null | undefined, style: PathStyle = "unix"): string {
   // A name or a detail may hold commas of its own, so the catalog sets the items of a group apart, and the groups,
   // with marks of its own.
   const joined = (key: "branchCleanup.plain.items" | "branchCleanup.plain.groups", parts: string[]) =>
     parts.reduce((before, after) => format(language, key, { before, after }));
   const groups = leftBranchGroups(items).map((group) => format(language, "branchCleanup.plain.group", {
     lead: format(language, group.lead, { count: group.items.length }),
-    items: joined("branchCleanup.plain.items", group.items.map((item) => leftBranchText(language, item, homeDir))),
+    items: joined("branchCleanup.plain.items", group.items.map((item) => leftBranchText(language, item, homeDir, style))),
   }));
   // A group's note is a sentence of its own, after the list.
   const notes = leftBranchGroups(items).flatMap((group) => group.note ? [format(language, group.note, { count: group.items.length })] : []);

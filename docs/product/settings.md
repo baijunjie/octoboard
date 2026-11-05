@@ -13,7 +13,8 @@ accounts table", "The account details dialog" and "Sharing the default configura
 `docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
 sections, in order, are **General**, **Git**, **Agent accounts**, **Agent behavior**, **Trusted folders**,
 **Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration** and **About**; the dialog opens on
-General unless it was asked to open on another section.
+General unless it was asked to open on another section. **Permissions** is there only in the macOS application; the
+Windows application and a browser leave it out.
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
 automatic deletion of archived sessions whose conversation is gone, closing idle shell terminals with their panel,
@@ -72,6 +73,9 @@ Settings opens from:
   unless the user has changed it (see `docs/product/keyboard-shortcuts.md`). The menu item does nothing
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
   open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
+- where there is no native menu — the Windows application and a browser — the Open settings shortcut itself (`Ctrl+,`
+  unless the user has changed it), which the page takes wherever keyboard focus is, the terminal included, so the key
+  never reaches the terminal. It does nothing in the situations the macOS menu item does nothing in;
 - in the macOS application, the application menu's **About Octoboard** item, which opens it on the About section
   (there is no separate About panel) and, while Settings is already open, moves it there; it does nothing in the
   situations the Settings… item does nothing in, except that an open Settings does not stop it;
@@ -138,6 +142,11 @@ directory itself. A path that only shares its first characters with the home dir
 the full path. When the daemon cannot determine its home directory, every path is shown in full: the home it
 settles on (`HOME` when absolute, else the user's entry in the system user database) is the filesystem root.
 
+A path is shown in the spelling of the host the daemon runs on, as the daemon gives it. On a Windows daemon host that
+is Windows' own (`C:\Users\dev\Projects\app`), and **no path is written with `~`**: every path is shown in full, cut
+only where it does not fit. A `~` the user types for a directory is still expanded to the daemon host's home directory
+there, followed by `\` or `/`.
+
 ## How switches save
 
 A row's switch whose value the daemon holds saves when it is turned, on its own: in General, **Order the sidebar by
@@ -162,7 +171,7 @@ the background**, a choice the client keeps itself rather than the daemon (see "
 
 Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, an **Order the sidebar
 by status** row, then an **Automatically delete archived sessions whose conversation is gone** row, a **Close idle
-terminals when closing the panel** row, and last, in the macOS application only, a **Keep running in the background**
+terminals when closing the panel** row, and last, in the desktop application only, a **Keep running in the background**
 row.
 
 ### Appearance
@@ -224,14 +233,14 @@ application settings an export carries" in `docs/product/settings-in-a-configura
 A switch, the section's last row, labelled for what turning it on does: keep Octoboard running in the background when
 the window is closed. It is **off to begin with**, so closing the window quits.
 
-**Only the macOS application has this row.** A browser has no native window to close into the background, so the row
-is absent there — the section then ends with Close idle terminals when closing the panel. In the macOS application
-this row sits directly under that switch.
+**Only the desktop application has this row**, on macOS and on Windows. A browser has no native window to close into
+the background, so the row is absent there — the section then ends with Close idle terminals when closing the panel. In
+the desktop application this row sits directly under that switch.
 
 The row's description says what the choice means and never mentions quitting, which the label already carries: while
 the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the
-window leaves the sessions, their agents and their notifications running, and the menu bar icon brings the window
-back.
+window leaves the sessions, their agents and their notifications running, and the menu bar icon (the
+notification-area icon on Windows) brings the window back.
 
 What closing the window actually does under either state, and where the choice is kept, are in "Closing the window"
 in `docs/product/application-lifecycle.md`.
@@ -450,8 +459,9 @@ opening paragraph says, what the list shows and what removing a folder does are 
 
 ## Permissions
 
-One row for each of the two macOS privacy permissions the agents can need, Screen Recording and Accessibility, to grant
-it ahead of time. What the section shows and what each row offers are in `docs/product/macos-privacy-permissions.md`.
+In the macOS application only: one row for each of the two macOS privacy permissions the agents can need, Screen
+Recording and Accessibility, to grant it ahead of time. What the section shows and what each row offers are in
+`docs/product/macos-privacy-permissions.md`.
 
 ## Notifications
 
@@ -461,6 +471,7 @@ Whether Octoboard may show a system notification when a session starts waiting f
 | Client | What the row shows |
 |---|---|
 | The macOS application | That Octoboard has no notification switch of its own: macOS manages its notifications, so they are turned off, or the way they appear changed, in System Settings. Beside it is an **Open System Settings** button (below). No permission prompt is ever shown. |
+| The Windows application | The same, with Windows and its Settings app in place of macOS and System Settings, and an **Open Windows Settings** button (below). |
 | A browser, not yet decided | That notifications are not enabled yet, with an **Enable** button that asks the browser. |
 | A browser, allowed | That they are allowed. |
 | A browser, blocked | That they are blocked, and that they are allowed again from the browser's own settings for the site. |
@@ -471,7 +482,7 @@ otherwise. Besides the Enable button here, a browser that has not decided yet ge
 notifications** button on the rail: a bell icon with a small dot on it, shown only while the browser's answer is
 undecided (see "The rail" in `docs/product/window-layout.md`). It cannot be dismissed; pressing it asks the
 browser. Once the browser has answered, whichever the answer, the bell is gone, and answering from either place
-updates the other. The macOS application never shows the bell, since it asks nothing. A browser's state is read
+updates the other. The desktop application never shows the bell, since it asks nothing. A browser's state is read
 again whenever the window regains focus, since it can be changed in the browser's own settings meanwhile.
 
 In the macOS application, **Open System Settings** opens Octoboard's own entry in the system's Notifications settings: in System Settings on macOS 13 and later, in System
@@ -479,6 +490,11 @@ Preferences' Notifications pane on macOS 11 and 12. When the system does not ope
 open System Settings" says that System Settings did not open and to open it by hand and choose Notifications; it has
 only its acknowledgement button, with no remedy button and no request to report an issue (see "The error alert" in
 `docs/product/error-alerts.md`).
+
+In the Windows application, **Open Windows Settings** opens the Notifications page of Windows' Settings (System >
+Notifications), which lists every application's notifications, Octoboard's among them. When it does not open, an error
+alert titled "Could not open Settings" says that Settings did not open and to open it by hand and choose Notifications,
+with the same buttons as macOS's.
 
 ## Keyboard shortcuts
 
@@ -497,10 +513,10 @@ cannot the section holds a line saying that exporting and importing configuratio
 
 ## About
 
-The application itself, under its own heading in the section: its icon, its name and, in the macOS application, the
+The application itself, under its own heading in the section: its icon, its name and, in the desktop application, the
 version running ("Version …"). Then, one row each:
 
-- **Updates** and **Update channel**, in the macOS application only: where the application's updates stand, with a
+- **Updates** and **Update channel**, in the desktop application only: where the application's updates stand, with a
   **What is new** link to the release notes of the version it names and the button that moves the update on, and the
   choice between the Stable and Beta channels (see "The Updates and Update channel rows" in
   `docs/product/in-app-updates.md`).

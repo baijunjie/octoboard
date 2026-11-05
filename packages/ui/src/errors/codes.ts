@@ -3,6 +3,7 @@ import type { MessageParams } from "./codedError";
 import { pathLinkRefusedCause } from "./causes";
 import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
+import type { PlatformHost } from "../i18n/platformTerms";
 
 /** Where a code comes from: the daemon declares it (`apps/daemon/src/protocol/codes.rs`), `daemon-client.ts` raises it
  * itself, or only the UI words it. */
@@ -72,14 +73,22 @@ export interface CodeRecord extends MessageFacets {
   /** Params the UI supplies itself (Git, PATH, `~/`, Enter, product names), beneath what the daemon sends. */
   uiParams?: MessageParams;
   /** The variant of the code a message with `params` is worded as, `daemon.<code>.<variant>` (see `messageCode`), or
-   * nothing for the code's own message. Each variant it can name has its message in every catalog. */
-  variantOf?: (params: MessageParams) => string | undefined;
+   * nothing for the code's own message. `os` is the operating system of the daemon's host, for a message whose wording
+   * is that of one system. Each variant it can name has its message in every catalog. */
+  variantOf?: (params: MessageParams, os: PlatformHost["os"]) => string | undefined;
   /** The message's params under a variant `variantOf` names, where they differ from the code's own. */
   variants?: Record<string, MessageFacets>;
 }
 
 /** The operations `provider_unsupported` is worded under, as its variants. */
 const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {} };
+
+/** The variant of a message about a directory the daemon cannot read or reach, on a host that is not a Mac: the
+ * per-volume file access prompts its own wording explains are macOS's, and elsewhere the daemon reads with the
+ * permissions of the account it runs as. */
+function notMacOS(os: PlatformHost["os"]): string | undefined {
+  return os === "macos" ? undefined : "accountPermissions";
+}
 
 /** The codes of the core: every code the UI has anything to say about except a provider's own, which its presentation
  * module owns (`providers/`). Keep a daemon code here in the same change that has the daemon send it:
@@ -137,8 +146,8 @@ const CORE_CODES = {
   daemon_shutting_down: { origin: "daemon", recovery: "none" },
   default_account_not_shareable: { origin: "daemon", recovery: "accountNotShareable" },
   directory_unavailable: { origin: "daemon", recovery: "openFileManager", detailBlock: true, noSummary: true },
-  directory_unreachable: { origin: "daemon", recovery: "path", codeParams: ["path"] },
-  directory_unreadable: { origin: "daemon", recovery: "access", detailBlock: true, recoveryLine: true, codeParams: ["path"], uiParams: { macOS: "macOS" } },
+  directory_unreachable: { origin: "daemon", recovery: "path", codeParams: ["path"], variants: { accountPermissions: { codeParams: ["path"] } }, variantOf: (_params, os) => notMacOS(os) },
+  directory_unreadable: { origin: "daemon", recovery: "access", detailBlock: true, recoveryLine: true, codeParams: ["path"], variants: { accountPermissions: { codeParams: ["path"] } }, variantOf: (_params, os) => notMacOS(os) },
   draft_restore_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   draft_save_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   // The export dialog keeps Export unavailable while nothing is chosen, so only a client that does not guard it
@@ -225,6 +234,10 @@ const CORE_CODES = {
   // A read of the project's files the system denied, where there is no folder to choose instead and nothing is written.
   permission_denied: { origin: "daemon", recovery: "readAccess", detailBlock: true, codeParams: ["path"] },
   process_count_timed_out: { origin: "daemon", recovery: "none" },
+  // A stop the daemon answered with processes it left running (`processes_stopped`'s `not_stopped`), worded by why
+  // the first of them was left.
+  process_not_stopped: { origin: "ui", recovery: "none", recoveryLine: true, variantOf: (params) => params.reason === "access_denied" ? "accessDenied" : undefined },
+  process_shares_agent_console: { origin: "daemon", recovery: "none", recoveryLine: true },
   project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"] },
   project_directory_protected: { origin: "daemon", recovery: "trash" },
   project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"], variants: { retryTrash: { nameParams: ["project"] } } },
@@ -283,6 +296,7 @@ const CORE_CODES = {
   sharing_messages_dropped: { origin: "daemon", recovery: "sharingLostMessages", failureNotice: true, alertTitle: true },
   sharing_resume_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true, nameParams: ["name"], variants: { running: { nameParams: ["name"] } }, variantOf: (params) => params.still_running === "true" ? "running" : undefined },
   sharing_session_did_not_stop: { origin: "daemon", recovery: "sharingStop", recordIds: ["session"], nameParams: ["session", "name"] },
+  sharing_unavailable_on_host: { origin: "daemon", causeOnly: true },
   shell_environment_timeout: { origin: "daemon", recovery: "shell", detailBlock: true },
   source_changed: { origin: "daemon", recovery: "refresh", recoveryLine: true, codeParams: ["path"] },
   // The project's directory, or its place in a worktree, that a request is scoped to: nothing the user typed or

@@ -1,9 +1,10 @@
 import { isPrimaryModifier } from "../input/keys";
+import type { HostFacts } from "../platform/host";
 import { renderedCodeRange } from "./code/rendererDom";
 
 /** Whether a key press is the platform's Select All: ⌘A on an Apple keyboard, Ctrl+A elsewhere. */
-export function isSelectAll(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">): boolean {
-  return event.key.toLowerCase() === "a" && !event.altKey && !event.shiftKey && isPrimaryModifier(event);
+export function isSelectAll(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">, host: Pick<HostFacts, "modifier">): boolean {
+  return event.key.toLowerCase() === "a" && !event.altKey && !event.shiftKey && isPrimaryModifier(event, host);
 }
 
 /**

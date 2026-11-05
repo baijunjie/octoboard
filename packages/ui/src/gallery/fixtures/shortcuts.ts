@@ -1,14 +1,15 @@
 // The gallery's scenarios for the keyboard shortcuts: Settings → Keyboard shortcuts as a browser and as
 // the desktop app list it, a row recording a new combination, the reasons a combination is refused and what
 // a changed shortcut looks like. Which commands a client lists, and how a key is written, follow the platform
-// the gallery is viewed in (⌘ on an Apple keyboard, Ctrl elsewhere): the steps press combinations through
-// `ui.chord`, which turns a portable binding into that platform's keys.
+// the gallery is viewed in (⌘ on an Apple keyboard, Ctrl elsewhere), or the scenario's `host` where it gives one: the
+// steps press combinations through `ui.chord`, which turns a portable binding into that host's keys.
 import type { Binding } from "../../shortcuts/binding";
 import type { Overrides } from "../../shortcuts/store";
 import type { Ui, Step } from "../../fixtures/interact";
 import type { Preferences } from "../../fixtures/preferences";
 import type { Scenario } from "../scenario";
-import { SAMPLE, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 
 const GROUP = "Settings";
 
@@ -42,6 +43,12 @@ const defaultTaken: Overrides = {
   quickCreate: { code: "KeyF", primary: true, shift: true },
 };
 
+/** Changes that use every modifier a Windows keyboard can bind (Ctrl, Alt, Shift), so the key caps of each show. */
+const customisedWindows: Overrides = {
+  focusMode: { code: "KeyG", primary: true, alt: true, shift: true },
+  newSession: { code: "KeyO", primary: true, alt: true },
+};
+
 const customisedPreferences = (keyboardShortcuts: Overrides): Preferences => ({ keyboardShortcuts });
 
 export const shortcutsScenarios: Scenario[] = [
@@ -51,7 +58,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in a browser",
     description:
-      "Only what a browser has is listed: under Navigation the two Fixed region keys, then Focus mode with a Change button per command, each key drawn as key caps. Back and Forward, the console-session switch and the native-menu groups (Application, Window) are left out. Editing is listed with only Find in file, also Fixed. A line above says shortcut changes apply only to the current browser, and there is no Restore defaults while every key is a default.",
+      "Only what a browser has is listed: under Navigation the two Fixed region keys, then Focus mode with a Change button per command, then Application with Open settings alone, also with a Change button, each key drawn as key caps. Back and Forward, the console-session switch and the native menu's keys (Window and the editing keys of the system) are left out. Editing is listed with only Find in file, Fixed. A line above says shortcut changes apply only to the current browser, and there is no Restore defaults while every key is a default.",
     state,
     steps: openSection,
   },
@@ -61,9 +68,23 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the desktop app",
     description:
-      "The introduction says shortcut changes apply only to the current desktop app. Every group is listed: Navigation (Back and Forward appear only where the window itself reports macOS, the console-session switch as ⌃Tab and ⇧⌃Tab), Focus mode, Application with Open settings, then Editing and Window below it, where the dialog scrolls and every row reads Fixed instead of Change.",
+      "The introduction says shortcut changes apply only to the current desktop app. Every group is listed: Navigation (Back and Forward appear only where the window itself reports macOS, then the console-session switch as ⌃⇥ and ⌃⇧⇥ (Tab drawn as the ⇥ symbol), each with a Change button), Focus mode, Application with Open settings, then Editing and Window below it, where the dialog scrolls and every row reads Fixed instead of Change.",
     desktopApp: true,
+    host: MAC_HOST,
     state,
+    steps: openSection,
+  },
+  {
+    id: "settings-shortcuts-windows",
+    group: GROUP,
+    category: "normal",
+    title: "Keyboard shortcuts in the Windows app",
+    description:
+      "The Windows app has no native menu bar and its window controls are the system's, so it lists what a browser does plus the console-session switch, under the desktop app's introduction: under Navigation, Next console session as Ctrl and Tab and Previous console session as Ctrl, Shift and Tab sit before the two Fixed region keys, each with a Change button (never Win, and no Back or Forward); the menu's editing and window keys are left out, and Open settings is listed and changeable, as the page itself handles it. The key caps are written as text, in Windows' order: Ctrl, Alt and Shift, never ⌘⌥⇧. Toggle focus mode and New session show their changed keys (Ctrl, Alt, Shift and G; Ctrl, Alt and O) with a Reset button; the rest, the console-session switch among them, keep their defaults (Ctrl+Shift+F, Ctrl+N, Ctrl+Shift+N, Ctrl+,) with no Reset. A menu's key caps are the same (see Menu of a project session on Windows).",
+    desktopApp: true,
+    host: WINDOWS_HOST,
+    state: snapshotState({ consoles: [console_], projects: [web, api], sessions, ...WINDOWS_MACHINE }),
+    preferences: customisedPreferences(customisedWindows),
     steps: openSection,
   },
   {

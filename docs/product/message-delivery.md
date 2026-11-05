@@ -6,11 +6,11 @@ information shared by another session, a report panel form submission — and wh
 ## Messages held until a session can take them
 
 A session that is working or at its prompt (paused, done, awaiting instructions, with child sessions working, or working
-in background) takes a message straight away, unless one of the holds below applies to it, or it is a Claude Code
-session held behind a message its agent did not send (see "A message written but not sent" below). A message written mid-turn is taken by the agent: Claude Code and Grok Build
-queue it and run it once the turn ends, though Claude Code can also take it into the turn still running, and Codex
-steers it into the running turn. What becomes of such messages when an owner interrupts the turn is
-in "Messages during an interrupt" in `docs/product/interrupting-turns.md`.
+in background) takes a message straight away, unless one of the holds below applies to it, or it is held behind a
+message its agent did not send (see "A message written but not sent" below). A message written mid-turn is taken by
+the agent: Claude Code and Grok Build queue it and run it once the turn ends, though Claude Code can also take it into
+the turn still running, and Codex steers it into the running turn. What becomes of such messages when an owner
+interrupts the turn is in "Messages during an interrupt" in `docs/product/interrupting-turns.md`.
 
 **Draft preservation has a bounded wait.** On supported launches, Octoboard first tries to deliver the automatic
 message separately while preserving the user's draft, without waiting for the user to finish typing:
@@ -306,11 +306,14 @@ held until a session can take them" above).
 
 Claude Code can take a message Octoboard writes and still not send it: the text stays in its input box and no turn
 starts. Invisible characters are one cause, which their removal above is there to prevent; anything else that leaves a
-message unsent is caught the same way.
+message unsent is caught the same way. Codex on a Windows daemon host can leave a message in its input box too (see
+"Codex on a Windows daemon host" below).
 
 **The check.** When Octoboard writes a message into a Claude Code session whose agent is at its prompt — whichever
 status it shows there, not mid-turn — it waits up to about three seconds for the agent's hooks to report
-a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
+a prompt sent (`UserPromptSubmit`). On a Windows daemon host the first message of a launch — a new session's, a resumed
+one's or a relaunch's, written before the agent has reported any prompt in that launch — is given three times as long,
+about nine seconds, since the launch's first hook starts cold there; later messages get the usual wait. This applies to every message Octoboard writes: an owner's instruction, a report,
 shared information, a report panel form submission, the instruction `resume_session` hands over or the prompt to
 continue after an account switch when it is written rather than given as the launch prompt, the messages of a
 transfer or a handoff, and a client's own `send_message` request. A message that was queued is checked the same way
@@ -330,18 +333,52 @@ written during the wait nor lifts the hold below. Neither does the report a suba
 back, which Claude Code submits to itself as a prompt holding an `<agent-message from="…">` block. Any other prompt
 counts, whoever sends it.
 
+**Codex on a Windows daemon host.** There the terminal hands Codex a paste as typed keys, and Codex reads an Enter
+that arrives in the same burst as a line break in the text, so a message written together with its Enter would stay in
+the input box. So Octoboard writes the message's paste alone, and its Enter only once Codex has caught up with the
+paste: its input box shows the whole message (compared without whitespace, so wrapping does not count; for a message
+too long for the box, its last 40 characters or more; for a large paste, Codex's `[Pasted Content <n> chars]` naming
+the message's length; and nothing else, where the message went into a box found empty, so text the user typed
+meanwhile holds the Enter back), and after that the box has held still for the settle window (250 milliseconds). Only
+the box counts, not the rest of the screen: mid-turn, Codex redraws its spinner and status line all the time. It waits
+up to **15 seconds** for that, not counting the time no input box is recognised on the screen at all. Octoboard reads
+the box above each footer Codex draws in its ordinary states with its default keys and status line, down to very
+narrow terminals, including the "tab to queue message" footer Codex shows while a turn runs a tool with the message in
+its box; the uncounted time is a fallback for a screen whose footer Octoboard does not know. That allowance is only
+for a message written into a box found empty; its unrecognised time has a cap of its own, **10 minutes** in all,
+during which the session's queue waits and the session does not count as idle, and the wait ends at once if the
+session ends, is being stopped or is archived. If the box never shows the message within those caps, no Enter is
+pressed and the message is **left unsent**, as below. After the Enter, an input box that empties counts as the message
+sent, as does one no longer recognised on the screen, so no Enter goes into whatever took its place. Enter is pressed
+once more only when the first became a line break: the box's rows changed, end in an empty row below the whole
+message, and the box held still so. A box the Enter did not change is waited on, not pressed into again. If neither
+comes within 15 seconds of an Enter, or the box still holds the message after the second, the message is left unsent,
+but its Enter has had its chance: no further Enter is pressed for it. This applies to every message Octoboard writes
+into such a session, mid-turn or at its prompt.
+
 **What a message left unsent does:**
 
 - Its text is not written again or put back in the queue: it is already in the session's input box.
 - Every client is sent the `message_not_sent` notice about that session, naming its agent, provided the session's
   process that was written to is still running when the check ends. The window shows it as an error alert (see
-  `docs/product/error-alerts.md`) titled "Message not sent", naming the session and where it is, and saying the agent
-  has not confirmed sending the message, and that Octoboard will retry its submit key once after three seconds,
-  without pasting the text again. The user is told to answer pending dialogs first and check the automatic retry; if
-  the message still waits in the composer, press Enter without pasting it again. The notice carries
-  `submit_retry: "once"`; a notice without that value retains the manual-send guidance for compatibility.
-- Later messages wait until the agent reports another submitted prompt or the single submit-key retry is attempted.
-  If a prompt has already been reported, Octoboard skips the retry. Otherwise, three seconds after the message was
+  `docs/product/error-alerts.md`) titled "Message not sent", naming the session and where it is:
+  - For a message the check above left unsent the notice carries `submit_retry: "once"`, and the alert says the agent
+    has not confirmed sending the message, and that Octoboard will retry its submit key once after three seconds,
+    without pasting the text again. The user is told to answer pending dialogs first and check the automatic retry; if
+    the message still waits in the composer, press Enter without pasting it again.
+  - For a Codex message left in its input box on a Windows host (its Enter held back, or pressed and not taken) the
+    notice carries no `submit_retry`, and the alert says the agent did not send the message, so it is waiting in the
+    session's input box, and that Octoboard writes nothing more into the session until a prompt is sent. The user is
+    told to open the session, check the message waiting in its input box and press Enter to send it.
+- **The notice is withdrawn** once the agent reports a prompt sent after the message the notice was about — the
+  message's own report arriving late, the submit-key retry having worked, or the user pressing Enter: every client is
+  sent `session_notice_withdrawn` naming the session and the code `message_not_sent`, and the window closes that
+  session's "Message not sent" alert, or drops it from the alerts waiting to be shown. A client not showing the notice
+  ignores the withdrawal; later prompts withdraw nothing more.
+- Later messages wait until the agent reports another submitted prompt or, for a message the check left unsent, the
+  single submit-key retry is attempted; behind a Codex message left in its input box on a Windows host, only a prompt
+  the agent reports releases them. If a prompt has already been reported, Octoboard skips the retry. Otherwise, three
+  seconds after the message was
   marked unsent, it presses Enter once into the current input, which may include the user's later edits. A recognised
   dialog or trust confirmation must clear first. Once the attempt is made, the hold clears even without another
   submitted-prompt report, and later messages can proceed under the other holds above. If writing the submit key fails,
@@ -350,6 +387,10 @@ counts, whoever sends it.
   sending the message and Octoboard could not press Enter again, and telling the user to check the input box and, if the
   message is still there, press Enter without pasting it again. The key is not retried again and the message is not
   written again.
+- A message left unsent after its draft was put in the agent's native stash (see "Draft preservation has a bounded
+  wait" above) still counts as sent for the draft's protection: restoring the stash is the agent's, and the user's own
+  send of the message, which brings the draft back, ends the protection. No agent both uses a native stash and has its
+  submit key checked as above today, so this case is not reached yet.
 - The hold belongs to the session's process that was written to and ends with it, as its queue does: a session resumed
   later starts without one.
 
@@ -376,7 +417,8 @@ every client, gets the `message_not_sent` notice.
 
 - A message written while the agent is mid-turn. The agent queues it and sends it only when the turn ends, which no
   short wait can see, so a mid-turn message Claude Code holds back is not detected and counts as delivered.
-- Codex and Grok Build sessions: a message counts as delivered once it has been written.
+- Grok Build sessions, and Codex sessions outside a Windows daemon host: a message counts as delivered once it has been
+  written. A Codex message on a Windows daemon host is checked only as "Codex on a Windows daemon host" above says.
 - A message written through a native stash whose input recovery remains pending: the recovery rules above apply,
   and the message is not reported as an unsent draft or retried.
 - Which prompt was sent. The prompt's text is not matched against the message: a prompt the user sends within those

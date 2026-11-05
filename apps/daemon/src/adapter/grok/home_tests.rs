@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use super::tests::{plan_isolated, with_default_home};
 use super::*;
 use crate::adapter::tests::spec_fixture;
-use crate::adapter::HOOK_TIMEOUT_SECS;
+use crate::adapter::COMMAND_HOOK_TIMEOUT_SECS;
 use crate::providers::grok::GROK_TRUST_STORE;
 
 #[test]
@@ -52,8 +52,10 @@ fn the_farms_trust_store_is_the_users_copied_without_the_project_added() {
     assert_eq!(carried.user_store(), home.join(GROK_TRUST_STORE));
     // The entry Grok writes into the session's copy for the canonical working directory is the one
     // carried into the user's store.
-    let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
-    let entry = format!("\n[folders.\"{}\"]\ntrusted = true\n", canonical.display());
+    let canonical = crate::hostfs::canonical(&fixture.cwd).expect("canonical path");
+    // A TOML basic string, where a backslash (Windows' separator) is written escaped.
+    let key = canonical.to_string_lossy().replace('\\', "\\\\");
+    let entry = format!("\n[folders.\"{key}\"]\ntrusted = true\n");
     std::fs::write(farm.join(GROK_TRUST_STORE), format!("{users}{entry}")).expect("recorded");
     carried.carry().expect("carried");
     assert_eq!(
@@ -62,6 +64,7 @@ fn the_farms_trust_store_is_the_users_copied_without_the_project_added() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn the_farms_config_is_readable_by_its_owner_only_even_when_the_users_is_not() {
     use std::os::unix::fs::PermissionsExt;
@@ -155,7 +158,7 @@ fn the_hooks_are_command_type_with_an_explicit_timeout() {
         assert_eq!(handler["type"], "command");
         // Grok defaults `Stop`, `SubagentStop` and `PostToolUse` to 600 s, which would stall
         // the UI for ten minutes on a wedged hook.
-        assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);
+        assert_eq!(handler["timeout"], COMMAND_HOOK_TIMEOUT_SECS);
     }
 }
 
@@ -215,8 +218,8 @@ fn a_linked_source_directory_becomes_a_real_one_and_inner_links_stay_links() {
     let elsewhere = fixture.scratch.join("elsewhere");
     std::fs::create_dir_all(elsewhere.join("sub")).expect("target directory");
     std::fs::write(elsewhere.join("sub/tool"), "tool").expect("file");
-    std::os::unix::fs::symlink("sub/tool", elsewhere.join("inner")).expect("inner link");
-    std::os::unix::fs::symlink(&elsewhere, home.join("bundled")).expect("link");
+    crate::test_support::symlink("sub/tool", elsewhere.join("inner")).expect("inner link");
+    crate::test_support::symlink(&elsewhere, home.join("bundled")).expect("link");
 
     let plan = plan_isolated(&fixture.spec()).expect("plan");
     let farm = PathBuf::from(&plan.env[0].1);
@@ -242,18 +245,18 @@ fn a_source_entry_that_is_a_link_is_reached_through_one_link() {
     let default = fixture.scratch.join("default-home");
     std::fs::create_dir_all(default.join("skills")).expect("default directory");
     std::fs::write(default.join("AGENTS.md"), "shared").expect("default file");
-    std::os::unix::fs::symlink(default.join("AGENTS.md"), home.join("AGENTS.md"))
+    crate::test_support::symlink(default.join("AGENTS.md"), home.join("AGENTS.md"))
         .expect("file link");
-    std::os::unix::fs::symlink(default.join("skills"), home.join("skills"))
+    crate::test_support::symlink(default.join("skills"), home.join("skills"))
         .expect("directory link");
     let middle = fixture.scratch.join("middle");
-    std::os::unix::fs::symlink(default.join("AGENTS.md"), &middle).expect("first hop");
-    std::os::unix::fs::symlink(&middle, home.join("chained.md")).expect("second hop");
+    crate::test_support::symlink(default.join("AGENTS.md"), &middle).expect("first hop");
+    crate::test_support::symlink(&middle, home.join("chained.md")).expect("second hop");
 
     let plan = plan_isolated(&fixture.spec()).expect("plan");
     let farm = PathBuf::from(&plan.env[0].1);
 
-    let file = std::fs::canonicalize(default.join("AGENTS.md")).expect("canonical path");
+    let file = crate::hostfs::canonical(default.join("AGENTS.md")).expect("canonical path");
     assert_eq!(
         std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
         file
@@ -264,7 +267,7 @@ fn a_source_entry_that_is_a_link_is_reached_through_one_link() {
     );
     assert_eq!(
         std::fs::read_link(farm.join("skills")).expect("a link"),
-        std::fs::canonicalize(default.join("skills")).expect("canonical path")
+        crate::hostfs::canonical(default.join("skills")).expect("canonical path")
     );
     assert_eq!(
         std::fs::read_to_string(farm.join("AGENTS.md")).expect("read"),
@@ -283,7 +286,7 @@ fn a_plain_source_entry_is_linked_to_itself() {
 
     assert_eq!(
         std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
-        std::fs::canonicalize(home.join("AGENTS.md")).expect("canonical path")
+        crate::hostfs::canonical(home.join("AGENTS.md")).expect("canonical path")
     );
 }
 
@@ -292,7 +295,7 @@ fn a_plain_source_entry_is_linked_to_itself() {
 fn a_dangling_source_link_is_linked_to_the_source_entry() {
     let mut fixture = spec_fixture();
     let home = with_default_home(&mut fixture);
-    std::os::unix::fs::symlink(fixture.scratch.join("gone"), home.join("AGENTS.md"))
+    crate::test_support::symlink(fixture.scratch.join("gone"), home.join("AGENTS.md"))
         .expect("dangling link");
 
     let plan = plan_isolated(&fixture.spec()).expect("plan");
@@ -325,7 +328,7 @@ fn linked_source_entries_still_yield_real_copies_of_the_owned_files() {
         GROK_TRUST_STORE,
         "config.toml",
     ] {
-        std::os::unix::fs::symlink(default.join(name), home.join(name)).expect("link");
+        crate::test_support::symlink(default.join(name), home.join(name)).expect("link");
     }
 
     let plan = plan_isolated(&fixture.spec()).expect("plan");
@@ -373,4 +376,289 @@ fn a_sandbox_profile_file_is_copied_too() {
         std::fs::read_to_string(farm.join("sandbox.toml")).expect("copy"),
         "[profiles.p]\n"
     );
+}
+
+/// Sets [`super::home::FILE_LINKS_OVERRIDE`] for as long as it is held.
+pub(super) struct FileLinks;
+
+impl FileLinks {
+    pub(super) fn set(available: bool) -> Self {
+        super::home::FILE_LINKS_OVERRIDE.set(Some(available));
+        Self
+    }
+}
+
+impl Drop for FileLinks {
+    fn drop(&mut self) {
+        super::home::FILE_LINKS_OVERRIDE.set(None);
+    }
+}
+
+/// The value of `name` in the plan's environment.
+fn env_value<'a>(plan: &'a LaunchPlan, name: &str) -> Option<&'a str> {
+    plan.env
+        .iter()
+        .find(|(key, _)| key == name)
+        .map(|(_, value)| value.as_str())
+}
+
+/// A source home with the entries Grok Build 1.0.77 leaves in one: locks beside the files they
+/// guard, a temporary file a write left, a SQLite database with its index, state and caches.
+fn with_a_lived_in_home(fixture: &mut crate::adapter::tests::SpecFixture) -> PathBuf {
+    let home = with_default_home(fixture);
+    std::fs::create_dir_all(home.join("skills")).expect("skills");
+    for (name, text) in [
+        ("auth.json.lock", "50843:1794022920"),
+        (".config-init.lock", ""),
+        ("active_sessions.json", "[]"),
+        ("active_sessions.lock", ""),
+        ("managed_config.lock", ""),
+        (".59335.0.tmp", "half"),
+        ("agent_id", "id"),
+        ("worktrees.db", "database"),
+        ("worktrees.db-wal", "log"),
+        ("worktrees.db-shm", "index"),
+        (GROK_TRUST_STORE, ""),
+        ("trusted_folders.toml.lock", ""),
+    ] {
+        std::fs::write(home.join(name), text).expect(name);
+    }
+    home
+}
+
+/// Without file links, a launch no longer fails on the first file it would link: directories are
+/// still linked, every other file is the session's own copy, and what no copy may share — the
+/// login, locks, temporary files, SQLite's index — is left out.
+#[test]
+fn without_file_links_the_farm_copies_files_and_leaves_out_locks_and_the_login() {
+    let _links = FileLinks::set(false);
+    let mut fixture = spec_fixture();
+    let home = with_a_lived_in_home(&mut fixture);
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    let farm = PathBuf::from(&plan.env[0].1);
+
+    for name in ["sessions", "skills"] {
+        assert!(farm.join(name).is_symlink(), "{name}");
+        assert!(farm.join(name).is_dir(), "{name}");
+    }
+    for (name, text) in [
+        ("active_sessions.json", "[]"),
+        ("agent_id", "id"),
+        ("worktrees.db", "database"),
+        ("worktrees.db-wal", "log"),
+    ] {
+        assert!(!farm.join(name).is_symlink(), "{name}");
+        assert_eq!(std::fs::read_to_string(farm.join(name)).expect(name), text);
+    }
+    for name in [
+        "auth.json",
+        "auth.json.lock",
+        ".config-init.lock",
+        "active_sessions.lock",
+        "managed_config.lock",
+        "trusted_folders.toml.lock",
+        ".59335.0.tmp",
+        "worktrees.db-shm",
+        "managed_config.toml",
+    ] {
+        assert!(
+            std::fs::symlink_metadata(farm.join(name)).is_err(),
+            "{name}"
+        );
+    }
+    for entry in std::fs::read_dir(&farm).expect("farm") {
+        let path = entry.expect("entry").path();
+        assert!(!path.is_symlink() || path.is_dir(), "{}", path.display());
+    }
+    // A copy is the session's own: what Grok writes there stays out of the user's home.
+    std::fs::write(farm.join("agent_id"), "changed").expect("write");
+    assert_eq!(
+        std::fs::read_to_string(home.join("agent_id")).expect("source"),
+        "id"
+    );
+    // The files the farm owns are as on any host.
+    assert!(std::fs::read_to_string(farm.join("config.toml"))
+        .expect("config")
+        .contains("[mcp_servers.octoboard]"));
+    assert!(farm.join("hooks").join("octoboard.json").is_file());
+    assert!(farm.join(GROK_TRUST_STORE).is_file());
+}
+
+/// Without file links Grok is pointed at the user's own login rather than at a copy, so a sign-in
+/// or a refresh it saves is the user's at once, with nothing to write back; with no login yet, at
+/// the place a sign-in creates it.
+#[test]
+fn without_file_links_grok_saves_its_login_in_the_users_own_file() {
+    let _links = FileLinks::set(false);
+    let mut fixture = spec_fixture();
+    let home = with_default_home(&mut fixture);
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    let store = PathBuf::from(env_value(&plan, "GROK_AUTH_PATH").expect("the login store"));
+    assert_eq!(
+        store,
+        crate::hostfs::canonical(home.join("auth.json")).expect("canonical path")
+    );
+    std::fs::write(&store, "{\"refreshed\":true}").expect("Grok's save");
+    assert_eq!(
+        std::fs::read_to_string(home.join("auth.json")).expect("the user's login"),
+        "{\"refreshed\":true}"
+    );
+
+    std::fs::remove_file(home.join("auth.json")).expect("signed out");
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    assert_eq!(
+        env_value(&plan, "GROK_AUTH_PATH").map(PathBuf::from),
+        Some(home.join("auth.json"))
+    );
+}
+
+/// A login store the user's shell already names reaches Grok through the launch environment, and
+/// is left to it.
+#[test]
+fn a_login_store_the_shell_names_is_left_as_it_is() {
+    let _links = FileLinks::set(false);
+    let mut fixture = spec_fixture();
+    with_default_home(&mut fixture);
+    fixture.shell_env.insert(
+        "GROK_AUTH_PATH".to_string(),
+        "/elsewhere/auth.json".to_string(),
+    );
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    assert_eq!(env_value(&plan, "GROK_AUTH_PATH"), None);
+}
+
+/// Where the host makes file links nothing changes: the login and every lock beside a linked
+/// file stay linked, so the session's Grok and the user's own take the same lock before writing
+/// the same file, and no login store is named. A SQLite database is linked only where the host's
+/// SQLite follows the link to name its log.
+#[test]
+fn with_file_links_the_login_and_its_locks_stay_linked() {
+    let _links = FileLinks::set(true);
+    let mut fixture = spec_fixture();
+    with_a_lived_in_home(&mut fixture);
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    let farm = PathBuf::from(&plan.env[0].1);
+
+    for name in [
+        "auth.json",
+        "auth.json.lock",
+        ".config-init.lock",
+        "active_sessions.json",
+        "active_sessions.lock",
+        "managed_config.lock",
+        "trusted_folders.toml.lock",
+        "agent_id",
+        "sessions",
+    ] {
+        assert!(farm.join(name).is_symlink(), "{name}");
+    }
+    assert_eq!(env_value(&plan, "GROK_AUTH_PATH"), None);
+    if crate::platform::fs::SQLITE_FOLLOWS_FILE_ALIASES {
+        for name in ["worktrees.db", "worktrees.db-wal", "worktrees.db-shm"] {
+            assert!(farm.join(name).is_symlink(), "{name}");
+        }
+    } else {
+        for name in ["worktrees.db", "worktrees.db-wal"] {
+            assert!(farm.join(name).is_file() && !farm.join(name).is_symlink());
+        }
+        assert!(std::fs::symlink_metadata(farm.join("worktrees.db-shm")).is_err());
+    }
+}
+
+/// A copied directory carries no lock or temporary file on any host. Without file links, a link
+/// inside it to a file becomes a copy of that file, and one to a directory is made again to where
+/// it resolves.
+#[test]
+fn a_copied_directory_without_file_links_leaves_out_groks_locks_and_follows_its_links() {
+    let mut fixture = spec_fixture();
+    let home = with_default_home(&mut fixture);
+    let bundled = home.join("bundled");
+    std::fs::create_dir_all(bundled.join("skills")).expect("bundled");
+    std::fs::write(bundled.join("manifest.json"), "{}").expect("manifest");
+    let grok_scratch = [".lock", "manifest.json.lock", ".tmp2tPTzx", ".59335.0.tmp"];
+    let users_files = [
+        "uv.lock",
+        "Cargo.lock",
+        "yarn.lock",
+        "bun.lock",
+        ".tmplate",
+        ".tmpl2tPTz",
+        "notes.tmp",
+    ];
+    for name in grok_scratch.iter().chain(&users_files) {
+        std::fs::write(bundled.join(name), "").expect(name);
+    }
+    crate::test_support::symlink("manifest.json", bundled.join("linked.json")).expect("file link");
+    crate::test_support::symlink("skills", bundled.join("linked-skills")).expect("directory link");
+
+    for file_links in [true, false] {
+        let _links = FileLinks::set(file_links);
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let copy = PathBuf::from(&plan.env[0].1).join("bundled");
+        assert!(!copy.is_symlink());
+        assert!(copy.join("manifest.json").is_file());
+        // Where the host makes file links, the copy is the whole directory, as it always was.
+        for name in grok_scratch {
+            assert_eq!(copy.join(name).is_file(), file_links, "{name}");
+        }
+        for name in users_files {
+            assert!(copy.join(name).is_file(), "{name}");
+        }
+        if file_links {
+            assert_eq!(
+                std::fs::read_link(copy.join("linked.json")).expect("a link"),
+                Path::new("manifest.json")
+            );
+        } else {
+            assert!(!copy.join("linked.json").is_symlink());
+            assert_eq!(
+                std::fs::read_to_string(copy.join("linked.json")).expect("copy"),
+                "{}"
+            );
+            assert_eq!(
+                crate::hostfs::canonical(copy.join("linked-skills")).expect("resolves"),
+                crate::hostfs::canonical(bundled.join("skills")).expect("canonical path")
+            );
+        }
+    }
+}
+
+/// Which source entries are linked, copied or left out, by name and host.
+#[test]
+fn entries_are_carried_by_what_they_are_and_what_the_host_links() {
+    use super::home::{carried, Carried};
+
+    for name in [
+        "auth.json.lock",
+        ".config-init.lock",
+        ".59335.0.tmp",
+        "x.sock",
+        "auth.json",
+    ] {
+        assert_eq!(carried(name, false, false), Carried::Left, "{name}");
+        assert_eq!(carried(name, false, true), Carried::Linked, "{name}");
+    }
+    for name in [
+        "agent_id",
+        "models_cache.json",
+        "worktrees.db",
+        "worktrees.db-wal",
+    ] {
+        assert_eq!(carried(name, false, false), Carried::Copied, "{name}");
+    }
+    assert_eq!(carried("worktrees.db-shm", false, false), Carried::Left);
+    for name in ["sessions", "skills", "x.lock"] {
+        assert_eq!(carried(name, true, false), Carried::Linked, "{name}");
+    }
+    let database = if crate::platform::fs::SQLITE_FOLLOWS_FILE_ALIASES {
+        [Carried::Linked; 3]
+    } else {
+        [Carried::Copied, Carried::Copied, Carried::Left]
+    };
+    for (name, expected) in ["worktrees.db", "state.sqlite-journal", "worktrees.db-shm"]
+        .into_iter()
+        .zip(database)
+    {
+        assert_eq!(carried(name, false, true), expected, "{name}");
+    }
 }

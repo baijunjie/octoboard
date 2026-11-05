@@ -990,13 +990,33 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
 /// asks to, before the projects are placed, so a project of the same import goes where the choice
 /// puts it; a directory the document carries that is not usable here is left out.
 #[tokio::test]
+async fn a_default_clone_directory_written_on_another_operating_system_is_marked_and_left_out() {
+    let (state, _dir) = app_state("import-foreign-clone-dir");
+    let mut carried = with_settings(document(Vec::new()), false, false);
+    carried["settings"]["default_clone_dir"] = json!(foreign_path());
+
+    let settings = inspect(&state, &carried).await.unwrap().settings.unwrap();
+
+    assert!(settings.foreign_default_clone_dir);
+    assert_eq!(settings.default_clone_dir, None);
+
+    carried["settings"]["default_clone_dir"] = json!("Projects");
+    let settings = inspect(&state, &carried).await.unwrap().settings.unwrap();
+    assert!(!settings.foreign_default_clone_dir);
+    assert_eq!(settings.default_clone_dir, None);
+}
+
+#[tokio::test]
 async fn the_default_clone_directory_travels_and_the_user_may_keep_the_machines_own() {
     let area = ScratchDir::new("import-clone-dir-area");
     let theirs = directory(&area, "theirs");
     let own = directory(&area, "own");
     directory(&theirs, "derived");
     directory(&own, "derived");
-    let hub = console("Hub", vec![project("derived", "/gone/layout/derived")]);
+    let hub = console(
+        "Hub",
+        vec![project("derived", &host_path("/gone/layout/derived"))],
+    );
     let mut carried = with_settings(document(vec![hub]), false, false);
     carried["settings"]["default_clone_dir"] = json!(theirs.to_string_lossy());
     let place = || vec![at(0, 0, DirectoryChoice::DefaultCloneDir)];
@@ -1154,8 +1174,8 @@ async fn the_inspection_offers_the_clone_dependent_targets_under_the_documents_c
     let hub = console(
         "Hub",
         vec![
-            project("only-theirs", "/gone/only-theirs"),
-            project("only-own", "/gone/only-own"),
+            project("only-theirs", &host_path("/gone/only-theirs")),
+            project("only-own", &host_path("/gone/only-own")),
         ],
     );
     let mut carried = with_settings(document(vec![hub]), false, false);

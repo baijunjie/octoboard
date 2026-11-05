@@ -5,7 +5,8 @@ payloads can and cannot be correlated on, what a failing hook costs, how a proje
 injected one, the mechanism and conditions for injecting Octoboard into each, what it takes to move a session's
 conversation into another config directory, how each signs in a config directory without a terminal and what it answers
 before that, what happens when two accounts share a session directory or the rest of a configuration directory, and how
-to ask each one how much of its plan quota is left and how to start a usage window that has not begun counting.
+to ask each one how much of its plan quota is left, how to start a usage window that has not begun counting, and what
+differs when the daemon runs on Windows.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
@@ -35,7 +36,9 @@ says about input written before bracketed paste is turned on, and about pasted p
 **Claude Code 2.1.310** on 2026-10-26. What the Claude Code section's "How the global config file is saved, and what a
 kill leaves behind" says was read from the executable of, and measured on, **Claude Code 2.1.316** on 2026-11-02. What
 the Grok Build section's "Leader mode leaves the TUI's stop to a `SIGKILL` of the leader" note says was measured on
-**Grok Build 1.0.70** on 2026-11-02. All three rewrite their hook surface, their payload fields, their configuration
+**Grok Build 1.0.70** on 2026-11-02. What "The agents on Windows" says was measured in November 2026 on Windows 11 23H2
+on **Claude Code 2.1.318** and **2.1.319**, **Codex 0.166.0** (the stop, the hook commands and the app server also on
+**0.163.0**) and **Grok Build 1.0.77**. All three rewrite their hook surface, their payload fields, their configuration
 layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 The permission-resume note below distinguishes the native implementations in **Claude Code 2.1.274** and **2.1.319**.
@@ -1024,6 +1027,186 @@ the PTY master closed, stdin closed or `session/close` on `grok agent stdio` all
 `SIGKILL` fires nothing. Each of Octoboard's teardowns is one of these, so a `channel_closed` `Stop` is not expected
 from it; were one to arrive, Octoboard's mapping, which only sets `shutdown` aside, would read it as a normal turn end.
 
+## The agents on Windows
+
+What differs for the three agents when the daemon runs on Windows, beyond what the sections above say. Measured in
+November 2026 on Windows 11 23H2 (an ARM64 virtual machine) on
+**Claude Code 2.1.318** and **2.1.319**, **Codex 0.166.0** (the stop and the hook commands also on **0.163.0**) and
+**Grok Build 1.0.77**; each fact names the build it came from where it matters. The probes ran from an elevated session
+unless a note says otherwise, and nothing was run on x64 hardware or on Windows 10. Both Claude Code and Codex need Git
+for Windows for their own shell tooling.
+
+### Stopping an agent on a pseudoconsole
+
+Each agent ran in a pseudoconsole of the inbox console host, was given one turn, and was stopped when idle or 2 to 3 s
+into a long reply. `ClosePseudoConsole` hands every process on the console `CTRL_CLOSE_EVENT`; the two agents answer it
+differently.
+
+| Stop | Claude Code 2.1.318 (native `claude.exe`) | Codex 0.166.0 (native `codex.exe`) |
+|---|---|---|
+| `ClosePseudoConsole` or `CTRL_BREAK_EVENT` to its process group | Exits in 0.8 to 0.9 s, code 129 on the close and 0 on the break; `SessionEnd` with `reason` `other`; the session trailer and `cost-state` are written, and a partial reply and its `turn_duration` mid-turn | Exits in 0.05 to 0.2 s with `0xC000013A` (`STATUS_CONTROL_C_EXIT`, the default handler's); no `SessionEnd` or `Interrupt`; mid-turn the rollout ends at a `reasoning` item, with no `turn_aborted` and the partial reply lost |
+| Ctrl-C twice through the input | Exits in 1.3 s with code 0 and `SessionEnd` `prompt_input_exit`; 5.4 s with an unsent draft in the box | Idle: 1.1 s (5.5 s once before any turn, 3.9 s with a draft), code 0, `SessionEnd`, "Shutting down…" and the resume hint printed. Mid-turn: 2.0 s, the first Ctrl-C fires `Interrupt` and the second `SessionEnd`, and `token_count`, the final message and `turn_aborted` are written |
+| `TerminateProcess` | `SessionEnd` never fires; `cost-state` is missing, and mid-turn the partial reply and thinking are lost | Code 1, no hook; the rollout is complete up to the last `task_complete` |
+
+- **Claude Code stops politely on the close; Codex does not.** Codex installs no handler for `CTRL_CLOSE_EVENT` or
+  `CTRL_BREAK_EVENT`, so for it both are as abrupt as a terminate. A Ctrl-C written into its input pipe is the only
+  polite stop that works: it arrives as a key event in its raw-mode input, even though the process group was created
+  with `CREATE_NEW_PROCESS_GROUP`, which disables `CTRL_C_EVENT`. Claude Code also quits on Ctrl-C twice, so one
+  sequence serves both.
+- **`ClosePseudoConsole` returns only once Claude Code has exited**, 0.77 to 0.93 s: it blocks while the client shuts
+  down, so it has to be called off the thread reading the console's output, with that output still drained.
+- **Codex through its npm shim** (`cmd /d /s /c codex.cmd`, the tree `cmd` to `node codex.js` to `codex.exe`): the close
+  and the break ended the whole tree as abruptly (`0xC000013A`, 0.2 s), and a single Ctrl-C ended it gracefully (code
+  0). Passing `-c hooks.*` overrides through the shim failed, since `cmd` mangled the arguments holding `&` and `\"`.
+- **Children.** An MCP server an agent starts has a hidden console host of its own: both agents start their children
+  windowless, so they are not attached to the pseudoconsole and receive no console event. After a graceful stop of
+  Claude Code the server read end-of-file on its stdin and exited; after a terminate of either agent, and after every
+  stop of Codex, it disappeared without logging an end-of-file or an exit, together with its console host. That the
+  agents hold their children in a kill-on-close job of their own is a conjecture; only the disappearance was seen. No
+  member of the launch's job outlived the agent in any run.
+- **Ctrl-C and the inherited "ignore Ctrl-C" flag.** A process whose parent set Windows' per-process ignore flag (every
+  program started over the virtual machine's ssh had it) raises no `CTRL_C_EVENT` for a raw `0x03` written to its
+  terminal, on either console host. Claude Code 2.1.319 and Codex 0.166.0 read the byte as a key whatever the flag says:
+  both clear the input, and both quit on an empty one (Codex with exit code 0).
+- Not tested: a stop during a running tool call or a permission prompt, and a stop of Codex's headless app server.
+
+### Hook and status-line commands
+
+- **Claude Code runs command hooks and the status line through Git Bash** (2.1.318): the chain is `probe.exe`, Git's
+  `usr\bin\bash.exe`, Git's `bin\bash.exe` launcher, `claude.exe`, with `MSYSTEM` set by Git and `SHELL` set to
+  `C:\Program Files\Git\bin\bash.exe`; an inherited `SHELL` naming PowerShell was ignored, and a
+  `CLAUDE_CODE_GIT_BASH_PATH` naming a missing file still ran Git Bash. Forms measured with an executable path that
+  holds a space:
+  - `exec 'C:\…\bin dir\tool.exe' args 2>/dev/null`, the macOS form with POSIX single quotes: works unchanged.
+  - A double-quoted `"C:\…\tool.exe" args` with no `exec`: works, but bash eats a backslash before `\`, `"`, `$` or a
+    backquote, so only values free of those survive; `\U`, `\a`, `\c` and the like are not escapes and pass.
+  - A quoted `.cmd` (`"C:\…\hook.cmd" args`): works, bash starts `cmd.exe`, which starts the program. The same path
+    unquoted fails, as bash eats its backslashes (`C:Users…: command not found`) and Claude Code shows a hook error.
+  - The per-hook field `"shell": "powershell"` makes Claude Code run `pwsh.exe` directly: `& "C:\…\tool.exe" args` works
+    and the bare quoted path is a ParserError. The binary also says it needs "either Git for Windows (for bash) or
+    PowerShell"; which shell hooks use with Git for Windows absent was not tested, as Git could not be hidden from its
+    detection.
+- **HTTP hooks work without any shell** (`UserPromptSubmit`, `Stop`, `SessionEnd`; `User-Agent: axios/1.15.2`).
+- **Codex runs hook commands through PowerShell**, never a direct exec and never `cmd`: `pwsh.exe -NoProfile -Command
+  "<command>"` when `pwsh` is on the `PATH`, else `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile
+  -Command "<command>"` (0.163.0 and 0.166.0; read from `[Environment]::CommandLine` inside a hook). So the command
+  string is PowerShell source: `& "C:\…\bin dir\tool.exe" args` and `& 'C:\…\bin dir\hook.cmd' args` work, the cmd or
+  bash form `"C:\…\tool.exe" args` fails with "hook exited with code 1", and a bare `.cmd` path works only when it holds
+  no space. Hooks Codex's remote TUI attached to ran in the app server's process.
+- **Codex's first hook is slow.** A cold `SessionStart` through `pwsh` under a home directory with non-ASCII characters
+  took 4.3 s on 0.166.0 (4.6 s earlier), so the Windows command-hook timeout is 15 s; `Interrupt` keeps 3 s.
+- **Both agents choose their own PowerShell** for the tools and hooks they start (Codex the one that runs its hooks and
+  tool calls, Claude Code its PowerShell tool's), and Octoboard starts neither. Where it is the Store's `pwsh`, what it
+  starts is outside the launch's job (the "A Store PowerShell leaves the launch's job" entry of "Known pitfalls" in
+  `docs/architecture.md`).
+
+### What they draw and read on a pseudoconsole
+
+Claude Code 2.1.319 and Codex 0.166.0, on the inbox console host and on the bundled one ("The two Windows console
+hosts" in `docs/architecture.md`):
+
+- **Claude Code** draws every stage as on macOS on both hosts. The trust screen selects "No, exit" first with the glyph
+  `❯` (Enter on the default quits; Down then Enter trusts), and with `TERM` unset the same binary draws `>`, for a
+  reason not established. The fresh session's placeholder `Try "…"` is faint (SGR 2) and gone after a turn. `ESC[?2004h`
+  is on at the trust screen and in the session. Titles run `claude`, `✳ Claude Code`, `◐ Claude Code`, `◐ <task>`, `✳
+  <task>`, with the intermediate spinner titles dropped by the inbox host. It queries `ESC]7501;?` and writes
+  `ESC[?9001l ESC[?9001h` itself. Words are separated by cursor moves in the bytes (`ESC[1C` on the inbox host, `ESC[nG`
+  on the bundled one), so only the parsed screen holds a phrase.
+- **Codex** shows its folder-access screen only inside a git repository, with the selected row (`› 1. Trust and
+  continue`) bold and inverse across the row and, in a subdirectory, a note "You're in a subdirectory of a Git project"
+  with a lower-cased `c:\users\…` path. The composer's placeholder `Ask Codex to do anything` is faint. Titles are
+  `<folder>`, `⠸ <folder>` while working and `<task> | <folder>`. It emits `ESC]7501;state=idle|working|done:app=codex
+  ESC\`, which passes both hosts. It enters the alternate screen at start on the bundled host (invisible on the inbox
+  one).
+- **Codex reads input records, not VT bytes.** The console host consumes a bracketed paste's markers and hands Codex the
+  pasted text as typed keys, and an Enter written right behind it as one more key in the same burst; Codex draws the
+  paste only when its paste burst flushes, 100 to 150 ms later, and takes that Enter for a line break inside the paste.
+  On the bundled host, with its cursor-position query unanswered (about 500 ms stalled), an Enter written 300 ms after
+  the paste still arrived inside the burst and the message was not submitted.
+- **Queries.** Both agents issue cursor-position queries on the bundled host (Codex after every paste and every submit,
+  Claude Code once after the trust screen); unanswered, each holds the agent for about 500 ms, and Codex's lost the
+  submit as above. Answered at once from a parse of the stream, every stage worked. Whether the host or the agent issues
+  them is unverified.
+- **Settling.** After a keystroke Claude Code's output is one burst of 15 to 46 ms; its start after the trust screen has
+  gaps up to 237 ms, Codex's up to 308 ms, and a pasted draft is drawn 100 to 150 ms after the paste, so an idle window
+  of 100 ms declares Codex's screen settled before the draft is drawn.
+
+### Where the agents live on Windows
+
+- **Claude Code** is a native `claude.exe` (about 325 MB) at `%USERPROFILE%\.local\bin\claude.exe`, on the user's
+  `PATH`, with no shim; `claude --version` answers. It updates itself while running (2.1.318 became 2.1.319 during a
+  probe).
+- **Codex** from npm installs `codex.cmd`, `codex.ps1` and a `codex` sh script into `%APPDATA%\npm` (PowerShell's
+  `Get-Command` picks `codex.ps1`, a `PATHEXT` lookup `codex.cmd`), a chain of `cmd`, `node codex.js` and the native
+  program, which sits in a platform package under the main one:
+  `…\node_modules\@openai\codex\node_modules\@openai\codex-win32-<arch>\vendor\<triple>\bin\codex.exe`, with
+  `codex-win32-arm64` and `aarch64-pc-windows-msvc` on ARM64 and `codex-win32-x64` and `x86_64-pc-windows-msvc` on x64.
+  The launcher script sets the `CODEX_MANAGED_*` variables and puts the package's `codex-path` directory, which holds
+  `rg.exe`, on the `PATH`; a native `codex.exe` started directly, an ARM64 standalone one and the x64 package's under
+  emulation alike, carries no `CODEX_MANAGED_*` and still started, with `rg.exe` 15.2 found.
+- **Elevation.** Codex run as administrator warns "Running as administrator: shared background server disabled", and
+  files created from such a session are owned by the Administrators group, not the user.
+- **Grok Build** is installed with `irm https://x.ai/cli/install.ps1 | iex`, which puts `grok.exe` in
+  `%USERPROFILE%\.grok\bin`; the installer copies it from the unversioned `downloads\grok-windows-<arch>.exe`, and `grok
+  update` leaves `downloads\grok-<version>-windows-<arch>` (no `.exe`) of the same size as `bin\grok.exe`, from which
+  the installed version reads without starting a process. A `bin` copy with no versioned download beside it has to be
+  asked with `--version`.
+- **Grok Build has no system-wide configuration directory on Windows**: its Windows implementation's system
+  configuration directory is `None`, and `grok inspect` (1.0.77) does not load a `C:\etc\grok` candidate, where Unix
+  reads `/etc/grok`.
+
+### Managed settings and credentials
+
+- **Claude Code's managed settings** on Windows are `C:\Program Files\ClaudeCode` (the `managed-settings.json` and the
+  `managed-settings.d` directory beside the `/Library/Application Support/ClaudeCode` and `/etc/claude-code` of the
+  other systems), and the registry policy `HKLM\SOFTWARE\Policies\ClaudeCode` and `HKCU\SOFTWARE\Policies\ClaudeCode`,
+  found in the binary's strings. The registry value carries settings such as `allowedHttpHookUrls` or a managed
+  `statusLine`.
+- **Claude Code keeps its OAuth tokens in `%USERPROFILE%\.claude\.credentials.json`** (`claudeAiOauth`) on this build,
+  with nothing in Credential Manager. The binary has a second store, `windows-credman-with-plaintext-fallback`
+  (`CredReadW` and `CredWriteW`), chosen when the server-side flag `tengu_windows_credman` is true, which is cached in
+  `~/.claude.json` and was false here. The file is today's default, not a guarantee: a missing file may mean "stored
+  elsewhere" rather than "signed out".
+- **Claude Code's login honours `BROWSER`** (`claude auth login` against an empty `CLAUDE_CONFIG_DIR`, so the real login
+  was untouched): it prints "Opening browser to sign in…" and runs `$BROWSER` with the authorize URL as one argument.
+  `BROWSER` naming an executable (unquoted, a path with a space) is started directly, with no shell. Naming a `.cmd`, it
+  runs through `cmd.exe` with the URL quoted and whole: `&` is safe through `%*`, but `echo %1 >> file` or `%~1` breaks
+  at the `&` (a `%~1` argument ended at `=`, `;` or `,`). A real login URL of 447 characters with 7 `&` arrived whole
+  through a `%*` recorder. The URL's `redirect_uri` is `http://localhost:<port>/callback`, a local listener, and the
+  screen also offers a paste-code URL.
+
+### Grok Build's session home without file links
+
+Where the host makes no file links (Developer Mode off, not elevated), a per-session `GROK_HOME` on Windows holds
+junctions for directories (`sessions`, `skills` and the rest), regular-file copies of the other files, no `*.lock` or
+`*.tmp` file and no `auth.json`, and `GROK_AUTH_PATH` names `%USERPROFILE%\.grok\auth.json` (1.0.77). A conversation
+started in it is listed and resumed by the user's own `grok`. A token refresh inside the session is written back to the
+user's `auth.json`, and Grok creates `auth.json.lock` beside that file, not in the session home. A theme change in the
+session is not written back for a plain `config.toml`, as on macOS. Grok's own lock and temporary names, which a copy
+leaves out, are a bare `.lock`, a `<file>.lock` beside the file it guards, `.tmp` and six letters or digits, and
+`.<number>.<number>.tmp`; `uv.lock` and a `.tmpl…` name are the user's and kept. With file links on (Developer Mode on),
+the home links files and locks as on macOS and `worktrees.db` is a copy, as SQLite on Windows names its log from the
+link's path ("Codex's state database through a link" under "Sharing a session directory between accounts").
+
+### Codex's app server on Windows
+
+Octoboard does not use Codex's `app-server --listen` mode, and the following was measured on 0.163.0 and 0.166.0 for the
+day it does:
+
+- `--listen ws://127.0.0.1:0` works, and the port the system chose is printed only on **stderr** (`listening on:
+  ws://127.0.0.1:<port>`).
+- `--ws-auth capability-token --ws-token-file <file>` rejects a WebSocket with no token or a wrong one (the TUI shows
+  `HTTP error: 401 Unauthorized`); the TUI passes it with `--remote-auth-token-env <VAR>` and a client sends
+  `Authorization: Bearer <token>`; `/readyz` stays open.
+- `--listen unix://<path>` works on Windows, if the socket's directory is private to the user: with the inherited ACL,
+  or an owner-only ACL whose owner was the Administrators group, Codex refused with "socket directory is not private to
+  the current user"; with inheritance removed, only the user granted, and the user as the directory's owner, it
+  listened. A bare `--listen unix://` uses `%USERPROFILE%\.codex\app-server-control\app-server-control.sock`.
+- A remote TUI asks "Trust this folder?" even with a `projects.<dir>.trust_level="trusted"` override on both sides
+  (0.163.0), and on 0.166.0 it lands in an "Agent command center" while `thread/loaded/list` stays empty during the
+  trust screen. The hook trust review works as elsewhere; the key of a `-c` hook reads
+  `C:\<session-flags>\config.toml:<event>:0:0`.
+
 ## Moving a conversation to another config directory
 
 All three agents resume a conversation under a second config directory when **the session's own record** is copied
@@ -1734,8 +1917,13 @@ target).
 
 **Codex's state database through a link** (0.162.1).
 
-- **The write-ahead log sits beside the target.** With `A/state_5.sqlite` linked to `D/state_5.sqlite`, no `-wal` or
-  `-shm` appeared in A, and `lsof` showed D's database and both companions open.
+- **The write-ahead log sits beside the target** (macOS). With `A/state_5.sqlite` linked to `D/state_5.sqlite`, no
+  `-wal` or `-shm` appeared in A, and `lsof` showed D's database and both companions open.
+- **Not on Windows** (Windows 11; SQLite 3.46.0 as bundled by `rusqlite`, and the system's `winsqlite3` 3.43.2; Codex
+  itself not run). SQLite there names the `-wal` and `-shm` from the path a database is opened by, without resolving a
+  file symbolic link: two processes, one opening the link and one the target, each kept a log of their own over the one
+  file, never saw each other's rows, and after both closed only one side's rows remained (`integrity_check` stayed ok).
+  So a thread database is not shared through a link on Windows.
 - **Concurrency.** Three rounds: six `exec` workers over D, A and B (two each) with four turns; fifteen workers with six
   turns; nine workers while TUIs, each with its daemon, ran turns in A and D. All exited 0, every thread had its row,
   every rollout had the expected `task_complete` count, `PRAGMA integrity_check` returned ok on copies after exit and
@@ -2166,7 +2354,7 @@ in `docs/product/per-agent-launch-specifics.md`.
 |---|---|---|---|
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
 | Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` payload; the interactive thread is created lazily on the first prompt, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
-| Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries mostly symlink to the source home |
+| Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3 (15 on Windows, except 3 for `Interrupt`),async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries mostly symlink to the source home |
 | Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]`, `.default_tools_approval_mode="approve"` and `.tool_timeout_sec=660` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME`, with `tool_timeout_sec = 660` |
 | Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
 | Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
@@ -2181,8 +2369,14 @@ in `docs/product/per-agent-launch-specifics.md`.
   points at the source entry's fully resolved target, except a copied `config.toml` carrying the MCP block, a copied
   `trusted_folders.toml` with nothing added to it, an Octoboard `hooks/` directory, and real copies of `bundled/`,
   `bundles/`, `hooks-paths` and `sandbox.toml`. `auth.json` and `sessions/` stay links, so login is shared and
-  sessions stay resumable from the user's own `grok`. The mechanism cannot run under Grok's sandbox (Grok Build
-  1.0.62, macOS):
+  sessions stay resumable from the user's own `grok`. Where the host makes no file links (Windows without Developer
+  Mode or elevation), directories are still linked, the other files are copies with lock and temporary files left out,
+  and `auth.json` is left out too: `GROK_AUTH_PATH` names the login store in its place. Grok Build 1.0.77 (macOS) read
+  its login from the file that variable named, with an empty `GROK_HOME` (`grok models` listed the signed-in models,
+  and the signed-out ones without it), and created neither `auth.json` nor `auth.json.lock` in the home; whether a
+  refresh or a sign-in writes back to that file, and where it takes `auth.json.lock` then, was not measured there (on
+  Windows it was: "Grok Build's session home without file links"). The
+  mechanism cannot run under Grok's sandbox (Grok Build 1.0.62, macOS):
   - With any profile but `off`, Grok refuses to start when `bundled/` or `bundles/` is not a real directory, or
     `hooks-paths` or `sandbox.toml` not a real file: `hook write-deny ensure failed: Grok directory has wrong type
     (expected real directory)`, then `Refusing to start with its protections missing`. Missing ones it creates itself,
@@ -2212,16 +2406,22 @@ in `docs/product/per-agent-launch-specifics.md`.
   the rendered UI, and matching rendered text would need a VT emulator in the daemon (see "Claude Code" in
   `docs/product/per-agent-launch-specifics.md` for what it reads and when it warns).
 - **Each agent reads a different instruction filename, matched by exact spelling.** Claude Code reads `CLAUDE.md` and
-  `CLAUDE.local.md` and does **not** read `AGENTS.md`, and cannot be made to; where it must be shown a project's
-  `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`. Grok reads
+  `CLAUDE.local.md` and does **not** read `AGENTS.md` on its own; a line `@AGENTS.md` in `CLAUDE.md` imports it, with
+  no confirmation for a file inside the working directory (its "Allow external CLAUDE.md file imports?" dialog is for
+  files outside it), and the request then carries a block for each file with the text once (Claude Code 2.1.319, `-p`
+  with Octoboard's `--settings`, `--append-system-prompt` and `--mcp-config` against a local stub); where it must be
+  shown a project's `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`. Grok reads
   `AGENTS.md`, `Agents.md`, `CLAUDE.md`, `Claude.md` and `CLAUDE.local.md`, and on a case-sensitive volume loads every
   matching spelling present. No agent accepts an all-lowercase name. Folder trust, not a git repository, is what
   gates Grok's instruction files: in a trusted folder that is not a repository Grok reads `AGENTS.md` and `CLAUDE.md`
   from the working directory alone (Grok's own guide says outside a repository only the working directory is read),
   and an untrusted one loads neither (measured on Grok Build 1.0.52). Its project *hooks* are the part that still
   needs a git root. Grok loads one file reached by two names once when the second is a symlink to the first, and a
-  pair of separate identical files twice, so a console's working directory holds one `AGENTS.md` and a relative
-  symlink `CLAUDE.md -> AGENTS.md`, and every agent's console session reads the same text. Claude Code follows the
+  pair of separate identical files twice, a hard-linked pair included; a `CLAUDE.md` holding the line `@AGENTS.md`
+  reaches the model as that line, not expanded (Grok Build 1.0.77, `grok inspect --json` and a local stub). Codex
+  0.166.0 reads only `AGENTS.md` beside any `CLAUDE.md` (`codex debug prompt-input`). So a console's working directory
+  holds one `AGENTS.md` and a relative symlink `CLAUDE.md -> AGENTS.md`, or, where the host makes no file links, a
+  `CLAUDE.md` holding `@AGENTS.md`, and every agent's console session reads the same text once. Claude Code follows the
   symlink, and replacing the target by a temporary file and an atomic rename leaves the link working, with the next
   launch seeing the new content (Claude Code 2.1.300). The file's text therefore names the tools without any agent's
   prefix, since each agent shows them under its own.
@@ -2269,7 +2469,7 @@ in `docs/product/per-agent-launch-specifics.md`.
   measured, because that needs a model request. Octoboard sets no limit on the user's text.
 - **Hook scripts must fail silently and fast on all three.** Every agent surfaces a failing hook, and a hook with no
   timeout blocks the turn for its full duration. Octoboard's scripts exit 0 unconditionally, write nothing to stderr,
-  set a short explicit timeout (Codex clamps some events to 3 s), are asynchronous where the agent allows it, and give
+  set a short explicit timeout (3 s; command hooks 15 s on Windows, HTTP hooks and Codex's `Interrupt` 3 s everywhere, where the first hook of a launch took 4.6 s to start under Codex's `pwsh`; Codex clamps some events to 3 s), are asynchronous where the agent allows it, and give
   the daemon call a hard deadline. Grok's HTTP hooks cannot reach the daemon at all, since its SSRF protection rejects
   plain HTTP and private addresses, so hooks are `command` type.
 - Injection never modifies project files or the user's global configuration; where an agent can only be configured

@@ -9,7 +9,7 @@ import type { ProcessTree } from "../protocol";
 const NOW = Date.UTC(2026, 9, 28, 12, 0, 0);
 const translate = (language: Language): Translate => ((key: string, ...args: unknown[]) => format(language, key as never, args[0] as never)) as Translate;
 const tree = (extra: Partial<ProcessTree> = {}): ProcessTree => ({
-  id: "1:1", command: "vite", cwd: null, cwd_missing: false, kept: false, started_at: NOW - 2 * 3600_000, process_count: 1, memory_bytes: 3_400_000, ports: [], ...extra,
+  id: "1:1", command: "vite", cwd: null, cwd_missing: false, kept: false, keepable: true, started_at: NOW - 2 * 3600_000, process_count: 1, memory_bytes: 3_400_000, ports: [], ...extra,
 });
 
 it("gives memory and age, then the ports and the process count only when there are any", () => {

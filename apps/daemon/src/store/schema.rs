@@ -1014,7 +1014,9 @@ mod tests {
     }
 
     /// Rows a pre-release build left in its write-ahead log are in the moved-aside file itself,
-    /// while that build's connection is still open, and the log moves with it.
+    /// while that build's connection is still open, and the log moves with it. Only where a file
+    /// another connection holds open can be renamed, which Windows refuses.
+    #[cfg(unix)]
     #[test]
     fn a_pre_release_database_moved_aside_keeps_the_rows_in_its_log() {
         let path = temp_db("pre-release-wal");

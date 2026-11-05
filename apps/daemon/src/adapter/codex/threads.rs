@@ -278,7 +278,10 @@ fn point_row(
 /// not looked up, as the path written for a compressed rollout names one that need not exist; a
 /// directory that cannot be resolved leaves the path as written.
 fn resolved(path: &Path) -> PathBuf {
-    match (path.parent().map(std::fs::canonicalize), path.file_name()) {
+    match (
+        path.parent().map(crate::hostfs::canonical),
+        path.file_name(),
+    ) {
         (Some(Ok(parent)), Some(name)) => parent.join(name),
         _ => path.to_path_buf(),
     }
@@ -329,10 +332,11 @@ fn repoint_in(connection: &Connection, repoints: &[Repoint]) -> rusqlite::Result
     Ok(())
 }
 
+/// `path` with the host's separator after it, as Codex writes the paths of the records below it.
 fn directory_prefix(path: &Path) -> String {
     let mut text = path.to_string_lossy().into_owned();
-    if !text.ends_with('/') {
-        text.push('/');
+    if !text.ends_with(std::path::is_separator) {
+        text.push(std::path::MAIN_SEPARATOR);
     }
     text
 }

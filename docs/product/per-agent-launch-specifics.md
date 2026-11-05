@@ -83,8 +83,27 @@ are unaffected.
 Octoboard does not assign Codex a session id in advance. A resumed session has its conversation's id from the start;
 a new session learns its agent-side id from the first prompt submitted in it, so one opened without a task has none
 until then. Whatever the Codex version, the session runs as one terminal process, `codex` (`codex resume <id>` on a
-resume), whose own command line carries every override Octoboard passes, all of them again on a resume. The launch
-conditions that are visible:
+resume), whose own command line carries every override Octoboard passes, all of them again on a resume.
+
+On a Windows daemon host, where the `codex` found on the `PATH` is a package manager's shim, Octoboard runs the native
+Codex program (`codex.exe`) the installed package ships instead of that shim, for the session as for its account's
+reads and sign-in. It finds the package through each package manager's install layout:
+
+- npm: beside its shims in the global prefix, or in a project's `node_modules` for a shim in its `node_modules\.bin`;
+- pnpm: under `global\<n>\node_modules` below its shims, the newest `<n>` first, with Codex's platform package also
+  looked for beside the store directory the package's link leads to;
+- Yarn classic: shims in `Yarn\bin`, packages in `Yarn\Data\global\node_modules`;
+- Bun: the program shim `.bun\bin\codex.exe`, packages in `.bun\install\global\node_modules`;
+- Volta: shims in `Volta\bin`, the package under `Volta\tools\image\packages`.
+
+Only a `codex.exe` built for an architecture the machine runs is taken, whichever architecture Octoboard's daemon
+itself is built for: on an x64 machine only an x64 build; on an ARM64 machine the ARM64 build, or, where the install
+has only the x64 build, that one, run emulated. A shim whose package ships no such program, and a script shim (`.cmd`,
+`.bat`, `.ps1`) whose package is in none of these layouts, are refused with `provider.codex.native_program_missing`,
+whose message says Codex's install is missing its native program and to reinstall Codex: the launcher script is never
+run in the native program's place. A `codex.exe` found in none of these layouts is run as it is.
+
+The launch conditions that are visible:
 
 - project trust is not passed: in a git repository Codex has not been told to trust, its own folder-trust confirmation
   appears, and Octoboard presses it under the user's permission (see `docs/product/folder-trust.md`);
@@ -213,6 +232,11 @@ Always-approve leaves deny rules and hooks active; a session can still need the 
 Grok Build's sandbox or bypass Octoboard's refusal of an incompatible sandboxed launch, described below. Octoboard
 passes no separate grant to pre-approve its own tools for Grok Build.
 
+Grok Build is available on a Windows daemon host as on macOS. It is installed there with x.ai's PowerShell installer
+(`irm https://x.ai/cli/install.ps1 | iex`), and its `grok` binary is looked up on the launch environment's `PATH` like
+every agent's (see "The launch environment" in `docs/product/launching-agents.md`). A Windows host that makes no file
+links still runs Grok Build sessions (see "On a host without file links" below).
+
 ### The per-session Grok home
 
 A Grok session runs against a per-session Grok home that Octoboard builds afresh on every launch from a **source home**:
@@ -253,13 +277,43 @@ knowing:
   trust record" in `docs/product/folder-trust.md`).
 
 Grok's built-in bundles and its sandbox files — `bundled/`, `bundles/`, `hooks-paths` and `sandbox.toml` — are copies
-taken on every launch as well, whichever of them the source home holds. A bundle update Grok downloads during a session
-lands in Octoboard's copy and is not kept; the next launch copies whatever the user's own `grok` has fetched since.
+taken on every launch as well, a directory copied whole, whichever of them the source home holds. A bundle update Grok
+downloads during a session lands in Octoboard's copy and is not kept; the next launch copies whatever the user's own
+`grok` has fetched since.
 
 Three entries of the source home are left out altogether. Its `hooks/` directory is not linked: the per-session home's
 `hooks/` holds Octoboard's status hooks alone, so hooks the user keeps in the Grok home's own `hooks/` directory do not
 run in a session Octoboard starts, while a project's own hooks still do (see "A project's hooks and instruction files"
 below). Its `requirements.toml` and `managed_config.toml` are not carried either (see "Grok's own sandbox" below).
+
+On a Windows daemon host, a SQLite database the source home holds is a copy even where the host makes file links, so
+what a session writes into it is not kept.
+
+### On a host without file links
+
+Where the daemon's host makes no file links — Windows with Developer Mode off and Octoboard not elevated — a Grok Build
+session still runs, against a per-session Grok home built differently from the one above:
+
+- the source home's directories are still linked, the session records' `sessions/` among them, so a session stays
+  resumable from the user's own `grok`;
+- its other files are copies taken at launch, the session's own, and what the session writes into them is not kept;
+  lock files and temporary files are left out, for Grok to create its own;
+- a directory copied into the home (`bundled/`, `bundles/`) leaves out only Grok's own lock and temporary files: a
+  bare `.lock`, a `<file>.lock` beside the `<file>` it guards (`auth.json.lock`), `.tmp` followed by six letters or
+  digits (`.tmp2tPTzx`), and `.<number>.<number>.tmp` (`.59335.0.tmp`). Files that only look alike are copied: a
+  `uv.lock`, `Cargo.lock`, `yarn.lock` or `bun.lock` with no file of its own name beside it, and a name starting
+  `.tmpl`;
+- `auth.json` is left out as well: the launch sets `GROK_AUTH_PATH` to the source home's `auth.json`, so Grok uses the
+  user's own login file rather than a copy of it. A refresh of an expired token in the session is written to that
+  file, with Grok's `auth.json.lock` created beside it, as it is through the link on other hosts, and a sign-in in the
+  session is expected to be written there too, so the user's own `grok` stays signed in and never holds a refresh
+  token the session has spent. Where the launch environment already holds
+  `GROK_AUTH_PATH`, that value is left as it is;
+- the Grok configuration file and the trust store are copies under the rules above: with a plain source `config.toml`,
+  settings saved in the session stay in the session's copy, and the trust entry Grok writes when its confirmation is
+  accepted is carried into the user's own `trusted_folders.toml`.
+
+A host that makes file links builds the home as described above.
 
 ### Grok's own sandbox
 

@@ -11,8 +11,8 @@ use anyhow::Result;
 
 use crate::accounts::shared_config::{
     account_in_use, carry_out, default_dir, entries, in_use, lock_account, lock_agent,
-    not_shareable, own_conversations, sharing_failed, sharing_in_progress, still_sharing,
-    try_lock_agent, Changing, Locked, Refused,
+    not_shareable, own_conversations, require_file_links, sharing_failed, sharing_in_progress,
+    still_sharing, try_lock_agent, Changing, Locked, Refused,
 };
 use crate::hostfs::dir_key;
 use crate::hostfs::is_same_path;
@@ -29,7 +29,8 @@ use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 /// choice to make, being the directory the others share. Asking again for the choice already
 /// recorded retries a change that did not complete, and does nothing otherwise.
 ///
-/// Refused, with nothing recorded: turning sharing on for an account of a provider without the
+/// Refused, with nothing recorded: turning sharing on where the host cannot make file links
+/// (`sharing_unavailable_on_host`), for an account of a provider without the
 /// `config_sharing` capability (`provider_unsupported`), for the default account and for an account
 /// whose directory is the default account's under another spelling
 /// (`default_account_not_shareable`), while sessions of the account run or start or it is being
@@ -37,6 +38,9 @@ use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 /// (`account_sharing_in_progress`). A change that fails part-way is answered with what it left
 /// where (`account_sharing_failed`) and stays incomplete.
 pub async fn set(state: &Arc<AppState>, account: Option<String>, share: bool) -> Result<()> {
+    if share {
+        require_file_links(crate::platform::fs::file_links_available())?;
+    }
     let Some(id) = account else {
         return Err(not_shareable(None));
     };

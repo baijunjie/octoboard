@@ -2,7 +2,6 @@
 //! shape resolves to, what a read returns or refuses, and that every path reaches exactly the bytes
 //! it names.
 
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -19,7 +18,9 @@ use crate::protocol::{
     Project, ProjectSource, ProjectSourceInfo,
 };
 use crate::state::AppState;
-use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir, TEST_KEY};
+use crate::test_support::{
+    app_state, creatable, git, git_bytes, repo_with, symlink, ScratchDir, TEST_KEY,
+};
 use crate::wire_path::{self, RelPath};
 
 #[test]
@@ -130,6 +131,7 @@ impl Fixture {
         serve(&self.state, None, body, &make, &AtomicBool::new(false))
     }
 
+    #[cfg(unix)]
     fn source_result(&self, project: &str) -> anyhow::Result<Event> {
         self.serve(BrowseBody::GetProjectSource {
             project: project.to_string(),
@@ -248,7 +250,9 @@ fn unavailable_cause<T: std::fmt::Debug>(result: anyhow::Result<T>) -> String {
 }
 
 pub(super) fn canonical(path: &Path) -> String {
-    wire_path::encode(std::fs::canonicalize(path).unwrap().as_os_str().as_bytes())
+    wire_path::encode(&crate::platform::names::name_bytes(
+        crate::hostfs::canonical(path).unwrap().as_os_str(),
+    ))
 }
 
 #[test]
@@ -271,7 +275,7 @@ fn each_project_shape_resolves_to_its_own_root_repository_worktree_and_scope() {
     );
     let links = ScratchDir::new("browse-links");
     let through_link = links.join("link");
-    std::os::unix::fs::symlink(repo.join("sub"), &through_link).unwrap();
+    symlink(repo.join("sub"), &through_link).unwrap();
 
     let plain_source = fixture.source(&fixture.project("plain", &plain));
     assert!(plain_source.git.is_none() && plain_source.git_error.is_none());
@@ -354,7 +358,7 @@ fn a_subdirectory_maps_into_another_worktree_and_never_broadens() {
         ],
     );
     std::fs::remove_dir_all(linked_scope.join("sub")).unwrap();
-    std::os::unix::fs::symlink(".", linked_scope.join("sub")).unwrap();
+    symlink(".", linked_scope.join("sub")).unwrap();
 
     let project = fixture.project("sub", &repo.join("sub"));
     let source = fixture.source(&project);
@@ -461,13 +465,16 @@ fn a_removed_worktree_or_its_path_reused_by_another_repository_invalidates_its_i
 #[test]
 fn awkward_names_and_binary_bodies_are_read_byte_for_byte_from_every_source() {
     let fixture = Fixture::new();
-    let names: &[&[u8]] = &[
-        b"with space.txt",
+    let names: Vec<&[u8]> = [
+        &b"with space.txt"[..],
         b"new\nline.txt",
         b"a*[b]?.txt",
         b":(glob)x",
         b"100%.txt",
-    ];
+    ]
+    .into_iter()
+    .filter(|name| creatable(std::str::from_utf8(name).unwrap()))
+    .collect();
     let binary: &[u8] = b"\x89PNG\r\n\x1a\n\x00\xff\xfe binary \x00";
     let files: Vec<(&[u8], &[u8])> = names
         .iter()
@@ -478,16 +485,20 @@ fn awkward_names_and_binary_bodies_are_read_byte_for_byte_from_every_source() {
     // A decoy that a pattern reading of `a*[b]?.txt` would also match.
     std::fs::write(repo.join("aXbY.txt"), b"decoy").unwrap();
     // APFS stores only UTF-8 names, so a name that is not UTF-8 can exist here only in Git's own
-    // objects — which is where a branch or another checkout brings one from.
+    // objects — which is where a branch or another checkout brings one from. Windows cannot give
+    // `git` such a name as an argument, so there it is left out.
     let not_utf8: &[u8] = b"caf\xe9.bin";
-    std::fs::write(repo.join("blob-source"), not_utf8).unwrap();
-    let oid = String::from_utf8(git(&repo, &["hash-object", "-w", "blob-source"])).unwrap();
-    let mut cacheinfo = format!("100644,{},", oid.trim()).into_bytes();
-    cacheinfo.extend_from_slice(not_utf8);
-    git_bytes(
-        &repo,
-        &[b"update-index", b"--add", b"--cacheinfo", &cacheinfo],
-    );
+    let spells_not_utf8 = crate::platform::names::name_from_bytes(not_utf8).is_some();
+    if spells_not_utf8 {
+        std::fs::write(repo.join("blob-source"), not_utf8).unwrap();
+        let oid = String::from_utf8(git(&repo, &["hash-object", "-w", "blob-source"])).unwrap();
+        let mut cacheinfo = format!("100644,{},", oid.trim()).into_bytes();
+        cacheinfo.extend_from_slice(not_utf8);
+        git_bytes(
+            &repo,
+            &[b"update-index", b"--add", b"--cacheinfo", &cacheinfo],
+        );
+    }
     git(&repo, &["add", "aXbY.txt"]);
     git(&repo, &["commit", "-q", "-m", "more"]);
     let project = fixture.project("names", &repo);
@@ -497,7 +508,7 @@ fn awkward_names_and_binary_bodies_are_read_byte_for_byte_from_every_source() {
 
     let (entries, complete) = fixture.list(&project, None, "").unwrap();
     assert!(complete);
-    for name in names {
+    for name in &names {
         let wire = wire_path::encode(name);
         assert!(
             entries
@@ -510,7 +521,10 @@ fn awkward_names_and_binary_bodies_are_read_byte_for_byte_from_every_source() {
             assert_eq!(bytes_of(&file), *name, "{wire:?} from {from:?}");
         }
     }
-    for from in [ReadFrom::Index, branch.clone()] {
+    for from in [ReadFrom::Index, branch.clone()]
+        .into_iter()
+        .filter(|_| spells_not_utf8)
+    {
         let (_, file) = fixture.read(&project, None, "caf%E9.bin", from).unwrap();
         assert_eq!(bytes_of(&file), not_utf8);
     }
@@ -672,9 +686,7 @@ fn links_are_followed_inside_the_scope_and_refused_outside_it() {
     let project_dir = ScratchDir::new("browse-links-project");
     std::fs::create_dir(project_dir.join("dir")).unwrap();
     std::fs::write(project_dir.join("dir/real.txt"), b"inside\n").unwrap();
-    let link = |target: &Path, name: &str| {
-        std::os::unix::fs::symlink(target, project_dir.join(name)).unwrap()
-    };
+    let link = |target: &Path, name: &str| symlink(target, project_dir.join(name)).unwrap();
     link(&project_dir.join("dir/real.txt"), "inside-link");
     link(Path::new("dir"), "dir-link");
     link(&outside.join("secret"), "escape");
@@ -764,14 +776,12 @@ fn a_listed_file_carries_the_version_a_live_read_reports() {
     assert_eq!(after, Some(read()));
 }
 
+#[cfg(unix)]
 #[test]
 fn special_files_are_refused_without_being_opened() {
     let fixture = Fixture::new();
     let project_dir = ScratchDir::new("browse-special");
-    let fifo = project_dir.join("fifo");
-    let fifo_c = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
-    // SAFETY: a plain `mkfifo` on a NUL-terminated path.
-    assert_eq!(unsafe { libc::mkfifo(fifo_c.as_ptr(), 0o600) }, 0);
+    crate::test_support::mkfifo(&project_dir.join("fifo"));
     let _socket = std::os::unix::net::UnixListener::bind(project_dir.join("socket")).unwrap();
     let project = fixture.project("p", &project_dir);
 
@@ -788,6 +798,7 @@ fn special_files_are_refused_without_being_opened() {
     assert!(entries.iter().all(|e| e.kind == EntryKind::Other));
 }
 
+#[cfg(unix)]
 #[test]
 fn missing_and_unreadable_sources_are_told_apart() {
     let fixture = Fixture::new();
@@ -884,7 +895,7 @@ fn a_listing_cut_at_its_budget_says_so() {
     for n in 0..20 {
         std::fs::write(dir.join(format!("f{n:02}")), b"").unwrap();
     }
-    let scope = std::fs::canonicalize(&*dir).unwrap();
+    let scope = crate::hostfs::canonical(&*dir).unwrap();
     let root = RelPath::parse("").unwrap();
     let never = AtomicBool::new(false);
     let list = |entries, bytes| live::list_resolved(&scope, &scope, &root, entries, bytes, &never);
@@ -899,7 +910,7 @@ fn a_listing_cut_at_its_budget_says_so() {
 #[test]
 fn a_file_rewritten_during_a_read_is_never_stitched_from_two_versions() {
     let dir = ScratchDir::new("browse-race");
-    let scope = std::fs::canonicalize(&*dir).unwrap();
+    let scope = crate::hostfs::canonical(&*dir).unwrap();
     let path = scope.join("busy");
     let size = 2 * 1024 * 1024;
     std::fs::write(&path, vec![b'a'; size]).unwrap();
@@ -955,7 +966,7 @@ fn a_file_rewritten_during_a_read_is_never_stitched_from_two_versions() {
 #[test]
 fn a_home_directory_repository_is_not_taken_for_a_project_s_repository() {
     let home = ScratchDir::new("browse-home");
-    let home = std::fs::canonicalize(&*home).unwrap();
+    let home = crate::hostfs::canonical(&*home).unwrap();
     git(&home, &["init", "-q"]);
     std::fs::create_dir(home.join("project")).unwrap();
     let make = || {
@@ -1114,20 +1125,20 @@ fn host_path_actions_validate_wire_paths_and_recheck_worktree_scopes() {
     };
     assert_eq!(
         resolve(None, "a%25.txt").unwrap(),
-        std::fs::canonicalize(repo.join("sub/a%.txt")).unwrap()
+        crate::hostfs::canonical(repo.join("sub/a%.txt")).unwrap()
     );
     assert_eq!(
         resolve(Some(&worktree), "a%25.txt").unwrap(),
-        std::fs::canonicalize(other.join("sub/a%.txt")).unwrap()
+        crate::hostfs::canonical(other.join("sub/a%.txt")).unwrap()
     );
-    std::os::unix::fs::symlink("a%.txt", repo.join("sub/link")).unwrap();
+    symlink("a%.txt", repo.join("sub/link")).unwrap();
     assert_eq!(
         resolve(None, "link").unwrap(),
-        std::fs::canonicalize(repo.join("sub"))
+        crate::hostfs::canonical(repo.join("sub"))
             .unwrap()
             .join("link")
     );
-    std::os::unix::fs::symlink(repo.join("top.txt"), repo.join("sub/escape")).unwrap();
+    symlink(repo.join("top.txt"), repo.join("sub/escape")).unwrap();
     for (path, code) in [
         ("../top.txt", error_code::INVALID_PATH),
         ("/etc/passwd", error_code::INVALID_PATH),
@@ -1187,11 +1198,23 @@ fn ignoring_repo(label: &str) -> ScratchDir {
         ("star*.txt", b"not ignored"),
         ("root.tmp", b"not ignored here"),
     ] {
+        if !creatable(name) {
+            continue;
+        }
         let path = repo.join(name);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, body).unwrap();
     }
     repo
+}
+
+/// The paths of `paths` this host can create, which [`ignoring_repo`] made.
+fn on_host(paths: &[&str]) -> Vec<String> {
+    paths
+        .iter()
+        .filter(|path| creatable(path))
+        .map(|path| path.to_string())
+        .collect()
 }
 
 impl Fixture {
@@ -1236,12 +1259,12 @@ fn a_listing_marks_what_git_ignores() {
     let project = fixture.project("p", &repo);
     assert_eq!(
         fixture.ignored_in(&project, ""),
-        [
+        on_host(&[
             ":(glob)magic.log",
             "build",
             "debug.log",
             "odd \"name\"\n.log"
-        ],
+        ]),
         "a folder and files named by the root .gitignore, however odd their names"
     );
     assert_eq!(
@@ -1308,7 +1331,7 @@ fn a_search_leaves_out_ignored_files_and_folders_unless_asked() {
     let project = fixture.project("p", &repo);
     assert_eq!(
         fixture.search(&project, ".txt", false),
-        ["keep/plain.txt", "star*.txt", "sub/plain.txt"]
+        on_host(&["keep/plain.txt", "star*.txt", "sub/plain.txt"])
     );
     assert_eq!(
         fixture.search(&project, ".log", false),
@@ -1322,13 +1345,13 @@ fn a_search_leaves_out_ignored_files_and_folders_unless_asked() {
     );
     assert_eq!(
         fixture.search(&project, ".txt", true),
-        [
+        on_host(&[
             "build/inner/output.txt",
             "build/top.txt",
             "keep/plain.txt",
             "star*.txt",
             "sub/plain.txt"
-        ]
+        ])
     );
     assert_eq!(
         fixture.search_marked(&project, ".txt", true).1,
@@ -1338,13 +1361,13 @@ fn a_search_leaves_out_ignored_files_and_folders_unless_asked() {
     assert!(fixture.search_marked(&project, ".txt", false).1.is_empty());
     assert_eq!(
         fixture.search(&project, ".log", true),
-        [
+        on_host(&[
             ":(glob)magic.log",
             "debug.log",
             "keep/other.log",
             "keep/tracked.log",
             "odd \"name\"\n.log"
-        ]
+        ])
     );
 }
 
@@ -1402,8 +1425,12 @@ fn the_global_excludes_file_makes_an_entry_ignored_too() {
     std::fs::write(
         &config,
         format!(
-            "[core]\n\texcludesFile = {}\n",
-            home.join("ignore").display()
+            "[core]\n\texcludesFile = \"{}\"\n",
+            // Escaped as git's configuration reads a quoted value: Windows' separator is `\`.
+            home.join("ignore")
+                .display()
+                .to_string()
+                .replace('\\', "\\\\")
         ),
     )
     .unwrap();
@@ -1463,7 +1490,8 @@ fn a_cancel_during_each_git_run_ends_the_read() {
             "git",
             &format!("case \"$*\" in *{fails}*) exit 128;; esac\n/bin/sleep 30\n"),
         );
-        (bin.join("git").to_string_lossy().into_owned(), env, bin)
+        let program = crate::env_shell::resolve_program("git", &env).unwrap();
+        (program, env, bin)
     };
     // The cancel comes a moment after the read has started.
     let cancel_soon = |read: &dyn Fn(&AtomicBool) -> anyhow::Result<()>| {
@@ -1490,7 +1518,7 @@ fn a_cancel_during_each_git_run_ends_the_read() {
     let (program, env, _bin) = stalling("browse-ignored-cancel-listing", "nothing-fails");
     let make = || Ok(IsolatedGit::new(program.clone(), env.clone()));
     let git = BrowseGit::new(&make).with_ceiling(None);
-    let canonical = std::fs::canonicalize(&*repository).unwrap();
+    let canonical = crate::hostfs::canonical(&*repository).unwrap();
     assert!(cancel_soon(&|cancel| {
         let root = wire_path::RelPath::parse("").unwrap();
         live::list_dir(&canonical, &root, &git, cancel).map(|_| ())
@@ -1500,7 +1528,7 @@ fn a_cancel_during_each_git_run_ends_the_read() {
         live::search_files(&canonical, "a", false, &git, cancel).map(|_| ())
     }));
     // The `ls-files` of a repository nested in a project that is in none.
-    let nested = std::fs::canonicalize(&*nesting).unwrap();
+    let nested = crate::hostfs::canonical(&*nesting).unwrap();
     assert!(cancel_soon(&|cancel| {
         live::search_files(&nested, "a", false, &git, cancel).map(|_| ())
     }));
@@ -1633,12 +1661,14 @@ fn a_name_that_looks_like_a_pattern_is_asked_about_as_the_file_it_is() {
     git(&repo, &["add", "-f", "x.txt"]);
     git(&repo, &["commit", "-q", "-m", "track a file that matches"]);
     for name in ["*.txt", "[a].txt", "a?b.txt", "back\\slash.txt", "keep.txt"] {
-        std::fs::write(repo.join(name), b"x").unwrap();
+        if creatable(name) {
+            std::fs::write(repo.join(name), b"x").unwrap();
+        }
     }
     let project = fixture.project("p", &repo);
     assert_eq!(
         fixture.ignored_in(&project, ""),
-        ["*.txt", "[a].txt", "a?b.txt", "back\\slash.txt"],
+        on_host(&["*.txt", "[a].txt", "a?b.txt", "back\\slash.txt"]),
         "an untracked file named like a pattern is not answered for by the tracked x.txt, and a \
          pattern that un-ignores a file leaves it not ignored"
     );
@@ -1731,6 +1761,8 @@ fn the_ignored_entries_of_a_folder_are_remembered_until_something_that_decides_t
     );
 }
 
+/// Only where the host takes `*`, `?` and `\` in a name, which Windows forbids.
+#[cfg(unix)]
 #[test]
 fn names_that_look_like_patterns_are_judged_by_the_rules_as_the_files_they_are() {
     let fixture = Fixture::new();

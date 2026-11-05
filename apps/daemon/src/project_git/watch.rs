@@ -56,8 +56,8 @@ impl Dirs {
         let git_dir = crate::git::layout::git_dir(project_dir)?;
         let common_dir = crate::git::layout::common_dir(&git_dir).ok()?;
         Some(Self {
-            git_dir: git_dir.canonicalize().ok()?,
-            common_dir: common_dir.canonicalize().ok()?,
+            git_dir: crate::hostfs::canonical(&git_dir).ok()?,
+            common_dir: crate::hostfs::canonical(&common_dir).ok()?,
         })
     }
 

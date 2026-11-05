@@ -41,7 +41,7 @@ use accounts::{
 };
 use progress::Progress;
 use projects::{
-    clone_directory, derived_directory, exported_directory, place_project, probe_disk,
+    clone_directory, derived_directory, exported_directory, is_foreign, place_project, probe_disk,
     probe_offers, Probe, PROBE_DEADLINE,
 };
 
@@ -357,6 +357,10 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             git_workflow: settings.git_workflow,
             current_git_workflow: state.store.git_workflow_settings()?,
             default_clone_dir: usable_clone_dir(settings.default_clone_dir.as_deref()),
+            foreign_default_clone_dir: settings
+                .default_clone_dir
+                .as_deref()
+                .is_some_and(|text| is_foreign(text.trim())),
             current_default_clone_dir: clone_dir,
         }),
         None => None,
@@ -379,6 +383,7 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                     InspectedProject {
                         name: document_project.name.clone(),
                         path: document_project.path.clone(),
+                        foreign_path: is_foreign(&document_project.path),
                         remote_url: document_project
                             .remote_url
                             .as_deref()

@@ -7,6 +7,8 @@ import { TitledControl } from "../components/hint/TitledControl";
 import { useBottomStrip } from "../components/panel/useBottomStrip";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import { useHost } from "../platform/react";
+import { installedMessageKey } from "./installedMessageKey";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { updateNoticeKind } from "./noticeKind";
 import { useUpdates } from "./UpdatesProvider";
@@ -27,8 +29,10 @@ const BUTTON_CLASS =
  * The strip along the bottom edge, above the connection banner, that tells the user about the application's
  * updates without taking the window: a newer version is available (with a link to its release page, and
  * a Download and install that is the user's to press, never done automatically), the download is under way, or the
- * update is installed and takes effect after a restart (Restart now, or Later, which only hides the strip). Nothing
- * here restarts anything: Restart now goes through the window's exit confirmation (`UpdateStore.restart`).
+ * update is installed and takes effect after a restart (Restart now, or Later, which only hides the strip). Where an
+ * installer applies the update (Windows) it only says the update is downloaded, and installed when the application
+ * quits or restarts (`installedMessageKey`). Nothing here restarts anything: Restart now goes through the window's
+ * exit confirmation (`UpdateStore.restart`).
  *
  * Mounted whatever the update does, so the announcement region is not inserted already holding its text; the strip
  * is a stop of the F6 region cycle (`data-region="update"`) while shown. A button pressed there that makes the strip
@@ -42,13 +46,14 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
   const t = useT();
   const language = useCurrentLanguage();
   const updates = useUpdates();
+  const host = useHost();
   const kind = updates ? updateNoticeKind(updates.state) : undefined;
   const { ref, focusProps } = useBottomStrip({ visible: kind !== undefined, heightVar: NOTICE_HEIGHT_VAR, focusTerminal });
 
   if (!updates) return <></>;
   const { store, state } = updates;
   const version = isolate(state.update?.version ?? state.installedVersion ?? "");
-  const message = kind && t(kind === "installed" && !state.installedVersion ? "updates.notice.installedUnknown" : `updates.notice.${kind}`, { version });
+  const message = kind && t(kind === "installed" ? installedMessageKey(host.updater, "notice", !!state.installedVersion) : `updates.notice.${kind}`, { version });
   const progress = state.progress;
   const percent = progress?.total ? Math.min(progress.downloaded / progress.total, 1) : undefined;
   const percentText = percent === undefined ? undefined : new Intl.NumberFormat(language, { style: "percent" }).format(percent);

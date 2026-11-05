@@ -255,8 +255,8 @@ mod tests {
     use super::*;
     use crate::mcp::test_support::{arguments, project_session, shared_console_state};
     use crate::test_support::{
-        assert_stops_running, fake_live_session, is_running, output_containing, perl_write,
-        running, wait_for_pid, KillOnDrop, ScratchDir, StandIn,
+        assert_stops_running, is_running, output_containing, running, stand_in_starting,
+        wait_for_pid, Background, KillOnDrop, ScratchDir, StandIn,
     };
 
     /// `shared_console_state` plus sessions of the console session `a`: `kid` and `other-kid`,
@@ -285,17 +285,7 @@ mod tests {
     /// id of that tree, once the ledger has it as the session's.
     fn running_leaving_one(state: &Arc<AppState>, dir: &ScratchDir, id: &str) -> (StandIn, String) {
         let pid_file = dir.join(format!("{id}-child"));
-        let live = fake_live_session(
-            id,
-            crate::protocol::AgentId::CLAUDE,
-            80,
-            24,
-            &format!(
-                "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
-                 exec sleep 300",
-                perl_write(&pid_file, "$$")
-            ),
-        );
+        let live = stand_in_starting(id, vec![Background::sleeper(&pid_file)]);
         state.register_live(live.clone());
         crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         let child = wait_for_pid(&pid_file);

@@ -37,17 +37,16 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 
+use crate::platform::term::Input;
 use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
 use crate::session::screen::{Interrupt, InterruptKey};
 use crate::session::wait::{wait_for, wait_quiet};
 use crate::session::LiveSession;
 use crate::state::{AppState, ClaimKind, WriteHold};
 
-use crate::session::input_box::{input_box, input_box_rows};
-
-const ESC: &[u8] = b"\x1b";
-const CTRL_U: &[u8] = b"\x15";
-const CTRL_C: &[u8] = b"\x03";
+const ESC: &[Input] = &[Input::Escape];
+const CTRL_U: &[Input] = &[Input::Ctrl('u')];
+const CTRL_C: &[Input] = &[Input::Ctrl('c')];
 
 /// How long the session is given to leave `Working` after the key. Codex's and Grok's hooks come
 /// within a fifth of a second; the title watches act about a second and a quarter after the title
@@ -459,7 +458,6 @@ fn press(
     interrupt: &Interrupt,
     settle: Duration,
 ) -> Result<Pressed> {
-    let agent = live.agent;
     // Read before anything is looked at: a write by anyone else after this point means what was
     // looked at may no longer be true.
     let mut writes = live.input_writes();
@@ -470,7 +468,7 @@ fn press(
     // permission to clear here could erase a user's pending edit.
     let mut input_before = interrupt
         .restores_prompt
-        .then(|| input_box(agent, &live.screen_text_undimmed()))
+        .then(|| live.input_box(&live.screen_text_undimmed()))
         .flatten();
     let stops = live.title_activity().stops();
     // Paused while keys may still go in, so no message of Octoboard's joins what the agent puts
@@ -569,7 +567,7 @@ fn key(
     state: &Arc<AppState>,
     live: &Arc<LiveSession>,
     writes: u64,
-    keys: &[u8],
+    keys: &[Input],
 ) -> Result<Option<u64>> {
     match live.write_keys_if(writes, || turn_running(state, live), keys) {
         Ok(true) => Ok(Some(writes + 1)),
@@ -623,7 +621,7 @@ fn clear_input_box(
     writes: &mut u64,
     gated: bool,
 ) -> (Cleared, usize) {
-    let Some(text) = input_box(live.agent, &live.screen_text_undimmed()) else {
+    let Some(text) = live.input_box(&live.screen_text_undimmed()) else {
         return (Cleared::Left, 0);
     };
     // A press clears a line's text and the next its line break, so two a row and one to spare.
@@ -631,12 +629,12 @@ fn clear_input_box(
     let mut pressed = 0;
     for _ in 0..presses {
         let screen = live.screen_text_undimmed();
-        match input_box(live.agent, &screen) {
+        match live.input_box(&screen) {
             Some(text) if text.is_empty() => return (Cleared::Empty, pressed),
             Some(_) => {}
             None => return (Cleared::Left, pressed),
         }
-        let before = input_box_rows(live.agent, &screen);
+        let before = live.input_box_rows(&screen);
         match live.write_keys_if(*writes, || !gated || turn_running(state, live), CTRL_U) {
             Ok(true) => {
                 *writes += 1;
@@ -648,10 +646,10 @@ fn clear_input_box(
         // The box's own reading, not the screen: a spinner turning elsewhere changes the screen
         // before the press has shown.
         wait_for(PRESS_TIMEOUT, || {
-            input_box_rows(live.agent, &live.screen_text_undimmed()) != before
+            live.input_box_rows(&live.screen_text_undimmed()) != before
         });
     }
-    match input_box(live.agent, &live.screen_text_undimmed()) {
+    match live.input_box(&live.screen_text_undimmed()) {
         Some(text) if text.is_empty() => (Cleared::Empty, pressed),
         _ => (Cleared::Left, pressed),
     }
@@ -671,7 +669,7 @@ fn clear_restored_prompt(state: &AppState, live: &LiveSession, writes: &mut u64)
 /// for a box that held text before it.
 fn left_in_input_box(live: &LiveSession) -> Restored {
     wait_quiet(live, QUIET_TIMEOUT);
-    match input_box(live.agent, &live.screen_text_undimmed()) {
+    match live.input_box(&live.screen_text_undimmed()) {
         Some(text) if text.is_empty() => Restored::None,
         _ => Restored::Left,
     }

@@ -21,8 +21,9 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, Notify};
 
 use super::Key;
-use crate::adapter;
-use crate::processes::leader;
+use crate::adapter::{self, Unstartable};
+use crate::platform::proc::{self, ChildHandle, ProcessId, Reach};
+use crate::platform::shell::ResolvedBinary;
 use crate::protocol::{login_failure_code as code, AgentId, LoginFailure, LoginStatus};
 use crate::providers::ProviderCode;
 use crate::state::AppState;
@@ -128,7 +129,7 @@ pub(crate) struct Flow {
     /// How the agent's sign-in is driven.
     login: &'static dyn LoginFlow,
     /// Where the agent's binary resolved, once, so that every command of the flow runs the same.
-    binary: String,
+    binary: ResolvedBinary,
     pub(crate) shell_env: HashMap<String, String>,
     /// The account's directory, exported to the CLI; `None` for the default account.
     pub(crate) config_dir: Option<PathBuf>,
@@ -149,7 +150,7 @@ impl Drop for Scratch {
 }
 
 impl Flow {
-    /// `Err` carries the binary's name when it does not resolve in `shell_env`.
+    /// `Err` is why the agent's binary cannot start its CLI in `shell_env`.
     pub(super) fn new(
         agent: AgentId,
         login: &'static dyn LoginFlow,
@@ -157,7 +158,7 @@ impl Flow {
         config_dir: Option<PathBuf>,
         resolved_dir: Option<PathBuf>,
         scratch: PathBuf,
-    ) -> Result<Self, &'static str> {
+    ) -> Result<Self, Unstartable> {
         let binary = adapter::resolve_account_binary(agent, &shell_env)?;
         Ok(Self {
             agent,
@@ -194,7 +195,7 @@ impl Flow {
                 .accounts()
                 .and_then(|ops| ops.login())
                 .expect("the agent has a sign-in flow"),
-            binary: String::new(),
+            binary: ResolvedBinary::default(),
             shell_env: HashMap::new(),
             config_dir: None,
             resolved_dir: None,
@@ -291,6 +292,8 @@ pub(crate) fn last_line_of(path: &Path) -> String {
 /// browser a login opens can be in it, started directly by `xdg-open` on a Linux desktop.
 pub(crate) struct Process {
     pub(crate) child: Child,
+    /// The CLI as the platform kills and sweeps it, while `child` is not reaped.
+    handle: ChildHandle,
     /// Names the CLI in the log of a session sweep: the agent's name.
     label: &'static str,
     stdin: Option<ChildStdin>,
@@ -303,7 +306,7 @@ impl Process {
         label: &'static str,
         pipe_stdin: bool,
     ) -> std::io::Result<Self> {
-        leader::lead_session(&mut command);
+        proc::lead_session(&mut command);
         let mut command = tokio::process::Command::from(command);
         command
             .stdin(if pipe_stdin {
@@ -315,6 +318,17 @@ impl Process {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let mut child = command.spawn()?;
+        let taken_on = child.id().map_or_else(
+            || Err(std::io::ErrorKind::NotFound.into()),
+            |pid| ChildHandle::started(ProcessId(pid), Reach::Session, None),
+        );
+        let handle = match taken_on {
+            Ok(handle) => handle,
+            Err(err) => {
+                let _ = child.start_kill();
+                return Err(err);
+            }
+        };
         let (tx, lines) = line_channel();
         if let Some(stdout) = child.stdout.take() {
             forward_lines(stdout, tx.clone());
@@ -325,6 +339,7 @@ impl Process {
         Ok(Self {
             stdin: child.stdin.take(),
             child,
+            handle,
             label,
             lines,
         })
@@ -343,14 +358,14 @@ impl Process {
     /// from passing to another process.
     pub(crate) async fn stop(&mut self) {
         // `id` is `None` once the child has been reaped, when its pid may be someone else's.
-        if let Some(pid) = self.child.id() {
-            let pid = pid as libc::pid_t;
-            leader::kill_group(pid);
+        if self.child.id().is_some() {
+            let child = &self.handle;
+            child.kill();
             loop {
-                match leader::exited_unreaped(pid) {
+                match child.exited_unreaped() {
                     Some(false) => tokio::time::sleep(EXIT_POLL).await,
                     Some(true) => {
-                        leader::kill_members(pid).log(pid, self.label);
+                        child.kill_leftovers(&[]).log(child.pid(), self.label);
                         break;
                     }
                     // `waitid` cannot tell, which it also says of a child already reaped, whose
@@ -377,10 +392,11 @@ impl Drop for Process {
     fn drop(&mut self) {
         // Swept without waiting for the CLI to exit, which a drop cannot do, so a process it
         // starts while the kill is landing is missed.
-        if let Some(pid) = self.child.id() {
-            let pid = pid as libc::pid_t;
-            leader::kill_group(pid);
-            leader::kill_members(pid).log(pid, self.label);
+        if self.child.id().is_some() {
+            self.handle.kill();
+            self.handle
+                .kill_leftovers(&[])
+                .log(self.handle.pid(), self.label);
         }
     }
 }
@@ -465,9 +481,11 @@ fn forward_lines(pipe: impl tokio::io::AsyncRead + Unpin + Send + 'static, tx: m
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use crate::test_support::helper_in_its_own_group;
     use crate::test_support::{
-        assert_stops_running, helper_in_its_own_group, is_running, read_pid_file, KillOnDrop,
-        ScratchDir, ScratchFile, PATIENCE,
+        assert_stops_running, is_running, read_pid_file, KillOnDrop, ScratchDir, ScratchFile,
+        PATIENCE,
     };
     use serde_json::json;
 
@@ -536,14 +554,11 @@ mod tests {
     }
 
     /// Starts a stand-in login CLI that leaves a helper in a process group of its own and then
-    /// runs `then`, and returns it with the helper's pid once the helper is running.
-    async fn stand_in_with_a_helper(then: &str) -> (Process, libc::pid_t) {
+    /// exits, or keeps running unless `exits`, and returns it with the helper's pid once the
+    /// helper is running.
+    async fn stand_in_with_a_helper(exits: bool) -> (Process, i32) {
         let pid_file = ScratchFile::new("login-helper", "pid");
-        let mut command = std::process::Command::new("/bin/bash");
-        command.args([
-            "-c",
-            &format!("{}; {then}", helper_in_its_own_group(&pid_file)),
-        ]);
+        let command = helper_leaving_cli(&pid_file, exits);
         let process = Process::spawn(command, "stand-in", false).expect("the stand-in starts");
         let deadline = tokio::time::Instant::now() + PATIENCE;
         loop {
@@ -558,10 +573,41 @@ mod tests {
         }
     }
 
+    /// The stand-in of [`stand_in_with_a_helper`], writing its helper's pid to `pid_file`.
+    #[cfg(unix)]
+    fn helper_leaving_cli(pid_file: &std::path::Path, exits: bool) -> std::process::Command {
+        let then = if exits {
+            "exit 0"
+        } else {
+            "exec /bin/sleep 300"
+        };
+        let mut command = std::process::Command::new(crate::test_support::bash());
+        command.args([
+            "-c",
+            &format!("{}; {then}", helper_in_its_own_group(pid_file)),
+        ]);
+        command
+    }
+
+    /// The stand-in of [`stand_in_with_a_helper`] on Windows, a fixture process with its helper on
+    /// its console. It writes the helper's pid to `pid_file` once the helper has written it beside
+    /// it, which the helper does once it runs, and so is on the console by then.
+    #[cfg(windows)]
+    fn helper_leaving_cli(pid_file: &std::path::Path, exits: bool) -> std::process::Command {
+        use crate::test_support::fixture::Steps;
+        let running = pid_file.with_extension("helper");
+        let steps = Steps::new()
+            .spawn_on_console("helper", Steps::new().write_pid(&running).sleep(300))
+            .wait_for(&running)
+            .write_child_pid(pid_file);
+        let steps = if exits { steps } else { steps.sleep(300) };
+        steps.program("login-cli").command()
+    }
+
     #[tokio::test]
     async fn a_login_cli_stopped_or_dropped_leaves_no_helper_behind() {
         for stopped in [true, false] {
-            let (mut process, helper) = stand_in_with_a_helper("exec /bin/sleep 300").await;
+            let (mut process, helper) = stand_in_with_a_helper(false).await;
             let mut guard = KillOnDrop(vec![helper]);
             if stopped {
                 process.stop().await;
@@ -575,7 +621,7 @@ mod tests {
 
     #[tokio::test]
     async fn dropping_a_login_cli_that_was_reaped_leaves_its_helpers_running() {
-        let (mut process, helper) = stand_in_with_a_helper("exit 0").await;
+        let (mut process, helper) = stand_in_with_a_helper(true).await;
         let _guard = KillOnDrop(vec![helper]);
         let status = process.child.wait().await.expect("its status");
         assert!(status.success());
@@ -592,13 +638,13 @@ mod tests {
     async fn a_write_to_a_cli_that_has_exited_reports_what_it_said_last() {
         let scratch = ScratchDir::new("login-write-after-exit");
         let flow = Flow::unresolved(AgentId::CODEX, scratch.to_path_buf());
-        let mut command = std::process::Command::new("/bin/sh");
+        let mut command = std::process::Command::new(crate::test_support::bash());
         command.args(["-c", "echo 'Error: bad configuration' >&2; exit 1"]);
         let mut process = Process::spawn(command, "stand-in", true).expect("the stand-in starts");
         // Exited, found out without reaping it, so the write below meets a closed pipe.
-        let pid = process.child.id().expect("not reaped") as libc::pid_t;
+        let child = &process.handle;
         let deadline = tokio::time::Instant::now() + PATIENCE;
-        while leader::exited_unreaped(pid) != Some(true) {
+        while child.exited_unreaped() != Some(true) {
             assert!(
                 tokio::time::Instant::now() < deadline,
                 "the stand-in never exited"

@@ -91,6 +91,7 @@ mod tests {
         assert!(!entries[1].is_git_repo);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_directory_that_cannot_be_read_is_reported_with_the_volume_hint() {
         use std::os::unix::fs::PermissionsExt;

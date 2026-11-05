@@ -4,12 +4,18 @@ use super::*;
 use crate::adapter::claude::screen::TRUST as CLAUDE;
 use crate::adapter::codex::screen::TRUST as CODEX;
 use crate::adapter::grok::screen::TRUST as GROK;
+use crate::platform::term::Input;
 use crate::protocol::{Console, ProjectSource, Role, SessionStatus};
 use crate::session::spawn_reader_thread;
 use crate::session::wait::wait_for;
 use crate::state::WriteHold;
 use crate::store::LOCAL_HOST_ID;
-use crate::test_support::{bare_session, watched_live_session, ScratchDir, StandIn, PATIENCE};
+use crate::test_support::{
+    bare_session, disk_root, host_path, printed, watched_live_session, ScratchDir, StandIn,
+    PATIENCE,
+};
+
+mod on_the_parsed_screen;
 
 // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
 // never seen; only the directory's name and the account's plan were replaced. The screen as
@@ -40,6 +46,11 @@ const CODEX_FOLDER_ACCESS: &[u8] =
 const GROK_SCREEN: &[u8] = include_bytes!("../../../testdata/grok_trust_screen.bin");
 const GROK_ANIMATION: &[u8] = include_bytes!("../../../testdata/grok_trust_animation.bin");
 
+/// The bytes the press's keys reach the stand-ins as.
+const DOWN: &[u8] = b"\x1b[B";
+const ENTER: &[u8] = b"\r";
+const YES: &[u8] = b"y";
+
 /// What an answered screen is sent: the Down, then the Enter.
 fn answer_keys() -> Vec<u8> {
     [DOWN, ENTER].concat()
@@ -49,9 +60,10 @@ fn answer_keys() -> Vec<u8> {
 /// pinned here instead.
 #[test]
 fn the_keys_are_the_bytes_the_screen_expects() {
-    assert_eq!(DOWN, b"\x1b[B");
-    assert_eq!(ENTER, b"\r");
-    assert_eq!(YES, b"y");
+    use crate::platform::term::encode;
+    assert_eq!(encode(press::DOWN), b"\x1b[B");
+    assert_eq!(encode(press::ENTER), b"\r");
+    assert_eq!(encode(&press::yes()), b"y");
 }
 
 /// Each agent's screen is recognised in its own first drawing and nowhere else: not in what
@@ -204,9 +216,49 @@ fn load_captures() -> String {
 fn load(captures: &[(&str, &str)]) -> String {
     captures
         .iter()
-        .map(|(var, file)| format!("IFS= read -r -d '' {var} < {}", fixture(file)))
+        .map(|(var, file)| read_capture(var, &fixture(file)))
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+/// The device attributes and cursor position queries, which the daemon answers where
+/// `TermFacts::host_waits_on_queries`.
+const ANSWERED_QUERIES: [&str; 2] = ["\\e[c", "\\e[6n"];
+
+/// Reads the capture at `path`, quoted, into the variable `var`. Where the daemon answers the
+/// queries in [`ANSWERED_QUERIES`], the ones the agent printed are left out: the agent reads the
+/// answers apart from its keys, and the stand-in, which reads keys alone, would take them for keys.
+fn read_capture(var: &str, path: &str) -> String {
+    let read = format!("IFS= read -r -d '' {var} < {path}");
+    if !crate::platform::term::facts().host_waits_on_queries {
+        return read;
+    }
+    ANSWERED_QUERIES.iter().fold(read, |script, query| {
+        format!("{script}; {var}=${{{var}//$'{query}'/}}")
+    })
+}
+
+/// `capture` as a stand-in that read it with [`read_capture`] prints it.
+fn as_printed(capture: &[u8]) -> Vec<u8> {
+    if !crate::platform::term::facts().host_waits_on_queries {
+        return capture.to_vec();
+    }
+    ANSWERED_QUERIES
+        .iter()
+        .fold(capture.to_vec(), |bytes, query| {
+            let query = query.replace("\\e", "\x1b").into_bytes();
+            let mut kept = Vec::with_capacity(bytes.len());
+            let mut rest = &bytes[..];
+            while !rest.is_empty() {
+                if rest.starts_with(&query) {
+                    rest = &rest[query.len()..];
+                } else {
+                    kept.push(rest[0]);
+                    rest = &rest[1..];
+                }
+            }
+            kept
+        })
 }
 
 /// Codex's whole conversation: its screen, a read of the Enter, what replaces the screen, and
@@ -727,12 +779,16 @@ fn a_terminals_own_traffic_does_not_stop_the_answer() {
 fn a_key_is_written_only_while_nothing_else_has_written() {
     let dir = scratch("if-untouched");
     let received = dir.join("received");
-    let script = format!("printf ready; {}; sleep 30", take(5, &quoted(&received)));
+    // The stand-in asks for focus reports, as an agent sent them does: the Windows console host
+    // takes a report for itself while the program on it has not asked for them.
+    let script = format!(
+        "printf 'ready\\e[?1004h'; {}; sleep 30",
+        take(5, &quoted(&received))
+    );
     let live = stand_in("s", AgentId::CLAUDE, &script);
     // Input written before the stand-in has set its terminal up would be thrown away.
-    assert!(wait_for(PATIENCE, || live
-        .recent_output(64)
-        .starts_with(b"ready")));
+    assert!(wait_for(PATIENCE, || printed(&live, 64)
+        .starts_with(b"ready\x1b[?1004h")));
 
     let before = live.input_writes();
     live.write_input(b"\x1b[I").expect("focus report");
@@ -743,9 +799,11 @@ fn a_key_is_written_only_while_nothing_else_has_written() {
     );
     live.write_input(b"x").expect("typed");
     assert_eq!(live.input_writes(), before + 1);
-    assert!(!live.write_input_if_untouched(before, b"Z").unwrap());
+    assert!(!live
+        .write_input_if_untouched(before, &[Input::Text("Z".into())])
+        .unwrap());
     assert!(live
-        .write_input_if_untouched(live.input_writes(), b"\r")
+        .write_input_if_untouched(live.input_writes(), &[Input::Enter])
         .unwrap());
 
     // The focus report, the typed byte and the key — not the key that was refused.
@@ -871,18 +929,33 @@ async fn screen_printed(live: &StandIn) {
 /// that replaces the trust screen. A test that ended at the Enter would drop the stand-in
 /// while an answer running in the background was still waiting for that screen, and the
 /// runtime would then wait out the answer's `DISMISS_TIMEOUT`.
+///
+/// The screen is told by the end of it, [`DISMISSED_END`] bytes, anywhere in the recent output:
+/// the bundled Windows console host rewrites some of the mode changes it starts with (it asks
+/// again for the focus reports and input records a program turns off, and has left out a reset of
+/// the keyboard's modifier encoding), and follows a program's screen with output of its own (a
+/// cursor position query, and a cursor move once that is answered).
 async fn answered(live: &StandIn, received: &Path) {
     let seen = Arc::clone(live);
     let received = received.to_path_buf();
+    let dismissed = as_printed(DISMISSED);
+    let end = dismissed[dismissed.len() - DISMISSED_END..].to_vec();
     assert!(
         tokio::task::spawn_blocking(move || wait_for(PATIENCE, || {
-            sent(&received) == answer_keys() && seen.recent_output(DISMISSED.len()) == DISMISSED
+            sent(&received) == answer_keys()
+                && seen
+                    .recent_output(WINDOW)
+                    .windows(end.len())
+                    .any(|window| window == end)
         }))
         .await
         .unwrap(),
         "the keys must have been sent and the screen dismissed"
     );
 }
+
+/// How much of the end of [`DISMISSED`] tells it: its last row of drawing, past every mode change.
+const DISMISSED_END: usize = 200;
 
 #[tokio::test]
 async fn a_console_sessions_screen_is_answered_without_asking() {
@@ -1369,9 +1442,9 @@ async fn a_trusted_directory_covers_what_really_lies_in_it_and_nothing_else() {
     }
     let at = |relative: &str| text(&dir.join(relative));
     let work = at("work");
-    std::os::unix::fs::symlink(dir.join("elsewhere/repo"), dir.join("work/link")).expect("link");
-    std::os::unix::fs::symlink(dir.join("work/project"), dir.join("into")).expect("link");
-    std::os::unix::fs::symlink(dir.join("work"), dir.join("work-link")).expect("link");
+    crate::test_support::symlink(dir.join("elsewhere/repo"), dir.join("work/link")).expect("link");
+    crate::test_support::symlink(dir.join("work/project"), dir.join("into")).expect("link");
+    crate::test_support::symlink(dir.join("work"), dir.join("work-link")).expect("link");
 
     assert!(covers(&state, &work, &work).await, "itself");
     assert!(covers(&state, &at("work/project"), &work).await, "a child");
@@ -1446,9 +1519,9 @@ async fn a_trusted_directory_that_is_the_root_or_holds_the_home_directory_covers
     for (link, target) in [
         ("to-home", home.clone()),
         ("to-above", dir.join("people")),
-        ("to-root", PathBuf::from("/")),
+        ("to-root", disk_root()),
     ] {
-        std::os::unix::fs::symlink(target, dir.join(link)).expect("link");
+        crate::test_support::symlink(target, dir.join(link)).expect("link");
     }
     let project = text(&home.join("work/project"));
     let covers = |trusted: PathBuf| {
@@ -1465,7 +1538,7 @@ async fn a_trusted_directory_that_is_the_root_or_holds_the_home_directory_covers
         assert!(!covers(dir.join(broad)).await, "{broad}");
     }
     assert!(!covers(home.clone()).await, "the home directory as written");
-    assert!(!covers(PathBuf::from("/")).await, "the root as written");
+    assert!(!covers(disk_root()).await, "the root as written");
     assert!(covers(home.join("work")).await, "a directory below home");
 
     // While the home directory cannot be looked at, which directories are too broad is not known,
@@ -1473,7 +1546,7 @@ async fn a_trusted_directory_that_is_the_root_or_holds_the_home_directory_covers
     let stuck = Arc::new(());
     state
         .directory_looks
-        .record(home.clone(), Arc::downgrade(&stuck));
+        .record(crate::hostfs::lexical_key(&home), Arc::downgrade(&stuck));
     assert!(
         !covers(home.join("work")).await,
         "nothing while home is stuck"
@@ -1483,18 +1556,20 @@ async fn a_trusted_directory_that_is_the_root_or_holds_the_home_directory_covers
 
 #[test]
 fn the_parent_to_trust_is_never_the_root_the_home_directory_or_above_it() {
-    let home = Path::new("/Users/me");
+    let home = PathBuf::from(host_path("/Users/me"));
+    let home = home.as_path();
     assert_eq!(
-        trustable_parent("/Users/me/Coding/app", home).unwrap(),
-        Path::new("/Users/me/Coding")
+        trustable_parent(&host_path("/Users/me/Coding/app"), home).unwrap(),
+        PathBuf::from(host_path("/Users/me/Coding"))
     );
     assert_eq!(
-        trustable_parent("/Users/me/Coding/app/", home).unwrap(),
-        Path::new("/Users/me/Coding"),
+        trustable_parent(&host_path("/Users/me/Coding/app/"), home).unwrap(),
+        PathBuf::from(host_path("/Users/me/Coding")),
         "a trailing slash"
     );
     // Directly in the home directory, in the root, and the root itself.
-    for project in ["/Users/me/app", "/app", "/", "/Users/app"] {
+    for project in ["/Users/me/app", "/app", "/", "/Users/app"].map(host_path) {
+        let project = project.as_str();
         let err = trustable_parent(project, home).expect_err(project);
         let coded = err.downcast_ref::<CodedError>().expect("a coded error");
         assert_eq!(
@@ -1637,9 +1712,10 @@ async fn a_folder_go_ahead_for_a_project_that_cannot_be_looked_at_is_refused() {
     live.trust.feed(SCREEN, 0, 0);
     screen_printed(&live).await;
     let stuck = Arc::new(());
-    state
-        .directory_looks
-        .record(work.join("project"), Arc::downgrade(&stuck));
+    state.directory_looks.record(
+        crate::hostfs::lexical_key(&work.join("project")),
+        Arc::downgrade(&stuck),
+    );
 
     let err = confirm(&state, "project-session-1", false, true)
         .await
@@ -1663,11 +1739,14 @@ async fn a_directory_can_be_removed_again_and_each_projects_own_consent_stays() 
         .store
         .set_project_trust_consent("project-1", true)
         .expect("consent");
-    state.store.add_trusted_directory("/work").expect("trusted");
+    state
+        .store
+        .add_trusted_directory(&host_path("/work"))
+        .expect("trusted");
     let mut events = state.subscribe();
 
-    remove_trusted_directory(&state, "/work/").expect("removed");
-    remove_trusted_directory(&state, "/work").expect("a repeat");
+    remove_trusted_directory(&state, &host_path("/work/")).expect("removed");
+    remove_trusted_directory(&state, &host_path("/work")).expect("a repeat");
     assert!(trusted_in_store(&state).is_empty());
     assert!(consented_in_store(&state));
 
@@ -1781,7 +1860,7 @@ async fn offered_in_prompt(
 async fn a_project_linked_out_of_a_trusted_directory_is_asked_about_and_not_pressed() {
     let (state, dir, work) = state_with_real_project("linked-out");
     std::fs::create_dir_all(dir.join("elsewhere/repo")).expect("elsewhere");
-    std::os::unix::fs::symlink(dir.join("elsewhere/repo"), work.join("link")).expect("link");
+    crate::test_support::symlink(dir.join("elsewhere/repo"), work.join("link")).expect("link");
     let mut linked = project(false);
     linked.id = "project-2".to_string();
     linked.path = text(&work.join("link"));
@@ -1842,8 +1921,8 @@ fn the_guard_sees_through_symlinks_and_letter_case() {
     let dir = scratch("guard");
     let home = dir.join("Home");
     std::fs::create_dir_all(home.join("app")).expect("home");
-    std::os::unix::fs::symlink(&home, dir.join("link-to-home")).expect("link");
-    std::os::unix::fs::symlink(&dir, dir.join("link-to-above")).expect("link");
+    crate::test_support::symlink(&home, dir.join("link-to-home")).expect("link");
+    crate::test_support::symlink(&dir, dir.join("link-to-above")).expect("link");
     let under = |parent: PathBuf| parent.join("app").to_string_lossy().into_owned();
 
     // As written, for the baseline.
@@ -1882,7 +1961,7 @@ fn the_guard_sees_a_home_directory_reached_through_a_link() {
     let dir = scratch("guard-home-link");
     std::fs::create_dir_all(dir.join("data/home/me")).expect("real home");
     std::fs::create_dir_all(dir.join("data/app")).expect("project");
-    std::os::unix::fs::symlink(dir.join("data/home"), dir.join("home")).expect("link");
+    crate::test_support::symlink(dir.join("data/home"), dir.join("home")).expect("link");
     let home = dir.join("home/me");
 
     let project = dir.join("data/app").to_string_lossy().into_owned();
@@ -1900,12 +1979,14 @@ fn the_guard_sees_a_home_directory_reached_through_a_link() {
 /// and a project path that is not absolute says so rather than blaming the root or home.
 #[test]
 fn an_odd_home_directory_or_a_relative_project_path_offers_nothing() {
-    for home in ["", "relative/home", "/"] {
-        let err = trustable_parent("/work/project", Path::new(home)).expect_err(home);
+    let root = disk_root().to_string_lossy().into_owned();
+    for home in ["", "relative/home", root.as_str()] {
+        let err = trustable_parent(&host_path("/work/project"), Path::new(home)).expect_err(home);
         assert!(err.to_string().contains("home directory"), "{err}");
         assert!(is_not_offerable(&Err::<PathBuf, _>(err)), "{home:?}");
     }
-    let err = trustable_parent("work/project", Path::new("/Users/me")).expect_err("relative");
+    let home = PathBuf::from(host_path("/Users/me"));
+    let err = trustable_parent("work/project", &home).expect_err("relative");
     assert!(err.to_string().contains("not an absolute path"), "{err}");
     assert!(!err.to_string().contains("too broad"), "{err}");
     // Still a refusal the dialog stays open for.
@@ -1914,10 +1995,10 @@ fn an_odd_home_directory_or_a_relative_project_path_offers_nothing() {
 
 #[test]
 fn dot_dot_in_a_project_path_is_folded_before_a_parent_is_offered() {
-    let home = Path::new("/Users/me");
+    let home = PathBuf::from(host_path("/Users/me"));
     assert_eq!(
-        trustable_parent("/work/other/../project", home).unwrap(),
-        Path::new("/work")
+        trustable_parent(&host_path("/work/other/../project"), &home).unwrap(),
+        PathBuf::from(host_path("/work"))
     );
 }
 
@@ -1928,7 +2009,7 @@ fn dot_dot_in_a_project_path_is_folded_before_a_parent_is_offered() {
 async fn a_prompt_offers_the_parent_only_where_trusting_it_would_cover_the_project() {
     let (state, dir, work) = state_with_real_project("offered");
     std::fs::create_dir_all(dir.join("elsewhere/repo")).expect("elsewhere");
-    std::os::unix::fs::symlink(dir.join("elsewhere/repo"), work.join("link")).expect("link");
+    crate::test_support::symlink(dir.join("elsewhere/repo"), work.join("link")).expect("link");
     let inside = text(&work.join("project"));
     let through_a_link = text(&work.join("link"));
     let missing = text(&work.join("missing"));
@@ -2160,7 +2241,10 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
 #[tokio::test]
 async fn a_message_waits_while_codex_is_at_its_screen_and_follows_the_press() {
     let (state, dir) = state_with_project("held-message");
-    let message = crate::session::term::frame_message(AgentId::CODEX, "hello");
+    let message = crate::platform::term::encode(&crate::session::term::frame_message(
+        AgentId::CODEX,
+        "hello",
+    ));
     let record = session(
         "codex-1",
         AgentId::CODEX,
@@ -2249,7 +2333,10 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
 #[tokio::test]
 async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() {
     let (state, dir) = state_with_project("title-ends");
-    let message = crate::session::term::frame_message(AgentId::CODEX, "hello");
+    let message = crate::platform::term::encode(&crate::session::term::frame_message(
+        AgentId::CODEX,
+        "hello",
+    ));
     let record = session(
         "codex-1",
         AgentId::CODEX,
@@ -2289,7 +2376,10 @@ async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() 
 #[tokio::test]
 async fn codex_answered_in_the_terminal_lets_held_messages_through_once_the_screen_goes() {
     let (state, dir) = state_with_project("codex-released");
-    let message = crate::session::term::frame_message(AgentId::CODEX, "hello");
+    let message = crate::platform::term::encode(&crate::session::term::frame_message(
+        AgentId::CODEX,
+        "hello",
+    ));
     let r = "'%RECEIVED%'";
     let answered = session(
         "codex-1",
@@ -2666,7 +2756,8 @@ async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_
 #[tokio::test]
 async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
     let (state, dir) = state_with_project("hook-fallback");
-    let message = crate::session::term::frame_message(AgentId::GROK, "hello");
+    let message =
+        crate::platform::term::encode(&crate::session::term::frame_message(AgentId::GROK, "hello"));
     let record = session(
         "grok-1",
         AgentId::GROK,
@@ -2681,7 +2772,7 @@ async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
     let ready = Arc::clone(&live);
     assert!(
         tokio::task::spawn_blocking(move || wait_for(PATIENCE, || {
-            ready.recent_output(WINDOW).starts_with(b"ready")
+            printed(&ready, WINDOW).starts_with(b"ready")
         }))
         .await
         .unwrap(),
@@ -2911,7 +3002,10 @@ fn a_hook_after_a_press_the_screen_confirmed_still_carries_the_entry() {
 #[tokio::test]
 async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
     let (state, dir) = state_with_project("paste-after-hook");
-    let message = crate::session::term::frame_message(AgentId::CLAUDE, "hello");
+    let message = crate::platform::term::encode(&crate::session::term::frame_message(
+        AgentId::CLAUDE,
+        "hello",
+    ));
     let record = session(
         "claude-1",
         AgentId::CLAUDE,
@@ -2995,7 +3089,10 @@ fn claude_bracketed_paste_turned_off_before_the_hook_does_not_count() {
 #[tokio::test]
 async fn claude_messages_are_not_released_by_the_start_probes_bracketed_paste() {
     let (state, dir) = state_with_project("paste-probe");
-    let message = crate::session::term::frame_message(AgentId::CLAUDE, "hello");
+    let message = crate::platform::term::encode(&crate::session::term::frame_message(
+        AgentId::CLAUDE,
+        "hello",
+    ));
     let record = session(
         "claude-1",
         AgentId::CLAUDE,

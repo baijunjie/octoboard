@@ -5,16 +5,16 @@
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use super::{injected, interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS};
+use super::{injected, render, write_dir, Rendering, BUILT_IN_HOOKS};
 use crate::branch_origin::{ref_created, repo_key, RefReport};
 use crate::git::repo_files::repository_of;
+use crate::platform::shell;
 use crate::protocol::{
     AgentId, Console, GitWorkflowSettingsChanges, Project, ProjectSource, Session, SessionKind,
     SessionStatus,
@@ -23,19 +23,21 @@ use crate::state::AppState;
 use crate::store::{BranchOrigin, LOCAL_HOST_ID};
 use crate::test_support::bare_session;
 use crate::test_support::{
-    app_state, fixture_git, git, repo_with, ScratchDir, ScratchFile, PATIENCE, SYSTEM_GIT, TEST_KEY,
+    app_state, fixture_git, git, make_executable, repo_with, ScratchDir, ScratchFile, PATIENCE,
+    SYSTEM_GIT, TEST_KEY,
 };
 use crate::time::now_millis;
 
 /// The dispatchers every test here runs git with, written once per test binary under a fixed
 /// name, as a fresh executable per test would pay macOS's first-exec cost each time. Their report
 /// goes to a stand-in for `octoboardd git-ref` that appends what it was started with — its
-/// directory, `GIT_DIR` and arguments — to the file `OCTOBOARD_TEST_REPORTS` names. The same
-/// stand-in answers `octoboardd gate-hook`: it appends its arguments and the input it was given to
-/// the file `OCTOBOARD_TEST_GATES` names and exits with the status `OCTOBOARD_TEST_GATE_STATUS`
-/// holds, 0 when unset, as the gate would for a rejection (3) or any other outcome. With
-/// `OCTOBOARD_TEST_GATE_BINARY` set to the test binary it instead runs the real `gate-hook` in that
-/// binary (see `tests::gate::gate_hook_child`), against whatever daemon the session's port names.
+/// directory (as Windows spells it where the shell is MSYS's), `GIT_DIR` and arguments — to the
+/// file `OCTOBOARD_TEST_REPORTS` names. The same stand-in answers `octoboardd gate-hook`: it
+/// appends its arguments and the input it was given to the file `OCTOBOARD_TEST_GATES` names and
+/// exits with the status `OCTOBOARD_TEST_GATE_STATUS` holds, 0 when unset, as the gate would for a
+/// rejection (3) or any other outcome. With `OCTOBOARD_TEST_GATE_BINARY` set to the test binary it
+/// instead runs the real `gate-hook` in that binary (see `tests::gate::gate_hook_child`), against
+/// whatever daemon the session's port names.
 pub(crate) fn dispatchers() -> &'static Path {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
     DIR.get_or_init(|| dispatchers_for(&system_exec_path(), &[]))
@@ -71,13 +73,14 @@ pub(crate) fn dispatchers_with(exec_path: &str, system_files: &[PathBuf], state:
          printf '%s\\t%s\\n' \"$*\" \"$(tr '\\n' ' ')\" >>\"${OCTOBOARD_TEST_GATES:-/dev/null}\"\n\
          exit \"${OCTOBOARD_TEST_GATE_STATUS:-0}\"\n\
          fi\n\
-         printf '%s\\t%s\\t%s\\n' \"$PWD\" \"${GIT_DIR-}\" \"$*\" >>\"$OCTOBOARD_TEST_REPORTS\"\n",
-        0o755,
+         printf '%s\\t%s\\t%s\\n' \"$(pwd -W 2>/dev/null || pwd)\" \"${GIT_DIR-}\" \"$*\" \
+         >>\"$OCTOBOARD_TEST_REPORTS\"\n",
+        true,
     );
     let root = temp.join("octoboardd-test-githooks");
     let names: BTreeSet<String> = BUILT_IN_HOOKS.iter().map(|n| n.to_string()).collect();
     let script = render(&Rendering {
-        interpreter: interpreter(),
+        interpreter: shell::posix_interpreter(),
         self_exe: &stand_in.to_string_lossy(),
         exec_path,
         state,
@@ -88,13 +91,15 @@ pub(crate) fn dispatchers_with(exec_path: &str, system_files: &[PathBuf], state:
 
 /// A file of `body` under a fixed name in the temporary directory, written by renaming one of this
 /// process's own into place: a test binary of another worktree may be reading or running it.
-pub(crate) fn installed(name: &str, body: &str, mode: u32) -> PathBuf {
+pub(crate) fn installed(name: &str, body: &str, executable: bool) -> PathBuf {
     let temp = std::env::temp_dir();
     let path = temp.join(name);
     if std::fs::read_to_string(&path).ok().as_deref() != Some(body) {
         let own = temp.join(format!("{name}.{}", std::process::id()));
         std::fs::write(&own, body).unwrap();
-        std::fs::set_permissions(&own, std::fs::Permissions::from_mode(mode)).unwrap();
+        if executable {
+            make_executable(&own);
+        }
         std::fs::rename(&own, &path).unwrap();
     }
     path
@@ -335,7 +340,7 @@ pub(crate) fn rev_parses(trace: &Path) -> usize {
 pub(crate) fn write_hook(path: &Path, body: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    make_executable(path);
 }
 
 pub(crate) fn succeeds(output: Output) -> bool {

@@ -37,12 +37,18 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   fixture that cannot be answered as the real daemon would, lazy content that failed or never settled, an exit
   transition that never ends) is painted over the page as a `[data-gallery-failure]` overlay
   (`packages/ui/src/fixtures/banner.ts`); check a capture for it even when the page signals ready.
-- `chrome=1` in a frame URL gives the page the desktop window's `windowChrome` capability, so what only the desktop app
-  offers can be driven in a browser, while keeping the browser platform kind. A scenario's `desktopApp` gives it that,
-  the native menu bar and the desktop platform kind, for a view that exists only in the app (the full Keyboard
-  shortcuts list). Which keys are drawn (⌘ or Ctrl) and whether Back and Forward are listed follow the platform the
-  gallery is viewed in; steps press keys with `ui.chord`, which turns a
-  portable binding into that platform's.
+- `chrome=1` in a frame URL gives the page the desktop window's `windowChrome` capability (the top bar's drag region, and
+  on a macOS host the window's own Back and Forward keys), while keeping the browser platform kind. It does not make the
+  page the desktop app: what the app alone has by its platform kind (the console-session switch, which exists in the app on
+  any system; the Back and Forward rows of Settings, on macOS; a report page's relay of those keys) needs the scenario's
+  `desktopApp`, which gives the page that kind, the window chrome and the native menu bar, for a view that exists only in
+  the app (the full Keyboard shortcuts list). A scenario's `host` gives the page the facts a desktop shell reports about its machine (`HostFacts`: the
+  system's words such as Recycle Bin, which Settings sections exist, no window controls over a native chrome), with the
+  snapshot's `state.host` and `state.homeDir` saying the same of the daemon's machine (`WINDOWS_MACHINE`); without one the
+  browser's own facts stand, and a host with no native menu (`appMenu: false`, the Windows app's) gives a `desktopApp`
+  scenario none. Which keys are drawn (⌘ and symbols, or Ctrl and text caps) and whether Back and Forward are listed follow
+  the scenario's `host`, or the platform the gallery is viewed in where it has none; steps press keys with `ui.chord`, which
+  turns a portable binding into that host's.
 - A scenario with `liveChanges` lists them as buttons beside the other controls, offered once its page is ready. Each
   makes what another window or the machine would while the view is on screen (an account added, a terminal closed there,
   an agent found missing), as the daemon's own events through the steps' `daemonEvents`, for the motion and focus of a

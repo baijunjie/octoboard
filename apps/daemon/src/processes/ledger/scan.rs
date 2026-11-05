@@ -23,7 +23,7 @@ thread_local! {
 /// Reads `id`'s environment for the tag ([`table::env_tag`]).
 fn env_tag(id: Identity) -> EnvTag {
     #[cfg(test)]
-    if UNREADABLE_OVERRIDE.get() == Some(id.pid) {
+    if UNREADABLE_OVERRIDE.get() == Some(id.pid.0 as i32) {
         return EnvTag::Unreadable;
     }
     table::env_tag(id)
@@ -51,6 +51,7 @@ impl ProcessLedger {
             let mut book = self.book();
             // What a session read back would decide is decided first, as `attribute` does.
             attribute::prove_read_back(&mut book, &table);
+            book.refresh_contained();
             let horizon = if full { Some(0) } else { book.horizon };
             (
                 horizon,
@@ -74,7 +75,7 @@ impl ProcessLedger {
                 EnvTag::Unreadable => {
                     scans.unreadable.insert(proc.id, proc.comm.clone());
                 }
-                EnvTag::Untagged if proc.id.start >= settled_before => {}
+                EnvTag::Untagged if proc.id.start_micros >= settled_before => {}
                 _ => {
                     scans.unreadable.remove(&proc.id);
                     scans.tags.insert(proc.id, tag.clone());
@@ -86,7 +87,7 @@ impl ProcessLedger {
         let instance = &self.instance;
         let tags = &scans.tags;
         let mut tag_of = |proc: &Proc| {
-            if horizon.is_none_or(|horizon| proc.id.start < horizon) {
+            if horizon.is_none_or(|horizon| proc.id.start_micros < horizon) {
                 return None;
             }
             match read.get(&proc.id).or_else(|| tags.get(&proc.id)) {
@@ -97,6 +98,7 @@ impl ProcessLedger {
                 _ => None,
             }
         };
+        book.refresh_contained();
         attribute::attribute(&mut book, &table, self.own, &mut tag_of);
         drop(book);
         self.advance_listings(&table);

@@ -231,29 +231,30 @@ async fn forward_until(
 ) -> Forwarded {
     tokio::pin!(cancelled);
     // The loopback client is blocking: the connect as well as the exchange, which can take minutes.
-    let connecting = tokio::task::spawn_blocking(move || {
-        let stream = crate::loopback::connect(port, CALL_TIMEOUT)?;
-        let closer = stream.try_clone()?;
-        Ok::<_, std::io::Error>((stream, closer))
-    });
-    let (stream, closer) = tokio::select! {
+    let connecting =
+        tokio::task::spawn_blocking(move || crate::loopback::connect(port, CALL_TIMEOUT));
+    let stream = tokio::select! {
         connected = connecting => match connected {
-            Ok(Ok(connected)) => connected,
+            Ok(Ok(connected)) => Arc::new(connected),
             Ok(Err(err)) => return Forwarded::Answered(Err(err)),
             Err(err) => return Forwarded::Answered(Err(std::io::Error::other(err.to_string()))),
         },
         // Nothing has reached the daemon yet; a connection made after this is dropped unused.
         () = &mut cancelled => return Forwarded::Cancelled,
     };
+    let exchanging = stream.clone();
     let exchange = tokio::task::spawn_blocking(move || {
-        crate::loopback::exchange(stream, port, &key, &path, &body)
+        crate::loopback::exchange(&exchanging, port, &key, &path, &body)
     });
     tokio::select! {
         answered = exchange => Forwarded::Answered(answered.unwrap_or_else(|err| {
             Err(std::io::Error::other(err.to_string()))
         })),
         () = &mut cancelled => {
-            let _ = closer.shutdown(std::net::Shutdown::Both);
+            // Through the handle the connection was made on, which the exchange's thread may be
+            // blocked on: on Windows a duplicate of it (`try_clone`) can refuse the shutdown as
+            // not connected (`WSAENOTCONN`) and send nothing, which leaves the daemon waiting.
+            let _ = stream.shutdown(std::net::Shutdown::Both);
             Forwarded::Cancelled
         }
     }

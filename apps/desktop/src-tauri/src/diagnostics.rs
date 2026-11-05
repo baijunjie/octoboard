@@ -43,15 +43,44 @@ pub fn record(message: &str) {
         .and_then(|mut file| file.write_all(line.as_bytes()));
 }
 
+#[cfg(target_os = "macos")]
+mod macos {
+    /// The variable the home directory is read from, as the daemon reads it
+    /// (`platform::fs::env_home` in `apps/daemon/`).
+    pub const HOME_VARIABLE: &str = "HOME";
+}
+#[cfg(target_os = "macos")]
+use macos as platform;
+
+/// Every target but macOS, Linux included.
+#[cfg(not(target_os = "macos"))]
+mod windows {
+    /// The variable the home directory is read from, as the daemon reads it
+    /// (`platform::fs::env_home` in `apps/daemon/`): `USERPROFILE` on Windows.
+    #[cfg(windows)]
+    pub const HOME_VARIABLE: &str = "USERPROFILE";
+
+    /// `HOME` on Linux, as on macOS.
+    #[cfg(not(windows))]
+    pub const HOME_VARIABLE: &str = "HOME";
+}
+#[cfg(not(target_os = "macos"))]
+use windows as platform;
+
+use platform::HOME_VARIABLE;
+
 /// `~/.octoboard/logs`, which has to be the same directory as `paths::logs_dir` in
 /// `apps/daemon/src/paths.rs`, with the home directory resolved the way `paths::home_dir` does:
-/// `HOME` when it is absolute, else the system's record of the user's home when `HOME` is unset.
-/// A relative `HOME` leaves the log unwritten (`std::env::home_dir` returns a set `HOME` as it is,
-/// so the system's record is not consulted then), so it is not written into whatever directory the
-/// application happens to run in.
+/// the home variable (`HOME_VARIABLE`) when it is absolute, else the system's record of the user's
+/// home when it is unset. A relative one leaves the log unwritten (`std::env::home_dir` returns a
+/// set `HOME` as it is on Unix, so the system's record is not consulted then), so it is not written
+/// into whatever directory the application happens to run in.
 fn logs_dir() -> Option<PathBuf> {
-    home_dir(std::env::var_os("HOME").as_deref(), std::env::home_dir)
-        .map(|home| home.join(".octoboard").join("logs"))
+    home_dir(
+        std::env::var_os(HOME_VARIABLE).as_deref(),
+        std::env::home_dir,
+    )
+    .map(|home| home.join(".octoboard").join("logs"))
 }
 
 fn home_dir(
@@ -128,6 +157,18 @@ mod tests {
         assert_eq!(
             home_dir(Some(OsStr::new("me")), || Some(PathBuf::from("me"))),
             None
+        );
+    }
+
+    #[test]
+    fn the_home_variable_is_the_one_the_daemon_reads() {
+        assert_eq!(
+            HOME_VARIABLE,
+            if cfg!(target_os = "windows") {
+                "USERPROFILE"
+            } else {
+                "HOME"
+            }
         );
     }
 

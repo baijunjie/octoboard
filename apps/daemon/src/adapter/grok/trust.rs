@@ -108,7 +108,8 @@ fn wait_recorded(carried: &CarriedTrust) -> Option<String> {
 /// place of the one it has otherwise. Every other byte of the user's store stays as it was, which
 /// is checked by reading the result back before it replaces anything. Holds the store's lock file
 /// (`trusted_folders.toml.lock`, which Grok keeps beside it and which the session's own home
-/// links to) while it reads and writes, and writes by replacing the file, as Grok does.
+/// links to where the host makes file links) while it reads and writes, and writes by replacing
+/// the file, as Grok does.
 fn merge_into_user_store(
     carried: &CarriedTrust,
     entry: &str,
@@ -125,8 +126,8 @@ fn merge_into_user_store(
         }
     })?;
     // A store the user keeps elsewhere and links to is written where it really is.
-    let target =
-        std::fs::canonicalize(&carried.user_store).unwrap_or_else(|_| carried.user_store.clone());
+    let target = crate::hostfs::canonical(&carried.user_store)
+        .unwrap_or_else(|_| carried.user_store.clone());
     let current = match std::fs::read_to_string(&target) {
         Ok(text) => text,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -234,9 +235,9 @@ fn entry_span(text: &str, folder: &str) -> Option<Range<usize>> {
 }
 
 /// Takes the store's lock file, which Grok keeps beside it, for as long as the returned file is
-/// held: an exclusive `flock`, given up after [`LOCK_TIMEOUT`] rather than waited on for ever.
+/// held: an exclusive lock, given up after [`LOCK_TIMEOUT`] rather than waited on for ever.
 fn lock_store(store: &Path) -> Result<std::fs::File> {
-    use std::os::fd::AsRawFd;
+    use crate::platform::fs::{try_lock_file, Busy};
 
     let mut name = store
         .file_name()
@@ -244,20 +245,17 @@ fn lock_store(store: &Path) -> Result<std::fs::File> {
         .to_os_string();
     name.push(".lock");
     let path = store.with_file_name(name);
-    let file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .with_context(|| format!("opening {}", path.display()))?;
     let deadline = Instant::now() + LOCK_TIMEOUT;
     loop {
-        // SAFETY: `flock` on a descriptor this function owns; the lock goes with the file.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
-            return Ok(file);
-        }
-        let err = std::io::Error::last_os_error();
-        if err.raw_os_error() != Some(libc::EWOULDBLOCK) {
-            return Err(err).with_context(|| format!("locking {}", path.display()));
+        match try_lock_file(&path) {
+            Ok(file) => return Ok(file),
+            Err(Busy::Held) => {}
+            Err(Busy::Open(err)) => {
+                return Err(err).with_context(|| format!("opening {}", path.display()))
+            }
+            Err(Busy::Lock(err)) => {
+                return Err(err).with_context(|| format!("locking {}", path.display()))
+            }
         }
         if Instant::now() >= deadline {
             return Err(StoreLocked.into());

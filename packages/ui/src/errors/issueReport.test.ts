@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { appConfig } from "../appConfig";
 import { CodedError } from "./codedError";
 import { ActionableError } from "./actionableError";
-import { issueReportUrl, osFromUserAgent, recordNames, sanitizeReportText, type IssueFacts } from "./issueReport";
+import { issueReportUrl, osFromUserAgent, recordNames, sanitizeReportText, type IssueEnvironment, type IssueFacts } from "./issueReport";
 
 const context = { names: ["Secret Project", "Q", "zz", "my-branch", "Q7", "dev"], homeDir: "/Users/alice" };
 const sanitize = (text: string) => sanitizeReportText(text, context);
@@ -229,4 +229,18 @@ it("fences a diagnostic that itself holds a code fence with a longer one", () =>
 it("points to the log files only in the desktop application", () => {
   const { body } = parse(issueReportUrl(BASE, facts([{ error: new Error("x") }], { environment: { ...environment, platform: "browser" } })));
   expect(body).not.toContain("~/.octoboard/logs/");
+});
+
+it("names the daemon host's operating system on a line of its own, beside the client's", () => {
+  const withHost = (daemonHost: IssueEnvironment["daemonHost"]) => parse(issueReportUrl(BASE, facts([{ error: new Error("x") }], { environment: { ...environment, daemonHost } }))).body;
+  expect(withHost({ os: "windows", path_style: "windows" })).toContain("- OS: macOS 10.15.7\n- Daemon host: Windows\n- Language: en");
+  expect(withHost({ os: "linux", path_style: "unix" })).toContain("- Daemon host: Linux");
+  expect(withHost(undefined)).not.toContain("Daemon host");
+});
+
+it("spells the logs location in the daemon host's path style", () => {
+  const hint = (daemonHost: IssueEnvironment["daemonHost"]) => parse(issueReportUrl(BASE, facts([{ error: new Error("x") }], { environment: { ...environment, daemonHost } }))).body;
+  expect(hint({ os: "windows", path_style: "windows" })).toContain("keeps its logs in %USERPROFILE%\\.octoboard\\logs\\ (daemon.log, desktop.log);");
+  expect(hint({ os: "macos", path_style: "unix" })).toContain("keeps its logs in ~/.octoboard/logs/ (daemon.log, desktop.log);");
+  expect(hint(undefined)).toContain("keeps its logs in ~/.octoboard/logs/ (daemon.log, desktop.log);");
 });

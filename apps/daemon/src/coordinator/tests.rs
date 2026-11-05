@@ -128,7 +128,11 @@ async fn listing_agent_models_echoes_the_request_and_refuses_a_foreign_account()
     handle(
         &state,
         Some("req-1".to_string()),
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(
+            AgentId::CODEX,
+            "Work",
+            &crate::test_support::host_path("/home/u/.codex-work"),
+        ),
     )
     .await
     .expect("created");
@@ -249,7 +253,11 @@ async fn using_a_reset_credit_is_refused_for_a_foreign_or_unknown_account() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
+        create_account_request(
+            AgentId::CLAUDE,
+            "Work",
+            &crate::test_support::host_path("/home/u/.claude-work"),
+        ),
     )
     .await
     .expect("created");

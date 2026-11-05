@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { isSecondaryPress } from "../../input/keys";
 import { useT } from "../../i18n/react";
+import { useHost } from "../../platform/react";
 import { TitledControl } from "../hint/TitledControl";
 import { useLatest } from "../hooks/useLatest";
 import { ICON_TRIGGER_CLASS } from "../controls/iconTrigger";
@@ -73,6 +74,7 @@ export function ActionMenu({
   onClosed?: (keyboardTrigger: HTMLElement | null) => void;
 }): React.ReactElement {
   const t = useT();
+  const host = useHost();
   const contextOpenRef = useLatest(onContextOpen);
   const [isOpen, setIsOpen] = useState(false);
   // Where a right-click opened the menu; `null` while it is anchored to its trigger.
@@ -175,7 +177,7 @@ export function ActionMenu({
     // must not take focus: a target without its own focus handling would pull it off whatever had
     // it (typically the terminal), and the menu returns focus to where it stood at the gesture.
     const onMouseDown = (event: MouseEvent) => {
-      if (isSecondaryPress(event, !contextOnly)) {
+      if (isSecondaryPress(event, host, !contextOnly)) {
         event.preventDefault();
         // xterm handles a secondary press itself; leaving it through would change the selection
         // or send a mouse report before the editing menu can use it.
@@ -218,7 +220,7 @@ export function ActionMenu({
       target.removeEventListener("contextmenu", onContextMenu, contextOnly);
       target.removeEventListener("keydown", onKeyDown, contextOnly);
     };
-  }, [contextTargetRef, contextOnly, contextOpenRef]);
+  }, [contextTargetRef, contextOnly, contextOpenRef, host]);
 
   // react-aria's popover ignores a press outside it made with anything but the primary button, so
   // a right-click while the menu is open would leave it open (and, on the web, show the browser's
@@ -228,7 +230,7 @@ export function ActionMenu({
     const inMenu = (event: Event) => event.target instanceof Element && event.target.closest(partSelector.menuPopover);
     const onMouseDown = (event: MouseEvent) => {
       if (inMenu(event)) return;
-      if (isSecondaryPress(event, !contextOnly)) onOpenChange(false);
+      if (isSecondaryPress(event, host, !contextOnly)) onOpenChange(false);
     };
     const onContextMenu = (event: MouseEvent) => {
       if (!inMenu(event)) event.preventDefault();
@@ -239,7 +241,7 @@ export function ActionMenu({
       document.removeEventListener("mousedown", onMouseDown, true);
       document.removeEventListener("contextmenu", onContextMenu, true);
     };
-  }, [isOpen]);
+  }, [isOpen, host]);
 
   return (
     // Always a flex container, so the trigger is a flex item and not an inline box in a line: left
@@ -265,7 +267,9 @@ export function ActionMenu({
             {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
           </MenuTrigger>
         </TitledControl>
-        <MenuPopover className="min-w-48 max-w-72" at={pointerAt ?? undefined}>
+        {/* Key caps spelled out (Ctrl Shift F, off an Apple keyboard) are wider than macOS's glyphs; a menu that has
+            them is that much wider, so the label beside them keeps the room it has next to glyphs. */}
+        <MenuPopover className="min-w-48 max-w-72 has-[[data-kbd-spelled]]:max-w-82" at={pointerAt ?? undefined}>
           <MenuShortcutScope value={isOpen}>
             <ResolvedMenuItems source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
           </MenuShortcutScope>

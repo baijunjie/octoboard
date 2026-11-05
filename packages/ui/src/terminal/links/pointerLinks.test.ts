@@ -2,6 +2,7 @@
 import { type IBufferRange, type ILink, type ITerminalOptions, Terminal } from "@xterm/xterm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { BROWSER_HOST } from "../../test/hosts";
 import { installPathLinks, type PathAnswer } from "./pathLinks";
 import { cellAtPoint, rangeHasCell, type TerminalGrid } from "./terminalLinks";
 import { watchPointerForLinks } from "./pointerLinks";
@@ -222,7 +223,7 @@ describe("a path the pointer rests on before the daemon answers", () => {
     let answer!: (answers: PathAnswer[]) => void;
     const probe = vi.fn(() => new Promise<PathAnswer[]>((resolve) => (answer = resolve)));
     const askAgain = watchPointerForLinks(term, screen, signal);
-    installPathLinks(term, { probe, open: async () => {} }, () => false, askAgain);
+    installPathLinks(term, { probe, open: async () => {} }, () => false, askAgain, BROWSER_HOST);
     await write(term, "see /a/b.ts here");
     moveTo(screen, at(6, 1));
     expect(showsLink(screen)).toBe(false);
@@ -238,7 +239,7 @@ describe("the path link the pointer is on", () => {
     const opened = openTerminal();
     const { term, screen, signal } = opened;
     const askAgain = watchPointerForLinks(term, screen, signal);
-    const { cache } = installPathLinks(term, { probe: async (paths) => paths.map(() => ({ kind: "file" as const })), open: async () => {} }, () => false, askAgain);
+    const { cache } = installPathLinks(term, { probe: async (paths) => paths.map(() => ({ kind: "file" as const })), open: async () => {} }, () => false, askAgain, BROWSER_HOST);
     await write(term, text);
     const grid = (): TerminalGrid => ({
       cols: COLS,

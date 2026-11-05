@@ -11,8 +11,10 @@ import ReactDOM from "react-dom/client";
 import { observeLazyReadiness } from "../components/hooks/lazyReadiness";
 import { isLanguage, type Language } from "../i18n/languages";
 import { galleryFailure } from "../fixtures/banner";
+import { readHost } from "../platform/host";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "../fixtures/fakeTerminal";
+import { galleryAppMenu } from "./appMenu";
 import { holdPrimaryModifier } from "./heldModifier";
 import { afterFrames, applyDocumentTheme } from "../fixtures/pageFrame";
 import { createUi, settleMotion, stuckExit } from "../fixtures/interact";
@@ -37,7 +39,7 @@ applyDocumentTheme(document, theme);
 installFakeTerminal();
 // The shell's Held control: the new-session "+" buttons as they are while the shortcut modifier is down.
 // A scenario that asks for it opens with the modifier held; `held=0` is the shell's Released over that.
-const heldModifier = (params.get("held") ?? (scenario?.held ? "1" : "0")) === "1" ? holdPrimaryModifier() : undefined;
+const heldModifier = (params.get("held") ?? (scenario?.held ? "1" : "0")) === "1" ? holdPrimaryModifier(scenario?.host ?? readHost()) : undefined;
 
 // The app's modules are imported dynamically, after `prepareStorage` above: they read stored preferences (the
 // language among them) as they load, so the scenario's own choices have to be in storage first. The converse binds
@@ -70,16 +72,18 @@ let requestQuit: (() => void) | undefined;
 let daemonExited: ((detail: string) => void) | undefined;
 
 /** The browser platform, with what the desktop app alone offers added so it can be driven in the
- * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
- * between console sessions; it also puts the top bar's drag region on) and, with the scenario's
- * `desktopApp`, the desktop platform kind and native menu bar (which no menu is drawn for), the macOS privacy grants stubbed
+ * gallery: `windowChrome` while the URL says `chrome=1` (the top bar's drag region, and on a macOS host the
+ * window's own Back and Forward keys) and, with the scenario's `desktopApp`, the desktop platform kind (which
+ * the app's shortcuts follow: the console-session switch's Ctrl+Tab on any system, Back and Forward on macOS)
+ * and native menu bar (which no menu is drawn for, and which a scenario's `host`
+ * without one, as the Windows app's has none, leaves out), the macOS privacy grants stubbed
  * from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
  * `macosSettingsOpenError`), there being no other
  * way to look at those rows than to really change a system setting, a link opener that refuses with
  * the error of a scenario's `externalLinkError` (otherwise the browser's own opener stands, which
  * opens a new tab), and `backgroundRun` for a scenario that says so (the Settings switch), the
- * macOS app's system-managed `notifications` for one that says `systemNotifications` (nothing is
- * shown or opened), the clipboard taken away for a
+ * desktop shell's `notifications` for one that says `desktopNotifications` (nothing is
+ * shown or opened; the link to the system's pane only where the scenario's `host` has one), the clipboard taken away for a
  * scenario that says so, and the configuration-file capability stubbed from the scenario's
  * `configuration` (absent where it says the platform has none) so that no download or file picker
  * is raised from a capture, and the exit capability for a scenario that says `quitRequested`, whose
@@ -89,6 +93,8 @@ let daemonExited: ((detail: string) => void) | undefined;
  * capability, since a restart goes through it. Nothing else native; `chrome=1` alone keeps the browser platform kind. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
+  const host = scenario?.host ?? platform.host;
+  const appMenu = galleryAppMenu(scenario?.desktopApp, scenario?.host);
   const grants = scenario?.macosPermissions;
   const configuration = scenario?.configuration;
   const externalLinkError = scenario?.externalLinkError;
@@ -96,8 +102,9 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   return {
     ...platform,
     kind: scenario?.desktopApp ? "tauri" : platform.kind,
-    ...((params.get("chrome") === "1" || scenario?.desktopApp) && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
-    ...(scenario?.desktopApp && { appMenu: { onSettingsRequested: () => () => {}, onAboutRequested: () => () => {}, setLabels: async () => {} } }),
+    host,
+    ...((params.get("chrome") === "1" || scenario?.desktopApp) && host.chrome !== "native" && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
+    ...(appMenu && { appMenu }),
     ...(grants && {
       macosPermissions: {
         status: () =>
@@ -126,11 +133,11 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       },
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
-    ...(scenario?.systemNotifications && {
+    ...(scenario?.desktopNotifications && {
       notifications: {
         ensurePermission: async () => true,
         notify: async () => {},
-        openSystemSettings: async () => {},
+        ...(host.notificationSettings === "system-pane" && { openSystemSettings: async () => {} }),
       },
     }),
     ...(scenario?.clipboard === "unavailable" && { clipboard: undefined }),
@@ -261,7 +268,7 @@ class LiveChanges {
 
 // The scenario's interactions, once the app has mounted. A failed one is shown over the page as
 // well as logged, since the scenario then shows less than it says; so is an exit that does not end.
-const ui = createUi(document, language, daemon);
+const ui = createUi(document, language, daemon, scenario?.host ?? readHost());
 // Listening before the steps, so the buttons work on a page whose steps failed; a change waits for them.
 const live = new LiveChanges(ui);
 document.addEventListener(LIVE_CHANGE_EVENT, (event) => void live.apply(String((event as CustomEvent<unknown>).detail)));

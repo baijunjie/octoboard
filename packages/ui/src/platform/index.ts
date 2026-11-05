@@ -1,9 +1,11 @@
 import { browserPlatform } from "./browser";
+import { type HostFacts, inTauri } from "./host";
 import { tauriPlatform } from "./tauri";
 import type { Agent } from "../protocol";
 
 export { ConfigurationFileError } from "./configurationFileError";
 export { UpdaterError } from "./updaterError";
+export type { HostFacts } from "./host";
 
 /**
  * The only route from the UI to anything native. Every capability is optional: a member that is
@@ -15,6 +17,10 @@ export { UpdaterError } from "./updaterError";
  */
 export interface PlatformAdapter {
   readonly kind: "tauri" | "browser";
+  /** What the machine the window runs on is: declared by the shell, or for a browser derived from the platform it
+   * names (`browserHost`). Where a behaviour or a word differs by system, it reads this and nothing else; what a
+   * capability below is there to do is not repeated here. */
+  readonly host: HostFacts;
   /** The application's own lifetime: present only where a shell owns the process and must be told
    * when it may end. */
   readonly exit?: ExitCapability;
@@ -382,5 +388,5 @@ export interface MacosPermissionsCapability {
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */
 export function selectPlatform(): PlatformAdapter {
-  return "__TAURI_INTERNALS__" in window ? tauriPlatform() : browserPlatform();
+  return inTauri() ? tauriPlatform() : browserPlatform();
 }

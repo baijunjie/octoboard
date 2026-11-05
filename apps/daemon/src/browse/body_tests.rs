@@ -9,7 +9,7 @@ use super::tests::{code, Fixture};
 use super::*;
 use crate::protocol::{ChangeGroup, ChangeRef, ComparedChangeRef, SideRead, SideRef, SideVersion};
 use crate::test_support::{
-    fixture_git, git, git_dir_state, move_modification_time_back, repo_with,
+    fixture_git, git, git_dir_state, move_modification_time_back, repo_with, symlink,
 };
 
 /// The version a diff reply reported for `side`, as a client names it back.
@@ -363,7 +363,7 @@ fn a_body_over_the_file_budget_is_refused_whole_and_other_sides_have_no_bodies()
 
     // A link has no body to read, and an untracked file has no patch to expand.
     std::fs::remove_file(repo.join("t.txt")).unwrap();
-    std::os::unix::fs::symlink("elsewhere", repo.join("t.txt")).unwrap();
+    symlink("elsewhere", repo.join("t.txt")).unwrap();
     let diff = fixture
         .change(
             &project,

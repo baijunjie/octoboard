@@ -10,6 +10,7 @@ import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import type { Account, Project, Session } from "../protocol";
 import { archiveSubmenu, consoleMenu, type MenuPlacement, projectMenu, sessionMenu } from "./menus";
+import { BROWSER_HOST } from "../test/hosts";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import type { SidebarHandlers } from "./types";
 
@@ -18,7 +19,7 @@ const openIn = (menu: ActionMenuEntry[]) => menu.find((entry) => typeof entry ==
 const account = (id: string, agent: Account["agent"]): Account => accountOf(id, agent, id, `/home/${id}`);
 
 function submenu(session: Session, accounts: Account[], handlers = {} as SidebarHandlers) {
-  const entry = sessionMenu(t, handlers, session, accounts, {}, { providers: TEST_PROVIDERS, switching: false }).find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account");
+  const entry = sessionMenu(t, handlers, session, accounts, {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false }).find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account");
   return entry && typeof entry === "object" && "items" in entry ? entry : undefined;
 }
 
@@ -54,7 +55,7 @@ describe("the Switch account entry", () => {
 
   it("lists no turned-off account but the session's own, and is absent when every other one is off", () => {
     const labels = (session: Session, accounts: Account[], disabledDefaults?: ("claude" | "codex" | "grok")[]) => {
-      const entry = sessionMenu(t, {} as SidebarHandlers, session, accounts, {}, { providers: TEST_PROVIDERS, switching: false, disabledDefaults })
+      const entry = sessionMenu(t, {} as SidebarHandlers, session, accounts, {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, disabledDefaults })
         .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu | undefined;
       return entry?.items.map((item) => (typeof item === "object" ? item.label : item));
     };
@@ -71,7 +72,7 @@ describe("the Switch account entry", () => {
       windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: 7_200_000, window_minutes: 300 }], email: null,
     });
     const menu = (quotas: ReturnType<typeof spent>[], now: number) => {
-      const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, quota: { quotas, now } })
+      const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, quota: { quotas, now } })
         .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
       return entry.items.slice(0, 2) as { reason?: { state: string; detail?: string } }[];
     };
@@ -83,17 +84,17 @@ describe("the Switch account entry", () => {
 
   it("disables an account whose sharing change runs, without a reason, whatever its quota, and never the current one", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
-    const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing })
+    const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, sharing })
       .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const [current, other] = entry.items as { disabled?: boolean; reason?: { state: string }; description?: string }[];
     expect(current.reason).toBeUndefined();
     expect(other.disabled).toBe(true);
     expect(other.reason).toBeUndefined();
     expect(other.description).toBeUndefined();
-    const free = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing: new Map() })
+    const free = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, sharing: new Map() })
       .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     expect((free.items[1] as { reason?: unknown }).reason).toBeUndefined();
-    const onto = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing })
+    const onto = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, sharing })
       .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     expect((onto.items[1] as { selected: boolean; reason?: unknown }).selected).toBe(true);
     expect((onto.items[1] as { reason?: unknown }).reason).toBeUndefined();
@@ -101,7 +102,7 @@ describe("the Switch account entry", () => {
 
   it("disables every other account, without a reason, while the session's own account is changing its sharing", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
-    const entry = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing })
+    const entry = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, sharing })
       .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const [dflt, current] = entry.items as { disabled?: boolean; reason?: { state: string }; description?: string; selected: boolean }[];
     expect(current.selected).toBe(true);
@@ -113,7 +114,7 @@ describe("the Switch account entry", () => {
 
   it("disables Hand off, without a reason, while the session's own account is changing its sharing", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
-    const handoff = (opts: { sharing?: typeof sharing }) => sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, ...opts })
+    const handoff = (opts: { sharing?: typeof sharing }) => sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, ...opts })
       .find((entry) => typeof entry === "object" && "label" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; description?: string };
     expect(handoff({ sharing }).disabled).toBe(true);
     expect(handoff({ sharing }).reason).toBeUndefined();
@@ -124,7 +125,7 @@ describe("the Switch account entry", () => {
 
   it("disables the other accounts, Hand off and Unbind while an account switch holds the session", () => {
     const held = project({ account_id: "w", config_dir: "/home/w", bound_to: "hub" });
-    const menu = sessionMenu(t, {} as SidebarHandlers, held, [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: true });
+    const menu = sessionMenu(t, {} as SidebarHandlers, held, [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: true });
     const entry = menu.find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const [dflt, current] = entry.items as { disabled?: boolean; reason?: { state: string }; selected: boolean }[];
     expect(current.reason).toBeUndefined();
@@ -141,7 +142,7 @@ describe("the Switch account entry", () => {
       agent: "claude" as const, account: "v", fetched_at: 0, plan: null, windows: [],
       unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "Claude Code is not signed in" }, email: null,
     };
-    const items = (session: Session, switching = false) => (sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude"), account("v", "claude")], {}, { providers: TEST_PROVIDERS, switching, quota: { quotas: [signedOut], now: 0 } })
+    const items = (session: Session, switching = false) => (sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude"), account("v", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching, quota: { quotas: [signedOut], now: 0 } })
       .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu).items as { disabled?: boolean; reason?: { state: string }; description?: string; selected: boolean }[];
     const [, , v] = items(project());
     expect(v.disabled).toBe(true);
@@ -163,7 +164,7 @@ describe("the Switch account entry", () => {
       agent: "claude" as const, account: "w", fetched_at: 0, plan: null, unavailable: null,
       windows: [{ kind: "session" as const, label: null, used_percent: 40, resets_at: 7_200_000, window_minutes: 300 }], email: null,
     };
-    const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, quota: { quotas: [quota], now: 0 } })
+    const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, quota: { quotas: [quota], now: 0 } })
       .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const other = entry.items[1] as { reason?: unknown; description?: string };
     expect(other.reason).toBeUndefined();
@@ -180,7 +181,7 @@ describe("the Switch account entry", () => {
 
 describe("the Hand off entry", () => {
   const item = (session: Session, handlers = {} as SidebarHandlers, canHandoff = true, switching = false) =>
-    sessionMenu(t, handlers, session, [], {}, { providers: TEST_PROVIDERS, canHandoff, switching }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; onClick: () => void } | undefined;
+    sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, canHandoff, switching }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; onClick: () => void } | undefined;
 
   it.each([
     ["idle", false, undefined],
@@ -203,7 +204,7 @@ describe("the Hand off entry", () => {
 
   it("lets a lasting hold win over a brief one, so the reason shown is the one that lasts", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
-    const handoff = (session: Session, opts: { sharing?: typeof sharing; canHandoff?: boolean; switching?: boolean }) => sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, ...opts })
+    const handoff = (session: Session, opts: { sharing?: typeof sharing; canHandoff?: boolean; switching?: boolean }) => sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, ...opts })
       .find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string } };
     const onAccount = (extra: Partial<Session>) => sessionOf("s", "c", "p", "Title", "idle", extra);
     const own = { account_id: "w", config_dir: "/home/w" };
@@ -217,7 +218,7 @@ describe("the Hand off entry", () => {
 
   it("says why Archive and Delete are unavailable, and leaves Unbind's brief states unexplained", () => {
     const entry = (session: Session, label: string, hasBoundSessions = true) =>
-      sessionMenu(t, {} as SidebarHandlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false, hasBoundSessions }).find((candidate) => typeof candidate === "object" && candidate.label === label) as { disabled?: boolean; reason?: { state: string } } | undefined;
+      sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, hasBoundSessions }).find((candidate) => typeof candidate === "object" && candidate.label === label) as { disabled?: boolean; reason?: { state: string } } | undefined;
     const locked = sessionOf("s", "c", "p", "Title", "idle", { locked: true });
     expect(entry(locked, "Archive")).toMatchObject({ disabled: true, reason: { state: "Session locked" } });
     expect(entry({ ...locked, status: "archived" }, "Delete")).toMatchObject({ disabled: true, reason: { state: "Session locked" } });
@@ -245,7 +246,7 @@ describe("the Hand off entry", () => {
 
 describe("the Change model entry", () => {
   const item = (session: Session, handlers = {} as SidebarHandlers, switching = false) =>
-    sessionMenu(t, handlers, session, [], {}, { providers: TEST_PROVIDERS, switching }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Change model") as { disabled?: boolean; reason?: unknown; onClick: () => void } | undefined;
+    sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Change model") as { disabled?: boolean; reason?: unknown; onClick: () => void } | undefined;
 
   it.each([
     ["idle", {}, false],
@@ -264,7 +265,7 @@ describe("the Change model entry", () => {
     expect(item(sessionOf("h", "c", undefined, "Hub", "archived"))).toBeUndefined();
     const hub = sessionOf("h", "c", undefined, "Hub", "idle");
     const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
-    const menu = sessionMenu(t, handlers, hub, [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, placement });
+    const menu = sessionMenu(t, handlers, hub, [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement });
     const labels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
     expect(labels.slice(labels.indexOf("Change model"), labels.indexOf("Hand off") + 1)).toEqual(["Change model", "Switch account", "Hand off"]);
     const changeModel = menu.find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Change model") as ActionMenuItem;
@@ -276,7 +277,7 @@ describe("the Change model entry", () => {
 describe("a session that is still starting", () => {
   it("offers Archive, never Delete, even when it was never used", () => {
     const starting = sessionOf("s", "c", "p", "Title", "starting");
-    const labels = sessionMenu(t, {} as SidebarHandlers, starting, [], {}, { providers: TEST_PROVIDERS, switching: false }).map((entry) => (entry === "separator" ? entry : entry.label));
+    const labels = sessionMenu(t, {} as SidebarHandlers, starting, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false }).map((entry) => (entry === "separator" ? entry : entry.label));
     expect(labels).toContain("Archive");
     expect(labels).not.toContain("Delete");
   });
@@ -285,7 +286,7 @@ describe("a session that is still starting", () => {
 
 describe("the Colour entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle", { colour: "cyan" });
-  const entry = (session: Session, handlers = {} as SidebarHandlers) => sessionMenu(t, handlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false }).find((candidate) => typeof candidate === "object" && candidate.label === "Colour");
+  const entry = (session: Session, handlers = {} as SidebarHandlers) => sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false }).find((candidate) => typeof candidate === "object" && candidate.label === "Colour");
 
   it.each([
     ["a console session's row", hub, true],
@@ -309,7 +310,7 @@ describe("the Colour entry", () => {
 describe("the Focus mode entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle");
   const labels = (session: Session, placement: MenuPlacement = "list") =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false, placement, focusTarget: { consoleSession: hub } }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
+    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement, focusTarget: { consoleSession: hub } }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
 
   it.each([
     ["a console session's row", hub, "list", true],
@@ -322,7 +323,7 @@ describe("the Focus mode entry", () => {
 
   it("enters the console session's focus mode", () => {
     const handlers = { onFocus: vi.fn() } as unknown as SidebarHandlers;
-    const entry = sessionMenu(t, handlers, hub, [], {}, { providers: TEST_PROVIDERS, switching: false, focusTarget: { consoleSession: hub } }).find((candidate) => typeof candidate === "object" && candidate.label === "Focus mode");
+    const entry = sessionMenu(t, handlers, hub, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, focusTarget: { consoleSession: hub } }).find((candidate) => typeof candidate === "object" && candidate.label === "Focus mode");
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onFocus).toHaveBeenCalledWith({ consoleSession: hub });
   });
@@ -330,7 +331,7 @@ describe("the Focus mode entry", () => {
 
 describe("the Archive and Delete entries", () => {
   const entry = (session: Session, hasBoundSessions = false) =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false, hasBoundSessions }).flatMap((item) => (typeof item === "object" && ["Archive", "Delete"].includes(item.label) ? [item.label] : []));
+    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, hasBoundSessions }).flatMap((item) => (typeof item === "object" && ["Archive", "Delete"].includes(item.label) ? [item.label] : []));
   const session = (extra: Partial<Session>) => sessionOf("s", "c", "p", "Title", "idle", extra);
 
   it.each([
@@ -459,7 +460,7 @@ describe("a console session's Pin entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle");
   it("is left out of its own focus mode's menu only", () => {
     const pin = (placement: MenuPlacement) =>
-      sessionMenu(t, {} as SidebarHandlers, hub, [], {}, { providers: TEST_PROVIDERS, switching: false, placement }).some((entry) => typeof entry === "object" && (entry.label === "Pin" || entry.label === "Unpin"));
+      sessionMenu(t, {} as SidebarHandlers, hub, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement }).some((entry) => typeof entry === "object" && (entry.label === "Pin" || entry.label === "Unpin"));
     expect([pin("list"), pin("focused")]).toEqual([true, false]);
   });
 });
@@ -548,7 +549,7 @@ describe("the Copy session ID entry", () => {
   ] as const)("copies a %s session while %s in the %s menu", (kind, status, placement) => {
     const session = sessionOf("session-id", "c", kind === "project" ? "p" : undefined, "Title", status);
     const handlers = { onCopySessionId: vi.fn() } as unknown as SidebarHandlers;
-    const menu = sessionMenu(t, handlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false, placement });
+    const menu = sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement });
     const labels = menu.map((entry) => entry === "separator" ? entry : entry.label);
     if (status !== "archived") expect(labels.indexOf("Copy session ID")).toBe(labels.indexOf("Rename") + 1);
     const entry = menu.find((item) => typeof item === "object" && item.label === "Copy session ID");
@@ -560,7 +561,7 @@ describe("the Copy session ID entry", () => {
 it("keeps a locked live session protected and offers unlocking", () => {
   const session = sessionOf("locked", "c", "p", "Protected", "idle", { locked: true });
   const handlers = { onSetLocked: vi.fn() } as unknown as SidebarHandlers;
-  const items = sessionMenu(t, handlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false });
+  const items = sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false });
   const unlock = items.find((item) => typeof item !== "string" && item.label === "Unlock");
   const removal = items.find((item) => typeof item !== "string" && ["Archive", "Delete"].includes(item.label));
   expect(removal).toMatchObject({ disabled: true });
@@ -571,7 +572,7 @@ it("keeps a locked live session protected and offers unlocking", () => {
 
 it("offers unbinding only on a bound session that is not archived", () => {
   const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
-  const unbind = (session: Session) => sessionMenu(t, handlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false }).find((item) => typeof item === "object" && item.label === "Unbind");
+  const unbind = (session: Session) => sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false }).find((item) => typeof item === "object" && item.label === "Unbind");
   expect(unbind(sessionOf("free", "c", "p", "Free", "idle"))).toBeUndefined();
   const bound = sessionOf("bound", "c", "p", "Bound", "idle", { bound_to: "hub" });
   (unbind(bound) as { onClick: () => void }).onClick();
@@ -582,7 +583,7 @@ it("offers unbinding only on a bound session that is not archived", () => {
 
 it.each([false, true])("offers no lock controls on archived sessions, locked=%s", (locked) => {
   const session = sessionOf("archived", "c", "p", "Archived", "archived", { locked });
-  const labels = sessionMenu(t, {} as SidebarHandlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false }).flatMap((item) => typeof item === "object" ? [item.label] : []);
+  const labels = sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false }).flatMap((item) => typeof item === "object" ? [item.label] : []);
   expect(labels).not.toContain("Lock");
   expect(labels).not.toContain("Unlock");
   expect(labels).toContain("Reopen");
@@ -642,7 +643,7 @@ describe("menu-only letters on direct actions", () => {
 
   it.each(["list", "focused"] as const)("keeps session leaves bound and Colour and Switch account unbound in %s", (placement) => {
     const session = sessionOf("hub", "c", undefined, "Hub", "idle");
-    const menu = sessionMenu(t, {} as SidebarHandlers, session, [account("work", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, placement });
+    const menu = sessionMenu(t, {} as SidebarHandlers, session, [account("work", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement });
     expect(menu.filter((entry) => typeof entry === "object" && ("items" in entry || "panel" in entry)).map((entry) => typeof entry === "object" && entry.label)).toEqual(["Colour", "Switch account"]);
     noNestedLetters(menu);
     uniqueLetters(menu);

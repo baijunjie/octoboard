@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type InspectedAgentSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -206,7 +206,7 @@ export function processTreeOf(
   minutes: number,
   extra: Partial<Omit<ProcessTree, "id" | "session_id" | "command" | "started_at">> = {},
 ): ProcessTree & { session_id: string } {
-  return { id, session_id: session.id, kept: false, command, cwd: "/Users/dev/code/website", cwd_missing: false, started_at: minutesAgo(minutes), process_count: 1, memory_bytes: 48_000_000, ports: [], ...extra };
+  return { id, session_id: session.id, kept: false, keepable: true, command, cwd: "/Users/dev/code/website", cwd_missing: false, started_at: minutesAgo(minutes), process_count: 1, memory_bytes: 48_000_000, ports: [], ...extra };
 }
 
 /** A project process left behind in a removed directory of a project, which belongs to no session. */
@@ -216,7 +216,7 @@ export function leftoverOf(
   minutes: number,
   extra: Partial<Omit<ProcessTree, "id" | "session_id" | "command" | "started_at">> = {},
 ): Omit<ProcessTree, "session_id"> {
-  return { id, kept: false, command, cwd: "/Users/dev/code/website/.worktrees/old-nav", cwd_missing: true, started_at: minutesAgo(minutes), process_count: 1, memory_bytes: 48_000_000, ports: [], ...extra };
+  return { id, kept: false, keepable: true, command, cwd: "/Users/dev/code/website/.worktrees/old-nav", cwd_missing: true, started_at: minutesAgo(minutes), process_count: 1, memory_bytes: 48_000_000, ports: [], ...extra };
 }
 
 /** A project process the user kept past the end of its session (or a failed account switch left): it belongs to no
@@ -275,6 +275,9 @@ export function snapshotState(parts: {
   accountQuotas?: AccountQuota[];
   accountSharing?: AccountSharing[];
   daemon?: State["daemon"];
+  /** The daemon host's own facts and home directory, for a scenario on a machine that is not the Unix one the rest assumes. */
+  host?: HostInfo;
+  homeDir?: string;
 }): Partial<State> {
   return {
     connectionState: parts.connectionState ?? "open",
@@ -295,9 +298,17 @@ export function snapshotState(parts: {
     settings: parts.settings ?? { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects" },
     accountQuotas: parts.accountQuotas ?? [],
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
-    homeDir: "/Users/dev",
+    homeDir: parts.homeDir ?? "/Users/dev",
+    ...(parts.host && { host: parts.host }),
   };
 }
+
+/** What a snapshot says of a Windows machine: the daemon host's facts and its home directory, for `snapshotState`, so a
+ * scenario about a Windows host shows its paths as the daemon spells them (`C:\Users\dev`, never shortened to `~`). */
+export const WINDOWS_MACHINE = {
+  host: { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings" },
+  homeDir: "C:\\Users\\dev",
+} as const satisfies { host: HostInfo; homeDir: string };
 
 /** `state` as the daemon reports it when the account switches of the sessions `ids` are under way
  * (`Session.switching_account`), whatever those sessions were doing. */

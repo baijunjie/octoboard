@@ -2,7 +2,7 @@ name: Rust dependency cache
 description: Restore compatible Rust dependencies and save reusable caches from main.
 inputs:
   profile:
-    description: Separate checks, release and Linux compilation caches.
+    description: Separate checks, release, Linux and Windows compilation caches.
     required: true
 outputs:
   cache-hit:

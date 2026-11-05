@@ -16,6 +16,16 @@
 //! user's own `grok` — plain for the default home, with `GROK_HOME=<that directory>` for a pinned
 //! one.
 //!
+//! Where the host makes no file links (Windows without Developer Mode or elevation), directories are
+//! still linked, since a directory alias needs none, and every other file is a copy, the
+//! session's own, lost with it, except that lock and temporary files are left out, for Grok to
+//! create, and so is `auth.json`: Grok is pointed at the user's own login with `GROK_AUTH_PATH`
+//! instead, so a sign-in or a token refresh in the session lands in the user's own file, as it does
+//! through a link, and the user's own `grok` never holds a refresh token the session has spent.
+//! Nothing else needs writing back: a session's conversations are under the linked `sessions/`,
+//! and the two files below that are copies on every host are carried back as they always are.
+//! Which entry is linked, copied or left out is decided by `home::carried`.
+//!
 //! Two files in the farm are copies rather than symlinks, and both must stay that way:
 //!
 //! - `config.toml`. The session home keeps a real copy so the MCP server appended to it stays out of
@@ -113,7 +123,7 @@ use crate::protocol::{AgentId, Code, CodedError, TerminalAppearance};
 use crate::providers::{grok, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
 use crate::session_tools;
-use home::{build_grok_home, canonical_cwd};
+use home::{build_grok_home, canonical_cwd, GrokHome};
 use sandbox::require_unsandboxed;
 use writeback::shared_config_writeback;
 
@@ -176,19 +186,14 @@ impl AgentProvider for GrokProvider {
         }
     }
 
-    /// Native releases resolve to a versioned download, without spawning a CLI process.
+    /// Read from the name of the release download the binary is, without spawning a CLI process:
+    /// through the launcher link the installer makes on macOS and Linux, or, where the launcher is a
+    /// copy (Windows), the versioned download of the same size beside it (see
+    /// [`copied_release_version`]).
     fn installed_version(&self, binary: &str) -> Option<super::AgentVersion> {
-        let resolved = std::fs::canonicalize(binary).ok()?;
-        let filename = resolved.file_name()?.to_str()?;
-        let release = filename.strip_prefix("grok-")?;
-        let (version, platform) = release.split_once('-')?;
-        if !matches!(
-            platform,
-            "macos-aarch64" | "macos-x86_64" | "linux-aarch64" | "linux-x86_64"
-        ) {
-            return None;
-        }
-        super::parse_version(version)
+        let resolved = crate::hostfs::canonical(binary).ok()?;
+        release_version(resolved.file_name()?.to_str()?)
+            .or_else(|| copied_release_version(&resolved))
     }
 
     /// Grok's title is its items joined by ` - `: while it works a spinner and a status ending in
@@ -246,7 +251,10 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     }
     let source_home = super::account_dir(AgentId::GROK, pinned, spec.shell_env);
     require_unsandboxed(spec, &source_home, system_dir)?;
-    let grok_home = build_grok_home(spec, &source_home)?;
+    let GrokHome {
+        dir: grok_home,
+        env: home_env,
+    } = build_grok_home(spec, &source_home)?;
 
     // Grok's leader mode (`[cli] use_leader = true` in the user's configuration, which the farm
     // copies) makes this TUI only a client of a leader process it starts in a process group of
@@ -335,6 +343,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         ),
         ("GROK_THEME".to_string(), theme.to_string()),
     ];
+    env.extend(home_env);
     // Grok's own Claude compatibility is on unless its configuration or the user's shell turns it
     // off; these outrank both. Turned off in Octoboard, nothing is passed and Grok follows its own
     // configuration.
@@ -349,6 +358,65 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
             .map(|writeback| Box::new(writeback) as Box<dyn crate::session::term::AfterExit>),
         ..LaunchPlan::default()
     })
+}
+
+/// The platforms Grok Build publishes native releases for, with the suffix their downloads carry:
+/// a release is `grok-<version>-<platform><suffix>`, the name of its artifact on x.ai's server
+/// (`https://x.ai/cli/install.sh` and `install.ps1`) and of the download Grok's updater keeps in
+/// `~/.grok/downloads` (seen on macOS).
+const RELEASE_PLATFORMS: [(&str, &str); 6] = [
+    ("macos-aarch64", ""),
+    ("macos-x86_64", ""),
+    ("linux-aarch64", ""),
+    ("linux-x86_64", ""),
+    ("windows-x86_64", ".exe"),
+    ("windows-aarch64", ".exe"),
+];
+
+/// The version in a release download's file name; `None` for any other name.
+fn release_version(filename: &str) -> Option<super::AgentVersion> {
+    let release = filename.strip_prefix("grok-")?;
+    let (version, platform) = release.split_once('-')?;
+    if !RELEASE_PLATFORMS
+        .iter()
+        .any(|(name, suffix)| platform.strip_suffix(suffix) == Some(name))
+    {
+        return None;
+    }
+    super::parse_version(version)
+}
+
+/// The version of a launcher that is a copy rather than a link: on Windows the installer copies
+/// the download into `<grok dir>\bin\grok.exe` (`install.ps1`), and the name it downloads to,
+/// `grok-windows-<arch>.exe`, carries no version, nor does the program itself (1.0.77 has no
+/// version resource). A versioned release download in `<grok dir>\downloads` of exactly the launcher's size
+/// is the release it was copied from; `None` when no one version matches, which leaves the version
+/// to the caller's probe.
+fn copied_release_version(launcher: &Path) -> Option<super::AgentVersion> {
+    let bin = launcher.parent()?;
+    if bin.file_name()? != "bin" {
+        return None;
+    }
+    let size = std::fs::metadata(launcher).ok()?.len();
+    let mut found = None;
+    for entry in std::fs::read_dir(bin.parent()?.join("downloads")).ok()? {
+        let Ok(entry) = entry else { continue };
+        let Some(version) = entry.file_name().to_str().and_then(release_version) else {
+            continue;
+        };
+        if !entry
+            .metadata()
+            .is_ok_and(|meta| meta.is_file() && meta.len() == size)
+        {
+            continue;
+        }
+        match found {
+            None => found = Some(version),
+            Some(other) if other == version => {}
+            Some(_) => return None,
+        }
+    }
+    found
 }
 
 /// The environment variables of Grok's `compat.claude.{skills,rules,agents,mcps,hooks}`

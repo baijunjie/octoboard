@@ -2,7 +2,6 @@
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -12,6 +11,7 @@ use super::survey::{exists, failed, survey, BranchSurvey, WorktreeRemovability, 
 use crate::branch_origin::bound::{bound_in, Bound};
 use crate::git::run::Runner;
 use crate::git::worktrees::worktrees;
+use crate::platform::names;
 use crate::protocol::{
     Session, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
     SessionStatus,
@@ -257,11 +257,18 @@ pub(super) fn remove_in(
             left.push(item);
             continue;
         };
+        let Some(branch) = names::name_from_bytes(&name) else {
+            left.push(failed(
+                item,
+                "the branch name is not one this host can pass to git",
+            ));
+            continue;
+        };
         let args = [
             OsStr::new("branch"),
             OsStr::new(flag),
             OsStr::new("--"),
-            OsStr::from_bytes(&name),
+            &branch,
         ];
         if let Err(detail) = git.write(&bound.repo, &args) {
             if exists(git, &bound.repo, &name) {

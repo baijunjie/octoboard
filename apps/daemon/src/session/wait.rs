@@ -3,21 +3,24 @@
 
 use std::time::{Duration, Instant};
 
+use crate::platform::term;
 use crate::session::LiveSession;
 
 /// How long a session's output has to stay silent to count as quiet: the span [`wait_quiet`]
-/// watches for.
-pub(super) const QUIET: Duration = Duration::from_millis(100);
+/// watches for, which is what the terminal backend says it takes to have finished drawing.
+pub(super) fn quiet() -> Duration {
+    term::facts().settle_window
+}
 
 /// How often [`wait_for`] looks again.
 pub(crate) const POLL: Duration = Duration::from_millis(25);
 
-/// Waits until the session has printed nothing for [`QUIET`], or `timeout` passes.
+/// Waits until the session has printed nothing for [`quiet`], or `timeout` passes.
 pub(crate) fn wait_quiet(live: &LiveSession, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
         let before = live.output_total();
-        std::thread::sleep(QUIET);
+        std::thread::sleep(quiet());
         if live.output_total() == before {
             return true;
         }

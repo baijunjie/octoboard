@@ -1,4 +1,5 @@
-//! A bounded observer of OSC 0/2 titles in the unmodified PTY byte stream.
+//! A bounded observer of OSC 0/2 titles in the unmodified PTY byte stream, and of the title
+//! changes the parsed screen reports (`crate::terminal::snapshot`), read the same way.
 
 const MAX_TITLE_BYTES: usize = 4096;
 
@@ -41,6 +42,24 @@ fn without_spinner_glyphs(title: &str) -> &str {
     }
     rest.trim_start()
 }
+
+/// Whether `title` is the path of a program's executable (`C:\…\codex.exe`, `\\host\…\x.EXE`):
+/// the title the inbox console host gives a console after the program started on it, in its first
+/// paint, while the program has set none. That paint can come after the program has drawn, where
+/// [`crate::terminal::snapshot::TerminalSnapshot::report_titles`] no longer leaves it out. The
+/// title's shape is what tells it apart rather than the path the program was started by, which the
+/// host may spell otherwise (a batch file runs as `cmd.exe`); an agent never names its work so.
+pub(crate) fn names_an_executable(title: &str) -> bool {
+    let bytes = title.as_bytes();
+    let absolute = bytes.starts_with(b"\\\\")
+        || matches!(bytes, [drive, b':', b'\\', ..] if drive.is_ascii_alphabetic());
+    let extension = bytes.len().checked_sub(4).map(|at| &bytes[at..]);
+    absolute && extension.is_some_and(|extension| extension.eq_ignore_ascii_case(b".exe"))
+}
+
+/// A change of the title as the parsed screen reports it: a title set, or the title reset to none
+/// (`None`).
+pub(crate) type TitleChange = Option<String>;
 
 #[derive(Default)]
 enum Mode {
@@ -140,6 +159,21 @@ impl Parser {
         self.glyph
     }
 
+    /// [`Self::feed`] for the title changes the parsed screen reported for a chunk instead of the
+    /// chunk's bytes: the last that is a title is returned, read as a title the bytes complete is,
+    /// and a reset is an empty title.
+    /// A title longer than the bytes can complete is passed over, as they pass it over.
+    pub(crate) fn take(&mut self, changes: &[TitleChange]) -> Option<Option<String>> {
+        let mut latest = None;
+        for change in changes {
+            let text = change.as_deref().unwrap_or("");
+            if text.len() <= MAX_TITLE_BYTES {
+                complete(text, &mut self.glyph, &mut latest);
+            }
+        }
+        latest
+    }
+
     fn finish(&mut self, latest: &mut Option<Option<String>>) {
         if let Some(bytes) = self
             .osc
@@ -147,16 +181,25 @@ impl Parser {
             .or_else(|| self.osc.strip_prefix(b"2;"))
         {
             if let Ok(text) = std::str::from_utf8(bytes) {
-                if !text.chars().any(char::is_control) {
-                    let title = without_spinner_glyphs(text.trim());
-                    self.glyph = text.trim().chars().next().filter(|c| is_spinner_glyph(*c));
-                    *latest = Some((!title.is_empty()).then(|| title.to_owned()));
-                }
+                complete(text, &mut self.glyph, latest);
             }
         }
         self.osc.clear();
     }
 }
+
+/// Takes `text` as the latest title, and `glyph` as the activity glyph it starts with, unless it
+/// holds a control character.
+fn complete(text: &str, glyph: &mut Option<char>, latest: &mut Option<Option<String>>) {
+    if !text.chars().any(char::is_control) {
+        let title = without_spinner_glyphs(text.trim());
+        *glyph = text.trim().chars().next().filter(|c| is_spinner_glyph(*c));
+        *latest = Some((!title.is_empty()).then(|| title.to_owned()));
+    }
+}
+
+#[cfg(test)]
+mod from_the_parsed_screen;
 
 #[cfg(test)]
 mod tests {
@@ -234,5 +277,27 @@ mod tests {
         assert!(parser.osc.len() <= MAX_TITLE_BYTES + 2);
         assert_eq!(parser.feed(b"\x1b]2;hidden\x07"), None);
         assert_eq!(parser.feed(b"\x1b]2;next\x07"), Some(Some("next".into())));
+    }
+
+    #[test]
+    fn only_the_path_of_an_executable_names_one() {
+        for title in [
+            r"C:\Users\me\AppData\Roaming\npm\node_modules\@openai\codex\bin\codex.exe",
+            r"c:\Program Files\Tool\TOOL.EXE",
+            r"\\server\share\agent.Exe",
+        ] {
+            assert!(names_an_executable(title), "{title}");
+        }
+        for title in [
+            "codex.exe",
+            "Say hi | codex.exe",
+            r"C:\Windows\System32\cmd.exe - npm test",
+            r"Administrator: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            "/usr/local/bin/codex.exe",
+            r"C:\Users\me\project",
+            "",
+        ] {
+            assert!(!names_an_executable(title), "{title}");
+        }
     }
 }

@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { CloneDirSetting } from "./CloneDirSetting";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -142,7 +143,7 @@ it.each([undefined, "/srv/chosen"])("holds a typed draft during native browsing 
   const pick = vi.fn(() => { input.blur(); return pending; });
   const host = mountHost(<CloneDirSetting />, {
     daemon: testDaemon({ isLocal: true, state: { settings: { ...DEFAULT_SETTINGS, default_clone_dir: "/home/dev/Projects" }, homeDir: "/home/dev" }, request }),
-    platform: { kind: "tauri", directoryPicker: { pick } },
+    platform: { kind: "tauri", host: BROWSER_HOST, directoryPicker: { pick } },
   });
   const input = host.querySelector("input")!;
   act(() => {

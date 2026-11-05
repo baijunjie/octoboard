@@ -17,6 +17,7 @@ import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal }
 import { testDaemon } from "../../test/testDaemon";
 import { ShellTerminalPanel } from "./ShellTerminalPanel";
 import { startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
+import { BROWSER_HOST } from "../../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -68,7 +69,7 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, fram
   const root = createRoot(container);
   act(() =>
     root.render(
-      <PlatformProvider value={{ kind: "browser" }}>
+      <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
         <DaemonProvider value={daemon}>
           <PanelFrameProvider value={frame}>
             <ShellTerminalPanel project={project} switching={false} />

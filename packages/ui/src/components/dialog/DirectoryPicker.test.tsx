@@ -306,3 +306,13 @@ it.each([
 ])("starts the picker at $start for the typed '$typed'", ({ typed, start }) => {
   expect(pickerStart(typed)).toBe(start);
 });
+
+it.each([
+  { typed: "C:\\code", start: "C:\\code" },
+  { typed: " \\\\server\\share ", start: "\\\\server\\share" },
+  { typed: "~\\code", start: "~\\code" },
+  { typed: "/srv/code", start: "~" },
+  { typed: "code\\a", start: "~" },
+])("starts the picker at $start for '$typed' on a Windows host", ({ typed, start }) => {
+  expect(pickerStart(typed, "windows")).toBe(start);
+});

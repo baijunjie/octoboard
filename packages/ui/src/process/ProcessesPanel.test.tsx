@@ -5,13 +5,14 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { windowAttention } from "../components/announce/windowTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
-import { mountForTooltip } from "../components/hint/tooltipTestSupport";
+import { enter, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Event, ProcessTree, ClientRequestBody, Session } from "../protocol";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
+import { HOVER_OPEN_DELAY_MS } from "../components/hint/Hint";
 import { ProcessesPanel } from "./ProcessesPanel";
 import { ProcessPanelProvider, useProcessPanel } from "./useProcessPanel";
 import type { Project } from "../protocol";
@@ -27,7 +28,7 @@ const second = sessionOf("s-2", console_.id, project.id, "Add filters", "working
 const NOW = Date.UTC(2026, 9, 28, 12, 0, 0);
 
 const tree = (id: string, extra: Partial<ProcessTree> = {}): ProcessTree => ({
-  id, session_id: running.id, command: "npm run dev", cwd: "/work/search", cwd_missing: false, kept: false,
+  id, session_id: running.id, command: "npm run dev", cwd: "/work/search", cwd_missing: false, kept: false, keepable: true,
   started_at: NOW - 5 * 60_000, process_count: 1, memory_bytes: 120_000_000, ports: [], ...extra,
 });
 
@@ -251,6 +252,50 @@ it("offers Stop and Keep on a session's tree, each named by the command, and onl
   expect(button("Stop", rows()[2]).getAttribute("aria-label")).toContain("node old.js");
 });
 
+const AGENT_CONSOLE_REASON = "This process runs in the agent's own terminal, so it ends with the session and cannot be kept. Start it in a window of its own to keep it running.";
+const keepOf = (row: Element) => row.querySelector<HTMLButtonElement>('button[aria-label^="Keep "]')!;
+const describedBy = (element: Element) => (element.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.textContent).join(" ");
+
+it("leaves Keep unavailable on a tree that cannot be kept, saying why as its description and tooltip, while a tree that can be kept keeps it", async () => {
+  const { request } = await mount({ project }, async () => ({
+    type: "processes_listed",
+    id: null,
+    trees: [tree("1:1", { keepable: false, unkeepable_reason: "agent_console" }), tree("2:2", { command: "vite" })],
+  }));
+  const keep = keepOf(rows()[0]);
+  // Focusable and marked unavailable rather than disabled, so the reason can be reached; its name stays the action.
+  expect(keep.disabled).toBe(false);
+  expect(keep.getAttribute("aria-disabled")).toBe("true");
+  expect(keep.getAttribute("aria-label")).toBe("Keep \u2068npm run dev\u2069");
+  expect(describedBy(keep)).toBe(AGENT_CONSOLE_REASON);
+  enter(keep);
+  act(() => void vi.advanceTimersByTime(HOVER_OPEN_DELAY_MS));
+  expect(openTooltip()?.textContent).toBe(AGENT_CONSOLE_REASON);
+  // A press explains, raising the refusal the daemon would answer a keep with, and asks nothing.
+  await act(async () => keep.click());
+  expect(confirmation()).toBeNull();
+  expect(sent(request, "keep_processes")).toEqual([]);
+  expect(errorAlerts.getSnapshot().map((alert) => [alert.title, alert.error])).toMatchObject([["Cannot keep the process", { code: "process_shares_agent_console" }]]);
+  await act(async () => errorAlerts.acknowledge());
+  const other = keepOf(rows()[1]);
+  expect(other.hasAttribute("aria-disabled")).toBe(false);
+  expect(other.hasAttribute("aria-describedby")).toBe(false);
+  await act(async () => other.click());
+  expect(confirmation().textContent).toContain("Keep process");
+});
+
+it("says plainly that a tree cannot be kept when its reason is one this window does not know", async () => {
+  await mount({ project }, async () => ({
+    type: "processes_listed",
+    id: null,
+    trees: [tree("1:1", { keepable: false, unkeepable_reason: "from_a_newer_daemon" as never }), tree("2:2", { keepable: false })],
+  }));
+  for (const row of rows()) {
+    expect(keepOf(row).getAttribute("aria-disabled")).toBe("true");
+    expect(describedBy(keepOf(row))).toBe("This process cannot be kept.");
+  }
+});
+
 it("puts actions beside single-line facts while the command and directory keep the card's whole width", async () => {
   await mount({ project }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   const line = button("Stop").parentElement!.parentElement!;
@@ -345,6 +390,23 @@ it("raises a refused stop as an error alert and keeps the tree listed", async ()
   await act(async () => errorAlerts.acknowledge());
   await confirmStop();
   expect(sent(request, "stop_processes")).toHaveLength(2);
+});
+
+it("raises a stop that left a process running as an error alert, worded by why, with no notice that it stopped", async () => {
+  const { daemon } = await mount({ session: running }, async (body) => {
+    if (body.type === "stop_processes") return { type: "processes_stopped", id: null, ids: [], not_stopped: [{ tree_id: "1:1", pid: 7, name: "node", reason: "access_denied" }] };
+    return { type: "processes_listed", id: null, trees: [tree("1:1")] };
+  });
+  await act(async () => button("Stop").click());
+  await confirmStop();
+  expect(errorAlerts.getSnapshot().map((alert) => [alert.title, alert.message, alert.error])).toMatchObject([[
+    "Could not stop the process",
+    "Octoboard does not have permission to stop the process or some of its child processes, so they are still running. To stop them, run Octoboard with the same permissions as those processes.",
+    { code: "process_not_stopped", params: { reason: "access_denied" } },
+  ]]);
+  expect(daemon.showNotice).not.toHaveBeenCalled();
+  expect(rows()).toHaveLength(1);
+  expect(confirmation()).not.toBeNull();
 });
 
 it("asks again every few seconds while open, and shows a failed refresh as an Alert over the last list, never as an error alert dialog", async () => {

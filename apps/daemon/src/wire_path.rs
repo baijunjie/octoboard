@@ -9,13 +9,16 @@
 //! UTF-8 with replacement characters. Anything not in the canonical form (a lower-case escape, an
 //! escaped byte that needed none) is refused rather than normalised, so one name has one spelling.
 
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
+
+use crate::platform::names;
 
 /// A validated relative path, held as its raw bytes: components separated by `/`, none empty, `.`
-/// or `..`, none containing NUL. It names something below a root (a browse scope, a project's
-/// directory) or is a `/`-separated name such as a branch's; the empty path is the root itself.
+/// or `..`, and none holding a NUL, which no file system and no `git` path holds. It names
+/// something below a root (a browse scope, a project's directory) or is a `/`-separated name such
+/// as a branch's; the empty path is the root itself. Whether this host can name each component is
+/// asked only where the path is joined onto the disk ([`Self::host_path`]): `git` holds names
+/// Windows cannot create (`CON`, `a:b`), which are listed and read from `git` all the same.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RelPath(Vec<u8>);
 
@@ -35,11 +38,31 @@ impl RelPath {
         if bytes.is_empty() {
             return Some(Self(bytes));
         }
-        let valid = bytes
-            .split(|&b| b == b'/')
-            .all(|component| !component.is_empty() && component != b"." && component != b"..")
-            && !bytes.contains(&0);
+        let valid = bytes.split(|&b| b == b'/').all(|component| {
+            !component.is_empty()
+                && component != b"."
+                && component != b".."
+                && !component.contains(&0)
+        });
         valid.then_some(Self(bytes))
+    }
+
+    /// The path `path` names below `root`, or `None` where it is not below it, or what is left
+    /// is not a valid relative path. Both are compared as the lexical paths they are: nothing is
+    /// resolved.
+    pub fn below(root: &Path, path: &Path) -> Option<Self> {
+        let rest = path.strip_prefix(root).ok()?;
+        let mut bytes = Vec::new();
+        for component in rest.components() {
+            let Component::Normal(name) = component else {
+                return None;
+            };
+            if !bytes.is_empty() {
+                bytes.push(b'/');
+            }
+            bytes.extend_from_slice(&names::name_bytes(name));
+        }
+        Self::from_bytes(bytes)
     }
 
     pub fn is_root(&self) -> bool {
@@ -50,8 +73,33 @@ impl RelPath {
         &self.0
     }
 
-    pub fn as_path(&self) -> &Path {
-        Path::new(OsStr::from_bytes(&self.0))
+    /// The path as the host spells it, built by pushing one component after another, for joining
+    /// onto the disk; the root is the empty path. `None` where a component is one this host cannot
+    /// name (`names::component_is_valid`): nothing on its disk has that path.
+    pub fn host_path(&self) -> Option<PathBuf> {
+        let mut path = PathBuf::new();
+        for component in self.components() {
+            if !names::component_is_valid(component) {
+                return None;
+            }
+            path.push(names::name_from_bytes(component)?);
+        }
+        Some(path)
+    }
+
+    /// The path one component up, or `None` for the root, whose parent is not a path.
+    pub fn parent(&self) -> Option<RelPath> {
+        if self.is_root() {
+            return None;
+        }
+        let end = self.0.iter().rposition(|&b| b == b'/').unwrap_or(0);
+        Some(RelPath(self.0[..end].to_vec()))
+    }
+
+    fn components(&self) -> impl Iterator<Item = &[u8]> {
+        self.0
+            .split(|&b| b == b'/')
+            .filter(|component| !component.is_empty())
     }
 
     pub fn to_wire(&self) -> String {
@@ -130,9 +178,42 @@ mod tests {
         ];
         for (bytes, wire) in cases {
             assert_eq!(encode(bytes), *wire);
-            let parsed = RelPath::parse(wire).expect("canonical form parses");
+            let parsed = RelPath::parse(wire).expect("a canonical form parses");
             assert_eq!(parsed.as_bytes(), *bytes);
+            // Only a path whose every name the host takes is one on its disk: Windows refuses
+            // `*`, `?`, a newline and bytes that are not UTF-8.
+            let valid = bytes.split(|&b| b == b'/').all(names::component_is_valid);
+            assert_eq!(parsed.host_path().is_some(), valid, "{wire:?}");
         }
+    }
+
+    #[test]
+    fn a_path_is_built_from_and_found_below_its_root() {
+        let root = Path::new("root");
+        let rel = RelPath::parse("a/b c/d.txt").expect("a canonical form");
+        let path = root.join(rel.host_path().unwrap());
+        assert_eq!(path, root.join("a").join("b c").join("d.txt"));
+        assert_eq!(RelPath::below(root, &path), Some(rel.clone()));
+        assert_eq!(
+            RelPath::below(root, root),
+            Some(RelPath::parse("").unwrap())
+        );
+        assert_eq!(RelPath::below(root, Path::new("other/a")), None);
+        assert_eq!(RelPath::below(root, &root.join("..").join("a")), None);
+        assert!(RelPath::parse("")
+            .unwrap()
+            .host_path()
+            .unwrap()
+            .as_os_str()
+            .is_empty());
+    }
+
+    #[test]
+    fn the_parent_of_a_path_is_the_path_without_its_last_component() {
+        let parent = |wire: &str| RelPath::parse(wire).unwrap().parent().map(|p| p.to_wire());
+        assert_eq!(parent("a/b/c").as_deref(), Some("a/b"));
+        assert_eq!(parent("a").as_deref(), Some(""));
+        assert_eq!(parent(""), None);
     }
 
     #[test]
@@ -152,5 +233,16 @@ mod tests {
             assert!(RelPath::parse(wire).is_none(), "{wire:?} was accepted");
         }
         assert!(RelPath::parse("").expect("the scope itself").is_root());
+    }
+
+    /// A name `git` may hold but Windows cannot create travels as any other path; only its
+    /// place on the disk is refused there.
+    #[test]
+    fn a_name_the_host_cannot_create_parses_but_has_no_place_on_its_disk() {
+        for wire in ["CON", "a/NUL.txt", "a:b", "trailing.", "x/y<z"] {
+            let rel = RelPath::parse(wire).expect("a git path parses on every host");
+            assert_eq!(rel.to_wire(), wire);
+            assert_eq!(rel.host_path().is_some(), !cfg!(windows), "{wire:?}");
+        }
     }
 }

@@ -4,7 +4,8 @@
 
 use super::*;
 
-use crate::session::wait::{wait_for, wait_quiet, QUIET};
+use crate::platform::term::Input;
+use crate::session::wait::{quiet, wait_for, wait_quiet};
 
 /// How long to let the agent finish drawing and start reading its input before the first key.
 pub(super) const SETTLE: Duration = Duration::from_millis(300);
@@ -17,11 +18,83 @@ pub(super) const DISMISS_TIMEOUT: Duration = Duration::from_secs(3);
 /// How long Grok's press waits for its hook and the carry the hook makes.
 pub(super) const CARRY_WAIT: Duration = Duration::from_secs(12);
 
-/// The keys. Down is the sequence a terminal sends for the arrow key; Enter is `\r`, as the
-/// terminal sends it; `y` is Grok's own key for "Yes, proceed".
-pub(super) const DOWN: &[u8] = b"\x1b[B";
-pub(super) const ENTER: &[u8] = b"\r";
-pub(super) const YES: &[u8] = b"y";
+/// The keys: the Down arrow, Enter, and ([`yes`]) `y`, Grok's own key for "Yes, proceed".
+pub(super) const DOWN: &[Input] = &[Input::Down];
+pub(super) const ENTER: &[Input] = &[Input::Enter];
+
+pub(super) fn yes() -> [Input; 1] {
+    [Input::Text("y".to_string())]
+}
+
+/// The point a key was sent at, which what the press reads after the key is measured from: how
+/// much the session had printed by then, and, where the parsed screen is read
+/// ([`TrustState::reads_screen`]), what it showed.
+struct Mark {
+    output: u64,
+    screen: Option<String>,
+}
+
+impl Mark {
+    fn now(live: &LiveSession) -> Self {
+        Self {
+            output: live.output_total(),
+            screen: live.trust.reads_screen().then(|| live.screen_text()),
+        }
+    }
+}
+
+/// The terminal as a press looks at it before a key: the recent output, at most [`WINDOW`] of it,
+/// or the parsed screen.
+fn recent(live: &LiveSession) -> Vec<u8> {
+    if live.trust.reads_screen() {
+        live.screen_text().into_bytes()
+    } else {
+        live.recent_output(WINDOW)
+    }
+}
+
+/// The terminal as a press looks at it after the key `mark` was taken at: what was printed since,
+/// or the parsed screen.
+fn since(live: &LiveSession, mark: &Mark) -> Vec<u8> {
+    if mark.screen.is_some() {
+        live.screen_text().into_bytes()
+    } else {
+        live.output_since(mark.output)
+    }
+}
+
+/// Whether the screen is on `terminal`, as [`recent`] read it: first drawn in the recent output, or
+/// up on the parsed screen wherever its cursor is ([`Screen::is_up_in`]), which no longer holds
+/// the first drawing once the cursor has moved.
+fn shown(live: &LiveSession, screen: &Screen, terminal: &[u8]) -> bool {
+    if live.trust.reads_screen() {
+        screen.is_up_in(terminal)
+    } else {
+        screen.is_shown_in(terminal)
+    }
+}
+
+/// Which option the cursor is on in `terminal`, as [`recent`] or [`since`] read it: by its glyph,
+/// and, on the parsed screen only, by the option drawn in inverse video where no glyph says
+/// ([`Screen::cursor_in_inverse`]).
+fn cursor(live: &LiveSession, screen: &Screen, terminal: &[u8]) -> Option<Cursor> {
+    screen.cursor_on(terminal).or_else(|| {
+        live.trust
+            .reads_screen()
+            .then(|| screen.cursor_in_inverse(live.screen_text_inverse().as_bytes()))
+            .flatten()
+    })
+}
+
+/// Whether the screen is gone since Octoboard's own key, `mark`: the output printed since shows it
+/// gone ([`Screen::gone_in`]), or the parsed screen has changed since and shows it gone
+/// ([`Screen::gone_from`]).
+fn gone(live: &LiveSession, screen: &Screen, mark: &Mark) -> bool {
+    match &mark.screen {
+        None => screen.gone_in(&live.output_since(mark.output)),
+        Some(before) => screen.gone_from(before.as_bytes(), live.screen_text().as_bytes()),
+    }
+}
 
 /// Sends the keys that accept the session's trust confirmation, checking before each one that the
 /// screen is as it must be. Blocks, for the settle time and while it watches the screen respond.
@@ -68,19 +141,19 @@ pub(super) fn press_down_then_enter(live: &LiveSession, screen: &Screen) -> Resu
     let writes = live.input_writes();
     std::thread::sleep(SETTLE);
 
-    let output = live.recent_output(WINDOW);
-    if !screen.is_shown_in(&output) {
+    let output = recent(live);
+    if !shown(live, screen, &output) {
         return Err(screen_gone(agent));
     }
     // A Down from the second option wraps round to the first, where the Enter would then exit.
-    if screen.cursor_on(&output) != Some(Cursor::Decline) {
+    if cursor(live, screen, &output) != Some(Cursor::Decline) {
         return Err(cursor_not_at_start(agent));
     }
 
-    let mark = live.output_total();
+    let mark = Mark::now(live);
     write(live, writes, DOWN)?;
     if !wait_for(MOVE_TIMEOUT, || {
-        screen.cursor_on(&live.output_since(mark)) == Some(Cursor::Accept)
+        cursor(live, screen, &since(live, &mark)) == Some(Cursor::Accept)
     }) {
         return Err(answer_failed(
             agent,
@@ -94,7 +167,7 @@ pub(super) fn press_down_then_enter(live: &LiveSession, screen: &Screen) -> Resu
     if !wait_quiet(live, MOVE_TIMEOUT) {
         return Err(not_settled(agent));
     }
-    if screen.cursor_on(&live.output_since(mark)) != Some(Cursor::Accept) {
+    if cursor(live, screen, &since(live, &mark)) != Some(Cursor::Accept) {
         return Err(cursor_moved_away(agent));
     }
     enter_until_gone(live, screen, writes)
@@ -107,32 +180,32 @@ pub(super) fn press_enter(live: &LiveSession, screen: &Screen) -> Result<()> {
     let writes = live.trust.writes_at_sighting.load(Ordering::Acquire);
     std::thread::sleep(SETTLE);
 
-    let output = live.recent_output(WINDOW);
-    if !screen.is_shown_in(&output) {
+    let output = recent(live);
+    if !shown(live, screen, &output) {
         return Err(screen_gone(agent));
     }
     // An Enter on the decline option quits or returns to the command center.
-    if screen.cursor_on(&output) != Some(Cursor::Accept) {
+    if cursor(live, screen, &output) != Some(Cursor::Accept) {
         return Err(cursor_not_at_start(agent));
     }
     if !wait_quiet(live, MOVE_TIMEOUT) {
         return Err(not_settled(agent));
     }
-    if screen.cursor_on(&live.recent_output(WINDOW)) != Some(Cursor::Accept) {
+    if cursor(live, screen, &recent(live)) != Some(Cursor::Accept) {
         return Err(cursor_moved_away(agent));
     }
     enter_until_gone(live, screen, writes)
 }
 
-/// The Enter, and then the screen seen gone (`Screen::gone_in`), and still gone a moment later.
+/// The Enter, and then the screen seen gone ([`gone`]), and still gone a moment later.
 pub(super) fn enter_until_gone(live: &LiveSession, screen: &Screen, writes: u64) -> Result<()> {
-    let mark = live.output_total();
+    let mark = Mark::now(live);
     write(live, writes, ENTER)?;
-    if !wait_for(DISMISS_TIMEOUT, || screen.gone_in(&live.output_since(mark))) {
+    if !wait_for(DISMISS_TIMEOUT, || gone(live, screen, &mark)) {
         return Err(not_dismissed(live.agent));
     }
-    std::thread::sleep(QUIET);
-    if !screen.gone_in(&live.output_since(mark)) {
+    std::thread::sleep(quiet());
+    if !gone(live, screen, &mark) {
         return Err(answer_failed(
             live.agent,
             trust_reason::SCREEN_REDRAWN,
@@ -177,7 +250,7 @@ pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
     // writes (`super::on_hook`); the press waits for that to know whether it succeeded. Said
     // before the key, which is what the hook can follow.
     trust.await_carry();
-    if let Err(err) = write(live, writes, YES) {
+    if let Err(err) = write(live, writes, &yes()) {
         // The person answered first. Should their answer have been carried and failed, that is
         // what there is to tell; otherwise the screen is simply theirs.
         return match trust.stop_awaiting_carry() {
@@ -254,7 +327,7 @@ pub(super) fn not_dismissed(agent: AgentId) -> anyhow::Error {
 
 /// Writes the keys unless anyone else has written into the session's input since `writes` was read;
 /// the check and the write are one step.
-pub(super) fn write(live: &LiveSession, writes: u64, keys: &[u8]) -> Result<()> {
+pub(super) fn write(live: &LiveSession, writes: u64, keys: &[Input]) -> Result<()> {
     match live.write_input_if_untouched(writes, keys) {
         Ok(true) => Ok(()),
         // For a screen that input ends, that was the person answering it in the terminal: it is

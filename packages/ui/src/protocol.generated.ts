@@ -1130,6 +1130,11 @@ export type Event = {
   "type": "processes_stopped",
   id: string | null,
   ids: Array<string>,
+  /**
+   * The processes the stop left running, each with the tree it was stopped with, which
+   * `ids` leaves out.
+   */
+  not_stopped?: Array<UnstoppedProcess>,
 }
 | {
   "type": "processes_kept",
@@ -1200,6 +1205,12 @@ export type Event = {
    * Null when the daemon cannot determine one.
    */
   home_dir: string | null,
+  /**
+   * The daemon host's own facts: its operating system, how it writes a path, whether it
+   * can make file links, and how its interface names the Trash (`trash`) and its settings
+   * app (`settings`).
+   */
+  host: HostInfo,
   /**
    * Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,
    * not stored.
@@ -1277,6 +1288,11 @@ export type Event = {
     [key in string]: string
   },
   message: string,
+}
+| {
+  "type": "session_notice_withdrawn",
+  session: string,
+  code: string,
 }
 | {
   "type": "trust_prompt",
@@ -1809,7 +1825,54 @@ export type Host = {
   ssh_config: string | null,
 };
 
+/**
+ * The daemon host's own facts, which a client takes from the host and never from its own
+ * platform, since the two may be different machines.
+ */
+export type HostInfo = {
+  os: HostOsName,
+  /**
+   * How the host writes an absolute path. Paths travel in the host's own spelling; a client
+   * uses this only to split and shorten them for display.
+   */
+  path_style: HostPathStyle,
+  /**
+   * Whether the host can make the file links configuration sharing needs. When false,
+   * `set_account_sharing` is refused with `sharing_unavailable_on_host`.
+   */
+  file_links: boolean,
+  /**
+   * How the host names its Trash, for wording what a removal does there.
+   */
+  trash: HostTrashName,
+  /**
+   * The host's system settings app, for wording a setting to change there.
+   */
+  settings: HostSettingsName,
+};
+
 export type HostKind = "local" | "ssh";
+
+/**
+ * The operating system of the daemon's host.
+ */
+export type HostOsName = "macos" | "linux" | "windows";
+
+/**
+ * How the daemon's host writes an absolute path.
+ */
+export type HostPathStyle = "unix" | "windows";
+
+/**
+ * What the daemon's host calls the app its system settings are changed in, for wording a remedy
+ * that has the user change one there.
+ */
+export type HostSettingsName = "system_settings" | "settings";
+
+/**
+ * How the daemon's host names the place a move to the Trash puts things.
+ */
+export type HostTrashName = "trash" | "recycle_bin";
 
 /**
  * Why something was not created or applied: an `error` reply's `code`, `params` and `message`.
@@ -1939,6 +2002,12 @@ export type InspectedAccount = {
    */
   directory: string,
   /**
+   * Whether `directory` is absolute in the other operating system's style (a Windows path read
+   * on macOS or Linux, a Unix one read on Windows). It then names nothing on this machine, and
+   * `proposed_directory` is absent; a client can say why.
+   */
+  foreign_directory: boolean,
+  /**
    * The directory as it resolves on this machine (`~/` expanded); absent when the document's
    * cannot be resolved.
    */
@@ -2028,6 +2097,12 @@ export type InspectedProject = {
    * The path as the document records it.
    */
   path: string,
+  /**
+   * Whether `path` is absolute in the other operating system's style (a Windows path read on
+   * macOS or Linux, a Unix one read on Windows). Such a path names nothing on this machine, so
+   * no directory is derived from it and `exported_path` and `default_clone_dir` are never offered.
+   */
+  foreign_path: boolean,
   remote_url: string | null,
   offers: DirectoryOffers,
   default: "exported_path" | "default_clone_dir" | "clone" | null,
@@ -2072,6 +2147,12 @@ export type InspectedSettings = {
    * starting with `~/`), which an import leaves out.
    */
   default_clone_dir: string | null,
+  /**
+   * Whether the document's default clone directory is absolute in the other operating system's
+   * style (a Windows path read on macOS or Linux, a Unix one read on Windows). It is then the
+   * reason `default_clone_dir` is absent, which a client can say.
+   */
+  foreign_default_clone_dir: boolean,
   /**
    * This machine's default clone directory.
    */
@@ -2296,6 +2377,11 @@ export type ProcessTree = {
    * The TCP ports the tree's processes listen on, sorted.
    */
   ports: Array<number>,
+  /**
+   * A `keep_processes` naming the tree can keep it; when not, `unkeepable_reason` says why.
+   */
+  keepable: boolean,
+  unkeepable_reason?: UnkeepableReason,
 };
 
 export type Project = {
@@ -4688,6 +4774,32 @@ export type TermEvent = {
  * the terminal that will show it. It is not stored: a later launch sends its own.
  */
 export type TerminalAppearance = "light" | "dark";
+
+/**
+ * Why a tree cannot be kept.
+ */
+export type UnkeepableReason = "agent_console";
+
+/**
+ * A process a `stop_processes` left running: still running once the stop was through with it.
+ */
+export type UnstoppedProcess = {
+  /**
+   * The tree the process was stopped with, as the request named it.
+   */
+  tree_id: string,
+  pid: number,
+  /**
+   * The process's name; empty when it cannot be read.
+   */
+  name: string,
+  reason: UnstoppedReason,
+};
+
+/**
+ * Why a process is still running after a stop.
+ */
+export type UnstoppedReason = "access_denied" | "other";
 
 /**
  * A branch's upstream: the remote-tracking branch, as a wire path below `refs/remotes/` (such as

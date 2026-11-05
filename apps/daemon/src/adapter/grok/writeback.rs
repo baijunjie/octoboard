@@ -62,7 +62,7 @@ pub(super) fn shared_config_writeback(
     if !meta.file_type().is_symlink() {
         return None;
     }
-    let shared_target = std::fs::canonicalize(&account_config).ok()?;
+    let shared_target = crate::hostfs::canonical(&account_config).ok()?;
     let session_config = grok_home.join(GROK_CONFIG_FILE);
     let text = read_regular_text(&session_config, SMALL_FILE_LIMIT).ok()?;
     let table: toml::Table = text.parse().ok()?;
@@ -157,7 +157,7 @@ impl SharedConfigWriteback {
     fn still_shares(&self) -> bool {
         std::fs::symlink_metadata(&self.account_config)
             .is_ok_and(|meta| meta.file_type().is_symlink())
-            && std::fs::canonicalize(&self.account_config).ok().as_ref()
+            && crate::hostfs::canonical(&self.account_config).ok().as_ref()
                 == Some(&self.shared_target)
     }
 }

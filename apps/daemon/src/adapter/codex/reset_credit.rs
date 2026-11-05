@@ -64,6 +64,7 @@ fn consume(
         account_cli::admitted_command(agent, shell_env, config_dir, CODEX_APP_SERVER_ARGS)
             .map_err(|refused| match refused {
                 NotRun::BinaryNotFound(binary) => Failure::BinaryNotFound(binary.to_string()),
+                NotRun::BinaryRefused(err) => Failure::BinaryRefused(err),
                 NotRun::DirMissing(_) => Failure::Failed(refused.detail()),
             })?;
     let mut params = json!({"idempotencyKey": idempotency_key});

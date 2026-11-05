@@ -91,6 +91,14 @@ fn write(root: &Path, relative: &str, content: &str) {
     std::fs::write(path, content).unwrap();
 }
 
+/// `relative`, segments separated by `/`, under `root` with the host's separator between them all,
+/// as Codex records a rollout's path in its thread database.
+fn host_spelled(root: &Path, relative: &str) -> PathBuf {
+    relative
+        .split('/')
+        .fold(root.to_path_buf(), |path, segment| path.join(segment))
+}
+
 fn read(root: &Path, relative: &str) -> String {
     std::fs::read_to_string(root.join(relative)).unwrap()
 }
@@ -100,7 +108,7 @@ fn is_link(path: &Path) -> bool {
 }
 
 fn real(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap()
+    crate::hostfs::canonical(path).unwrap()
 }
 
 /// The entries of `dir` named `<name>.bak-…`.
@@ -302,7 +310,7 @@ async fn a_link_names_the_default_entrys_resolved_target() {
         fixture.account(AgentId::CLAUDE),
     );
     write(&fixture.dir, "dotfiles/settings.json", "from dotfiles");
-    std::os::unix::fs::symlink(
+    crate::test_support::symlink(
         fixture.dir.join("dotfiles/settings.json"),
         default.join("settings.json"),
     )
@@ -312,6 +320,13 @@ async fn a_link_names_the_default_entrys_resolved_target() {
         std::fs::read_link(account.join("settings.json")).unwrap(),
         real(&fixture.dir.join("dotfiles/settings.json"))
     );
+}
+
+#[test]
+fn a_host_without_file_links_refuses_turning_sharing_on() {
+    let err = require_file_links(false).unwrap_err();
+    assert_eq!(code_of(&err), error_code::SHARING_UNAVAILABLE_ON_HOST);
+    assert!(require_file_links(true).is_ok());
 }
 
 #[tokio::test]
@@ -331,7 +346,7 @@ async fn the_default_account_is_refused() {
 
     // So is an account whose directory is the default's under another spelling.
     let default = fixture.default(AgentId::CODEX);
-    std::os::unix::fs::symlink(&default, fixture.account(AgentId::CODEX)).unwrap();
+    crate::test_support::symlink(&default, fixture.account(AgentId::CODEX)).unwrap();
     let err = fixture.share(AgentId::CODEX, true).await.unwrap_err();
     assert_eq!(code_of(&err), error_code::DEFAULT_ACCOUNT_NOT_SHAREABLE);
     assert!(!fixture.record(AgentId::CODEX).share_default_config);
@@ -452,6 +467,7 @@ async fn only_a_sharing_accounts_launch_is_given_the_shared_directory() {
     assert_eq!(resumed_with(&fixture, "s").await, None);
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn a_change_that_fails_part_way_says_what_it_left_where_and_stays_incomplete() {
     use std::os::unix::fs::PermissionsExt;
@@ -579,6 +595,10 @@ fn rollout_of(database: &Path, id: &str) -> Option<String> {
 
 const ROLLOUT: &str = "sessions/2026/10/20/rollout-2026-10-20T00-00-00-a.jsonl";
 
+/// Only where a database another connection holds open can be set aside, which Windows refuses,
+/// and where SQLite follows a file link to a database's write-ahead log, the one kind of host that
+/// shares a thread database.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_codex_accounts_history_is_merged_and_its_threads_listed_through_the_shared_database() {
     let fixture = Fixture::new();
@@ -607,7 +627,7 @@ async fn a_codex_accounts_history_is_merged_and_its_threads_listed_through_the_s
     // The account's rows, one of them only in its write-ahead log.
     let own = codex_database(
         &account.join("state_5.sqlite"),
-        &[("a", &account.join(ROLLOUT).to_string_lossy(), 5)],
+        &[("a", &host_spelled(&account, ROLLOUT).to_string_lossy(), 5)],
     );
     assert!(account.join("state_5.sqlite-wal").exists());
 
@@ -650,6 +670,9 @@ async fn a_codex_accounts_history_is_merged_and_its_threads_listed_through_the_s
     );
 }
 
+/// Only where SQLite follows a file link to a database's write-ahead log, the one kind of host
+/// that shares a thread database.
+#[cfg(unix)]
 #[tokio::test]
 async fn turning_codex_sharing_off_points_the_rows_written_through_the_account_at_the_default() {
     let fixture = Fixture::new();
@@ -667,8 +690,8 @@ async fn turning_codex_sharing_off_points_the_rows_written_through_the_account_a
     codex_database(
         &account.join("state_5.sqlite"),
         &[
-            ("a", &account.join(ROLLOUT).to_string_lossy(), 1),
-            ("b", &account.join(archived).to_string_lossy(), 1),
+            ("a", &host_spelled(&account, ROLLOUT).to_string_lossy(), 1),
+            ("b", &host_spelled(&account, archived).to_string_lossy(), 1),
         ],
     );
 
@@ -822,7 +845,7 @@ async fn a_history_item_the_account_links_elsewhere_itself_is_left_and_reported(
     let elsewhere = fixture.dir.join("elsewhere-projects");
     std::fs::create_dir_all(&elsewhere).unwrap();
     std::fs::remove_dir_all(account.join("projects")).unwrap();
-    std::os::unix::fs::symlink(&elsewhere, account.join("projects")).unwrap();
+    crate::test_support::symlink(&elsewhere, account.join("projects")).unwrap();
     let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
     let coded = err.downcast_ref::<CodedError>().unwrap();
     let items: Vec<serde_json::Value> = serde_json::from_str(&coded.params["items"]).unwrap();
@@ -837,6 +860,9 @@ async fn a_history_item_the_account_links_elsewhere_itself_is_left_and_reported(
     );
 }
 
+/// Only where SQLite follows a file link to a database's write-ahead log, the one kind of host
+/// that shares a thread database.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_codex_row_carry_that_failed_is_redone_by_a_retry() {
     let fixture = Fixture::new();
@@ -853,7 +879,7 @@ async fn a_codex_row_carry_that_failed_is_redone_by_a_retry() {
     write(&account, ROLLOUT, "rollout a");
     codex_database(
         &account.join("state_5.sqlite"),
-        &[("a", &account.join(ROLLOUT).to_string_lossy(), 1)],
+        &[("a", &host_spelled(&account, ROLLOUT).to_string_lossy(), 1)],
     );
     let err = fixture.share(AgentId::CODEX, true).await.unwrap_err();
     assert_eq!(code_of(&err), error_code::ACCOUNT_SHARING_FAILED);
@@ -1037,8 +1063,8 @@ async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_bac
     assert_eq!(coded.params["items"], "[]");
 
     // Turning off finds links into the recorded default and into the current one alike.
-    std::fs::remove_file(account.join("rules")).unwrap();
-    std::os::unix::fs::symlink(real(&moved).join("rules"), account.join("rules")).unwrap();
+    crate::platform::fs::remove_file_or_link(&account.join("rules")).unwrap();
+    crate::test_support::symlink(real(&moved).join("rules"), account.join("rules")).unwrap();
     fixture.share(AgentId::CLAUDE, false).await.unwrap();
     assert!(
         !fixture
@@ -1049,6 +1075,9 @@ async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_bac
     assert!(std::fs::symlink_metadata(account.join("agents")).is_err());
 }
 
+/// Only where SQLite follows a file link to a database's write-ahead log, the one kind of host
+/// that shares a thread database.
+#[cfg(unix)]
 #[tokio::test]
 async fn codex_rows_carried_once_are_not_carried_again() {
     let fixture = Fixture::new();
@@ -1060,7 +1089,7 @@ async fn codex_rows_carried_once_are_not_carried_again() {
     write(&account, ROLLOUT, "rollout a");
     codex_database(
         &account.join("state_5.sqlite"),
-        &[("a", &account.join(ROLLOUT).to_string_lossy(), 1)],
+        &[("a", &host_spelled(&account, ROLLOUT).to_string_lossy(), 1)],
     );
     fixture.share(AgentId::CODEX, true).await.unwrap();
     assert!(rollout_of(&default.join("state_5.sqlite"), "a").is_some());
@@ -1196,11 +1225,23 @@ async fn turning_sharing_off_takes_the_accounts_own_codex_threads_back() {
         );
     }
     assert_eq!(read(&account, &archived_rollout), "archived thread");
-    // The shared database no longer names the moved threads; another thread's row is kept.
-    let shared = default.join("state_5.sqlite");
-    assert_eq!(rollout_of(&shared, THREAD), None);
-    assert_eq!(rollout_of(&shared, ARCHIVED_THREAD), None);
-    assert!(rollout_of(&shared, "019a0000-0000-7000-8000-00000000000f").is_some());
+    // The shared database no longer names the moved threads; another thread's row is kept. A
+    // host that shares no thread database leaves every row in the account's own.
+    if crate::platform::fs::SQLITE_FOLLOWS_FILE_ALIASES {
+        let shared = default.join("state_5.sqlite");
+        assert_eq!(rollout_of(&shared, THREAD), None);
+        assert_eq!(rollout_of(&shared, ARCHIVED_THREAD), None);
+        assert!(rollout_of(&shared, "019a0000-0000-7000-8000-00000000000f").is_some());
+    } else {
+        let own = account.join("state_5.sqlite");
+        for id in [
+            THREAD,
+            ARCHIVED_THREAD,
+            "019a0000-0000-7000-8000-00000000000f",
+        ] {
+            assert!(rollout_of(&own, id).is_some(), "{id}");
+        }
+    }
     assert_eq!(
         judged(&session).resumability,
         crate::records::Resumability::Resumable
@@ -1316,7 +1357,7 @@ async fn a_record_the_account_holds_already_is_kept_when_it_is_the_later_one() {
     let transcript = format!("projects/p/{CLAUDE_ID}.jsonl");
     write(&default, &transcript, "older");
     test_support::move_modification_time_back(&default.join(&transcript));
-    std::fs::remove_file(account.join("projects")).unwrap();
+    crate::platform::fs::remove_file_or_link(&account.join("projects")).unwrap();
     write(&account, &transcript, "later");
     let dirs = link::Dirs::for_undoing(&account, &default, &default)
         .unwrap()
@@ -1345,6 +1386,9 @@ async fn a_record_the_account_holds_already_is_kept_when_it_is_the_later_one() {
     assert!(std::fs::symlink_metadata(default.join(&transcript)).is_err());
 }
 
+/// Only where SQLite follows a file link to a database's write-ahead log, the one kind of host
+/// that shares a thread database.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_codex_row_cleanup_that_failed_is_redone_by_a_retry() {
     let fixture = Fixture::new();
@@ -1381,6 +1425,43 @@ async fn a_codex_row_cleanup_that_failed_is_redone_by_a_retry() {
     assert_eq!(rollout_of(&default.join("state_5.sqlite"), THREAD), None);
 }
 
+/// Where SQLite does not follow a file link to a database's write-ahead log, a sharing Codex
+/// account keeps its thread database: it is not linked, its rows are not carried into the
+/// default's, and a launch tells nothing of it.
+#[cfg(windows)]
+#[tokio::test]
+async fn a_codex_accounts_thread_database_stays_its_own_where_sqlite_does_not_follow_links() {
+    let fixture = Fixture::new();
+    let (default, account) = (
+        fixture.default(AgentId::CODEX),
+        fixture.account(AgentId::CODEX),
+    );
+    codex_database(&default.join("state_5.sqlite"), &[]);
+    write(&account, ROLLOUT, "rollout a");
+    codex_database(
+        &account.join("state_5.sqlite"),
+        &[("a", &host_spelled(&account, ROLLOUT).to_string_lossy(), 1)],
+    );
+    let own = account.join("state_5.sqlite");
+
+    fixture.share(AgentId::CODEX, true).await.unwrap();
+    assert!(is_link(&account.join("sessions")));
+    assert!(own.is_file() && !is_link(&own));
+    assert!(backups(&account, "state_5.sqlite").is_empty());
+    assert!(rollout_of(&own, "a").is_some());
+    assert_eq!(rollout_of(&default.join("state_5.sqlite"), "a"), None);
+    let session = fixture.session("s", AgentId::CODEX);
+    let prepared = before_launch(&fixture.state, &session).await.unwrap();
+    let codes: Vec<crate::protocol::Code> =
+        prepared.notices.iter().map(|notice| notice.code).collect();
+    assert!(codes.is_empty(), "{codes:?}");
+
+    fixture.share(AgentId::CODEX, false).await.unwrap();
+    assert!(own.is_file() && !is_link(&own));
+    assert!(rollout_of(&own, "a").is_some());
+    assert_eq!(rollout_of(&default.join("state_5.sqlite"), "a"), None);
+}
+
 #[tokio::test]
 async fn a_taken_back_codex_thread_is_pointed_where_the_launch_environment_puts_the_database() {
     let fixture = Fixture::new();
@@ -1390,7 +1471,7 @@ async fn a_taken_back_codex_thread_is_pointed_where_the_launch_environment_puts_
     );
     std::fs::create_dir_all(default.join("sessions")).unwrap();
     fixture.share(AgentId::CODEX, true).await.unwrap();
-    std::fs::remove_file(account.join("sessions")).unwrap();
+    crate::platform::fs::remove_file_or_link(&account.join("sessions")).unwrap();
     let chain = test_support::codex_chain(&account, THREAD, false);
     let database_dir = fixture.dir.join("codex-sqlite-home");
     std::fs::create_dir_all(&database_dir).unwrap();
@@ -1445,7 +1526,7 @@ async fn conversations_are_taken_back_from_a_default_records_directory_that_is_a
     );
     let projects = fixture.dir.join("claude-projects");
     std::fs::create_dir_all(&projects).unwrap();
-    std::os::unix::fs::symlink(&projects, default.join("projects")).unwrap();
+    crate::test_support::symlink(&projects, default.join("projects")).unwrap();
     fixture.share(AgentId::CLAUDE, true).await.unwrap();
     archived_with_conversation(&fixture, "own", AgentId::CLAUDE, CLAUDE_ID);
     let transcript = format!("projects/p/{CLAUDE_ID}.jsonl");
@@ -1461,7 +1542,7 @@ async fn conversations_are_taken_back_from_a_default_records_directory_that_is_a
     );
     let sessions = fixture.dir.join("codex-sessions");
     std::fs::create_dir_all(&sessions).unwrap();
-    std::os::unix::fs::symlink(&sessions, default.join("sessions")).unwrap();
+    crate::test_support::symlink(&sessions, default.join("sessions")).unwrap();
     codex_database(&default.join("state_5.sqlite"), &[]);
     fixture.share(AgentId::CODEX, true).await.unwrap();
     archived_with_conversation(&fixture, "own-thread", AgentId::CODEX, THREAD);
@@ -1477,9 +1558,12 @@ async fn conversations_are_taken_back_from_a_default_records_directory_that_is_a
     let head = chain.head.strip_prefix(&account).unwrap().to_path_buf();
     fixture.share(AgentId::CODEX, false).await.unwrap();
     assert!(account.join(&head).is_file());
-    assert_eq!(rollout_of(&default.join("state_5.sqlite"), THREAD), None);
-    // No file of this thread was found anywhere: its row is the only trace left, and stays.
-    assert!(rollout_of(&default.join("state_5.sqlite"), ARCHIVED_THREAD).is_some());
+    // Only a host that shares the thread database has rows of the account's in the default's.
+    if crate::platform::fs::SQLITE_FOLLOWS_FILE_ALIASES {
+        assert_eq!(rollout_of(&default.join("state_5.sqlite"), THREAD), None);
+        // No file of this thread was found anywhere: its row is the only trace left, and stays.
+        assert!(rollout_of(&default.join("state_5.sqlite"), ARCHIVED_THREAD).is_some());
+    }
 }
 
 /// The account's sharing state as a client connecting now would be told it.
@@ -1924,6 +2008,7 @@ async fn a_launch_of_an_incomplete_account_skips_the_repair() {
     );
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn an_incomplete_account_is_given_the_shared_directory_while_its_conversations_lead_there() {
     use std::os::unix::fs::PermissionsExt;
@@ -2196,6 +2281,7 @@ async fn an_idle_session_does_not_block_and_is_resumed_after_the_change() {
     assert!(fixture.state.sharing_locked("claude-a").is_none());
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn an_idle_session_is_resumed_after_a_change_that_failed() {
     use std::os::unix::fs::PermissionsExt;
@@ -2469,6 +2555,7 @@ async fn removing_or_repointing_restarts_idle_sessions_and_refuses_working_ones(
 
 /// Starts a change of `agent`'s account to `share` held at waiting behind another account's
 /// change of the same agent, which the answer's sender lets go of.
+#[cfg(unix)]
 async fn change_held_at_waiting(
     fixture: &Fixture,
     agent: AgentId,
@@ -2502,6 +2589,7 @@ async fn change_held_at_waiting(
     (change, release)
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn a_retry_refused_before_it_started_keeps_the_earlier_failure() {
     use std::os::unix::fs::PermissionsExt;
@@ -2639,13 +2727,7 @@ async fn a_message_sent_to_a_session_being_restarted_is_held_for_its_resumed_pro
         let relaunched = relaunched.clone();
         *fixture.state.account_sharing.relaunch.lock().unwrap() = Some(Arc::new(
             move |request: crate::session::term::LaunchRequest| {
-                let live = test_support::fake_live_session(
-                    &request.session_id,
-                    request.agent,
-                    80,
-                    24,
-                    "sleep 30",
-                );
+                let live = test_support::idle_stand_in_of(&request.session_id, request.agent);
                 crate::session::spawn_reader_thread((*live).clone(), 8 * 1024);
                 let process = (*live).clone();
                 relaunched.lock().unwrap().push(live);
@@ -3015,10 +3097,16 @@ async fn a_change_of_sharing_tells_a_session_which_trees_it_ended() {
     let relaunched = fixture.state.live_session("idle").expect("resumed");
     let heard = test_support::heard_after_marker(&fixture.state, &relaunched);
     assert!(
-        heard.contains("The restart ended these processes you had started: `/usr/bin/perl"),
+        heard.contains(&format!(
+            "The restart ended these processes you had started: `{}",
+            test_support::doomed_command_starts()
+        )),
         "{heard}"
     );
-    assert!(!heard.contains("/bin/sleep"), "{heard}");
+    assert!(
+        !heard.contains(&test_support::survivor_command_starts()),
+        "{heard}"
+    );
     assert!(test_support::is_running(survivor));
 }
 

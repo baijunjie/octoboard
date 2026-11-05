@@ -326,12 +326,13 @@ async fn judged(
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::{symlink, PermissionsExt};
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
     use std::sync::Arc;
 
     use super::*;
-    use crate::hostfs::lexically_normalise;
+    use crate::hostfs::lexical_key;
     use crate::protocol::ProjectSource;
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{app_state, git, repo_with, second_real_path};
@@ -391,7 +392,7 @@ mod tests {
     fn stall(state: &AppState, path: &Path, stuck: &Arc<()>) {
         state
             .directory_looks
-            .record(lexically_normalise(path), Arc::downgrade(stuck));
+            .record(lexical_key(path), Arc::downgrade(stuck));
     }
 
     /// Trashing is refused for a protected directory, and over any other project's directory
@@ -413,7 +414,7 @@ mod tests {
             std::fs::write(file, b"").unwrap();
         }
         let linked = dir.join("linked");
-        symlink(&outer, &linked).unwrap();
+        crate::test_support::symlink(&outer, &linked).unwrap();
         let outer_project = project_at("outer", &outer);
         let inner_project = project_at("inner", &inner);
         for (deleted, other) in [
@@ -453,7 +454,8 @@ mod tests {
         );
 
         let home = crate::paths::home_dir();
-        for protected in [Path::new("/"), home.as_path()] {
+        let root = crate::test_support::disk_root();
+        for protected in [root.as_path(), home.as_path()] {
             assert_eq!(
                 trash_refusal(&state, &project_at("protected", protected), &[]).await,
                 error_code::PROJECT_DIRECTORY_PROTECTED
@@ -513,7 +515,7 @@ mod tests {
     #[tokio::test]
     async fn trashing_tells_a_directory_by_what_it_is_not_by_its_real_path() {
         let (state, dir) = app_state("project-trash-firmlink");
-        let outer = std::fs::canonicalize(&*dir).unwrap().join("outer");
+        let outer = crate::hostfs::canonical(&*dir).unwrap().join("outer");
         let inner = outer.join("inner");
         std::fs::create_dir_all(&inner).unwrap();
         let Some(second) = second_real_path(&outer) else {
@@ -643,7 +645,7 @@ mod tests {
         let stuck = Arc::new(());
         stall(&state, &home, &stuck);
         stall(&state, &data, &stuck);
-        let root = project_at("root", Path::new("/"));
+        let root = project_at("root", &crate::test_support::disk_root());
         let result = directory_to_trash_with(&state, &root, &[], Some(home.clone()), data).await;
         assert_eq!(refusal(result).0, error_code::PROJECT_DIRECTORY_PROTECTED);
     }
@@ -653,6 +655,7 @@ mod tests {
     /// blocks every move nor is taken along when its text lies in the folder; the folder to be
     /// moved itself, when it cannot be read, refuses with the cause `unreadable`. Skipped as root,
     /// who can read it.
+    #[cfg(unix)]
     #[tokio::test]
     async fn another_project_that_cannot_be_read_is_compared_by_its_text() {
         if unsafe { libc::geteuid() } == 0 {

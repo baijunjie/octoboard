@@ -14,6 +14,7 @@ import type { DocumentSettings, Event, ClientRequestBody } from "../protocol";
 import type { Daemon, State } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
+import { BROWSER_HOST } from "../test/hosts";
 
 /** A document's settings with each switch off and no default clone directory, except what `carried` sets. */
 export function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
@@ -65,7 +66,7 @@ export function mountDialog(
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     vi.unstubAllGlobals();
   });
-  mountHost(<ThemeProvider>{dialog(closed)}<ErrorAlerts daemon={daemon} /></ThemeProvider>, { daemon, platform: { kind: "browser", configurationFile, ...capabilities } });
+  mountHost(<ThemeProvider>{dialog(closed)}<ErrorAlerts daemon={daemon} /></ThemeProvider>, { daemon, platform: { kind: "browser", host: BROWSER_HOST, configurationFile, ...capabilities } });
   return {
     sent: () => request.mock.calls.map(([body]) => body),
     notices: () => vi.mocked(daemon.showNotice).mock.calls.map(([message]) => message),

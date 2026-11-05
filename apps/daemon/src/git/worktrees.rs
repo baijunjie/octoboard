@@ -2,12 +2,11 @@
 //! one's root and branch ([`worktrees`]), and whether one holds changes a removal would discard
 //! ([`changes`]). The reads run through the caller's [`Runner`].
 
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::git::run::{GitError, Limits, Runner};
+use crate::platform::names;
 
 /// What each `git` that reads or removes worktrees is held to: a deadline of two minutes, since a
 /// forced removal deletes a whole worktree and a status walks a large one, and no output ceiling,
@@ -31,15 +30,15 @@ pub(crate) fn worktrees(git: &Runner, repo: &Path) -> Result<Vec<Listed>, GitErr
         .iter()
         .enumerate()
         .filter(|(_, record)| !record.bare)
-        .map(|(at, record)| {
-            let path = Path::new(OsStr::from_bytes(&record.path));
-            Listed {
-                root: std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
+        .filter_map(|(at, record)| {
+            let path = names::path_from_name_bytes(&record.path)?;
+            Some(Listed {
+                root: crate::hostfs::canonical(&path).unwrap_or(path),
                 branch: record.branch.clone(),
                 main: at == 0,
                 locked: record.locked,
                 prunable: record.prunable,
-            }
+            })
         })
         .collect())
 }

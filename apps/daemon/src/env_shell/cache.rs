@@ -282,10 +282,10 @@ mod tests {
     #[test]
     fn a_capture_is_not_servable_to_a_launch_once_a_path_directory_it_saw_is_gone() {
         let dir = ScratchDir::new("capture-path");
-        let kept = dir.to_string_lossy().into_owned();
         // A directory that never existed is not held against the capture.
-        let path = format!("{kept}:/octoboard-test-no-such-dir");
-        let capture = Capture::new(env_with_path(&path));
+        let never = dir.join("..").join("octoboard-test-no-such-dir");
+        let path = std::env::join_paths([dir.to_path_buf(), never]).unwrap();
+        let capture = Capture::new(env_with_path(path.to_str().unwrap()));
         assert!(capture.is_servable_to_launch());
         drop(dir);
         assert!(!capture.is_servable_to_launch());

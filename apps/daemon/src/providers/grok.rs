@@ -73,9 +73,12 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         generic: &["AGENTS.md", ".agents"],
     },
     instruction_file: "AGENTS.md",
+    // A line `@AGENTS.md` reaches the model as written (Grok Build 1.0.77).
+    instruction_import_prefix: None,
     // Grok Build presents an MCP tool as `<server>__<tool>`, with nothing before it.
     tool_name_prefix: "",
     ask_question_tool: Some("ask_user_question"),
+    quit_keys: None,
     capabilities: Capabilities {
         preallocates_session_id: true,
         hook_script: true,

@@ -40,6 +40,16 @@
 //! output window before the watch has ended; and whatever is sighted, keys are sent only if the
 //! checks below pass.
 //!
+//! Where the host renders what the program draws (`TermFacts::host_renders`), the output is the
+//! host's repaint in an order of its own, so everything below that reads the output reads the
+//! session's parsed screen instead ([`TrustState::reads_screen`]): the screen is sighted when the
+//! parsed screen shows its first drawing after a chunk, the cursor is read off the glyph wherever
+//! it now stands, or off the option drawn in inverse video where no glyph says, and a screen is
+//! gone once the parsed screen has changed since the key and holds none of its text. Codex's watch
+//! ends there once the parsed screen shows its composer rather than at its first title, which the
+//! host can send at a moment of its own. Elsewhere the output is still read, because its order says
+//! what was drawn after what and the parsed screen does not.
+//!
 //! **Octoboard's own messages are held** for as long as a screen may be up
 //! ([`TrustState::holds_writes`]), since a message's trailing Enter would otherwise answer it —
 //! accept Codex's or Grok's, decline Claude Code's — on nobody's say-so:
@@ -60,9 +70,12 @@
 //!   (`Screen::waits_for_paste_mode`), whichever of the two comes last releasing them
 //!   ([`on_hook`], [`release_when_paste_mode_comes`]); the inline renderer turns it on first, so
 //!   its first hook releases at once. Bracketed paste turned on and off again before the hook, as
-//!   Claude Code's terminal probe does at start, does not count.
+//!   Claude Code's terminal probe does at start, does not count. Where the parsed screen is read,
+//!   the host may keep bracketed paste to itself, so the input box drawn on the parsed screen
+//!   after the `SessionStart` hook releases them too ([`on_session_start`]).
 //! - Codex runs none until its first prompt, so its messages are held while the watch is still
-//!   looking (until its first terminal title) and, once its screen is sighted, until Octoboard's
+//!   looking (until its first terminal title, or, where the parsed screen is read, until that shows
+//!   its input box) and, once its screen is sighted, until Octoboard's
 //!   press of it succeeds, a hook arrives, or the person's own answer in the terminal is seen to
 //!   take the screen away. The press releases them itself; the end of the watch with nothing
 //!   sighted and the person's answer are watched for by [`supervise`]
@@ -111,14 +124,14 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+use crate::hostfs::lexically_normalise;
 use crate::hostfs::place::{looked_within, Place};
-use crate::hostfs::{self, lexically_normalise};
 use crate::paths;
 use crate::protocol::{
     error_code, notice_code, trust_reason, AgentId, CodedError, Event, Notice, Project, Session,
     SessionKind,
 };
-use crate::session::wait::QUIET;
+use crate::session::wait::quiet;
 use crate::session::LiveSession;
 use crate::state::AppState;
 
@@ -187,8 +200,8 @@ fn normalise_path(text: &str) -> PathBuf {
 /// project reached through a link inside a trusted directory that leads out of it is not covered,
 /// and one whose path is spelled through a link into it, or in another letter case on a file
 /// system that ignores case, is. A path that cannot be resolved in time, on either side, covers
-/// nothing and is covered by nothing, and a trusted path whose directory is the root, the home
-/// directory or one above it covers nothing ([`too_broad_to_trust`]); when those directories
+/// nothing and is covered by nothing, and a trusted path whose directory is a filesystem root, the
+/// home directory or one above it covers nothing ([`is_too_broad`]); when those directories
 /// cannot be looked at in time, no trusted directory covers anything. The paths are looked at off
 /// the runtime, a few at a time, each bounded by [`LOOK_DEADLINE`] ([`looked_within`]).
 async fn covered(state: &AppState, projects: &[String], trusted: &[String]) -> HashSet<String> {
@@ -222,7 +235,7 @@ async fn covered_with_home(
     let directories: Vec<&Place> = trusted
         .iter()
         .filter_map(|directory| places.get(Path::new(directory)))
-        .filter(|directory| !directory.is_one_of(broad))
+        .filter(|directory| !is_too_broad(directory, broad))
         .collect();
     projects
         .iter()
@@ -320,7 +333,7 @@ fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
     if home.starts_with(&parent) {
         return Err(too_broad(&parent));
     }
-    let resolved = std::fs::canonicalize(&home).ok();
+    let resolved = crate::hostfs::canonical(&home).ok();
     if [Some(&home), resolved.as_ref()]
         .into_iter()
         .flatten()
@@ -336,8 +349,9 @@ fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
 /// or in another letter case on a volume that does not tell them apart. False when either is
 /// unreadable.
 fn same_directory(a: &Path, b: &Path) -> bool {
-    match (std::fs::metadata(a), std::fs::metadata(b)) {
-        (Ok(a), Ok(b)) => hostfs::identity::raw(&a) == hostfs::identity::raw(&b),
+    use crate::platform::fs::{identity, Links};
+    match (identity(a, Links::Follow), identity(b, Links::Follow)) {
+        (Ok(a), Ok(b)) => a == b,
         _ => false,
     }
 }
@@ -399,9 +413,10 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
 ///   own), and still a moment later. A Down only redraws the options, and a key Codex ignores
 ///   draws an empty frame; both keep the hold, while typing on into the next screen does not.
 ///   Once more than [`WATCHED_ANSWER_BYTES`] has been printed since the sighting, this stops
-///   looking and the hold stays until a hook. The review Codex raises for new hooks names neither
-///   option, and is kept from appearing here only by the `--dangerously-bypass-hook-trust` every
-///   launch passes (`crate::adapter::codex`).
+///   looking and the hold stays until a hook. Where the parsed screen is read, it must show the
+///   next screen up and nothing of the screen's own (`Screen::replaced_on`), with no bound. The
+///   review Codex raises for new hooks names neither option, and is kept from appearing here only
+///   by the `--dangerously-bypass-hook-trust` every launch passes (`crate::adapter::codex`).
 ///
 /// Octoboard's successful press and a hook release them on their own.
 fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) {
@@ -427,16 +442,23 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
             }
             let screen = trust.screen;
             let mark = trust.output_at_sighting.load(Ordering::Acquire);
-            if live.output_total().saturating_sub(mark) > WATCHED_ANSWER_BYTES {
+            let on_screen = trust.reads_screen();
+            if !on_screen && live.output_total().saturating_sub(mark) > WATCHED_ANSWER_BYTES {
                 // Too much has been printed to judge by order; the hold stays for a hook.
                 break;
             }
-            let since_sighting = || live.output_since(mark);
-            if !screen.replaced_in(&since_sighting()) {
+            let replaced = || {
+                if on_screen {
+                    screen.replaced_on(live.screen_text().as_bytes())
+                } else {
+                    screen.replaced_in(&live.output_since(mark))
+                }
+            };
+            if !replaced() {
                 continue;
             }
-            tokio::time::sleep(QUIET).await;
-            if screen.replaced_in(&since_sighting()) {
+            tokio::time::sleep(quiet()).await;
+            if replaced() {
                 trust.dismissed.store(true, Ordering::Release);
                 publish_status(&state, &live);
                 release_held(&state, &live.id);
@@ -447,7 +469,8 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
 }
 
 /// Releases the messages held for a session whose agent turns bracketed paste on only once it
-/// reads its input ([`Screen::waits_for_paste_mode`]), when that comes after its first hook: the
+/// reads its input ([`Screen::waits_for_paste_mode`]), or, where the parsed screen is read, draws
+/// its input box after its `SessionStart` hook, when that comes after its first hook: the
 /// drain does not retry by itself, and nothing else is left to call for it. When bracketed paste
 /// comes first the first hook releases them ([`on_hook`]), and the release here finds nothing left.
 /// It waits for both, not for bracketed paste alone: bracketed paste seen before the hook can be
@@ -459,6 +482,7 @@ fn release_when_paste_mode_comes(state: &Arc<AppState>, live: &Arc<LiveSession>)
         loop {
             tokio::time::sleep(RELEASE_POLL).await;
             let Some(live) = live.upgrade() else { break };
+            live.look_for_input_box();
             if live.trust.follows_paste_mode() {
                 continue;
             }
@@ -513,7 +537,7 @@ fn release_when_the_sighted_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSe
             if !trust.sighted.load(Ordering::Acquire) || !gone(&live) {
                 continue;
             }
-            tokio::time::sleep(QUIET).await;
+            tokio::time::sleep(quiet()).await;
             if trust.hook_seen.load(Ordering::Acquire) {
                 break;
             }
@@ -571,6 +595,15 @@ pub fn on_hook(state: &Arc<AppState>, live: &Arc<LiveSession>) {
             &not_carried_over(live.agent, carried.as_ref(), &failure),
         );
     });
+}
+
+/// The agent's `SessionStart` hook reached the daemon, ahead of [`on_hook`] for the same hook:
+/// where the parsed screen is read, the input box it shows from now on says that the agent reads
+/// its input, as bracketed paste does ([`TrustState::note_session_start`]), and one already up
+/// says so at once.
+pub fn on_session_start(live: &LiveSession) {
+    live.trust.note_session_start();
+    live.look_for_input_box();
 }
 
 /// What to do about a screen that has just come up.

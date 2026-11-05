@@ -661,14 +661,16 @@ async fn a_switch_tells_the_session_which_trees_it_ended() {
             assert!(!heard.contains("The restart ended"), "{case}: {heard}");
         } else {
             assert!(
-                heard.contains("The restart ended these processes you had started"),
+                heard.contains(&format!(
+                    "The restart ended these processes you had started: `{}",
+                    crate::test_support::doomed_command_starts()
+                )),
                 "{case}: {heard}"
             );
             assert!(
-                heard.contains("perl -MPOSIX -e my $agent"),
+                !heard.contains(&crate::test_support::survivor_command_starts()),
                 "{case}: {heard}"
             );
-            assert!(!heard.contains("/bin/sleep"), "{case}: {heard}");
         }
         assert!(crate::test_support::is_running(survivor), "{case}");
         stop_process(&state, relaunched).await.unwrap();
@@ -743,10 +745,11 @@ async fn a_continuing_switch_lists_what_it_ended_in_the_prompt_and_a_failing_one
         assert!(switched.unwrap(), "continued");
         let prompt = launched.lock().unwrap()[0].2.clone().expect("a prompt");
         assert!(
-            prompt.starts_with(
+            prompt.starts_with(&format!(
                 "Message from Octoboard: your session was restarted. The restart ended these \
-                 processes you had started: `/usr/bin/perl"
-            ),
+                 processes you had started: `{}",
+                crate::test_support::doomed_command_starts()
+            )),
             "{prompt}"
         );
         assert!(
@@ -835,6 +838,7 @@ async fn a_switch_that_fails_stops_what_a_process_that_had_exited_by_itself_star
         .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
         .unwrap();
     let (pid_file, go_file) = (dir.join("s-child"), dir.join("go"));
+    #[cfg(unix)]
     let live = fake_live_session(
         "s",
         AgentId::CLAUDE,
@@ -847,6 +851,19 @@ async fn a_switch_that_fails_stops_what_a_process_that_had_exited_by_itself_star
             crate::test_support::perl_write(&pid_file, "$$"),
             go = go_file.display()
         ),
+    );
+    #[cfg(windows)]
+    let live = crate::test_support::stand_in_running_steps(
+        "s",
+        crate::test_support::fixture::Steps::new()
+            .spawn(
+                "sleep",
+                crate::test_support::fixture::Steps::new()
+                    .write_pid(&pid_file)
+                    .sleep(300),
+            )
+            .wait_for(&go_file)
+            .exit(),
     );
     state.register_live(live.clone());
     let child = crate::test_support::wait_for_pid(&pid_file);

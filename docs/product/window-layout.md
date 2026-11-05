@@ -11,8 +11,8 @@ session's **report panel** (see `docs/product/report-panel.md`), or a project's 
 there at all while it has no owner or none of its owner's panels is open (see "What the right pane shows" below and
 `docs/product/right-pane-panels.md`). The connection banner, while the daemon connection is down, is a full-width strip
 along the window's bottom edge, under the rail and the content panel (see "Losing the daemon connection" in
-`docs/product/application-lifecycle.md`). In the macOS application the update notice, while there is an update to tell
-the user about, is another such strip, directly above the banner when both are shown (see "The update notice" in
+`docs/product/application-lifecycle.md`). In the desktop application the update notice, while there is an update to
+tell the user about, is another such strip, directly above the banner when both are shown (see "The update notice" in
 `docs/product/in-app-updates.md`); whatever this doc says ends above the connection banner ends above the update notice
 as well. Toasts float over the bottom right, above those strips while they are shown (see `docs/product/toasts.md`).
 
@@ -31,7 +31,7 @@ with the rail or one right-pane panel. Touch swipes open, close and switch them 
 The fixed viewport boundaries are **1024 px**, **768 px** and **390 px**. At 1024 px and wider the desktop presentation
 stays the same; at 768 px and below the single-panel interaction applies; below 390 px compact spacing makes more room
 for content. Pane docking above 768 px still depends on the open panes' space needs, rather than another fixed viewport
-category. The macOS window's separate minimum remains **1168×600**.
+category. The desktop window's separate minimum remains **1168×600**.
 
 The right pane's cards and floating behavior are the same whoever owns it.
 
@@ -39,7 +39,7 @@ For the window's light/dark appearance see `docs/product/appearance.md`; for how
 in it and what Enter does there see `docs/product/dialogs.md`; for how the whole window mirrors under a right-to-left
 language see `docs/product/right-to-left-layout.md`; for the settings the rail opens see `docs/product/settings.md`; for
 the top bar's Back and Forward see `docs/product/navigation-history.md`; for moving keyboard focus between the window's
-regions see `docs/product/moving-focus-between-regions.md`; for how the macOS window's size and position are remembered
+regions see `docs/product/moving-focus-between-regions.md`; for how the desktop window's size and position are remembered
 see `docs/product/window-size-and-position.md`.
 
 ## The window chrome and the content panel
@@ -49,7 +49,8 @@ of the breadcrumb.
 
 - **In the macOS application** the top bar and the rail show the system's translucent sidebar material, which follows
   the window's light or dark appearance (see "What follows the choice" in `docs/product/appearance.md`).
-- **In a browser** the chrome is an opaque colour of its own, which follows the appearance too.
+- **In the Windows application and in a browser** the chrome is an opaque colour of its own, which follows the
+  appearance too.
 
 At 768 px and below the rail, when it comes in with the floating sidebar, lies on the card's surface instead (see "At
 768 px and below: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`).
@@ -152,7 +153,8 @@ report it at — comes first on the surface, above the stack trace.
 
 Of the four screens only the one for a daemon of another version has a **Quit** button, and only in the desktop
 application: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit Octoboard
-and, where closing the window quits, its close button (see "Quitting" in `docs/product/application-lifecycle.md`). As
+(the notification-area icon's on Windows) and, where closing the window quits, its close button (see "Quitting" in
+`docs/product/application-lifecycle.md`). As
 the screens for a daemon that could not start, for a daemon of another version and for a UI that failed appear,
 assistive technology is told their heading and the line under it, once; nothing on them takes keyboard focus by itself.
 
@@ -256,6 +258,14 @@ language the buttons and their clear space stay at the left end, which then hold
 start. Dragging any part of the bar that is not a control moves the window, and double-clicking it zooms the window,
 as with a native titlebar. Opened in a plain browser, the bar has none of this: it starts at the left edge and does
 not move anything.
+
+**In the Windows application the window has the system's own title bar and frame**, with the system's minimise,
+maximise and close buttons, above the top bar; snapping, maximising and moving the window are the system's, by that
+title bar. The top bar is then like a browser's: it starts at the window's left edge, keeps no space for window
+buttons, and dragging it moves nothing. There is no menu bar and no application menu: Settings, its About section
+included, opens from the rail's Settings button and from its shortcut (see "Opening and closing Settings" in
+`docs/product/settings.md`), and Octoboard is quit from the notification-area icon's menu (see
+`docs/product/menu-bar-icon.md`).
 
 ### The sidebar toggle and the panel toggles
 
@@ -369,7 +379,8 @@ When the owner changes while keyboard focus is inside the right pane, focus goes
 
 ## The window's minimum size
 
-The macOS window has a **minimum size of 1168×600**. This native limit is separate from the responsive
+The desktop window has a **minimum size of 1168×600**, not counting the title bar and frame the system draws around it
+on Windows. This native limit is separate from the responsive
 layout capacities: at this width the sidebar and a right pane of one or two cards can both dock; a right pane of
 three or four cards floats while the sidebar is shown. The minimum height leaves the
 terminal about 30 rows.

@@ -50,15 +50,17 @@ The body is Markdown in three sections:
 
 - **What happened**: a hidden comment asking what the user was doing and what they expected instead; in the desktop
   application only, a second hidden comment saying that the application keeps its logs in `~/.octoboard/logs/`
-  (`daemon.log`, `desktop.log`, see "Files Octoboard owns" in `docs/product/application-lifecycle.md`) and that a
-  maintainer may ask about them if more detail is needed — the logs themselves are never attached; then a line saying
+  (`daemon.log`, `desktop.log`, see "Files Octoboard owns" in `docs/product/application-lifecycle.md`), the path
+  spelled `%USERPROFILE%\.octoboard\logs\` when the daemon's host writes Windows paths, and that a maintainer may ask about them if more detail is needed — the logs themselves are never attached; then a line saying
   the details below were filled in automatically with personal information removed, and asking the user to check them
   before submitting.
 - **Environment**: one line each, where it is known — the application's name and, in the desktop application, the
   version running; `Daemon:` and the daemon's release version, as the daemon gave it on the window's current
   connection (see "A daemon of another version" in `docs/product/application-lifecycle.md`); the platform, `desktop app` or `browser`; the operating system's family and version as the user
-  agent names them (such as `macOS 10.15.7`), nothing else of the device; and the UI's current language as its code
-  (such as `zh-Hans`). With none known, the section says `Unknown`.
+  agent names them (such as `macOS 10.15.7`), nothing else of the device; `Daemon host:` and the operating system of
+  the machine the daemon runs on, `macOS`, `Windows` or `Linux`, as the daemon announced it on the window's current
+  connection, which may be another machine than the window's; and the UI's current language as its code (such as
+  `zh-Hans`). With none known, the section says `Unknown`.
 - **Error**: one entry per failure:
   - its kind: `unexpected`, `known` for a known failure, or `actionable (<remedy>)` with the name of the remedy kind
     it was classified under;

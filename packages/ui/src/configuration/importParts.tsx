@@ -160,11 +160,19 @@ export type Shown = ReturnType<typeof useSubmitValidation>["shown"];
 /** A labelled path or URL on a line of its own, shown as plain monospace text (see the "References in copy use
  * `InlineReference`" section of docs/ui-standard.md). It is a pair of cells of a `dl` laid out as a two-column
  * grid. */
-export function Field({ label, value }: { label: string; value: string }): React.ReactElement {
+export function Field({ label, value, mark }: {
+  label: string;
+  value: string;
+  /** A mark about the value, after it: a note of what is wrong with it. */
+  mark?: React.ReactNode;
+}): React.ReactElement {
   return (
     <>
       <dt className="text-app-muted">{label}</dt>
-      <dd className="min-w-0 font-mono [overflow-wrap:anywhere]" dir="ltr">{value}</dd>
+      <dd className="min-w-0 font-mono [overflow-wrap:anywhere]" dir="ltr">
+        {value}
+        {mark && <span className="ms-1 inline-flex align-middle font-sans" dir="auto">{mark}</span>}
+      </dd>
     </>
   );
 }

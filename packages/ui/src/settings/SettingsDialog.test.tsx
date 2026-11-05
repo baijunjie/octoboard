@@ -7,6 +7,10 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { SettingsDialog } from "./SettingsDialog";
 import type { SettingsNavigation } from "./sections";
+import type { HostFacts } from "../platform/host";
+import { PlatformProvider } from "../platform/react";
+import { browserHost } from "../platform/host";
+import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { matchesWidthQuery } from "../test/viewport";
 
 beforeEach(() => {
@@ -41,10 +45,10 @@ vi.mock("./AgentBehaviorSection", () => ({ AgentBehaviorSection: () => <p>Agent 
 vi.mock("./NotificationsSection", () => ({ NotificationsSection: () => <p>Notifications</p> }));
 vi.mock("./ConfigurationSection", () => ({ ConfigurationSection: () => <p>Configuration</p> }));
 
-function mount(first: SettingsNavigation, width = 1440) {
+function mount(first: SettingsNavigation, width = 1440, host: HostFacts = MAC_HOST) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const show = (navigation: typeof first) => act(() => root.render(<SettingsDialog navigation={navigation} onClose={() => {}} />));
+  const show = (navigation: typeof first) => act(() => root.render(<PlatformProvider value={{ kind: "tauri", host }}><SettingsDialog navigation={navigation} onClose={() => {}} /></PlatformProvider>));
   taken.count = 0;
   document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
   document.documentElement.style.setProperty("--breakpoint-phone", "390px");
@@ -141,6 +145,20 @@ it("lists the Agent behavior section right after Agent accounts and opens on it"
   const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
   expect(tabs.indexOf("Agent behavior")).toBe(tabs.indexOf("Agent accounts") + 1);
   expect(tabs).toEqual(["General", "Git", "Agent accounts", "Agent behavior", "Trusted folders", "Permissions", "Notifications", "Keyboard shortcuts", "Configuration", "About"]);
+});
+
+it.each([
+  ["the macOS app", MAC_HOST, true],
+  // To say there that they are managed in the macOS app.
+  ["a browser on a Mac", browserHost("MacIntel"), true],
+  ["the Windows app", WINDOWS_HOST, false],
+  ["a browser on Windows", browserHost("Win32"), false],
+] as const)("lists the Permissions section only where the system has privacy grants to give: %s", async (_name, host, listed) => {
+  const tabs = () => [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+  mount({ nonce: 1, section: "general", addAgent: false }, 1440, host);
+  await act(async () => {});
+  expect(tabs().includes("Permissions")).toBe(listed);
+  expect(tabs()).toContain("Notifications");
 });
 
 it("asks account forms to close for every later navigation request", async () => {

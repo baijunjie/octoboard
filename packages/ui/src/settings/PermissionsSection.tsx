@@ -163,9 +163,9 @@ export function PermissionsSection(): React.ReactElement {
 
   const body = (): React.ReactNode => {
     const line = (message: PlainMessageKey) => <p className="text-sm text-app-muted"><Message id={message} /></p>;
-    // The same line as the `!status` case below, and not redundant with it: with no capability there
-    // is nothing to wait for, so saying it straight away spares a browser the blank frame the macOS
-    // app spends waiting for its first read.
+    // A browser on a Mac, where the section is shown only to say this. The same line as the `!status`
+    // case below, and not redundant with it: with no capability there is nothing to wait for, so saying
+    // it straight away spares the browser the blank frame the macOS app spends waiting for its first read.
     if (!macosPermissions) return line("settings.permissions.unavailable");
     // Nothing until the first read is in: the rows would otherwise be preceded by a flash of the
     // line saying there is nothing here to manage, on the very macOS app that has all of it.

@@ -56,14 +56,14 @@ async fn each_project_is_offered_the_choices_its_state_allows_and_the_first_is_t
 
     let mut present = project("present", &here.to_string_lossy());
     present.remote_url = Some("https://example.com/o/present.git".to_string());
-    let mut moved = project("moved", "/gone/layout/moved");
+    let mut moved = project("moved", &host_path("/gone/layout/moved"));
     moved.remote_url = Some("https://example.com/o/moved-repo.git".to_string());
-    let mut cloneable = project("cloneable", "/gone/layout/cloneable");
+    let mut cloneable = project("cloneable", &host_path("/gone/layout/cloneable"));
     cloneable.remote_url = Some("https://example.com/o/cloneable.git".to_string());
     // Its clone would land on the directory that exists, so there is nothing to clone into.
-    let mut taken = project("taken", "/gone/layout/elsewhere");
+    let mut taken = project("taken", &host_path("/gone/layout/elsewhere"));
     taken.remote_url = Some("https://example.com/o/taken.git".to_string());
-    let mut unclonable = project("unclonable", "/gone/layout/unclonable-x/..");
+    let mut unclonable = project("unclonable", &host_path("/gone/layout/unclonable-x/.."));
     unclonable.remote_url = Some("ext::sh -c true".to_string());
     let hopeless = project("hopeless", "relative/hopeless");
 
@@ -188,4 +188,58 @@ async fn an_export_without_the_accounts_region_inspects_with_no_fallbacks() {
 
     assert!(consoles[0].account_fallbacks.is_empty());
     assert!(consoles[0].projects[0].account_fallbacks.is_empty());
+}
+
+#[tokio::test]
+async fn a_path_written_on_another_operating_system_is_marked_and_offers_only_a_clone() {
+    let area = ScratchDir::new("import-foreign-area");
+    let clone_dir = directory(&area, "projects");
+    let document_dir = directory(&area, "document-projects");
+    let (state, _dir) = state_cloning_into("import-foreign", &clone_dir);
+    // Both directories hold what the foreign path's last segment would name, so a derived
+    // directory would be offered if one were derived.
+    directory(&clone_dir, "app");
+    directory(&document_dir, "app");
+
+    let mut foreign = project("foreign", foreign_path());
+    foreign.remote_url = Some("https://example.com/o/foreign.git".to_string());
+    let own = project("own", &host_path("/gone/layout/app"));
+    let bare = project("bare", "app");
+    let mut document = with_settings(
+        document(vec![console("Hub", vec![foreign, own, bare])]),
+        false,
+        false,
+    );
+    document["settings"]["default_clone_dir"] = json!(document_dir.to_string_lossy());
+
+    let consoles = inspect(&state, &document)
+        .await
+        .expect("inspected")
+        .consoles;
+    let projects = &consoles[0].projects;
+
+    assert!(projects[0].foreign_path);
+    assert_eq!(projects[0].offers.exported_path, None);
+    assert_eq!(projects[0].offers.default_clone_dir, None);
+    assert_eq!(
+        projects[0].offers.clone.as_deref(),
+        Some(&*clone_dir.join("foreign").to_string_lossy())
+    );
+    assert_eq!(projects[0].default, Some(DirectoryChoiceKind::Clone));
+    let under = projects[0]
+        .in_document_clone_dir
+        .as_ref()
+        .expect("the document's own clone directory");
+    assert_eq!(under.offers.default_clone_dir, None);
+    assert_eq!(under.offers.exported_path, None);
+    assert_eq!(
+        under.offers.clone.as_deref(),
+        Some(&*document_dir.join("foreign").to_string_lossy())
+    );
+    assert!(!projects[1].foreign_path);
+    assert!(!projects[2].foreign_path);
+    assert_eq!(
+        projects[2].offers.default_clone_dir.as_deref(),
+        Some(&*clone_dir.join("app").to_string_lossy())
+    );
 }

@@ -192,40 +192,95 @@ fn a_reference_is_rebound_by_agent_and_name_ignoring_case_and_falls_back_to_the_
 #[test]
 fn a_documents_paths_are_taken_only_as_an_absolute_path_and_its_last_segment() {
     assert_eq!(
-        exported_directory("/work/./a/../b/").as_deref(),
-        Some(Path::new("/work/b"))
+        exported_directory(&host_path("/work/./a/../b/")),
+        Some(PathBuf::from(host_path("/work/b")))
     );
     assert_eq!(exported_directory("work/b"), None);
     assert_eq!(exported_directory("~/work/b"), None);
     assert_eq!(exported_directory(""), None);
 
     assert_eq!(
-        derived_directory("/home/u/Projects", "/Users/x/code/app").as_deref(),
-        Some(Path::new("/home/u/Projects/app"))
+        derived_directory(
+            &host_path("/home/u/Projects"),
+            &host_path("/Users/x/code/app")
+        ),
+        Some(PathBuf::from(host_path("/home/u/Projects/app")))
     );
     // Resolved before the last segment is taken, so a `..` cannot lead out of the directory.
     assert_eq!(
-        derived_directory("/home/u/Projects", "/Users/x/code/app/../tool").as_deref(),
-        Some(Path::new("/home/u/Projects/tool"))
+        derived_directory(
+            &host_path("/home/u/Projects"),
+            &host_path("/Users/x/code/app/../tool")
+        ),
+        Some(PathBuf::from(host_path("/home/u/Projects/tool")))
     );
-    assert_eq!(derived_directory("/home/u/Projects", "/"), None);
+    assert_eq!(
+        derived_directory(&host_path("/home/u/Projects"), &host_path("/")),
+        None
+    );
     // A document exported without paths records a directory's name alone.
     assert_eq!(
-        derived_directory("/home/u/Projects", "app").as_deref(),
-        Some(Path::new("/home/u/Projects/app"))
+        derived_directory(&host_path("/home/u/Projects"), "app"),
+        Some(PathBuf::from(host_path("/home/u/Projects/app")))
     );
-    assert_eq!(derived_directory("/home/u/Projects", "work/app"), None);
-    assert_eq!(derived_directory("/home/u/Projects", ""), None);
-    assert_eq!(derived_directory("/home/u/Projects", "."), None);
-    assert_eq!(derived_directory("/home/u/Projects", ".."), None);
+    assert_eq!(
+        derived_directory(&host_path("/home/u/Projects"), "work/app"),
+        None
+    );
+    assert_eq!(derived_directory(&host_path("/home/u/Projects"), ""), None);
+    assert_eq!(derived_directory(&host_path("/home/u/Projects"), "."), None);
+    assert_eq!(
+        derived_directory(&host_path("/home/u/Projects"), ".."),
+        None
+    );
     assert_eq!(derived_directory("Projects", "/Users/x/app"), None);
+    // A path written on another operating system derives nothing, padded or not.
+    let padded = format!(" {} ", foreign_path());
+    assert!(is_foreign(&padded));
+    assert_eq!(
+        derived_directory(&host_path("/home/u/Projects"), &padded),
+        None
+    );
 
     assert_eq!(
-        clone_directory("/home/u/Projects", "git@github.com:o/r.git").as_deref(),
-        Some(Path::new("/home/u/Projects/r"))
+        clone_directory(&host_path("/home/u/Projects"), "git@github.com:o/r.git"),
+        Some(PathBuf::from(host_path("/home/u/Projects/r")))
     );
-    assert_eq!(clone_directory("/home/u/Projects", "https://h/.."), None);
-    assert_eq!(clone_directory("/home/u/Projects", "https://h/."), None);
-    assert_eq!(clone_directory("/home/u/Projects", "/srv/git/r"), None);
+    assert_eq!(
+        clone_directory(&host_path("/home/u/Projects"), "https://h/.."),
+        None
+    );
+    assert_eq!(
+        clone_directory(&host_path("/home/u/Projects"), "https://h/."),
+        None
+    );
+    assert_eq!(
+        clone_directory(&host_path("/home/u/Projects"), "/srv/git/r"),
+        None
+    );
     assert_eq!(clone_directory("Projects", "https://h/o/r"), None);
+}
+
+#[test]
+fn a_path_written_on_another_operating_system_derives_no_directory() {
+    let foreign = foreign_path();
+    assert_eq!(exported_directory(foreign), None);
+    assert_eq!(
+        derived_directory(&host_path("/home/u/Projects"), foreign),
+        None
+    );
+    // The same path in the style of this host, and a bare name, still derive.
+    let own = host_path("/Users/x/code/app");
+    assert!(exported_directory(&own).is_some());
+    assert_eq!(
+        derived_directory(&host_path("/home/u/Projects"), &own),
+        Some(PathBuf::from(host_path("/home/u/Projects/app")))
+    );
+    assert_eq!(
+        derived_directory(&host_path("/home/u/Projects"), "app"),
+        Some(PathBuf::from(host_path("/home/u/Projects/app")))
+    );
+    assert!(!is_foreign(&own));
+    assert!(!is_foreign("app"));
+    assert!(is_foreign(foreign));
 }

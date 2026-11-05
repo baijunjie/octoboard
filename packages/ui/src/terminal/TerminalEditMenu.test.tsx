@@ -8,6 +8,7 @@ import { PlatformProvider } from "../platform/react";
 import type { TerminalController } from "./TerminalController";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root;
@@ -20,7 +21,7 @@ let sessionId: string;
 const controllerRef = { current: undefined as TerminalController | undefined };
 const targetRef = createRef<HTMLDivElement>();
 const render = () => act(() => root.render(
-  <PlatformProvider value={{ kind: "browser", clipboard }}>
+  <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST, clipboard }}>
     <TerminalEditMenu key={sessionId} sessionId={sessionId} controllerRef={controllerRef} contextTargetRef={targetRef} />
   </PlatformProvider>,
 ));

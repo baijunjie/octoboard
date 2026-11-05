@@ -10,7 +10,7 @@ import type { Account } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
-import { IS_MAC } from "./input/keys";
+import { BROWSER_HOST, IS_MAC } from "./test/hosts";
 import { matchesWidthQuery } from "./test/viewport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -55,7 +55,7 @@ function mountWith(incomplete: boolean) {
   });
   daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts: [account(incomplete)] } });
   const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <ThemeProvider>
         <DaemonProvider value={daemon}><App /></DaemonProvider>
       </ThemeProvider>

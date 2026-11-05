@@ -17,6 +17,7 @@ import { PlatformProvider } from "./platform/react";
 import type { Event, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./preferences/theme";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -101,7 +102,7 @@ function mountApp() {
   function StackReset() { stacks = usePanelStacks(); return null; }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={{ kind: "browser" }}><ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider></PlatformProvider>));
   onTestFinished(async () => {
     act(() => { stacks.setStack("project", defaultStack("project")); stacks.setStack("report", defaultStack("report")); root.unmount(); });
     container.remove();

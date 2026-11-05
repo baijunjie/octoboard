@@ -24,7 +24,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 | `packages/ui/scripts/compiler-bailouts.mjs` | `pnpm compiler:bailouts`: lists the components and hooks the React Compiler leaves uncompiled, and exits 1 when there is any (run by hand; not part of `pnpm verify`) |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
-| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`, with `withEmptyReplies` to turn a stand-in's `ack` into the empty reply of the requests that have one), its providers (`TestHost`) and `mountHost`, which renders under them |
+| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`, with `withEmptyReplies` to turn a stand-in's `ack` into the empty reply of the requests that have one), its providers (`TestHost`) and `mountHost`, which renders under them; `hosts.ts`, the `HostFacts` of a macOS and a Windows desktop shell (`MAC_HOST`, `WINDOWS_HOST`) for tests |
 
 ## Directory map of `src/`
 
@@ -44,21 +44,33 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 
 ### Wrapper layer (bottom)
 
-- `src/primitives/` — the wrapper layer, the one importer of HeroUI and React Aria in application source: one project
+- [`src/primitives/`](../../packages/ui/src/primitives/README.md) — the wrapper layer, the one importer of HeroUI and React Aria in application source: one project
   wrapper per third-party component, the project hooks over React Aria's and the utilities it re-exports, all from its
-  `index.ts` (see its README). It imports nothing else of the application, and every other directory may import it.
+  `index.ts`. It imports nothing else of the application, and every other directory may import it.
 
 ### Pure domain layers
 
 - `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by; imports nothing.
 - `src/platform/` — `PlatformAdapter`, the interface to everything native, made of optional capabilities: `tauri.ts`
-  (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`; `useAppVersion.ts` the hook
-  that asks the shell for the running application's version.
+  (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`; `host.ts` the `HostFacts`
+  every adapter carries as `host` (the system, the shortcut modifier, the window chrome and which native features exist,
+  read from the window's `?host=` query under the shell and derived from the browser's platform otherwise);
+  `useAppVersion.ts` the hook that asks the shell for the running application's version.
 - `src/preferences/` — the `localStorage` key of every persisted preference, the guarded store behind them, the theme.
 - `src/input/` — shortcut modifier and key predicates, touch, IME and focus workarounds.
 - `src/i18n/` — languages, the typed English catalog and translated ones (`messages/`), lookup, the React side; every
-  user-facing string goes through it, and `languages.ts` is also the language list the website derives from.
-- `src/format/` — small pure formatting helpers (paths, relative time, sizes, `Reason`).
+  user-facing string goes through it, and `languages.ts` is also the language list the website derives from. The
+  system's own words in a message (`{trash}`, `{systemSettings}`, `{hostSettings}`, `{settingsApp}`, `{menuBarIcon}`,
+  `{developerMode}`, and the vocabulary words a translation alone may ask for, such as Korean's `{appWindow}`) and
+  `{osName}` are global params filled where messages are formatted, from the host `AppRoot` announces (`announceHost`;
+  macOS's until one is), except the words for what happens on the daemon's machine: `{trash}` and `{hostSettings}` (the
+  settings app a setting there is changed in), and a daemon error's `{osName}`, come from
+  the daemon's host (`snapshot.host`), which `DaemonHostAnnouncement` (`store/`) announces (`announceDaemonHost`; the
+  client's own until a snapshot names it) and `useT` and `Message` re-render on: `platformTerms.ts`
+  holds the per-language `PLATFORM_TERMS` table selected by `host.terms`, with forms (`{trashTo}`, `{trashFrom}`,
+  `{systemSettingsAcc}`) where a language inflects the word and a capitalised name (`{MenuBarIcon}`) where a message starts
+  with it. A caller never passes them; `catalog.test.ts` checks every one is filled in every language for every host.
+- `src/format/` — small pure formatting helpers (relative time, sizes, `Reason`, wire-path display) and `hostPath`, the one module that reads and shows the daemon host's absolute paths by its `path_style` (`isAbsolute`, `split`, `basename`, `parent`, `display` with the `~` rule that applies on Unix hosts only, `isPathLike` for terminal links, home expansion); every such rule takes the style as an argument, taken from `snapshot.host` by `useHostPaths()` (`components/hooks/`), and defaults to `unix` before the first snapshot. Project-relative wire paths stay `/`-separated and never go through it.
 - `src/providers/` — one presentation module per provider (`claude.ts`, `codex.ts`, `grok.ts`: mark, quota colour and the `provider.<id>.*` catalog messages, among them the trust, sharing and directory-hint wording that `types.ts`'s `ProviderMessageName` names; each also owns the copy of every setting its descriptor declares (`provider.<id>.setting.<setting>.*`) and the record and wording of every code the descriptor declares (`codes`, `provider.<id>.<code>`, whose recovery may be the module's own `provider.<id>.<code>.remedy` copy); `planNames` for plan ids whose generic wording reads badly and `params`, the product-name placeholders its messages use, which `i18n/catalog.ts` merges into the catalogs' global params as `PROVIDER_PARAMS`), `registry.ts` listing them (the built-in three plus a test-only `testAgent` module registered under the test runner, one line each) and looking them up by provider id (`genericMark.ts` is the mark of a provider with no module), and `agentMarks.ts`, the `@octoboard/ui/agent-marks` entry. Imports nothing; the catalogs and the website import it.
 - `src/agents/` — agent rules (`agents.ts`: the pickable, listed and served agents, always taken from the providers the daemon serves in `snapshot`, in its registry order), provider names and facts read from the module or from the providers the daemon serves in `snapshot` (`providers.ts`, which also reads the served model display rule and capabilities; the store holds them as `State.providers`, read with `useProviders()`; `ProviderMessage.tsx` shows a provider's message with a generic fallback), model and effort picker rules, per-agent launch settings; `providers.ts` also holds `settingMessageKey` (the copy key of a provider setting), `idWords` (an id read as words, for a setting or choice a module has no copy for) and re-exports the providers' code records as `PROVIDER_CODES`.
 - `src/git/` — git workflow settings and git-badge wording, repository host links.
@@ -165,7 +177,7 @@ the shape is:
   do not import `daemon-client`: its `CodedError` lives in `errors/codedError.ts`, and the codes it raises are records in
   `errors/codes.ts`.
 - `components/` is the leaf layer: outside itself it imports only the pure layers, the `store/` barrel and the shared
-  root files. `shortcuts/` imports `i18n/`, `preferences/`, `input/` and `components/`.
+  root files. `shortcuts/` imports `i18n/`, `platform/`, `preferences/`, `input/` and `components/`.
 - `viewer/`, `about/`, `updates/`, `layout/`, `quota/` and `statusItem/` import the leaf layer and the pure layers (`quota/` also
   `accounts/`; `statusItem/` also `accounts/` and `quota/`) and no other feature directory; `project-browser/` additionally imports `viewer/`. The remaining feature
   directories import one another freely.
@@ -184,7 +196,7 @@ the shape is:
 
 Other checks that hold structure: `src/errorModulesCycle.test.ts` (the error modules do not import each other in a
 cycle), `src/daemonCodes.test.ts` (the registry in `errors/codes.ts` matches the codes the daemon declares, the providers' included, and the
-catalogs), `src/i18n/catalog.test.ts` (placeholders and plural categories of every catalog), `src/appConfig.test.ts`
+catalogs), `src/i18n/catalog.test.ts` (placeholders and plural categories of every catalog, the platform words for every host), `src/appConfig.test.ts`
 (copies of `config/app.json` elsewhere), `src/cssDependencies.test.ts` (every package a stylesheet names is a production
 dependency).
 
@@ -286,6 +298,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |
 | Platform capabilities (native menu, updater, clipboard, directory picker, permissions) | the `PlatformAdapter` through `src/platform/` |
+| A behaviour or a word that differs by operating system | on the client's machine, `PlatformAdapter.host` (`HostFacts`, `src/platform/host.ts`), read with `usePlatform()` or `useHost()`; on the daemon's machine (its paths, its Trash), `snapshot.host` in the store (`useHostPaths()`, the daemon's words in `platformTerms.ts`); never `navigator`, and a pure function takes the host as an argument |
 | Read the store | the barrel `src/store/index.ts` (`useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, session hooks); below `src/` the barrel is the only store import allowed |
 | The provider tree around `App` in a new host of the app | `AppRoot` (`src/AppRoot.tsx`), as `main.tsx`, the gallery frame and the website preview use it |
 | Data for the gallery, the website preview and application tests | `src/fixtures/` (builders, `snapshotState`, `createFixtureDaemon`), never gallery scenarios |

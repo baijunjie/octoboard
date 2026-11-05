@@ -112,7 +112,8 @@ unchecked by default, whose label names what it removes and how many; a short hi
 disclosure, collapsed by default and left as the user sets it while it is shown, over the items it covers grouped by
 what keeps them, each group led by one line saying so (that these worktrees have uncommitted changes, say) over the
 names. Expanded, those groups sit together on a light grey panel, set apart from the option's label and hint. A worktree
-is named by its path, with the home directory written as `~`, and the branch it has checked out (or that its `HEAD` is
+is named by its path, with the home directory written as `~` (see "How paths are shown" in
+`docs/product/settings.md`), and the branch it has checked out (or that its `HEAD` is
 detached); a branch by its name. Paths and branch names are plain monospace text. Each worktree shows a folder glyph
 before its path, then a branch glyph and branch name on a separate line below it. The glyphs share a column, as do the
 path and branch text; wrapped paths and branch names keep their text indentation. A detached `HEAD` note occupies the

@@ -191,8 +191,9 @@ export function buildJsonLd(input: JsonLdInput): Record<string, unknown> {
     },
     page,
   ];
-  // The installer is not published. An Offer, installUrl, or rating would be
-  // read as "you can download it now", and there is no real rating to report.
+  // The site links to the releases page, not to an installer, so an Offer or
+  // installUrl would point at a file the page does not serve, and there is no
+  // real rating to report.
   // FAQ rich results are marked on the homepage only; the privacy page repeats
   // none of these questions.
   if (input.page === "home") {
@@ -219,7 +220,7 @@ export function buildJsonLd(input: JsonLdInput): Record<string, unknown> {
       url: input.siteUrl,
       image: input.logoUrl,
       applicationCategory: "DeveloperApplication",
-      operatingSystem: "macOS",
+      operatingSystem: "macOS, Windows",
       inLanguage: input.languages,
       author: { "@id": identity },
       publisher: { "@id": identity },

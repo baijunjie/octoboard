@@ -1,6 +1,7 @@
 import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
+import { BROWSER_HOST } from "../../test/hosts";
 import { foundPathMatches, installPathLinks, type PathAnswer, PathLinkCache, pathCandidates, pathMatchesIn } from "./pathLinks";
 import type { TerminalRow } from "./terminalLines";
 
@@ -363,7 +364,7 @@ it("sends at most 64 paths a request and two requests at a time", async () => {
 });
 
 /** The path link provider over `rows`, once the daemon, which finds every path, has answered for `wanted`. */
-async function pathProvider(rows: TerminalRow[], wanted: string[]) {
+async function pathProvider(rows: TerminalRow[], wanted: string[], pathStyle?: "unix" | "windows") {
   const term = {
     cols: rows[0].cells.length,
     registerLinkProvider: vi.fn(),
@@ -377,9 +378,10 @@ async function pathProvider(rows: TerminalRow[], wanted: string[]) {
   };
   const { cache: links } = installPathLinks(
     term as unknown as Terminal,
-    { probe: async (asked) => asked.map((): PathAnswer => ({ kind: "file" })), open: vi.fn(async () => {}) },
+    { probe: async (asked) => asked.map((): PathAnswer => ({ kind: "file" })), open: vi.fn(async () => {}), ...(pathStyle && { pathStyle }) },
     () => false,
     () => {},
+    BROWSER_HOST,
   );
   const provider = term.registerLinkProvider.mock.calls[0][0] as ILinkProvider;
   links.want(wanted);
@@ -418,6 +420,7 @@ it("remembers the path link the pointer is on, and forgets it only when that lin
     { probe: async (asked) => asked.map((): PathAnswer => ({ kind: "file" })), open: vi.fn(async () => {}) },
     () => false,
     () => {},
+    BROWSER_HOST,
   );
   const provider = term.registerLinkProvider.mock.calls[0][0] as ILinkProvider;
   cache.want(["/tmp/a.png"]);
@@ -441,4 +444,48 @@ it("remembers the path link the pointer is on, and forgets it only when that lin
   second.hover?.(event, second.text);
   cache.clear();
   expect(cache.hovered).toBeUndefined();
+});
+
+it.each<[string, string, string[]]>([
+  ["a drive path", String.raw`wrote C:\Users\dev\a.png now`, [String.raw`C:\Users\dev\a.png`]],
+  ["a drive path with forward slashes", "wrote C:/Users/dev/a.png now", ["C:/Users/dev/a.png"]],
+  ["a UNC path", String.raw`see \\server\share\a.md`, [String.raw`\\server\share\a.md`]],
+  ["a home-relative path", String.raw`see ~\notes\a.md`, [String.raw`~\notes\a.md`]],
+  ["a relative path with a directory", String.raw`edit src\ui\a.ts:42`, [String.raw`src\ui\a.ts`]],
+  ["a Unix-style path", "see /tmp/a.png", ["/tmp/a.png"]],
+  ["a path ending a sentence", String.raw`saved to C:\tmp\a.png.`, [String.raw`C:\tmp\a.png`]],
+  ["a bare drive", String.raw`in C:\ now`, []],
+])("finds %s on a Windows host", (_name, text, expected) => {
+  expect(pathCandidates(text, "windows").map((candidate) => candidate.path)).toEqual(expected);
+});
+
+it.each([
+  String.raw`wrote C:\Users\dev\a.png now`,
+  String.raw`see ~\notes\a.md`,
+  String.raw`edit src\ui\a.ts:42`,
+])("finds no path in %j on a Unix host", (text) => {
+  expect(pathCandidates(text)).toEqual([]);
+});
+
+// A Windows path the program broke onto the next row, laid out 30 columns wide as `BROKEN_PATH` is.
+const BROKEN_WINDOWS_PATH = String.raw`C:\Users\dev\icons\set.iconset\icon.png`;
+const BROKEN_WINDOWS_ROWS = [
+  sized(30, "  Checked it, looks right:"),
+  sized(30, "  " + BROKEN_WINDOWS_PATH.slice(0, 28)),
+  sized(30, "  " + BROKEN_WINDOWS_PATH.slice(28) + ". I have not seen"),
+];
+
+it("joins a Windows path the program broke onto the next row, on a Windows host only", () => {
+  const joined = (style: "unix" | "windows") =>
+    pathMatchesIn((y) => BROKEN_WINDOWS_ROWS[y - 1], 1, 3, style).filter((match) => match.joined).map((match) => match.path);
+  expect(joined("windows")).toEqual([BROKEN_WINDOWS_PATH]);
+  expect(joined("unix")).toEqual([]);
+});
+
+it("finds paths in the daemon host's style it is installed with, and Unix paths where it is told none", async () => {
+  const rows = [sized(30, String.raw`see C:\tmp\a.png and /tmp/b.png`)];
+  const windows = await pathProvider(rows, [String.raw`C:\tmp\a.png`], "windows");
+  expect(windows(1)?.map(({ text }: { text: string }) => text)).toEqual([String.raw`C:\tmp\a.png`]);
+  const unix = await pathProvider(rows, ["/tmp/b.png"]);
+  expect(unix(1)?.map(({ text }: { text: string }) => text)).toEqual(["/tmp/b.png"]);
 });

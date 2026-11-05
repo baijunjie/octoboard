@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { BareButton, Button, buttonClassName, type ButtonPress } from "./Button";
 import { mount, pressWithMouse } from "./testSupport";
@@ -16,7 +16,7 @@ function pressWithKeyboard(element: HTMLElement): void {
 
 it("maps the project's props onto the button's attributes", () => {
   const { container } = mount(
-    <Button label="Close" describedBy="" expanded controls="panel" current unavailable iconOnly size="xs" variant="ghost" data-mark="" className="extra">
+    <Button label="Close" describedBy="" expanded controls="panel" current iconOnly size="xs" variant="ghost" data-mark="" className="extra">
       x
     </Button>,
   );
@@ -27,7 +27,6 @@ it("maps the project's props onto the button's attributes", () => {
   expect(button.getAttribute("aria-expanded")).toBe("true");
   expect(button.getAttribute("aria-controls")).toBe("panel");
   expect(button.getAttribute("aria-current")).toBe("true");
-  expect(button.getAttribute("aria-disabled")).toBe("true");
   expect(button.hasAttribute("data-mark")).toBe(true);
   expect(button.getAttribute("data-size")).toBe("xs");
   expect(button.className).toContain("app-button--xs");
@@ -35,6 +34,23 @@ it("maps the project's props onto the button's attributes", () => {
   expect(button.className).toContain("button--icon-only");
   expect(button.className).toContain("button--ghost");
   expect(button.className).toContain("extra");
+});
+
+it("stays focusable and pressable while unavailable, describing itself with the reason and keeping its fill", () => {
+  const onPress = vi.fn();
+  const { container } = mount(<Button label="Keep" describedBy="other" variant="secondary" unavailable="Cannot be kept" onPress={onPress}>Keep</Button>);
+  const button = container.querySelector("button")!;
+  expect(button.getAttribute("aria-disabled")).toBe("true");
+  expect(button.disabled).toBe(false);
+  expect(button.getAttribute("aria-label")).toBe("Keep");
+  const description = document.getElementById(button.getAttribute("aria-describedby")!)!;
+  expect(description.textContent).toBe("Cannot be kept");
+  expect(description.className).toBe("sr-only");
+  expect(button.contains(description)).toBe(true);
+  expect(button.className).toContain("pointer-events-auto");
+  expect(button.className).toContain("[--button-bg-hover:var(--button-bg)]");
+  pressWithKeyboard(button);
+  expect(onPress).toHaveBeenCalledTimes(1);
 });
 
 it("shows a decorative spinner before the unchanged label while pending", () => {

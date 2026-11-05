@@ -18,6 +18,7 @@ import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
 import type { TermStatus } from "./TerminalController";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,7 +78,7 @@ vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "
 
 // One daemon for every render of a test: the pane re-attaches when `terminalUrl` changes identity.
 let daemon: Daemon;
-const platform: { -readonly [K in keyof PlatformAdapter]: PlatformAdapter[K] } = { kind: "browser" };
+const platform: { -readonly [K in keyof PlatformAdapter]: PlatformAdapter[K] } = { kind: "browser", host: BROWSER_HOST };
 const host = (ui: React.ReactNode) => <TestHost daemon={daemon} platform={platform}>{ui}</TestHost>;
 /** Updates the daemon's state the way a broadcast would. */
 const setState = (state: Partial<State>) => act(() => daemon.store.setState(state));

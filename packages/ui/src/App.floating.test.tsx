@@ -17,6 +17,7 @@ import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { matchesWidthQuery } from "./test/viewport";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -129,7 +130,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
     request: vi.fn(async (body: ClientRequestBody) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null }) as Daemon["request"],
   });
   mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
@@ -685,7 +686,7 @@ it("updates swipe availability with the selected session's filtered processes", 
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
     type: "processes_listed",
     id: null,
-    trees: [{ id: "1", session_id: "s-site", command: "vite", cwd: "/app", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
+    trees: [{ id: "1", session_id: "s-site", command: "vite", cwd: "/app", cwd_missing: false, kept: false, keepable: true, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
   } : { type: "ack", id: null });
   await selectProjectSession();
   await swipe(-120);
@@ -705,7 +706,7 @@ it("shows all project processes when opened from a project with no session selec
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
     type: "processes_listed",
     id: null,
-    trees: [{ id: "all-tree", session_id: "s-site", command: "vite all sessions", cwd: "/app", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
+    trees: [{ id: "all-tree", session_id: "s-site", command: "vite all sessions", cwd: "/app", cwd_missing: false, kept: false, keepable: true, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
   } : { type: "ack", id: null });
   await pressElement(byLabel(`Actions for project ${isolate("Website")}`));
   await pressMenuItem("Open panel");

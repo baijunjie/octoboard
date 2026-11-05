@@ -15,6 +15,11 @@
 //! older than [`STALE_AFTER`] is settled too, answered or not: a program waits that long for an
 //! answer at most, and one that has given up would read a late answer as input. A client attaching
 //! is told how much of its replay is settled (see [`ReplayMark`]), so it answers only the rest.
+//!
+//! The daemon can be the one to answer ([`ReplyRoute::DAEMON`]), for a program whose host holds it
+//! up until its queries are answered, while no client is attached to do it. Its answer is the first
+//! to the output it names like any other, so a client attaching later is told that output is
+//! settled, and one that answers it anyway is dropped.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -22,10 +27,10 @@ use std::time::{Duration, Instant};
 /// How long a program is taken to wait for its terminal's answer: what prompt libraries wait
 /// (termenv's 5 seconds, crossterm's 2).
 #[cfg(not(test))]
-const STALE_AFTER: Duration = Duration::from_secs(5);
+pub(crate) const STALE_AFTER: Duration = Duration::from_secs(5);
 /// Long under test, so that a loaded machine cannot settle output a test drives answers to.
 #[cfg(test)]
-const STALE_AFTER: Duration = Duration::from_secs(60);
+pub(crate) const STALE_AFTER: Duration = Duration::from_secs(60);
 
 /// Where a replay stands in the output, told to a client attaching before its replay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +54,9 @@ pub struct ReplyRoute {
 }
 
 impl ReplyRoute {
+    /// The id the daemon answers under, which no client has: they count up from 0.
+    pub const DAEMON: u64 = u64::MAX;
+
     /// Records a frame of output, which ends at `end`, as having come at `now`.
     pub fn note_output(&mut self, end: u64, now: Instant) {
         self.recent.push_back((end, now));
@@ -116,6 +124,24 @@ mod tests {
     use std::time::Instant;
 
     use super::{ReplayMark, ReplyRoute, STALE_AFTER};
+
+    #[test]
+    fn the_daemons_answer_settles_the_output_it_answers_and_no_client_can_repeat_it() {
+        let mut route = ReplyRoute::default();
+        let now = Instant::now();
+        route.note_output(10, now);
+        assert!(route.admit(ReplyRoute::DAEMON, 10, 10, now));
+        assert!(!route.admit(0, 10, 10, now));
+        assert_eq!(
+            route.replay_mark(10, 10, 0, now),
+            ReplayMark {
+                offset: 10,
+                answered: 10
+            }
+        );
+        route.note_output(20, now);
+        assert!(route.admit(0, 20, 20, now), "later output is still open");
+    }
 
     #[test]
     fn the_first_answer_to_a_point_is_written_and_another_clients_copy_is_dropped() {

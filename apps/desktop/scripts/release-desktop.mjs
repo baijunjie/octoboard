@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { gitChecked, gitResult, runResult } from "../../../scripts/lib/git.mjs";
-import { compareVersions, tag } from "./release-manifest.mjs";
+import { compareVersions, parsePlatforms, platformsTrailer, tag } from "./release-manifest.mjs";
 
 const VERSION_FILES = ["apps/desktop/package.json", "Cargo.toml", "Cargo.lock"];
 const NUMBER = "(?:0|[1-9][0-9]*)";
@@ -37,17 +37,18 @@ export function parseOptions(args, cwd = process.cwd()) {
   const { values, positionals } = parseArgs({ args, allowPositionals: true, options: {
     notes: { type: "string" },
     "notes-file": { type: "string" },
+    platforms: { type: "string" },
     "dry-run": { type: "boolean", default: false },
   } });
   if (positionals.length !== 1 || (values.notes === undefined) === (values["notes-file"] === undefined)) {
-    throw new Error('Usage: pnpm --filter @octoboard/desktop release:version <version> (--notes "text" | --notes-file path) [--dry-run]');
+    throw new Error('Usage: pnpm --filter @octoboard/desktop release:version <version> (--notes "text" | --notes-file path) [--platforms macos|windows|macos,windows] [--dry-run]');
   }
   const notes = (values.notes ?? readFileSync(path.resolve(cwd, values["notes-file"]), "utf8")).trim();
   if (!notes) throw new Error("The release notes are empty.");
-  return { version: positionals[0], notes, dryRun: values["dry-run"] };
+  return { version: positionals[0], notes, platforms: parsePlatforms(values.platforms), dryRun: values["dry-run"] };
 }
 
-export function releaseDesktop({ root, version, notes, dryRun = false, run = runResult, log = console.log }) {
+export function releaseDesktop({ root, version, notes, platforms = parsePlatforms(), dryRun = false, run = runResult, log = console.log }) {
   const git = (...args) => gitChecked(root, ...args);
   const cleanMain = () => {
     if (git("branch", "--show-current") !== "main") throw new Error("Run the release from the main worktree on main.");
@@ -75,7 +76,10 @@ export function releaseDesktop({ root, version, notes, dryRun = false, run = run
     throw new Error(`${branch} or ${worktree} already exists. Inspect the previous attempt before starting another.`);
   }
   if (git("check-ignore", ".worktrees/") !== ".worktrees/") throw new Error("Exclude .worktrees/ in .git/info/exclude before releasing.");
-  log(`release: ${current} -> ${version}; annotated tag ${releaseTag}`);
+  // A version for one platform only says so on the last line of its tag's message, which release CI reads.
+  const trailer = platformsTrailer(platforms);
+  const message = trailer === null ? `${notes.trim()}\n` : `${notes.trim()}\n\n${trailer}\n`;
+  log(`release: ${current} -> ${version}; annotated tag ${releaseTag}; platforms: ${platforms.join(", ")}`);
   log(`release: notes:\n${notes.trim()}`);
   if (dryRun) {
     log("release: --dry-run: no files or refs changed. Would fetch main, prepare and check an isolated version commit, fast-forward main, run fresh application release checks, verify the push, and atomically push main and the tag to origin. All checks precede tagging. Release CI then builds and publishes.");
@@ -121,7 +125,7 @@ export function releaseDesktop({ root, version, notes, dryRun = false, run = run
     command(root, "pnpm", ["verify", "--base", remoteMain, "--head", releaseCommit]);
     cleanMain();
     if (git("rev-parse", "HEAD") !== releaseCommit) throw new Error("main changed during push verification. Recheck it before tagging or pushing.");
-    command(root, "git", ["tag", "-a", releaseTag, releaseCommit, "--cleanup=whitespace", "-F", "-"], { input: `${notes.trim()}\n`, stdio: ["pipe", "inherit", "inherit"] });
+    command(root, "git", ["tag", "-a", releaseTag, releaseCommit, "--cleanup=whitespace", "-F", "-"], { input: message, stdio: ["pipe", "inherit", "inherit"] });
     cleanMain();
     if (git("rev-parse", "HEAD") !== releaseCommit) throw new Error("main changed after tagging. Inspect the local release tag before pushing.");
     command(root, "git", ["push", "--atomic", "origin", `${releaseCommit}:refs/heads/main`, `refs/tags/${releaseTag}`]);

@@ -1,4 +1,4 @@
-use std::os::unix::fs::symlink;
+use crate::test_support::symlink;
 use std::path::Path;
 
 use super::*;
@@ -200,7 +200,11 @@ async fn protected_directories_are_refused() {
     let (home, data) = (dir.join("home"), dir.join("holder").join("data"));
     std::fs::create_dir_all(&home).unwrap();
     std::fs::create_dir_all(&data).unwrap();
-    for protected in [Path::new("/"), &home, &dir.join("holder")] {
+    for protected in [
+        &crate::test_support::disk_root(),
+        &home,
+        &dir.join("holder"),
+    ] {
         let (code, _) = refusal_at(&state, protected, &home, &data).await;
         assert_eq!(
             code,
@@ -301,7 +305,7 @@ async fn a_directory_that_cannot_be_looked_at_is_refused() {
     create_directory(&state);
     let guard = Arc::new(());
     state.directory_looks.record(
-        crate::hostfs::lexically_normalise(&dir.join("claude-a")),
+        crate::hostfs::lexical_key(&dir.join("claude-a")),
         Arc::downgrade(&guard),
     );
     let err = confirmed_within(&state, SHORT).await.unwrap_err();
@@ -334,7 +338,7 @@ async fn another_path_that_cannot_be_looked_at_is_not_called_shared() {
     std::fs::create_dir_all(&stuck_dir).unwrap();
     let guard = Arc::new(());
     state.directory_looks.record(
-        crate::hostfs::lexically_normalise(&stuck_dir),
+        crate::hostfs::lexical_key(&stuck_dir),
         Arc::downgrade(&guard),
     );
     assert_eq!(inspected(&state).await, AccountTrashOutcome::Undecided);
@@ -370,7 +374,7 @@ async fn the_removal_waits_for_a_look_an_inspection_left_stuck() {
     let directory = create_directory(&state);
     let guard = Arc::new(());
     state.directory_looks.record(
-        crate::hostfs::lexically_normalise(&dir.join("claude-a")),
+        crate::hostfs::lexical_key(&dir.join("claude-a")),
         Arc::downgrade(&guard),
     );
     assert_eq!(inspected(&state).await, AccountTrashOutcome::Undecided);
@@ -892,7 +896,9 @@ async fn an_inspection_answers_each_refusal_as_data() {
 async fn an_inspection_answers_a_disks_root_as_protected() {
     let (state, _dir) = fixture("account-trash-inspect-protected");
     let mut mine = account(&state, "claude-a");
-    mine.config_dir = "/".to_string();
+    mine.config_dir = crate::test_support::disk_root()
+        .to_string_lossy()
+        .into_owned();
     state.store.update_account(&mine).unwrap();
     assert_eq!(inspected(&state).await, AccountTrashOutcome::Protected);
     let err = remove(&state, true).await.unwrap_err();

@@ -16,11 +16,20 @@ use crate::wire_path;
 
 /// The most bytes of reference names one upstream lookup asks `git for-each-ref` for: the same
 /// branch's name and the `HEAD` on each of the repository's remotes, so room for some one thousand
-/// remotes. The output is about these names again with an object id on each line, plus what lies
-/// below a name asked for (`refs/remotes/origin/a` also names `refs/remotes/origin/a/b`), which is
-/// not bounded here. This and the two budgets below are recorded in `apps/daemon/PROTOCOL.md`'s
-/// "Browse budgets" section, and change together with it.
-pub const UPSTREAM_PATTERN_BYTES: usize = 64 * 1024;
+/// remotes, or fewer where the host's command line holds less than 64 KiB of arguments. The output
+/// is about these names again with an object id on each line, plus what lies below a name asked
+/// for (`refs/remotes/origin/a` also names `refs/remotes/origin/a/b`), which is not bounded here.
+/// This and the two budgets below are recorded in `apps/daemon/PROTOCOL.md`'s "Browse budgets"
+/// section, and change together with it.
+pub const UPSTREAM_PATTERN_BYTES: usize = {
+    let wanted = 64 * 1024;
+    let fits = crate::platform::proc::ARGUMENT_BYTES;
+    if wanted < fits {
+        wanted
+    } else {
+        fits
+    }
+};
 
 /// The most stdout the `git remote` of an upstream lookup may print.
 pub const UPSTREAM_REMOTES_STDOUT: usize = 32 * 1024;

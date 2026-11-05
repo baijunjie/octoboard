@@ -1,24 +1,26 @@
 // @vitest-environment jsdom
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { IS_MAC } from "../input/keys";
+import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { copyDocument, isSelectAll, selectCode, selectDocument } from "./selectAll";
 
-const command = IS_MAC ? { metaKey: true, ctrlKey: false } : { metaKey: false, ctrlKey: true };
-const other = IS_MAC ? { metaKey: false, ctrlKey: true } : { metaKey: true, ctrlKey: false };
+const META = { metaKey: true, ctrlKey: false };
+const CTRL = { metaKey: false, ctrlKey: true };
 
 beforeEach(() => {
   document.body.innerHTML = "<h2>name.ts</h2><div id=\"frame\"></div><p>4 kB</p>";
   document.getSelection()!.removeAllRanges();
 });
 
-it.each([
-  ["A with the platform's modifier is", { key: "a", ...command, altKey: false, shiftKey: false }, true],
-  ["A with the other platform's modifier is not", { key: "a", ...other, altKey: false, shiftKey: false }, false],
-  ["A with Shift held is not", { key: "A", ...command, altKey: false, shiftKey: true }, false],
-  ["another key with the platform's modifier is not", { key: "b", ...command, altKey: false, shiftKey: false }, false],
-])("%s Select All", (_, event, expected) => {
-  expect(isSelectAll(event)).toBe(expected);
+describe.each([["macOS", MAC_HOST, META, CTRL], ["Windows", WINDOWS_HOST, CTRL, META]] as const)("on %s", (_host, host, command, other) => {
+  it.each([
+    ["A with the platform's modifier is", { key: "a", ...command, altKey: false, shiftKey: false }, true],
+    ["A with the other platform's modifier is not", { key: "a", ...other, altKey: false, shiftKey: false }, false],
+    ["A with Shift held is not", { key: "A", ...command, altKey: false, shiftKey: true }, false],
+    ["another key with the platform's modifier is not", { key: "b", ...command, altKey: false, shiftKey: false }, false],
+  ])("%s Select All", (_, event, expected) => {
+    expect(isSelectAll(event, host)).toBe(expected);
+  });
 });
 
 const frame = () => document.getElementById("frame")!;

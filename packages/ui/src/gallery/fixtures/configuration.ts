@@ -152,7 +152,7 @@ function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSett
 
 /** The settings an inspection says its document carries, without this machine's values beside them. */
 export function carriedSettings(settings: InspectedSettings): DocumentSettings {
-  return documentSettings(Object.fromEntries(Object.entries(settings).filter(([key]) => !key.startsWith("current_"))));
+  return documentSettings(Object.fromEntries(Object.entries(settings).filter(([key]) => !key.startsWith("current_") && key !== "foreign_default_clone_dir")));
 }
 
 /** The settings that have a value of the document and one of this machine's in an inspection. */
@@ -179,6 +179,7 @@ function inspectedSettings(carried: Partial<InspectedSettings> = {}): InspectedS
     ...documentSettings(Object.fromEntries(entries((key) => key))),
     ...(Object.fromEntries(entries((key) => `current_${key}`)) as { [K in SettingKey as `current_${K}`]: DocumentSettings[K] }),
     current_default_clone_dir: DEFAULT_CLONE_DIR,
+    foreign_default_clone_dir: false,
     ...carried,
   };
 }
@@ -257,6 +258,32 @@ const NO_PATHS = inspected({
           default: "clone",
         }),
         inspectedProject({ name: "Notes", path: "notes" }),
+      ],
+    },
+  ],
+});
+
+/** A document written on Windows, read here: no project's path names anything on this machine, so none derives a directory.
+ * The project with a remote is offered a clone, as the daemon does for a path it cannot use; the other has nothing to place it. */
+const FOREIGN_PATHS = inspected({
+  consoles: [
+    {
+      name: "Work laptop",
+      account_fallbacks: [],
+      projects: [
+        inspectedProject({
+          name: "Design System",
+          path: "C:\\Users\\ana\\work\\design-system",
+          foreign_path: true,
+          remote_url: "https://github.com/acme/design-system.git",
+          offers: { exported_path: null, default_clone_dir: null, clone: `${DEFAULT_CLONE_DIR}/design-system` },
+          default: "clone",
+        }),
+        inspectedProject({
+          name: "Notes",
+          path: "C:\\Users\\ana\\Documents\\Work\\Clients\\Northwind\\Archive\\2019\\Quarterly-Reports\\final-notes",
+          foreign_path: true,
+        }),
       ],
     },
   ],
@@ -468,6 +495,7 @@ export const resolvedAccountDirectory = (directory: string): string | null => {
 };
 
 const inspectedAccount = (extra: Partial<InspectedAccount> & Pick<InspectedAccount, "name" | "directory">): InspectedAccount => ({
+  foreign_directory: false,
   proposed_directory: resolvedAccountDirectory(extra.directory),
   status: "new",
   in_use_by: null,
@@ -609,6 +637,43 @@ const ACCOUNTS_ONLY = inspected({
     ],
     agent_settings: null,
   },
+});
+
+/** A document of accounts alone written on Windows, read here: Claude Code's one account has a Windows directory, which names
+ * nothing on this machine, so it cannot be created as it is and the daemon, which can only say the directory is not
+ * absolute, marks it as written on another operating system. */
+const ACCOUNT_FOREIGN_DIRECTORY = inspected({
+  consoles: [],
+  accounts: {
+    agents_to_add: [],
+    agents: [
+      {
+        agent: "claude",
+        default_name: null,
+        default_name_applies: false,
+        default_disabled: null,
+        default_disabled_applies: false,
+        accounts: [
+          inspectedAccount({
+            name: "Laptop",
+            directory: "C:\\Users\\ana\\.claude-laptop",
+            foreign_directory: true,
+            proposed_directory: null,
+            status: "invalid",
+            error: failure("config_dir_not_absolute", { agent: "Claude Code" }, "the Claude Code config directory must be an absolute path or start with `~/`"),
+          }),
+        ],
+      },
+    ],
+    agent_settings: null,
+  },
+});
+
+/** A document of application settings alone, every one the machine's own, whose default clone directory was written on
+ * Windows: the document carries none this machine can use, and says it had one. */
+const SETTINGS_FOREIGN_CLONE_DIR = inspected({
+  consoles: [],
+  settings: inspectedSettings({ default_clone_dir: null, foreign_default_clone_dir: true }),
 });
 
 /** The accounts of `ACCOUNTS` that cannot be created as the file has them, alone: a directory another account uses, one the
@@ -1163,6 +1228,39 @@ export const configurationScenarios: Scenario[] = [
       ...importFromSettings,
       chooseFile,
     ],
+  },
+  {
+    id: "configuration-import-review-foreign-paths",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review of a document written on another operating system",
+    description: "Each project's \"Exported path\" is a Windows path, which names nothing on this machine, and no loose sentence says so under the fields: a mark after the path does. Design System, offered a clone (\"Clone from\" and \"Clone into\"), has a note mark right after its \"Exported path\" value, named \"Exported path of Design System cannot be used\"; its popover says only that the exported path was written on another operating system, so it cannot be used here, with no remedy. Notes, found nowhere, whose long path wraps, has only the warning triangle after its name; its popover opens with the same sentence, then says it is skipped unless a directory is chosen for it. The accounts and the application settings of such a document are in the two scenarios below.",
+    state,
+    configuration: { file: FILE, inspection: FOREIGN_PATHS },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
+  },
+  {
+    id: "configuration-import-review-foreign-account",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review of an account whose directory was written on another operating system",
+    description: "A document of accounts alone, whose Laptop account has a Windows directory. Its \"Directory in the file\" line shows the Windows path with no sentence under the account; its choice is Leave out. The mouse rests on the warning mark after the Laptop name: its popover opens above it with no click and no focus taken, saying first that the directory in the file was written on another operating system, so it cannot be used here, then that the account is left out unless another directory is chosen for it, and never that the path is not absolute.",
+    state: accountsMachine,
+    configuration: { file: FILE, inspection: ACCOUNT_FOREIGN_DIRECTORY },
+    steps: [...importFromSettings, chooseFile, hoverAccountMark("invalidMark", "Laptop")],
+  },
+  {
+    id: "configuration-import-review-foreign-clone-dir",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review of a default clone directory written on another operating system",
+    description: "A document of application settings alone, so there is no tab bar. In the Git card, Default clone directory reads No change and the line under it says the file's default clone directory was written on another operating system, so it cannot be used here, and that the current default clone directory is kept. It has no directory to show and no checkbox to choose the file's directory, unlike a directory this machine can use.",
+    state,
+    configuration: { file: FILE, inspection: SETTINGS_FOREIGN_CLONE_DIR },
+    steps: [...importFromSettings, chooseFile],
   },
   {
     id: "configuration-import-review-not-found-details",

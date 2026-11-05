@@ -11,6 +11,7 @@ import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,7 +38,7 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false, otherSessions: Se
   });
   const daemon = testDaemon({ state: { sessions: new Map([...sessions, ...otherSessions].map((session) => [session.id, session])) } });
   const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <DaemonProvider value={daemon}>
         <Rail
           consoles={[main]}

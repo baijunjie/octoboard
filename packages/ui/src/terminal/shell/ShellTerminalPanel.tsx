@@ -27,6 +27,7 @@ import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Project, ShellTerminal } from "../../protocol";
 import { useDaemon } from "../../store";
+import { useHostPaths } from "../../components/hooks/useHostPaths";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { shellTerminalTitle } from "./shellTerminalTitle";
 import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
@@ -65,6 +66,7 @@ export function ShellTerminalPanel({
 }): React.ReactElement {
   const t = useT();
   const daemon = useDaemon();
+  const { style } = useHostPaths();
   const [fadesIn] = useState(switching);
   const terminals = useProjectShellTerminals(project.id);
   const starting = useShellTerminalStarting(project.id);
@@ -225,7 +227,7 @@ export function ShellTerminalPanel({
   // this component again (`tabNodes`).
   useTabPanelLink(bodyRef, activeTab);
 
-  const tabLabel = (terminal: ShellTerminal, title = shellTerminalTitle(terminal)) =>
+  const tabLabel = (terminal: ShellTerminal, title = shellTerminalTitle(terminal, style)) =>
     terminal.state === "exited" ? t("shellTerminal.tab.exited", { title: isolate(title) }) : title;
 
   const newTerminalButton = (
@@ -267,7 +269,7 @@ export function ShellTerminalPanel({
                     >
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
                       <HandoffOnUnmount from={itemKeySelector(terminal.id)} to={focusShownTab} />
-                      <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" title={shellTerminalTitle(terminal) !== terminal.title ? tabLabel(terminal, terminal.title) : undefined} titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
+                      <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" title={shellTerminalTitle(terminal, style) !== terminal.title ? tabLabel(terminal, terminal.title) : undefined} titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
                       <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal, "terminal")} />
                     </Tab>
                   ))}

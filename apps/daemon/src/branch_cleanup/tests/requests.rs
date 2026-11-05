@@ -49,9 +49,9 @@ async fn the_users_requests_force_what_they_name_and_report_what_is_left() {
         let named: Vec<SessionBranchTarget> = shown
             .iter()
             .filter(|item| {
-                item.path
-                    .as_deref()
-                    .is_some_and(|path| path.ends_with("/forced"))
+                item.path.as_deref().is_some_and(|path| {
+                    path.ends_with(&format!("{}forced", std::path::MAIN_SEPARATOR))
+                })
             })
             .map(target)
             .collect();
@@ -68,7 +68,10 @@ async fn the_users_requests_force_what_they_name_and_report_what_is_left() {
             .map(|item| item["name"].as_str().unwrap())
             .collect();
         assert_eq!(names.len(), 1, "{kind}: {told}");
-        assert!(names[0].ends_with("/left"), "{kind}: {told}");
+        assert!(
+            names[0].ends_with(&format!("{}left", std::path::MAIN_SEPARATOR)),
+            "{kind}: {told}"
+        );
         assert_eq!(told[0]["state"], "uncommitted_changes");
         assert_eq!(told[0]["uncommitted"], true);
     }
@@ -209,7 +212,7 @@ async fn a_removal_after_an_unresolved_inspection_repeats_its_refusal() {
         let stuck = Arc::new(());
         if stalled {
             state.directory_looks.record(
-                crate::hostfs::lexically_normalise(elsewhere),
+                crate::hostfs::lexical_key(elsewhere),
                 Arc::downgrade(&stuck),
             );
         }

@@ -1,7 +1,8 @@
 // What the desktop build scripts share around `tauri build`: where things are, running it and the environment it
-// gets, and finding and checking what it produced. The update archive made from the `.app` is `update-archive.mjs`.
+// gets, and finding and checking what it produced. The update archive made from the `.app` is `update-archive.mjs`;
+// what only the Windows release needs is `windows-release.mjs`.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -16,15 +17,32 @@ export const UNIVERSAL_TARGET = "universal-apple-darwin";
 // The architectures a universal build is made of, each a Rust target the build compiles for.
 export const UNIVERSAL_ARCHITECTURES = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
 export const universalBundleDir = path.join(repoRoot, "target", UNIVERSAL_TARGET, "release", "bundle");
-export const tauriBin = path.join(appDir, "node_modules", ".bin", "tauri");
+// The Windows release is one x64 build, which lands under its target's own directory too.
+export const WINDOWS_TARGET = "x86_64-pc-windows-msvc";
+export const windowsReleaseDir = path.join(repoRoot, "target", WINDOWS_TARGET, "release");
+export const windowsBundleDir = path.join(windowsReleaseDir, "bundle");
+// The Tauri CLI's entry script, run with the current Node: a package manager's `.bin/tauri` is a shell script or a
+// `.cmd` file that `execFileSync` cannot start on every platform.
+export const tauriCli = path.join(appDir, "node_modules", "@tauri-apps", "cli", "tauri.js");
 
-// Runs `tauri build` with `args` in the app directory and `env` as its environment, plus
-// `scripts/actool/` first on the PATH: under the Node-hosted CLI the bundler starts `actool` with
-// stdin closed, which crashes it, and the shim there reopens stdin on /dev/null.
+// Runs the Tauri CLI with `args` in the app directory; `options` go to `execFileSync` (`env`, for one).
+export function runTauri(args, options = {}) {
+  execFileSync(process.execPath, [tauriCli, ...args], { cwd: appDir, stdio: "inherit", ...options });
+}
+
+// Runs `tauri build` with `args` in the app directory and `env` as its environment. On macOS `scripts/actool/` goes
+// first on the PATH: under the Node-hosted CLI the bundler starts `actool` with stdin closed, which crashes it, and
+// the shim there reopens stdin on /dev/null.
 export function tauriBuild(args, env) {
+  if (process.platform !== "darwin") return runTauri(["build", ...args], { env });
   const shimDir = path.join(appDir, "scripts", "actool");
   const buildEnv = { ...env, PATH: [shimDir, env.PATH].filter(Boolean).join(path.delimiter) };
-  execFileSync(tauriBin, ["build", ...args], { cwd: appDir, env: buildEnv, stdio: "inherit" });
+  runTauri(["build", ...args], { env: buildEnv });
+}
+
+// The version in `apps/desktop/package.json`, which `tauri.conf.json` reads: the one every build is made as.
+export function packageVersion() {
+  return JSON.parse(readFileSync(path.join(appDir, "package.json"), "utf8")).version;
 }
 
 // `env` without the update signing key variables, for a build that must never hold the key. `tauri.conf.json` turns

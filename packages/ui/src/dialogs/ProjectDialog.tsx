@@ -17,6 +17,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { offeredAccountOptions } from "./accountOptions";
 import { AdvancedSection, AdvancedTabs } from "../components/form/AdvancedSection";
 import { AgentAccountField } from "./AgentAccountField";
@@ -83,7 +84,7 @@ export function ProjectDialog({
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
-  const home = useDaemonStore((s) => s.homeDir);
+  const { home, style } = useHostPaths();
   // The clone directory is kept apart from the other sources' directory, so switching the source
   // back and forth loses neither; it starts at the default clone directory, which the user may change.
   const [directory, setDirectory] = useState(editing?.path ?? "");
@@ -310,7 +311,7 @@ export function ProjectDialog({
             value={name}
             onChange={setName}
             autoFocus={!!editing}
-            placeholder={editing ? t("dialog.project.nameExample") : projectNameDefault(source, path, remoteUrl, home) ?? t(source === "git" ? "dialog.project.repositoryNameDefault" : "dialog.project.directoryNameDefault")}
+            placeholder={editing ? t("dialog.project.nameExample") : projectNameDefault(source, path, remoteUrl, home ?? null, style) ?? t(source === "git" ? "dialog.project.repositoryNameDefault" : "dialog.project.directoryNameDefault")}
             description={editing ? undefined : t("dialog.project.nameHint")}
             errorMessage={shown(nameError)}
             characterLimit={PROJECT_NAME_LIMIT}

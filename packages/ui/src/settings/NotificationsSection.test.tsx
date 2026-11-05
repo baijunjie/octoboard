@@ -7,12 +7,14 @@ import type { NotificationCapability, PlatformAdapter } from "../platform";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PlatformProvider } from "../platform/react";
 import { NotificationsSection } from "./NotificationsSection";
+import type { HostFacts } from "../platform/host";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Mounts the section over a platform with `notifications`. */
-async function mount(notifications: NotificationCapability) {
-  const platform: PlatformAdapter = { kind: "tauri", notifications };
+async function mount(notifications: NotificationCapability, host: HostFacts = BROWSER_HOST) {
+  const platform: PlatformAdapter = { kind: "tauri", host, notifications };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -39,13 +41,31 @@ const base = {
 
 it("explains that the system manages the notifications and opens its settings on press, in the macOS app", async () => {
   const openSystemSettings = vi.fn(() => Promise.resolve());
-  const { container, buttons } = await mount({ ...base, openSystemSettings });
+  const { container, buttons } = await mount({ ...base, openSystemSettings }, MAC_HOST);
   expect(container.textContent).toContain("there is no separate in-app switch");
   expect(buttons()).toEqual(["Open System Settings"]);
   await act(async () => {
     container.querySelector("button")!.click();
   });
   expect(openSystemSettings).toHaveBeenCalledTimes(1);
+});
+
+it("explains that the system manages the notifications and opens its settings on press, in the Windows app", async () => {
+  const openSystemSettings = vi.fn(() => Promise.resolve());
+  const { container, buttons } = await mount({ ...base, openSystemSettings }, WINDOWS_HOST);
+  expect(container.textContent).toContain("there is no separate in-app switch");
+  expect(buttons()).toHaveLength(1);
+  await act(async () => {
+    container.querySelector("button")!.click();
+  });
+  expect(openSystemSettings).toHaveBeenCalledTimes(1);
+});
+
+it("says only that notifications are allowed where the system keeps no pane for them and the platform asks nothing", async () => {
+  const { container, buttons } = await mount({ ...base }, { ...WINDOWS_HOST, notificationSettings: "none" });
+  expect(container.textContent).toContain("Allowed.");
+  expect(container.textContent).not.toContain("manages these notifications");
+  expect(buttons()).toEqual([]);
 });
 
 it("offers no link to the system's settings where the capability cannot open them", async () => {

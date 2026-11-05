@@ -1,7 +1,9 @@
 import type { IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
 import type { PathLinkKind, PathLinkView } from "../../protocol";
+import { isPathLike, type PathStyle } from "../../format/hostPath";
 import { isPrimaryModifier } from "../../input/keys";
+import type { HostFacts } from "../../platform/host";
 import {
   cachedRows,
   crossesJoin,
@@ -39,12 +41,19 @@ const NONE_TTL_MS = 10_000;
 const MAX_ENTRIES = 2000;
 
 /** The characters a path is made of in running text: not blanks, quotes, brackets, pipes or
- * full-width punctuation, which end one. */
-const PATH_CHAR = String.raw`[^\s"'\`<>()\[\]{}|\\^*?\u3000-\u303f\uff00-\uffef]`;
+ * full-width punctuation, which end one. A backslash ends one too, except in a Windows host's paths, where it
+ * separates names. */
+const PATH_CHARS: Record<PathStyle, string> = {
+  unix: String.raw`[^\s"'\`<>()\[\]{}|\\^*?\u3000-\u303f\uff00-\uffef]`,
+  windows: String.raw`[^\s"'\`<>()\[\]{}|^*?\u3000-\u303f\uff00-\uffef]`,
+};
 /** What may stand right before a path: the start of the text, a blank, or an opening quote or
  * bracket, a comma, a semicolon or an equals sign. */
 const PATH_START = String.raw`(?<=^|[\s"'\`(\[<{=,;\u3000-\u303f\uff00-\uffef])`;
-const PATH_TOKEN = new RegExp(`${PATH_START}${PATH_CHAR}+`, "g");
+const PATH_TOKENS: Record<PathStyle, RegExp> = {
+  unix: new RegExp(`${PATH_START}${PATH_CHARS.unix}+`, "g"),
+  windows: new RegExp(`${PATH_START}${PATH_CHARS.windows}+`, "g"),
+};
 const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 const LINE_SUFFIX = /:\d+(?::\d+)?$/;
 
@@ -83,24 +92,25 @@ const COMPILER_POSITION = /^\((\d+)(?:,\d+)?\)/;
 /**
  * The paths a run of text appears to mention: absolute (`/…`), home-relative (`~/…`) and relative
  * with a directory in them (`src/a.ts`, `./a`, `../a`), or with a `:line` after a file name
- * (`a.ts:42`), each optionally mentioned with a leading `@`. A trailing `.`, `,`, `;`, `:`, `!` or
+ * (`a.ts:42`), each optionally mentioned with a leading `@`. On a Windows host the same with its
+ * spelling: `C:\…`, `\\server\share\…`, `~\…` and `src\a.ts`. A trailing `.`, `,`, `;`, `:`, `!` or
  * `?` is not part of one, and an address (`https://…`) is not one. Whether a path exists is the
  * daemon's to say; this only finds the text worth asking about.
  */
-export function pathCandidates(text: string): PathCandidate[] {
+export function pathCandidates(text: string, style: PathStyle = "unix"): PathCandidate[] {
   const found: PathCandidate[] = [];
-  for (const match of text.matchAll(PATH_TOKEN)) {
+  for (const match of text.matchAll(PATH_TOKENS[style])) {
     // A path that goes on into a bracket is a route pattern (`app/[id]/page.tsx`), not the part of
     // it before the bracket. A parenthesis after a name is a compiler's position (`a.ts(12,5)`).
     const next = text[match.index + match[0].length];
-    if (next === "[" || next === "{" || (next === "(" && match[0].endsWith("/"))) continue;
+    if (next === "[" || next === "{" || (next === "(" && (match[0].endsWith("/") || (style === "windows" && match[0].endsWith("\\"))))) continue;
     // An `@` in front is a mention of the path (`@src/a.ts`), not part of it.
     const mention = match[0].startsWith("@") ? 1 : 0;
     const token = match[0].slice(mention).replace(TRAILING_PUNCTUATION, "");
     if (token.length === 0 || token.length > MAX_PATH_CHARS || token.includes("://") || token.startsWith("//")) continue;
     const suffix = LINE_SUFFIX.exec(token);
     const path = suffix ? token.slice(0, suffix.index) : token;
-    if (!isPathLike(path, suffix !== null)) continue;
+    if (!isPathLike(path, suffix !== null, style)) continue;
     const compiler = next === "(" ? COMPILER_POSITION.exec(text.slice(match.index + match[0].length)) : null;
     const line = Number(suffix ? suffix[0].split(":")[1] : compiler?.[1]);
     found.push({
@@ -111,13 +121,6 @@ export function pathCandidates(text: string): PathCandidate[] {
     });
   }
   return found;
-}
-
-function isPathLike(path: string, hasLine: boolean): boolean {
-  if (path.startsWith("/")) return path.length > 1;
-  if (path.startsWith("~/")) return path.length > 2;
-  if (!/[\p{L}\p{N}_]/u.test(path)) return false;
-  return path.includes("/") || (hasLine && /[^.]\.[^.]/.test(path));
 }
 
 /** A path found in the terminal's rows, where it is on screen. */
@@ -133,7 +136,10 @@ export interface PathMatch {
   joined?: boolean;
 }
 
-const PATH_CHAR_CELL = new RegExp(`^${PATH_CHAR}$`);
+const PATH_CHAR_CELLS: Record<PathStyle, RegExp> = {
+  unix: new RegExp(`^${PATH_CHARS.unix}$`),
+  windows: new RegExp(`^${PATH_CHARS.windows}$`),
+};
 
 /** The narrowest width taken as the one a program laid its lines out at. A program's text width is
  * never this narrow, so a block of lines that are all shorter is a listing (`src/` / `lib/`), not
@@ -149,27 +155,29 @@ const MIN_LAYOUT_WIDTH = 40;
  * shows it (but see `MIN_LAYOUT_WIDTH`). It is only a candidate: the daemon says whether the joined
  * text names anything, and the pieces stay candidates too.
  */
-function continuesPath(above: LineRow[], row: TerminalRow, layout: LineLayout): number | undefined {
+function continuesPath(style: PathStyle, above: LineRow[], row: TerminalRow, layout: LineLayout): number | undefined {
+  const cell = PATH_CHAR_CELLS[style];
   const length = lineLength(above);
   if (length < layout.cols && !(length >= MIN_LAYOUT_WIDTH && length >= layout.longest)) return undefined;
   const cells = lineCells(above);
   const end = textEnd(cells);
-  if (end === 0 || !PATH_CHAR_CELL.test(cells[end - 1])) return undefined;
+  if (end === 0 || !cell.test(cells[end - 1])) return undefined;
   const from = indentOf(row.cells);
-  return PATH_CHAR_CELL.test(row.cells[from] ?? "") ? from : undefined;
+  return cell.test(row.cells[from] ?? "") ? from : undefined;
 }
 
-const PATH_CHAIN: LineChain = { continues: continuesPath, maxChars: MAX_PATH_CHARS };
+const pathChain = (style: PathStyle): LineChain => ({ continues: (above, row, layout) => continuesPath(style, above, row, layout), maxChars: MAX_PATH_CHARS });
+const PATH_CHAINS: Record<PathStyle, LineChain> = { unix: pathChain("unix"), windows: pathChain("windows") };
 
 /** The candidates in a joined line that run over a program break. Each break is also taken as a
  * start of its own, since the row above may end in a word that is not part of the path
  * (`looks right:` / `/private/…`). */
-function joinedCandidates(text: string, joins: number[]): PathCandidate[] {
+function joinedCandidates(text: string, joins: number[], style: PathStyle): PathCandidate[] {
   if (joins.length === 0) return [];
   const seen = new Set<string>();
   const found: PathCandidate[] = [];
   for (const offset of [0, ...joins]) {
-    for (const candidate of pathCandidates(text.slice(offset))) {
+    for (const candidate of pathCandidates(text.slice(offset), style)) {
       const start = candidate.start + offset;
       const end = candidate.end + offset;
       if (!crossesJoin(joins, start, end) || seen.has(`${start}:${end}`)) continue;
@@ -201,16 +209,17 @@ export function pathMatchesIn(
   rowAt: (y: number) => TerminalRow | undefined,
   from: number,
   to: number,
+  style: PathStyle = "unix",
 ): PathMatch[] {
   const read = cachedRows(rowAt);
   const matches: PathMatch[] = [];
   for (const line of logicalLinesIn(read, from, to)) {
     const content = lineText(line);
-    matches.push(...matchesIn(content, pathCandidates(content.text)));
+    matches.push(...matchesIn(content, pathCandidates(content.text, style)));
   }
-  for (const line of logicalLinesIn(read, from, to, PATH_CHAIN)) {
+  for (const line of logicalLinesIn(read, from, to, PATH_CHAINS[style])) {
     const content = lineText(line);
-    matches.push(...matchesIn(content, joinedCandidates(content.text, content.joins)));
+    matches.push(...matchesIn(content, joinedCandidates(content.text, content.joins, style)));
   }
   return matches;
 }
@@ -359,8 +368,9 @@ function pathSegmentsIn(
   read: (y: number) => TerminalRow | undefined,
   from: number,
   to: number,
+  style: PathStyle,
 ): LinkSegment[] {
-  const matches = pathMatchesIn(read, from, to);
+  const matches = pathMatchesIn(read, from, to, style);
   cache.setVisible(matches.map((match) => match.path));
   cache.want(matches.map((match) => match.path));
   return mergeSegments(
@@ -380,16 +390,18 @@ function pathLinkProvider(
   cache: PathLinkCache,
   open: (target: PathLinkTarget, onHost: boolean) => Promise<void>,
   hasSelection: () => boolean,
+  host: Pick<HostFacts, "modifier" | "os">,
+  style: PathStyle,
 ): ILinkProvider {
   const rowAt = terminalRowReader(term);
   return {
     provideLinks(y, callback) {
-      const matches = pathMatchesIn(rowAt, y, y).filter((match) => match.segments.some((segment) => segment.y === y));
+      const matches = pathMatchesIn(rowAt, y, y, style).filter((match) => match.segments.some((segment) => segment.y === y));
       cache.want(matches.map((match) => match.path));
       const links: ILink[] = foundPathMatches(matches, (path) => !!cache.kind(path))
         .flatMap((match) => {
           const target: PathLinkTarget = { path: match.path, line: match.line, ...cache.answerFor(match.path) };
-          const activate = terminalLinkHandler((_, event) => open(target, isPrimaryModifier(event)), hasSelection);
+          const activate = terminalLinkHandler((_, event) => open(target, isPrimaryModifier(event, host)), hasSelection, host);
           // A leave that arrives after another link's hover must not forget that link, hence the identity check.
           return match.ranges
             .filter((range) => range.start.y <= y && y <= range.end.y)
@@ -417,11 +429,15 @@ export function installPathLinks(
   handlers: {
     probe: (paths: string[]) => Promise<PathAnswer[]>;
     open: (target: PathLinkTarget, onHost: boolean) => Promise<void>;
+    /** How the daemon host writes a path; `unix` where unsaid. */
+    pathStyle?: PathStyle;
   },
   hasSelection: () => boolean,
   onChange: () => void,
+  host: Pick<HostFacts, "modifier" | "os">,
 ): { cache: PathLinkCache; segments: ExtraLinkSegments } {
   const cache = new PathLinkCache(handlers.probe, onChange);
-  term.registerLinkProvider(pathLinkProvider(term, cache, handlers.open, hasSelection));
-  return { cache, segments: (read, from, to) => pathSegmentsIn(cache, read, from, to) };
+  const style = handlers.pathStyle ?? "unix";
+  term.registerLinkProvider(pathLinkProvider(term, cache, handlers.open, hasSelection, host, style));
+  return { cache, segments: (read, from, to) => pathSegmentsIn(cache, read, from, to, style) };
 }

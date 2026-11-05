@@ -12,12 +12,13 @@ in the environment wins.
 - `native-localizations.mjs` (`pnpm native:generate`) — generates the native permission resources from
   every `src-tauri/localizations/*.json` catalog and `src-tauri/Info.template.plist`, substituting the app name from
   `config/app.json`. Tauri runs it before development and builds; `src-tauri/build.rs` runs the same generator for
-  Cargo-only builds. The ignored `src-tauri/Info.plist` supplies both Tauri development embedding and
-  `bundle.macOS.infoPlist`; the ignored `src-tauri/generated-localizations/` holds the `.lproj/InfoPlist.strings` files
-  mapped into bundle resources by `src-tauri/tauri.conf.json`. Its exported `generateNativeLocalizations` is tested by
+  Cargo-only builds on macOS (other targets list no such resources). The ignored `src-tauri/Info.plist` supplies both Tauri development embedding and
+  `bundle.macOS.infoPlist` in `tauri.macos.conf.json`; the ignored `src-tauri/generated-localizations/` holds the `.lproj/InfoPlist.strings` files
+  mapped into bundle resources by `src-tauri/tauri.macos.conf.json`. Its exported `generateNativeLocalizations` is tested by
   `native-localizations.test.mjs`.
 - `build-daemon.mjs` (`pnpm build:daemon`) — builds `apps/daemon/` in release mode and copies it into
-  `src-tauri/binaries/` as `octoboardd-<target triple>`, the name Tauri's `externalBin` needs. Tauri runs it as
+  `src-tauri/binaries/` as `octoboardd-<target triple>` (with `.exe` for a Windows target, which Tauri's
+  `beforeBuildCommand` announces through `TAURI_ENV_TARGET_TRIPLE`), the name Tauri's `externalBin` needs. Tauri runs it as
   `beforeBuildCommand` (through `pnpm build:tauri`); `tauri dev` does not, so it must be run by hand after a daemon
   change. With `TAURI_ENV_TARGET_TRIPLE=universal-apple-darwin` or `--universal` it builds both architectures `--locked`
   and `lipo`-joins `octoboardd-universal-apple-darwin`. `pnpm build:daemon --universal` does not add the two Rust
@@ -30,19 +31,33 @@ in the environment wins.
   update key) and installs it into `OCTOBOARD_INSTALL_DIR` from `.env.local`. It verifies the built signature, refuses
   while Octoboard runs, refuses to replace a symlink or another application, stages the copy on the destination volume
   and keeps the previous bundle for rollback if the replacement fails.
-- `release.mjs` (`pnpm release`) — the universal, signed and notarized release build (below).
+- `release.mjs` (`pnpm release`) — picks the host's release build: `release-macos.mjs`, the universal, signed and
+  notarized macOS build, or `release-windows.mjs`, the x64 NSIS installer with its signing modes (below).
 - `release-desktop.mjs` (`pnpm release:version`) — prepares a version commit in an isolated worktree, checks it and
-  pushes it with its annotated tag to start release CI (see "Releasing by tag"). Its version-file preparation,
-  argument parsing and release orchestration are tested by `release-desktop.test.mjs`.
-- `sign-update.mjs` (`pnpm sign-update`) — signs the update archive `pnpm release --no-sign-update` left with the update
-  key and checks that a fresh `.sig` came out (below).
-- `publish-release.mjs` (`pnpm publish-release`) — publishes what `pnpm release` built (below).
-- `release-manifest.mjs` — what publishing decides without GitHub (which manifests a version goes to, asset names and
-  addresses, version ordering, the manifest itself); tested by `release-manifest.test.mjs` through `pnpm test`.
-- `bundle.mjs` — shared by the build scripts: paths, `tauriBuild`, `withoutAppleVariables`, `withoutUpdateKey`, the
+  pushes it with its annotated tag to start release CI (see "Releasing by tag"); `--platforms` makes a version for one
+  platform. Its version-file preparation, argument parsing and release orchestration are tested by
+  `release-desktop.test.mjs`.
+- `tag-message.mjs` — prints the notes or the platforms of a tag message read from standard input, for
+  `.github/release-notes.sh`.
+- `sign-update.mjs` (`pnpm sign-update`) — signs the update artifact `pnpm release --no-sign-update` left (the archive on
+  macOS, the installer on Windows) with the update key and checks that a fresh `.sig` came out (below).
+- `publish-release.mjs` (`pnpm publish-release`) — publishes what `pnpm release` built, for both platforms or the one
+  `--platforms` selects: the universal macOS build from the bundle directory, the Windows installer from a directory
+  (below).
+- `release-manifest.mjs` — what publishing decides without GitHub (the platform selection and the tag message's
+  `Platforms:` line, which manifests a version goes to for each platform, asset names and addresses, what an existing
+  release needs, version ordering, the manifest itself and its platform entries); tested by `release-manifest.test.mjs` through
+  `pnpm test`.
+- `windows-release.mjs` — the Windows release's pieces: the signing mode and stages, the `--config` that makes
+  `tauri build` call the sign command, the `signtool` checks, the look inside the installer and the check of the
+  files `publish-release` takes. `sign-file.mjs` is what `tauri build` calls per file in `command` mode. Tested by
+  `windows-release.test.mjs`, which covers what needs no `signtool` or 7-Zip.
+- `bundle.mjs` — shared by the build scripts: paths (macOS's universal bundle directory and Windows's), `tauriBuild`
+  and `runTauri` (the CLI is run as `node tauri.js`, which also works on Windows), `withoutAppleVariables`,
+  `withoutUpdateKey`, the
   bundle lookup and the checks on a built `.app` (`assertLayeredIcon`, `assertProducedSince`, `appVersion`,
   `verifySignature`, `signatureReport`).
-- `update-archive.mjs` — the update archive's lifecycle: `createUpdateArchive` packs the `.app` with the system `tar`
+- `update-archive.mjs` — the update archive's lifecycle (`signUpdateArchive` also signs the Windows installer): `createUpdateArchive` packs the `.app` with the system `tar`
   without xattrs and refuses entries other than files, directories and symlinks (a hard link breaks the updater's
   unpack); `signUpdateArchive` signs it with `tauri signer sign`; `removeUpdateArchives` clears earlier builds'.
   Tested by `update-archive.test.mjs`.
@@ -71,6 +86,11 @@ first compile instead of being rewritten. The script checks the environment befo
   only: `APPLE_ID` or `APPLE_PASSWORD` present in the environment is refused, because a second credential set could
   notarize the `.app` and the `.dmg` under different identities.
 
+`tauri build` on macOS reads `tauri.conf.json` with `tauri.macos.conf.json` merged over it (RFC 7396; arrays replace).
+That merged configuration gives the `.app` the same `Info.plist`, `.lproj` resources, entitlements, icons and DMG
+layout as the former single configuration file, and a release build from it is expected to sign, notarize and staple as
+described here.
+
 A signed build also needs the update signing key, `TAURI_SIGNING_PRIVATE_KEY` (the key file's path or the key itself;
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` for a key made with a password), and is refused without it. It is a different key
 from Apple's: it signs `Octoboard.app.tar.gz`, the archive the in-app update downloads, and the application checks that
@@ -93,35 +113,121 @@ otherwise be refused), `stapler validate` and Gatekeeper's verdict on the `.dmg`
 this machine just built, which carry no quarantine attribute, so they prove little about a download; a real Gatekeeper
 test needs a copy that was quarantined on its way.
 
+## Windows release builds
+
+`pnpm release` on Windows (x64 only, `x86_64-pc-windows-msvc`; arm64 comes later) runs `rustup target add`, then
+`tauri build --target x86_64-pc-windows-msvc --bundles nsis --locked`. `beforeBuildCommand` in
+`tauri.windows.conf.json` fetches the ConPTY files and builds the daemon and the UI first. The output is
+`target/x86_64-pc-windows-msvc/release/bundle/nsis/Octoboard_<version>_x64-setup.exe`; stale installers and `.sig` files
+are deleted first. The NSIS installer is the update artifact itself: the updater downloads it and runs it. The update
+key variables are left out of the build's environment as on macOS, `--no-sign-update` leaves the update signature to
+`pnpm sign-update`, and without it `TAURI_SIGNING_PRIVATE_KEY` is required and the script writes `<installer>.sig` with
+it, after the checks below and so after the last step that could change the installer's bytes. Nothing may touch the
+installer afterwards.
+
+```sh
+# Unsigned installer, no update key (what the `windows-bundle` job of Code quality builds)
+pnpm --filter @octoboard/desktop release --no-sign-update
+# Unsigned installer and its update signature (TAURI_SIGNING_PRIVATE_KEY in .env.secret or the environment)
+pnpm --filter @octoboard/desktop release
+```
+
+**Code signing** is the mode `WINDOWS_SIGNING=none|command|signpath` (default `none`; an environment variable or
+`.env.secret` locally, a repository variable in CI). The first Windows release ships unsigned, so Windows SmartScreen
+warns on the download; SignPath Foundation is the intended provider later. Nothing in `tauri.windows.conf.json` names a
+provider.
+
+- **`none`** — nothing is signed.
+- **`command`** — one run: `WINDOWS_SIGN_COMMAND`, a command line with `%1` where a file's path goes (double quotes group
+  words, no other escapes), is run once per file `tauri build` signs. Its first word must name an executable (`.exe`):
+  `sign-file.mjs` starts it without a shell (`execFileSync`), and Node refuses to start a `.cmd` or `.bat` file that
+  way, so a `WINDOWS_SIGN_COMMAND` naming a batch signer is refused: its sign step fails, and with it the build. The script passes `bundle.windows.signCommand`
+  through `--config`, pointing at `sign-file.mjs`, which reads the command line from the environment (Tauri replaces
+  every `%1` in the arguments, the command's own among them) and skips Microsoft's `conpty.dll` and `OpenConsole.exe`.
+  The provider's own credentials are environment variables of the build. Locally:
+  `WINDOWS_SIGNING=command WINDOWS_SIGN_COMMAND='<signer> <options> %1' pnpm --filter @octoboard/desktop release`.
+- **`signpath`** — SignPath signs only uploaded GitHub artifacts and each request is approved by hand, so there are
+  three runs with a submission between them, `--stage` each: `build` (`tauri build --no-bundle`, then our own
+  `Octoboard.exe` and `octoboardd.exe` are left in `target/signpath/binaries/`), `bundle --signed <dir>` (checks the
+  signed files, puts them back, `tauri bundle --bundles nsis --no-binary-patching`, the patching of the shell would
+  break its signature; the installer is left in `target/signpath/installer/`) and `finish --signed <dir>` (checks the
+  signed installer, puts it in the bundle directory, checks the result). The conpty files are in neither submission.
+  The NSIS uninstaller is generated inside `makensis` and so is not signed. Add `--no-sign-update` to each when the
+  update is signed by `pnpm sign-update` afterwards.
+
+After the build, `release` looks inside the installer (extracted with 7-Zip, `7z.exe`, which a runner has; without it
+the check is skipped for `none` and fails otherwise). Outside `none`, `signtool verify /pa /v` must accept the
+installer, `Octoboard.exe` and `octoboardd.exe`, or the release fails. In every mode it checks that the installer's
+`conpty.dll` and `OpenConsole.exe` files are byte-identical to the files `fetch-conpty.mjs` took from the pinned
+package (failing if not) and reports, without failing, who signed each file.
+
+What a signed build is expected to do, in either signing mode:
+
+- `command`: Tauri hands `bundle.windows.signCommand` `Octoboard.exe`, `octoboardd.exe`, the NSIS uninstaller and the
+  `setup.exe`, and never `conpty.dll` or `OpenConsole.exe` (`sign-file.mjs` would skip them in any case). The check on
+  the installer is what reports whether the shell and the sidecar in it are signed.
+- `signpath`: our own PE files are signed in the first round and the installer in the second; the uninstaller is not
+  signed (above).
+- In both, `signtool verify /pa /v` passes on the installer and on `Octoboard.exe` and `octoboardd.exe` inside it, and
+  the ConPTY files in it are byte-identical to the package's and keep Microsoft's signature.
+- The look inside the installer expects exactly one of each of those four files, found by the tail of its path in what
+  7-Zip extracts, and fails the release otherwise.
+
 ## Publishing a release
 
-`pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path) [--dry-run]` publishes what the
-last signed `pnpm release` built, for the version in `apps/desktop/package.json`. The manifest model it writes to (the
-fixed-tag `updater` release, the channels, the manifest contents, asset naming, a channel never moving backwards) is
-described in `docs/product/in-app-updates.md`, section "Where updates come from"; this section is the procedure.
+`pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path) [--platforms macos|windows|macos,windows] [--windows-dir <dir>] [--dry-run]`
+publishes what the last signed `pnpm release` built, for the version in `apps/desktop/package.json`. A release carries
+both platforms unless `--platforms` selects one, and a platform that is not selected is neither needed nor touched: its
+files are not looked for and its manifests are not read or written. The manifest model it writes to (the fixed-tag
+`updater` release, one pair of manifests per platform, the channels, the manifest contents, asset naming, a manifest
+never moving backwards) is described in `docs/product/in-app-updates.md`, section "Where updates come from"; this
+section is the procedure.
 
-1. It refuses unless `gh` is logged in, the working tree is clean and the universal build in the bundle directory is
-   this version's, signed and notarized: the `.app` says it is `<version>`, the `.dmg` is named for it and passes
-   `stapler validate`, and the update archive and its signature are no older than the `.app`. A release
-   `desktop-v<version>` that already exists with exactly this build's assets, the same archive size and the same
-   signature is an earlier run that failed part-way, and this run resumes from step 3; any other (other assets, a
-   rebuild of the same version, a draft) is refused, since a published version is never replaced: raise the version
-   instead.
+macOS is the universal build in `target/universal-apple-darwin/release/bundle` and is checked with macOS tools, so a
+macOS publish runs on a Mac. Windows comes as `--windows-dir <dir>`, required with Windows (and refused without it): `<dir>` holds
+`Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build and `sign-update` left them (the installer
+named for the version, the `.sig` present and not older than it). A Windows-only publish needs no macOS tool and runs on
+any machine.
+
+1. It refuses unless `gh` is logged in, the working tree is clean and each selected build is this version's. macOS:
+   signed and notarized, the `.app` says it is `<version>`, the `.dmg` is named for it and passes `stapler validate`,
+   and the update archive and its signature are no older than the `.app`. The release `desktop-v<version>` is then
+   compared with the selected platforms: one that has all of a platform's files, the same update file size and the
+   same signature, is an earlier run that failed part-way, and that platform resumes from step 3; one that has none of a
+   platform's files gets them added in step 2; any other (some of a platform's files, files that belong to neither
+   platform, a different build of the same version, a draft, an immutable release when files must be added) is
+   refused, since a published file is never replaced: raise the version instead. A platform that is not selected is
+   not compared.
 2. It creates the release `desktop-v<version>` on the current commit (which must be pushed), marked prerelease when the
-   version has a suffix, with the `.dmg` and the update archive and its signature.
+   version has a suffix, with the selected platforms' files (macOS: the `.dmg` and the update archive; Windows: the
+   installer), each update file with its signature. When the release exists already, it adds the files of the
+   platform that are missing and leaves the rest as it is, so a version can be published for the second platform later.
 3. It creates the `updater` release if it is missing (as a prerelease, so it is never the repository's latest), then
-   uploads the manifests the version goes to with `--clobber`. A manifest that already announces a newer version is left
-   alone and reported. A manifest that is not valid is refused, with nothing created yet. Immutable releases must stay
-   off for the repository: the `updater` release is rewritten by every release, and the script refuses when it is
-   immutable (it reads the `isImmutable` field, which needs a `gh` recent enough to report it).
+   uploads each selected platform's manifests the version goes to with `--clobber`: `beta.json` and `stable.json` for
+   macOS, `beta-windows.json` and `stable-windows.json` for Windows, the beta one always and the stable one unless the
+   version has a prerelease suffix. A manifest that already announces a newer version is left alone and reported. A
+   manifest that is not valid is refused, with nothing created yet. Immutable releases must stay off for the
+   repository: the `updater` release is rewritten by every release, and the script refuses when it is immutable (it
+   reads the `isImmutable` field, which needs a `gh` recent enough to report it).
 
-`--dry-run` prints the plan and the manifest without calling GitHub.
+A manifest carries only its own platform's entries, so publishing one platform never writes the other's manifests: its
+users are offered nothing for that version until it is published for them.
+
+`--dry-run` prints the plan and the manifests without calling GitHub.
 
 ## Releasing by tag
 
-Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which validates the tag and does the two steps
-above on a macOS runner. Application quality checks run locally before creating the tag; release CI does not repeat
-them. The manual `pnpm release` and `publish-release` path stays available.
+Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which validates the tag, builds the macOS
+and Windows releases in parallel on their own runners and publishes them from a job of its own. Application quality
+checks run locally before creating the tag; release CI does not repeat them. The manual `pnpm release` and
+`publish-release` path stays available.
+
+By default a tag releases both platforms. Two things select one: `release:version --platforms macos|windows` ends the
+tag's message with a line `Platforms: macos` (or `windows`), which `validate` reads and `.github/release-notes.sh`
+leaves out of the notes (no such line, or `Platforms: macos,windows`, is both); and running the **Release** workflow
+by hand (**Run workflow**) takes the `tag` of an existing version tag and a `platforms` input (`both`, `macos` or
+`windows`), which wins over the tag's own line. The second is how a platform a version's tag left out is released
+later, from the same tag: the versioned release gets that platform's files added and its manifests written.
 
 ### Prepare and push a version
 
@@ -137,7 +243,8 @@ Supply exactly one nonempty notes source: `--notes "text"` or `--notes-file path
 from the repository root, even when pnpm runs the command in the desktop package; absolute paths work too. Keep an
 uncommitted notes file outside the tracked tree or in an ignored location so the main checkout stays clean. The tag
 message is the same text shown on the release page and in the application's update notice; Markdown headings are
-preserved.
+preserved. `--platforms macos|windows` releases one platform only: the tag message then ends with a blank line and
+`Platforms: macos` (or `windows`), which is not part of the notes. Without it the version is for both platforms.
 
 The version must be a semantic version strictly newer than the current one, without build metadata. The command
 refuses an existing local or remote version tag, release branch or release worktree. `.worktrees/` must be ignored
@@ -180,36 +287,87 @@ and notes. Do not delete or replace a published tag to retry.
 The workflow:
 
 1. `validate` runs `.github/release-notes.sh`: the tag must equal `desktop-v<version>` from `apps/desktop/package.json`
-   and be an annotated tag with a non-empty message. The message, minus any signature, is the release notes, which the
-   in-app update notice shows too. It also checks that the tagged commit is on `main`, that the repository secrets
-   below are set, and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build
-   would otherwise find after the build starts.
-2. After `validate` passes, `release` restores the universal-build Rust dependency cache, then builds, signs and
-   notarizes with
+   and be an annotated tag with a non-empty message. The message, minus any signature and its `Platforms:` line, is the
+   release notes, which the in-app update notice shows too. The platforms are the `platforms` input of a manual run, else
+   the tag message's `Platforms:` line, else both; they are the job's output. It also checks that the tagged commit is
+   on `main`, that the repository secrets below are set (the update key always; the Apple ones only for macOS), and
+   that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would otherwise
+   find after the build starts. With Windows it checks the signing mode too: the repository variable
+   `WINDOWS_SIGNING` (`none`, `command` or `signpath`; unset is `none`) and what that mode needs. A manual run checks
+   out the tag it names, and every job builds that tag.
+2. After `validate` passes, the Windows build and `macos` (`macos-26`) run in parallel, each only when its platform is
+   selected; neither waits for the other. The Windows build follows `WINDOWS_SIGNING`, which `validate` hands on as
+   an output:
+   - `none` and `command`: the job `windows` (`windows-latest`) is one `release --no-sign-update`.
+   - `signpath`: each SignPath request waits for an approval given by hand, and a GitHub-hosted job is ended after
+     six hours, so the route is five jobs that pass artifacts on, each with its own limit well under that.
+     `windows-signpath-build` runs `--stage build` and uploads the executables (`unsigned-binaries`);
+     `windows-signpath-sign-binaries` (`ubuntu-latest`) submits them with
+     `signpath/github-action-submit-signing-request`, waits at most four hours (`wait-for-completion-timeout-in-seconds`,
+     inside a 270-minute job) and uploads what comes back (`signed-binaries`); `windows-signpath-bundle` builds the tree
+     again from the same commit (from the shared dependency cache), puts the signed executables in place with
+     `--stage bundle` and uploads the installer twice, as `unsigned-installer` for SignPath and as `unsigned-nsis` under
+     the bundler's name; `windows-signpath-sign-installer` submits and waits the same way (`signed-installer`); and
+     `windows-signpath-finish` fetches the ConPTY files the installer is checked against, puts the signed installer in
+     the bundle directory under that name with `--stage finish`, and signs the update. The two submitting jobs carry
+     `actions: read` beside `contents: read`, as SignPath reads the artifact and the run with the job's token.
+
+     Design assumptions of this route: each submission is made from a Linux job other than the one that uploaded the
+     artifact (SignPath's documentation shows upload and request in one job), and SignPath's origin check is expected
+     to accept an artifact of another job of the same run. What SignPath hands back is unpacked into the submitting
+     job's output directory as the files themselves: `Octoboard.exe` and `octoboardd.exe` for the first round, and
+     the one signed `*-setup.exe` for the second, which `finish` finds by that suffix. The `unsigned-nsis` artifact is
+     there only to give the installer's file name under the bundler's naming; `finish` runs on a fresh runner, and
+     the signed installer replaces what the bundler would have produced.
+
+   Either way `sign-update` signs the installer in a step of its own, the only one given the update key, and the
+   installer and its `.sig` are uploaded as the artifact `windows-installer`. The Windows build jobs restore the
+   `windows-release` dependency cache.
+3. `macos` restores the universal-build Rust dependency cache, then builds, signs and notarizes with
    `pnpm --filter @octoboard/desktop release --no-sign-update`. It signs the update archive in a step of its own
    (`sign-update`), the only step given the update key (no build step has it in its environment; code planted for
-   later steps of the same runner could still read it), and publishes with `publish-release --notes-file`, the only
-   one given the workflow's own token (for `gh`; checkouts keep no credential in `.git/config`). The signing certificate
-   and the Developer ID G2 intermediate go into a keychain that exists for that run only, and the API key is written
-   to a temporary file; both are removed right after the build. `validate` learns whether the secrets are set from
-   boolean expressions, without their values reaching a step.
-3. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
-   third tag pushed while one runs replaces the waiting one, which must then be re-run.
+   later steps of the same runner could still read it). The signing certificate and the Developer ID G2 intermediate go
+   into a keychain that exists for that run only, and the API key is written to a temporary file; both are removed
+   right after the build. `validate` learns whether the secrets are set from boolean expressions, without their values
+   reaching a step. It then packs `bundle/macos` and `bundle/dmg` of the universal bundle directory into one tar (which
+   keeps symlinks, permissions and modification times that an artifact's zip would drop) and uploads it as the artifact
+   `macos-bundle`.
+4. `publish` needs `validate`, `macos`, `windows` and `windows-signpath-finish`, and runs when `validate` succeeded and
+   each selected platform's build succeeded (for Windows, the job of the signing mode's route): an unselected
+   platform's jobs, or the route not taken, are skipped, which does not stop it, and a selected one that failed or was
+   cancelled does. It downloads the selected platforms' artifacts (the macOS tar is unpacked into
+   `target/universal-apple-darwin/release`) and runs
+   `node apps/desktop/scripts/publish-release.mjs --notes-file ... --platforms <selection>` with `--windows-dir` for
+   Windows. It is the only job whose token may write (`contents: write`, for `gh`; every other job reads, and
+   checkouts keep no credential in `.git/config`) and has no update key. It installs nothing (the script uses Node's
+   built-in modules only) and runs on
+   `macos-26` when macOS is selected, whose tools check the disk image, and on `ubuntu-latest` otherwise.
+5. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
+   third run started while one runs and one waits replaces the waiting one, which must then be re-run.
 
 Before the first release, or after dependency or toolchain changes, run **Warm Rust caches** manually on `main` to
-prepare compatible dependency caches. Warming uses an unsigned universal build with no signing credentials and never
-publishes an application. Tag runs restore main's caches; different version tags cannot restore one another's caches.
+prepare compatible dependency caches. Warming uses an unsigned universal build and an unsigned Windows installer, with
+no signing credentials, and never publishes an application; its `windows` job fills the `windows-release` profile that
+the Windows jobs of `release.yml` and `windows-bundle` restore. Tag runs restore main's caches; different version tags cannot restore one another's caches.
 Local release checks still run before tagging. The [Rust cache module](../../../.github/actions/rust-cache/README.md)
 documents the command, profiles, GitHub retention limits and the measurements to inspect before judging a speed change.
 
 The **Code quality** workflow (`.github/workflows/quality.yml`) remains available on request for independent hosted
-frontend, macOS native and Linux compilation checks. It is not called by release CI and does not block publication.
+frontend, macOS native, Linux compilation and Windows checks; its `windows-bundle` job builds the unsigned Windows
+installer (`WINDOWS_SIGNING=none`, no update key), the way to see `tauri build` pass on Windows without a release. It is not called by release CI and does not block publication.
 The local macOS release checks do not cover Linux compilation; run that workflow when Linux verification is needed.
 
 Repository secrets: `APPLE_CERTIFICATE` (base64 of the Developer ID Application `.p12`, private key included),
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`
 (the contents of the API key's `.p8`), `TAURI_SIGNING_PRIVATE_KEY` (the key's contents) and
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (not set for a key without a password).
+
+Windows code signing, by mode of the repository variable `WINDOWS_SIGNING` (none of it is needed for `none`):
+`command` needs the variable `WINDOWS_SIGN_COMMAND` (the provider's own credentials go into the `windows` job's build
+step `env` when a provider is chosen); `signpath` needs the secret `SIGNPATH_API_TOKEN` and the variables
+`SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`,
+`SIGNPATH_BINARIES_CONFIGURATION_SLUG` and `SIGNPATH_INSTALLER_CONFIGURATION_SLUG` (the artifact configurations of the
+two submissions: a zip holding `Octoboard.exe` and `octoboardd.exe`, and a zip holding the installer).
 
 **The version is kept in two places**: `version` in `apps/desktop/package.json`, which `src-tauri/tauri.conf.json` reads
 (its `version` is the path `../package.json`) and the release scripts read, and the workspace `version` in the root
@@ -227,7 +385,10 @@ commit to `main`, write the notes to a file, then run
 rather than the editor keeps Git's `#` template lines out of them. Push tags one at a time: GitHub creates no push
 event when more than three tags are pushed at once.
 
-When a run fails after `gh release create` but before the manifests are uploaded, re-running it rebuilds with a
-different signature, and `publish-release` refuses it. Delete the release but keep the tag
-(`gh release delete desktop-v<version>`, without `--cleanup-tag`) and re-run the failed jobs. The script's own messages
-still describe the manual flow.
+When a run fails after `gh release create` but before the manifests are uploaded, re-running only the failed jobs
+reuses the artifacts the build jobs already uploaded, so `publish` finds the same build and resumes; a re-run of
+the build jobs rebuilds with a different signature, and `publish-release` refuses it. Delete the release but keep the
+tag (`gh release delete desktop-v<version>`, without `--cleanup-tag`) and re-run the failed jobs. When one platform's
+build fails, `publish` does not run and nothing is published: fix the cause and re-run the failed jobs, or release the
+passing platform alone by running the workflow by hand for it and the other one later. The script's own messages still
+describe the manual flow.

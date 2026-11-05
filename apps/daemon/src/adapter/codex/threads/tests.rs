@@ -12,7 +12,7 @@ const CODEX_ID: &str = "019a0000-0000-7000-8000-000000000001";
 fn share(account: &Path, default: &Path, names: &[&str]) {
     for name in names {
         std::fs::create_dir_all(default.join(name)).unwrap();
-        std::os::unix::fs::symlink(default.join(name), account.join(name)).unwrap();
+        crate::test_support::symlink(default.join(name), account.join(name)).unwrap();
     }
 }
 
@@ -86,7 +86,7 @@ fn a_row_is_rewritten_only_when_it_names_another_file_than_the_head() {
     let named = uncompressed(&chain.head);
     database_naming(&linked, Some(&named));
     for home in [&source, &target] {
-        std::os::unix::fs::symlink(&linked, home.join("state_5.sqlite")).unwrap();
+        crate::test_support::symlink(&linked, home.join("state_5.sqlite")).unwrap();
     }
     point_head(&target, &head, &[]);
     assert_eq!(row_of(&linked), Some(named));
@@ -132,15 +132,15 @@ fn the_database_scan_follows_a_linked_file_and_ignores_what_is_not_one() {
     let (chain, head) = head_of(&default);
     let linked = default.join("state_5.sqlite");
     database_naming(&linked, Some(&uncompressed(&chain.middle)));
-    std::os::unix::fs::symlink(&linked, target.join("state_5.sqlite")).unwrap();
+    crate::test_support::symlink(&linked, target.join("state_5.sqlite")).unwrap();
     // A link that loops, and is no database, does not fail the switch.
-    std::os::unix::fs::symlink("loop", target.join("loop")).unwrap();
+    crate::test_support::symlink("loop", target.join("loop")).unwrap();
     point_head(&target, &head, &[]);
     assert_eq!(row_of(&linked), Some(uncompressed(&target.join(&head))));
 
     // A link to nothing is no database.
     let dangling = temp_dir("scan-dangling");
-    std::os::unix::fs::symlink(
+    crate::test_support::symlink(
         dangling.join("gone.sqlite"),
         dangling.join("state_5.sqlite"),
     )

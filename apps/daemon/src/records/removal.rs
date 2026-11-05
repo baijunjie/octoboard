@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::adapter::provider;
-use crate::hostfs::lexically_normalise;
+use crate::hostfs::{lexically_normalise, lexically_within};
 use crate::protocol::{Account, AgentId, Session};
 use crate::records::locate::{
     in_real_directories, own_paths, plausible_id, record_paths, records_dir, Hints, Locator,
@@ -46,16 +46,16 @@ pub fn removable_record_paths(
         .map(|root| records_dir(agent, &lexically_normalise(&root)));
     let default_real = default
         .as_deref()
-        .and_then(|default| std::fs::canonicalize(default).ok());
+        .and_then(|default| crate::hostfs::canonical(default).ok());
     paths
         .into_iter()
         .filter(|path| {
             !default
                 .as_ref()
-                .is_some_and(|default| path.starts_with(default))
+                .is_some_and(|default| lexically_within(path, default))
                 && !default_real.as_ref().is_some_and(|default| {
                     path.parent()
-                        .and_then(|parent| std::fs::canonicalize(parent).ok())
+                        .and_then(|parent| crate::hostfs::canonical(parent).ok())
                         .is_some_and(|parent| parent.starts_with(default))
                 })
         })
@@ -116,7 +116,7 @@ pub(crate) struct Resolved {
 impl Resolved {
     /// `dir` and where it leads; `None` when it cannot be resolved, as when it does not exist.
     pub(crate) fn of(dir: PathBuf) -> Option<Self> {
-        let real = std::fs::canonicalize(&dir).ok()?;
+        let real = crate::hostfs::canonical(&dir).ok()?;
         Some(Self { spelled: dir, real })
     }
 
@@ -194,7 +194,7 @@ mod tests {
         // An account whose directory is a link to the default one reaches the default's record by
         // its own spelling; that is not its own to remove.
         let alias = dir.join("alias");
-        std::os::unix::fs::symlink(&default, &alias).unwrap();
+        crate::test_support::symlink(&default, &alias).unwrap();
         let through_alias = removable(&mut locator, &[], Some(&alias));
         assert!(through_alias.is_empty(), "{through_alias:?}");
     }

@@ -35,6 +35,14 @@
     "fencedframe",
   ];
   var INERT_TAGS = ["script", "noscript", "template"];
+  // A resource hint (`preconnect`, `dns-prefetch`, `prefetch`, `prerender`, `modulepreload`,
+  // `preload`) is a `rel` value that a browser acts on, on a `<link>`, before any request a content
+  // rule or request filter sees: WebView2's request filter was measured letting a `preconnect` open
+  // its connection. `<link>` is forbidden above, and the hints take effect on no other element; `rel`
+  // goes from every element all the same, as DOMPurify keeps it by default, so no element carries a
+  // hint at all. Unknown elements, custom ones among them, are dropped with their text kept. It is
+  // checked against the result as the tags are.
+  var HINT_ATTRIBUTES = ["rel"];
 
   // `RETURN_DOM` hands back the sanitized document's `<html>` element with `WHOLE_DOCUMENT`.
   // `SANITIZE_DOM` is off because it drops ordinary form field names (`name`, `id` colliding with a
@@ -60,10 +68,17 @@
       "srcset",
       "sizes",
       "nonce",
-    ],
+    ].concat(HINT_ATTRIBUTES),
     ALLOWED_URI_REGEXP: /^(?:(?![/\\]{2})[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
   });
-  var leftover = clean.querySelector(NETWORK_TAGS.concat(INERT_TAGS).join(", "));
+  var leftover = clean.querySelector(
+    NETWORK_TAGS.concat(
+      INERT_TAGS,
+      HINT_ATTRIBUTES.map(function (name) {
+        return "[" + name + "]";
+      }),
+    ).join(", "),
+  );
   if (leftover) {
     // Nothing is rendered rather than the page as it came.
     return;

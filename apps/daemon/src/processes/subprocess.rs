@@ -7,8 +7,7 @@
 //! own holding a pipe open and so needs a completion marker rather than end-of-file, is
 //! `crate::env_shell`'s.
 
-use std::io::{self, Read, Write};
-use std::os::unix::process::CommandExt;
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::sync::mpsc;
@@ -17,35 +16,25 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
-use crate::processes::leader;
+use crate::platform::proc::{
+    self, bounded_pipe_reader, BoundedChunk, ChildHandle, Polite, ProcessId, Reach, REAP_GRACE,
+};
 
-/// Starts `command` in a new session and reaps it on another thread. The new session is what
-/// keeps the application alive after the daemon exits; the thread is what keeps it from staying a
-/// zombie until then. A failure to exec is reported by `spawn` itself.
+/// Starts `command` apart from the daemon and reaps it on another thread. Being apart (a new
+/// session) is what keeps the application alive after the daemon exits; the thread is what keeps
+/// it from staying a zombie until then. A failure to exec is reported by `spawn` itself.
 pub fn spawn_detached(mut command: Command) -> Result<(), String> {
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    leader::lead_session(&mut command);
+    proc::detach(&mut command);
     let mut child = command.spawn().map_err(|err| err.to_string())?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });
     Ok(())
 }
-
-/// Upper bound on the bounded reap attempted after a timeout's `SIGKILL`. A process wedged in an
-/// uninterruptible kernel wait (a dead network mount under `/Volumes` is the realistic trigger
-/// here) can leave the signal pending indefinitely, and nothing short of the kernel itself can
-/// force that reap to finish — so this is a best effort, not a guarantee, and giving up after it
-/// elapses risks at most one leaked zombie.
-pub(crate) const REAP_GRACE: Duration = Duration::from_millis(500);
-
-/// Size of each chunk a pipe reader thread forwards over its channel. Arbitrary beyond "comfortably
-/// smaller than the pipe's own OS buffer", since the channel is unbounded and nothing here needs
-/// the chunking to line up with any particular boundary in the data.
-const PIPE_CHUNK_SIZE: usize = 8192;
 
 /// How long the stop of an agent CLI run leaves the CLI to exit after `SIGTERM` before it is
 /// killed. Just above the five seconds Claude Code's own shutdown allows itself before it forces
@@ -60,21 +49,11 @@ const AGENT_TERM_GRACE: Duration = Duration::from_secs(6);
 /// Claude Code's own cleanup is allowed to take.
 const CANCEL_TERM_GRACE: Duration = Duration::from_secs(3);
 
-/// What a stop of a bounded run kills besides the command itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reach {
-    /// The process group the command leads: what it forked without moving it elsewhere, such as
-    /// the `ssh` or askpass helper of a `git`. Left alone when the command ends by itself.
-    ProcessGroup,
-    /// The session the command leads, for an agent CLI: it moves some helpers into process groups
-    /// of their own, which a signal to its group misses. Killed when the command ends by itself
-    /// too, as nothing is left to stop a helper of a CLI that has gone.
-    Session,
-}
-
 /// A spawned child and what stopping it reaches.
 struct Leader {
     child: Child,
+    /// The child as the platform signals and sweeps it, while it is unreaped.
+    handle: ChildHandle,
     reach: Reach,
     /// How long a stop leaves the child to exit after `SIGTERM` before the kill; see
     /// [`Bounds::term_grace`].
@@ -84,8 +63,8 @@ struct Leader {
 }
 
 impl Leader {
-    fn pid(&self) -> libc::pid_t {
-        self.child.id() as libc::pid_t
+    fn pid(&self) -> ProcessId {
+        self.handle.pid()
     }
 
     /// Polls the child without blocking, reaping it once it has exited. For a session, what the
@@ -94,9 +73,9 @@ impl Leader {
     /// nothing is swept.
     fn try_reap(&mut self) -> io::Result<Option<ExitStatus>> {
         if self.reach == Reach::Session {
-            match leader::exited_unreaped(self.pid()) {
+            match self.handle.exited_unreaped() {
                 Some(false) => return Ok(None),
-                Some(true) => leader::kill_members(self.pid()).log(self.pid(), &self.label),
+                Some(true) => self.handle.kill_leftovers(&[]).log(self.pid(), &self.label),
                 None => {}
             }
         }
@@ -119,13 +98,13 @@ impl Leader {
     /// timeout began just before it.
     fn stop(&mut self, cancel: &std::sync::atomic::AtomicBool) {
         let pid = self.pid();
-        if !self.term_grace.is_zero() {
-            leader::signal_group(pid, libc::SIGTERM);
+        // A host that has no polite request for the child leaves nothing to wait for.
+        if !self.term_grace.is_zero() && proc::stop_group(pid, Polite::Terminate).delivered() {
             let mut deadline = Instant::now() + self.term_grace;
             let mut cancelled = false;
             // A group member the leader outlives is killed below; `None`, where `waitid` cannot
             // say, ends the wait for the kill to decide.
-            while leader::exited_unreaped(pid) == Some(false) && Instant::now() < deadline {
+            while self.handle.exited_unreaped() == Some(false) && Instant::now() < deadline {
                 if !cancelled && cancel.load(std::sync::atomic::Ordering::Relaxed) {
                     cancelled = true;
                     deadline = deadline.min(Instant::now() + CANCEL_TERM_GRACE);
@@ -133,14 +112,14 @@ impl Leader {
                 thread::sleep(Duration::from_millis(20));
             }
         }
-        leader::kill_group(pid);
+        self.handle.kill();
         if self.reach == Reach::Session {
             // Swept once the child has exited, so that it can start nothing after the sweep; one
             // that outlives the grace is swept as it is, still unreaped. When `waitid` cannot
             // tell, the child may have been reaped and its pid passed on, so nothing is swept.
             let exit_deadline = Instant::now() + REAP_GRACE;
             let unreaped = loop {
-                match leader::exited_unreaped(pid) {
+                match self.handle.exited_unreaped() {
                     Some(false) if Instant::now() < exit_deadline => {
                         thread::sleep(Duration::from_millis(20));
                     }
@@ -149,7 +128,7 @@ impl Leader {
                 }
             };
             if unreaped {
-                leader::kill_members(pid).log(pid, &self.label);
+                self.handle.kill_leftovers(&[]).log(pid, &self.label);
             }
         }
         // A grace of its own, and at least one attempt, so that a child that exits late in the
@@ -192,7 +171,7 @@ fn run_unbounded(
         timeout,
         stdout_limit: usize::MAX,
         stderr_limit: usize::MAX,
-        reach: Reach::ProcessGroup,
+        reach: Reach::Group,
         term_grace: Duration::ZERO,
     };
     run_bounded_with(command, &bounds, &NEVER, input).map_err(BoundedFailure::into_error)
@@ -270,57 +249,6 @@ impl std::fmt::Display for BoundedFailure {
     }
 }
 
-/// What a bounded pipe reader forwards: a chunk, the news that the pipe went past its limit (after
-/// which the reader has stopped reading), or a read error.
-pub(crate) enum BoundedChunk {
-    Data(Vec<u8>),
-    Exceeded,
-    Failed(io::Error),
-}
-
-/// Reads `pipe` until EOF, forwarding at most `limit` bytes over `tx`. Past the limit it either
-/// stops reading altogether and reports [`BoundedChunk::Exceeded`] (`stop_at_limit`), which drops
-/// the read end so the writer gets `EPIPE` instead of a pipe that never drains, or keeps reading
-/// and discards the rest, so a chatty writer is never blocked on a full pipe. Either way at most
-/// `limit` bytes are ever held, here or in the channel.
-pub(crate) fn bounded_pipe_reader(
-    mut pipe: impl Read,
-    tx: &mpsc::Sender<BoundedChunk>,
-    limit: usize,
-    stop_at_limit: bool,
-) {
-    let mut chunk = vec![0u8; PIPE_CHUNK_SIZE];
-    let mut forwarded = 0usize;
-    loop {
-        match pipe.read(&mut chunk) {
-            Ok(0) => break,
-            Ok(n) => {
-                let room = limit - forwarded;
-                if n > room {
-                    if room > 0 && tx.send(BoundedChunk::Data(chunk[..room].to_vec())).is_err() {
-                        break;
-                    }
-                    forwarded = limit;
-                    if stop_at_limit {
-                        let _ = tx.send(BoundedChunk::Exceeded);
-                        break;
-                    }
-                    continue;
-                }
-                forwarded += n;
-                if tx.send(BoundedChunk::Data(chunk[..n].to_vec())).is_err() {
-                    break;
-                }
-            }
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-            Err(err) => {
-                let _ = tx.send(BoundedChunk::Failed(err));
-                break;
-            }
-        }
-    }
-}
-
 /// A spawned child with its pipes read on threads of their own, bounded as `bounds` says.
 struct Spawned {
     leader: Leader,
@@ -338,12 +266,7 @@ fn spawn_bounded(
     bounds: &Bounds,
     pipe_stdin: bool,
 ) -> std::result::Result<Spawned, anyhow::Error> {
-    match bounds.reach {
-        Reach::ProcessGroup => {
-            command.process_group(0);
-        }
-        Reach::Session => leader::lead_session(command),
-    }
+    bounds.reach.lead(command);
     let label = Path::new(command.get_program())
         .file_name()
         .unwrap_or(command.get_program())
@@ -357,6 +280,14 @@ fn spawn_bounded(
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     let mut child = command.spawn().context("spawning the command")?;
+    let handle = match ChildHandle::started(ProcessId(child.id()), bounds.reach, None) {
+        Ok(handle) => handle,
+        Err(err) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(err).context("taking on the command");
+        }
+    };
 
     let stdin = child.stdin.take();
     let stdout_pipe = child.stdout.take().expect("stdout was piped");
@@ -370,6 +301,7 @@ fn spawn_bounded(
     Ok(Spawned {
         leader: Leader {
             child,
+            handle,
             reach: bounds.reach,
             term_grace: bounds.term_grace,
             label,
@@ -503,10 +435,8 @@ fn run_bounded_with(
             // session was swept the group may be empty. What the sweep missed, if it ran at
             // all, is left.
             Some((_, at)) if at.elapsed() >= REAP_GRACE => {
-                if leader.reach == Reach::ProcessGroup
-                    && leader::group_has_members(leader.pid()) == Some(true)
-                {
-                    leader::kill_group(leader.pid());
+                if leader.reach == Reach::Group && leader.handle.group_has_members() == Some(true) {
+                    leader.handle.kill();
                 }
                 return Err(BoundedFailure::Failed(anyhow::anyhow!(
                     "a process it started kept its output open after it exited"
@@ -628,11 +558,11 @@ pub struct ExchangeTrace {
     pub after_reply: Option<AfterReply>,
 }
 
-/// Waits until the child `pid` has exited by itself, `until` has come, `cancel` is set or its
+/// Waits until `child` has exited by itself, `until` has come, `cancel` is set or its
 /// output has gone past the limit, passing over whatever it prints meanwhile. The child is not
 /// reaped here.
 fn await_exit(
-    pid: libc::pid_t,
+    child: &ChildHandle,
     stdout_rx: &mpsc::Receiver<BoundedChunk>,
     until: Instant,
     cancel: &std::sync::atomic::AtomicBool,
@@ -644,7 +574,7 @@ fn await_exit(
     };
     loop {
         // `None`, where `waitid` cannot say, leaves the matter to the stop that follows.
-        if leader::exited_unreaped(pid) != Some(false) {
+        if child.exited_unreaped() != Some(false) {
             return AfterReply::Exited {
                 after: waited.elapsed(),
             };
@@ -748,7 +678,7 @@ pub fn run_exchange_traced(
         // Closing stdin is what tells the program its input has ended.
         drop(stdin);
         let until = (Instant::now() + reply_grace).min(deadline);
-        trace.after_reply = Some(await_exit(leader.pid(), &stdout_rx, until, cancel));
+        trace.after_reply = Some(await_exit(&leader.handle, &stdout_rx, until, cancel));
     }
     trace.elapsed = started.elapsed();
     leader.stop(cancel);
@@ -801,14 +731,16 @@ fn take_reply(pending: &mut Vec<u8>, is_reply: &mut impl FnMut(&str) -> bool) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use crate::test_support::helper_in_its_own_group;
     use crate::test_support::{
-        assert_gone_by, assert_stops_running, helper_in_its_own_group, read_pid_file,
-        until_the_shell_ran, KillOnDrop, ScratchFile, PATIENCE,
+        assert_gone_by, assert_stops_running, read_pid_file, until_the_shell_ran, KillOnDrop,
+        ScratchFile, PATIENCE,
     };
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
-    /// Runs `script` under `/bin/sh` through [`run_bounded`], the script recording its pid in a
+    /// Runs `script` under bash through [`run_bounded`], the script recording its pid in a
     /// file first, and returns the outcome with that pid once the script has written it — or
     /// `None` when the run ended before it did, which a stalled exec can cause (see
     /// [`until_the_shell_ran`]).
@@ -818,10 +750,14 @@ mod tests {
         cancel_after: Option<Duration>,
     ) -> Option<(std::result::Result<Output, BoundedFailure>, i32)> {
         let pid_file = ScratchFile::new("env-shell-bounded", "pid");
-        let mut command = Command::new("/bin/sh");
+        let mut command = Command::new(crate::test_support::bash());
         command.args([
             "-c",
-            &format!("echo $$ > '{}'; {script}", pid_file.display()),
+            &format!(
+                "echo {} > '{}'; {script}",
+                crate::test_support::SHELL_PID,
+                pid_file.display()
+            ),
         ]);
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         if let Some(delay) = cancel_after {
@@ -842,8 +778,12 @@ mod tests {
     #[test]
     fn input_larger_than_the_pipe_reaches_the_command_whole() {
         let input = vec![b'x'; 1 << 20];
-        let output =
-            run_with_input(&mut Command::new("/bin/cat"), input.clone(), PATIENCE).unwrap();
+        let output = run_with_input(
+            &mut crate::test_support::programs::hold_stdin().command(),
+            input.clone(),
+            PATIENCE,
+        )
+        .unwrap();
         assert_eq!(output.stdout, input);
     }
 
@@ -853,7 +793,7 @@ mod tests {
             timeout: PATIENCE,
             stdout_limit: 64 * 1024,
             stderr_limit: 1024,
-            reach: Reach::ProcessGroup,
+            reach: Reach::Group,
             term_grace: Duration::ZERO,
         };
         let short = Bounds {
@@ -894,17 +834,12 @@ mod tests {
             timeout: PATIENCE,
             stdout_limit: 1024,
             stderr_limit: 1024,
-            reach: Reach::ProcessGroup,
+            reach: Reach::Group,
             term_grace: Duration::ZERO,
         };
         let (outcome, pid) = until_the_shell_ran(|| {
             let pid_file = ScratchFile::new("env-shell-leftover", "pid");
-            let mut command = Command::new("/bin/sh");
-            let script = format!(
-                "/bin/sleep 300 & echo $! > '{}'; echo partial",
-                pid_file.display()
-            );
-            command.args(["-c", &script]);
+            let mut command = leaving_its_output_open(&pid_file);
             let never = std::sync::atomic::AtomicBool::new(false);
             let outcome = run_bounded(&mut command, &bounds, &never);
             Some((outcome, read_pid_file(&pid_file)?))
@@ -914,16 +849,42 @@ mod tests {
         assert_gone_by(pid, Instant::now() + PATIENCE);
     }
 
+    /// A command that starts a process holding its output open, writes that process's pid to
+    /// `pid_file`, writes `partial` and exits.
+    #[cfg(unix)]
+    fn leaving_its_output_open(pid_file: &Path) -> Command {
+        let mut command = Command::new(crate::test_support::bash());
+        let script = format!(
+            "/bin/sleep 300 & echo $! > '{}'; echo partial",
+            pid_file.display()
+        );
+        command.args(["-c", &script]);
+        command
+    }
+
+    /// A command that starts a process holding its output open, writes that process's pid to
+    /// `pid_file`, writes `partial` and exits: a fixture process, whose pids are Windows' own.
+    #[cfg(windows)]
+    fn leaving_its_output_open(pid_file: &Path) -> Command {
+        use crate::test_support::fixture::Steps;
+        Steps::new()
+            .spawn_with_streams("sleep", Steps::new().sleep(300))
+            .write_child_pid(pid_file)
+            .say("partial")
+            .program("leaver")
+            .command()
+    }
+
     #[test]
     fn a_bounded_run_keeps_its_stderr_to_the_limit_without_failing() {
         let bounds = Bounds {
             timeout: PATIENCE,
             stdout_limit: 1024,
             stderr_limit: 10,
-            reach: Reach::ProcessGroup,
+            reach: Reach::Group,
             term_grace: Duration::ZERO,
         };
-        let mut command = Command::new("/bin/sh");
+        let mut command = Command::new(crate::test_support::bash());
         command.args(["-c", "printf 'out'; printf '0123456789abcdef' >&2"]);
         let output = run_bounded(
             &mut command,
@@ -935,7 +896,7 @@ mod tests {
         assert_eq!(output.stderr, b"0123456789");
     }
 
-    /// Runs `script` under `/bin/sh` through [`run_exchange_traced`], with no time to exit after
+    /// Runs `script` under bash through [`run_exchange_traced`], with no time to exit after
     /// the reply and `input` on its stdin, the script recording its pid first; `None` when the run
     /// ended before it did (see [`until_the_shell_ran`]).
     fn exchange_of(
@@ -974,10 +935,14 @@ mod tests {
         trace: &mut ExchangeTrace,
     ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
         let pid_file = ScratchFile::new("env-shell-exchange", "pid");
-        let mut command = Command::new("/bin/sh");
+        let mut command = Command::new(crate::test_support::bash());
         command.args([
             "-c",
-            &format!("echo $$ > '{}'; {script}", pid_file.display()),
+            &format!(
+                "echo {} > '{}'; {script}",
+                crate::test_support::SHELL_PID,
+                pid_file.display()
+            ),
         ]);
         let input: Vec<String> = input.iter().map(|line| line.to_string()).collect();
         let outcome = run_exchange_traced(
@@ -1101,7 +1066,7 @@ mod tests {
             timeout,
             stdout_limit: 64 * 1024,
             stderr_limit: 1024,
-            reach: Reach::ProcessGroup,
+            reach: Reach::Group,
             term_grace: Duration::ZERO,
         }
     }
@@ -1221,21 +1186,9 @@ mod tests {
     /// [`run_bounded`] or (`Replies`) [`run_exchange`] with [`Reach::Session`], ended as `end`
     /// says. Returns the helper's pid once the run is over, or `None` when the run ended before
     /// the stand-in recorded it (see [`until_the_shell_ran`]).
-    fn session_run_ending(end: &SessionEnd) -> Option<libc::pid_t> {
+    fn session_run_ending(end: &SessionEnd) -> Option<i32> {
         let pid_file = ScratchFile::new("session-run", "pid");
-        let then = match end {
-            SessionEnd::Exits => "exit 0",
-            SessionEnd::TimesOut | SessionEnd::TimesOutGraced | SessionEnd::Cancelled => {
-                "exec /bin/sleep 300"
-            }
-            SessionEnd::Replies => "read line; echo \"reply $line\"; exec /bin/sleep 300",
-            SessionEnd::RepliesThenExits => "read line; echo \"reply $line\"; cat >/dev/null",
-        };
-        let mut command = Command::new("/bin/bash");
-        command.args([
-            "-c",
-            &format!("{}; {then}", helper_in_its_own_group(&pid_file)),
-        ]);
+        let mut command = session_stand_in(&pid_file, end);
         let bounds = Bounds {
             timeout: match end {
                 SessionEnd::TimesOut | SessionEnd::TimesOutGraced => Duration::from_millis(300),
@@ -1293,8 +1246,52 @@ mod tests {
         read_pid_file(&pid_file)
     }
 
+    /// The stand-in of [`session_run_ending`]: it leaves a helper in a process group of its own,
+    /// whose pid it writes to `pid_file`, and then goes on as `end` says.
+    #[cfg(unix)]
+    fn session_stand_in(pid_file: &Path, end: &SessionEnd) -> Command {
+        let then = match end {
+            SessionEnd::Exits => "exit 0",
+            SessionEnd::TimesOut | SessionEnd::TimesOutGraced | SessionEnd::Cancelled => {
+                "exec /bin/sleep 300"
+            }
+            SessionEnd::Replies => "read line; echo \"reply $line\"; exec /bin/sleep 300",
+            SessionEnd::RepliesThenExits => "read line; echo \"reply $line\"; cat >/dev/null",
+        };
+        let mut command = Command::new(crate::test_support::bash());
+        command.args([
+            "-c",
+            &format!("{}; {then}", helper_in_its_own_group(pid_file)),
+        ]);
+        command
+    }
+
+    /// The stand-in of [`session_run_ending`] on Windows, a fixture process: its helper is on its
+    /// console, which is its session there. It writes the helper's pid to `pid_file` once the
+    /// helper has written it beside it, which the helper does once it runs, and so is on the
+    /// console by then.
+    #[cfg(windows)]
+    fn session_stand_in(pid_file: &Path, end: &SessionEnd) -> Command {
+        use crate::test_support::fixture::Steps;
+        let running = pid_file.with_extension("helper");
+        let steps = Steps::new()
+            .spawn_on_console("helper", Steps::new().write_pid(&running).sleep(300))
+            .wait_for(&running)
+            .write_child_pid(pid_file);
+        let steps = match end {
+            SessionEnd::Exits => steps,
+            SessionEnd::TimesOut | SessionEnd::TimesOutGraced | SessionEnd::Cancelled => {
+                steps.sleep(300)
+            }
+            SessionEnd::Replies => steps.reply().sleep(300),
+            SessionEnd::RepliesThenExits => steps.reply().read_input(),
+        };
+        steps.program("stand-in").command()
+    }
+
     /// The bounds of a stand-in agent CLI that is stopped after 300 ms and given `term_grace` to
     /// exit on `SIGTERM`.
+    #[cfg(unix)]
     fn terminable_bounds(term_grace: Duration) -> Bounds {
         Bounds {
             timeout: Duration::from_millis(300),
@@ -1307,6 +1304,7 @@ mod tests {
 
     /// A stand-in that, on `SIGTERM`, writes `marker` and exits, and otherwise runs `then`: the
     /// marker is there only if the program was asked to exit, which a kill never does.
+    #[cfg(unix)]
     fn term_marking_script(marker: &Path, then: &str) -> String {
         format!(
             "trap \"echo termed > '{}'; exit 0\" TERM; {then}",
@@ -1315,6 +1313,8 @@ mod tests {
     }
 
     #[test]
+    // Unix only: a process without a terminal takes no polite request on Windows.
+    #[cfg(unix)]
     fn a_timed_out_run_is_asked_to_exit_before_it_is_killed() {
         let marker = ScratchFile::new("term-handled", "marker");
         let script = term_marking_script(&marker, "while :; do /bin/sleep 0.05; done");
@@ -1331,6 +1331,8 @@ mod tests {
     }
 
     #[test]
+    // Unix only: a process without a terminal takes no polite request on Windows.
+    #[cfg(unix)]
     fn a_run_that_ignores_sigterm_is_killed_once_the_grace_has_passed() {
         let grace = Duration::from_millis(600);
         let started = Instant::now();
@@ -1351,6 +1353,8 @@ mod tests {
     }
 
     #[test]
+    // Unix only: a process without a terminal takes no polite request on Windows.
+    #[cfg(unix)]
     fn a_cancelled_run_is_asked_to_exit_before_it_is_killed() {
         let marker = ScratchFile::new("term-handled-cancel", "marker");
         let script = term_marking_script(&marker, "while :; do /bin/sleep 0.05; done");
@@ -1370,6 +1374,8 @@ mod tests {
     }
 
     #[test]
+    // Unix only: a process without a terminal takes no polite request on Windows.
+    #[cfg(unix)]
     fn a_stop_in_progress_waits_no_longer_than_the_cancel_cap_once_cancelled() {
         // Times out at 300 ms with a grace far longer than `PATIENCE`, and is cancelled while it
         // waits out that grace: well after the shell started, so the timeout has fired first.
@@ -1388,11 +1394,12 @@ mod tests {
                 thread::sleep(Duration::from_millis(1500));
                 flag.store(true, Ordering::Relaxed);
             });
-            let mut command = Command::new("/bin/sh");
+            let mut command = Command::new(crate::test_support::bash());
             command.args([
                 "-c",
                 &format!(
-                    "trap '' TERM; echo $$ > '{}'; while :; do /bin/sleep 0.05; done",
+                    "trap '' TERM; echo {} > '{}'; while :; do /bin/sleep 0.05; done",
+                    crate::test_support::SHELL_PID,
                     pid_file.display()
                 ),
             ]);
@@ -1409,6 +1416,8 @@ mod tests {
     }
 
     #[test]
+    // Unix only: a process without a terminal takes no polite request on Windows.
+    #[cfg(unix)]
     fn a_program_still_running_after_the_reply_grace_is_asked_to_exit_before_it_is_killed() {
         let marker = ScratchFile::new("term-handled-reply", "marker");
         let script = term_marking_script(

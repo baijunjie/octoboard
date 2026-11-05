@@ -2,11 +2,11 @@
 //! resolving a binary on its `PATH`. Running a subprocess the daemon spawns directly, within a
 //! deadline and output bounds, is `crate::processes::subprocess`'s.
 //!
-//! - `snapshot.rs` takes one: runs the user's login shell and parses the environment it dumps.
-//!   Slow, so nothing here takes one per call that can avoid it.
+//! - `snapshot.rs` takes one: the environment the host's login shell gives (`platform::shell`), less
+//!   what is not the user's. Slow, so nothing here takes one per call that can avoid it.
 //! - `cache.rs` keeps the last one and decides who may be served it, under one policy for an agent
 //!   launch and another for callers on someone else's schedule.
-//! - `resolve.rs` finds a binary on a snapshot's `PATH`.
+//! - `resolve.rs` finds a binary on a snapshot's `PATH`, as what starts it.
 //!
 //! This file is the module's face: callers name these functions, not the files.
 
@@ -18,8 +18,8 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
-pub use resolve::resolve_binary;
-pub use snapshot::{is_filtered, shell_path};
+pub use resolve::{resolve_binary, resolve_program};
+pub use snapshot::is_filtered;
 
 static CACHE: cache::Cache = cache::Cache::new();
 

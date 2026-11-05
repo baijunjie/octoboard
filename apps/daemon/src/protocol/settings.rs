@@ -177,6 +177,7 @@ mod tests {
             account_logins: vec![],
             account_sharing: vec![],
             home_dir: Some("/Users/dev".to_string()),
+            host: crate::platform::HostFacts::current().into(),
             shell_terminals: vec![],
         })
         .unwrap();

@@ -27,7 +27,7 @@ HTML page adds one tag that repeats an existing URL: `zh` is the Simplified Chin
 The sitemap does not include `zh`. Portuguese uses `pt` in both the HTML alternates and the sitemap.
 
 Every language's homepage SEO title identifies Octoboard as a multi-agent workspace for Claude Code and Codex. Its SEO
-description names Claude Code, Codex and Grok Build, describes an open source macOS workspace, and covers account
+description names Claude Code, Codex and Grok Build, describes an open source workspace for macOS and Windows, and covers account
 management, usage tracking, account switching and coordination across projects. These localized titles and descriptions
 are used in the HTML metadata, social metadata, structured data and agent-readable page listings. The visible homepage
 headings and share-image text retain their own wording.
@@ -69,7 +69,7 @@ that page's language, published by the person.
 A homepage also includes an FAQ page and a software application. The FAQ page is that page's canonical
 URL plus `#webpage`. It contains the nine questions and, as part of that page, an item list of all 16
 localized feature titles, in feature-wall order. The software application is the origin plus
-`#app` on every language. Its category is `DeveloperApplication`, its operating system is `macOS`, and its URL is the
+`#app` on every language. Its category is `DeveloperApplication`, its operating system is `macOS, Windows`, and its URL is the
 deployment root, the English homepage, not the localized homepage. It names the repository and the MIT
 license linked from the site. Its image is the mascot file `logo.png` at the deployment root, not the
 share image and not the brand artwork. It lists every language the website publishes, using the BCP-47
@@ -86,7 +86,8 @@ Agent-readable files are published at the deployment root and are crawlable:
   English privacy page is `privacy.md`. Another language's homepage is `<route code>.md`, so Simplified
   Chinese is `zh.md`, not `zh-Hans.md`. Another language's privacy page is `<route code>/privacy.md`.
 - `llms.txt`, in English. Its notes state that Octoboard is free and open source under the MIT License, and cover
-  the supported macOS processors, beta status, each platform's availability, the releases link, local data handling,
+  the supported systems and processors (macOS on Apple silicon and Intel, Windows on x64), beta status, each
+  platform's availability, the Windows install note, the releases link, local data handling,
   account switching, agent handoff, usage and resets, the nine questions and answers, the support email, and the
   repository. Platform availability is described in `docs/product/website.md`, "Platform availability".
   It then lists every language, each linking to that language's homepage Markdown and full-content bundle and stating

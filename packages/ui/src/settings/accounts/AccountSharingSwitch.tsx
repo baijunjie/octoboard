@@ -18,8 +18,7 @@ import { alertFailure } from "../../components/alerts/raiseError";
 import { Label, ProgressBar, ProgressBarTrack } from "../../primitives";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
- * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the
- * account's settings dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end,
+ * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the account's settings dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end,
  * with the warning's mark after it): the progress bar takes the row's full width under it. What the switch does now
  * is the row's description, following its position (and left out while a change runs or did not finish); what
  * turning it off does is behind the label's help tip, with the idle sessions it would end; and under the
@@ -27,8 +26,11 @@ import { Label, ProgressBar, ProgressBarTrack } from "../../primitives";
  * unavailable, and says which. Unavailable, it stays focusable and describes itself, so a keyboard user hears why
  * (see "Buttons" in `docs/ui-standard.md`):
  * - free: nothing under it;
+ * - unavailable, turning sharing on, where the daemon's host cannot make the file links sharing needs (`file_links`),
+ *   saying how to turn that on there (Windows' Developer Mode). Sharing already on can still be turned off, as the
+ *   daemon allows, and its line says that turning it on again is not possible there until then;
  * - unavailable while sessions of the account run or start under its directory, or it is being signed in (`in_use`),
- *   saying so;
+ *   saying so, in place of the line above when sharing is on, since that is what locks the switch then;
  * - unavailable while the change runs (`progress`), under a progress bar that every window shows from the daemon's
  *   `account_sharing` event;
  * - after a failure, or a change the daemon restarted in the middle of (`share_default_config_incomplete`), a warning
@@ -57,15 +59,19 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
   const idle = sharing?.idle_sessions ?? 0;
   const held = sharing?.in_use;
   const inUse = held !== undefined && (held.sessions > 0 || held.signing_in) ? held : undefined;
+  // The host says it cannot make file links, so turning sharing on would only be refused (turning it off is not).
+  // Until the first snapshot, which says nothing, it can.
+  const unlinkable = useDaemonStore((s) => s.host?.file_links === false);
   // A change that did not finish: the daemon says so with the flag, and may hold why (`failure`, until the next change
   // starts); after a restart there is the flag alone.
   const unfinished = !progress && account.share_default_config_incomplete;
   const failure = unfinished ? sharing?.failure : undefined;
   const moved = failure?.cause === "default_moved";
-  const locked = busy || progress !== undefined || inUse !== undefined;
   // A retry is turning the switch, which asks for the recorded choice again; so the switch shows the position it had
   // before. A moved default directory cannot be mended by asking again, so it shows the recorded choice.
   const shown = unfinished && !moved && !busy ? !shared : shared;
+  // Turning the switch on is what an off switch asks for.
+  const locked = busy || progress !== undefined || inUse !== undefined || (unlinkable && !shown);
   const title = t(failure
     ? (shared ? "settings.accounts.sharing.failedOn" : "settings.accounts.sharing.failedOff")
     : (shared ? "settings.accounts.sharing.incompleteOn" : "settings.accounts.sharing.incompleteOff"));
@@ -102,13 +108,17 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
       .catch(alertFailure({ title: t("settings.accounts.sharing.failedTitle") }))
       .finally(() => setBusy(false));
   };
-  // The only line kept under the switch: why it cannot be turned now. What it does is in the help tip.
-  const caption = inUse
-    ? <>
-      {inUse.sessions > 0 && <span className="block">{t("settings.accounts.sharing.inUseSessions", { count: inUse.sessions })}</span>}
-      {inUse.signing_in && <span className="block">{t("settings.accounts.sharing.inUseSigningIn")}</span>}
-    </>
-    : undefined;
+  // The only line kept under the switch: why it cannot be turned now. What it does is in the help tip. With sharing on,
+  // a host that makes no file links does not stop it being turned off, so only what locks it (sessions running, a
+  // sign-in) is said; once it is off, the host is the reason, and stays so.
+  const caption = unlinkable && !shown
+    ? <span className="block"><Message id="daemon.sharing_unavailable_on_host" /></span>
+    : inUse
+      ? <>
+        {inUse.sessions > 0 && <span className="block">{t("settings.accounts.sharing.inUseSessions", { count: inUse.sessions })}</span>}
+        {inUse.signing_in && <span className="block">{t("settings.accounts.sharing.inUseSigningIn")}</span>}
+      </>
+      : undefined;
   const describedByIds = [
     caption !== undefined && `${id}-caption`,
     progress && `${id}-label`,

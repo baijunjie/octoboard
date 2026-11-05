@@ -808,17 +808,7 @@ mod tests {
 
         deliver_report(&state, &worker.id, done_report()).expect("delivered");
 
-        let wait_for_output = |live: &crate::session::LiveSession| -> Vec<u8> {
-            let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-            loop {
-                let output = live.recent_output(8 * 1024);
-                if !output.is_empty() || std::time::Instant::now() >= deadline {
-                    return output;
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            }
-        };
-        let a_output = String::from_utf8_lossy(&wait_for_output(&live_a)).into_owned();
+        let a_output = crate::test_support::output_containing(&live_a, &worker.id);
         assert!(
             a_output.contains(&worker.id),
             "owner-a should see the report: {a_output}"

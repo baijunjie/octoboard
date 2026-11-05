@@ -13,6 +13,7 @@ import type { State } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import type { ChangeViewState } from "./git/changeView";
+import { BROWSER_HOST } from "../test/hosts";
 
 /** Presses Tab on `element`, with Option held for `altKey`, and returns where the key put focus for
  * the browser's own move to go on from, and whether that move was left to happen. jsdom makes no such
@@ -108,6 +109,6 @@ export function mountRows(children: React.ReactNode, { request, clipboard, notif
   // The error alerts go where the daemon's notifications do.
   onTestFinished(forwardAlerts(notifications.error));
   const daemon = testDaemon({ state, request, showNotice: notifications.notice });
-  act(() => root.render(<TestHost daemon={daemon} platform={{ kind: "browser", clipboard }}>{children}</TestHost>));
+  act(() => root.render(<TestHost daemon={daemon} platform={{ kind: "browser", host: BROWSER_HOST, clipboard }}>{children}</TestHost>));
   return container;
 }

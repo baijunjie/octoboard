@@ -5,7 +5,8 @@
 //!
 //! - [`control`]: the control socket, `/ws/control`.
 //! - [`terminal`]: the terminal socket, `/ws/term/:session`.
-//! - [`callbacks`]: the HTTP routes the agents' hooks and the daemon's own helpers post to.
+//! - [`callbacks`]: the HTTP routes the agents' hooks and the daemon's own helpers post to, and
+//!   the request to shut down.
 
 pub(crate) mod access;
 mod callbacks;
@@ -46,6 +47,7 @@ fn routes(state: Arc<AppState>) -> Router {
             post(callbacks::context_window_callback),
         )
         .route("/mcp/:token", post(callbacks::mcp_call))
+        .route("/shutdown", post(callbacks::shutdown))
         .with_state(state)
 }
 
@@ -71,6 +73,7 @@ mod tests {
                 "POST /revert-gate/s",
                 "POST /context-window/s",
                 "POST /mcp/x",
+                "POST /shutdown",
             ];
             for route in routes {
                 let keyed = keyed(route);
@@ -133,6 +136,54 @@ mod tests {
         tests.await.expect("the checks ran");
     }
 
+    /// A request to shut down is refused without the key, and with it reaches the path a
+    /// termination signal takes: whoever waits on the daemon's shutdown is woken.
+    #[tokio::test]
+    async fn the_shutdown_request_needs_the_key_and_asks_for_the_shutdown() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (state, _dir) = app_state("server-shutdown");
+        let served = state.clone();
+        tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let host = format!("Host: 127.0.0.1:{port}");
+
+        let waiter = state.clone();
+        let mut shutdown = tokio::spawn(async move { waiter.await_shutdown().await });
+        // Lets the waiter reach its wait: a shutdown asked for before then is not remembered.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let refused = {
+            let host = host.clone();
+            tokio::task::spawn_blocking(move || {
+                let wrong = format!("POST /shutdown?key={}", "0".repeat(64));
+                (
+                    status_of(port, "POST /shutdown", &[&host]),
+                    status_of(port, &wrong, &[&host]),
+                )
+            })
+            .await
+            .expect("the requests ran")
+        };
+        assert_eq!(refused, (401, 401));
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(200), &mut shutdown)
+                .await
+                .is_err(),
+            "a refused request shut the daemon down"
+        );
+
+        let accepted = tokio::task::spawn_blocking(move || {
+            status_of(port, &keyed("POST /shutdown"), &[&host])
+        })
+        .await
+        .expect("the request ran");
+        assert_eq!(accepted, 202);
+        tokio::time::timeout(PATIENCE, shutdown)
+            .await
+            .expect("the shutdown was asked for")
+            .expect("the waiter ran");
+    }
+
     /// The handshake a browser sends: a refusal must come before the upgrade, and an allowed
     /// origin, or none, must get through it.
     #[tokio::test]
@@ -186,6 +237,12 @@ mod tests {
         use tokio_tungstenite::tungstenite::Message as Frame;
 
         let (state, dir) = app_state("server-shell-terminal");
+        // A POSIX shell behind the terminal on every host: what is under test is the sockets and
+        // the routing of answers, which its `read` shows.
+        state.host_tools.replace(crate::host_tools::Tools {
+            shell: crate::test_support::posix_shell,
+            ..state.host_tools.get()
+        });
         state
             .store
             .insert_console(&crate::test_support::console(&dir))
@@ -239,6 +296,12 @@ mod tests {
         let term_url = format!("ws://127.0.0.1:{port}/ws/term/{terminal}?key={TEST_KEY}");
         let (mut term, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
         async fn read_until(term: &mut Socket, needle: &str) -> String {
+            read_answering(term, needle, false).await
+        }
+        // With `answer`, answers the cursor position queries in what it reads, as the terminal of
+        // a client attached alone does: with a client attached the daemon leaves them to it, and
+        // a console host that waits on one unanswered can lose a key typed meanwhile.
+        async fn read_answering(term: &mut Socket, needle: &str, answer: bool) -> String {
             let mut seen = String::new();
             while !seen.contains(needle) {
                 let frame = tokio::time::timeout(PATIENCE, term.next())
@@ -246,6 +309,14 @@ mod tests {
                     .unwrap_or_else(|_| panic!("{needle:?} never arrived in {seen:?}"));
                 match frame {
                     Some(Ok(Frame::Binary(bytes))) => {
+                        let queries = bytes.windows(4).filter(|query| query == b"\x1b[6n");
+                        if answer {
+                            for _ in 0..queries.count() {
+                                term.send(Frame::Binary(b"\x1b[1;1R".to_vec()))
+                                    .await
+                                    .unwrap();
+                            }
+                        }
                         seen.push_str(&String::from_utf8_lossy(&bytes))
                     }
                     // The replay's mark, which `replay_mark` reads.
@@ -273,7 +344,7 @@ mod tests {
         term.send(Frame::Binary(b"echo $((6*7))\r".to_vec()))
             .await
             .unwrap();
-        read_until(&mut term, "42").await;
+        read_answering(&mut term, "42", true).await;
         term.send(Frame::Text(
             r#"{"type":"resize","cols":100,"rows":40}"#.into(),
         ))
@@ -282,7 +353,7 @@ mod tests {
         term.send(Frame::Binary(b"stty size\r".to_vec()))
             .await
             .unwrap();
-        read_until(&mut term, "40 100").await;
+        read_answering(&mut term, "40 100", true).await;
         drop(term);
 
         let (mut again, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();

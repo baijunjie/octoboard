@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::agents::launch_settings::{self, normalize_session_launch_setting, LaunchCheck};
 use crate::messaging::delivery;
@@ -453,7 +453,10 @@ pub(super) async fn start_process(
         state.broadcast(notice.about(&session.id));
     }
     // Reserved until the process is registered below, and given up if it never is.
-    let pending_launch = state.process_ledger.begin_launch(&session.id);
+    let pending_launch = state
+        .process_ledger
+        .begin_launch(&session.id)
+        .context("creating the launch's process containment")?;
     let request = term::LaunchRequest {
         session_id: session.id.clone(),
         agent: session.agent,

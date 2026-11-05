@@ -12,7 +12,7 @@ fn native_download_versions_are_read_through_the_launcher_symlink() {
     let release = scratch.join("grok-1.0.70-macos-aarch64");
     std::fs::write(&release, "not executed").unwrap();
     let launcher = scratch.join("grok");
-    std::os::unix::fs::symlink(&release, &launcher).unwrap();
+    crate::test_support::symlink(&release, &launcher).unwrap();
     assert_eq!(
         GrokProvider.installed_version(launcher.to_str().unwrap()),
         Some((1, 0, 70))
@@ -30,6 +30,67 @@ fn native_download_versions_are_read_through_the_launcher_symlink() {
             None
         );
     }
+}
+
+/// The Windows release downloads are named like the others, with `.exe`.
+#[test]
+fn windows_release_names_are_read_too() {
+    let scratch = crate::test_support::ScratchDir::new("grok-installed-version-windows");
+    for (filename, version) in [
+        ("grok-1.0.77-windows-x86_64.exe", Some((1, 0, 77))),
+        ("grok-1.0.77-windows-aarch64.exe", Some((1, 0, 77))),
+        ("grok-1.0.77-windows-x86_64", None),
+        ("grok-1.0.77-macos-aarch64.exe", None),
+        ("grok-windows-x86_64.exe", None),
+    ] {
+        let release = scratch.join(filename);
+        std::fs::write(&release, "not executed").unwrap();
+        assert_eq!(
+            GrokProvider.installed_version(release.to_str().unwrap()),
+            version,
+            "{filename}"
+        );
+    }
+}
+
+/// The Windows installer copies the download into `bin\grok.exe` under a name with no version
+/// (`install.ps1`); a versioned download of the copy's size beside it tells the version, and
+/// none, or several versions of that size, leave it to the probe.
+#[test]
+fn a_copied_launcher_is_read_from_the_versioned_download_of_its_size() {
+    let scratch = crate::test_support::ScratchDir::new("grok-installed-version-copied");
+    let (bin, downloads) = (scratch.join("bin"), scratch.join("downloads"));
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(&downloads).unwrap();
+    let launcher = bin.join("grok.exe");
+    std::fs::write(&launcher, "build 77").unwrap();
+    std::fs::write(downloads.join("grok-windows-x86_64.exe"), "build 77").unwrap();
+    let version = || GrokProvider.installed_version(launcher.to_str().unwrap());
+    assert_eq!(
+        version(),
+        None,
+        "the installer's own download names no version"
+    );
+
+    std::fs::write(
+        downloads.join("grok-1.0.70-windows-x86_64.exe"),
+        "build 70 longer",
+    )
+    .unwrap();
+    assert_eq!(version(), None, "no download of the copy's size");
+    std::fs::write(downloads.join("grok-1.0.77-windows-x86_64.exe"), "build 77").unwrap();
+    assert_eq!(version(), Some((1, 0, 77)));
+    std::fs::write(downloads.join("grok-1.0.78-windows-x86_64.exe"), "build 78").unwrap();
+    assert_eq!(version(), None, "two versions of the copy's size");
+
+    let elsewhere = scratch.join("tools");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    std::fs::write(elsewhere.join("grok.exe"), "build 77").unwrap();
+    assert_eq!(
+        GrokProvider.installed_version(elsewhere.join("grok.exe").to_str().unwrap()),
+        None,
+        "a launcher outside a `bin` beside the downloads"
+    );
 }
 
 #[test]
@@ -201,7 +262,7 @@ fn permission_modes_apply_on_fresh_launches_and_resumes_without_account_writebac
             let shared = fixture.scratch.join("shared-config.toml");
             std::fs::write(&shared, original).unwrap();
             std::fs::remove_file(home.join("config.toml")).unwrap();
-            std::os::unix::fs::symlink(&shared, home.join("config.toml")).unwrap();
+            crate::test_support::symlink(&shared, home.join("config.toml")).unwrap();
             fixture.model = Some("grok-4".to_string());
             fixture.effort = Some("low".to_string());
             let settings = crate::providers::ProviderSettings::new([(
@@ -297,11 +358,11 @@ fn a_pinned_grok_home_replaces_the_users_as_the_source_of_the_farm() {
     // Login and session records are the chosen directory's, so a resume finds its transcript.
     assert_eq!(
         std::fs::read_link(farm.join("auth.json")).expect("a link"),
-        std::fs::canonicalize(pinned.join("auth.json")).expect("canonical path")
+        crate::hostfs::canonical(pinned.join("auth.json")).expect("canonical path")
     );
     assert_eq!(
         std::fs::read_link(farm.join("sessions")).expect("a link"),
-        std::fs::canonicalize(pinned.join("sessions")).expect("canonical path")
+        crate::hostfs::canonical(pinned.join("sessions")).expect("canonical path")
     );
 }
 

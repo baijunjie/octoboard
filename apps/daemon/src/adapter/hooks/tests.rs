@@ -1,6 +1,9 @@
+#[cfg(unix)]
 use super::write_hook_script;
+#[cfg(unix)]
 use crate::adapter::tests::spec_fixture;
 
+#[cfg(unix)]
 #[test]
 fn the_hook_script_is_executable_by_its_owner_only() {
     use std::os::unix::fs::PermissionsExt;

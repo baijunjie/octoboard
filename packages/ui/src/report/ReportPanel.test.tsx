@@ -10,12 +10,14 @@ import { press } from "../components/alerts/detailsTestSupport";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PanelFrameProvider } from "../components/panel/PanelHeader";
 import { focusLanding, focusLandingWithoutText } from "../components/focus/regionFocus";
+import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { applyDaemonEvent, createStateStore, DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { withReportScrollBridge } from "../website-preview/scrollBridge";
 import { PageDocumentTransform } from "./pageDocumentTransform";
 import { ReportPanel } from "./ReportPanel";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,7 +42,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
   });
   act(() => root.render(
     <StrictMode>
-      <PlatformProvider value={{ kind: "browser" }}>
+      <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
         <PageDocumentTransform value={withReportScrollBridge}>
           <DaemonProvider value={daemon}>
             <ReportPanel sessionId="console-session" peek={undefined}
@@ -59,6 +61,35 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
   expect(documents()[1]).toContain("data-website-preview-scroll-bridge");
 });
 
+it.each<[string, PlatformAdapter, boolean, boolean]>([
+  ["the macOS app", { kind: "tauri", host: MAC_HOST }, true, true],
+  ["the Windows app", { kind: "tauri", host: WINDOWS_HOST }, false, true],
+  ["a browser on Windows", { kind: "browser", host: WINDOWS_HOST }, false, false],
+])("relays to the window the keys of the commands %s has", (_name, platform, history, switching) => {
+  const attributes = vi.spyOn(Element.prototype, "setAttribute");
+  const store = createStateStore({ pages: new Map([["console-session", [pageOf("first", "console-session", "<p>First</p>", 0)]]]) });
+  const daemon = testDaemon({ store, request: vi.fn(), showNotice: vi.fn() });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.restoreAllMocks();
+  });
+  act(() => root.render(
+    <PlatformProvider value={platform}>
+      <DaemonProvider value={daemon}>
+        <ReportPanel sessionId="console-session" peek={undefined}
+          onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
+      </DaemonProvider>
+    </PlatformProvider>,
+  ));
+  const srcdoc = String(attributes.mock.calls.find(([name]) => name.toLowerCase() === "srcdoc")?.[1]);
+  expect(srcdoc.includes("\"historyKeys\":")).toBe(history);
+  // Control with Tab on every system: never the Windows key, which a Windows page would otherwise be told.
+  expect(srcdoc.includes(JSON.stringify({ switchKeys: { next: { code: "Tab", metaKey: false, ctrlKey: true, shiftKey: false, altKey: false } } }).slice(1, -2))).toBe(switching);
+});
+
 function renderReport(pageCount = 2) {
   const pages = Array.from({ length: pageCount }, (_, i) => pageOf(`page-${i}`, "console-session", `<p>Page ${i}</p>`, i));
   const store = createStateStore({ pages: new Map([["console-session", pages]]) });
@@ -72,7 +103,7 @@ function renderReport(pageCount = 2) {
   });
   act(() => root.render(
     <StrictMode>
-      <PlatformProvider value={{ kind: "browser" }}>
+      <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
         <DaemonProvider value={daemon}>
           <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
             <ReportPanel sessionId="console-session" peek={undefined}
@@ -159,7 +190,7 @@ it("shows a failed page listing in the panel with its reason and Try again, and 
     container.remove();
   });
   await act(async () => root.render(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <DaemonProvider value={daemon}>
         <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
           <ReportPanel sessionId="console-session" peek={undefined}
@@ -197,7 +228,7 @@ async function renderWith(request: Daemon["request"], store: ReturnType<typeof c
     container.remove();
   });
   await act(async () => root.render(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <DaemonProvider value={daemon}>
         <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
           <ReportPanel sessionId="console-session" peek={undefined}

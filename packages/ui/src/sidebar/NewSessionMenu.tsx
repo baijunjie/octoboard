@@ -7,6 +7,7 @@ import { ActionMenu } from "../components/menus/ActionMenu";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { quickCreateUnavailable } from "../dialogs/openSessionRequest";
 import { useT } from "../i18n/react";
+import { useHost } from "../platform/react";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
 import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
@@ -39,6 +40,7 @@ export function NewSessionMenu({
   onQuickCreate: (target: NewSessionRequest) => void;
 }): React.ReactElement {
   const t = useT();
+  const host = useHost();
   const { quick: heldQuick, blocked } = useNewSessionMode();
   // A shortcut chooses the action before the project picker opens; releasing its keys must not
   // change that choice. Pointer-opened menus keep following the held modifier.
@@ -46,7 +48,7 @@ export function NewSessionMenu({
   const quick = shortcutMode === undefined ? heldQuick : shortcutMode === "quickCreate";
   const triggerRef = useRef<HTMLButtonElement>(null);
   useWindowShortcut((event) => {
-    const action = matchCreateShortcut(event);
+    const action = matchCreateShortcut(event, host);
     return action === undefined ? undefined : { action, repeat: event.repeat };
   }, ({ action, repeat }) => {
     if (repeat || blocked || projects.length === 0) return;

@@ -19,9 +19,9 @@ const MENU_LABEL_KEYS = Object.keys(en).filter((key) => key.startsWith("menu."))
  * surfacing to the user.
  */
 export function useNativeMenuLabels(): void {
-  const { appMenu } = usePlatform();
+  const { appMenu, host } = usePlatform();
   const language = useCurrentLanguage();
-  const accelerator = toAccelerator(useBinding("openSettings"));
+  const accelerator = toAccelerator(useBinding("openSettings"), host);
   // Serial, so two in-flight pushes cannot settle out of order and leave the menu in the earlier language.
   const push = useSerialPush();
 

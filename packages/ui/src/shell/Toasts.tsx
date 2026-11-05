@@ -31,7 +31,9 @@ const shownToasts = new Map<string, string>();
  * Routes errors into the acknowledgement queue and displays notices in HeroUI's timed toast
  * stack. An error alert is titled for what failed, with no name in the title, and names its session in the body; a session
  * notice keeps its location and structured daemon message. Notices keep keyboard focus where it
- * was, remain selectable, and move clear of dialog footers.
+ * was, remain selectable, and move clear of dialog footers. A withdrawal of a daemon notice shows nothing: it takes the
+ * notice's error alert back (`errorAlerts.withdraw`), shown or still queued, and leaves a notice
+ * already acknowledged, or one shown as a toast, as it is.
  */
 export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement {
   const { store, onNotification } = useDaemon();
@@ -39,6 +41,10 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   useEffect(
     () =>
       onNotification((request) => {
+        if (request.kind === "withdrawn") {
+          errorAlerts.withdraw(request.session, request.code);
+          return;
+        }
         if (request.kind === "error") {
           errorAlerts.report(errorAlertOf(request));
           return;

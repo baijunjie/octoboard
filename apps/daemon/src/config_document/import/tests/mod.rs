@@ -10,7 +10,7 @@ use crate::config_document::export;
 use crate::protocol::{
     DirectoryChoiceKind, DirectoryOffers, GitWorkflowSettings, Launch, Project, ProjectSource,
 };
-use crate::test_support::{app_state, code_of, ScratchDir, PATIENCE};
+use crate::test_support::{app_state, code_of, host_path, ScratchDir, PATIENCE};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -28,6 +28,15 @@ pub(super) fn project(name: &str, path: &str) -> DocumentProject {
         accounts: Default::default(),
         launch: Default::default(),
         git_workflow: Default::default(),
+    }
+}
+
+/// An absolute path in the style of the other operating system than the one running the test.
+pub(super) fn foreign_path() -> &'static str {
+    if cfg!(windows) {
+        "/Users/x/code/app"
+    } else {
+        r"C:\Users\x\code\app"
     }
 }
 
@@ -69,8 +78,11 @@ pub(super) fn account(id: &str, agent: AgentId, name: &str) -> Account {
     }
 }
 
+/// The directory `name` (segments separated by `/`) below `parent`, created.
 pub(super) fn directory(parent: &Path, name: &str) -> PathBuf {
-    let path = parent.join(name);
+    let path = name
+        .split('/')
+        .fold(parent.to_path_buf(), |path, segment| path.join(segment));
     std::fs::create_dir_all(&path).expect("directory");
     path
 }

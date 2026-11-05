@@ -13,7 +13,7 @@ use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::SystemTime;
 
-use crate::hostfs::identity::{self, Identity};
+use crate::platform::fs::{self, Identity, Links};
 
 /// A file's length and modification time, which together say whether it changed.
 pub type Signature = (u64, Option<SystemTime>);
@@ -48,7 +48,7 @@ impl LineFile {
     /// until [`Self::read`] or [`Self::settle`] succeeds.
     pub fn check(&mut self, path: &Path) -> std::io::Result<Change> {
         let metadata = std::fs::metadata(path)?;
-        let identity = identity::raw(&metadata);
+        let identity = fs::identity(path, Links::Follow)?;
         let signature = (metadata.len(), metadata.modified().ok());
         let replaced = self.identity.is_some_and(|previous| previous != identity);
         if replaced {

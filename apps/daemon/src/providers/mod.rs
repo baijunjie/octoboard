@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 
 use layout::AgentLayout;
 
+use crate::platform::term::QuitKeys;
+
 /// Every registered provider's descriptor, in the registry's order, which every per-provider
 /// listing keeps. Registering a provider is one line here and one in `crate::adapter`'s registry.
 const REGISTRY: &[&ProviderDescriptor] = &[
@@ -161,6 +163,10 @@ pub struct ProviderDescriptor {
     /// The instruction file the provider reads out of its working directory, matched by exact
     /// spelling (see "Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`).
     pub instruction_file: &'static str,
+    /// What a line of [`Self::instruction_file`] starts with, followed by the path of a file beside
+    /// it, for the provider to read that file's text in the line's place; `None` where the provider
+    /// is not known to read such a line.
+    pub instruction_import_prefix: Option<&'static str>,
     /// What the provider puts before `<server>__<tool>` when it presents an MCP server's tool to
     /// its model.
     pub tool_name_prefix: &'static str,
@@ -168,6 +174,10 @@ pub struct ProviderDescriptor {
     /// has one whose name is known.
     pub ask_question_tool: Option<&'static str>,
     pub capabilities: Capabilities,
+    /// The keys the provider's CLI quits on, for a host whose own request to end would end it
+    /// without its shutdown work (the hook that fires on a clean teardown, the turn it is in): a
+    /// stop presses them first. `None` for a CLI that finishes on the host's request.
+    pub quit_keys: Option<QuitKeys>,
     /// How the provider's own interface names its quota windows.
     pub quota_windows: QuotaWindowNaming,
     /// How a model id of the provider is shown.

@@ -1,7 +1,7 @@
 name: Code quality
 
-# Optional hosted application checks, including Linux compilation. Release preparation runs application checks
-# locally before tagging; the release workflow does not call this workflow.
+# Optional hosted application checks, including Linux compilation and an unsigned Windows installer build. Release
+# preparation runs application checks locally before tagging; the release workflow does not call this workflow.
 on:
   workflow_dispatch:
 
@@ -52,7 +52,8 @@ jobs:
 
   linux-check:
     # The desktop shell gates its macOS-only code, and the daemon is meant to run on Linux; the macOS
-    # job above cannot notice either one breaking, so this compiles both crates there.
+    # job above cannot notice either one breaking, so this compiles both crates there and runs the
+    # daemon's tests, whose platform contract tests hold Linux to the same neutral API as macOS.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,3 +70,59 @@ jobs:
           profile: linux-check
       # `scripts/cargo.mjs` empties the sidecar list `tauri-build` insists on; compiling never starts it.
       - run: /usr/bin/time -v node scripts/cargo.mjs check --locked
+      - run: cargo test --locked -p octoboardd
+
+  windows-check:
+    # The Windows port compiles natively here (the MSVC target is the runner's host, x64). The desktop
+    # shell is the gate, linted and tested here; locally `pnpm check:windows` cross-checks the same crates
+    # through `cargo xwin`.
+    # The daemon is linted and its tests run here too: they need Git for Windows, which the runner
+    # image carries, and no agent CLI.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # rustup is preinstalled; this installs the toolchain `rust-toolchain.toml` pins.
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: windows-check
+      # `scripts/cargo.mjs` empties the sidecar list `tauri-build` insists on; compiling never starts it.
+      # With `-p` it checks just that crate, tests and other targets included.
+      - run: node scripts/cargo.mjs check --locked -p octoboard
+      # With `clippy` the script adds `--all-targets` and `-D warnings`.
+      - run: node scripts/cargo.mjs clippy --locked -p octoboard
+      - run: node scripts/cargo.mjs test --locked -p octoboard
+      # The daemon gates too, its tests included. They run on the bundled ConPTY, which the daemon
+      # loads from beside its executable.
+      - run: cargo clippy --locked --all-targets -p octoboardd -- -D warnings
+      - run: node scripts/fetch-conpty.mjs --arch x64
+      - run: cargo test --locked -p octoboardd
+
+  windows-bundle:
+    # The unsigned installer, built as the release builds it (`WINDOWS_SIGNING=none`, no update key), so that the
+    # `tauri build` of the Windows release can be checked without making a release. It shares the release builds'
+    # dependency cache.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: windows-release
+      - run: pnpm install --frozen-lockfile
+      - name: Build the unsigned installer
+        env:
+          WINDOWS_SIGNING: none
+        run: pnpm --filter @octoboard/desktop release --no-sign-update

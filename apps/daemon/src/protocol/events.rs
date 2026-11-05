@@ -18,9 +18,10 @@ use super::configuration::{
 use super::errors::{error_parts, params, Params};
 use super::fields::is_true;
 use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence};
+use super::host::HostInfo;
 use super::models::{AgentModel, DefaultModelSource, ModelChangeOutcome, ModelsUnavailable};
 use super::path_links::PathLink;
-use super::processes::{ProcessCount, ProcessTree};
+use super::processes::{ProcessCount, ProcessTree, UnstoppedProcess};
 use super::providers::ProviderInfo;
 use super::quotas::{AccountQuota, ResetCreditOutcome};
 use super::records::{
@@ -91,6 +92,11 @@ pub enum Event {
     ProcessesStopped {
         id: Option<String>,
         ids: Vec<String>,
+        /// The processes the stop left running, each with the tree it was stopped with, which
+        /// `ids` leaves out.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        not_stopped: Vec<UnstoppedProcess>,
     },
     ProcessesKept {
         id: Option<String>,
@@ -141,6 +147,10 @@ pub enum Event {
         /// is the daemon's home, not the browser's, since the two may be on different machines.
         /// Null when the daemon cannot determine one.
         home_dir: Option<String>,
+        /// The daemon host's own facts: its operating system, how it writes a path, whether it
+        /// can make file links, and how its interface names the Trash (`trash`) and its settings
+        /// app (`settings`).
+        host: HostInfo,
         /// Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,
         /// not stored.
         shell_terminals: Vec<ShellTerminal>,
@@ -226,6 +236,13 @@ pub enum Event {
         code: Code,
         params: Params,
         message: String,
+    },
+    /// The `session_notice` with `code` about `session` that was broadcast last no longer holds: a
+    /// `message_not_sent` whose message the agent has since reported sending. A client still
+    /// showing that notice drops it; one that is not ignores this.
+    SessionNoticeWithdrawn {
+        session: String,
+        code: Code,
     },
     /// A session of a project the user has not yet agreed Octoboard may press trust confirmations
     /// for — not by its own consent and not through a trusted directory — is sitting at its

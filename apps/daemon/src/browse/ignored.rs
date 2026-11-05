@@ -31,6 +31,7 @@ use anyhow::Result;
 
 use crate::browse::{budget, BrowseGit, Cancelled};
 use crate::git::isolated::IsolatedGit;
+use crate::git::pathspec;
 use crate::git::run::GitError;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::BrowseEntry;
@@ -38,7 +39,7 @@ use crate::wire_path;
 
 /// The most name bytes one `git check-ignore` run is given on its command line, so a listing of
 /// thousands of long names still fits the system's argument limit; a longer listing takes more runs.
-const CHECK_BATCH_BYTES: usize = 96 * 1024;
+const CHECK_BATCH_BYTES: usize = crate::platform::proc::ARGUMENT_BYTES;
 
 /// The most names one `git check-ignore` run is given, so that its output (a line of source, line
 /// number, pattern and name for each) stays within [`budget::GIT_METADATA_STDOUT`].
@@ -234,7 +235,7 @@ fn check_ignore(
     let deadline = Instant::now() + budget::IGNORE_CHECK_TIMEOUT;
     // `./` keeps a name that starts with `:(` from being read as pathspec magic, which
     // `check-ignore` refuses.
-    let given = |name: &Vec<u8>| [b"./".as_slice(), name].concat();
+    let given = |name: &Vec<u8>| pathspec::relative(name);
     let plain: Vec<usize> = (0..names.len())
         .filter(|&at| !has_glob(&names[at]))
         .collect();
@@ -351,7 +352,7 @@ fn tracked_among(
                     .filter(|path| !path.is_empty())
                     .map(|path| {
                         let first = path.split(|&byte| byte == b'/').next().unwrap_or(path);
-                        [b"./".as_slice(), first].concat()
+                        pathspec::relative(first)
                     }),
             ),
             Err(GitError::Stopped(BoundedFailure::Cancelled)) => {

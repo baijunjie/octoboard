@@ -11,4 +11,26 @@ fn main() {
         .as_str()
         .expect("config/app.json `name` is a string");
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");
+
+    embed_windows_manifest();
+}
+
+/// Has the MSVC linker embed `octoboardd.exe.manifest`, which declares the daemon long-path aware,
+/// in the Windows binary: the linker merges it into the manifest it makes, so no resource compiler
+/// or crate is needed. Other targets link no manifest.
+fn embed_windows_manifest() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if target_os != "windows" || target_env != "msvc" {
+        return;
+    }
+    let manifest =
+        std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").expect("set by cargo"))
+            .join("octoboardd.exe.manifest");
+    println!("cargo:rerun-if-changed={}", manifest.display());
+    println!("cargo:rustc-link-arg-bins=/MANIFEST:EMBED");
+    println!(
+        "cargo:rustc-link-arg-bins=/MANIFESTINPUT:{}",
+        manifest.display()
+    );
 }

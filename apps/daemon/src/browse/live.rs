@@ -4,12 +4,10 @@
 //!
 //! A path is resolved with every symbolic link followed and then held to the scope, so a link that
 //! stays inside is read through and one that leads out is refused. The resolved path has no link
-//! left in it, and it is then opened refusing a link in any of its components (`O_NOFOLLOW_ANY` on
-//! macOS, `openat2` with `RESOLVE_NO_SYMLINKS` on Linux), so a link swapped in between the check
-//! and the open makes the open fail instead of redirecting it; a listing then reads the directory
-//! it opened, not the path again. Where neither is available — another system, a Linux kernel
-//! before 5.6, a sandbox that refuses `openat2` — only the last component is held to that, and a
-//! link swapped into a directory above it is followed.
+//! left in it, and it is then opened refusing a link in any of its components
+//! ([`platform::open_without_links`]), so a link swapped in between the check and the open makes
+//! the open fail instead of redirecting it; a listing then reads the directory it opened, not the
+//! path again.
 //!
 //! The opened descriptor's own path cannot stand in for that check: on macOS `F_GETPATH` reports
 //! whichever hard link to the file any process looked up last, so a file hard-linked from outside
@@ -17,14 +15,10 @@
 //!
 //! A FIFO, socket or device is refused from its metadata and never read: opening a FIFO blocks
 //! until a writer appears, and reading a device can be endless. One swapped in after that check is
-//! opened without blocking (`O_NONBLOCK`) and refused before anything is read from it.
+//! opened without blocking and refused before anything is read from it.
 
-use std::ffi::CStr;
-use std::fs::{self, File, Metadata};
+use std::fs::{self, Metadata};
 use std::io;
-use std::os::fd::IntoRawFd;
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -34,75 +28,21 @@ use crate::browse::content::json_escaped_len;
 use crate::browse::source::file_id;
 use crate::browse::{budget, ignored, BrowseGit, Cancelled};
 use crate::hostfs::{read_bounded, ReadFailure};
+use crate::platform::fs::{self as platform, DirReader, EntryType, Links, Opens, Stat};
+use crate::platform::names;
 use crate::protocol::{error_code, BrowseEntry, CodedError, EntryKind, LinkTarget};
 use crate::wire_path::{self, RelPath};
 
 /// Resolves `path` inside the scope directory `scope` (already canonical) to the canonical path
-/// it names, refusing one that leads outside.
+/// it names, refusing one that leads outside, and one this host cannot name, which `git` may list
+/// but nothing on its disk has.
 pub fn resolve(scope: &Path, path: &RelPath) -> Result<PathBuf> {
-    let joined = scope.join(path.as_path());
-    let canonical = fs::canonicalize(&joined).map_err(|err| io_failure(path, &err))?;
+    let joined = scope.join(path.host_path().ok_or_else(|| unnameable(path))?);
+    let canonical = crate::hostfs::canonical(&joined).map_err(|err| io_failure(path, &err))?;
     if !canonical.starts_with(scope) {
         return Err(outside(path));
     }
     Ok(canonical)
-}
-
-/// Opens `path` for reading with `flags`, failing with `ELOOP` should any component of it be a
-/// symbolic link — see the module doc.
-fn open_without_links(path: &Path, flags: libc::c_int) -> io::Result<File> {
-    #[cfg(target_os = "macos")]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(flags | libc::O_NOFOLLOW_ANY)
-            .open(path)
-    }
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::fd::FromRawFd;
-        let c_path = std::ffi::CString::new(path.as_os_str().as_bytes())?;
-        // SAFETY: `open_how` is plain integers, for which all zeroes is a valid value (and the
-        // value the kernel requires of any field not set).
-        let mut how: libc::open_how = unsafe { std::mem::zeroed() };
-        how.flags = (flags | libc::O_RDONLY | libc::O_CLOEXEC) as u64;
-        how.resolve = libc::RESOLVE_NO_SYMLINKS;
-        // SAFETY: `openat2` reads `how` (of the size passed) and the NUL-terminated path, both
-        // alive for the call; a non-negative result is a descriptor this process now owns.
-        let fd = unsafe {
-            libc::syscall(
-                libc::SYS_openat2,
-                libc::AT_FDCWD,
-                c_path.as_ptr(),
-                &how as *const libc::open_how,
-                std::mem::size_of::<libc::open_how>(),
-            )
-        };
-        if fd >= 0 {
-            // SAFETY: see above.
-            return Ok(unsafe { File::from_raw_fd(fd as libc::c_int) });
-        }
-        let err = io::Error::last_os_error();
-        // `ENOSYS` from a kernel older than `openat2` (5.6), `EPERM` from a seccomp filter (older
-        // container runtimes) that does not know it: fall back, holding only the last component.
-        if !matches!(err.raw_os_error(), Some(libc::ENOSYS | libc::EPERM)) {
-            return Err(err);
-        }
-        use std::os::unix::fs::OpenOptionsExt;
-        fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(flags | libc::O_NOFOLLOW)
-            .open(path)
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(flags | libc::O_NOFOLLOW)
-            .open(path)
-    }
 }
 
 /// A file read whole off the disk, with the version it was read at.
@@ -133,30 +73,32 @@ pub(super) fn read_resolved(
     limit: usize,
     cancel: &AtomicBool,
 ) -> Result<LiveFile> {
-    let before = fs::symlink_metadata(canonical).map_err(|err| io_failure(path, &err))?;
-    if before.file_type().is_symlink() {
+    let before = platform::stat(canonical, Links::Keep).map_err(|err| io_failure(path, &err))?;
+    if before.metadata.file_type().is_symlink() {
         return Err(changed(path));
     }
-    if !before.is_file() {
-        return Err(unsupported(path, file_type_name(&before)));
+    if !before.metadata.is_file() {
+        return Err(unsupported(path, file_type_name(&before.metadata)));
     }
-    if before.len() > limit as u64 {
-        return Err(too_large(limit, Some(before.len())));
+    if before.metadata.len() > limit as u64 {
+        return Err(too_large(limit, Some(before.metadata.len())));
     }
-    let file = open_without_links(canonical, libc::O_NONBLOCK | libc::O_NOCTTY)
+    let file = platform::open_without_links(canonical, Path::new(""), Opens::File)
         .map_err(|err| open_failure(path, &err))?;
-    let opened = file.metadata().map_err(|err| io_failure(path, &err))?;
-    if !opened.is_file() || file_id(&opened) != file_id(&before) {
+    let opened = platform::stat_of(&file).map_err(|err| io_failure(path, &err))?;
+    if !opened.metadata.is_file() || file_id(&opened) != file_id(&before) {
         return Err(changed(path));
     }
     let bytes =
-        read_bounded(&file, limit, opened.len(), Some(cancel)).map_err(|err| match err {
-            ReadFailure::Exceeded => too_large(limit, None),
-            ReadFailure::Cancelled => anyhow::Error::new(Cancelled),
-            ReadFailure::Io(err) => io_failure(path, &err),
-        })?;
-    let after = file.metadata().map_err(|err| io_failure(path, &err))?;
-    if version(&opened) != version(&after) || bytes.len() as u64 != after.len() {
+        read_bounded(&file, limit, opened.metadata.len(), Some(cancel)).map_err(
+            |err| match err {
+                ReadFailure::Exceeded => too_large(limit, None),
+                ReadFailure::Cancelled => anyhow::Error::new(Cancelled),
+                ReadFailure::Io(err) => io_failure(path, &err),
+            },
+        )?;
+    let after = platform::stat_of(&file).map_err(|err| io_failure(path, &err))?;
+    if version(&opened) != version(&after) || bytes.len() as u64 != after.metadata.len() {
         return Err(changed(path));
     }
     Ok(LiveFile {
@@ -165,37 +107,11 @@ pub(super) fn read_resolved(
     })
 }
 
-/// A regular file's version: its device and inode, size, and modification and change times, as one
-/// opaque string. The change time moves with every write and every replacement of the inode, so two
-/// equal versions mean nothing about the file changed in between. It is built from fields a plain
-/// `stat` carries, so a listing's [`entry_version`] and a read's [`version`] of the same file agree.
-fn version_of(dev: u64, ino: u64, size: u64, mtime: (i64, i64), ctime: (i64, i64)) -> String {
-    format!(
-        "{dev}:{ino}:{size}:{}.{}:{}.{}",
-        mtime.0, mtime.1, ctime.0, ctime.1
-    )
-}
-
-pub(super) fn version(metadata: &Metadata) -> String {
-    version_of(
-        metadata.dev(),
-        metadata.ino(),
-        metadata.len(),
-        (metadata.mtime(), metadata.mtime_nsec()),
-        (metadata.ctime(), metadata.ctime_nsec()),
-    )
-}
-
-/// The [`version`] a read of the regular file `stat` describes would report.
-#[allow(clippy::unnecessary_cast)] // The `stat` fields' types differ between platforms.
-fn entry_version(stat: &libc::stat) -> String {
-    version_of(
-        stat.st_dev as u64,
-        stat.st_ino as u64,
-        stat.st_size as u64,
-        (stat.st_mtime as i64, stat.st_mtime_nsec as i64),
-        (stat.st_ctime as i64, stat.st_ctime_nsec as i64),
-    )
+/// A regular file's version, as one opaque string that changes with every write and every
+/// replacement of the file: two equal versions mean nothing about the file changed in between. A
+/// listing's entry version and a read's version of the same file agree.
+pub(super) fn version(stat: &Stat) -> String {
+    platform::version(stat)
 }
 
 /// A directory listing, possibly cut at a budget.
@@ -239,16 +155,16 @@ pub(super) fn list_resolved(
     max_name_bytes: usize,
     cancel: &AtomicBool,
 ) -> Result<Listing> {
-    let metadata = fs::symlink_metadata(canonical).map_err(|err| io_failure(path, &err))?;
-    if metadata.file_type().is_symlink() {
+    let metadata = platform::stat(canonical, Links::Keep).map_err(|err| io_failure(path, &err))?;
+    if metadata.metadata.file_type().is_symlink() {
         return Err(changed(path));
     }
-    if !metadata.is_dir() {
-        return Err(unsupported(path, file_type_name(&metadata)));
+    if !metadata.metadata.is_dir() {
+        return Err(unsupported(path, file_type_name(&metadata.metadata)));
     }
-    let directory = open_without_links(canonical, libc::O_DIRECTORY | libc::O_NOCTTY)
+    let directory = platform::open_without_links(canonical, Path::new(""), Opens::Directory)
         .map_err(|err| open_failure(path, &err))?;
-    let opened = directory.metadata().map_err(|err| io_failure(path, &err))?;
+    let opened = platform::stat_of(&directory).map_err(|err| io_failure(path, &err))?;
     if file_id(&opened) != file_id(&metadata) {
         return Err(changed(path));
     }
@@ -260,7 +176,7 @@ pub(super) fn list_resolved(
         if cancel.load(Ordering::Relaxed) {
             return Err(anyhow::Error::new(Cancelled));
         }
-        let (raw, d_type) = match reader.next_entry() {
+        let listed = match reader.next_entry() {
             Ok(Some(entry)) => entry,
             Ok(None) => break,
             Err(err) => {
@@ -269,26 +185,22 @@ pub(super) fn list_resolved(
                 break;
             }
         };
-        let name = wire_path::encode(&raw);
+        let raw = &listed.name;
+        let name = wire_path::encode(raw);
         let sent = json_escaped_len(name.as_bytes());
         if entries.len() == max_entries || name_bytes + sent > max_name_bytes {
             complete = false;
             break;
         }
         name_bytes += sent;
-        let Some(stat) = reader.stat(&raw) else {
+        let Some(stat) = reader.stat(&listed) else {
             complete = false;
             continue;
         };
-        let kind = match d_type {
-            libc::DT_LNK => libc::S_IFLNK,
-            libc::DT_DIR => libc::S_IFDIR,
-            libc::DT_REG => libc::S_IFREG,
-            _ => stat.st_mode as libc::mode_t & libc::S_IFMT,
-        };
-        let (kind, size, version, target) = match kind {
-            libc::S_IFLNK => {
-                let link = canonical.join(std::ffi::OsStr::from_bytes(&raw));
+        let (kind, size, version, target) = match listed.hint.unwrap_or(stat.kind) {
+            EntryType::Link => {
+                let link = canonical
+                    .join(names::name_from_bytes(raw).expect("a directory entry is a name"));
                 (
                     EntryKind::Symlink,
                     None,
@@ -296,14 +208,9 @@ pub(super) fn list_resolved(
                     Some(link_target(scope, &link)),
                 )
             }
-            libc::S_IFDIR => (EntryKind::Directory, None, None, None),
-            libc::S_IFREG => (
-                EntryKind::File,
-                Some(stat.st_size as u64),
-                Some(entry_version(&stat)),
-                None,
-            ),
-            _ => (EntryKind::Other, None, None, None),
+            EntryType::Directory => (EntryKind::Directory, None, None, None),
+            EntryType::File => (EntryKind::File, Some(stat.size), Some(stat.version()), None),
+            EntryType::Other => (EntryKind::Other, None, None, None),
         };
         entries.push(BrowseEntry {
             name,
@@ -380,7 +287,7 @@ fn search_bounded(
         return Err(anyhow::Error::new(Cancelled));
     }
     let root = RelPath::parse("").expect("the root is a valid path");
-    let directory = open_without_links(scope, libc::O_DIRECTORY | libc::O_NOCTTY)
+    let directory = platform::open_without_links(scope, Path::new(""), Opens::Directory)
         .map_err(|err| open_failure(&root, &err))?;
     let mut stack = vec![(root, DirReader::new(directory)?)];
     let mut visited = 0;
@@ -393,8 +300,8 @@ fn search_bounded(
             result.complete = false;
             break;
         }
-        let raw = match reader.next_entry() {
-            Ok(Some((raw, _))) => raw,
+        let listed = match reader.next_entry() {
+            Ok(Some(listed)) => listed,
             Ok(None) => {
                 stack.pop();
                 continue;
@@ -410,31 +317,38 @@ fn search_bounded(
             break;
         }
         visited += 1;
-        if is_left_out(&raw) {
+        let raw = &listed.name;
+        if is_left_out(raw) {
             continue;
         }
-        let Some(stat) = reader.stat(&raw) else {
+        let Some(stat) = reader.stat(&listed) else {
             result.complete = false;
             continue;
         };
         let path =
             parent.join(&RelPath::from_bytes(raw.clone()).expect("a directory entry is a name"));
+        // A name the host's rules reject (on Windows, one ending in a dot, say, which only a
+        // `\\?\` path makes) cannot be opened by its path: left out as an unreadable entry is.
+        let Some(on_disk) = path.host_path() else {
+            result.complete = false;
+            continue;
+        };
         // An ignored folder is ignored itself, so a search leaving ignored entries out never goes
         // into it.
         let is_ignored = ignored.covers(path.as_bytes());
         if is_ignored && !include_ignored {
             continue;
         }
-        let canonical = scope.join(path.as_path());
-        let kind = stat.st_mode as libc::mode_t & libc::S_IFMT;
-        if kind == libc::S_IFDIR {
+        let canonical = scope.join(&on_disk);
+        let kind = stat.kind;
+        if kind == EntryType::Directory {
             if stack.len() >= max_depth {
                 result.complete = false;
                 continue;
             }
             // Do not canonicalize this path: a directory replaced with a symlink since stat
             // must fail the same no-follow open that protects ordinary browse reads.
-            match open_without_links(&canonical, libc::O_DIRECTORY | libc::O_NOCTTY)
+            match platform::open_without_links(scope, &on_disk, Opens::Directory)
                 .and_then(DirReader::new)
             {
                 Ok(reader) => {
@@ -448,16 +362,13 @@ fn search_bounded(
             }
             continue;
         }
-        if kind != libc::S_IFREG
-            && !(kind == libc::S_IFLNK
+        if kind != EntryType::File
+            && !(kind == EntryType::Link
                 && matches!(link_target(scope, &canonical), LinkTarget::File))
         {
             continue;
         }
-        if !String::from_utf8_lossy(&raw)
-            .to_lowercase()
-            .contains(&query)
-        {
+        if !String::from_utf8_lossy(raw).to_lowercase().contains(&query) {
             continue;
         }
         let wire = path.to_wire();
@@ -501,99 +412,9 @@ fn is_left_out(name: &[u8]) -> bool {
         || name.starts_with(b"._")
 }
 
-/// Reads the entries of an open directory through its descriptor, so what is listed is the
-/// directory that was opened, whatever has happened to its path since.
-struct DirReader {
-    dir: std::ptr::NonNull<libc::DIR>,
-}
-
-impl DirReader {
-    fn new(directory: File) -> io::Result<Self> {
-        let fd = directory.into_raw_fd();
-        // SAFETY: `fd` is an open directory descriptor this process owns; on success the stream
-        // takes it over and `closedir` closes it, and on failure it is closed here.
-        let dir = unsafe { libc::fdopendir(fd) };
-        match std::ptr::NonNull::new(dir) {
-            Some(dir) => Ok(Self { dir }),
-            None => {
-                let err = io::Error::last_os_error();
-                // SAFETY: the descriptor was not taken over by a stream.
-                unsafe { libc::close(fd) };
-                Err(err)
-            }
-        }
-    }
-
-    /// The next entry's name and `d_type`, skipping `.` and `..`; `None` at the end.
-    fn next_entry(&mut self) -> io::Result<Option<(Vec<u8>, u8)>> {
-        loop {
-            clear_errno();
-            // SAFETY: `self.dir` is an open stream; the entry it returns is valid until the next
-            // call on the same stream, and is copied out before that.
-            let entry = unsafe { libc::readdir(self.dir.as_ptr()) };
-            if entry.is_null() {
-                let err = io::Error::last_os_error();
-                return match err.raw_os_error() {
-                    Some(0) | None => Ok(None),
-                    Some(_) => Err(err),
-                };
-            }
-            // SAFETY: see above; `d_name` is NUL-terminated.
-            let (name, d_type) = unsafe {
-                let entry = &*entry;
-                (
-                    CStr::from_ptr(entry.d_name.as_ptr()).to_bytes().to_vec(),
-                    entry.d_type,
-                )
-            };
-            if name != b"." && name != b".." {
-                return Ok(Some((name, d_type)));
-            }
-        }
-    }
-
-    /// The entry `name`'s own metadata, not following a link it is.
-    fn stat(&self, name: &[u8]) -> Option<libc::stat> {
-        let name = std::ffi::CString::new(name).ok()?;
-        let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
-        // SAFETY: the stream's descriptor is open, `name` is NUL-terminated, and `stat` is
-        // written in full on success.
-        let result = unsafe {
-            libc::fstatat(
-                libc::dirfd(self.dir.as_ptr()),
-                name.as_ptr(),
-                stat.as_mut_ptr(),
-                libc::AT_SYMLINK_NOFOLLOW,
-            )
-        };
-        // SAFETY: initialised by the successful call.
-        (result == 0).then(|| unsafe { stat.assume_init() })
-    }
-}
-
-impl Drop for DirReader {
-    fn drop(&mut self) {
-        // SAFETY: the stream is open and closed only here.
-        unsafe { libc::closedir(self.dir.as_ptr()) };
-    }
-}
-
-/// Zeroes `errno`, which `readdir` leaves alone at the end of a directory and sets on an error.
-fn clear_errno() {
-    // SAFETY: each returns this thread's `errno` location.
-    #[cfg(target_os = "macos")]
-    unsafe {
-        *libc::__error() = 0;
-    }
-    #[cfg(target_os = "linux")]
-    unsafe {
-        *libc::__errno_location() = 0;
-    }
-}
-
 /// What a symbolic link inside `scope` resolves to, without following one that leads outside.
 fn link_target(scope: &Path, link: &Path) -> LinkTarget {
-    let Ok(target) = fs::canonicalize(link) else {
+    let Ok(target) = crate::hostfs::canonical(link) else {
         return LinkTarget::Missing;
     };
     if !target.starts_with(scope) {
@@ -614,14 +435,8 @@ fn file_type_name(metadata: &Metadata) -> &'static str {
         "directory"
     } else if file_type.is_file() {
         "file"
-    } else if file_type.is_fifo() {
-        "fifo"
-    } else if file_type.is_socket() {
-        "socket"
-    } else if file_type.is_block_device() || file_type.is_char_device() {
-        "device"
     } else {
-        "other"
+        platform::special_file_name(metadata).unwrap_or("other")
     }
 }
 
@@ -631,6 +446,15 @@ pub fn unsupported(path: &RelPath, file_type: &str) -> anyhow::Error {
         error_code::UNSUPPORTED_FILE_TYPE,
         format!("{shown} is a {file_type}, which cannot be read here"),
         &[("path", &shown), ("file_type", file_type)],
+    )
+}
+
+fn unnameable(path: &RelPath) -> anyhow::Error {
+    let shown = path.to_wire();
+    CodedError::raised(
+        error_code::INVALID_PATH,
+        format!("{shown} is not a name this host's file system can hold"),
+        &[("path", &shown)],
     )
 }
 
@@ -669,9 +493,10 @@ pub fn too_large(limit: usize, size: Option<u64>) -> anyhow::Error {
 /// A failure to open a path that was just resolved with no link in it: a link found there now
 /// means one was swapped in since.
 fn open_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
-    match err.raw_os_error() {
-        Some(libc::ELOOP) => changed(path),
-        _ => io_failure(path, err),
+    if platform::is_symlink_loop(err) {
+        changed(path)
+    } else {
+        io_failure(path, err)
     }
 }
 
@@ -694,7 +519,7 @@ fn io_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
             &[("path", &shown), ("detail", &err.to_string())],
         );
     }
-    if err.raw_os_error() == Some(libc::ENAMETOOLONG) {
+    if platform::is_name_too_long(err) {
         return CodedError::raised(
             error_code::INVALID_PATH,
             format!("{shown} is too long a path"),
@@ -707,7 +532,7 @@ fn io_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::ScratchDir;
+    use crate::test_support::{symlink, ScratchDir};
 
     fn never() -> AtomicBool {
         AtomicBool::new(false)
@@ -728,10 +553,9 @@ mod tests {
 
     #[test]
     fn search_finds_unopened_nested_hidden_and_ignored_files_without_following_directories() {
-        use std::os::unix::fs::symlink;
         let scope = ScratchDir::new("file-search");
         let outside = ScratchDir::new("file-search-outside");
-        let scope = fs::canonicalize(&*scope).unwrap();
+        let scope = crate::hostfs::canonical(&*scope).unwrap();
         fs::create_dir_all(scope.join("unopened/deeper")).unwrap();
         fs::create_dir_all(scope.join("ignored")).unwrap();
         fs::create_dir_all(scope.join("unopened/.git")).unwrap();
@@ -777,7 +601,7 @@ mod tests {
     #[test]
     fn search_leaves_out_the_files_an_operating_system_leaves_in_a_folder() {
         let scope = ScratchDir::new("file-search-system");
-        let scope = fs::canonicalize(&*scope).unwrap();
+        let scope = crate::hostfs::canonical(&*scope).unwrap();
         fs::create_dir_all(scope.join("src/.Spotlight-V100")).unwrap();
         for path in [
             "src/.DS_Store",
@@ -799,7 +623,7 @@ mod tests {
     #[test]
     fn search_reports_visit_result_path_depth_and_time_limits_and_cancellation() {
         let scope = ScratchDir::new("file-search-limits");
-        let scope = fs::canonicalize(&*scope).unwrap();
+        let scope = crate::hostfs::canonical(&*scope).unwrap();
         fs::create_dir_all(scope.join("nested")).unwrap();
         fs::write(scope.join("needle.txt"), b"match").unwrap();
         fs::write(scope.join("nested/needle.txt"), b"match").unwrap();
@@ -853,6 +677,23 @@ mod tests {
         assert_eq!(limited.paths.len(), 1);
     }
 
+    /// A name on disk that the host's rules reject is left out, and the search says it is not
+    /// complete, as for an entry that cannot be read.
+    #[cfg(windows)]
+    #[test]
+    fn search_leaves_out_a_name_the_host_rules_reject() {
+        let scope = ScratchDir::new("file-search-rejected-name");
+        let scope = crate::hostfs::canonical(&*scope).unwrap();
+        fs::write(scope.join("needle.txt"), b"").unwrap();
+        // Only a verbatim path keeps the trailing dot, which the Windows rules reject.
+        let mut verbatim = std::ffi::OsString::from(r"\\?\");
+        verbatim.push(scope.join("needle."));
+        fs::write(&verbatim, b"").unwrap();
+        let found = search_files(&scope, "needle", &never()).unwrap();
+        assert!(!found.complete);
+        assert_eq!(found.paths, ["needle.txt"]);
+    }
+
     /// Whether this Linux system refuses `openat2`, so that an open falls back to holding only the
     /// last component (see the module doc).
     #[cfg(target_os = "linux")]
@@ -891,7 +732,7 @@ mod tests {
             return;
         }
         let scope = ScratchDir::new("live-swap");
-        let scope = fs::canonicalize(&*scope).unwrap();
+        let scope = crate::hostfs::canonical(&*scope).unwrap();
         let outside = ScratchDir::new("live-swap-outside");
         fs::create_dir(outside.join("sub")).unwrap();
         fs::write(outside.join("file.txt"), b"outside").unwrap();
@@ -903,7 +744,7 @@ mod tests {
         let resolved_sub = resolve(&scope, &sub).unwrap();
 
         fs::rename(scope.join("dir"), scope.join("moved")).unwrap();
-        std::os::unix::fs::symlink(&*outside, scope.join("dir")).unwrap();
+        symlink(&*outside, scope.join("dir")).unwrap();
 
         let read = read_resolved(&resolved_file, &file, 1024, &never()).unwrap_err();
         assert_eq!(code(read), error_code::SOURCE_CHANGED);

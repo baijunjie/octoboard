@@ -452,10 +452,11 @@ async fn a_model_change_tells_the_session_which_trees_it_ended() {
         if continued {
             let prompt = prompt.expect("a prompt");
             assert!(
-                prompt.starts_with(
+                prompt.starts_with(&format!(
                     "Message from Octoboard: your session was restarted. The restart ended these \
-                     processes you had started: `/usr/bin/perl"
-                ),
+                     processes you had started: `{}",
+                    crate::test_support::doomed_command_starts()
+                )),
                 "{prompt}"
             );
             assert!(prompt.ends_with(crate::messaging::texts::CONTINUE_AFTER_NOTICE));

@@ -12,6 +12,7 @@ import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import type { Location } from "./history";
 import { type Navigation, useNavigationHistory } from "./useNavigationHistory";
+import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,7 +41,7 @@ afterEach(() => {
 function mount({
   alive = () => true,
   settle = (location) => location,
-  platform = { kind: "browser" },
+  platform = { kind: "browser", host: BROWSER_HOST },
 }: {
   alive?: (location: Location) => boolean;
   settle?: (location: Location) => Location;
@@ -189,16 +190,20 @@ describe("useNavigationHistory", () => {
 
   describe("moveByShortcut", () => {
     const windowChrome = { leftInset: () => 0, subscribe: () => () => {} };
+    const macApp = { kind: "tauri", host: MAC_HOST, windowChrome } as const;
 
-    it("does nothing where there is no window chrome", () => {
-      const h = mount();
+    it.each([
+      ["a browser", { kind: "browser", host: BROWSER_HOST }],
+      ["the desktop app off macOS", { kind: "tauri", host: { ...MAC_HOST, os: "windows", modifier: "control" } }],
+    ] as const)("does nothing in %s, which has no Back and Forward keys", (_, platform) => {
+      const h = mount({ platform });
       visitAll(h, "a", "b");
       act(() => h.navigation.moveByShortcut(true));
       expect(h.shown().session).toBe("b");
     });
 
-    it("goes back and forward where there is", () => {
-      const h = mount({ platform: { kind: "browser", windowChrome } });
+    it("goes back and forward in the macOS app", () => {
+      const h = mount({ platform: macApp });
       visitAll(h, "a", "b");
       act(() => h.navigation.moveByShortcut(true));
       expect(h.shown().session).toBe("a");
@@ -210,7 +215,7 @@ describe("useNavigationHistory", () => {
       const previous = getInteractionModality();
       onTestFinished(() => Reflect.apply(setInteractionModality, undefined, [previous]));
       setInteractionModality("pointer");
-      const h = mount({ platform: { kind: "browser", windowChrome } });
+      const h = mount({ platform: macApp });
       visitAll(h, "a", "b");
       act(() => h.navigation.moveByShortcut(false));
       expect(getInteractionModality()).toBe("pointer");
@@ -219,7 +224,7 @@ describe("useNavigationHistory", () => {
     });
 
     it.each(['<div role="dialog"></div>', '<div role="menu"></div>'])("does nothing while %s is open", (markup) => {
-      const h = mount({ platform: { kind: "browser", windowChrome } });
+      const h = mount({ platform: macApp });
       visitAll(h, "a", "b");
       const open = document.body.appendChild(document.createElement("div"));
       open.innerHTML = markup;
@@ -258,7 +263,7 @@ describe("joinPressVisits", () => {
     }
     container = document.body.appendChild(document.createElement("div"));
     root = createRoot(container);
-    act(() => root!.render(<DaemonProvider value={daemon()}><PlatformProvider value={{ kind: "browser" }}><Host /></PlatformProvider></DaemonProvider>));
+    act(() => root!.render(<DaemonProvider value={daemon()}><PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><Host /></PlatformProvider></DaemonProvider>));
     return { navigation: () => navigation, setConsole: (id: string) => act(() => setConsole(id)), setSession: (id: string) => act(() => setSession(id)), setSessionNow: (id: string) => setSession(id) };
   }
   const release = (type = "pointerup") => {

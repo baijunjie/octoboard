@@ -19,7 +19,6 @@ serde_json = "1"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["ws"] }
-portable-pty = "0.8"
 serde = { version = "1", features = ["derive"] }
 # `preserve_order`: a report panel form's field order is the author's reading order, and
 # `render_page_submission` renders a submitted object's fields in iteration order straight into
@@ -40,7 +39,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
-libc = "0.2"
 futures-util = { version = "0.3", default-features = false }
 rusqlite = { version = "0.32", features = ["bundled"] }
 rmcp = { version = "3.5", features = ["server", "transport-io"] }
@@ -55,6 +53,40 @@ trash = "5"
 zstd = { version = "0.13", default-features = false }
 # Watches each repository's refs for a commit made outside the daemon (`crate::project_git::watch`).
 notify = "8.2"
+
+# The platform layer's Unix modules (`src/platform`), the PTY backend of `platform::term` among
+# them.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+portable-pty = "0.8"
+
+# The platform layer's Windows modules; the version the lockfile already resolves for other
+# dependencies.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Wdk_System_Threading",
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_IO",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_JobObjects",
+    "Win32_System_Kernel",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Pipes",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [dev-dependencies]
 # Paused time for tests that would otherwise wait out a real timeout.

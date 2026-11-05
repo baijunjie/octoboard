@@ -7,6 +7,11 @@ use super::writeback::SharedConfigWriteback;
 use super::*;
 use crate::adapter::files::SMALL_FILE_LIMIT;
 use crate::adapter::tests::{spec_fixture, SpecFixture};
+use crate::platform::fs::Links;
+
+fn identity(path: &std::path::Path, links: Links) -> crate::platform::fs::Identity {
+    crate::platform::fs::identity(path, links).expect("identity")
+}
 
 /// The write-back the plan leaves for after the exit.
 fn writeback_of(plan: &LaunchPlan) -> &SharedConfigWriteback {
@@ -41,7 +46,7 @@ fn link_config(fixture: &mut SpecFixture, text: &str) -> PathBuf {
     std::fs::create_dir_all(&shared).expect("default directory");
     std::fs::write(shared.join("config.toml"), text).expect("shared config");
     std::fs::remove_file(account.join("config.toml")).expect("replace config");
-    std::os::unix::fs::symlink(shared.join("config.toml"), account.join("config.toml"))
+    crate::test_support::symlink(shared.join("config.toml"), account.join("config.toml"))
         .expect("link");
     shared.join("config.toml")
 }
@@ -77,7 +82,7 @@ fn a_dangling_config_link_is_not_written_back() {
     let mut fixture = spec_fixture();
     let home = with_default_home(&mut fixture);
     std::fs::remove_file(home.join("config.toml")).expect("replace config");
-    std::os::unix::fs::symlink(
+    crate::test_support::symlink(
         fixture.scratch.join("missing.toml"),
         home.join("config.toml"),
     )
@@ -92,13 +97,11 @@ fn a_dangling_config_link_is_not_written_back() {
 
 #[test]
 fn a_linked_config_gains_the_theme_the_plugin_switches_and_the_chosen_model() {
-    use std::os::unix::fs::MetadataExt;
-
     let mut fixture = spec_fixture();
     fixture.model = Some("launch-model".to_string());
     let shared = link_config(&mut fixture, SHARED_CONFIG);
     let link = PathBuf::from(fixture.shell_env["GROK_HOME"].clone()).join("config.toml");
-    let link_ino = std::fs::symlink_metadata(&link).expect("link").ino();
+    let link_ino = identity(&link, Links::Keep);
     let link_target = std::fs::read_link(&link).expect("target");
     let plan = plan_isolated(&fixture.spec()).expect("plan");
     let session = session_config(&plan);
@@ -173,21 +176,21 @@ tool_timeout_sec = 660
     assert!(updated.contains("# kept comment"), "{updated}");
     assert!(updated.contains("# kept"), "{updated}");
     assert!(updated.contains("mark = 'stay'"), "{updated}");
-    let after = std::fs::symlink_metadata(&link).expect("link");
-    assert!(after.file_type().is_symlink());
-    assert_eq!(after.ino(), link_ino);
+    assert!(std::fs::symlink_metadata(&link)
+        .expect("link")
+        .file_type()
+        .is_symlink());
+    assert_eq!(identity(&link, Links::Keep), link_ino);
     assert_eq!(std::fs::read_link(&link).expect("target"), link_target);
 }
 
 #[test]
 fn the_launch_model_and_startup_writes_stay_in_the_session_copy() {
-    use std::os::unix::fs::MetadataExt;
-
     let mut fixture = spec_fixture();
     fixture.model = Some("launch-model".to_string());
     let shared = link_config(&mut fixture, SHARED_CONFIG);
     let plan = plan_isolated(&fixture.spec()).expect("plan");
-    let before_ino = std::fs::metadata(&shared).expect("shared").ino();
+    let before_ino = identity(&shared, Links::Follow);
     std::fs::write(
         session_config(&plan),
         "\
@@ -217,10 +220,7 @@ command = \"/usr/bin/true\"
         std::fs::read_to_string(&shared).expect("shared"),
         SHARED_CONFIG
     );
-    assert_eq!(
-        std::fs::metadata(&shared).expect("shared").ino(),
-        before_ino
-    );
+    assert_eq!(identity(&shared, Links::Follow), before_ino);
 }
 
 #[test]
@@ -245,8 +245,6 @@ fn a_model_chosen_without_a_launch_model_is_written_back() {
 
 #[test]
 fn a_chain_of_links_is_written_at_its_end_and_both_links_stay() {
-    use std::os::unix::fs::MetadataExt;
-
     let mut fixture = spec_fixture();
     let account = with_default_home(&mut fixture);
     let real_dir = fixture.scratch.join("dotfiles");
@@ -254,13 +252,11 @@ fn a_chain_of_links_is_written_at_its_end_and_both_links_stay() {
     let real = real_dir.join("config.toml");
     std::fs::write(&real, SHARED_CONFIG).expect("real config");
     let middle = fixture.scratch.join("middle.toml");
-    std::os::unix::fs::symlink(&real, &middle).expect("middle link");
+    crate::test_support::symlink(&real, &middle).expect("middle link");
     std::fs::remove_file(account.join("config.toml")).expect("replace config");
-    std::os::unix::fs::symlink(&middle, account.join("config.toml")).expect("account link");
-    let account_ino = std::fs::symlink_metadata(account.join("config.toml"))
-        .expect("link")
-        .ino();
-    let middle_ino = std::fs::symlink_metadata(&middle).expect("link").ino();
+    crate::test_support::symlink(&middle, account.join("config.toml")).expect("account link");
+    let account_ino = identity(&account.join("config.toml"), Links::Keep);
+    let middle_ino = identity(&middle, Links::Keep);
 
     let plan = plan_isolated(&fixture.spec()).expect("plan");
     let mut session = std::fs::read_to_string(session_config(&plan)).expect("copy");
@@ -279,15 +275,10 @@ fn a_chain_of_links_is_written_at_its_end_and_both_links_stay() {
     );
     assert_eq!(std::fs::read_link(&middle).expect("middle link"), real);
     assert_eq!(
-        std::fs::symlink_metadata(account.join("config.toml"))
-            .expect("link")
-            .ino(),
+        identity(&account.join("config.toml"), Links::Keep),
         account_ino
     );
-    assert_eq!(
-        std::fs::symlink_metadata(&middle).expect("link").ino(),
-        middle_ino
-    );
+    assert_eq!(identity(&middle, Links::Keep), middle_ino);
 }
 
 #[test]
@@ -326,7 +317,7 @@ fn a_link_redirected_or_broken_before_exit_is_not_written_back() {
         std::fs::write(session_config(&plan), "[ui]\ntheme = \"tokyonight\"\n")
             .expect("session change");
         std::fs::remove_file(&link).expect("unlink");
-        std::os::unix::fs::symlink(&replacement, &link).expect("redirect link");
+        crate::test_support::symlink(&replacement, &link).expect("redirect link");
         writeback_of(&plan).publish();
         assert_eq!(std::fs::read_to_string(&shared).unwrap(), SHARED_CONFIG);
         assert_eq!(std::fs::read_link(&link).unwrap(), replacement);
@@ -446,7 +437,9 @@ fn bounded_agent_files_do_not_hold_grok_writeback() {
         &[
             "shared-regular",
             "session-linked",
+            #[cfg(unix)]
             "shared-fifo",
+            #[cfg(unix)]
             "session-fifo",
             "shared-oversized",
             "session-oversized",
@@ -492,14 +485,43 @@ fn bounded_agent_files_do_not_hold_grok_writeback() {
                     (SHARED_CONFIG.len() + SMALL_FILE_LIMIT) as u64
                 );
             } else {
-                use std::os::unix::fs::FileTypeExt;
-                assert!(std::fs::symlink_metadata(&shared)
-                    .unwrap()
-                    .file_type()
-                    .is_fifo());
+                assert_eq!(kind, "fifo");
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::FileTypeExt;
+                    assert!(std::fs::symlink_metadata(&shared)
+                        .unwrap()
+                        .file_type()
+                        .is_fifo());
+                }
             }
             std::fs::remove_dir_all(session.parent().unwrap()).unwrap();
             assert!(!session.parent().unwrap().exists());
         },
+    );
+}
+
+/// The farm's strategy does not reach the configuration's write-back: without file links the
+/// session's `config.toml` is the same owned copy, so a linked source (one made by a process the
+/// host lets make links) still gets the theme the session changed.
+#[test]
+fn without_file_links_a_linked_configs_change_is_still_written_back() {
+    let _links = super::home_tests::FileLinks::set(false);
+    let mut fixture = spec_fixture();
+    let shared = link_config(&mut fixture, SHARED_CONFIG);
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    let session = session_config(&plan);
+    let text = std::fs::read_to_string(&session).expect("copy");
+    std::fs::write(
+        &session,
+        text.replace("theme = \"dark\"", "theme = \"light\""),
+    )
+    .expect("save");
+    writeback_of(&plan).publish();
+
+    let updated = std::fs::read_to_string(&shared).expect("shared");
+    assert_eq!(
+        updated,
+        SHARED_CONFIG.replace("theme = \"dark\"", "theme = \"light\"")
     );
 }

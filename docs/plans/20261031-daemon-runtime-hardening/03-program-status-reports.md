@@ -38,5 +38,12 @@
   - The adapter interface through which each agent's status reaches the rest of the daemon.
 - **Development notes**: builds on daemon-side answering of terminal queries, which is planned separately and has to
   exist first. Precedence over the other status sources is open (see the overview).
+- **`TermFacts::host_answers_queries` and `TermFacts::host_waits_on_queries`** (`apps/daemon/src/platform/term/mod.rs`):
+  where the host answers the device attributes, status and cursor reports itself (`host_answers_queries`, the
+  system's console host on Windows), it does not answer OSC 7501, which reaches the daemon's parser on every host,
+  so the support query is still the daemon's to answer there. Where the host holds the program while a query goes
+  unanswered (`host_waits_on_queries`, the console host bundled on Windows), the support query must be answered
+  promptly whether or not a client is attached; the daemon's narrow answer to DA1 and the cursor position while no
+  client is attached (`Fan::push` in `terminal/fan.rs`, recorded as `ReplyRoute::DAEMON`) is the model to extend.
 - **Reference docs**: `docs/product/session-statuses.md`, `docs/agent-cli-reference.md`, and the Program Status
   Protocol specification, revision 0.4 (<https://www.superlogical.com/rex/docs/build/program-status>).

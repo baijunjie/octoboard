@@ -2,13 +2,8 @@
 import { Terminal } from "@xterm/xterm";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { TerminalController } from "./TerminalController";
-
-const platform = vi.hoisted(() => ({ mac: true }));
-vi.mock("../input/keys", async (original) => ({
-  ...await original<typeof import("../input/keys")>(),
-  get IS_MAC() { return platform.mac; },
-}));
 
 /** The real xterm, to pin what `TerminalController` relies on through private API: if an upgrade
  * renames `_core.coreService.onUserInput` or changes what it marks, this fails. */
@@ -48,7 +43,6 @@ type KeyboardCore = {
 };
 
 function editingTerminal(mac = true) {
-  platform.mac = mac;
   class Socket extends EventTarget {
     static readonly OPEN = 1;
     static readonly CONNECTING = 0;
@@ -61,11 +55,10 @@ function editingTerminal(mac = true) {
     open() { this.readyState = Socket.OPEN; this.dispatchEvent(new Event("open")); }
   }
   vi.stubGlobal("WebSocket", Socket);
-  const controller = new TerminalController({ onStatusChange: () => {} }, "dark", { gpu: false });
+  const controller = new TerminalController({ onStatusChange: () => {} }, "dark", { gpu: false, host: mac ? MAC_HOST : WINDOWS_HOST });
   onTestFinished(() => {
     controller.dispose();
     vi.unstubAllGlobals();
-    platform.mac = true;
   });
   controller.attach("editing", "ws://daemon/ws/term/editing", false);
   const core = (controller.term as unknown as { _core: KeyboardCore })._core;

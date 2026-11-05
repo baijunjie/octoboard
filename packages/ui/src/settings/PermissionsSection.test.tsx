@@ -9,6 +9,7 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { MacosPermissionsCapability, MacosPermissionsStatus, PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { PermissionsSection } from "./PermissionsSection";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -49,7 +50,7 @@ async function mount({
     request: vi.fn(() => (requestFailure === undefined ? Promise.resolve(granted) : Promise.reject(requestFailure))),
     openSystemSettings: vi.fn(() => (openFailure === undefined ? Promise.resolve() : Promise.reject(openFailure))),
   } satisfies MacosPermissionsCapability;
-  const platform: PlatformAdapter = { kind: "tauri", macosPermissions: absent ? undefined : capability };
+  const platform: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, macosPermissions: absent ? undefined : capability };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {

@@ -27,6 +27,8 @@ export interface NotificationRequest {
    * session" without naming it, having no notion of what the client calls it, so the alert's body
    * is the only thing that tells the user which one. */
   session?: string;
+  /** The code of the daemon notice, for a later withdrawal of it to find what it showed. */
+  code?: string;
   /** The plain name of what failed, for an error alert whose code has no `alertTitle` of its own. */
   title?: string;
   /** The call site's `title` beats the code's own `alertTitle`; see `AlertOptions.keepTitle`. */
@@ -35,6 +37,17 @@ export interface NotificationRequest {
    * one (see `classifyError`). */
   recovery?: ErrorRecovery;
 }
+
+/** The withdrawal of a daemon notice shown earlier: it shows nothing, and takes back the notice with `code` about
+ * `session`, which no longer holds. It travels the same channel as the notice it withdraws, so it never overtakes it. */
+export interface NoticeWithdrawal {
+  kind: "withdrawn";
+  session: string;
+  code: string;
+}
+
+/** What the window's notification channel carries: a notification to show, or the withdrawal of one. */
+export type WindowNotification = NotificationRequest | NoticeWithdrawal;
 
 /** What a call site says about the error alert it raises (see `raiseError`). */
 export interface AlertOptions {
@@ -66,10 +79,15 @@ export function errorNotification(error: unknown, { title, session, recovery, co
  * request. */
 export type NotifiedBroadcast = Extract<Event, { type: "session_notice" }> | Extract<Event, { type: "error" }>;
 
+/** The event that takes back a notice the daemon sent: a notification of its own, so that it follows the notice it
+ * withdraws. */
+export type WithdrawnBroadcast = Extract<Event, { type: "session_notice_withdrawn" }>;
+
 /** The notification to show for a broadcast of the daemon, worded in `language` with the names of `records`. A request's own
  * `error` reply carries its request id and reaches its caller as a rejected promise instead, so it is no broadcast and
  * is left to the caller to filter out. Pure, so that the gallery's daemon routes its fixtures through the same code. */
-export function broadcastNotification(event: NotifiedBroadcast, records: RecordNames, language: Language): NotificationRequest {
+export function broadcastNotification(event: NotifiedBroadcast | WithdrawnBroadcast, records: RecordNames, language: Language): WindowNotification {
+  if (event.type === "session_notice_withdrawn") return { kind: "withdrawn", session: event.session, code: event.code };
   const message = daemonMessage(language, event.code, event.params, event.message, records);
   if (event.type === "error") {
     return { kind: "error", daemonError: new CodedError(event.message, event.code, event.params), message };
@@ -83,5 +101,6 @@ export function broadcastNotification(event: NotifiedBroadcast, records: RecordN
     daemonTitle: failure ? new CodedError(event.message, `${event.code}.title`, event.params) : undefined,
     daemonError: failure ?? new CodedError(event.message, event.code, event.params),
     session: event.session,
+    code: event.code,
   };
 }

@@ -43,6 +43,7 @@ pub fn unarchive(
             NotRun::BinaryNotFound(binary).detail(),
             &[("binary", binary)],
         ),
+        QueryFailure::NotRun(NotRun::BinaryRefused(refusal)) => anyhow::Error::new(refusal),
         QueryFailure::NotRun(refused) => failed(refused.detail()),
         QueryFailure::Bounded(failure) => failed(failure.into_error().to_string()),
     })?;

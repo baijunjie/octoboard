@@ -194,8 +194,11 @@ Where to start, by question:
 
 ### Desktop app and website
 
-- [Application lifecycle](product/application-lifecycle.md) — requirements, startup, daemon connection and its key,
-  restarting a daemon that dies, closing, quitting, crashes, logs and owned files.
+- [Installing the desktop app](product/installing-the-desktop-app.md) — what the macOS and Windows apps run on, where
+  releases are published, and installing (WebView2, the agents' CLIs, Developer Mode, SmartScreen on the unsigned
+  Windows installer).
+- [Application lifecycle](product/application-lifecycle.md) — startup, daemon connection and its key, restarting a
+  daemon that dies, closing, quitting, crashes, logs and owned files.
 - [In-app updates](product/in-app-updates.md) — update channels, where updates come from, checking, notice, download
   and restart.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot and menu.
@@ -288,6 +291,8 @@ Where to start, by question:
   catalog and laying out by reading direction.
 - [Verifying behaviour in the desktop app](memory/verifying-the-desktop-ui.md) — how narrow to keep a verification, and
   gallery, fixture and capture pitfalls.
+- [Verifying changes for Windows](memory/verifying-changes-for-windows.md) — cross-checking Rust changes for Windows
+  from a Mac, and confirming Windows behaviour as a standard user on that user's own desktop.
 - [What goes on the window material](memory/what-goes-on-the-window-material.md) — which chrome may sit on the
   translucent window material.
 - [Writing automated tests](memory/writing-automated-tests.md) — keeping tests lean, checking a test by breaking its

@@ -20,6 +20,10 @@ impl ScreenReader for ClaudeScreen {
         input_box_rows(screen)
     }
 
+    fn input_placeholder(&self, row: &str) -> bool {
+        is_placeholder(row)
+    }
+
     fn as_submitted<'a>(&self, typed: &'a str) -> &'a str {
         crate::text::without_paste_wrapper(typed)
     }
@@ -97,6 +101,17 @@ fn input_box_rows(screen: &str) -> Option<Vec<String>> {
         .find(|&row| rows[row].starts_with(PROMPT_MARK) && is_rule(rows[row - 1]))?;
     let end = start + 1 + rows[start + 1..].iter().position(|row| is_rule(row))?;
     Some(box_rows(rows[start..end].iter().copied(), PROMPT_MARK))
+}
+
+/// Whether `row` is a hint Claude Code shows in its empty input box, both written faint (see
+/// `testdata/claude-input-box.md`): a fresh session's suggestion, `Try "…"` with an example prompt
+/// that varies (`Try "write a test for <filepath>"`, 2.1.310), and `Press up to edit queued
+/// messages` while a message waits for the turn to end (2.1.316).
+fn is_placeholder(row: &str) -> bool {
+    row == "Press up to edit queued messages"
+        || row
+            .strip_prefix("Try \"")
+            .is_some_and(|rest| rest.len() > 1 && rest.ends_with('"'))
 }
 
 /// Whether a row is one of the horizontal rules around Claude Code's input box.

@@ -11,7 +11,7 @@ import { isolate } from "./i18n/isolate";
 import type { PlatformAdapter, StatusItemCapability } from "./platform";
 import type { Project, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, type Daemon } from "./store";
-import { IS_MAC } from "./input/keys";
+import { BROWSER_HOST, IS_MAC } from "./test/hosts";
 import { inputLabelled, type as typeInto } from "./test/dom";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -150,7 +150,7 @@ it("selects the session chosen in the menu bar icon's menu, in its own console, 
     },
     onOpened: () => () => {},
   };
-  mountTwoConsoles(undefined, { kind: "browser", statusItem });
+  mountTwoConsoles(undefined, { kind: "browser", host: BROWSER_HOST, statusItem });
   // Wherever focus was when the window came to the front; not lost, so nothing else moves it.
   act(() => topBar("Hide sessions")!.focus());
   await act(async () => choose(triage.id));

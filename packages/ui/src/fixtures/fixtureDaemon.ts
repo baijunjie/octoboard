@@ -4,7 +4,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
-import { createImportProgressListeners, type Daemon, type NotificationRequest } from "../store";
+import { createImportProgressListeners, type Daemon, type WindowNotification } from "../store";
 import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, NotificationFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -48,14 +48,14 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   const context = createFixtureContext(scenario);
   const { store, git, restored, fail, providerSettingChoices } = context;
   keepProviderSettingsInEffect(context);
-  const notificationListeners = new Set<(notification: NotificationRequest) => void>();
-  const emitNotification = (notification: NotificationRequest) => notificationListeners.forEach((listener) => listener(notification));
+  const notificationListeners = new Set<(notification: WindowNotification) => void>();
+  const emitNotification = (notification: WindowNotification) => notificationListeners.forEach((listener) => listener(notification));
   let notificationsRaised = false;
   let markNotificationsRaised!: () => void;
   const scenarioNotificationsRaised = new Promise<void>((resolve) => (markNotificationsRaised = resolve));
 
   /** The notification a fixture stands for, made by the code the real route uses. */
-  const scenarioNotification = (fixture: NotificationFixture): NotificationRequest => {
+  const scenarioNotification = (fixture: NotificationFixture): WindowNotification => {
     const worded = (message: string | ((t: Translate) => string)) => (typeof message === "function" ? message(t) : message);
     switch (fixture.kind) {
       case "broadcast":

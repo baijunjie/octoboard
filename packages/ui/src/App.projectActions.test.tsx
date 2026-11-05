@@ -23,6 +23,7 @@ import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon, withEmptyReplies } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { FileViewer } from "./viewer/FileViewer";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -72,7 +73,7 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
     showNotice: vi.fn(),
   });
   const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser", clipboard, links }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST, clipboard, links }}>
       <ThemeProvider><DaemonProvider value={daemon}><App /><ErrorAlerts daemon={daemon} /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
@@ -220,7 +221,7 @@ it.each([false, true])("opens the project's Terminal panel from Open panel, star
 
 it.each([false, true])("opens the project's Processes panel from Open panel, listing every session's processes even with one selected; narrow=%s", async (narrow) => {
   const { daemon, project } = mountApp(narrow, undefined, true);
-  const tree = (id: string, command: string, session_id: string | undefined) => ({ id, session_id, command, cwd: "/p", cwd_missing: false, kept: session_id === undefined, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] });
+  const tree = (id: string, command: string, session_id: string | undefined) => ({ id, session_id, command, cwd: "/p", cwd_missing: false, kept: session_id === undefined, keepable: true, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] });
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
     type: "processes_listed",
     id: null,
@@ -538,7 +539,7 @@ it("asks before archiving an idle session that has a bound worktree git refuses 
 
 /** A process tree the archive's inspection found, running for a while. */
 const TREE = {
-  id: "4242:1", session_id: "s-archive", command: "npm run dev", cwd: "/r-feature", cwd_missing: false, kept: false,
+  id: "4242:1", session_id: "s-archive", command: "npm run dev", cwd: "/r-feature", cwd_missing: false, kept: false, keepable: true,
   started_at: 1_000, process_count: 3, memory_bytes: 120_000_000, ports: [5173],
 };
 
@@ -774,7 +775,7 @@ it("keeps a reply unheard and unexpired while a FileViewer covers the status reg
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   const close = () => root.render(null);
   await act(async () => root.render(
-    <PlatformProvider value={{ kind: "browser" }}><ThemeProvider><DaemonProvider value={daemon}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ThemeProvider><DaemonProvider value={daemon}>
       <FileViewer subject={{ key: "file", path: "test.bin", content: { state: "file", body: { kind: "binary", size: 1 } } }} onClose={close} />
     </DaemonProvider></ThemeProvider></PlatformProvider>,
   ));

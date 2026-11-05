@@ -237,8 +237,8 @@ selecting its row does, it resumes the console session when it is interrupted (s
 
 **Next console session moves to the next chip and Previous console session to the previous one** — `Ctrl+Tab` and
 `Ctrl+Shift+Tab` unless the user has changed them (see `docs/product/keyboard-shortcuts.md`) — going round from either
-end, starting from the console session in focus. They exist only in the macOS application; a browser keeps the keys
-for its own tabs.
+end, starting from the console session in focus. They exist in the desktop application on any system, Windows
+included; a browser keeps the keys for its own tabs.
 
 - It works only while the sidebar is shown — docked, or revealed while it cannot dock; not while it is hidden or
   only previewing while docking is available (see "Hiding the sidebar" in `docs/product/pane-docking.md`) — in a

@@ -10,6 +10,7 @@ import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { matchesWidthQuery } from "./test/viewport";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -45,7 +46,7 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
     showNotice: vi.fn(),
   });
   const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <ThemeProvider>
         <DaemonProvider value={daemon}><App /></DaemonProvider>
       </ThemeProvider>

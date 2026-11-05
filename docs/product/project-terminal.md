@@ -38,6 +38,15 @@ When none of those is found, `x-terminal-emulator` is used if it is found, and o
 given the directory as an argument: they inherit it as their own working directory. The request finishes once that
 process has been started, not when its window is on screen.
 
+On Windows, Octoboard starts Windows Terminal (`wt.exe`) in the directory when it is found on the `PATH` of the user's
+environment (see "The launch environment" in `docs/product/launching-agents.md`), and otherwise opens a new console
+window of `cmd.exe` in the directory. Either is handed the directory as its working directory, never on its command
+line, so a directory whose name holds characters those programs read specially (`;`, `&`, `^`, parentheses) opens all
+the same. Whether Windows Terminal opens a new window or a tab in one already open is its own setting. The request
+finishes once that process has been started. A project on a network share named by a UNC path (`\\server\share\...`)
+opens in Windows Terminal at that path; `cmd.exe` does not take a UNC path as its working
+directory, so the fallback's window starts in the Windows directory instead.
+
 Any other operating system has no system terminal Octoboard opens.
 
 ## Refusals
@@ -47,8 +56,8 @@ not be opened, with the reason under its **Error details** and a remedy that ask
 is installed and can be opened, when:
 
 - the project directory does not exist, or is not a directory;
-- the project path is not valid Unicode;
-- the operating system is not macOS or Linux;
+- on macOS or Linux, the project path is not valid Unicode;
+- the operating system is not macOS, Linux or Windows;
 - on Linux, none of the programs in "Which terminal opens" is found;
 - on Linux, the login shell's environment could not be read — this is not reported as a missing emulator;
 - the launch itself fails, including, on macOS, `open` not returning within 15 seconds.

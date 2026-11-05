@@ -8,25 +8,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use portable_pty::CommandBuilder;
 use uuid::Uuid;
 
 use crate::adapter::{self, LaunchSpec};
 use crate::env_shell;
 use crate::paths;
+use crate::platform::term::{self as host_term, Input, PartialWrite};
 use crate::protocol::{error_code, AgentId, CodedError, Notice, SessionKind, TerminalAppearance};
 use crate::providers::ProviderSettings;
 use crate::session::{self, LiveSession, NewSession};
 use crate::session_git_hooks;
 use crate::terminal::pty;
-
-/// Bracketed paste, then the text, then the paste end, then Enter — written as one buffer, which is
-/// what makes a multi-line message arrive as a single submitted message with no delay needed
-/// between the paste and the Enter. It must be `\r`: a raw `\n` inserts a newline instead of
-/// submitting.
-const PASTE_START: &[u8] = b"\x1b[200~";
-const PASTE_END: &[u8] = b"\x1b[201~";
-const SUBMIT: &[u8] = b"\r";
 
 pub struct Launch {
     pub session: Arc<LiveSession>,
@@ -116,8 +108,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let session_id = session_id.as_str();
     let cwd = cwd.as_path();
     if !cwd.is_dir() {
-        // `portable_pty` falls back to the home directory for a cwd that does not exist, which
-        // would silently start a write-capable agent in `$HOME`.
+        // The terminal backend may fall back to the home directory for a cwd that does not exist,
+        // which would silently start a write-capable agent in `$HOME`.
         return Err(CodedError::raised(
             error_code::DIRECTORY_UNREACHABLE,
             format!(
@@ -155,7 +147,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     // Resolved ahead of the plan because the agent's version, read from where the binary is
     // installed, decides how some adapters inject; a failure is raised only after the plan, so a
     // plan's own error (a missing pinned directory, say) is the one the user is told about.
-    let binary = env_shell::resolve_binary(adapter.descriptor().binary, &shell_env);
+    let binary = adapter::resolve_binary(agent, &shell_env);
     let spec = LaunchSpec {
         session_id,
         kind,
@@ -177,10 +169,15 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         model: model.as_deref(),
         effort: effort.as_deref(),
         terminal_appearance,
-        agent_version: binary
-            .as_ref()
-            .ok()
-            .and_then(|binary| adapter.installed_version(binary)),
+        agent_version: binary.as_ref().ok().and_then(|binary| {
+            adapter
+                .installed_version(&binary.program.to_string_lossy())
+                .or_else(|| {
+                    adapter::version_from_output(&crate::platform::shell::probe_version(
+                        binary, &shell_env,
+                    )?)
+                })
+        }),
         self_exe: &self_exe,
         daemon_port,
         daemon_key: &daemon_key,
@@ -203,21 +200,22 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
             &daemon_key,
         ));
     }
-    environment.insert(
-        crate::processes::ledger::TAG_VARIABLE.to_string(),
-        process_tag.value(),
-    );
+    process_tag.containment().prepare(&mut environment);
     environment.insert("TERM".to_string(), pty::TERM.to_string());
-    let mut cmd = CommandBuilder::new(&binary);
+    let mut cmd = host_term::Command::new(&binary.program);
+    cmd.args(&binary.leading_args);
     cmd.args(&plan.args);
     cmd.env_clear();
     for (key, value) in &environment {
         cmd.env(key, value);
     }
     cmd.cwd(cwd);
+    if let Some(keys) = adapter.descriptor().quit_keys {
+        cmd.quit_keys(keys);
+    }
 
-    let spawned = pty::spawn(cmd, pty::INITIAL_ROWS, pty::INITIAL_COLS)
-        .with_context(|| format!("spawning `{binary}`"))?;
+    let spawned = host_term::spawn(cmd, pty::INITIAL_SIZE, Some(process_tag.containment()))
+        .with_context(|| format!("spawning `{}`", binary.program.display()))?;
 
     let agent_session_id = match resume_agent_session_id {
         Some(id) => Some(id),
@@ -291,16 +289,14 @@ pub const HELD_FRAGMENT: &str = concat!(
 );
 
 #[cfg(test)]
-pub fn send_message(
-    session: &LiveSession,
-    text: &str,
-) -> Result<(), crate::terminal::ptyio::PartialWrite> {
+pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrite> {
     paste_message(session, text, false)
 }
 
 /// Submits a message by checked bracketed paste + Enter.
 ///
-/// A failure's `written` counts bytes of the **framed** buffer, not `text`, so zero is
+/// A failure's `written` counts bytes of the **framed** message as the terminal encodes the paste
+/// and its Enter, not of `text`, so zero is
 /// the one case where nothing of the message reached the session. Any other count may have left an
 /// unterminated paste in the input line, or — for a count short of the paste introducer — a
 /// truncated escape sequence; either way the message may not be written again.
@@ -317,21 +313,24 @@ pub fn paste_message(
     session: &LiveSession,
     text: &str,
     allow_mixed: bool,
-) -> Result<(), crate::terminal::ptyio::PartialWrite> {
+) -> Result<(), PartialWrite> {
     let framed = frame_message(session.agent, text);
-    let prompt = std::str::from_utf8(
-        &framed[PASTE_START.len()..framed.len() - PASTE_END.len() - SUBMIT.len()],
-    )
-    .expect("framed UTF-8 prompt");
+    let [Input::Paste(prompt), _] = &framed else {
+        unreachable!("a message is framed as a paste");
+    };
     session.write_message_input(&framed, prompt, allow_mixed)
 }
 
-/// Shapes a message into the bracketed-paste buffer `paste_message` writes: see [`shaped`], then
-/// whatever the receiving agent needs on top, then frame. Pulled out as a pure function so the
+/// Shapes a message into the inputs `paste_message` writes: a paste of the message, made as
+/// [`shaped`] says and with whatever the receiving agent needs on top, then Enter. Written as one
+/// buffer, which is what makes a multi-line message arrive as a single submitted message with no
+/// delay needed between the paste and the Enter, except where the terminal hands the agent the
+/// paste as keys and the agent would read that Enter as part of it (`crate::session::paste_apart`
+/// writes the Enter apart there). Pulled out as a pure function so the
 /// ordering — both strips before the slash guard, not after — is something a test can pin
 /// directly, rather than re-deriving it from a copy of this logic; the send path itself needs a
 /// `LiveSession` and a PTY, which is why it is not tested directly.
-pub(crate) fn frame_message(agent: AgentId, text: &str) -> Vec<u8> {
+pub(crate) fn frame_message(agent: AgentId, text: &str) -> [Input; 2] {
     let text = shaped(text);
     // An agent that reads a pasted piece ending in an image extension as an image loses the Enter
     // that follows (see `image_path`).
@@ -343,14 +342,7 @@ pub(crate) fn frame_message(agent: AgentId, text: &str) -> Vec<u8> {
     } else {
         text
     };
-
-    let mut buf =
-        Vec::with_capacity(PASTE_START.len() + text.len() + PASTE_END.len() + SUBMIT.len());
-    buf.extend_from_slice(PASTE_START);
-    buf.extend_from_slice(text.as_bytes());
-    buf.extend_from_slice(PASTE_END);
-    buf.extend_from_slice(SUBMIT);
-    buf
+    [Input::Paste(text), Input::Enter]
 }
 
 /// A message as the agent should read it: control and invisible characters stripped, then a
@@ -422,6 +414,17 @@ fn strip_control_chars(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bracketed paste around a message and the Enter after it, as the bytes a Unix terminal
+    /// receives them in.
+    const PASTE_START: &[u8] = b"\x1b[200~";
+    const PASTE_END: &[u8] = b"\x1b[201~";
+    const SUBMIT: &[u8] = b"\r";
+
+    /// The buffer `super::frame_message`'s inputs are written into the terminal as.
+    fn frame_message(agent: AgentId, text: &str) -> Vec<u8> {
+        host_term::encode(&super::frame_message(agent, text))
+    }
 
     /// An embedded paste-end marker must not survive into the framed buffer at all — not just be
     /// absent from the stripped text — since the buffer written into the PTY is what an attacker

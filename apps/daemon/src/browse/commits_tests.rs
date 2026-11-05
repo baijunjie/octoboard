@@ -412,6 +412,8 @@ fn a_commit_list_is_cut_at_its_path_budget() {
     let repo = repo_with("commits-path-budget", &[(b"a.txt", b"a\n")]);
     let fork = rev_parse(&repo, "main");
     git(&repo, &["checkout", "-q", "-b", "long"]);
+    // Git for Windows stops at 260 characters of path unless told otherwise.
+    git(&repo, &["config", "core.longpaths", "true"]);
     // Names so long that the paths reach the budget well before the entries do.
     let count = budget::MAX_CHANGE_ENTRIES * 9 / 10;
     for n in 0..count {

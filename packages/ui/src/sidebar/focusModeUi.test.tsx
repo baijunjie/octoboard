@@ -7,6 +7,7 @@ import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { menuOfTrigger, partSelector } from "../primitives";
 import { restoreAllBindings, setBinding } from "../shortcuts/store";
+import { BROWSER_HOST } from "../test/hosts";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
@@ -49,6 +50,6 @@ it.each(["project", "console"] as const)("shows the live global focus binding in
   expect(tooltip.textContent).toContain("Leave focus mode");
   expect(tooltip.querySelector("kbd")?.textContent?.endsWith("F")).toBe(true);
   expect(tooltip.querySelector("kbd")?.textContent).not.toBe("F");
-  act(() => { expect(setBinding("focusMode", { code: "KeyG", primary: true, alt: true })).toBeUndefined(); });
+  act(() => { expect(setBinding("focusMode", { code: "KeyG", primary: true, alt: true }, BROWSER_HOST)).toBeUndefined(); });
   expect(openTooltip()?.querySelector("kbd")?.textContent?.endsWith("G")).toBe(true);
 });

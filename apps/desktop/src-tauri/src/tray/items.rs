@@ -8,15 +8,18 @@ use tauri::menu::{
 use tauri::{AppHandle, Wry};
 
 use super::model::TrayMenu;
+use super::platform::{menu_picture, native_text};
 use super::{OPEN_ITEM_ID, QUIT_ITEM_ID, SESSION_ITEM_PREFIX, UPDATES_ITEM_ID};
 
 /// The picture a line names, or none when it names none or one the table does not hold, or one that
-/// does not decode: a line is better shown bare than not at all.
+/// does not decode: a line is better shown bare than not at all. The platform finishes it for its
+/// menu (`menu_picture`).
 fn icon_of(menu: &TrayMenu, key: Option<&str>) -> Option<Image<'static>> {
+    let icon = menu.icons.get(key?)?;
     let png = base64::engine::general_purpose::STANDARD
-        .decode(&menu.icons.get(key?)?.png)
+        .decode(&icon.png)
         .ok()?;
-    Image::from_bytes(&png).ok()
+    Some(menu_picture(Image::from_bytes(&png).ok()?, icon.template))
 }
 
 pub(super) fn is_template(menu: &TrayMenu, key: Option<&str>) -> bool {
@@ -25,9 +28,10 @@ pub(super) fn is_template(menu: &TrayMenu, key: Option<&str>) -> bool {
 }
 
 /// A label as muda takes it, where a lone `&` marks a mnemonic and would be dropped: "R&D" is
-/// written "R&&D" to be shown as it is.
+/// written "R&&D" to be shown as it is. The platform first takes out what its menu cannot draw
+/// (`native_text`).
 fn literal(label: &str) -> String {
-    label.replace('&', "&&")
+    native_text(label).replace('&', "&&")
 }
 
 /// A line that cannot be chosen when `id` is `None`, with its picture when it has one.

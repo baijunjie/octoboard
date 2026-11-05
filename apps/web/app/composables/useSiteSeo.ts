@@ -29,9 +29,9 @@ export function useSiteSeo() {
     t(kind.value === "privacy" ? "privacySeoTitle" : "codingAgentsSeoTitle"),
   );
   const description = computed(() =>
-    t(kind.value === "privacy" ? "privacySeoDescription" : "codingAgentsSeoDescription"),
+    t(kind.value === "privacy" ? "privacySeoDescription" : "workspaceSeoDescription"),
   );
-  const siteDescription = computed(() => t("codingAgentsSeoDescription"));
+  const siteDescription = computed(() => t("workspaceSeoDescription"));
 
   useHead(() => {
     const contentPage = kind.value === "home" || kind.value === "privacy";

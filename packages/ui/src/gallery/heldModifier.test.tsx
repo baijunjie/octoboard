@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import { useQuickCreateModifier } from "../sidebar/useQuickCreateModifier";
+import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { holdPrimaryModifier } from "./heldModifier";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -41,4 +42,14 @@ it("holds the modifier through plain pointer moves and takes it back after the w
 
   dispatch(new PointerEvent("pointermove"));
   expect(held).toBe(true);
+});
+
+it.each([["Windows", WINDOWS_HOST, false], ["macOS", MAC_HOST, true]] as const)("holds the modifier of the host it is given: %s", (_, host, apple) => {
+  const { press } = holdPrimaryModifier(host);
+  const seen: boolean[][] = [];
+  const listen = (event: KeyboardEvent) => seen.push([event.metaKey, event.ctrlKey]);
+  window.addEventListener("keydown", listen);
+  onTestFinished(() => window.removeEventListener("keydown", listen));
+  act(press);
+  expect(seen).toEqual([[apple, !apple]]);
 });

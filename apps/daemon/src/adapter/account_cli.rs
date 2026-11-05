@@ -11,8 +11,9 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use crate::accounts::shared_config;
+use crate::platform::shell::ResolvedBinary;
 use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
-use crate::protocol::AgentId;
+use crate::protocol::{AgentId, CodedError};
 use crate::providers::layout::layout;
 
 /// The home directory the launch's shell snapshot carries, else the daemon's own.
@@ -64,8 +65,8 @@ pub fn account_dir(
 /// `PATH`, the environment the snapshot's and no more, the account's directory exported under
 /// the agent's own variable when `config_dir` names one (left as the shell has it for the
 /// default account), and the home directory as working directory, so no project-level
-/// configuration of whatever directory the daemon started in takes part. `Err` carries the
-/// binary's name when it does not resolve.
+/// configuration of whatever directory the daemon started in takes part. `Err` is why the binary
+/// cannot start the CLI.
 ///
 /// [`admitted_command`] is the way to run it.
 fn account_command(
@@ -73,20 +74,33 @@ fn account_command(
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     args: &[&str],
-) -> Result<std::process::Command, &'static str> {
+) -> Result<std::process::Command, Unstartable> {
     let binary = resolve_account_binary(agent, shell_env)?;
     Ok(account_command_of(
         &binary, agent, shell_env, config_dir, args,
     ))
 }
 
-/// Where `agent`'s binary resolves on `shell_env`'s `PATH`; `Err` carries the binary's name.
+/// Why an agent's binary cannot start its CLI.
+#[derive(Debug)]
+pub enum Unstartable {
+    /// The binary does not resolve on the shell environment's `PATH`; carries its name.
+    NotFound(&'static str),
+    /// The binary is a launcher whose native program is missing, which the provider does not start
+    /// the CLI through (`AgentProvider::native_binary`); carries the provider's coded error.
+    Refused(CodedError),
+}
+
+/// What starts `agent`'s CLI as resolved on `shell_env`'s `PATH`, as a launch resolves it
+/// (`super::resolve_binary`).
 pub fn resolve_account_binary(
     agent: AgentId,
     shell_env: &HashMap<String, String>,
-) -> Result<String, &'static str> {
-    let binary_name = agent.descriptor().binary;
-    crate::env_shell::resolve_binary(binary_name, shell_env).map_err(|_| binary_name)
+) -> Result<ResolvedBinary, Unstartable> {
+    let name = agent.descriptor().binary;
+    let binary = crate::env_shell::resolve_binary(name, shell_env)
+        .map_err(|_| Unstartable::NotFound(name))?;
+    super::starting_program(agent, binary).map_err(|err| Unstartable::Refused(CodedError::of(&err)))
 }
 
 /// `account_command` over a `binary` already resolved by [`resolve_account_binary`], for a caller
@@ -94,13 +108,13 @@ pub fn resolve_account_binary(
 /// account's directory admitted for the run (`shared_config::admitted_reading`, or `running_long`
 /// for a long one), so sharing cannot move what the CLI opens from under it.
 pub fn account_command_of(
-    binary: &str,
+    binary: &ResolvedBinary,
     agent: AgentId,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     args: &[&str],
 ) -> std::process::Command {
-    let mut command = std::process::Command::new(binary);
+    let mut command = binary.command();
     command.args(args).env_clear().envs(shell_env);
     if let Some(dir) = config_dir {
         command.env(layout(agent).config_dir_var, dir);
@@ -139,6 +153,18 @@ pub(crate) enum NotRun {
     DirMissing(PathBuf),
     /// The agent's binary does not resolve on the shell environment's `PATH`; carries its name.
     BinaryNotFound(&'static str),
+    /// The agent's binary is a launcher the provider refuses to start the CLI through; carries the
+    /// provider's coded error ([`Unstartable::Refused`]).
+    BinaryRefused(CodedError),
+}
+
+impl From<Unstartable> for NotRun {
+    fn from(unstartable: Unstartable) -> Self {
+        match unstartable {
+            Unstartable::NotFound(binary) => Self::BinaryNotFound(binary),
+            Unstartable::Refused(err) => Self::BinaryRefused(err),
+        }
+    }
 }
 
 impl NotRun {
@@ -152,6 +178,7 @@ impl NotRun {
             Self::BinaryNotFound(binary) => {
                 format!("`{binary}` was not found on PATH in the shell environment")
             }
+            Self::BinaryRefused(refusal) => refusal.message.clone(),
         }
     }
 }
@@ -167,8 +194,7 @@ pub(crate) fn admitted_command(
 ) -> Result<AdmittedCommand, NotRun> {
     let reading = shared_config::admitted_reading(config_dir)
         .map_err(|missing| NotRun::DirMissing(missing.0))?;
-    let command =
-        account_command(agent, shell_env, config_dir, args).map_err(NotRun::BinaryNotFound)?;
+    let command = account_command(agent, shell_env, config_dir, args)?;
     Ok(AdmittedCommand {
         command,
         _reading: reading,

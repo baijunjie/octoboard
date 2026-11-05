@@ -39,6 +39,10 @@ const sessionTrees = [
   processTreeOf("104:1", preview, "tail -f logs/dev.log", 130, { cwd: `${WEBSITE}/.worktrees/old-nav`, cwd_missing: true, memory_bytes: 1_000_000 }),
 ];
 
+// A tree with a process on its agent's own console (Windows): it ends with its session whatever keeps it, so the daemon
+// lists it as unkeepable, beside the first of `pair`, which can be kept.
+const sharedConsoleTree = processTreeOf("105:1", preview, "node scripts/export-report.mjs --watch", 20, { process_count: 2, memory_bytes: 64_000_000, keepable: false, unkeepable_reason: "agent_console" });
+
 // Two trees are enough for the views of one button at work.
 const pair = sessionTrees.slice(0, 2);
 
@@ -287,6 +291,17 @@ export const processScenarios: Scenario[] = [
     steps: [...openSession, (ui) => ui.focusControl(stopOf(ui, pair[0]))],
   },
   {
+    id: "processes-keep-unavailable",
+    group: GROUP,
+    category: "exceptional",
+    title: "Keep unavailable for a process on the agent's own console",
+    description: "Two rows, the dev server and, under it, a script that cannot be kept because it shares the agent's own console and so ends with the session whatever keeps it. Keyboard focus is on the second row's Keep, which stays in the row beside the danger-coloured Stop: it is faded and takes no hover fill, and a tooltip says why it is unavailable (the process runs in the agent's own terminal, so it ends with the session, and it should be started in a window of its own to keep it running); a screen reader reads the same reason as its description. Pressing it asks nothing and sends nothing: it raises the error alert titled \"Cannot keep the process\", whose body is the daemon's refusal (the process runs in the agent's own terminal, so it ends with the session and cannot be kept) followed by the remedy to start it in a window of its own. The first row's Keep, which a hover or focus on that row reveals, is the ordinary secondary button.",
+    state,
+    preferences: panelPreferences,
+    processes: { trees: [pair[0], sharedConsoleTree] },
+    steps: [...openSession, (ui) => ui.focusControl(keepOf(ui, sharedConsoleTree))],
+  },
+  {
     id: "processes-stop-confirmation",
     group: GROUP,
     category: "normal",
@@ -420,10 +435,21 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Stop refused",
-    description: "The user confirmed Stop on the first row, and the stop request was refused: an error alert titled \"Could not stop the process\" stands over the stop confirmation. After OK the confirmation remains available for retry or cancellation, with both process rows preserved in the panel behind it. A refused Keep is reported in the same way over its confirmation.",
+    description: "The user confirmed Stop on the first row, and the stop request was refused: an error alert titled \"Could not stop the process\" stands over the stop confirmation. After OK the confirmation remains available for retry or cancellation, with both process rows preserved in the panel behind it. A refused Keep is reported in the same way over its confirmation; Keep on a process that cannot be kept is refused before any confirmation (see Keep unavailable for a process on the agent's own console).",
     state,
     preferences: panelPreferences,
     processes: { trees: pair, stop: stopRefused },
+    steps: [...openSession, (ui) => ui.press(stopOf(ui, pair[0])), (ui) => ui.confirm()],
+  },
+  {
+    id: "processes-stop-not-stopped",
+    group: GROUP,
+    category: "exceptional",
+    title: "Stop left the process running",
+    description: "The user confirmed Stop on the first row and the daemon answered that the process was still running, which happens for a process whose security refuses Octoboard the right to end it (another account's, for example). An error alert titled \"Could not stop the process\" stands over the stop confirmation, saying Octoboard does not have permission to stop the process or some of its child processes, followed by a line saying to run Octoboard with the same permissions as those processes. After OK the confirmation remains for retry or cancellation, with both rows still listed behind it and no \"Stopped the process.\" notice.",
+    state,
+    preferences: panelPreferences,
+    processes: { trees: pair, stop: { leavesRunning: "access_denied" } },
     steps: [...openSession, (ui) => ui.press(stopOf(ui, pair[0])), (ui) => ui.confirm()],
   },
   {

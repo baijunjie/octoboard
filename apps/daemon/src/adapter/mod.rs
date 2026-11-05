@@ -49,9 +49,12 @@ mod hooks;
 mod test_provider;
 
 pub use account_cli::{
-    account_command_of, account_dir, default_account_dir, resolve_account_binary,
+    account_command_of, account_dir, default_account_dir, resolve_account_binary, Unstartable,
 };
-pub use hooks::{hook_command, hook_script_path, hook_url, write_hook_script, HOOK_TIMEOUT_SECS};
+pub use hooks::{
+    hook_command, hook_script_path, hook_url, write_hook_script, COMMAND_HOOK_TIMEOUT_SECS,
+    HTTP_HOOK_TIMEOUT_SECS,
+};
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -61,6 +64,7 @@ use anyhow::Result;
 
 use crate::agents::models::{ModelCatalogue, NoCatalogue};
 use crate::hooks::{HookInterpreter, NoHooks};
+use crate::platform::shell::ResolvedBinary;
 use crate::protocol::{
     error_code, AgentId, CodedError, GitWorkflowSettings, Notice, SessionKind, TerminalAppearance,
 };
@@ -369,9 +373,17 @@ pub trait AgentProvider: Send + Sync {
     /// The version of the resolved `binary`, read from where it is installed instead of by running
     /// it: a process start is exactly what the caller is trying to avoid, and on a machine whose
     /// endpoint security stalls every exec a `--version` probe costs seconds. `None` when this
-    /// agent's launch does not depend on its version, or when the install does not tell it.
+    /// agent's launch does not depend on its version, or when the install does not tell it; the
+    /// caller then asks the host to run the binary where the host does (`platform::shell::probe_version`).
     fn installed_version(&self, _binary: &str) -> Option<AgentVersion> {
         None
+    }
+
+    /// The program that starts the provider's CLI in place of the resolved `binary`, when `binary`
+    /// is a launcher the CLI should not be started through. `None` starts `binary` itself; an
+    /// error is a launcher whose native program cannot be found.
+    fn native_binary(&self, _binary: &ResolvedBinary) -> Result<Option<ResolvedBinary>> {
+        Ok(None)
     }
 
     /// The task title a raw terminal title carries, or `None` when it carries none: agents decorate
@@ -433,6 +445,23 @@ pub fn provider(agent: AgentId) -> &'static dyn AgentProvider {
         .expect("every registered provider has a behavior")
 }
 
+/// What starts `agent`'s CLI: the binary its name resolves to on `shell_env`'s `PATH`, or the
+/// native program the provider starts in place of it ([`AgentProvider::native_binary`]).
+pub fn resolve_binary(
+    agent: AgentId,
+    shell_env: &HashMap<String, String>,
+) -> Result<ResolvedBinary> {
+    let binary = crate::env_shell::resolve_binary(agent.descriptor().binary, shell_env)?;
+    starting_program(agent, binary)
+}
+
+/// What starts `agent`'s CLI where its binary resolved to `binary`: `binary` itself, or the native
+/// program the provider starts in place of it, or the provider's coded refusal of a launcher whose
+/// native program is missing.
+pub(crate) fn starting_program(agent: AgentId, binary: ResolvedBinary) -> Result<ResolvedBinary> {
+    Ok(provider(agent).native_binary(&binary)?.unwrap_or(binary))
+}
+
 /// The compatibility source `agent` reads under `settings`: that of the first of its
 /// compatibility switches (`SettingDescriptor::compatibility_with`) that is on, `None` while none
 /// is.
@@ -453,6 +482,13 @@ pub fn compatibility_source_of(
 /// An agent's version as major, minor, patch.
 pub type AgentVersion = (u32, u32, u32);
 
+/// The version a binary's `--version` output names: the first word that is a version, with or
+/// without a leading `v` (`2.1.318 (Claude Code)`, `codex-cli 0.166.0`).
+pub fn version_from_output(text: &str) -> Option<AgentVersion> {
+    text.split_whitespace()
+        .find_map(|word| parse_version(word.strip_prefix('v').unwrap_or(word)))
+}
+
 /// Reads a version that is exactly `major.minor.patch` and nothing else.
 fn parse_version(text: &str) -> Option<AgentVersion> {
     let mut parts = text.split('.');
@@ -464,10 +500,6 @@ fn parse_version(text: &str) -> Option<AgentVersion> {
     parts.next().is_none().then_some(version)
 }
 
-pub(crate) fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
-}
-
 #[cfg(test)]
 pub mod tests {
     use std::collections::HashMap;
@@ -476,6 +508,15 @@ pub mod tests {
     use super::LaunchSpec;
     use crate::protocol::TerminalAppearance;
     use crate::session_tools::Owner;
+
+    /// The file cases [`agent_file`] makes on this host: a FIFO only where there are FIFOs.
+    pub(crate) const FILE_CASES: &[&str] = &[
+        "regular",
+        "linked",
+        #[cfg(unix)]
+        "fifo",
+        "oversized",
+    ];
 
     /// Runs each file case in a killable process: a regressed FIFO open must not strand a test
     /// thread. The parent owns the temporary root, including fixtures a killed child cannot drop.
@@ -501,7 +542,7 @@ pub mod tests {
                 timeout: crate::test_support::PATIENCE,
                 stdout_limit: 64 * 1024,
                 stderr_limit: 64 * 1024,
-                reach: crate::processes::subprocess::Reach::ProcessGroup,
+                reach: crate::platform::proc::Reach::Group,
                 term_grace: std::time::Duration::ZERO,
             };
             match crate::processes::subprocess::run_bounded(
@@ -526,15 +567,13 @@ pub mod tests {
     pub(crate) fn agent_file(path: &std::path::Path, case: &str, text: &str, limit: usize) {
         std::fs::remove_file(path).ok();
         match case {
-            "fifo" => {
-                let path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
-                assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
-            }
+            #[cfg(unix)]
+            "fifo" => crate::test_support::mkfifo(path),
             "oversized" => std::fs::write(path, format!("{text}{}", " ".repeat(limit))).unwrap(),
             "linked" => {
                 let target = path.with_extension("target");
                 std::fs::write(&target, text).unwrap();
-                std::os::unix::fs::symlink(target, path).unwrap();
+                crate::test_support::symlink(target, path).unwrap();
             }
             "regular" => std::fs::write(path, text).unwrap(),
             _ => panic!("unknown file case {case}"),
@@ -750,5 +789,18 @@ pub mod tests {
         fixture.owner = None;
         let (_, independent) = super::mcp_server_command(&fixture.spec());
         assert!(!independent.contains(&"--worker".to_string()));
+    }
+
+    #[test]
+    fn a_version_is_the_first_word_of_the_output_that_is_one() {
+        for (text, version) in [
+            ("2.1.318 (Claude Code)\n", Some((2, 1, 318))),
+            ("codex-cli 0.166.0\r\n", Some((0, 166, 0))),
+            ("grok v1.2.3", Some((1, 2, 3))),
+            ("tool 1.2 beta", None),
+            ("", None),
+        ] {
+            assert_eq!(super::version_from_output(text), version, "{text:?}");
+        }
     }
 }

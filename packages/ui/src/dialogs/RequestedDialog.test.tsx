@@ -555,7 +555,7 @@ it.each(BRANCH_CONFIRMATIONS)("lists what git refuses to remove when %s and forc
 });
 
 const TREE = {
-  id: "4242:1", session_id: owner.id, command: "npm run dev", cwd: "/r-feature", cwd_missing: false, kept: false,
+  id: "4242:1", session_id: owner.id, command: "npm run dev", cwd: "/r-feature", cwd_missing: false, kept: false, keepable: true,
   started_at: 1_000, process_count: 1, memory_bytes: 1_000_000, ports: [],
 };
 
@@ -618,6 +618,21 @@ it("offers no checkbox at all when every process of an archive is a console sess
   const dialog = document.querySelector("[role=alertdialog]")!;
   expect(dialog.textContent).not.toContain("Uncheck any");
   expect(dialog.textContent).toContain("1 process will be stopped.");
+});
+
+it("lists a tree that cannot be kept as a row that is always stopped, with the reason under it and no checkbox, and never sends it to be kept", async () => {
+  const unkeepable = { ...TREE, id: "4500:4", command: "node shared.js", keepable: false, unkeepable_reason: "agent_console" as const };
+  const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [unkeepable, TREE] } }, [owner]);
+  await act(async () => {});
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect(boxes()).toHaveLength(1);
+  expect(dialog.textContent).toContain("node shared.js");
+  expect(dialog.textContent).toContain("This process runs in the agent's own terminal, so it ends with the session and cannot be kept. Start it in a window of its own to keep it running.");
+  expect(dialog.textContent).toContain("2 processes will be stopped.");
+  act(() => boxes()[0].click());
+  expect(dialog.textContent).toContain("1 process will be stopped.");
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id, keep_process_ids: [TREE.id] });
 });
 
 it("shows no section, and no divider, for an archive with nothing to list", async () => {

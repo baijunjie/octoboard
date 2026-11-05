@@ -1,6 +1,6 @@
 import type { IBufferCell, IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
-import { IS_MAC } from "../../input/keys";
+import type { HostFacts } from "../../platform/host";
 import {
   cachedRows,
   crossesJoin,
@@ -30,9 +30,10 @@ import {
 export function terminalLinkHandler(
   open: ((url: string, event: MouseEvent) => Promise<void>) | undefined,
   hasSelection: () => boolean,
+  host: Pick<HostFacts, "os">,
 ): (event: MouseEvent, uri: string) => void {
   return (event, uri) => {
-    if (!open || event.button !== 0 || (IS_MAC && event.ctrlKey) || hasSelection()) return;
+    if (!open || event.button !== 0 || (host.os === "macos" && event.ctrlKey) || hasSelection()) return;
     open(uri, event).catch((error: unknown) => {
       console.warn("Terminal: cannot open the link", error);
     });

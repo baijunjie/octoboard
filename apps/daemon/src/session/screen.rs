@@ -25,6 +25,13 @@ pub trait ScreenReader: Send + Sync {
         None
     }
 
+    /// Whether `row`, the first row of the input box as [`Self::input_box_rows`] gives it and the
+    /// only one with text, is a placeholder the provider shows in an empty box, read as such where
+    /// the attribute it is drawn with may be lost (`crate::session::input_box`).
+    fn input_placeholder(&self, _row: &str) -> bool {
+        false
+    }
+
     /// A draft typed into the input box as the provider reports it once submitted, for telling a
     /// prompt the provider reports sending apart from one sent before the draft
     /// (`crate::session::draft`).
@@ -36,6 +43,14 @@ pub trait ScreenReader: Send + Sync {
     /// Enter after it lost, so a message's image paths have to be guarded
     /// (`crate::session::term::image_path`).
     fn pasted_image_path_loses_enter(&self) -> bool {
+        false
+    }
+
+    /// Whether the provider, handed a paste as typed keys (`TermFacts::paste_as_keys`), tells it
+    /// from typing by how fast the keys come and reads an Enter that arrives within that burst as
+    /// a line break in the text, so a message's submit key is written only once the paste has been
+    /// taken (`crate::session::paste_apart`).
+    fn joins_enter_to_key_paste(&self) -> bool {
         false
     }
 

@@ -10,7 +10,7 @@ use crate::protocol::{Account, Availability, Role, SessionKind};
 use crate::session_tools::Owner;
 use crate::test_support::{
     app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
-    output_containing, repo_with, running, stand_in_launch_running, Launched, ScratchDir, StandIn,
+    output_containing, repo_with, running, stand_in_launch_echoing, Launched, ScratchDir, StandIn,
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
@@ -95,12 +95,8 @@ impl Fixture {
         during: impl FnOnce() + Send + 'static,
     ) -> impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static {
         // The combined prompt exceeds the cooked terminal's echo buffer; drain it like an agent.
-        let launch = stand_in_launch_running(
-            &self.started,
-            &self.launches,
-            "stty raw -echo; printf 'handoff-input-ready\\n'; exec cat",
-            during,
-        );
+        let launch =
+            stand_in_launch_echoing(&self.started, &self.launches, "handoff-input-ready", during);
         move |request| {
             let launched = launch(request)?;
             let ready = output_containing(&launched.session, "handoff-input-ready");
@@ -1056,16 +1052,9 @@ async fn a_session_that_is_no_longer_the_askers_is_refused() {
 /// launched session's is. Answers that process's pid.
 fn run_leaving_one(fixture: &Fixture, id: &str) -> (StandIn, i32) {
     let pid_file = fixture.dir.join(format!("{id}-child"));
-    let live = crate::test_support::fake_live_session(
+    let live = crate::test_support::stand_in_starting(
         id,
-        AgentId::CLAUDE,
-        80,
-        24,
-        &format!(
-            "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
-             exec sleep 300",
-            crate::test_support::perl_write(&pid_file, "$$")
-        ),
+        vec![crate::test_support::Background::sleeper(&pid_file)],
     );
     fixture.state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(&fixture.state, live.clone());

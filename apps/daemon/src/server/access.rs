@@ -22,7 +22,6 @@
 //! scratch directory. It targets web pages, not local processes: any process of the same user
 //! can read it, and could drive the daemon directly anyway.
 
-use std::io::Read;
 use std::sync::Arc;
 
 use axum::extract::{Request, State};
@@ -30,14 +29,15 @@ use axum::http::{header, HeaderMap, HeaderName, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
+use crate::platform;
+
 /// How many random bytes a key is made of.
 const KEY_BYTES: usize = 32;
 
 /// A fresh key: [`KEY_BYTES`] bytes from the operating system's random source, as lower-case hex.
-/// The daemon is unix-only, so the source is `/dev/urandom`.
 pub fn generate_key() -> std::io::Result<String> {
     let mut bytes = [0u8; KEY_BYTES];
-    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    platform::random::fill(&mut bytes)?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 

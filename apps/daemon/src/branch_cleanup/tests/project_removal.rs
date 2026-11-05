@@ -199,10 +199,9 @@ fn a_surviving_repository_loses_the_bound_branches_and_keeps_what_it_must() {
     let forced: Vec<SessionBranchTarget> = shown
         .iter()
         .filter(|item| match item.kind {
-            SessionBranchKind::Worktree => item
-                .path
-                .as_deref()
-                .is_some_and(|path| path.ends_with("/locked")),
+            SessionBranchKind::Worktree => item.path.as_deref().is_some_and(|path| {
+                path.ends_with(&format!("{}locked", std::path::MAIN_SEPARATOR))
+            }),
             SessionBranchKind::Branch => item.branch.as_deref() != Some("kept"),
         })
         .map(target)

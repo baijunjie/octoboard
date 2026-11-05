@@ -14,6 +14,7 @@ import { createImportProgressListeners, type ImportProgressEvent } from "../stor
 import { ThemeProvider } from "../preferences/theme";
 import { ConfigurationSection } from "../settings/ConfigurationSection";
 import { mountHost } from "../test/mountHost";
+import { BROWSER_HOST } from "../test/hosts";
 import { testDaemon } from "../test/testDaemon";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import type { ItemProgress } from "./progressState";
@@ -231,7 +232,7 @@ describe("the dialog Settings opens", () => {
       </ThemeProvider>
     );
   }
-  const platform = () => ({ kind: "browser" as const, configurationFile: configurationFile() });
+  const platform = () => ({ kind: "browser" as const, host: BROWSER_HOST, configurationFile: configurationFile() });
 
   async function startImportFromChoose() {
     await press("Choose file");

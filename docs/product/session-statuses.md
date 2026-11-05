@@ -415,8 +415,9 @@ switch-strip chips.
   The macOS application asks for no notification permission, and macOS showed no prompt for one. The banner has been
   seen while Octoboard was not the frontmost application, and not while it was. A notification that cannot be shown is
   not reported as having failed — the sidebar's own marker carries the same signal.
-- The Dock badge carries how many sessions are waiting, counted across every console, and clears when none is. While the
-  window is closed into the background Octoboard has no Dock icon; the count is still kept and shows once it returns to
+- In the macOS application the Dock badge carries how many sessions are waiting, counted across every console, and
+  clears when none is; the Windows application puts no count on its icon. While the window is closed into the
+  background Octoboard has no Dock icon; the count is still kept and shows once it returns to
   the Dock (see "Closing the window" in `docs/product/application-lifecycle.md`). The menu bar icon's menu lists the
   waiting sessions too (see "The icon's menu" in `docs/product/menu-bar-icon.md`), and the icon itself carries an orange
   dot while any is waiting or dormant (see "The icon's look" in `docs/product/menu-bar-icon.md`).

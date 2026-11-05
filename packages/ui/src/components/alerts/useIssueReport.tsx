@@ -57,11 +57,12 @@ export function useIssueReport(failures: readonly ReportableFailure[] | undefine
   const names = useDaemonStoreOrEmpty(useShallow((state) => (unexpected ? recordNames(state) : NO_NAMES)));
   const homeDir = useDaemonStoreOrEmpty((state) => state.homeDir);
   const daemonVersion = useDaemonStoreOrEmpty((state) => state.daemon?.version);
+  const daemonHost = useDaemonStoreOrEmpty(useShallow((state) => state.host ? { os: state.host.os, path_style: state.host.path_style } : undefined));
   const reportUrl = failures
     ? issueReportUrl(issueUrl, {
       failures,
       known: options.known,
-      environment: { version, daemonVersion, platform: platform?.kind, userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent, language },
+      environment: { version, daemonVersion, platform: platform?.kind, userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent, daemonHost, language },
       context: { names, homeDir },
     })
     : issueUrl;

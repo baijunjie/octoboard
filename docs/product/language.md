@@ -91,11 +91,12 @@ What follows the current language:
   is never translated. At launch the menu is English until the window's UI has loaded. The items macOS adds to
   these menus by itself — AutoFill, Start Dictation…, Emoji & Symbols, Close All — are not Octoboard's and do not
   follow the language; they are currently shown in English;
-- in the macOS application, the menu bar icon's menu: its group headings, its session lines' wording, its quota
-  submenus' titles and lines, the update entry, Open and Quit (see "The icon's menu" in
-  `docs/product/menu-bar-icon.md`). Like the application menu, it is relabelled at once on a change of language and is English until the window's UI has
-  loaded. The icon's accessible name follows the language too (see "The icon's look" in
-  `docs/product/menu-bar-icon.md`); without a quota it is the product name alone. The product name and the
+- in the desktop application, the menu bar icon's menu (the notification-area icon's on Windows): its group headings,
+  its session lines' wording, its quota submenus' titles and lines, the update entry, Open and Quit (see "The icon's
+  menu" in `docs/product/menu-bar-icon.md`). Like the application menu, it is relabelled at once on a change of
+  language and is English until the window's UI has loaded. The icon's accessible name — on Windows its tooltip — follows the language too (see "The icon's look" and
+  "The notification-area icon on Windows" in `docs/product/menu-bar-icon.md`); without a quota it is the product name
+  alone. The product name and the
   agents' names are never translated;
 - the document's language and writing direction. Arabic (`ar`) is the one right-to-left language, and choosing it
   mirrors the window (see `docs/product/right-to-left-layout.md`).
@@ -122,6 +123,21 @@ What does not follow it:
 - **What a daemon error quotes from elsewhere** is shown as it came: a path or an agent's name inside the localized
   wording, and the operating system's, `git`'s or an agent's own message never inside it but apart, as raw text (see
   "Names and diagnostic details" in `docs/product/error-alerts.md`).
+
+### The system's own words
+
+Where the UI names something of the operating system's — the place a removal moves things to, the settings app, the
+icon Octoboard puts in the system's bar, the system itself — it uses that system's own word for it, in the current
+language: the Trash and the Recycle Bin, System Settings and Settings, the menu bar icon and the notification area
+icon, macOS, Windows and Linux. The product docs call these the Trash, System Settings and the menu bar icon whatever
+the system. The file manager is called the file manager on every system.
+
+Which system's words are used depends on where the thing named is. What happens on the machine the daemon runs on — a
+folder moved to the Trash, a setting to change there, the system named in a
+daemon's error — is worded in that machine's terms, which the daemon announces with its host facts, since a browser
+may be on another machine; until a daemon has announced them, and for a daemon too old to announce one, the window's
+own are used. What concerns the window's own machine — its notifications, its permissions, its menu bar icon — is
+worded in the window's own terms.
 
 ## Where the choice is stored
 

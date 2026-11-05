@@ -116,7 +116,7 @@ it("remembers the logins this window started until they end, and forgets those a
   trackAccountLogin(daemon.store, "grok", null, true);
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [{ ...login, account: "b" }], account_sharing: [], home_dir: null, shell_terminals: [],
+    agent_availability: [], account_quotas: [], account_logins: [{ ...login, account: "b" }], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
   } as unknown as Event;
   client.onEvents!([snapshot]);
   expect(daemon.store.getState().loginsStartedHere).toEqual([]);
@@ -128,7 +128,7 @@ it("stores every session as the daemon sent it while this window has it queued f
   const sent = sessionOf("s", "c", "p", "Queued", "idle");
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [sent], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
   } as unknown as Event;
   client.onEvents!([snapshot]);
   expect(daemon.store.getState().sessions.get("s")).toBe(sent);
@@ -163,7 +163,7 @@ it("keeps each account's sharing state from the snapshot and the account_sharing
   const running = { account: "a", progress: { share: true, phase: "changing" as const, done: 1, total: 4, item: "skills" } };
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [running, { account: "free" }], home_dir: null, shell_terminals: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [running, { account: "free" }], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
   } as unknown as Event;
   client.onEvents!([snapshot]);
   const held = daemon.store.getState().accountSharing.get("a");
@@ -188,7 +188,7 @@ it("keeps the shell terminals a snapshot lists and the broadcasts change, and dr
   const project = (id: string) => ({ id, console_id: "c", name: id }) as Project;
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [project("p"), project("q")], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [shell("a", "p"), shell("b", "q")],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [shell("a", "p"), shell("b", "q")],
   } as unknown as Event;
   client.onEvents!([snapshot]);
   const held = daemon.store.getState().shellTerminals.get("a");
@@ -236,7 +236,7 @@ it("holds the prompt a snapshot's repeat brings back, until the session stops wa
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [sessionOf("s", "c", "p", "S", "waiting_user")], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
   } as unknown as Event;
   const prompt: Event = { type: "trust_prompt", session: "s", agent: "claude", project: "p", path: "/work/app", trust_dir: null };
   client.onEvents!([prompt, snapshot, prompt]);
@@ -339,7 +339,7 @@ it("does not bring back a deleted page when a list computed before the deletion 
   // A snapshot forgets the deletions along with the pages.
   client.onEvents!([{
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
   } as unknown as Event, stale]);
   expect(ids()).toEqual(["a-1", "a-2"]);
 });
@@ -388,7 +388,7 @@ it("holds the providers a snapshot serves, empty before one arrives, and keeps t
   expect(daemon.store.getState().providers).toEqual([]);
   const snapshot = (providers: ProviderInfo[]) => ({
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [], providers,
-    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
   } as unknown as Event);
   client.onEvents!([snapshot(TEST_PROVIDERS)]);
   const held = daemon.store.getState().providers;

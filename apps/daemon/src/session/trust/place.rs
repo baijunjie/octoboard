@@ -7,8 +7,8 @@
 //! no fallback to the text, which would let a project reached through a link count as inside
 //! again.
 //!
-//! A trusted directory whose real directory is the filesystem root, the home directory or one
-//! above it covers nothing ([`too_broad_to_trust`]). None is ever added as one, but a trusted path
+//! A trusted directory whose real directory is a filesystem root, the home directory or one
+//! above it covers nothing ([`is_too_broad`]). None is ever added as one, but a trusted path
 //! that is a link can be repointed later, and it must not then cover everything the user has.
 
 use std::collections::HashSet;
@@ -24,12 +24,12 @@ use crate::paths;
 /// this much at most, and never pushes a confirmation through.
 pub(super) const LOOK_DEADLINE: Duration = Duration::from_secs(5);
 
-/// The directories no trusted directory may be, as identities: the filesystem root, and the home
-/// directory and every directory above it, as `home` is written and as it really is — the same
-/// directories a folder offered for trusting is refused for (`trustable_parent`). With no usable
-/// home directory, the root alone. Blocking.
+/// The directories no trusted directory may be besides a filesystem root ([`is_too_broad`]), as
+/// identities: the home directory and every directory above it, as `home` is written and as it
+/// really is — the same directories a folder offered for trusting is refused for
+/// (`trustable_parent`). With no usable home directory, none. Blocking.
 pub(super) fn too_broad_to_trust(home: &Path) -> HashSet<Identity> {
-    let mut broad: HashSet<Identity> = identity::of_directory(Path::new("/")).into_iter().collect();
+    let mut broad = HashSet::new();
     if let Some(home) = paths::known_home(home) {
         broad.extend(home.ancestors().filter_map(identity::of_directory));
         if let Some(place) = Place::of(&home) {
@@ -37,4 +37,10 @@ pub(super) fn too_broad_to_trust(home: &Path) -> HashSet<Identity> {
         }
     }
     broad
+}
+
+/// Whether the trusted directory at `place` covers nothing: it is a filesystem root, whichever disk
+/// or share it is the root of, or one of the `broad` directories ([`too_broad_to_trust`]).
+pub(super) fn is_too_broad(place: &Place, broad: &HashSet<Identity>) -> bool {
+    place.is_root() || place.is_one_of(broad)
 }

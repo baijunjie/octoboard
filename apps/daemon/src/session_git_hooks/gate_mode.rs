@@ -18,10 +18,10 @@
 
 use std::ffi::OsStr;
 use std::io::{Cursor, Read, Write};
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
 
+use crate::platform::names;
 use crate::revert_gate::{self, GateInputs, Hook};
 use crate::wire_path;
 
@@ -62,8 +62,8 @@ pub(crate) fn inputs_for(
     git_dir: Option<&OsStr>,
 ) -> Option<GateInputs> {
     let request = GateRequest {
-        cwd: wire_path::encode(cwd.as_os_str().as_bytes()),
-        git_dir: git_dir.map(|dir| wire_path::encode(dir.as_bytes())),
+        cwd: wire_path::encode(&names::name_bytes(cwd.as_os_str())),
+        git_dir: git_dir.map(|dir| wire_path::encode(&names::name_bytes(dir))),
     };
     let body = serde_json::to_vec(&request).ok()?;
     let reply = match crate::loopback::post(

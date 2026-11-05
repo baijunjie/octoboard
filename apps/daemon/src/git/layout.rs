@@ -16,9 +16,8 @@
 //! [`home_ceiling`] is the ceiling the daemon uses, and [`admin_dir`] resolves a worktree's git
 //! directory.
 
-use std::ffi::OsStr;
+use crate::platform::names;
 use std::io::ErrorKind;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 /// The most bytes a pointer file is read to. It holds one path; `git` refuses a `.git` file past a
@@ -43,7 +42,10 @@ pub fn git_dir(top: &Path) -> Option<PathBuf> {
     }
     let contents = crate::hostfs::read_regular(&dot_git, MAX_POINTER).ok()?;
     let path = pointer(contents.strip_prefix(b"gitdir: ")?);
-    (!path.is_empty()).then(|| top.join(OsStr::from_bytes(path)))
+    if path.is_empty() {
+        return None;
+    }
+    names::path_from_name_bytes(path).map(|path| top.join(path))
 }
 
 /// The common directory of the git directory `git_dir`: the one its `commondir` file names
@@ -57,7 +59,14 @@ pub fn common_dir(git_dir: &Path) -> std::io::Result<PathBuf> {
                 ErrorKind::InvalidData,
                 "empty commondir",
             )),
-            path => Ok(git_dir.join(OsStr::from_bytes(path))),
+            path => names::path_from_name_bytes(path)
+                .map(|path| git_dir.join(path))
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        ErrorKind::InvalidData,
+                        "commondir names a path this host cannot use",
+                    )
+                }),
         },
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(git_dir.to_path_buf()),
         Err(err) => Err(err),
@@ -67,7 +76,7 @@ pub fn common_dir(git_dir: &Path) -> std::io::Result<PathBuf> {
 /// The directory discovery never climbs into: the home directory, resolved the way the paths it is
 /// compared with are. See [`find_dot_git`].
 pub fn home_ceiling() -> Option<PathBuf> {
-    crate::paths::known_home_dir().and_then(|home| std::fs::canonicalize(home).ok())
+    crate::paths::known_home_dir().and_then(|home| crate::hostfs::canonical(home).ok())
 }
 
 /// The nearest directory from `start` upwards holding a `.git` entry (a directory, or the file a
@@ -95,7 +104,7 @@ pub fn find_dot_git(start: &Path, ceiling: Option<&Path>) -> Option<PathBuf> {
 /// The git directory a worktree's `.git` leads to: the directory itself, or the one a `.git` file
 /// names (relative to the worktree when it is written relative).
 pub(crate) fn admin_dir(root: &Path) -> Option<PathBuf> {
-    std::fs::canonicalize(git_dir(root)?).ok()
+    crate::hostfs::canonical(git_dir(root)?).ok()
 }
 
 /// Whether `path` is a git working tree: its `.git` is a directory or a regular file, as `git`
@@ -108,9 +117,12 @@ pub fn is_git_repo(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{mkfifo, ScratchDir, PATIENCE};
+    use crate::test_support::ScratchDir;
+    #[cfg(unix)]
+    use crate::test_support::{mkfifo, PATIENCE};
 
     /// Runs `resolve` on a thread, so a read that blocks fails the test instead of hanging it.
+    #[cfg(unix)]
     fn within_patience<T: Send + 'static>(resolve: impl FnOnce() -> T + Send + 'static) -> T {
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || sender.send(resolve()));
@@ -136,6 +148,7 @@ mod tests {
         assert_eq!(common_dir(&git_dir).unwrap(), git_dir.join("../.."));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_dot_git_that_is_no_regular_file_resolves_to_nothing_without_blocking() {
         let fifo = ScratchDir::new("git-dir-fifo");
@@ -157,6 +170,7 @@ mod tests {
         assert_eq!(git_dir(&dir), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_commondir_that_is_no_regular_file_is_an_error_without_blocking() {
         let git_dir = ScratchDir::new("git-dir-commondir-fifo");
@@ -168,7 +182,7 @@ mod tests {
     #[test]
     fn discovery_never_climbs_into_the_ceiling() {
         let home = crate::test_support::ScratchDir::new("source-ceiling");
-        let home = std::fs::canonicalize(&*home).unwrap();
+        let home = crate::hostfs::canonical(&*home).unwrap();
         std::fs::create_dir_all(home.join(".git")).unwrap();
         std::fs::create_dir_all(home.join("project/inner")).unwrap();
         assert_eq!(find_dot_git(&home.join("project/inner"), Some(&home)), None);
@@ -179,6 +193,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_dot_git_that_is_neither_a_directory_nor_a_regular_file_is_no_repository() {
         let dir = ScratchDir::new("hostfs-dot-git-device");

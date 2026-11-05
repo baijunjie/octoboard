@@ -31,6 +31,7 @@ mod mcp;
 mod messaging;
 mod path_links;
 mod paths;
+mod platform;
 mod processes;
 mod project_git;
 mod protocol;
@@ -74,7 +75,7 @@ fn main() -> Result<()> {
     // While this is still the only thread.
     processes::ledger::forget_inherited_tag();
     let log_file = init_logging();
-    processes::crash_cleanup::install();
+    platform::proc::crash::install();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -226,7 +227,7 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
         _ = state.await_shutdown() => {
             tracing::info!("shutdown requested");
         }
-        _ = shutdown_signal() => {
+        _ = platform::proc::shutdown_requested() => {
             tracing::info!("a termination signal arrived");
         }
     }
@@ -245,61 +246,40 @@ async fn stop_all_processes(state: &Arc<AppState>) {
     tokio::join!(state.stop_all_sessions(), terminal::shell::close_all(state));
 }
 
-/// Polls the application's pid and ends the daemon once it is gone. The daemon lives and dies with
-/// the application; only this watch stands in the way of background operation.
+/// Ends the daemon once the application's process is gone. The daemon lives and dies with the
+/// application; only this watch stands in the way of background operation.
 fn spawn_parent_watch(state: Arc<AppState>, parent_pid: u32) {
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            // SAFETY: signal 0 only probes whether the pid exists.
-            if unsafe { libc::kill(parent_pid as i32, 0) } != 0
-                && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
-            {
-                tracing::info!(parent_pid, "the application is gone; shutting down");
-                state.request_shutdown();
-                break;
-            }
-        }
+    platform::proc::watch_parent(parent_pid, move || {
+        tracing::info!(parent_pid, "the application is gone; shutting down");
+        state.request_shutdown();
     });
 }
 
-/// Resolves when the daemon is asked to end: Ctrl-C, SIGTERM, or SIGHUP, which a closing terminal
-/// sends it.
-async fn shutdown_signal() {
-    use tokio::signal::unix::{signal, SignalKind};
-
-    // A signal whose handler cannot be installed never arrives, so the others still end the daemon.
-    let install = |kind: SignalKind, name: &str| match signal(kind) {
-        Ok(stream) => Some(stream),
-        Err(err) => {
-            tracing::warn!(%err, "installing the {name} handler failed");
-            None
-        }
-    };
-    let mut sigterm = install(SignalKind::terminate(), "SIGTERM");
-    let mut sighup = install(SignalKind::hangup(), "SIGHUP");
-    async fn arrival(stream: &mut Option<tokio::signal::unix::Signal>) {
-        match stream {
-            Some(stream) => {
-                stream.recv().await;
-            }
-            None => std::future::pending().await,
-        }
-    }
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {}
-        _ = arrival(&mut sigterm) => {}
-        _ = arrival(&mut sighup) => {}
-    }
-}
-
 /// Removes the per-session scratch directories of sessions that no longer exist. Every directory
-/// under it belonged to a session of a daemon that has already exited.
+/// under it belonged to a session of a daemon that has already exited. A file a dying process of
+/// that daemon still holds open can refuse its removal for a while (a sharing violation on
+/// Windows): then the rest is still removed, entry by entry, and what is held is left for the
+/// next start.
 fn clear_run_dir() {
     let run_dir = paths::run_dir();
-    if let Err(err) = std::fs::remove_dir_all(&run_dir) {
-        if err.kind() != std::io::ErrorKind::NotFound {
-            tracing::warn!(path = %run_dir.display(), %err, "clearing the run directory failed");
+    let err = match std::fs::remove_dir_all(&run_dir) {
+        Ok(()) => return,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
+        Err(err) => err,
+    };
+    let Ok(entries) = std::fs::read_dir(&run_dir) else {
+        tracing::warn!(path = %run_dir.display(), %err, "clearing the run directory failed");
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let removed = if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        if let Err(err) = removed {
+            tracing::warn!(path = %path.display(), %err, "a leftover in the run directory is held; it is left for the next start");
         }
     }
 }
@@ -411,7 +391,9 @@ mod tests {
         let (state, _dir) = app_state("parent-watch-child");
         // Stands in for the application: spawned and reaped here, so the watch finds its pid gone
         // the first time it looks.
-        let mut gone = Command::new("/usr/bin/true")
+        let mut gone = crate::test_support::programs::echo("")
+            .command()
+            .stdout(Stdio::null())
             .spawn()
             .expect("the stand-in application ran");
         let parent_pid = gone.id();

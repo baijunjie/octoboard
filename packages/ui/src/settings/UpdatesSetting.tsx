@@ -9,7 +9,10 @@ import { OptionSelect } from "../components/form/OptionSelect";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { UpdateChannel } from "../platform";
+import type { HostFacts } from "../platform/host";
 import { releaseUrl } from "../components/text/releaseUrl";
+import { useHost } from "../platform/react";
+import { installedMessageKey } from "../updates/installedMessageKey";
 import { updateChannel } from "../updates/updateChannel";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
@@ -20,12 +23,10 @@ import { Button } from "../primitives";
  * to know — a restart waiting, a download under way, a check running, a newer version, then how the last check
  * ended when it found nothing to fault. A check that did not finish is not in the sentence but in the row's
  * warning mark (`checkFailed`). */
-function versionStatus(t: ReturnType<typeof useT>, state: UpdateState): string {
+function versionStatus(t: ReturnType<typeof useT>, state: UpdateState, updater: HostFacts["updater"]): string {
   const version = isolate(state.currentVersion ?? "");
   if (state.phase === "installed") {
-    return state.installedVersion
-      ? t("settings.updates.version.installed", { installed: isolate(state.installedVersion) })
-      : t("settings.updates.version.installedUnknown");
+    return t(installedMessageKey(updater, "settings", !!state.installedVersion), { installed: isolate(state.installedVersion ?? "") });
   }
   if (state.phase === "downloading") return t("settings.updates.version.downloading", { available: isolate(state.update?.version ?? "") });
   if (state.phase === "checking") return t("settings.updates.version.checking");
@@ -51,6 +52,7 @@ function checkFailed(state: UpdateState): boolean {
  * The sentence of a check under way is left unspoken, as the button's pending state says it. */
 export function UpdatesSetting(): React.ReactElement | null {
   const t = useT();
+  const host = useHost();
   const channel = updateChannel.useValue();
   const updates = useUpdates();
   const [engaged, setEngaged] = useState(false);
@@ -74,7 +76,7 @@ export function UpdatesSetting(): React.ReactElement | null {
       setPressed(false);
     }
   }
-  const status = versionStatus(t, state);
+  const status = versionStatus(t, state, host.updater);
   const channels: { value: UpdateChannel; label: string }[] = [
     { value: "stable", label: t("settings.updates.channel.stable") },
     { value: "beta", label: t("settings.updates.channel.beta") },

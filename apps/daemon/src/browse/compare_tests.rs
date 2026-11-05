@@ -12,7 +12,7 @@ use crate::protocol::{
     SideRef, UpstreamInfo,
 };
 use crate::test_support::{
-    fixture_git, git, git_stdin, isolated_git_env, repo_with, ScratchDir, SYSTEM_GIT,
+    fixture_git, git, git_stdin, isolated_git_env, repo_with, symlink, ScratchDir, SYSTEM_GIT,
 };
 
 /// A comparison as `compare_project_branches` answered it.
@@ -505,8 +505,10 @@ fn a_main_branch_with_an_upstream_is_given_no_default_branch() {
 fn a_default_branch_lookup_past_a_budget_says_so() {
     // The names asked for, the same name and the `HEAD` of each remote, passing theirs (64 KiB)
     // though the same name alone does not, and `git remote` printing less than its budget.
+    // As many remotes as come to that where the host's command line holds less.
+    let remotes = 1_800 * crate::git::remote_branches::UPSTREAM_PATTERN_BYTES / (64 * 1024);
     let setup = |repo: &Path, main: &str| {
-        many_remotes(repo, "r", 1_800);
+        many_remotes(repo, "r", remotes);
         git(repo, &["update-ref", "refs/remotes/r00001/trunk", main]);
         git(
             repo,
@@ -1063,7 +1065,7 @@ fn additions_deletions_renames_images_and_binaries_read_both_sides_from_their_co
     write(repo.join("i.png"), &png(2));
     write(repo.join("data.bin"), b"\x00\x02binary two");
     std::fs::remove_file(repo.join("t.txt")).unwrap();
-    std::os::unix::fs::symlink("r2.txt", repo.join("t.txt")).unwrap();
+    symlink("r2.txt", repo.join("t.txt")).unwrap();
     git(&repo, &["add", "-A"]);
     git(&repo, &["commit", "-q", "-m", "next"]);
     git(&repo, &["checkout", "-q", "main"]);

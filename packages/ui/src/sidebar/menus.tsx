@@ -16,7 +16,7 @@ import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
-import { ariaBinding } from "../shortcuts/binding";
+import { ariaBinding, type ModifierHost } from "../shortcuts/binding";
 import { bindingFor, matchesCommand } from "../shortcuts/store";
 import { archivePreviewSessions, isUnusedSession } from "../sessions/order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
@@ -298,7 +298,8 @@ export function sessionMenu(
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", focusTarget, focusShortcut, hasBoundSessions = false, canHandoff = true, switching, quota, providers, sharing, disabledDefaults, accountOrder }: {
+  { host, placement = "list", focusTarget, focusShortcut, hasBoundSessions = false, canHandoff = true, switching, quota, providers, sharing, disabledDefaults, accountOrder }: {
+    host: ModifierHost;
     placement?: MenuPlacement;
     focusTarget?: FocusTarget;
     focusShortcut?: string;
@@ -321,7 +322,7 @@ export function sessionMenu(
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
     ...(archived ? [{ label: t("sidebar.session.reopen"), shortcut: "O", icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
     ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), shortcut: "P" }]),
-    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode")), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
+    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode"), host), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event, host) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
     ...(!archived ? ["separator" as const] : []),
     ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
     {

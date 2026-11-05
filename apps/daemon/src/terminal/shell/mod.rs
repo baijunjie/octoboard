@@ -9,12 +9,15 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use portable_pty::CommandBuilder;
 
+use crate::platform::proc::{Containment, Polite};
+use crate::platform::shell::ShellCommand;
+use crate::platform::term;
 use crate::protocol::{error_code, CodedError, Event, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
 use crate::terminal::pty::{self, NewPty, PtyCore, PtyOwner};
@@ -24,25 +27,6 @@ use crate::time::now_millis;
 /// has a signal of its own: the daemon waits on nothing a shell's exit closes, and a program
 /// running quietly in the foreground prints nothing.
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
-
-/// What a shell is asked to end with: the hangup a terminal closing sends. An interactive shell
-/// ignores `SIGTERM`, and on a hangup it passes the signal on to its jobs before it exits.
-const STOP_SIGNAL: libc::c_int = libc::SIGHUP;
-
-/// The program a shell terminal runs, and its arguments.
-#[derive(Debug, Clone)]
-pub struct ShellCommand {
-    pub program: String,
-    pub args: Vec<String>,
-}
-
-/// The user's login shell, the one their environment snapshot is taken with.
-pub fn login_shell() -> ShellCommand {
-    ShellCommand {
-        program: crate::env_shell::shell_path(),
-        args: vec!["-l".to_string()],
-    }
-}
 
 /// The shell terminals the daemon holds, on `AppState`.
 #[derive(Default)]
@@ -86,14 +70,26 @@ impl ShellTerminals {
     }
 }
 
+/// The instance a shell's containment is made for. Not the process ledger's, so a shell's jobs are
+/// never taken for an agent launch's. The containment only adopts the shell (what the busy check
+/// reads where the terminal cannot name its foreground job); it is not `prepare`d, so the shell's
+/// environment carries no process tag and a user's shell sees the environment it always did.
+const CONTAINMENT_INSTANCE: &str = "shell-terminal";
+
 /// A shell running on its PTY. Everything about its process and PTY is its [`PtyCore`]'s, reached
 /// through it directly (it dereferences to it).
 pub struct ShellProcess {
     pub id: String,
     pty: PtyCore,
+    /// What the shell's jobs are told apart from other processes by.
+    containment: Containment,
     /// The shell's own name, what its title shows before it sets one.
     shell_name: String,
     titles: Mutex<TitleWatch>,
+    /// Whether the shell's titles are the parsed screen's title changes, as where the host renders
+    /// what the program draws (`TermFacts::host_renders`), rather than what the output's own title
+    /// sequences say.
+    host_renders: AtomicBool,
 }
 
 #[derive(Default)]
@@ -119,26 +115,50 @@ impl PtyOwner for ShellProcess {
     }
 
     fn on_output(&self, data: &[u8]) {
-        {
-            let mut titles = self.titles.lock().expect("title watch lock poisoned");
-            if let Some(title) = titles.parser.feed(data) {
-                let title = title.filter(|title| !title.trim().is_empty());
-                if titles.latest != title {
-                    titles.latest = title;
-                    // Under the watch's lock, which registering takes too, so a title read
-                    // before the terminal was registered cannot overwrite a later one.
-                    if let Some(state) = titles.state.upgrade() {
-                        let shown = shown_title(&self.shell_name, titles.latest.as_deref());
-                        update(&state, &self.id, |record| {
-                            if !record.renamed {
-                                record.title = shown;
-                            }
-                        });
-                    }
+        let rendered = self.host_renders.load(Ordering::Relaxed);
+        if !rendered {
+            self.observe_title(|parser| parser.feed(data));
+        }
+        self.pty.push_output(data, |_, titles| {
+            if rendered {
+                self.observe_title(|parser| parser.take(&titles));
+            }
+        });
+    }
+}
+
+impl ShellProcess {
+    /// Takes the title `read` completes, if any, as the shell's latest, and shows it on the
+    /// terminal's record unless the terminal has been renamed.
+    fn observe_title(
+        &self,
+        read: impl FnOnce(&mut crate::terminal::title::Parser) -> Option<Option<String>>,
+    ) {
+        let mut titles = self.titles.lock().expect("title watch lock poisoned");
+        if let Some(title) = read(&mut titles.parser) {
+            let title = title.filter(|title| !title.trim().is_empty());
+            if titles.latest != title {
+                titles.latest = title;
+                // Under the watch's lock, which registering takes too, so a title read before the
+                // terminal was registered cannot overwrite a later one.
+                if let Some(state) = titles.state.upgrade() {
+                    let shown = shown_title(&self.shell_name, titles.latest.as_deref());
+                    update(&state, &self.id, |record| {
+                        if !record.renamed {
+                            record.title = shown;
+                        }
+                    });
                 }
             }
         }
-        self.pty.push_output(data, |_| {});
+    }
+
+    /// Reads the shell's titles from now on as a host that renders what the program draws has
+    /// them read, for a test of that reading on a host that does not.
+    #[cfg(test)]
+    pub(crate) fn read_as_rendered(&self) {
+        self.pty.report_titles();
+        self.host_renders.store(true, Ordering::Relaxed);
     }
 }
 
@@ -250,7 +270,7 @@ fn launch(
     env: HashMap<String, String>,
 ) -> Result<Arc<ShellProcess>> {
     if !cwd.is_dir() {
-        // `portable_pty` falls back to the home directory for a cwd that does not exist.
+        // The terminal backend may fall back to the home directory for a cwd that does not exist.
         return Err(CodedError::raised(
             error_code::DIRECTORY_UNREACHABLE,
             format!(
@@ -260,30 +280,39 @@ fn launch(
             &[("path", &cwd.to_string_lossy())],
         ));
     }
-    let mut command = CommandBuilder::new(&shell.program);
+    let mut command = term::Command::new(&shell.program);
     command.args(&shell.args);
     command.env_clear();
     for (key, value) in &env {
         command.env(key, value);
     }
     command.cwd(cwd);
-    let spawned = pty::spawn(command, pty::INITIAL_ROWS, pty::INITIAL_COLS)
-        .with_context(|| format!("starting the shell `{}`", shell.program))?;
-    let shell_name = Path::new(&shell.program)
-        .file_name()
-        .map(|name| name.to_string_lossy().trim_start_matches('-').to_string())
-        .unwrap_or_else(|| shell.program.clone());
+    let containment = Containment::create(CONTAINMENT_INSTANCE, id)
+        .context("creating the shell's process containment")?;
+    let spawned = term::spawn(command, pty::INITIAL_SIZE, Some(&containment))
+        .with_context(|| format!("starting the shell `{}`", shell.program.display()))?;
+    let shell_name = shell.program.file_name().map_or_else(
+        || shell.program.to_string_lossy().into_owned(),
+        |name| name.to_string_lossy().trim_start_matches('-').to_string(),
+    );
+    let pty = PtyCore::new(NewPty {
+        label: id.to_string(),
+        spawned,
+        scratch_dir: None,
+        kill_session_leftovers: false,
+        before_scratch_removal: None,
+    });
+    let host_renders = term::facts().host_renders;
+    if host_renders {
+        pty.report_titles();
+    }
     let process = Arc::new(ShellProcess {
         id: id.to_string(),
-        pty: PtyCore::new(NewPty {
-            label: id.to_string(),
-            spawned,
-            scratch_dir: None,
-            kill_session_leftovers: false,
-            before_scratch_removal: None,
-        }),
+        containment,
+        pty,
         shell_name,
         titles: Mutex::new(TitleWatch::default()),
+        host_renders: AtomicBool::new(host_renders),
     });
     pty::spawn_reader_thread(process.clone(), pty::READ_BUF);
     Ok(process)
@@ -411,7 +440,9 @@ fn remove(state: &AppState, id: &str) -> Option<Arc<ShellProcess>> {
 /// the hangup. Waits out the shell's grace period on a blocking thread.
 async fn end(process: Arc<ShellProcess>) {
     let ending = tokio::task::spawn_blocking(move || {
-        process.stop(STOP_SIGNAL);
+        // A hangup, which is what a terminal closing sends: an interactive shell ignores a request
+        // to terminate, and on a hangup it passes the signal on to its jobs before it exits.
+        process.stop(Polite::HangUp);
         process.hang_up();
     });
     if let Err(err) = ending.await {

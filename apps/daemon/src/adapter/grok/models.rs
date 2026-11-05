@@ -269,7 +269,7 @@ mod tests {
         use crate::adapter::tests::{agent_file, bounded_file_cases};
         bounded_file_cases(
             "adapter::grok::models::tests::bounded_agent_files_leave_grok_models_available",
-            &["regular", "linked", "fifo", "oversized"],
+            crate::adapter::tests::FILE_CASES,
             |case| {
                 let home = ScratchDir::new("bounded-model-cache");
                 agent_file(

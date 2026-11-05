@@ -5,8 +5,7 @@
 //! here is a bound on what one answer carries into an agent's context: a page of the change list,
 //! a window of a diff.
 
-use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
@@ -16,6 +15,7 @@ use serde_json::{json, Map, Value};
 use crate::branch_origin;
 use crate::browse::budget;
 use crate::mcp::lookup::{optional_bool, optional_count, optional_string, page_bounds};
+use crate::platform::names;
 use crate::protocol::{
     BrowseBody, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, ComparedChangeRef, ContentKind,
     Event, FileContent, GitSourceInfo, Project, Session, SideKind, SideRead, SideRef, WorktreeInfo,
@@ -48,10 +48,12 @@ async fn find_worktree<'a>(git: &'a GitSourceInfo, wanted: &str) -> Result<&'a W
     // compared by where it leads; only its metadata is read.
     // A bare branch name is not resolved against the daemon's working directory.
     let canonical = if Path::new(path).is_absolute() {
-        tokio::fs::canonicalize(path)
+        let owned = PathBuf::from(path);
+        tokio::task::spawn_blocking(move || crate::hostfs::canonical(&owned))
             .await
             .ok()
-            .map(|path| wire_path::encode(path.as_os_str().as_bytes()))
+            .and_then(Result::ok)
+            .map(|path| wire_path::encode(&names::name_bytes(path.as_os_str())))
     } else {
         None
     };
@@ -827,7 +829,7 @@ mod tests {
         git(Path::new(path), &["add", "d.txt"]);
         git(Path::new(path), &["commit", "-q", "-m", "add d"]);
         // The daemon reports canonical roots (`/private/var` for `/var` on macOS).
-        let root = std::fs::canonicalize(path).unwrap();
+        let root = crate::hostfs::canonical(path).unwrap();
         let root = root.to_str().unwrap();
         let wire_root = root.replace('%', "%25");
         for wanted in [path, root, wire_root.as_str(), "50%off", "50%25off"] {

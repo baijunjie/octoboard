@@ -317,6 +317,19 @@ The Focus mode entry in the selected session's menu is an exception: it shows th
 shortcut instead of a single letter. Other sessions' menus omit that entry. The focus view's exit button shows the
 same current shortcut in its tooltip.
 
+Key caps write a combination in the notation of the host's keyboard, one cap per key with no `+` between them. On an
+Apple keyboard the modifiers are HeroUI's glyphs, ⌃ ⌥ ⇧ ⌘ in that order. Elsewhere they are the key names Ctrl, Alt,
+Shift and Win, in the order Windows writes them (Win, Ctrl, Alt, Shift), since HeroUI's glyphs are macOS's; Home, End,
+Page Up and Page Down are names there too (Home, End, PgUp, PgDn), while Enter, Tab, Backspace, Space and the arrows
+keep their glyphs. The notation follows the host facts' `modifier` (`bindingParts` in `packages/ui/src/shortcuts/`),
+never the user agent. The names are the same in every language; the combination's accessible name follows the same
+order and names each key in the UI's language.
+
+Caps written as names are drawn with `Kbd`'s `spelled`, which puts a word's gap (4px) between them and keeps it on the
+side the caps are written in under a right-to-left page: HeroUI's own spacing reverses there even for caps held left to
+right, and loses the gap before the last key. Glyph caps keep HeroUI's spacing. An action menu holding spelled caps
+(`data-kbd-spelled`) may grow to 328px instead of 288px, so the label beside them keeps the room it has next to glyphs.
+
 Every interactive control is reachable from the keyboard and operable with Enter / Space, except for the collection-row
 behavior under "Buttons" below and a choice inside a dialog's form. A control that holds a choice there (a checkbox, a
 radio, a switch, a closed select, a tab) takes Space, and the arrow keys where it has them, while Enter submits the
@@ -443,7 +456,9 @@ is used up) is not natively disabled, which would take it out of the Tab order a
 it carries `aria-disabled`, keeps focus and its hover tooltip but takes no hover tint or press shrink, looks faded,
 gives the reason as its tooltip and as an `aria-describedby` description while its name stays the action, and a press
 explains instead of acting. HeroUI's disabled style turns off pointer events on `aria-disabled`, so such a button puts
-them back (`pointer-events-auto`), or its tooltip never opens on hover.
+them back (`pointer-events-auto`), or its tooltip never opens on hover. `Button`'s `unavailable`, given the reason, does
+all of it but the tooltip and a hover tint drawn by the caller's own classes, which the caller leaves off; its press
+reaches `onPress`, which explains (the Processes panel's Keep raises the refusal the daemon would answer with).
 
 A switch unavailable for a reason shown under it (the account's sharing switch while its sessions run) follows the
 same rule: it keeps focus and is marked `aria-disabled`, a press or Space does nothing, and the reason is its
@@ -1247,6 +1262,8 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 1. **An error the user's own action directly causes** — a submitted form, a Save or a confirm, a switch, a menu or row
    action, copying, opening — opens the dedicated error alert dialog, below. That includes a submit or a save failing
    inside a dialog: the error alert dialog opens over it, and the dialog keeps its input.
+   One more press opens it: an unavailable button whose press explains (see "Buttons") raises the refusal the daemon
+   would give for the action it stands for, without sending it (Keep on a process that shares the agent's console).
 2. **An error located at one input field** is the exception to the first and to the third: its error text stands
    under its field, in the field's `FieldError`, and no dialog opens. That is input validation — a check run
    synchronously the moment the user submits (empty, malformed, too long, a duplicate of a known name) — and equally a

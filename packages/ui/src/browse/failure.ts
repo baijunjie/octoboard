@@ -5,7 +5,7 @@ import type { Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import { CODE } from "../errors/codes";
 import { formatFileSize } from "../format/fileSize";
-import { abbreviateHome } from "../format/pathDisplay";
+import { display, hostPathsOf } from "../format/hostPath";
 import { displayWirePath } from "../format/wirePath";
 
 /** How a failed browse request is treated: given up for a newer one (nothing to show), worth asking
@@ -99,5 +99,5 @@ export function projectBrowseFailure(
   project: string,
 ): BrowseFailure {
   const root = state.projects.get(project)?.path;
-  return browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+  return browseFailure(t, language, err, state, root && display(root, hostPathsOf(state)));
 }

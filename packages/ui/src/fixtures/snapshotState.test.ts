@@ -9,6 +9,15 @@ describe("snapshotState", () => {
     expect(snapshotState({ gitStatuses: [status] }).gitStatuses).toEqual(new Map([["p1", status]]));
   });
 
+  it("says nothing of the host unless given, and puts a given one and its home directory in the state", () => {
+    expect(snapshotState({}).host).toBeUndefined();
+    expect(snapshotState({}).homeDir).toBe("/Users/dev");
+    const host = { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings" } as const;
+    const windows = snapshotState({ host, homeDir: "C:\\Users\\dev" });
+    expect(windows.host).toEqual(host);
+    expect(windows.homeDir).toBe("C:\\Users\\dev");
+  });
+
   it("defaults to an empty git statuses map and auto-pull off, and threads a given settings object through", () => {
     const empty = snapshotState({});
     expect(empty.gitStatuses).toEqual(new Map());

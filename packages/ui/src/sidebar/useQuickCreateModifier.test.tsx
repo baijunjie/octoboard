@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { useQuickCreateModifier } from "./useQuickCreateModifier";
-import { IS_MAC } from "../input/keys";
+import { IS_MAC } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

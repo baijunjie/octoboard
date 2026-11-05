@@ -12,6 +12,7 @@ import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { useProjectBrowserState } from "./browserState";
 import { ProjectBrowser } from "./ProjectBrowser";
+import { BROWSER_HOST } from "../test/hosts";
 
 // These checks exercise the browser's reads and navigation; the viewer's rendering has its own suite.
 vi.mock("../viewer/FileViewer", () => ({ FileViewer: () => null }));
@@ -81,7 +82,7 @@ async function mount(id: string, mode: "files" | "git"): Promise<() => Element> 
   await act(async () =>
     root.render(
       <DaemonProvider value={daemon}>
-        <PlatformProvider value={{ kind: "browser" }}><section data-region="panel-files"><Open /></section></PlatformProvider>
+        <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><section data-region="panel-files"><Open /></section></PlatformProvider>
       </DaemonProvider>,
     ),
   );

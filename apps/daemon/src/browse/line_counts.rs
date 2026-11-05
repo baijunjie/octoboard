@@ -396,6 +396,8 @@ mod tests {
         assert_eq!(groups[0].1["x"].stats, stats(1, 0));
     }
 
+    /// Only where the host takes a tab or a newline in a name: Windows forbids control characters.
+    #[cfg(unix)]
     #[test]
     fn a_path_may_hold_tabs_and_a_leading_newline() {
         let groups = parsed(b"1\t2\ta\tb\0\n4\t0\t\nc\0", &["a\tb", "\nc"]);

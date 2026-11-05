@@ -54,11 +54,15 @@ pub struct DaemonState {
 }
 
 /// How long a restart waits for the daemon to exit on its own after the UI asked it to shut down,
-/// before it sends SIGTERM.
+/// before it sends its own request.
 const DAEMON_EXIT_GRACE: Duration = Duration::from_secs(2);
 
-/// How long a restart waits for the daemon to exit after SIGTERM, which has it stop its sessions'
-/// processes first, before it kills it.
+/// How long the shutdown request itself may take, connecting, sending and reading the answer.
+const SHUTDOWN_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// How long a restart waits for the daemon to exit after the shutdown request, or SIGTERM where the
+/// request could not be made, either of which has it stop its sessions' processes first, before it
+/// kills it.
 const DAEMON_TERM_GRACE: Duration = Duration::from_secs(5);
 
 /// How long a restart waits for the daemon to be gone after killing it.
@@ -85,8 +89,11 @@ pub fn wait_for(timeout: Duration, condition: impl Fn() -> bool) -> bool {
 /// Makes sure the daemon has exited before a restart launches a new instance, whose own daemon refuses to
 /// start while this one still holds the instance lock (`instance_lock` in the daemon). The UI has asked it to
 /// shut down before confirming the restart, so this normally returns at once or within moments. One that has
-/// not exited within `DAEMON_EXIT_GRACE` gets SIGTERM, which the daemon handles like that request, and one
-/// still running `DAEMON_TERM_GRACE` later is killed. Blocks the calling thread: call it off the main thread.
+/// not exited within `DAEMON_EXIT_GRACE` is sent the shutdown request (`POST /shutdown`), which the daemon
+/// handles like the UI's and like SIGTERM; one that could not be sent it gets SIGTERM on macOS instead
+/// (Windows has no such signal, so the request is the only ask), and one still running
+/// `DAEMON_TERM_GRACE` after either is killed (`TerminateProcess` on Windows). Blocks the
+/// calling thread: call it off the main thread.
 pub fn stop_daemon(app: &AppHandle) {
     let state = app.state::<DaemonState>();
     state.stopping.store(true, Ordering::SeqCst);
@@ -97,6 +104,10 @@ pub fn stop_daemon(app: &AppHandle) {
     });
     escalate_stop(
         || daemon_stopped(app),
+        || match current_address(app) {
+            Some(address) => request_shutdown(&address),
+            None => false,
+        },
         || {
             if let Some(child) = app
                 .state::<DaemonState>()
@@ -123,10 +134,13 @@ pub fn stop_daemon(app: &AppHandle) {
     );
 }
 
-/// The escalation of `stop_daemon`: waits for `stopped` for each of the three durations in turn, running
-/// `terminate` before the second wait and `kill` before the third, and stops at the first wait that sees it.
+/// The escalation of `stop_daemon`: waits for `stopped` for `exit_grace`, then runs `request`, which says
+/// whether the daemon accepted it; one it did not accept is followed by `terminate`, which asks the same of
+/// the daemon by signal, so either way the daemon is asked once. Then it waits `term_grace`, runs `kill` and
+/// waits `kill_wait`. Stops at the first wait that sees `stopped`.
 fn escalate_stop(
     stopped: impl Fn() -> bool,
+    request: impl FnOnce() -> bool,
     terminate: impl FnOnce(),
     kill: impl FnOnce(),
     [exit_grace, term_grace, kill_wait]: [Duration; 3],
@@ -134,7 +148,9 @@ fn escalate_stop(
     if wait_for(exit_grace, &stopped) {
         return;
     }
-    terminate();
+    if !request() {
+        terminate();
+    }
     if wait_for(term_grace, &stopped) {
         return;
     }
@@ -142,17 +158,70 @@ fn escalate_stop(
     wait_for(kill_wait, &stopped);
 }
 
-/// Sends SIGTERM to `pid`, the signal the daemon's `shutdown_signal` waits for.
-#[cfg(unix)]
-fn terminate(pid: u32) {
-    // SAFETY: `kill` only sends a signal; a pid that is no longer the daemon's fails with `ESRCH`.
-    unsafe {
-        libc::kill(pid as libc::pid_t, libc::SIGTERM);
+/// Asks the daemon at `address` to shut down with `POST /shutdown`, and says whether it answered that it
+/// will. The one HTTP request the shell makes to the daemon, so it is written out over a socket rather than
+/// through a client the rest of the shell has no use for. Bounded by `SHUTDOWN_REQUEST_TIMEOUT` in each of its
+/// steps, so it cannot hold a restart up.
+fn request_shutdown(address: &DaemonAddress) -> bool {
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+
+    let attempt = || -> std::io::Result<bool> {
+        let target = SocketAddr::from((Ipv4Addr::LOCALHOST, address.port));
+        let mut stream = TcpStream::connect_timeout(&target, SHUTDOWN_REQUEST_TIMEOUT)?;
+        stream.set_read_timeout(Some(SHUTDOWN_REQUEST_TIMEOUT))?;
+        stream.set_write_timeout(Some(SHUTDOWN_REQUEST_TIMEOUT))?;
+        write!(
+            stream,
+            "POST /shutdown?key={} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            address.key, address.port
+        )?;
+        let mut status_line = String::new();
+        BufReader::new(stream).read_line(&mut status_line)?;
+        Ok(accepted(&status_line))
+    };
+    match attempt() {
+        Ok(accepted) => accepted,
+        Err(err) => {
+            diagnostic!("the shutdown request to the daemon failed: {err}");
+            false
+        }
     }
 }
 
-#[cfg(not(unix))]
-fn terminate(_pid: u32) {}
+/// Whether an HTTP status line is a success.
+fn accepted(status_line: &str) -> bool {
+    status_line
+        .split_whitespace()
+        .nth(1)
+        .is_some_and(|status| status.starts_with('2'))
+}
+
+#[cfg(target_os = "macos")]
+mod macos {
+    /// Sends SIGTERM to `pid`, the signal the daemon's `platform::proc::shutdown_requested` waits
+    /// for.
+    pub fn terminate(pid: u32) {
+        // SAFETY: `kill` only sends a signal; a pid that is no longer the daemon's fails with `ESRCH`.
+        unsafe {
+            libc::kill(pid as libc::pid_t, libc::SIGTERM);
+        }
+    }
+}
+#[cfg(target_os = "macos")]
+use macos as platform;
+
+/// Every target but macOS, Linux included.
+#[cfg(not(target_os = "macos"))]
+mod windows {
+    /// There is no signal to send on Windows: the daemon's stop is the shutdown request, then the
+    /// kill. Linux, which builds this half, stops its daemon the same way.
+    pub fn terminate(_pid: u32) {}
+}
+#[cfg(not(target_os = "macos"))]
+use windows as platform;
+
+use platform::terminate;
 
 pub fn daemon_stopped(app: &AppHandle) -> bool {
     app.state::<DaemonState>().stopped.load(Ordering::SeqCst)
@@ -354,6 +423,8 @@ pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFai
         .shell()
         .sidecar("octoboardd")
         .map_err(|err| AttemptFailure::Spawn(err.to_string()))?
+        // On Windows the plugin starts it with `CREATE_NO_WINDOW`: a console of its own, hidden,
+        // which the terminal sessions' process groups share, rather than none.
         .args(["--parent-pid", &pid.to_string()])
         .spawn()
         .map_err(|err| AttemptFailure::Spawn(err.to_string()))?;
@@ -606,6 +677,27 @@ mod wait_tests {
             >= 3));
     }
 
+    const SHORT: [Duration; 3] = [Duration::from_millis(30); 3];
+
+    /// Which steps of `escalate_stop` ran, in order, for a daemon that is `stopped` once the step
+    /// named `exits_after` has run (`None` for one that never is) and whose request is `accepted`
+    /// or not.
+    fn steps(exits_after: Option<&'static str>, accepted: bool) -> Vec<&'static str> {
+        let order = Mutex::new(Vec::new());
+        let stopped = || exits_after.is_some_and(|step| order.lock().unwrap().contains(&step));
+        escalate_stop(
+            stopped,
+            || {
+                order.lock().unwrap().push("request");
+                accepted
+            },
+            || order.lock().unwrap().push("terminate"),
+            || order.lock().unwrap().push("kill"),
+            SHORT,
+        );
+        order.into_inner().unwrap()
+    }
+
     #[test]
     fn a_daemon_that_exits_by_itself_is_not_signalled() {
         let signalled = AtomicUsize::new(0);
@@ -613,39 +705,92 @@ mod wait_tests {
             || true,
             || {
                 signalled.fetch_add(1, Ordering::SeqCst);
+                true
             },
             || {
                 signalled.fetch_add(1, Ordering::SeqCst);
             },
-            [Duration::from_millis(50); 3],
+            || {
+                signalled.fetch_add(1, Ordering::SeqCst);
+            },
+            SHORT,
         );
         assert_eq!(signalled.load(Ordering::SeqCst), 0);
     }
 
     #[test]
-    fn a_daemon_that_exits_on_sigterm_is_not_killed() {
-        let terminated = AtomicBool::new(false);
-        let killed = AtomicBool::new(false);
-        escalate_stop(
-            || terminated.load(Ordering::SeqCst),
-            || terminated.store(true, Ordering::SeqCst),
-            || killed.store(true, Ordering::SeqCst),
-            [Duration::from_millis(50); 3],
-        );
-        assert!(terminated.load(Ordering::SeqCst));
-        assert!(!killed.load(Ordering::SeqCst));
+    fn a_daemon_that_exits_on_the_request_is_not_signalled() {
+        assert_eq!(steps(Some("request"), true), ["request"]);
     }
 
     #[test]
-    fn a_daemon_that_ignores_sigterm_is_killed_after_it() {
-        let order = Mutex::new(Vec::new());
-        escalate_stop(
-            || false,
-            || order.lock().unwrap().push("terminate"),
-            || order.lock().unwrap().push("kill"),
-            [Duration::from_millis(20); 3],
-        );
-        assert_eq!(*order.lock().unwrap(), ["terminate", "kill"]);
+    fn a_request_that_is_refused_falls_back_to_sigterm_at_once() {
+        assert_eq!(steps(Some("terminate"), false), ["request", "terminate"]);
+    }
+
+    #[test]
+    fn a_daemon_that_ignores_an_accepted_request_is_killed_without_sigterm() {
+        assert_eq!(steps(None, true), ["request", "kill"]);
+    }
+
+    #[test]
+    fn a_daemon_that_ignores_everything_is_killed_last() {
+        assert_eq!(steps(None, false), ["request", "terminate", "kill"]);
+    }
+
+    #[test]
+    fn only_a_success_status_accepts_the_shutdown_request() {
+        assert!(accepted("HTTP/1.1 202 Accepted\r\n"));
+        assert!(accepted("HTTP/1.1 200 OK\r\n"));
+        assert!(!accepted("HTTP/1.1 401 Unauthorized\r\n"));
+        assert!(!accepted("HTTP/1.1 404 Not Found\r\n"));
+        assert!(!accepted(""));
+    }
+
+    #[test]
+    fn the_shutdown_request_is_posted_with_the_key_and_a_refusal_is_not_an_acceptance() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            for status in ["202 Accepted", "401 Unauthorized"] {
+                let (mut stream, _) = listener.accept().unwrap();
+                // The request may arrive in more than one read; its head ends at the blank line.
+                let mut request = Vec::new();
+                let mut buffer = [0u8; 1024];
+                while !request.ends_with(b"\r\n\r\n") {
+                    let read = stream.read(&mut buffer).unwrap();
+                    if read == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..read]);
+                }
+                requests.push(String::from_utf8_lossy(&request).into_owned());
+                write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n").unwrap();
+            }
+            requests
+        });
+        let address = DaemonAddress {
+            port,
+            key: "ab12".to_string(),
+        };
+        assert!(request_shutdown(&address));
+        assert!(!request_shutdown(&address));
+        let requests = server.join().unwrap();
+        assert!(requests[0].starts_with("POST /shutdown?key=ab12 HTTP/1.1\r\n"));
+        assert!(requests[0].contains(&format!("Host: 127.0.0.1:{port}\r\n")));
+    }
+
+    #[test]
+    fn a_request_to_nothing_listening_is_not_an_acceptance() {
+        // Port 1 (tcpmux) has no listener on a development machine or CI runner. A port freed by
+        // binding and dropping a listener would not do: a test running alongside may be handed it.
+        let address = DaemonAddress {
+            port: 1,
+            key: "ab12".to_string(),
+        };
+        assert!(!request_shutdown(&address));
     }
 
     #[test]

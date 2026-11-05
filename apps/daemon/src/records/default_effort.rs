@@ -215,10 +215,10 @@ mod tests {
 
     #[test]
     fn bounded_agent_files_preserve_catalogue_defaults() {
-        use crate::adapter::tests::{agent_file, bounded_file_cases};
+        use crate::adapter::tests::{agent_file, bounded_file_cases, FILE_CASES};
         bounded_file_cases(
             "records::default_effort::tests::bounded_agent_files_preserve_catalogue_defaults",
-            &["regular", "linked", "fifo", "oversized"],
+            FILE_CASES,
             |case| {
                 let account = ScratchDir::new("bounded-catalogue");
                 let path = account.join(CODEX_MODELS_CACHE);

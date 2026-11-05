@@ -3,9 +3,11 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
+import type { PathStyle } from "../format/hostPath";
 import type { TermControl, TermEvent } from "../protocol";
 import { interactionIsTouch } from "../input/touchInput";
-import { IS_MAC, isSecondaryPress } from "../input/keys";
+import { isSecondaryPress } from "../input/keys";
+import type { HostFacts } from "../platform/host";
 import { TerminalLinkColors } from "./links/linkColors";
 import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./links/pathLinks";
@@ -40,6 +42,9 @@ const RESIZE_SETTLE_MS = 120;
 export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
 export interface TerminalControllerOptions {
+  /** The facts of the machine the window runs on: the shortcut modifier, and the system for what the platform's own
+   * keyboard does. */
+  host: Pick<HostFacts, "modifier" | "os">;
   /** Draws on the GPU (`useWebglRenderer`), or keeps xterm's DOM renderer. On by default, meant for the one agent
    * terminal: any other xterm on the page passes `false`. WebKit caps a page's active WebGL contexts, counts a
    * released one until garbage collection (disposing the addon or `loseContext()` does not free the slot), and over
@@ -81,6 +86,8 @@ export interface TerminalControllerHandlers {
     open: (target: PathLinkTarget, onHost: boolean) => Promise<void>;
     /** Shows a path that was found in the host's file manager, a file selected in its folder. */
     reveal: (target: PathLinkTarget) => Promise<void>;
+    /** How the daemon host writes a path (`snapshot.host.path_style`), read once: `unix` where unsaid. */
+    pathStyle?: PathStyle;
   };
 }
 
@@ -191,10 +198,10 @@ export class TerminalController {
   /** Whether the terminal has been fitted to its container at least once. */
   private fitted = false;
 
-  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false }: TerminalControllerOptions = {}) {
+  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false, host }: TerminalControllerOptions) {
     this.handlers = handlers;
-    this.options = { gpu, fittedSizesOnly };
-    const onLinkClick = terminalLinkHandler(handlers.openLink, () => this.term.hasSelection());
+    this.options = { gpu, fittedSizesOnly, host };
+    const onLinkClick = terminalLinkHandler(handlers.openLink, () => this.term.hasSelection(), host);
     this.term = new Terminal({
       scrollback: 10000,
       fontFamily: TERMINAL_FONT_FAMILY,
@@ -235,7 +242,7 @@ export class TerminalController {
         this.linkColors.refresh();
         // A path the pointer already rests on becomes a link without the pointer having to move.
         this.askLinksUnderPointer?.();
-      });
+      }, host);
     this.pathLinks = paths?.cache;
     // The tooltip is placed against the viewport, so a scroll under the pointer leaves it behind.
     // xterm reports every line feed that scrolls the buffer, even while the view stays put under a
@@ -262,7 +269,7 @@ export class TerminalController {
     // written directly, bypassing xterm's own key-to-data pipeline entirely.
     this.term.attachCustomKeyEventHandler((event) => {
       keepModifiersFromArming(event);
-      const data = IS_MAC ? macEditingSequence(event) : undefined;
+      const data = this.options.host.os === "macos" ? macEditingSequence(event) : undefined;
       if (data !== undefined) {
         event.preventDefault();
         if (event.type === "keydown") this.term.input(data, true);
@@ -355,7 +362,7 @@ export class TerminalController {
         // before xterm's own listener on its element reads it.
         this.term.options.altClickMovesCursor = this.term.modes.mouseTrackingMode === "none";
         // A secondary press opens the editing menu, which is how what the program copied gets used.
-        if (!isSecondaryPress(event)) {
+        if (!isSecondaryPress(event, this.options.host)) {
           this.programCopy = undefined;
           this.userActs++;
         }

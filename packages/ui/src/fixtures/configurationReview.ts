@@ -13,6 +13,7 @@ import { type AccountFallback, type Agent, type GitWorkflowSettings, type Inspec
 export const fallback = (agent: Agent, name: string): AccountFallback => ({ agent, name });
 
 export const inspectedProject = (extra: Partial<InspectedProject> & Pick<InspectedProject, "name" | "path">): InspectedProject => ({
+  foreign_path: false,
   remote_url: null,
   offers: { exported_path: null, default_clone_dir: null, clone: null },
   default: null,
@@ -67,6 +68,7 @@ export const REVIEW = inspected({
     git_workflow: FILE_GIT_WORKFLOW,
     current_git_workflow: DEFAULT_GIT_WORKFLOW,
     default_clone_dir: FILE_CLONE_DIR,
+    foreign_default_clone_dir: false,
     current_default_clone_dir: THIS_CLONE_DIR,
   },
   consoles: [

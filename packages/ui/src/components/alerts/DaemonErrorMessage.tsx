@@ -13,6 +13,7 @@ import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import { sessionTask } from "../../sessions/sessionLabel";
 import { useDaemonStoreOrEmpty } from "../../store";
+import { useHostPathsOrEmpty } from "../hooks/useHostPaths";
 import { BranchGroups } from "./BranchGroups";
 import { DiagnosticBlock } from "./DiagnosticBlock";
 import { daemonErrorParts } from "./daemonErrorParts";
@@ -44,7 +45,7 @@ export type DaemonErrorPart = "summary" | "remedy" | "details" | "further" | "ra
  * whole message), git's message is not under its name in the list but in `raw`, under that name again. */
 function LeftBranches({ count, items, part }: { count: number; items: LeftBranchItem[]; part?: DaemonErrorPart }): React.ReactElement | null {
   const t = useT();
-  const homeDir = useDaemonStoreOrEmpty((s) => s.homeDir);
+  const { home, style } = useHostPathsOrEmpty();
   const groups = leftBranchGroups(items).map((group) => ({
     key: group.key,
     // A `Message` rather than `t`, so a product name in the lead is a chip as in any prose.
@@ -53,7 +54,7 @@ function LeftBranches({ count, items, part }: { count: number; items: LeftBranch
     rows: group.items.map((item, at) => ({
       id: `${at}`,
       worktree: item.kind === "worktree",
-      path: leftBranchName(item, homeDir),
+      path: leftBranchName(item, home, style),
       branch: item.kind === "worktree" ? item.branch : item.name,
       uncommitted: item.state === "locked" && item.uncommitted,
       detail: leftBranchDetail(item),
@@ -87,6 +88,9 @@ function LeftBranchDetail({ name, detail }: { name: string; detail: string }): R
 
 /** A failure with names or technical literals set apart as chips in the catalog's wording. */
 function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonErrorPart }): React.ReactElement | null {
+  // Kept out of the React Compiler: the message the code is worded under (`messageCode`) depends on the announced
+  // daemon host, state outside React that `useT` re-renders this for, which its memoization by `error` would not see.
+  "use no memo";
   const t = useT();
   const language = useCurrentLanguage();
   // The records are subscribed to only for a message that names one, so a failure that does not

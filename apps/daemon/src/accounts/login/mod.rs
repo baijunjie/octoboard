@@ -26,7 +26,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use crate::accounts::quotas;
-use crate::adapter::provider;
+use crate::adapter::{provider, Unstartable};
 use crate::protocol::{
     error_code, login_failure_code, AccountLogin, AgentId, Code, CodedError, Event, LoginFailure,
     LoginStatus, ProviderOperation,
@@ -282,12 +282,13 @@ impl AccountLogins {
             start.resolved_dir.map(PathBuf::from),
             scratch_root.join(format!("login-{}", uuid::Uuid::new_v4())),
         )
-        .map_err(|binary| {
-            CodedError::raised(
+        .map_err(|unstartable| match unstartable {
+            Unstartable::NotFound(binary) => CodedError::raised(
                 error_code::BINARY_NOT_FOUND,
                 format!("`{binary}` was not found on PATH in the shell environment."),
                 &[("binary", binary)],
-            )
+            ),
+            Unstartable::Refused(refusal) => anyhow::Error::new(refusal),
         })?;
 
         let login = AccountLogin {

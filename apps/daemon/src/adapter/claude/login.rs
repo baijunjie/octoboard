@@ -5,7 +5,6 @@
 //! terminal").
 
 use std::future::Future;
-use std::os::unix::fs::DirBuilderExt;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::Duration;
@@ -14,8 +13,9 @@ use serde_json::Value;
 use tokio::sync::Notify;
 
 use crate::accounts::login::flows::{last_line_of, Flow, LoginFlow, Outcome, Process, Progress};
-use crate::adapter;
 use crate::adapter::account_cli;
+use crate::platform::fs as platform;
+use crate::platform::shell;
 
 /// How often the file Claude Code's `BROWSER` script writes is looked at.
 const URL_POLL: Duration = Duration::from_millis(100);
@@ -98,25 +98,10 @@ async fn sign_in(flow: &Flow, progress: &Progress, cancel: &Notify) -> Outcome {
 /// Writes the `BROWSER` script, which appends its argument to the returned file, into the
 /// scratch directory. A script because `BROWSER` is run as `$BROWSER <url>`.
 fn write_browser_script(flow: &Flow) -> std::io::Result<(PathBuf, PathBuf)> {
-    use std::os::unix::fs::PermissionsExt;
-
     // Private to the user, as the script is run by whatever the CLI hands the URL to.
-    std::fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(flow.scratch_dir())?;
-    let (script, urls) = (
-        flow.scratch_dir().join("browser.sh"),
-        flow.scratch_dir().join("urls"),
-    );
-    std::fs::write(
-        &script,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$1\" >> {}\n",
-            adapter::shell_quote(&urls.to_string_lossy())
-        ),
-    )?;
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700))?;
+    platform::create_private_dir(flow.scratch_dir())?;
+    let urls = flow.scratch_dir().join("urls");
+    let script = shell::write_argument_recorder(&flow.scratch_dir().join("browser.sh"), &urls)?;
     Ok((script, urls))
 }
 
@@ -143,11 +128,22 @@ mod tests {
     use crate::protocol::AgentId;
     use crate::test_support::PATIENCE;
 
+    #[cfg(unix)]
+    fn text_file_busy(err: &std::io::Error) -> bool {
+        err.raw_os_error() == Some(libc::ETXTBSY)
+    }
+
+    #[cfg(not(unix))]
+    fn text_file_busy(_: &std::io::Error) -> bool {
+        false
+    }
+
     #[test]
     fn the_browser_script_appends_its_argument_to_the_file_the_flow_watches() {
         let dir = crate::test_support::ScratchDir::new("login-browser-script");
         let flow = Flow::unresolved(AgentId::CLAUDE, dir.join("it's here"));
         let (script, urls) = write_browser_script(&flow).unwrap();
+        #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(flow.scratch_dir())
@@ -162,10 +158,7 @@ mod tests {
             let deadline = std::time::Instant::now() + PATIENCE;
             let status = loop {
                 match std::process::Command::new(&script).arg(url).status() {
-                    Err(err)
-                        if err.raw_os_error() == Some(libc::ETXTBSY)
-                            && std::time::Instant::now() < deadline =>
-                    {
+                    Err(err) if text_file_busy(&err) && std::time::Instant::now() < deadline => {
                         std::thread::sleep(Duration::from_millis(10));
                     }
                     other => break other.unwrap(),
@@ -175,8 +168,11 @@ mod tests {
         }
         assert_eq!(last_line_of(&urls), "https://a/two");
         assert_eq!(
-            std::fs::read_to_string(&urls).unwrap(),
-            "https://a/one?x=1&y=2\nhttps://a/two\n"
+            std::fs::read_to_string(&urls)
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            ["https://a/one?x=1&y=2", "https://a/two"]
         );
     }
 }

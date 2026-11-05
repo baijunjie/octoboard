@@ -133,8 +133,8 @@ mod tests {
     #[test]
     fn a_project_path_is_stored_absolute_and_normalised() {
         assert_eq!(
-            absolute_path("/work/a/../project/./").unwrap(),
-            PathBuf::from("/work/project")
+            absolute_path(&crate::test_support::host_path("/work/a/../project/./")).unwrap(),
+            PathBuf::from(crate::test_support::host_path("/work/project"))
         );
         assert_eq!(
             absolute_path("~/code/app/").unwrap(),

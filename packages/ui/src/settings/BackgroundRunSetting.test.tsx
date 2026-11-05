@@ -10,6 +10,7 @@ import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { GeneralSection } from "./GeneralSection";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,13 +48,13 @@ afterEach(() => {
 });
 
 it("has no row without the capability", () => {
-  const container = mount({ kind: "browser" });
+  const container = mount({ kind: "browser", host: BROWSER_HOST });
   expect(container.querySelector("[role=switch], input[type=checkbox]")).toBeNull();
 });
 
 it("tells the shell the default choice at startup", async () => {
   const set = vi.fn(() => Promise.resolve());
-  mount({ kind: "tauri", backgroundRun: { set } });
+  mount({ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set } });
   await act(async () => {});
   expect(set).toHaveBeenCalledExactlyOnceWith(false);
 });
@@ -80,7 +81,7 @@ it("tells the shell a stored choice at startup", async () => {
   });
   act(() =>
     root.render(
-      <FreshProvider value={{ kind: "tauri", backgroundRun: { set } }}>
+      <FreshProvider value={{ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set } }}>
         <Host />
       </FreshProvider>,
     ),
@@ -91,7 +92,7 @@ it("tells the shell a stored choice at startup", async () => {
 
 it("pushes and stores the choice when the switch is toggled", async () => {
   const set = vi.fn(() => Promise.resolve());
-  const container = mount({ kind: "tauri", backgroundRun: { set } });
+  const container = mount({ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set } });
   await act(async () => {});
   const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
   expect(toggle.checked).toBe(false);

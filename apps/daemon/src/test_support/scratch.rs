@@ -1,4 +1,5 @@
-//! The scratch directory a test works in and removes on drop, and the files and fifos made in one.
+//! The scratch directory a test works in and removes on drop, and the files, links and fifos made
+//! in one.
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -106,7 +107,6 @@ fn remove_scratch(path: &Path) {
 }
 
 fn make_writable(dir: &Path) {
-    use std::os::unix::fs::PermissionsExt;
     let Ok(meta) = std::fs::symlink_metadata(dir) else {
         return;
     };
@@ -114,7 +114,15 @@ fn make_writable(dir: &Path) {
         return;
     }
     let mut permissions = meta.permissions();
-    permissions.set_mode(permissions.mode() | 0o700);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        permissions.set_mode(permissions.mode() | 0o700);
+    }
+    // On Windows the attribute is all there is to clear; the lint is about Unix's mode bits.
+    #[cfg(windows)]
+    #[allow(clippy::permissions_set_readonly_false)]
+    permissions.set_readonly(false);
     std::fs::set_permissions(dir, permissions).ok();
     for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         make_writable(&entry.path());
@@ -132,6 +140,15 @@ mod later_removals {
 
     use super::{remove_scratch, Writer};
 
+    #[cfg(unix)]
+    use libc::atexit;
+
+    // The C runtime's own, which every Windows Rust program links.
+    #[cfg(windows)]
+    extern "C" {
+        fn atexit(callback: extern "C" fn()) -> std::ffi::c_int;
+    }
+
     static PENDING: Mutex<Vec<(PathBuf, Vec<Writer>)>> = Mutex::new(Vec::new());
     static CREATED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
@@ -140,7 +157,7 @@ mod later_removals {
         static AT_EXIT: Once = Once::new();
         AT_EXIT.call_once(|| {
             // SAFETY: registers a plain function with no captured state, which `exit` calls once.
-            unsafe { libc::atexit(at_exit) };
+            unsafe { atexit(at_exit) };
         });
         CREATED
             .lock()
@@ -227,7 +244,44 @@ impl AsRef<Path> for ScratchFile {
     }
 }
 
+/// A symbolic link at `at` to `target`, which is taken relative to the link's directory where it is
+/// relative. Windows makes a link to a directory and one to a file differently, so there the kind
+/// follows what `target` is now (a file link where it does not exist), and a `/` in the target is
+/// written `\`, the only separator a Windows link follows.
+pub(crate) fn symlink(target: impl AsRef<Path>, at: impl AsRef<Path>) -> std::io::Result<()> {
+    let (target, at) = (target.as_ref(), at.as_ref());
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, at)
+    }
+    #[cfg(windows)]
+    {
+        let target = std::path::PathBuf::from(target.to_string_lossy().replace('/', "\\"));
+        let target = target.as_path();
+        let resolved = at.parent().unwrap_or(Path::new("")).join(target);
+        if resolved.is_dir() {
+            std::os::windows::fs::symlink_dir(target, at)
+        } else {
+            std::os::windows::fs::symlink_file(target, at)
+        }
+    }
+}
+
+/// Makes the file at `path` one the system would run: execute permission for everyone on Unix.
+/// Windows runs a file by its extension, so there it changes nothing.
+pub(crate) fn make_executable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+            .expect("the file is made executable");
+    }
+    #[cfg(windows)]
+    let _ = path;
+}
+
 /// A FIFO at `path`, replacing whatever is there: a file whose open blocks until a writer appears.
+#[cfg(unix)]
 pub(crate) fn mkfifo(path: &Path) {
     use std::os::unix::ffi::OsStrExt;
     let _ = std::fs::remove_file(path);

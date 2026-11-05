@@ -51,7 +51,6 @@ mod tests;
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::io::Write as _;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
@@ -59,10 +58,12 @@ use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use crate::adapter::shell_quote;
 use crate::env_shell;
 use crate::git::run::{Access, GitError, Limits, Policy, Runner, UserGit, WorkDir};
 use crate::paths;
+use crate::platform::fs as platform;
+use crate::platform::names;
+use crate::platform::shell::{self, posix_quote};
 use crate::processes::subprocess;
 
 /// The oldest git the variables are given to: `GIT_CONFIG_COUNT` needs 2.31 and the
@@ -219,10 +220,7 @@ fn injected(
             format!("GIT_CONFIG_KEY_{slot}"),
             "core.hooksPath".to_string(),
         ),
-        (
-            format!("GIT_CONFIG_VALUE_{slot}"),
-            dir.to_string_lossy().into_owned(),
-        ),
+        (format!("GIT_CONFIG_VALUE_{slot}"), shell::posix_path(dir)),
         (SESSION_VARIABLE.to_string(), session_id.to_string()),
         (PORT_VARIABLE.to_string(), port.to_string()),
         (KEY_VARIABLE.to_string(), key.to_string()),
@@ -236,7 +234,7 @@ fn ready_dir(root: &Path, shell_env: &HashMap<String, String>, self_exe: &str) -
     if !exe.is_absolute() || !exe.is_file() {
         bail!("the daemon executable `{self_exe}` cannot be found for the report");
     }
-    let git = env_shell::resolve_binary("git", shell_env)?;
+    let git = env_shell::resolve_program("git", shell_env)?;
     let key = (git.clone(), self_exe.to_string());
     let cached = READY
         .lock()
@@ -296,10 +294,10 @@ fn prepare(
     names.extend(documented_hook_names(&git));
     let state = root.join(STATE_DIR);
     fs::create_dir_all(&state).with_context(|| format!("creating {}", state.display()))?;
-    fs::set_permissions(&state, fs::Permissions::from_mode(0o700))?;
+    platform::restrict_to_owner(&state)?;
     remove_stale_state(&state);
     let script = render(&Rendering {
-        interpreter: interpreter(),
+        interpreter: shell::posix_interpreter(),
         self_exe,
         exec_path: &exec_path,
         state: &state,
@@ -310,28 +308,14 @@ fn prepare(
 
 /// The values a dispatcher is written with.
 struct Rendering<'a> {
-    interpreter: &'a str,
+    /// The shell the dispatcher is run by; `None` leaves the one it names itself.
+    interpreter: Option<PathBuf>,
     self_exe: &'a str,
     /// What `git --exec-path` says for the git whose configuration files were found, which git
     /// exports to every hook it runs as `GIT_EXEC_PATH`.
     exec_path: &'a str,
     state: &'a Path,
     system_files: &'a [PathBuf],
-}
-
-/// The shell the dispatchers run under. Every hook git runs starts one, several per commit, so
-/// `dash` is taken where the system has it: it starts in well under half the time of the `bash`
-/// behind macOS's `/bin/sh`. The script is POSIX either way.
-fn interpreter() -> &'static str {
-    let dash = Path::new("/bin/dash");
-    let usable = dash
-        .metadata()
-        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0);
-    if usable {
-        "/bin/dash"
-    } else {
-        "/bin/sh"
-    }
 }
 
 /// The dispatcher with this daemon's values in it.
@@ -342,17 +326,26 @@ fn render(values: &Rendering<'_>) -> String {
         .map(|file| {
             format!(
                 "\tocto_mentions {} && return 1\n",
-                shell_quote(&file.to_string_lossy())
+                posix_quote(&shell::posix_path(file))
             )
         })
         .collect();
-    DISPATCHER
-        .replacen("#!/bin/sh", &format!("#!{}", values.interpreter), 1)
+    let dispatcher = match (&values.interpreter, DISPATCHER.split_once('\n')) {
+        // The first line names the interpreter.
+        (Some(interpreter), Some((_, rest))) => {
+            format!("#!{}\n{rest}", interpreter.display())
+        }
+        _ => DISPATCHER.to_string(),
+    };
+    dispatcher
         // The placeholder holds a line of its own.
         .replace("@SYSTEM_SCANS@\n", &scans)
-        .replace("@EXE@", &shell_quote(values.self_exe))
-        .replace("@EXEC_PATH@", &shell_quote(values.exec_path))
-        .replace("@STATE@", &shell_quote(&values.state.to_string_lossy()))
+        .replace(
+            "@EXE@",
+            &posix_quote(&shell::posix_path(Path::new(values.self_exe))),
+        )
+        .replace("@EXEC_PATH@", &posix_quote(values.exec_path))
+        .replace("@STATE@", &posix_quote(&shell::posix_path(values.state)))
         .replace("@SESSION_VARIABLE@", SESSION_VARIABLE)
         .replace("@PORT_VARIABLE@", PORT_VARIABLE)
         .replace("@KEY_VARIABLE@", KEY_VARIABLE)
@@ -396,9 +389,18 @@ fn exec_path(git: &Runner) -> Result<String> {
     let Some(stdout) = probe_run(git, &["--exec-path"])? else {
         bail!("`git --exec-path` gave no path");
     };
-    let path = String::from_utf8(stdout)?;
-    let path = path.trim();
-    if !path.starts_with('/') {
+    parse_exec_path(&String::from_utf8(stdout)?)
+}
+
+/// The exec path `git --exec-path` printed, which the dispatcher compares with the
+/// `GIT_EXEC_PATH` git exports, so it is kept as printed: an absolute path of a POSIX shell, or
+/// with a drive letter, as git for Windows prints one.
+fn parse_exec_path(output: &str) -> Result<String> {
+    let path = output.trim();
+    let bytes = path.as_bytes();
+    let drive =
+        bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/';
+    if !path.starts_with('/') && !drive {
         bail!("`git --exec-path` gave no path");
     }
     Ok(path.to_string())
@@ -517,9 +519,9 @@ fn system_config_files(git: &Runner) -> Vec<PathBuf> {
     let mut files = Vec::new();
     if let Ok(Some(stdout)) = run_probe(git, &mut system_file_probe(git)) {
         let path = String::from_utf8_lossy(&stdout);
-        let path = path.trim();
-        if path.starts_with('/') {
-            files.push(PathBuf::from(path));
+        let path = PathBuf::from(path.trim());
+        if path.is_absolute() {
+            files.push(path);
         }
     }
     let listing = probe_run(
@@ -538,7 +540,6 @@ fn system_config_files(git: &Runner) -> Vec<PathBuf> {
 /// the user's, the repository's nor the command line's: `<scope>\0file:<path>\0<entry>\0`, again
 /// and again.
 fn other_scope_files(output: &[u8]) -> Vec<PathBuf> {
-    use std::os::unix::ffi::OsStrExt;
     let fields: Vec<&[u8]> = output.split(|b| *b == 0).collect();
     fields
         .chunks(3)
@@ -550,8 +551,7 @@ fn other_scope_files(output: &[u8]) -> Vec<PathBuf> {
                 return None;
             }
             let path = origin.strip_prefix(b"file:")?;
-            path.starts_with(b"/")
-                .then(|| PathBuf::from(std::ffi::OsStr::from_bytes(path)))
+            names::path_from_name_bytes(path).filter(|path| path.is_absolute())
         })
         .collect()
 }
@@ -569,7 +569,7 @@ fn write_dir(root: &Path, names: &BTreeSet<String>, script: &str) -> Result<Path
         fs::create_dir_all(root).with_context(|| format!("creating {}", root.display()))?;
         if dir.exists() {
             // Something else changed it: made writable again, it is written anew.
-            let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o755));
+            let _ = platform::set_read_only(&dir, false);
             fs::remove_dir_all(&dir).with_context(|| format!("removing {}", dir.display()))?;
         }
         write_new(root, &dir, names, script)?;
@@ -578,14 +578,12 @@ fn write_dir(root: &Path, names: &BTreeSet<String>, script: &str) -> Result<Path
     Ok(dir)
 }
 
-/// Whether `dir` holds exactly an executable copy of `script` under each of `names`.
+/// Whether `dir` holds exactly a copy of `script` git would run under each of `names`.
 fn holds(dir: &Path, names: &BTreeSet<String>, script: &str) -> bool {
     names.iter().all(|name| {
         let path = dir.join(name);
-        let executable = path
-            .metadata()
-            .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0);
-        executable && fs::read(&path).is_ok_and(|body| body == script.as_bytes())
+        platform::is_hook_script(&path)
+            && fs::read(&path).is_ok_and(|body| body == script.as_bytes())
     })
 }
 
@@ -607,7 +605,7 @@ fn write_new(root: &Path, dir: &Path, names: &BTreeSet<String>, script: &str) ->
             let mut file = fs::File::create(&path)?;
             file.write_all(script.as_bytes())?;
             file.sync_all()?;
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o555))?;
+            platform::set_read_only(&path, true)?;
         }
         Ok(())
     })();
@@ -624,22 +622,14 @@ fn write_new(root: &Path, dir: &Path, names: &BTreeSet<String>, script: &str) ->
         let _ = fs::remove_dir_all(&staging);
     }
     placed.with_context(|| format!("writing {}", dir.display()))?;
-    fs::set_permissions(dir, fs::Permissions::from_mode(0o555))?;
+    platform::set_read_only(dir, true)?;
     Ok(())
 }
 
 /// Moves the directory's modification time to now, which is what [`remove_stale`] goes by: a
 /// directory a daemon still starts sessions with is never stale, however long ago it was written.
 fn mark_in_use(dir: &Path) {
-    use std::os::unix::ffi::OsStrExt;
-    let Ok(path) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else {
-        return;
-    };
-    // SAFETY: a valid C string, and a null `times` sets both times to now, which the owner may do
-    // whatever the directory's mode is.
-    unsafe {
-        libc::utimes(path.as_ptr(), std::ptr::null());
-    }
+    let _ = platform::set_dir_modified(dir, SystemTime::now());
 }
 
 /// Removes the directories under `root` other than `keep` — another content's, or a staging
@@ -655,7 +645,7 @@ fn remove_stale(root: &Path, keep: &Path) {
             continue;
         }
         if older_than(&entry, now, STALE_AFTER) {
-            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o755));
+            let _ = platform::set_read_only(&path, false);
             let _ = fs::remove_dir_all(&path);
         }
     }

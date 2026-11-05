@@ -8,13 +8,14 @@ import { errorAlerts } from "../alerts/errorAlerts";
 import type { PlatformAdapter } from "../../platform";
 import { PlatformProvider } from "../../platform/react";
 import { ExternalLink } from "./ExternalLink";
+import { BROWSER_HOST } from "../../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const URL = "https://example.com/guide";
 
 afterEach(() => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }));
 
-function mount(element: React.ReactNode, platform: PlatformAdapter = { kind: "browser" }): HTMLAnchorElement {
+function mount(element: React.ReactNode, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }): HTMLAnchorElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -35,7 +36,7 @@ it("keeps a real destination, visible external marker and accessible description
 it("routes native opening through the platform, with one pending activation and no navigation", async () => {
   let finish!: () => void;
   const open = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
-  const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", links: { open } });
+  const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", host: BROWSER_HOST, links: { open } });
   const click = new MouseEvent("click", { bubbles: true, cancelable: true });
   act(() => { anchor.focus(); anchor.dispatchEvent(click); });
   expect(click.defaultPrevented).toBe(true);
@@ -51,7 +52,7 @@ it("routes native opening through the platform, with one pending activation and 
 it("honours a caller's opening flow and its external pending state", async () => {
   const platformOpen = vi.fn();
   const customOpen = vi.fn();
-  const anchor = mount(<ExternalLink href={URL} onOpen={customOpen}>Guide</ExternalLink>, { kind: "tauri", links: { open: platformOpen } });
+  const anchor = mount(<ExternalLink href={URL} onOpen={customOpen}>Guide</ExternalLink>, { kind: "tauri", host: BROWSER_HOST, links: { open: platformOpen } });
   await act(async () => anchor.click());
   expect(customOpen).toHaveBeenCalledExactlyOnceWith(URL);
   expect(platformOpen).not.toHaveBeenCalled();
@@ -72,7 +73,7 @@ it("shows a decorative spinner before the label of a pending button link, and no
 
 it("reports a failed opener with localized copy, the destination as plain text and the original cause", async () => {
   const cause = new Error("Browser launch failed");
-  const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", links: { open: vi.fn().mockRejectedValue(cause) } });
+  const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", host: BROWSER_HOST, links: { open: vi.fn().mockRejectedValue(cause) } });
   await act(async () => anchor.click());
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("The link did not open in a browser. Its address is shown below.");
@@ -82,7 +83,7 @@ it("reports a failed opener with localized copy, the destination as plain text a
 });
 
 it("prevents native-window navigation without a platform opener and refuses unsafe destinations", async () => {
-  const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri" });
+  const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", host: BROWSER_HOST });
   const click = new MouseEvent("click", { bubbles: true, cancelable: true });
   await act(async () => anchor.dispatchEvent(click));
   expect(click.defaultPrevented).toBe(true);

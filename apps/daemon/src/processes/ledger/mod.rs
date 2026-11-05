@@ -1,7 +1,7 @@
 //! The processes each agent launch started, wherever they went, and stopping them when the launch
 //! ends. Agent CLIs run every shell command in a terminal session of its own (`setsid`), so what a
 //! command leaves running — a dev server, a preview, a watcher — is out of reach of the sweep of the
-//! agent's own session (`crate::processes::leader`) and, once its shell exits, reparented away from
+//! agent's own session (`crate::platform::proc`) and, once its shell exits, reparented away from
 //! the agent too. The ledger follows those processes itself, from the process table alone, without
 //! the agent having to do or remember anything; and it never stops a process it cannot attribute
 //! to the launch being ended.
@@ -9,7 +9,7 @@
 //! Every launch is tagged ([`ProcessTag`]: [`TAG_VARIABLE`] in the agent's environment, which its
 //! descendants inherit), and a dedicated thread reads the process table every
 //! [`SCAN_INTERVAL`] while there is anything to follow, attributing processes to launches by the
-//! rules in `attribute.rs`. A process is told by its pid and start time (`table::Identity`), and
+//! rules in `attribute.rs`. A process is told by its pid and start time ([`crate::platform::proc::ProcessIdentity`]), and
 //! every signal checks the start time again just before it is sent.
 //!
 //! The processes of a launch are stopped when its agent process ends ([`ProcessLedger::end_launch`],
@@ -35,7 +35,8 @@
 //! a shell left running in the background is never attributed when that shell exits before a scan
 //! has seen it: its chain no longer reaches the launch, the shell's session was never recorded, and
 //! there is no tag to read. It is neither listed nor stopped with the launch.
-//! A process that outlives `SIGKILL` (one in an uninterruptible sleep) is tried again only after
+//! A process that outlives `SIGKILL` (one in an uninterruptible sleep), or that the system refuses
+//! to end (one running with more rights than the daemon), is tried again only after
 //! [`STUBBORN_RETRY`] or once another launch ends.
 
 mod attribute;
@@ -58,11 +59,14 @@ use std::time::{Duration, Instant};
 use attribute::{Book, Launch, ENDED};
 use table::{EnvTag, Identity};
 
+use crate::platform::proc::{ChildHandle, ContainerId, Containment, ProcessId};
 use crate::protocol::{ProcessCount, ProcessTree};
 
+pub use crate::platform::proc::TAG_VARIABLE;
 pub use carry::HeldForLaunch;
-pub use table::TAG_VARIABLE;
-pub use trees::MoveRefused;
+#[cfg(test)]
+pub(crate) use trees::AGENT_CONSOLE_OVERRIDE;
+pub use trees::{MoveRefused, SharesAgentConsole, TreesStopped};
 
 /// How often the table is read while there is anything to follow.
 const SCAN_INTERVAL: Duration = Duration::from_secs(2);
@@ -77,8 +81,8 @@ const STOP_PASSES: usize = 3;
 /// launch, a keep and the reconcile at start write at once.
 const WRITE_DEBOUNCE: Duration = Duration::from_secs(10);
 
-/// How long a process found running after a `SIGKILL` is left before it is tried again, unless a
-/// launch ends first.
+/// How long a process found running after a `SIGKILL`, or that the system refused to kill, is
+/// left before it is tried again, unless a launch ends first.
 const STUBBORN_RETRY: Duration = Duration::from_secs(5 * 60);
 
 /// Takes [`TAG_VARIABLE`] out of the daemon's own environment. A daemon started from an agent's
@@ -89,11 +93,12 @@ pub fn forget_inherited_tag() {
     std::env::remove_var(TAG_VARIABLE);
 }
 
-/// What one launch's processes carry in their environment, as [`TAG_VARIABLE`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What tells one launch's processes from any other's: the tag they carry in their environment,
+/// as [`TAG_VARIABLE`], and the containment the host keeps them in where it lists their members.
+#[derive(Debug, Clone)]
 pub struct ProcessTag {
-    instance: String,
     launch: String,
+    containment: Arc<Containment>,
 }
 
 impl ProcessTag {
@@ -101,9 +106,9 @@ impl ProcessTag {
         &self.launch
     }
 
-    /// The variable's value: `<instance id>:<launch id>`.
-    pub fn value(&self) -> String {
-        format!("{}:{}", self.instance, self.launch)
+    /// What the launch's process is started in and taken into once started.
+    pub fn containment(&self) -> &Arc<Containment> {
+        &self.containment
     }
 }
 
@@ -194,7 +199,7 @@ type Listings = HashMap<Identity, HashSet<Identity>>;
 pub struct ProcessLedger {
     instance: String,
     /// The daemon's own pid, which with its ancestors and direct children is never attributed.
-    own: i32,
+    own: ProcessId,
     file: PathBuf,
     book: Mutex<Book>,
     /// Notified whenever a launch leaves the book.
@@ -254,7 +259,7 @@ impl ProcessLedger {
     pub fn new(dir: &Path) -> Arc<Self> {
         Arc::new(Self {
             instance: persist::instance_id(dir),
-            own: std::process::id() as i32,
+            own: ProcessId(std::process::id()),
             file: dir.join(persist::LEDGER_FILE),
             book: Mutex::new(Book::default()),
             launch_left: Condvar::new(),
@@ -340,45 +345,56 @@ impl ProcessLedger {
     }
 
     /// Reserves a launch id for the session `session_id`'s launch about to start, for its agent's
-    /// environment.
-    pub fn begin_launch(self: &Arc<Self>, session_id: &str) -> PendingLaunch {
+    /// environment, with the containment its processes are kept in.
+    pub fn begin_launch(self: &Arc<Self>, session_id: &str) -> std::io::Result<PendingLaunch> {
         let launch = uuid::Uuid::new_v4().to_string();
+        let containment = Arc::new(Containment::create(&self.instance, &launch)?);
         self.book().launches.insert(
             launch.clone(),
             Launch {
                 session_id: Some(session_id.to_string()),
+                containments: vec![containment.clone()],
                 ..Launch::default()
             },
         );
-        PendingLaunch {
+        Ok(PendingLaunch {
             ledger: self.clone(),
             tag: ProcessTag {
-                instance: self.instance.clone(),
                 launch,
+                containment,
             },
-        }
+        })
     }
 
-    /// Follows the launch `launch_id` of the session `session_id`, whose agent process `agent_pid`
-    /// has just been started and is not reaped yet. A launch id not reserved before is followed
-    /// all the same.
-    pub fn launch_started(self: &Arc<Self>, launch_id: &str, session_id: &str, agent_pid: u32) {
-        let pid = agent_pid as i32;
-        let agent = table::start_of(pid).map(|start| Identity { pid, start });
+    /// Follows the launch `launch_id` of the session `session_id`, whose agent process `agent` has
+    /// just been started and is not reaped yet. A launch id not reserved before is followed all
+    /// the same.
+    pub fn launch_started(
+        self: &Arc<Self>,
+        launch_id: &str,
+        session_id: &str,
+        agent: &ChildHandle,
+    ) {
+        let pid = agent.pid();
+        let session = ContainerId(pid.0);
+        let agent = table::start_of(pid).map(|start_micros| Identity { pid, start_micros });
         let mut book = self.book();
         // A scan since the launch id was reserved may have found the agent, which carries the
         // tag, and what runs in its terminal session, and taken them for the launch's own.
         book.attributed
-            .retain(|id, attributed| id.pid != pid && attributed.sid != pid);
+            .retain(|id, attributed| id.pid != pid && attributed.sid != Some(session));
         for launch in book.launches.values_mut() {
-            launch.sessions.remove(&pid);
+            launch.sessions.remove(&session);
         }
         let launch = book.launches.entry(launch_id.to_string()).or_default();
         launch.session_id = Some(session_id.to_string());
         launch.started = true;
         launch.agent = agent;
         if let Some(agent) = agent {
-            book.horizon = Some(book.horizon.map_or(agent.start, |at| at.min(agent.start)));
+            book.horizon = Some(
+                book.horizon
+                    .map_or(agent.start_micros, |at| at.min(agent.start_micros)),
+            );
         }
         // What an earlier launch of the session carried over while none was running.
         let held: Vec<String> = book
@@ -528,6 +544,7 @@ impl ProcessLedger {
         // for an ended launch's by a later scan. The first scan forgets what is gone, and drops
         // what would never be attributed and the sessions it cannot prove are the ones recorded.
         let before = persisted.read_back(&mut self.book());
+        self.reopen_containments(&persisted);
         let Some(table) = self.scan(true) else {
             tracing::warn!("listing processes failed; what a previous run left is not stopped");
             return;
@@ -555,7 +572,7 @@ impl ProcessLedger {
                     attribute::record_kept_session(&mut book, &table, proc);
                 }
             }
-            let kept_sessions: HashSet<i32> = book.kept_sessions.keys().copied().collect();
+            let kept_sessions: HashSet<ContainerId> = book.kept_sessions.keys().copied().collect();
             if let Some(ended) = book.launches.get_mut(ENDED) {
                 ended.sessions.retain(|sid, _| !kept_sessions.contains(sid));
             }
@@ -567,6 +584,27 @@ impl ProcessLedger {
             }
         }
         self.persist(true);
+    }
+
+    /// Opens again the containments of the launches a previous run's ledger file attributed
+    /// processes to, for those the host lists the members of: what is in them is held for an
+    /// ended launch.
+    fn reopen_containments(&self, persisted: &persist::Persisted) {
+        let launches: HashSet<&str> = persisted
+            .attributed
+            .iter()
+            .map(|process| process.launch.as_str())
+            .filter(|launch| *launch != ENDED)
+            .collect();
+        let reopened: Vec<Arc<Containment>> = launches
+            .into_iter()
+            .filter_map(|launch| Containment::reopen(&self.instance, launch))
+            .filter(|containment| containment.members().is_some())
+            .map(Arc::new)
+            .collect();
+        if let Some(ended) = self.book().launches.get_mut(ENDED) {
+            ended.containments.extend(reopened);
+        }
     }
 
     /// Writes the ledger file if what a restart needs changed since it was last written; unless

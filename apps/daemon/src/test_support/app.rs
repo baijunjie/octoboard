@@ -45,8 +45,8 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
 }
 
 /// What requests reach the host through in a test: the system `git` over [`isolated_git_env`], a
-/// Trash that deletes, and a plain `bash` over [`shell_env`] for a shell terminal, so no test runs
-/// the user's login shell or fills their Trash.
+/// Trash that deletes, and a plain shell over [`shell_env`] for a shell terminal ([`test_shell`]),
+/// so no test runs the user's profile or fills their Trash.
 pub(crate) fn host_tools() -> crate::host_tools::Tools {
     crate::host_tools::Tools {
         git: || {
@@ -63,21 +63,59 @@ pub(crate) fn host_tools() -> crate::host_tools::Tools {
             }
             .map_err(|err| crate::hostfs::trash::TrashFailure::new(path, err))
         },
-        shell: || crate::terminal::shell::ShellCommand {
-            program: "/bin/bash".to_string(),
-            args: ["--noprofile", "--norc", "-i"].map(str::to_string).to_vec(),
-        },
+        shell: test_shell,
         shell_env: || Ok(shell_env()),
         scheduled_shell_env: || Ok(shell_env()),
     }
+}
+
+/// The shell a test's shell terminal runs: an interactive `bash` reading no profile on Unix; on
+/// Windows the shell the daemon starts there (`platform::shell::login_shell`), PowerShell on every
+/// host a test runs on, reading no profile and keeping no history.
+fn test_shell() -> crate::platform::shell::ShellCommand {
+    #[cfg(unix)]
+    return posix_shell();
+    #[cfg(windows)]
+    return crate::platform::shell::ShellCommand {
+        program: crate::platform::shell::login_shell().program,
+        args: [
+            "-NoLogo",
+            "-NoProfile",
+            "-NoExit",
+            "-Command",
+            "Set-PSReadLineOption -HistorySaveStyle SaveNothing",
+        ]
+        .map(Into::into)
+        .to_vec(),
+    };
+}
+
+/// An interactive `bash` reading no profile (Git Bash on Windows), for a test whose shell terminal
+/// needs a POSIX shell on every host.
+pub(crate) fn posix_shell() -> crate::platform::shell::ShellCommand {
+    crate::platform::shell::ShellCommand {
+        program: super::bash(),
+        args: ["--noprofile", "--norc", "-i"].map(Into::into).to_vec(),
+    }
+}
+
+/// What is typed into a test's shell terminal, Enter included: `bash` into the Unix one, or
+/// `powershell` into the Windows one, PowerShell ([`test_shell`]).
+pub(crate) fn typed(bash: &str, powershell: &str) -> Vec<u8> {
+    format!("{}\r", if cfg!(windows) { powershell } else { bash }).into_bytes()
 }
 
 /// The environment a test's shell terminal starts in: nothing of the developer's, a prompt that
 /// is plain text, and no history written anywhere. It is also the environment a launch and the
 /// Claude Code model listing resolve its configuration in, so its home is a directory that does
 /// not exist, which keeps a test from reading the developer's own `~/.claude`. That home reaches
-/// a test's shell terminals as well; none relies on one.
+/// a test's shell terminals as well; none relies on one. On Windows it also names the system's
+/// directory, without which Windows PowerShell does not start.
 pub(crate) fn shell_env() -> HashMap<String, String> {
+    let system_root = cfg!(windows)
+        .then(|| std::env::var("SystemRoot").ok())
+        .flatten()
+        .map(|root| ("SystemRoot".to_string(), root));
     [
         ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
         ("PS1", "$ "),
@@ -88,6 +126,7 @@ pub(crate) fn shell_env() -> HashMap<String, String> {
     ]
     .into_iter()
     .map(|(key, value)| (key.to_string(), value.to_string()))
+    .chain(system_root)
     .collect()
 }
 

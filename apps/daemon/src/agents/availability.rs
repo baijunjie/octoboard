@@ -127,14 +127,7 @@ mod tests {
     #[test]
     fn an_available_agent_shows_its_exported_directory() {
         let dir = crate::test_support::ScratchDir::new("availability-test-bin");
-        let claude = dir.join("claude");
-        std::fs::write(&claude, "#!/bin/sh\n").expect("fake claude");
-        let mut perms = std::fs::metadata(&claude).expect("metadata").permissions();
-        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o700);
-        std::fs::set_permissions(&claude, perms).expect("chmod fake claude");
-
-        let mut env = HashMap::new();
-        env.insert("PATH".to_string(), dir.to_string_lossy().into_owned());
+        let mut env = crate::test_support::fake_agent(&dir, "claude", "");
         env.insert(
             "CLAUDE_CONFIG_DIR".to_string(),
             "/custom/claude-dir".to_string(),
@@ -161,7 +154,10 @@ mod tests {
     fn with_nothing_exported_the_default_falls_back_to_the_agents_own_default() {
         let mut env = HashMap::new();
         env.insert("PATH".to_string(), String::new());
-        env.insert("HOME".to_string(), "/snapshot-home".to_string());
+        env.insert(
+            "HOME".to_string(),
+            crate::test_support::host_path("/snapshot-home"),
+        );
 
         let result = determine(&env);
         let codex_entry = result
@@ -171,7 +167,7 @@ mod tests {
         assert_eq!(codex_entry.availability, Availability::Unavailable);
         assert_eq!(
             codex_entry.default_account_dir,
-            Some("/snapshot-home/.codex".to_string())
+            Some(crate::test_support::host_path("/snapshot-home/.codex"))
         );
     }
 

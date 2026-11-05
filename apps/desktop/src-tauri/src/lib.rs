@@ -1,23 +1,29 @@
 //! The desktop application's Rust-side shell: it launches `octoboardd` as a sidecar, hands the
-//! window the daemon's port and key as `?port=` and `?key=` query parameters before the window is
-//! created, brings the daemon back when it dies, and offers the UI the few native capabilities it
-//! cannot have itself. No IPC command carries daemon traffic: the UI talks to the daemon over
-//! WebSocket (see "Why the daemon is split out" in `docs/architecture.md`).
+//! window the daemon's port and key as `?port=` and `?key=` query parameters (and the host's facts as
+//! `?host=`, see `host_facts`) before the window is created, brings the daemon back when it dies, and
+//! offers the UI the few native capabilities it cannot have itself. No IPC command carries daemon
+//! traffic: the UI talks to the daemon over WebSocket (see "Why the daemon is split out" in
+//! `docs/architecture.md`).
 //!
 //! The modules, the IPC surface and where new code goes are in `docs/structure/desktop.md`.
 
 mod background;
+mod chrome;
 mod configuration_file;
 mod diagnostics;
 mod directory_picker;
 mod exit;
+mod host_facts;
+mod languages;
+mod lifecycle;
 mod menu;
 mod notification_settings;
-#[cfg(target_os = "macos")]
 mod page_isolation;
 mod permissions;
 mod recovery;
 mod sidecar;
+// The panes it opens are those of the macOS privacy grants and notifications.
+#[cfg(target_os = "macos")]
 mod system_settings;
 mod tray;
 mod updater;
@@ -26,32 +32,26 @@ mod window_state;
 use std::thread;
 use std::time::Duration;
 
-#[cfg(target_os = "macos")]
-use tauri::{
-    window::{Effect, EffectsBuilder},
-    LogicalPosition, TitleBarStyle,
-};
 use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use background::BackgroundState;
 use diagnostics::diagnostic;
-#[cfg(target_os = "macos")]
-use exit::install_application_should_terminate_override;
-use exit::{
-    confirm_quit, frontend_exit_heartbeat, request_quit, should_let_quit_through, ExitState,
-};
-use menu::{build_menu, set_menu_labels, ui_event_for, Labels, DEFAULT_SETTINGS_ACCELERATOR};
+use exit::{confirm_quit, frontend_exit_heartbeat, request_quit, ExitState};
+use menu::{set_menu_labels, ui_event_for};
 use sidecar::{mark_daemon_stopping, start_daemon, window_params, DaemonState};
 
 /// The label of the one window the application opens.
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
+
+/// The builder the main window is made with, which the platform modules add to.
+pub(crate) type MainWindowBuilder<'a> = WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Before anything the user can act through: see the function's own doc comment.
     permissions::capture_launch_state();
 
-    let app = tauri::Builder::default()
+    let app = lifecycle::register_first(tauri::Builder::default())
         .plugin(tauri_plugin_shell::init())
         // Carries no daemon traffic either: the frontend asks for a notification, the plugin
         // shows it.
@@ -61,10 +61,11 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         // The system's file and directory dialogs; the page is given none of the plugin's own commands.
         .plugin(tauri_plugin_dialog::init())
-        // Driven from `updater.rs` through its own commands; the page is given none of the plugin's own.
+        // Driven from `updater/` through its own commands; the page is given none of the plugin's own.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ExitState::default())
         .manage(BackgroundState::default())
+        .manage(lifecycle::LifecycleState::default())
         .manage(DaemonState::default())
         .manage(tray::TrayState::default())
         .manage(updater::UpdaterState::default())
@@ -76,10 +77,10 @@ pub fn run() {
             tray::set_tray_menu,
             background::bring_to_front,
             background::set_run_in_background,
-            permissions::macos_permissions_status,
-            permissions::macos_request_permission,
-            permissions::macos_open_privacy_settings,
-            notification_settings::macos_open_notification_settings,
+            permissions::permissions_status,
+            permissions::request_permission,
+            permissions::open_privacy_settings,
+            notification_settings::open_notification_settings,
             configuration_file::save_configuration_file,
             configuration_file::open_configuration_file,
             directory_picker::pick_directory,
@@ -109,20 +110,9 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            app.set_menu(build_menu(
-                app.handle(),
-                &Labels::default(),
-                DEFAULT_SETTINGS_ACCELERATOR,
-            )?)?;
+            menu::install(app.handle())?;
             tray::create(app.handle())?;
-            #[cfg(target_os = "macos")]
-            background::show_on_activation(app.handle());
-            // This closure runs once the event loop (and with it, tao's `NSApplicationDelegate`)
-            // is up and running — `App::run` calls it on the runtime's `Ready` event — so the
-            // delegate this installs onto already exists by now. See the function's own doc
-            // comment for why the Dock icon's own Quit needs this at all.
-            #[cfg(target_os = "macos")]
-            install_application_should_terminate_override(app.handle());
+            lifecycle::install(app.handle());
             // The daemon is started on a thread of its own, with retries that can take most of a
             // minute in all, and the window opens once it has. A daemon that fails to start
             // (another instance already holds its lock, a corrupt database, ...) must not leave the
@@ -149,12 +139,11 @@ pub fn run() {
 
     app.run(|app_handle, event| match event {
         RunEvent::ExitRequested { api, .. } => {
-            if should_let_quit_through(app_handle) {
-                return;
+            // A deferral has already emitted `exit-requested`, or a held update's install has
+            // started; `prevent_exit` is this gesture's own mechanism-specific line.
+            if exit::on_exit_requested(app_handle) {
+                api.prevent_exit();
             }
-            // `should_let_quit_through` has already emitted `exit-requested`; `prevent_exit` is
-            // this gesture's own mechanism-specific line.
-            api.prevent_exit();
         }
         // Every quit path ends here: Cmd+Q and the menu's Quit through `app.exit`, the Dock's Quit
         // and a logout through AppKit's `applicationWillTerminate:`, the window's close when it
@@ -163,13 +152,12 @@ pub fn run() {
             // A recovery still running must not start a daemon the application would leave behind.
             mark_daemon_stopping(app_handle);
             window_state::save(app_handle);
+            // A held update is installed here only for a quit let through; the system ending the
+            // session on Windows reaches this with no `ExitRequested` and leaves it for the next
+            // start.
+            exit::install_on_exit(app_handle);
         }
-        // Opening the app again while it runs in the background, from the Finder, Spotlight or the
-        // Dock, brings the window back. Answered with a window still on screen too: one closed in
-        // fullscreen stays visible while it leaves fullscreen, and this cancels its pending hide.
-        #[cfg(target_os = "macos")]
-        RunEvent::Reopen { .. } => background::show_main_window(app_handle),
-        _ => {}
+        _ => lifecycle::on_run_event(app_handle, &event),
     });
 }
 
@@ -200,73 +188,43 @@ fn percent_encode_query_value(input: &str) -> String {
 /// launch reads as a hung application rather than a slow one.
 const REVEAL_SAFETY_NET: Duration = Duration::from_secs(4);
 
-/// The traffic lights' inset from the window's top-left, in points, as tao applies it to the close
-/// button. `Y` was tuned by eye so the buttons sit centred in the UI's 40 pt top bar.
-#[cfg(target_os = "macos")]
-const TRAFFIC_LIGHT_X: f64 = 16.0;
-#[cfg(target_os = "macos")]
-const TRAFFIC_LIGHT_Y: f64 = 21.0;
-
-/// The system's preferred languages, most preferred first, comma-separated, for the UI to choose
-/// its language from. The webview cannot tell it: WKWebView's `navigator.languages` holds only the
-/// first preference, so a user whose first language Octoboard does not offer would get the
-/// fallback even when a later preference is offered. A snapshot at launch, as macOS applications
-/// generally take one.
-#[cfg(target_os = "macos")]
-fn preferred_languages() -> Option<String> {
-    let languages = objc2_foundation::NSLocale::preferredLanguages();
-    let tags: Vec<String> = languages.iter().map(|tag| tag.to_string()).collect();
-    (!tags.is_empty()).then(|| tags.join(","))
-}
-
-#[cfg(not(target_os = "macos"))]
-fn preferred_languages() -> Option<String> {
-    None
-}
-
 /// Opens the main window for the daemon as it is when the window is built. On the main thread.
 fn open_window_for(app: &tauri::AppHandle) {
-    // The window's webview gets its content rule list before the window exists, which
-    // `page_isolation` can only report back asynchronously, so the window is opened from
-    // its callback.
-    #[cfg(target_os = "macos")]
-    {
-        let handle = app.clone();
-        let mtm = objc2::MainThreadMarker::new().expect("this runs on the main thread");
-        page_isolation::with_configuration(mtm, move |configuration| {
-            if let Err(err) = open_main_window(&handle, configuration) {
-                diagnostic!("cannot open the main window: {err}");
-                handle.exit(1);
-            }
-        });
-    }
-    #[cfg(not(target_os = "macos"))]
-    if let Err(err) = open_main_window(app) {
-        diagnostic!("cannot open the main window: {err}");
-        app.exit(1);
-    }
+    // The window's webview gets its isolation before the window exists where the platform lets it,
+    // which `page_isolation` may only be able to report back asynchronously (the content rule list
+    // on macOS), so the window is opened from its callback.
+    let handle = app.clone();
+    page_isolation::prepare(move |configuration| {
+        if let Err(err) = open_main_window(&handle, configuration) {
+            diagnostic!("cannot open the main window: {err}");
+            handle.exit(1);
+        }
+    });
 }
 
 fn open_main_window(
     app: &tauri::AppHandle,
-    #[cfg(target_os = "macos")] configuration: objc2::rc::Retained<
-        objc2_web_kit::WKWebViewConfiguration,
-    >,
+    configuration: page_isolation::Configuration,
 ) -> tauri::Result<()> {
     let daemon_query = window_params(app);
-    let query = match preferred_languages() {
+    let host = percent_encode_query_value(&host_facts::current_json());
+    let query = match languages::preferred_languages() {
         Some(languages) => format!(
-            "{daemon_query}&languages={}",
+            "{daemon_query}&host={host}&languages={}",
             percent_encode_query_value(&languages)
         ),
-        None => daemon_query.clone(),
+        None => format!("{daemon_query}&host={host}"),
     };
     let url = WebviewUrl::App(format!("index.html?{query}").into());
     // Decided before the window exists, from the saved frame and the displays connected now, so the
     // window is placed while it is still hidden and is never seen moving into place.
     let (displays, main_display) = window_state::displays(app);
-    let initial =
-        window_state::initial_window(window_state::load(app).as_ref(), &displays, main_display);
+    let initial = window_state::initial_window(
+        window_state::load(app).as_ref(),
+        &displays,
+        main_display,
+        chrome::system_frame(),
+    );
 
     let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, url)
         .title(menu::APP_NAME)
@@ -287,33 +245,12 @@ fn open_main_window(
         Some((x, y)) => builder.position(x, y),
         None => builder,
     };
-    // The configuration `page_isolation` prepared, with its content rule list on it.
-    #[cfg(target_os = "macos")]
-    let builder = builder.with_webview_configuration(configuration);
-
-    // The UI draws a top bar across the whole window (`TitleBar` in `packages/ui`), so the native
-    // titlebar's background and text go and the traffic lights float over the page.
-    // `TRAFFIC_LIGHT_X` / `TRAFFIC_LIGHT_Y` centre them in the bar's `--title-bar-height`, and
-    // `TRAFFIC_LIGHT_INSET` in `packages/ui/src/platform/tauri.ts` is the width the bar keeps clear
-    // for them; the three move together. The window keeps its title for the Dock and Mission
-    // Control.
-    //
-    // The window is also translucent: a sidebar-material `NSVisualEffectView` behind a transparent
-    // webview, which is why the UI paints nothing of its own behind the top bar and the left rail
-    // (the window chrome) and paints the content panel opaquely (`--window-background` in
-    // `packages/ui/src/style.css`). The material follows the window's appearance, which the UI
-    // pushes before it reveals the window (`packages/ui/src/main.tsx`), and the window stays hidden
-    // until then, so neither the material nor the transparent webview is ever seen in the wrong
-    // appearance. Transparency needs `macos-private-api` (`Cargo.toml`, `tauri.conf.json`).
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .title_bar_style(TitleBarStyle::Overlay)
-        .hidden_title(true)
-        .traffic_light_position(LogicalPosition::new(TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y))
-        .transparent(true)
-        .effects(EffectsBuilder::new().effect(Effect::Sidebar).build());
+    let builder = page_isolation::apply(builder, configuration);
+    let builder = chrome::decorate(builder);
 
     let window = builder.build()?;
+    page_isolation::install(&window);
+    chrome::install(&window);
     // A recovery that finished while the window was being built found no window to point at the
     // restarted daemon, so the window is pointed at it here instead.
     if window_params(app) != daemon_query {

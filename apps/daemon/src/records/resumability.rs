@@ -262,7 +262,8 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&orphan).unwrap();
-        std::os::unix::fs::symlink(dir.join("elsewhere"), account.join("projects/linked")).unwrap();
+        crate::test_support::symlink(dir.join("elsewhere"), account.join("projects/linked"))
+            .unwrap();
         assert_eq!(
             presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
             Unknown
@@ -521,7 +522,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("elsewhere")).unwrap();
         std::fs::create_dir_all(&account).unwrap();
         #[cfg(unix)]
-        std::os::unix::fs::symlink(dir.join("elsewhere"), account.join("sessions")).unwrap();
+        crate::test_support::symlink(dir.join("elsewhere"), account.join("sessions")).unwrap();
         assert_eq!(judged(&own), Resumability::Unknown);
         assert!(!needs_unarchive(&own));
 
@@ -598,7 +599,7 @@ mod tests {
         let account = dir.join("account");
         std::fs::create_dir_all(dir.join("elsewhere")).unwrap();
         std::fs::create_dir_all(&account).unwrap();
-        std::os::unix::fs::symlink(dir.join("elsewhere"), account.join("projects")).unwrap();
+        crate::test_support::symlink(dir.join("elsewhere"), account.join("projects")).unwrap();
         assert_eq!(
             judged(&session(AgentId::CLAUDE, CLAUDE_ID, Some(&account))),
             Resumability::Unknown
@@ -606,7 +607,7 @@ mod tests {
         // A link inside the records directory could hide the record as well.
         let inner = dir.join("inner");
         std::fs::create_dir_all(inner.join("projects")).unwrap();
-        std::os::unix::fs::symlink(dir.join("elsewhere"), inner.join("projects/work")).unwrap();
+        crate::test_support::symlink(dir.join("elsewhere"), inner.join("projects/work")).unwrap();
         assert_eq!(
             judged(&session(AgentId::CLAUDE, CLAUDE_ID, Some(&inner))),
             Resumability::Unknown

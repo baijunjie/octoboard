@@ -37,8 +37,10 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         generic: &[],
     },
     instruction_file: "TEST_AGENT.md",
+    instruction_import_prefix: None,
     tool_name_prefix: "mcp__",
     ask_question_tool: None,
+    quit_keys: None,
     capabilities: Capabilities {
         preallocates_session_id: false,
         hook_script: false,

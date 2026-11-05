@@ -27,3 +27,18 @@ describe("shellTerminalTitle", () => {
     expect(shellTerminalTitle({ title, renamed: true })).toBe(title);
   });
 });
+
+describe("shellTerminalTitle on a Windows host", () => {
+  it.each([
+    ["C:\\Users\\dev\\octoboard", "octoboard"],
+    ["C:/Users/dev/octoboard/", "octoboard"],
+    ["user@host: C:\\Users\\dev\\octoboard", "octoboard"],
+    ["host:~\\projects\\octoboard", "octoboard"],
+    ["C:\\", "C:\\"],
+    ["\\\\server\\share\\dir", "dir"],
+    ["pwsh", "pwsh"],
+    ["vim C:\\tmp\\file", "vim C:\\tmp\\file"],
+  ])("shows %s as %s", (title, expected) => {
+    expect(shellTerminalTitle({ title, renamed: false }, "windows")).toBe(expected);
+  });
+});

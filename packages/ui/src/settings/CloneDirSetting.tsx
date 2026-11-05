@@ -9,8 +9,9 @@ import { useTrimmedField } from "../components/form/useTrimmedField";
 import { Message, useT } from "../i18n/react";
 import { Input, TextField } from "../primitives";
 import { isImeKey } from "../input/imeKey";
-import { abbreviateHome } from "../format/pathDisplay";
+import { display } from "../format/hostPath";
 import { useDaemon, useDaemonStore } from "../store";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { SettingRow } from "./SettingRow";
 import { alertAppDataFailure } from "../components/alerts/raiseError";
 
@@ -27,8 +28,8 @@ export function CloneDirSetting(): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const storedFull = useDaemonStore((s) => s.settings.default_clone_dir);
-  const home = useDaemonStore((s) => s.homeDir);
-  const stored = abbreviateHome(storedFull, home);
+  const paths = useHostPaths();
+  const stored = display(storedFull, paths);
   const [draft, setDraft] = useState(stored);
   const [hovered, setHovered] = useState(false);
   const input = useRef<HTMLInputElement>(null);

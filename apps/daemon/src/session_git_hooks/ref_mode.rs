@@ -9,11 +9,11 @@
 //! whatever happens and writes nothing anywhere.
 
 use std::ffi::{OsStr, OsString};
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
 
 use crate::branch_origin::{CreatedRef, RefReport};
+use crate::platform::names;
 use crate::time::now_millis;
 use crate::wire_path;
 
@@ -33,10 +33,7 @@ pub fn run(
 ) {
     // Out of the process group of the command whose git started this, which the tool that ran it
     // may kill as soon as that command returns.
-    // SAFETY: no arguments, and it only changes this process's own session.
-    unsafe {
-        libc::setsid();
-    }
+    crate::platform::proc::leave_session();
     let Ok(cwd) = std::env::current_dir() else {
         return;
     };
@@ -65,15 +62,15 @@ pub fn report_of(
     unix_time: i64,
 ) -> RefReport {
     RefReport {
-        cwd: wire_path::encode(cwd.as_os_str().as_bytes()),
-        git_dir: git_dir.map(|dir| wire_path::encode(dir.as_bytes())),
-        head: head.map(|head| wire_path::encode(head.as_bytes())),
+        cwd: wire_path::encode(&names::name_bytes(cwd.as_os_str())),
+        git_dir: git_dir.map(|dir| wire_path::encode(&names::name_bytes(dir))),
+        head: head.map(|head| wire_path::encode(&names::name_bytes(head))),
         refs: refs
             .as_chunks::<2>()
             .0
             .iter()
             .map(|[name, oid]| CreatedRef {
-                name: wire_path::encode(name.as_bytes()),
+                name: wire_path::encode(&names::name_bytes(name)),
                 oid: oid.to_string_lossy().into_owned(),
             })
             .collect(),

@@ -7,6 +7,7 @@ import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
 import type { AccountQuota, Event, ClientRequestBody } from "../protocol";
 import type { PlatformAdapter, StatusItemCapability } from "../platform";
 import type { State } from "../store";
+import { BROWSER_HOST } from "../test/hosts";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
@@ -269,7 +270,7 @@ it("keeps the tray update entry in sync even after the update notice is dismisse
   });
   await act(async () => root.render(
     <TestHost daemon={testDaemon()} platform={{
-      kind: "tauri", statusItem,
+      kind: "tauri", host: BROWSER_HOST, statusItem,
       updater: { currentVersion: async () => "1.0.0", check, install: async () => {} },
     }}>
       <UpdatesProvider firstCheckDelayMs={null}><UpdatedHost /></UpdatesProvider>

@@ -1,4 +1,5 @@
 import { ConfigurationFileError } from "./configurationFileError";
+import { browserHost } from "./host";
 import type { PlatformAdapter } from "./index";
 
 /**
@@ -12,6 +13,7 @@ import type { PlatformAdapter } from "./index";
 export function browserPlatform(): PlatformAdapter {
   return {
     kind: "browser",
+    host: browserHost(),
     notifications: typeof Notification === "undefined" ? undefined : webNotifications(),
     clipboard: webClipboard(),
     configurationFile: webConfigurationFile(),

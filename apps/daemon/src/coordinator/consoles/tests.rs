@@ -29,6 +29,7 @@ fn update_console_request(console: &str, edit: impl FnOnce(&mut RequestBody)) ->
 
 /// A create the store cannot write, because the data folder is read-only, is refused as
 /// `store_write_failed` with the `access` cause, and leaves no working directory behind.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_create_the_store_cannot_write_leaves_no_working_directory() {
     use std::os::unix::fs::PermissionsExt;
@@ -96,6 +97,78 @@ async fn a_create_whose_instructions_cannot_be_written_leaves_no_working_directo
     refused.expect_err("the settings are gone");
     assert!(state.store.list_consoles().unwrap().is_empty());
     assert_eq!(std::fs::read_dir(&consoles).unwrap().count(), 0);
+}
+
+/// On a host that makes no file links, a create stores the console with its instruction files as
+/// regular files: `AGENTS.md` with the text, `CLAUDE.md` with Claude Code's import line for it,
+/// and the test provider's file, a provider with no import line, a copy. An update of the user's
+/// text reaches every agent: the copy is rewritten with `AGENTS.md`.
+#[tokio::test]
+async fn a_console_is_created_and_updated_where_the_host_makes_no_file_links() {
+    crate::coordinator::console_workdir::FILE_LINKS_OVERRIDE.set(Some(false));
+    let (state, _dir) = crate::test_support::app_state("coordinator-create-console-no-links");
+    handle(
+        &state,
+        None,
+        RequestBody::CreateConsole {
+            name: "Console".to_string(),
+            default_agent: AgentId::CLAUDE,
+            project_session_agent: None,
+            accounts: PerAgent::default()
+                .with(AgentId::CLAUDE, None)
+                .with(AgentId::CODEX, None)
+                .with(AgentId::GROK, None),
+            launch: Default::default(),
+            project_session_launch: Default::default(),
+            icon: None,
+            console_session_prompt: Some("Be brief.".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+    let consoles = state.store.list_consoles().unwrap();
+    assert_eq!(consoles.len(), 1);
+    let workdir = Path::new(&consoles[0].workdir);
+    let regular_file = |name: &str| {
+        let path = workdir.join(name);
+        assert!(
+            std::fs::symlink_metadata(&path).unwrap().is_file(),
+            "{name}"
+        );
+        std::fs::read_to_string(path).unwrap()
+    };
+    let text = |prompt| {
+        session_tools::console_instructions::console_session_instructions(
+            Some(prompt),
+            &session_tools::role::RoleOptions {
+                ask_as_choices: true,
+                ..Default::default()
+            },
+        )
+    };
+    assert_eq!(regular_file("AGENTS.md"), text("Be brief."));
+    assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+    assert_eq!(regular_file("TEST_AGENT.md"), text("Be brief."));
+
+    handle(
+        &state,
+        None,
+        update_console_request(&consoles[0].id, |request| {
+            let RequestBody::UpdateConsole {
+                console_session_prompt,
+                ..
+            } = request
+            else {
+                unreachable!()
+            };
+            *console_session_prompt = Some(Some("Answer in French.".to_string()));
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(regular_file("AGENTS.md"), text("Answer in French."));
+    assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+    assert_eq!(regular_file("TEST_AGENT.md"), text("Answer in French."));
 }
 
 /// A new console stores its default agent and launch settings; a model or effort is trimmed,

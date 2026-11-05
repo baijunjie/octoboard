@@ -1,8 +1,13 @@
 import { type Account, type Agent } from "../../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
+import { expandHome, type PathStyle, trimTrailingSeparators } from "../../format/hostPath";
 
-export function nextConfigDir(base: string, occupied: string[], home: string): string {
-  const normalize = (path: string) => path.trim().replace(/^~(?=\/|$)/, () => home).replace(/\/+$/, "");
+export function nextConfigDir(base: string, occupied: string[], home: string, style: PathStyle = "unix"): string {
+  // Windows spells one place several ways (either separator, any letter case), which would hide a taken name.
+  const normalize = (path: string) => {
+    const full = trimTrailingSeparators(expandHome(path.trim(), home, style), style);
+    return style === "windows" ? full.replace(/\//g, "\\").toLowerCase() : full;
+  };
   const taken = new Set(occupied.map(normalize));
   let number = 1;
   while (taken.has(normalize(`${base}-${number}`))) number++;

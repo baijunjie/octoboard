@@ -8,6 +8,7 @@ import { t } from "./i18n/language";
 import type { ExitCapability, PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,7 +16,7 @@ afterEach(() => { act(() => { while (errorAlerts.getSnapshot().length) errorAler
 
 const DIAGNOSTIC = "Error: listen EADDRINUSE: address already in use 127.0.0.1:4580";
 
-function mount(screen: React.ReactElement = <DaemonFailedScreen error={DIAGNOSTIC} />, platform: PlatformAdapter = { kind: "browser" }): HTMLElement {
+function mount(screen: React.ReactElement = <DaemonFailedScreen error={DIAGNOSTIC} />, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -57,7 +58,7 @@ it.each([
 ])("has no Quit on %s and registers nothing with the shell, which quits natively", (_name, screen) => {
   const register = vi.fn(() => () => {});
   const exit: ExitCapability = { register, heartbeat: async () => {}, confirmQuit: async () => {} };
-  const container = mount(screen, { kind: "tauri", exit });
+  const container = mount(screen, { kind: "tauri", host: BROWSER_HOST, exit });
   expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain(t("common.quit"));
   expect(register).not.toHaveBeenCalled();
 });
@@ -79,7 +80,7 @@ it("offers Report issue on the no-address screen, after the instructions and a s
 });
 
 it("words the report guidance for a platform that cannot open links without calling the failure a bug", () => {
-  const container = mount(<DaemonFailedScreen error={DIAGNOSTIC} />, { kind: "tauri" });
+  const container = mount(<DaemonFailedScreen error={DIAGNOSTIC} />, { kind: "tauri", host: BROWSER_HOST });
   const panel = container.querySelector('[data-slot="empty-state"]')!;
   expect(panel.querySelector("a[data-external-link]")).toBeNull();
   const guidance = panel.querySelector(':scope > [data-slot="surface"] p')!;

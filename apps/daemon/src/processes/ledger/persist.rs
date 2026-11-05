@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::attribute::{Attributed, Book, ENDED};
 use super::table::Identity;
 use crate::hostfs::replace::{replace_file, Permissions};
+use crate::platform::proc::{ContainerId, ProcessId};
 
 const INSTANCE_FILE: &str = "instance-id";
 pub(super) const LEDGER_FILE: &str = "process-ledger.json";
@@ -48,7 +49,7 @@ pub(super) struct Persisted {
     pub boot: Option<String>,
     #[serde(default)]
     pub attributed: Vec<PersistedProcess>,
-    #[serde(default)]
+    #[serde(default, with = "wire_identities")]
     pub kept: Vec<Identity>,
     #[serde(default)]
     pub kept_sessions: Vec<PersistedSession>,
@@ -72,30 +73,36 @@ impl Persisted {
                 .attributed
                 .iter()
                 .map(|(id, attributed)| PersistedProcess {
-                    pid: id.pid,
-                    start: id.start,
+                    pid: id.pid.0 as i32,
+                    start: id.start_micros,
                     launch: attributed.launch.clone(),
-                    sid: attributed.sid,
+                    sid: attributed.sid.map_or(0, |sid| sid.0 as i32),
                 })
                 .collect(),
             kept: book.kept.iter().copied().collect(),
             kept_sessions: book
                 .kept_sessions
                 .iter()
-                .map(|(&sid, &leader_start)| PersistedSession { sid, leader_start })
+                .map(|(&sid, &leader_start)| PersistedSession {
+                    sid: sid.0 as i32,
+                    leader_start,
+                })
                 .collect(),
             sessions: book
                 .launches
                 .values()
                 .flat_map(|launch| launch.sessions.iter())
-                .map(|(&sid, &leader_start)| PersistedSession { sid, leader_start })
+                .map(|(&sid, &leader_start)| PersistedSession {
+                    sid: sid.0 as i32,
+                    leader_start,
+                })
                 .collect(),
             kept_projects: book
                 .kept_projects
                 .iter()
                 .map(|(id, project)| PersistedKeptProject {
-                    pid: id.pid,
-                    start: id.start,
+                    pid: id.pid.0 as i32,
+                    start: id.start_micros,
                     project: project.clone(),
                 })
                 .collect(),
@@ -103,7 +110,7 @@ impl Persisted {
                 .kept_session_projects
                 .iter()
                 .map(|(&sid, project)| PersistedSessionProject {
-                    sid,
+                    sid: sid.0 as i32,
                     project: project.clone(),
                 })
                 .collect(),
@@ -119,7 +126,7 @@ impl Persisted {
         let sessions = |sessions: &[PersistedSession]| {
             sessions
                 .iter()
-                .map(|session| (session.sid, session.leader_start))
+                .map(|session| (ContainerId(session.sid as u32), session.leader_start))
                 .collect::<Vec<_>>()
         };
         book.read_back_sessions(
@@ -132,8 +139,8 @@ impl Persisted {
         );
         for kept in &self.kept_projects {
             let id = Identity {
-                pid: kept.pid,
-                start: kept.start,
+                pid: ProcessId(kept.pid as u32),
+                start_micros: kept.start,
             };
             if book.kept.contains(&id) {
                 book.kept_projects
@@ -142,9 +149,10 @@ impl Persisted {
             }
         }
         for session in &self.kept_session_projects {
-            if book.kept_sessions.contains_key(&session.sid) {
+            let sid = ContainerId(session.sid as u32);
+            if book.kept_sessions.contains_key(&sid) {
                 book.kept_session_projects
-                    .entry(session.sid)
+                    .entry(sid)
                     .or_insert_with(|| session.project.clone());
             }
         }
@@ -153,7 +161,7 @@ impl Persisted {
             if !book.kept.contains(&id) {
                 book.attributed.entry(id).or_insert(Attributed {
                     launch: ENDED.to_string(),
-                    sid: process.sid,
+                    sid: process.session(),
                 });
             }
         }
@@ -200,9 +208,49 @@ pub(super) struct PersistedProcess {
 impl PersistedProcess {
     pub fn identity(&self) -> Identity {
         Identity {
-            pid: self.pid,
-            start: self.start,
+            pid: ProcessId(self.pid as u32),
+            start_micros: self.start,
         }
+    }
+
+    /// The terminal session it was in, where it was in one: written as 0 when it was in none.
+    fn session(&self) -> Option<ContainerId> {
+        (self.sid > 0).then_some(ContainerId(self.sid as u32))
+    }
+}
+
+/// The wire form of the identities in the ledger file: `{"pid": …, "start": …}`.
+mod wire_identities {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::{Identity, ProcessId};
+
+    #[derive(Serialize, Deserialize)]
+    struct Wire {
+        pid: i32,
+        start: u64,
+    }
+
+    pub fn serialize<S: Serializer>(
+        identities: &[Identity],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(identities.iter().map(|id| Wire {
+            pid: id.pid.0 as i32,
+            start: id.start_micros,
+        }))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Vec<Identity>, D::Error> {
+        Ok(Vec::<Wire>::deserialize(deserializer)?
+            .into_iter()
+            .map(|wire| Identity {
+                pid: ProcessId(wire.pid as u32),
+                start_micros: wire.start,
+            })
+            .collect())
     }
 }
 

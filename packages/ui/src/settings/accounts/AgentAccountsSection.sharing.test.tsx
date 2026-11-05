@@ -48,6 +48,73 @@ it("offers the sharing switch on each owned account and none on the default acco
   expect(container.querySelector('[role="progressbar"]')).toBeNull();
 });
 
+it("locks the sharing switch where the daemon's host cannot make file links, saying how to turn them on there", async () => {
+  const { container: section, set } = mount("Codex");
+  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings" } });
+  const dialog = await openSettingsOf(section, "codex-work");
+  const [sharing] = sharingSwitches(dialog);
+  expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+  expect(captionOf(dialog, sharing!)).toContain("Turn on Developer Mode in Settings on that computer, then quit Octoboard and open it again, or restart the daemon.");
+  const chips = [...dialog.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent);
+  expect(chips).toEqual(expect.arrayContaining(["Developer Mode", "Settings"]));
+  request.mockClear();
+  act(() => sharing!.click());
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("leaves an account that already shares free to be turned off where the host cannot make file links, with nothing under the switch", async () => {
+  settings.accounts[1]!.share_default_config = true;
+  const { container: section, set } = mount("Codex");
+  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings" } });
+  const dialog = await openSettingsOf(section, "codex-work");
+  const [sharing] = sharingSwitches(dialog);
+  expect(sharing!.checked).toBe(true);
+  expect(sharing!.hasAttribute("aria-disabled")).toBe(false);
+  // A toggle's description does not warn of turning it off; once off, the host's reason stands under it.
+  expect(captionOf(dialog, sharing!)).toBe("");
+  request.mockClear();
+  act(() => sharing!.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
+  await act(async () => {});
+});
+
+describe("an account that shares, on a host that cannot make file links", () => {
+  const windows = { host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings" } } as const;
+
+  it("says the sessions that run, not Developer Mode, while sessions of the account run", async () => {
+    settings.accounts[1]!.share_default_config = true;
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 2, signing_in: false } });
+    const { container: section, set } = mount("Codex");
+    await set(windows);
+    const dialog = await openSettingsOf(section, "codex-work");
+    const [sharing] = sharingSwitches(dialog);
+    expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+    expect(captionOf(dialog, sharing!)).toBe("Sharing cannot be changed while 2 of this account’s sessions are working. Wait for them to finish.");
+  });
+
+  it("says the sign-in, not Developer Mode, while the account is being signed in", async () => {
+    settings.accounts[1]!.share_default_config = true;
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 0, signing_in: true } });
+    const { container: section, set } = mount("Codex");
+    await set(windows);
+    const dialog = await openSettingsOf(section, "codex-work");
+    const [sharing] = sharingSwitches(dialog);
+    expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+    expect(captionOf(dialog, sharing!)).toBe("Sharing cannot be changed while this account is being signed in.");
+  });
+});
+
+it("keeps saying why sharing is locked, with the file links available, while sessions run", async () => {
+  settings.accounts[1]!.share_default_config = true;
+  accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 1, signing_in: false } });
+  const { container: section, set } = mount("Codex");
+  await set({ host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "settings" } });
+  const dialog = await openSettingsOf(section, "codex-work");
+  const [sharing] = sharingSwitches(dialog);
+  expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+  expect(captionOf(dialog, sharing!)).toBe("Sharing cannot be changed while 1 of this account’s sessions is working. Wait for it to finish.");
+});
+
 it("words the help tip of a provider whose module names nothing it never shares with the generic sentence", async () => {
   settings.added_agents = ["claude", "test_agent"];
   settings.accounts = [...settings.accounts, account("test-work", "test_agent")];

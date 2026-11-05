@@ -2,7 +2,6 @@
 //! `browse::live`, and the agent's own configuration, caches and manifests
 //! (`crate::hostfs::read_regular_text`, re-exported here).
 
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -20,7 +19,7 @@ pub(crate) const LARGE_FILE_LIMIT: usize = 64 * 1024 * 1024;
 /// `cwd` canonical, else as given: the `project` that `read_bounded_text` takes, so that a file
 /// inside it is recognised as such.
 pub(super) fn canonical_project(cwd: &Path) -> PathBuf {
-    cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf())
+    crate::hostfs::canonical(cwd).unwrap_or_else(|_| cwd.to_path_buf())
 }
 
 /// Whether `dir`, a directory in the project's tree, is the agent configuration directory
@@ -33,8 +32,7 @@ pub(super) fn canonical_project(cwd: &Path) -> PathBuf {
 pub(super) fn is_agent_config_dir(dir: &Path, config_dir: &Path) -> bool {
     let config_dir = crate::hostfs::lexically_normalise(config_dir);
     let resolved = match (config_dir.parent(), config_dir.file_name()) {
-        (Some(parent), Some(name)) => parent
-            .canonicalize()
+        (Some(parent), Some(name)) => crate::hostfs::canonical(parent)
             .unwrap_or_else(|_| parent.to_path_buf())
             .join(name),
         _ => config_dir,
@@ -53,11 +51,7 @@ pub(super) fn read_bounded_text(
 ) -> std::io::Result<String> {
     use std::io::Error;
 
-    let Some(rel) = path
-        .strip_prefix(project)
-        .ok()
-        .and_then(|rel| RelPath::from_bytes(rel.as_os_str().as_bytes().to_vec()))
-    else {
+    let Some(rel) = RelPath::below(project, path) else {
         return read_regular_text(path, limit);
     };
     // Absent is told from the metadata, since `live` reports it only as a failure.

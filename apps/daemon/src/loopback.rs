@@ -20,11 +20,11 @@ pub fn post(
     body: &[u8],
     timeout: Duration,
 ) -> std::io::Result<Vec<u8>> {
-    exchange(connect(port, timeout)?, port, key, path, body)
+    exchange(&connect(port, timeout)?, port, key, path, body)
 }
 
 /// Opens the connection an [`exchange`] goes over, with every read and write on it bounded by
-/// `timeout`. Kept apart from the exchange so a caller can keep a clone of the stream and shut it
+/// `timeout`. Kept apart from the exchange so a caller can share the stream with it and shut it
 /// down from elsewhere, which ends a blocked exchange and tells the daemon the call is gone.
 pub fn connect(port: u16, timeout: Duration) -> std::io::Result<TcpStream> {
     let address = format!("127.0.0.1:{port}").parse().map_err(|_| {
@@ -40,7 +40,7 @@ pub fn connect(port: u16, timeout: Duration) -> std::io::Result<TcpStream> {
 /// daemon answered with an error status (see [`error_status`]). `path` has no query of its own: the
 /// key is appended as one.
 pub fn exchange(
-    mut stream: TcpStream,
+    mut stream: &TcpStream,
     port: u16,
     key: &str,
     path: &str,

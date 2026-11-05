@@ -1,12 +1,13 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../../git/gitWorkflow";
-import { type Agent, type AgentAvailability, type Console, type Settings } from "../../protocol";
+import { type Agent, type AgentAvailability, type Console, type Session, type SessionBranchState, type Settings } from "../../protocol";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import { type RelocationCause } from "../../errors/causes";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeNotification } from "../../fixtures/builders";
+import { accountOf, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeNotification, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { WINDOWS_HOST } from "../../test/hosts";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CLAUDE_MODELS_PRO, SAMPLE_CODEX_MODELS } from "../../fixtures/agentModels";
 import { IMAGES } from "../../fixtures/viewerImages";
@@ -341,6 +342,14 @@ const removedAgentProject = projectOf("p-removed-agent", console_.id, "Grok Site
 const docsSession = sessionOf("s-docs-1", console_.id, tagged[0].id, "Redesign the landing page", "archived");
 const removalState = { ...dialogState, sessions: new Map([...dialogState.sessions, [docsSession.id, docsSession]]) };
 
+// The Docs Site removal on a Windows machine: its folder and worktrees at the paths that host spells.
+const windowsDocs = projectWith(tagged[0], { path: `${WINDOWS_MACHINE.homeDir}\\code\\docs-site` });
+const windowsRemovalState = snapshotState({ consoles: [console_], projects: [windowsDocs], sessions: [docsSession], ...WINDOWS_MACHINE });
+const windowsRepository = `${windowsDocs.path}\\.git`;
+const windowsWorktreeOf = (name: string, ...rest: [Session | null, string | null, SessionBranchState?, boolean?]) =>
+  ({ ...worktreeItemOf(windowsDocs, rest[0], rest[1], `${WINDOWS_MACHINE.homeDir}\\worktrees\\${name}`, rest[2], rest[3]), repository: windowsRepository });
+const windowsBranchOf = (branch: string) => ({ ...branchItemOf(windowsDocs, docsSession, branch), repository: windowsRepository });
+
 // The sessions of the Hub 4 archive that the bound branches and worktrees belong to.
 const hubSessions = {
   web: cascadeState.sessions!.get("s-web-3")!,
@@ -579,6 +588,10 @@ const servingTrees = [
   processTreeOf("511:1", serving, "vitest --watch --reporter=dot", 40, { process_count: 3, memory_bytes: 150_000_000 }),
   processTreeOf("512:1", serving, "python3 -m http.server 8000", 12, { cwd: "/Users/dev/code/website/dist", memory_bytes: 18_000_000, ports: [8000] }),
 ];
+
+// A watcher whose process is attached to the agent's own console (Windows): it ends with the session whatever keeps
+// it, so the archive lists it without a choice.
+const sharedConsoleTree = processTreeOf("513:1", serving, "node scripts/export-report.mjs --watch", 25, { process_count: 2, memory_bytes: 64_000_000, keepable: false, unkeepable_reason: "agent_console" });
 
 // An idle session whose turn ended with a dev server still running, beside one sitting at its prompt
 // with nothing left running, which archives without asking.
@@ -1149,6 +1162,28 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...removeProjectTrash,
+    id: "dialog-remove-project-trash-windows",
+    title: "Remove project to the Recycle Bin, Windows host",
+    description: "The same confirmation as on macOS with every Trash word read as Recycle Bin: the option, its hint (\"You can recover it from the Recycle Bin.\"), the locked-worktree option and the consequence lines. Both disclosures are open, so the worktrees list their paths as Windows writes them, C:\\Users\\dev\\worktrees\\\u2026, whole, not shortened to ~, and a long one wraps at its dashes; choose 560px for the narrow layout.",
+    state: windowsRemovalState,
+    host: WINDOWS_HOST,
+    projectRemovalBranches: {
+      [windowsDocs.id]: [
+        windowsWorktreeOf("docs-site-redesign", docsSession, "feat/redesign"),
+        windowsBranchOf("fix/footer-links"),
+        windowsBranchOf("feat/search-box"),
+        windowsWorktreeOf("docs-site-scratch", null, null, "removable"),
+        windowsWorktreeOf("docs-site-old-nav", docsSession, "feat/old-nav", "locked"),
+        windowsWorktreeOf("docs-site-new-footer", docsSession, "feat/new-footer", "locked", true),
+        windowsWorktreeOf("docs-site-hotfix", null, null, "locked"),
+        windowsWorktreeOf("docs-site-spike", null, null, "locked", true),
+        windowsBranchOf("feat/old-nav"),
+      ],
+    },
+    steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
+  },
+  {
+    ...removeProjectTrash,
     id: "dialog-remove-project-trash-stays",
     group: "Projects",
     category: "exceptional",
@@ -1297,9 +1332,9 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive an idle session that left processes running",
-    description: "The session is idle with nothing else to ask about, yet archiving it opens this confirmation instead of archiving at once, because of the three processes it started. Under the message, a single \"Background processes\" section, with no divider and no other section, has the line \"Selected processes will be stopped. Uncheck any to keep them running.\" over them, oldest first, as checkboxes, each labelled by its single-line command alone; the checkboxes start ticked for stopping, and here the first, the dev server, is unticked to keep it running while the other two remain ticked. Its long command stays on one line and fades at the end (hover it for a tooltip with the whole command), and each option has a closed Details disclosure under it, which holds no command. Selected stop options carry a danger-coloured PlayOff icon, while the unchecked option kept running carries a success-green Play icon. Directly under the options in that section, two consequence lines say that \"2 processes are stopped.\" and that \"The process you keep stays running.\" The confirming button reads \"Archive\" in the normal colour.",
+    description: "The session is idle with nothing else to ask about, yet archiving it opens this confirmation instead of archiving at once, because of the four processes it started. Under the message, a single \"Background processes\" section, with no divider and no other section, has the line \"Selected processes will be stopped. Uncheck any to keep them running.\" over them, oldest first, as checkboxes, each labelled by its single-line command alone; the checkboxes start ticked for stopping, and here the first, the dev server, is unticked to keep it running while the other two remain ticked. Its long command stays on one line and fades at the end (hover it for a tooltip with the whole command), and each option has a closed Details disclosure under it, which holds no command. Selected stop options carry a danger-coloured PlayOff icon, while the unchecked option kept running carries a success-green Play icon. The fourth, a script attached to the agent's own console, cannot be kept: it is the last row of the checkbox list, after the checkbox rows, with no checkbox but set in so that its danger-coloured PlayOff icon and its command line up with the icon and command of the checkbox rows above, and under the command a muted line saying why (it runs in the agent's own terminal, so it ends with the session and cannot be kept, and to start it in a window of its own to keep it running), then its own closed Details disclosure. Directly under the options in that section, two consequence lines say that \"3 processes will be stopped.\" and that \"The process you keep stays running.\" The confirming button reads \"Archive\" in the normal colour.",
     state: servingState,
-    processes: { trees: servingTrees },
+    processes: { trees: [...servingTrees, sharedConsoleTree] },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: serving.title })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),

@@ -1,7 +1,7 @@
 # Application lifecycle
 
-Octoboard comes in two forms. This document describes the **desktop form**, the macOS application, in full: the agent
-processes are owned by a background daemon that starts and stops with it; background processes the user chose to keep
+Octoboard comes in two forms. This document describes the **desktop form**, the macOS or Windows application, in
+full: the agent processes are owned by a background daemon that starts and stops with it; background processes the user chose to keep
 are managed by the user instead (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`).
 Closing the window quits the application unless the user has turned on keeping it running in the background, a
 setting that is off to begin with (see "Closing the window" below). What the **server form** — the daemon alone, on a
@@ -9,19 +9,7 @@ Linux server without a display, reached by its owner from a browser on another m
 applies, and in "The daemon on its own" below. That form is not built yet, so those passages state what already follows
 from it and what the daemon does today, not a finished behaviour.
 
-## System requirements and distribution
-
-- **macOS 11 or later**, on Apple silicon or Intel — the release build is one universal bundle holding both
-  architectures, the bundled daemon included.
-- Octoboard is distributed as a `.dmg` disk image. It cannot be distributed through the Mac App Store: its translucent
-  window (see "The window chrome and the content panel" in `docs/product/window-layout.md`) relies on a private macOS
-  interface, which the store does not admit. The release build, the bundled daemon included, is signed with a Developer
-  ID and notarized, so Gatekeeper admits the `.app` and the `.dmg` as built, a copy carrying the quarantine attribute
-  included; that has been confirmed only on the machine that built it, not yet by installing on a clean one.
-- Once installed, the application updates itself in place from the project's releases, on the user's request (see
-  `docs/product/in-app-updates.md`).
-- The server form has no requirements or distribution settled: the daemon is a single binary meant to be put on the
-  server as it is, and its Linux build is not established yet.
+What the desktop application runs on and how it is installed is in `docs/product/installing-the-desktop-app.md`.
 
 ## Starting up
 
@@ -74,19 +62,21 @@ reloaded onto the new daemon with no notice of its own (until then it has lost i
 "Losing the daemon connection" below), and a window closed into the background stays there. The daemon's end has
 interrupted every session as any daemon end does, and each resumes with a click (see the list above).
 While the daemon is down there is nothing to keep running, so a close or quit meanwhile behaves as with no daemon (see
-"Closing the window" and "Quitting" below). Nothing is started again once a quit or a restart is under way, nor once
-an in-app update is installed and waits for the restart that applies it, including one installed while a relaunch was
-pending: the installed update has already replaced the application, so a relaunch would pair the new version's daemon
-with the running window of the old one. There is no button to start the daemon by hand.
+"Closing the window" and "Quitting" below). Nothing is started again once a quit or a restart is under way, nor, on
+macOS, once an in-app update is installed and waits for the restart that applies it, including one installed while a
+relaunch was pending: the installed update has already replaced the application, so a relaunch would pair the new
+version's daemon with the running window of the old one. On Windows a downloaded update leaves the running version's
+files in place until its installer runs as Octoboard quits, so a daemon that ends meanwhile is started again under the
+rules above. There is no button to start the daemon by hand.
 
-When the daemon is not started again — those 3 relaunches in the last 10 minutes are spent, an update is installed
-and waits for its restart, or it ended with exit status 0, as on a requested shutdown or a termination signal (see
+When the daemon is not started again — those 3 relaunches in the last 10 minutes are spent, on macOS an update is
+installed and waits for its restart, or it ended with exit status 0, as on a requested shutdown or a termination signal (see
 "The daemon on its own" below) — the application says so in an error alert titled "The daemon exited unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
 it, and asks the user to restart Octoboard; it does not silently keep showing a stale session list. The alert treats it
 as an unexpected failure, offering **Report issue**, with the detail behind **Error details** rather than in its
 sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`): how the daemon ended (its exit
 status, or a signal, or why the last relaunch failed) and, when the relaunches are spent, that it was restarted that
-many times in the last 10 minutes and is not restarted again, or, when an update is installed, that the update is not
+many times in the last 10 minutes and is not restarted again, or, when an update is installed (macOS), that the update is not
 applied until Octoboard restarts and the daemon is not restarted before then. A daemon stopped by the application's own
 quit or restart raises no alert (see "Quitting" below).
 
@@ -198,9 +188,10 @@ below) — quits at once, asking nothing about running sessions or terminals: th
 This section and "Quitting" below are the desktop form's. A browser tab has no close that Octoboard sees, and nothing
 in a browser quits anything (see "The daemon on its own" below).
 
-**The window's close button, `Cmd+W` and the Window menu's Close Window item are one gesture.** All three do the same
-thing, deliberately, and what they do is the user's choice: the **Keep running in the background when the window is
-closed** switch in Settings' General section, which is **off to begin with** (see "Keep running in the background" in
+**The window's close button, `Cmd+W` and the Window menu's Close Window item are one gesture**, and so, in the Windows
+application, which has no application menu, are the close button of the system's title bar and `Alt+F4`. They all do
+the same thing, deliberately, and what they do is the user's choice: the **Keep running in the background when the
+window is closed** switch in Settings' General section, which is **off to begin with** (see "Keep running in the background" in
 `docs/product/settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
@@ -209,14 +200,15 @@ busy shell terminal, it asks the same confirmation, where Cancel leaves the wind
 otherwise it quits at once. The sessions a confirmed close ends are left *interrupted* and resumable, just as any confirmed quit
 leaves them (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 
-**With the switch on, closing the window closes it into the background**: the window is hidden, Octoboard leaves the
-Dock, and the focus passes to the application used before it. The daemon, every session and its agent process keep
-running, and so does the UI behind the hidden window: a session that raises its hand still notifies (see "The raised
-hand" in `docs/product/session-statuses.md`), the Dock badge's count is kept up to date for when Octoboard returns to
-the Dock, and the menu bar icon's menu keeps following the sessions (see `docs/product/menu-bar-icon.md`).
+**With the switch on, closing the window closes it into the background**: the window is hidden — on macOS Octoboard
+leaves the Dock and the focus passes to the application used before it; on Windows the window leaves the taskbar. The
+daemon, every session and its agent process keep running, and so does the UI behind the hidden window: a session that
+raises its hand still notifies (see "The raised hand" in `docs/product/session-statuses.md`), on macOS the Dock
+badge's count is kept up to date for when Octoboard returns to the Dock, and the menu bar icon's menu — the
+notification-area icon's on Windows — keeps following the sessions (see `docs/product/menu-bar-icon.md`).
 
-- **In native fullscreen** the window first leaves fullscreen and is hidden once that is done, about 0.8 seconds later,
-  so no empty fullscreen space is left behind. Brought back within that time, it is not hidden.
+- **In native fullscreen** on macOS the window first leaves fullscreen and is hidden once that is done, about 0.8
+  seconds later, so no empty fullscreen space is left behind. Brought back within that time, it is not hidden.
 - **When the daemon is not running** — it failed to start, or has exited, or is being started again — there is nothing
   to keep running, so closing the window quits at once and asks nothing, whatever the switch says.
 - Hide Octoboard (`Cmd+H`) is not a close: it hides the application as macOS always does, and Octoboard stays in the
@@ -240,23 +232,28 @@ and position it had:
 
 - the menu bar icon's menu: its Open Octoboard or one of its sessions (see "Clicking the icon" and "The icon's menu"
   in `docs/product/menu-bar-icon.md`);
-- opening Octoboard again while it runs — from the Finder, Spotlight or `open`;
+- opening Octoboard again while it runs — on macOS from the Finder, Spotlight or `open`; on Windows any launch of it,
+  such as from the Start menu, which starts no second Octoboard but brings the running one's window forward (once its
+  window exists: during the first moments of a launch there is none yet to bring);
 - anything else that activates Octoboard, such as clicking one of its notifications;
 - a quit that has to ask for confirmation (see "Quitting" below);
 - the daemon exiting and not being started again: the window comes back showing the notice that it exited (see
   "Starting up" above). A daemon that exits while the window is shown only shows the notice, and does not take the
   focus from whatever the user is doing. A daemon that is started again brings nothing back.
 
-Octoboard then returns to the Dock, comes to the front, and its Dock badge shows the current waiting count again.
+Octoboard then comes to the front — on macOS it returns to the Dock, and its Dock badge shows the current waiting count
+again.
 
 ## Quitting
 
 Every way of ending the application behaves the same: `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit
 Octoboard (see "Quit Octoboard" in `docs/product/menu-bar-icon.md`), the Dock icon's own Quit, a system-initiated
-termination — logging out, restarting or shutting down the machine — and, while keeping Octoboard running in the
-background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close Window item (see "Closing
-the window" above). The one difference is the escape hatch in "Quitting when the window has stopped responding" below,
-which the close gestures have no part in. Nothing below asks while the window shows a daemon of another version (see
+termination on macOS — logging out, restarting or shutting down the machine — and, while keeping Octoboard running in
+the background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close Window item (see
+"Closing the window" above). The Windows application has no application menu and no `Cmd+Q`: it is quit through the
+notification-area icon's Quit Octoboard, or by closing the window while keeping it running in the background is off.
+The one difference is the escape hatch in "Quitting when the window has stopped responding" below, which the close
+gestures have no part in. Nothing below asks while the window shows a daemon of another version (see
 "A daemon of another version" above).
 
 - **While any session is *starting*, *working*, *waiting for the user*, *dormant* or *working in background*, quitting
@@ -296,7 +293,9 @@ which the close gestures have no part in. Nothing below asks while the window sh
 - On the screen for a UI that failed (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`), every quit is immediate and asks nothing, even while sessions are running or a
   shell terminal is busy, since the window no longer knows them; the daemon is not asked to shut down first. It exits
-  once the application is gone, leaving the sessions as a crash does (see "Crashes and forced termination" below).
+  once the application is gone, leaving the sessions as a crash does (see "Crashes and forced termination" below). On
+  Windows, while a downloaded update is held, that quit stops the daemon first and then starts the update's installer
+  without relaunching Octoboard (see "Downloading and installing" in `docs/product/in-app-updates.md`).
 - The daemon stopping as part of a quit is not reported as the daemon exiting: no notice is shown and a closed window is
   not brought back for it.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.
@@ -306,8 +305,13 @@ which the close gestures have no part in. Nothing below asks while the window sh
 - Until the window has loaded far enough to be able to ask, a quit is never held back — a window that never gets as
   far as showing the confirmation can still be quit.
 
-Because a logout, restart or shutdown is answered exactly like any other quit, **Octoboard can hold up a logout,
-restart or shutdown until the user answers the confirmation dialog.** That is deliberate, not an oversight.
+Because on macOS a logout, restart or shutdown is answered exactly like any other quit, **Octoboard can hold up a
+logout, restart or shutdown until the user answers the confirmation dialog.** That is deliberate, not an oversight.
+On Windows the system ending the user's session — signing out or shutting down — is not one of these quits: it asks
+nothing and installs no downloaded update, which is offered again after the next start (see "Downloading and
+installing" in `docs/product/in-app-updates.md`). The daemon ends with the system then, without stopping its sessions
+in order: its log shows no stop, and the next start finds the sessions as a crash leaves them (see "Crashes and forced
+termination" below).
 
 ### Restarting
 
@@ -325,8 +329,13 @@ rules above:
   terminal ended, the window's size and position saved — and Octoboard starts again. The daemon is stopped before the
   new launch, since the new launch's daemon would otherwise refuse to start while the old one holds the data directory
   (see "Starting up" above): the old daemon is first asked to shut down, as in any quit; one still running **2
-  seconds** later is sent a termination signal, which has it end its sessions' processes first, and one still running
-  **5 seconds** after that is killed.
+  seconds** later is sent the daemon's shutdown request directly — on macOS a termination signal instead when that
+  request cannot be sent — which has it end its sessions' processes first, and one still running **5 seconds** after
+  that is killed.
+- While a confirmed restart stops the daemon and, on Windows, starts the update's installer, another restart starts
+  nothing, and a quit made meanwhile through the menu, the tray or the window is held back without asking anything while
+  the restart goes ahead. On macOS the Dock's Quit and the system logging out, restarting or shutting down are not held
+  back.
 - If the application cannot restart, an error alert titled "Could not restart" says Octoboard kept running instead of
   relaunching and asks the user to quit it and open it again. It is treated as an unexpected failure, as a failed quit
   is.
@@ -336,7 +345,9 @@ rules above:
 A confirmation dialog that can no longer be shown or answered — the window's process died, or its page hung — would
 otherwise leave no way out short of a force quit. So: **when a quit gesture has been deferred to the confirmation
 dialog and a second quit gesture arrives within 2 seconds, that second gesture quits immediately and asks nothing.**
-The sessions are left exactly as a crash leaves them (see "Crashes and forced termination" below).
+The sessions are left exactly as a crash leaves them (see "Crashes and forced termination" below). On Windows, while a
+downloaded update is held, that quit stops the daemon first and then starts the update's installer without relaunching
+Octoboard (see "Downloading and installing" in `docs/product/in-app-updates.md`).
 
 A window that is still answering resets that 2-second window every time it handles a quit gesture, so pressing `Cmd+Q`
 twice in quick succession on a working Octoboard does **not** skip the confirmation. The escape hatch opens only when
@@ -344,10 +355,10 @@ nothing answered the first gesture. It is known to hold for scripted quits; with
 presses have been seen not to take it, for a reason not established, so the menu's Quit is the surer way out.
 
 **Closing the window has no part in this, even when it is a quit** (see "Closing the window" above). A double press
-on a close button is an ordinary gesture and must not end a live session unasked, so the close button, `Cmd+W` and
-Close Window never take this escape hatch however often they are repeated, and never open it for the gesture after
-them either. `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit or the Dock icon's Quit — twice — is the
-way out of that state.
+on a close button is an ordinary gesture and must not end a live session unasked, so the close button, `Cmd+W`, Close
+Window and `Alt+F4` never take this escape hatch however often they are repeated, and never open it for the gesture
+after them either. `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit (the notification-area icon's on
+Windows) or the Dock icon's Quit — twice — is the way out of that state.
 
 ## Crashes and forced termination
 
@@ -362,8 +373,18 @@ interrupted and resumable.
 - A normal process exit stops the launch's attributed background processes, subject to the user's keeps and the
   boundaries in "Automatic stopping and its boundaries" in `docs/product/background-processes.md`. On an internal
   failure the daemon also kills every process in each agent's terminal session, helpers in process groups of their
-  own included. At the next daemon start, saved process records allow cleanup of attributed processes that survived
-  outside those terminal sessions, while preserving kept processes.
+  own included; on Windows, every process of the launch's job object attached to the agent's console. At the next
+  daemon start, saved process records allow cleanup of attributed processes that survived outside those terminal
+  sessions, while preserving kept processes.
+- **On Windows a sign-out or a shutdown ends the daemon without its orderly stop**, whether the desktop application
+  started it or it was started on its own. Windows sends it no notice of either — it withholds them from a program
+  that has loaded the system's window libraries, as the daemon has — and ends it together with the application and the
+  user's other processes, its agents and shell terminals among them. Nothing of a stop is logged, and the sessions are
+  not stopped in order. The next daemon start handles what is left as after any crash: every non-archived session is
+  marked interrupted and resumes with a click (see "Starting up"), and the saved background-process records are
+  reconciled, stopping any attributed process they name that is still running and leaving kept ones alone (see
+  "Automatic stopping and its boundaries" in `docs/product/background-processes.md`), though the system has normally
+  ended those processes already.
 - Shell terminals do not outlive the daemon either (see "Closing a shell terminal" in
   `docs/product/shell-terminals.md`).
 - Should a session's process nonetheless survive, the next start still marks every non-archived session interrupted
@@ -380,7 +401,11 @@ nothing that the form will need and does not have yet claimed to exist.
   started from sends; or `SIGHUP`, which that terminal sends as it closes. The daemon answers any of them exactly as
   the desktop form's quit does once confirmed: every session's process is ended and every one of those sessions is
   left *interrupted*, never archived, every shell terminal ends, and nobody is asked first; it then exits with
-  status 0. Started without an application to follow, the daemon runs until it is stopped; exiting with the
+  status 0. On Windows, which has no signals, the same stop follows `Ctrl+C` or `Ctrl+Break` in the console window the
+  daemon was started in, and closing that window; after a close, Windows ends the daemon a few seconds later whatever
+  it is doing, so the stop has those seconds. A sign-out or a shutdown is not among these: Windows ends the daemon
+  without telling it, as "Crashes and forced termination" above describes. Started without an application to follow,
+  the daemon runs until it is stopped; exiting with the
   application is a watch the desktop form asks for and the server form never does. Nothing starts it again when it dies: that is the desktop
   application's (see "Starting up" above). A command-line surface for starting it in the background,
   stopping it and asking where it listens does not exist yet.
@@ -398,23 +423,28 @@ nothing that the form will need and does not have yet claimed to exist.
 ## Files Octoboard owns
 
 Everything Octoboard writes for itself lives under `~/.octoboard` — on the machine the daemon runs on, which in the
-server form is the server — with one exception, the window's state, described after the table:
+server form is the server — with one exception, the window's state, described after the table. On Windows the
+directory is `%USERPROFILE%\.octoboard`, and the paths below are the same under it, with Windows' separator
+(`%USERPROFILE%\.octoboard\logs\daemon.log`, say). A user name and home path outside ASCII (`C:\Users\测试用户`, say)
+take nothing away: the data directory, its logs, agent launches and the hooks Octoboard gives the agents work under it
+as under any other.
 
 | Path | Contents |
 |---|---|
 | `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "Git" and "General" in `docs/product/settings.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
-| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard writes there, `AGENTS.md`, and `CLAUDE.md`, a link to it (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
+| `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard writes there, `AGENTS.md`, and `CLAUDE.md`, a link to it, or a file that imports it where the host makes no file links (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted and archived sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
 | `~/.octoboard/handoff/<session id>.md` | The handoff package a session read when it took over another session's place (see "The handoff package" in `docs/product/handing-off-sessions.md`), named for the receiving session. Removed with that session's record; on daemon start, any left for a session that no longer exists, and any half-written one, is removed. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
 | `~/.octoboard/octoboardd.port` | The port the daemon listens on, alone, never the daemon's key, for a developer attaching to a daemon started by hand (see "Starting up"). Only the daemon that holds `daemon.lock` writes it; one that cannot write it logs a warning and starts all the same. Removed when the daemon stops, unless the file names another port by then, but not when the daemon goes down on an internal failure. |
 | `~/.octoboard/logs/daemon.log` | The daemon's log, at the level of information and above, the panics of any of its threads included. Only the daemon that holds `daemon.lock` writes it, so a second daemon refused at start leaves it alone. An entry that would take the file past **5 MiB** first rotates it: `daemon.log` becomes `daemon.log.1`, the one before that `daemon.log.2`, then `daemon.log.3`, and the oldest beyond that is dropped. |
-| `~/.octoboard/logs/desktop.log` | The macOS application's own log: each attempt to start the daemon or start it again and how it went, and the failures the application meets itself, each line with a UTC timestamp. A file larger than **1 MiB** when the application first writes to it in a launch is moved to `desktop.log.1`, replacing the one there. |
+| `~/.octoboard/logs/desktop.log` | The desktop application's own log: each attempt to start the daemon or start it again and how it went, and the failures the application meets itself, each line with a UTC timestamp. A file larger than **1 MiB** when the application first writes to it in a launch is moved to `desktop.log.1`, replacing the one there. |
 | `~/.octoboard/process-ledger.json` | The launch identities, attributed processes and user keeps used for background-process cleanup across daemon restarts (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). It records the boot ID of the system it was written in (on Linux), and records from before the system last started are ignored. An unreadable file is moved aside as `process-ledger.json.unreadable`; processes identified only by their launch tag are kept rather than stopped without knowing the user's choices. A file whose boot ID cannot be compared with the running system's (it records none, written before boot IDs were recorded, on a system that has one, or the daemon cannot read the system's) is treated as unreadable but not moved aside. |
 
-The macOS application keeps the window's size, position and maximized state in
-`~/Library/Application Support/dev.octoboard.desktop/window-state.json` (see "The window's size and position across
+The desktop application keeps the window's size, position and maximized state in
+`~/Library/Application Support/dev.octoboard.desktop/window-state.json` on macOS and in
+`%APPDATA%\dev.octoboard.desktop\window-state.json` on Windows (see "The window's size and position across
 launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
 

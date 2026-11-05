@@ -103,3 +103,25 @@ it("keeps clipboard writing available in a browser without clipboard reading", (
   expect(browserPlatform().clipboard?.readText).toBeUndefined();
   expect(browserPlatform().clipboard?.writeText).toBeDefined();
 });
+
+describe("the host facts", () => {
+  it.each([
+    ["MacIntel", "macos", "meta"],
+    ["iPad", "macos", "meta"],
+    ["Win32", "windows", "control"],
+    ["Linux x86_64", "linux", "control"],
+    ["", "linux", "control"],
+  ] as const)("take the system and the modifier from the platform %j and claim nothing a shell provides", (platform, os, modifier) => {
+    vi.stubGlobal("navigator", { platform });
+    const host = browserPlatform().host;
+    expect(host).toMatchObject({ os, modifier, chrome: "none", translucent: false, appMenu: false, statusItem: "none", badge: false, runInBackground: false, permissionsPane: false, notificationSettings: "none", updater: "none" });
+    expect(host.trafficLightInset).toBeUndefined();
+  });
+
+  it("name the system's own words for each system", () => {
+    vi.stubGlobal("navigator", { platform: "Win32" });
+    expect(browserPlatform().host.terms).toEqual({ trash: "recycleBin", settings: "settings", menuBarIcon: "notificationArea" });
+    vi.stubGlobal("navigator", { platform: "MacIntel" });
+    expect(browserPlatform().host.terms).toEqual({ trash: "trash", settings: "systemSettings", menuBarIcon: "menuBar" });
+  });
+});

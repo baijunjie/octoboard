@@ -178,7 +178,7 @@ export default [
   ...layer("browse", ["i18n", "errors", "format"], "browse/ imports, outside itself, only i18n/, errors/, format/ and protocol.", ["protocol"]),
   ...layer("store", ["values", "i18n", "agents", "errors", "accounts", "sessions", "preferences", "git"], "store/ imports, outside itself, only values/, i18n/, agents/, errors/, accounts/, sessions/, preferences/, git/, protocol, requests, daemon and daemon-client.", ["protocol", "requests", "daemon", "daemon-client"]),
   ...layer("i18n", ["preferences", "providers"], "i18n/ imports, outside itself, only preferences/, providers/ and appConfig.", ["appConfig"]),
-  ...layer("shortcuts", ["i18n", "preferences", "input", "components"], "shortcuts/ imports, outside itself, only i18n/, preferences/, input/ and components/.", []),
+  ...layer("shortcuts", ["i18n", "platform", "preferences", "input", "components"], "shortcuts/ imports, outside itself, only i18n/, platform/, preferences/, input/ and components/.", []),
   // Self-contained features: they use the leaf layer and import no other feature directory.
   ...layer("viewer", ["components", ...PURE_LAYERS], `viewer/ imports, outside itself, only components/, ${PURE_MESSAGE}, and the shared root files.`),
   ...layer("about", ["components", ...PURE_LAYERS], `about/ imports, outside itself, only components/ and ${PURE_MESSAGE}.`, []),

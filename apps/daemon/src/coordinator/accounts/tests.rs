@@ -10,8 +10,8 @@ use crate::protocol::{
     error_code, error_parts, AgentId, Availability, CodedError, Event, ProjectAccount, RequestBody,
 };
 use crate::state::AppState;
-use crate::test_support::code_of;
 use crate::test_support::console_with_project_and_accounts;
+use crate::test_support::{code_of, host_path};
 use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
@@ -33,7 +33,7 @@ fn an_account_dir_is_stored_absolute_or_not_at_all_and_existence_is_not_checked(
     );
 
     // Now intentionally accepted, where a console's pinned path used to refuse it.
-    let missing = format!("{text}/missing");
+    let missing = dir.join("missing").to_string_lossy().into_owned();
     assert_eq!(normalize(&missing).unwrap(), missing);
 
     // The refusal names the agent whose field it was.
@@ -246,7 +246,7 @@ async fn adding_an_agent_first_settles_an_undecided_list() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("created");
@@ -402,7 +402,7 @@ async fn removing_an_agent_keeps_its_accounts() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("created");
@@ -451,13 +451,13 @@ async fn an_account_can_be_created_renamed_repointed_and_removed_over_the_protoc
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("created");
     let created = only_account(&state);
     assert_eq!(created.name, "Work");
-    assert_eq!(created.config_dir, "/home/u/.codex-work");
+    assert_eq!(created.config_dir, host_path("/home/u/.codex-work"));
     assert_eq!(created.agent, AgentId::CODEX);
 
     handle(
@@ -473,7 +473,11 @@ async fn an_account_can_be_created_renamed_repointed_and_removed_over_the_protoc
     .expect("renamed");
     let renamed = only_account(&state);
     assert_eq!(renamed.name, "Work (renamed)");
-    assert_eq!(renamed.config_dir, "/home/u/.codex-work", "untouched");
+    assert_eq!(
+        renamed.config_dir,
+        host_path("/home/u/.codex-work"),
+        "untouched"
+    );
 
     handle(
         &state,
@@ -481,14 +485,14 @@ async fn an_account_can_be_created_renamed_repointed_and_removed_over_the_protoc
         RequestBody::UpdateAccount {
             account: created.id.clone(),
             name: None,
-            config_dir: Some("/home/u/.codex-work-2".to_string()),
+            config_dir: Some(host_path("/home/u/.codex-work-2")),
         },
     )
     .await
     .expect("repointed");
     let repointed = only_account(&state);
     assert_eq!(repointed.name, "Work (renamed)", "untouched");
-    assert_eq!(repointed.config_dir, "/home/u/.codex-work-2");
+    assert_eq!(repointed.config_dir, host_path("/home/u/.codex-work-2"));
 
     handle(
         &state,
@@ -511,7 +515,7 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Work", &host_path("/home/u/.claude-work")),
     )
     .await
     .expect("created");
@@ -520,7 +524,11 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     let refused = handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "  work ", "/home/u/.claude-other"),
+        create_account_request(
+            AgentId::CLAUDE,
+            "  work ",
+            &host_path("/home/u/.claude-other"),
+        ),
     )
     .await
     .expect_err("collides");
@@ -532,7 +540,11 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     let refused_default = handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "default", "/home/u/.claude-other"),
+        create_account_request(
+            AgentId::CLAUDE,
+            "default",
+            &host_path("/home/u/.claude-other"),
+        ),
     )
     .await
     .expect_err("collides with the default account");
@@ -543,7 +555,7 @@ async fn a_colliding_account_name_is_refused_within_its_agent_only() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("a different agent, so no collision");
@@ -581,7 +593,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Work", &host_path("/home/u/.claude-work")),
     )
     .await
     .expect("created");
@@ -603,10 +615,13 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
         coded.params.get("name").cloned().expect("name")
     };
     for (dir, owner) in [
-        ("/home/u/.claude-work", "Work"),
-        ("/home/u/.claude-work/", "Work"),
-        ("  /home/u/./.claude-work  ", "Work"),
-        ("/home/u/x/../.claude-work", "Work"),
+        (host_path("/home/u/.claude-work").as_str(), "Work"),
+        (host_path("/home/u/.claude-work/").as_str(), "Work"),
+        (
+            format!("  {}  ", host_path("/home/u/./.claude-work")).as_str(),
+            "Work",
+        ),
+        (host_path("/home/u/x/../.claude-work").as_str(), "Work"),
         ("~/.claude-home", "Home"),
         (&format!("{home_dir}/.claude-home"), "Home"),
         ("~/.claude", "Default"),
@@ -627,7 +642,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.claude-work")),
     )
     .await
     .expect("a different agent, so no collision");
@@ -658,7 +673,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
         RequestBody::UpdateAccount {
             account: work.id.clone(),
             name: Some("Work 2".to_string()),
-            config_dir: Some("/home/u/.claude-work/".to_string()),
+            config_dir: Some(host_path("/home/u/.claude-work/")),
         },
     )
     .await
@@ -680,12 +695,12 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
 fn racing_account_creates_let_exactly_one_through() {
     for (first, second) in [
         (
-            ("Équipe", "/home/u/.claude-a"),
-            ("équipe", "/home/u/.claude-b"),
+            ("Équipe", host_path("/home/u/.claude-a").as_str()),
+            ("équipe", host_path("/home/u/.claude-b").as_str()),
         ),
         (
-            ("Work", "/home/u/.claude-c"),
-            ("Other", "/home/u/.claude-c/"),
+            ("Work", host_path("/home/u/.claude-c").as_str()),
+            ("Other", host_path("/home/u/.claude-c/").as_str()),
         ),
     ] {
         for round in 0..20 {
@@ -719,25 +734,25 @@ fn racing_account_creates_let_exactly_one_through() {
     }
 }
 
-/// On macOS the directory comparison folds case, on other platforms it is byte-exact; the
-/// stored text stays as typed either way.
+/// Where the host's file system folds case (macOS, Windows) the directory comparison does too;
+/// elsewhere it is byte-exact. The stored text stays as typed either way.
 #[tokio::test]
-async fn account_directories_fold_case_only_on_macos() {
+async fn account_directories_fold_case_where_the_host_does() {
     let (state, _dir) = crate::test_support::app_state("coordinator-account-dir-case");
     handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.Claude-Work"),
+        create_account_request(AgentId::CLAUDE, "Work", &host_path("/home/u/.Claude-Work")),
     )
     .await
     .expect("created");
     let second = handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "Other", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Other", &host_path("/home/u/.claude-work")),
     )
     .await;
-    if cfg!(target_os = "macos") {
+    if crate::platform::names::FOLDS_CASE {
         let coded = second.expect_err("same directory on a case-insensitive file system");
         let coded = coded.downcast_ref::<CodedError>().expect("coded");
         assert_eq!(coded.code, error_code::CONFIG_DIR_TAKEN);
@@ -746,7 +761,7 @@ async fn account_directories_fold_case_only_on_macos() {
     }
     assert_eq!(
         state.store.list_accounts().unwrap()[0].config_dir,
-        "/home/u/.Claude-Work",
+        host_path("/home/u/.Claude-Work"),
         "stored as typed"
     );
 }
@@ -757,7 +772,7 @@ async fn refreshing_quotas_refuses_a_foreign_or_unknown_account_and_acks_otherwi
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("created");
@@ -802,7 +817,7 @@ async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("created");
@@ -848,7 +863,11 @@ async fn a_sign_in_is_refused_for_a_provider_with_no_login_flow() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::TEST, "Work", "/home/u/.test-agent-work"),
+        create_account_request(
+            AgentId::TEST,
+            "Work",
+            &host_path("/home/u/.test-agent-work"),
+        ),
     )
     .await
     .expect("created");
@@ -878,7 +897,7 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("created");
@@ -908,7 +927,7 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
     let refused = handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "personal", "/home/u/.codex-p"),
+        create_account_request(AgentId::CODEX, "personal", &host_path("/home/u/.codex-p")),
     )
     .await
     .expect_err("taken by the default");
@@ -925,7 +944,7 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
     let refused = handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "default", "/home/u/.codex-d"),
+        create_account_request(AgentId::CODEX, "default", &host_path("/home/u/.codex-d")),
     )
     .await
     .expect_err("reserved");
@@ -958,7 +977,7 @@ async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_an
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "personal", "/home/u/.codex-p"),
+        create_account_request(AgentId::CODEX, "personal", &host_path("/home/u/.codex-p")),
     )
     .await
     .expect("free again");
@@ -1042,7 +1061,7 @@ async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CODEX, "Work", "/home/u/.codex-work"),
+        create_account_request(AgentId::CODEX, "Work", &host_path("/home/u/.codex-work")),
     )
     .await
     .expect("created");
@@ -1083,7 +1102,7 @@ async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
         RequestBody::UpdateAccount {
             account: account.clone(),
             name: None,
-            config_dir: Some("/home/u/.codex-other".to_string()),
+            config_dir: Some(host_path("/home/u/.codex-other")),
         },
     )
     .await
@@ -1130,14 +1149,14 @@ async fn a_non_absolute_account_dir_is_refused_and_a_non_existent_one_is_accepte
         create_account_request(
             AgentId::CLAUDE,
             "Not yet created",
-            "/tmp/octoboard-does-not-exist",
+            &host_path("/tmp/octoboard-does-not-exist"),
         ),
     )
     .await
     .expect("a missing directory is accepted");
     assert_eq!(
         only_account(&state).config_dir,
-        "/tmp/octoboard-does-not-exist"
+        host_path("/tmp/octoboard-does-not-exist")
     );
 }
 
@@ -1149,7 +1168,7 @@ async fn removing_an_account_publishes_only_the_projects_it_cleared() {
     handle(
         &state,
         None,
-        create_account_request(AgentId::CLAUDE, "Work", "/home/u/.claude-work"),
+        create_account_request(AgentId::CLAUDE, "Work", &host_path("/home/u/.claude-work")),
     )
     .await
     .expect("created");

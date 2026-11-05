@@ -6,7 +6,7 @@ import { sessionOf } from "../fixtures/builders";
 import type { Event } from "../protocol";
 import { createDaemon } from ".";
 import { currentLanguage } from "../i18n/language";
-import { broadcastNotification, type NotifiedBroadcast, type NotificationRequest } from "./notifications";
+import { broadcastNotification, type NotificationRequest, type NotifiedBroadcast, type WindowNotification } from "./notifications";
 
 const client = vi.hoisted(() => ({ onEvent: undefined as ((event: Event) => void) | undefined }));
 vi.mock("../daemon-client", async (importOriginal) => ({
@@ -18,37 +18,43 @@ vi.mock("../daemon-client", async (importOriginal) => ({
   },
 }));
 
-function notificationsOf(events: Event[]): NotificationRequest[] {
+function notificationsOf(events: Event[]): WindowNotification[] {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  const notifications: NotificationRequest[] = [];
+  const notifications: WindowNotification[] = [];
   daemon.onNotification((notification) => notifications.push(notification));
   events.forEach((event) => client.onEvent!(event));
   return notifications;
 }
 
+/** `notification` as a notification shown, which a test of one expects it to be rather than a withdrawal. */
+function shown(notification: WindowNotification | undefined): NotificationRequest {
+  if (notification?.kind !== "error" && notification?.kind !== "notice") throw new Error(`not a shown notification: ${notification?.kind}`);
+  return notification;
+}
+
 it("shows a failure notice as an error that keeps the daemon's code and params", () => {
-  const [notification] = notificationsOf([{ type: "session_notice", session: "s", code: "account_sharing_repair_failed", params: { name: "Work" }, message: "raw" }]);
+  const notification = shown(notificationsOf([{ type: "session_notice", session: "s", code: "account_sharing_repair_failed", params: { name: "Work" }, message: "raw" }])[0]);
   expect(notification).toMatchObject({ kind: "error", session: "s", daemonTitle: undefined });
   expect(notification.daemonError).toBeInstanceOf(CodedError);
   expect(notification.daemonError).toMatchObject({ code: "account_sharing_repair_failed", params: { name: "Work" }, message: "raw" });
 });
 
 it("shows any other coded notice as a notice that keeps its code", () => {
-  const [notification] = notificationsOf([{ type: "session_notice", session: "s", code: "trust_not_carried_over", params: {}, message: "raw" }]);
+  const notification = shown(notificationsOf([{ type: "session_notice", session: "s", code: "trust_not_carried_over", params: {}, message: "raw" }])[0]);
   expect(notification).toMatchObject({ kind: "notice", session: "s", daemonTitle: undefined });
   expect(notification.daemonError).toMatchObject({ code: "trust_not_carried_over", message: "raw" });
 });
 
 it("shows a failed launch as the failure it reports under a title of its own", () => {
   const params = { reason_code: "directory_missing", title: "Task" };
-  const [notification] = notificationsOf([{ type: "session_notice", session: "s", code: "launch_failed", params, message: "raw" }]);
+  const notification = shown(notificationsOf([{ type: "session_notice", session: "s", code: "launch_failed", params, message: "raw" }])[0]);
   expect(notification).toMatchObject({ kind: "error", session: "s" });
   expect(notification.daemonTitle).toMatchObject({ code: "launch_failed.title", params, message: "raw" });
   expect(notification.daemonError).toMatchObject({ code: "directory_missing", params, message: "raw" });
 });
 
 it("shows a broadcast error with no request id as an error with no session or title", () => {
-  const [notification] = notificationsOf([{ type: "error", id: null, code: "internal_error", params: {}, message: "raw" }]);
+  const notification = shown(notificationsOf([{ type: "error", id: null, code: "internal_error", params: {}, message: "raw" }])[0]);
   expect(notification.kind).toBe("error");
   expect(notification.daemonTitle).toBeUndefined();
   expect(notification.session).toBeUndefined();
@@ -62,11 +68,11 @@ it("leaves a request's own error reply to its caller", () => {
 
 it("words the message with the names of the records the store holds", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  const notifications: NotificationRequest[] = [];
+  const notifications: WindowNotification[] = [];
   daemon.onNotification((notification) => notifications.push(notification));
   daemon.store.setState({ sessions: new Map([["s", sessionOf("s", "c", "p", "Named session", "idle")]]) });
   client.onEvent!({ type: "session_notice", session: "s", code: "session_did_not_stop", params: { session: "s" }, message: "raw" });
-  expect(notifications[0].message).toContain("Named session");
+  expect(shown(notifications[0]).message).toContain("Named session");
 });
 
 // A wiring check: the gallery's daemon calls `broadcastNotification` itself, so the store has to be doing the same.
@@ -77,4 +83,18 @@ it("is what the store shows for the same broadcast", () => {
   for (const event of [notice, failure] as const) {
     expect(broadcastNotification(event, records, currentLanguage())).toEqual(notificationsOf([event])[0]);
   }
+});
+
+it("passes a withdrawn notice on as a notification of its own, naming the session and code", () => {
+  const [notification] = notificationsOf([{ type: "session_notice_withdrawn", session: "s", code: "message_not_sent" }]);
+  expect(notification).toMatchObject({ kind: "withdrawn", session: "s", code: "message_not_sent" });
+});
+
+it("keeps a withdrawal behind the notice it withdraws, also when both arrive before anything listens", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  client.onEvent!({ type: "session_notice", session: "s", code: "message_not_sent", params: {}, message: "raw" });
+  client.onEvent!({ type: "session_notice_withdrawn", session: "s", code: "message_not_sent" });
+  const kinds: string[] = [];
+  daemon.onNotification((notification) => kinds.push(notification.kind));
+  expect(kinds).toEqual(["error", "withdrawn"]);
 });

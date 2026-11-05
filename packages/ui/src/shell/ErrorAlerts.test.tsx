@@ -24,6 +24,7 @@ import { reportDaemonExit } from "../lifecycle/exitFailure";
 import { issueReportUrl, recordNames } from "../errors/issueReport";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
 import { registerSessionModelLauncher } from "../dialogs/sessionModelLauncher";
+import { BROWSER_HOST } from "../test/hosts";
 
 vi.mock("../errors/issueReport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../errors/issueReport")>();
@@ -34,7 +35,7 @@ vi.mock("../errors/issueReport", async (importOriginal) => {
 
 afterEach(() => { vi.clearAllMocks(); act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
 
-function mount(child?: React.ReactNode, platform: PlatformAdapter = { kind: "browser" }, daemon?: Daemon, strict = false): void {
+function mount(child?: React.ReactNode, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }, daemon?: Daemon, strict = false): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const tree = <PlatformProvider value={platform}>{child}<ErrorAlerts daemon={daemon} /></PlatformProvider>;
@@ -108,7 +109,7 @@ it("gives known disk and lock failures specific remedies without bug-report inst
 it("offers Issue guidance for unexpected failures, opening only after a user click", async () => {
   let opened!: () => void;
   const open = vi.fn(() => new Promise<void>((resolve) => { opened = resolve; }));
-  mount(undefined, { kind: "browser", links: { open } });
+  mount(undefined, { kind: "browser", host: BROWSER_HOST, links: { open } });
   const source = new Error("Renderer invariant failed");
   act(() => errorAlerts.report({ message: source.message, error: source }));
   const alert = document.querySelector('[role="alertdialog"]')!;
@@ -139,7 +140,7 @@ it("offers Issue guidance for unexpected failures, opening only after a user cli
 
 it("immediately shows an actionable manual URL fallback if opening an Issue fails", async () => {
   const open = vi.fn().mockRejectedValue(Object.assign(new Error("Browser unavailable"), { code: "EACCES" }));
-  mount(undefined, { kind: "tauri", links: { open } });
+  mount(undefined, { kind: "tauri", host: BROWSER_HOST, links: { open } });
   act(() => errorAlerts.report({ message: "Unexpected failure" }));
   const report = [...document.querySelectorAll("a")].find((link) => link.textContent === "Report issue")!;
   await act(async () => report.click());
@@ -179,7 +180,7 @@ it("redacts the daemon's record names and home directory from the report", () =>
     homeDir: "/Users/alice",
     projects: new Map([["p", { name: "Zeta Project", path: "/Users/alice/zeta" }]]) as never,
   } });
-  mount(undefined, { kind: "browser" }, daemon);
+  mount(undefined, { kind: "browser", host: BROWSER_HOST }, daemon);
   const error = new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
   act(() => errorAlerts.report({ message: error.message, error }));
   const prefilled = reportOf();
@@ -198,7 +199,7 @@ it("leaves the alert's own words, session and body out of the report", () => {
 });
 
 it("puts the application's version, from the platform, in the report", async () => {
-  mount(undefined, { kind: "tauri", links: { open: vi.fn() }, updater: { currentVersion: async () => "9.8.7" } as PlatformAdapter["updater"] });
+  mount(undefined, { kind: "tauri", host: BROWSER_HOST, links: { open: vi.fn() }, updater: { currentVersion: async () => "9.8.7" } as PlatformAdapter["updater"] });
   await act(async () => errorAlerts.report({ message: "x", error: new Error("boom") }));
   expect(reportOf().get("body")).toContain(`- ${appConfig.name}: 9.8.7`);
 });
@@ -511,7 +512,7 @@ describe.each([{ strict: false }, { strict: true }])("acknowledged over a dialog
 });
 
 it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback", () => {
-  mount(undefined, { kind: "tauri" });
+  mount(undefined, { kind: "tauri", host: BROWSER_HOST });
   const error = { message: "Foreign failure", stack: "Foreign stack trace" };
   act(() => errorAlerts.report({ message: error.message, error }));
   const alert = document.querySelector('[role="alertdialog"]')!;

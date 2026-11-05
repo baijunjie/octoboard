@@ -11,22 +11,49 @@
 //! hints of an empty box faint (a fresh session's `❯ Try "…"`, `❯ Press up to edit queued
 //! messages` while a message waits for the turn to end), and they are no text of the box.
 //! Grok Build writes nothing in its composer faint (1.0.70).
+//!
+//! Where the host renders what the program draws (`TermFacts::host_renders`), the host may draw a
+//! faint cell plain, so a box that shows nothing but one of the provider's placeholders
+//! (`crate::session::screen::ScreenReader::input_placeholder`) is read as empty whatever it is
+//! drawn with ([`placeholder_as_empty`], which `crate::session::LiveSession::input_box_rows`
+//! applies); the faint cells are still blanked there too.
 
 use crate::protocol::AgentId;
 
 /// The text in the agent's input box as `screen` (the visible rows) shows it, one row a line with
 /// the indent taken off and empty rows at the end dropped; empty for an empty box, `None` where no
 /// input box is recognised. Codex requires a recognised final status footer to locate its box.
+/// What a session reads is `crate::session::LiveSession::input_box`, which reads it this way where
+/// its host does not render what the program draws.
+#[cfg(test)]
 pub(super) fn input_box(agent: AgentId, screen: &str) -> Option<String> {
-    let mut lines = input_box_rows(agent, screen)?;
+    Some(text_of(input_box_rows(agent, screen)?))
+}
+
+/// The text of an input box's rows: one row a line, empty rows at the end dropped.
+pub(super) fn text_of(mut lines: Vec<String>) -> String {
     while lines.last().is_some_and(|line| line.is_empty()) {
         lines.pop();
     }
-    Some(lines.join("\n"))
+    lines.join("\n")
+}
+
+/// The rows of `agent`'s input box with its placeholder, if that is all the box shows, read as an
+/// empty row: the first row one of the provider's placeholders and every row after it empty.
+pub(super) fn placeholder_as_empty(agent: AgentId, mut rows: Vec<String>) -> Vec<String> {
+    let screen = crate::adapter::provider(agent).screen();
+    if rows
+        .first()
+        .is_some_and(|first| screen.input_placeholder(first))
+        && rows[1..].iter().all(String::is_empty)
+    {
+        rows[0].clear();
+    }
+    rows
 }
 
 /// The rows of the agent's input box, each trimmed and the prompt mark off the first, empty rows
-/// kept: a Ctrl-U that removes an empty row changes these and not [`input_box`]'s text.
+/// kept: a Ctrl-U that removes an empty row changes these and not the text they hold ([`text_of`]).
 pub(super) fn input_box_rows(agent: AgentId, screen: &str) -> Option<Vec<String>> {
     crate::adapter::provider(agent)
         .screen()
@@ -231,7 +258,8 @@ mod tests {
     }
 
     /// Raw captures of a real session's output (Claude Code 2.1.310 and 2.1.316, Grok Build
-    /// 1.0.70), replayed into the daemon's own screen.
+    /// 1.0.70, and from the inbox console host Claude Code 2.1.319 and Codex 0.166.0), replayed
+    /// into the daemon's own screen.
     fn replayed(bytes: &[u8], undimmed: bool) -> String {
         let mut screen = crate::terminal::snapshot::TerminalSnapshot::new(40, 120);
         screen.process(bytes);
@@ -239,6 +267,60 @@ mod tests {
             screen.visible_text_undimmed()
         } else {
             screen.visible_text()
+        }
+    }
+
+    /// The captures of the inbox console host's repaint (`testdata/conhost-captures.md`) read as
+    /// the macOS ones do: the host keeps the placeholder faint, so it is no text of the box once the
+    /// faint cells are blanked, and a draft or a restored prompt is the box's text. Codex's footer
+    /// is the host's own, a home-relative directory on a second row with the hints.
+    #[test]
+    fn the_inbox_console_host_s_repaint_of_an_input_box_is_read_off_the_screen() {
+        for (agent, capture, plain, undimmed) in [
+            (
+                AgentId::CLAUDE,
+                &include_bytes!("../../testdata/conhost_claude_input_placeholder.bin")[..],
+                "Try \"refactor <filepath>\"",
+                "",
+            ),
+            (
+                AgentId::CLAUDE,
+                include_bytes!("../../testdata/conhost_claude_input_pasted.bin"),
+                "say hi in two words",
+                "say hi in two words",
+            ),
+            (
+                AgentId::CLAUDE,
+                include_bytes!("../../testdata/conhost_claude_input_restored.bin"),
+                "write a 400 word story about a lighthouse keeper",
+                "write a 400 word story about a lighthouse keeper",
+            ),
+            (
+                AgentId::CODEX,
+                include_bytes!("../../testdata/conhost_codex_fresh_empty.bin"),
+                "Ask Codex to do anything",
+                "",
+            ),
+            (
+                AgentId::CODEX,
+                include_bytes!("../../testdata/conhost_codex_fresh_draft.bin"),
+                "say hi in two words",
+                "say hi in two words",
+            ),
+        ] {
+            // Codex's footer names its directory the Windows way, which only such a host reads.
+            let reads = agent != AgentId::CODEX
+                || crate::platform::names::PATH_STYLE == crate::platform::names::PathStyle::Windows;
+            assert_eq!(
+                input_box(agent, &replayed(capture, false)).as_deref(),
+                reads.then_some(plain),
+                "{agent:?} on the plain screen"
+            );
+            assert_eq!(
+                input_box(agent, &replayed(capture, true)).as_deref(),
+                reads.then_some(undimmed),
+                "{agent:?} with faint cells blanked"
+            );
         }
     }
 

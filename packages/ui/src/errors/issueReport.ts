@@ -4,7 +4,8 @@ import type { RecordNames } from "./daemonMessage";
 import { diagnosticText, errorDiagnostic, rawFailureText } from "./errorText";
 import { CODE } from "./codes";
 import { classifyError, type ErrorClassification, type ErrorRecovery } from "./errorRecovery";
-import type { GitStatus } from "../protocol";
+import { daemonOsName } from "../i18n/platformTerms";
+import type { GitStatus, HostInfo } from "../protocol";
 
 export interface ErrorAlertFailure {
   error: unknown;
@@ -39,6 +40,8 @@ export interface IssueEnvironment {
   daemonVersion?: string;
   platform?: "tauri" | "browser";
   userAgent?: string;
+  /** The daemon host's own facts (`snapshot.host`), which may be another machine than the one the UI runs on. */
+  daemonHost?: Pick<HostInfo, "os" | "path_style">;
   language?: string;
 }
 
@@ -292,10 +295,13 @@ function titleOf({ failures, context, known }: IssueFacts): string {
   return summary ? `Unexpected error: ${summary}` : "Unexpected error";
 }
 
-/** Where the desktop application keeps its logs (`paths::logs_dir` in the daemon). Only where they are: a report
- * attaches nothing on its own and never asks for raw diagnostics, which can hold what the user would not share. */
-const LOGS_HINT =
-  `<!-- ${appConfig.name} keeps its logs in ~/.octoboard/logs/ (daemon.log, desktop.log); a maintainer may ask about them if more detail is needed. -->`;
+/** Where the desktop application keeps its logs (`paths::logs_dir` in the daemon), spelled the way the daemon's host
+ * writes a path. Only where they are: a report attaches nothing on its own and never asks for raw diagnostics, which
+ * can hold what the user would not share. */
+function logsHint(daemonHost: IssueEnvironment["daemonHost"]): string {
+  const logs = daemonHost?.path_style === "windows" ? "%USERPROFILE%\\.octoboard\\logs\\" : "~/.octoboard/logs/";
+  return `<!-- ${appConfig.name} keeps its logs in ${logs} (daemon.log, desktop.log); a maintainer may ask about them if more detail is needed. -->`;
+}
 
 function bodyOf(facts: IssueFacts, diagnostics: ReportedFailure[], diagnosticLimit: number): string {
   const { environment } = facts;
@@ -305,6 +311,7 @@ function bodyOf(facts: IssueFacts, diagnostics: ReportedFailure[], diagnosticLim
     environment.daemonVersion && `- Daemon: ${environment.daemonVersion}`,
     environment.platform && `- Platform: ${environment.platform === "tauri" ? "desktop app" : "browser"}`,
     os && `- OS: ${os}`,
+    environment.daemonHost && `- Daemon host: ${daemonOsName(environment.daemonHost)}`,
     environment.language && `- Language: ${environment.language}`,
   ].filter((line): line is string => !!line);
   const errors = diagnostics.map((failure) => {
@@ -324,7 +331,7 @@ function bodyOf(facts: IssueFacts, diagnostics: ReportedFailure[], diagnosticLim
     "<!-- Describe what you were doing when this happened, and what you expected instead. -->",
     // The desktop application's daemon and shell write their logs on this machine; a browser's daemon may run on
     // another one, whose files the user may not reach.
-    ...(environment.platform === "tauri" ? [LOGS_HINT] : []),
+    ...(environment.platform === "tauri" ? [logsHint(environment.daemonHost)] : []),
     "The details below were filled in automatically, with personal information removed. Please check them before submitting.",
     "### Environment",
     environmentLines.length > 0 ? environmentLines.join("\n") : "Unknown",

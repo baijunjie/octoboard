@@ -334,7 +334,7 @@ html {
   --tooltip-close-delay: 0s;
 
   /* The top bar across the whole window (`TitleBar.tsx`). On macOS the shell centres the traffic
-     lights in it (`TRAFFIC_LIGHT_Y` in `apps/desktop/src-tauri/src/lib.rs`), so the two move
+     lights in it (`TRAFFIC_LIGHT_Y` in `apps/desktop/src-tauri/src/chrome/macos.rs`), so the two move
      together; a fixed pixel size, since the lights' position is fixed too. */
   --title-bar-height: 40px;
 
@@ -916,7 +916,7 @@ html {
 
 /* What the window itself is painted with, behind the top bar and the rail: `--chrome` in a browser;
    clear in the macOS app, whose window is translucent behind the page (a native sidebar material,
-   applied by the shell in `open_main_window`, `apps/desktop/src-tauri/src/lib.rs`), which
+   applied by the shell in `apps/desktop/src-tauri/src/chrome/macos.rs`), which
    `main.tsx` marks on the page. The material then shows through wherever the page paints nothing,
    and everything else the page draws stays opaque. */
 :root {

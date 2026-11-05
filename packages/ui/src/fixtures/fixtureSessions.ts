@@ -23,7 +23,7 @@ const agentNotAdded = (agent: Agent) => ({
 /** The replies about sessions. */
 export function createSessionReplies({ scenario, store, fail, refuseLocked }: FixtureContext, guards: AccountGuards, ledger: ProcessLedger): Handlers {
   const { launchAccount, refuseIfSharingChanges, refuseIfDisabled, refuseIfQuotaExhausted, refuseIfNotSignedIn } = guards;
-  const { treesOfSession, oldestFirst, keepTrees, endSessions } = ledger;
+  const { treesOfSession, oldestFirst, keepTrees, refuseUnkeepable, endSessions } = ledger;
   let openedSessionCount = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
@@ -54,6 +54,8 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const current = store.getState();
       const session = current.sessions.get(body.session);
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
+      // A tree that cannot be kept refuses the archive before anything is kept or ended.
+      refuseUnkeepable(body.keep_process_ids ?? []);
       // The trees the user chose to keep are theirs before anything else happens, so a refusal leaves them kept.
       keepTrees(body.keep_process_ids ?? []);
       if (scenario.sessionArchiveError) return fail(scenario.sessionArchiveError);

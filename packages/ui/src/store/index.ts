@@ -4,13 +4,14 @@ export type { Daemon } from "./connection";
 export { createImportProgressListeners } from "./importProgressListeners";
 export type { ImportProgressEvent } from "./importProgressListeners";
 export { consolePreference, currentConsoleOf, useCurrentConsole } from "./currentConsole";
+export { DaemonHostAnnouncement } from "./daemonHost";
 export { DEFAULT_SETTINGS } from "./defaultSettings";
 export { DaemonProvider, useDaemon, useOptionalDaemon, useDaemonStore, useDaemonStoreEqual, useDaemonStoreOrEmpty, useProviders } from "./react";
 export type { SessionRequest } from "./sessionRequests";
 export { createStateStore } from "./state";
 export type { State, TrustPrompt } from "./state";
 export { errorNotification } from "./notifications";
-export type { AlertOptions, NotificationRequest } from "./notifications";
+export type { AlertOptions, NoticeWithdrawal, NotificationRequest, WindowNotification } from "./notifications";
 export {
   useAccountSwitchHeld,
   useArchivedOwnerSessions,

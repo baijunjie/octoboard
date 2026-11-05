@@ -47,6 +47,12 @@ project's folder (the folder itself is not inside it).
 - In a worktree where the project's folder is not on disk, its changes are still listed: a deletion is read from the
   index and `HEAD`, never from the disk.
 
+**On a Windows daemon host**, a repository made elsewhere can hold a path Windows cannot name — one with a colon
+(`a:b`), a reserved device name such as `CON`, or a trailing dot. A change at such a path is listed like any other,
+and its diff is read from what Git holds, the index or a commit; no file on the disk has that name, so what has to be
+read from the disk — opening it with Default application or File manager, say — is refused. Restoring the file
+changes of such a repository fails (see "Restoring file changes" in `docs/product/project-git-actions.md`).
+
 Within a section, changes are in the order the file tree would show their paths (see "Order" in
 `docs/product/project-pane.md`), a deleted file by the path it had.
 

@@ -12,8 +12,9 @@ use crate::providers::codex::{
     CODEX_TITLE_INDEX,
 };
 
-// The thread state database is a file item: SQLite opened through a link keeps its `-wal` and
-// `-shm` beside the target, so those are not items. Codex versions it by name (0.162.1 uses
+// The thread state database is a file item: where SQLite follows a link, it keeps the `-wal` and
+// `-shm` beside the target, so those are not items; where it does not, the host shares no thread
+// database at all (`shared_items`). Codex versions it by name (0.162.1 uses
 // `state_5.sqlite`), and a new schema generation is a new file beside the old one. Only this one
 // generation is listed on purpose; a database of another generation is reported by `repair` as
 // unshared (`Repaired::unshared_databases`) until the catalog is updated.

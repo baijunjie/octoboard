@@ -73,6 +73,18 @@ describe("the report page's sanitizer", () => {
     expect(document.documentElement.getAttribute("dir")).toBe("rtl");
   });
 
+  it("leaves no resource hint anywhere in the page, in its body or on a custom element", async () => {
+    const hints = ["preconnect", "dns-prefetch", "prefetch", "prerender", "modulepreload", "preload"];
+    const links = hints.map((rel) => `<link rel="${rel}" href="http://127.0.0.1:1/${rel}">`).join("");
+    const { document } = await render(`<!doctype html><html><head>${links}</head><body>
+      ${links}<p>text</p><a id="a" rel="prefetch" href="next.html">next</a>
+      <x-hint id="x" rel="preconnect" href="http://127.0.0.1:1/x">custom</x-hint>
+      <svg><a rel="preconnect" href="page.html"><text>svg</text></a></svg></body></html>`);
+    expect(document.querySelector("link, [rel], x-hint, #x")).toBeNull();
+    expect(document.querySelector("#a")?.textContent).toBe("next");
+    expect(document.body.textContent).toContain("custom");
+  });
+
   it("posts a submitted form's fields with the pressed button, and none from a history page", async () => {
     const page = "<form><input name=\"who\" value=\"Ada\"><button name=\"choice\" value=\"yes\">Yes</button></form>";
     const live = await render(page);

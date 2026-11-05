@@ -137,10 +137,12 @@ A **project's row** has the project's name and, under it, where the daemon found
 default clone directory, or not found but able to be cloned from its remote. That line follows what was found, whatever
 choice is then made. A project with nothing offered, and so no default (see "Where an imported project goes" in
 `docs/product/configuration-export-and-import.md`), has no such line: an amber warning mark follows its name instead,
-named after the project as not found, whose popover says that no matching project folder was found and that it is left
-out unless a directory is chosen for it. A project not found that also has account fallbacks still has
-this one mark, named after the project as not found and with accounts not set up, its popover adding the fallbacks'
-sentences (see "Account fallbacks" below) after its own. The choice of where the project goes sits at the end of the
+named after the project as not found, whose popover says that no matching project folder was found — or, for an
+exported path written on another operating system (see "Where an imported project goes" in
+`docs/product/configuration-export-and-import.md`), that the exported path was written on another operating system and
+so cannot be used here — and that it is left out unless a directory is chosen for it. A project not found that also
+has account fallbacks still has this one mark, named after the project as not found and with accounts not set up, its
+popover adding the fallbacks' sentences (see "Account fallbacks" below) after its own. The choice of where the project goes sits at the end of the
 name's line, and drops under it where the row is narrow; its accessible name is "Where to place" followed by the
 project's name. A row offers only the choices its state allows, with the daemon's default preselected, and always
 offers **Another directory** and **Leave out**. Labelled lines under them give the paths:
@@ -150,6 +152,12 @@ offers **Another directory** and **Leave out**. Labelled lines under them give t
   says it.
 - **Placed in** — the directory the choice would use, for the exported path and the default clone directory.
 - **Clone from** and **Clone into** — where a clone would come from and go to, for a clone.
+
+A project whose exported path was written on another operating system but that has a default — able to be cloned
+from its remote — says so in a note mark after the value of its Exported path line, named after the project's exported
+path as unable to be used, whose popover says only that the exported path was written on another operating system and
+so cannot be used here, with no remedy. The Exported path line still shows the path as the file records it. Such a
+project with nothing offered says it in its not-found mark instead (above).
 
 Another directory has no Placed in line: it shows a field labelled **Directory** (its accessible name is "Directory
 for" followed by the project's name), with a **Browse** button, where a path is typed or browsed to; a path that is
@@ -196,6 +204,11 @@ and notes marked at their point" in `docs/product/error-alerts.md`):
 - for an account the Add account form would refuse, the mark is named after the account as unable to be created, and
   its popover says why, with the form's remedy where it has one, then that the account is left out unless another
   directory is chosen for it — or, where its name is the problem, only that it is left out — and last any raw text.
+  For an account whose directory in the file was written on another operating system (see "Importing accounts" in
+  `docs/product/configuration-export-and-import.md`), the popover never says the directory is not absolute: it says
+  that the directory in the file was written on another operating system and so cannot be used here, then that the
+  account is left out unless another directory is chosen for it. An account whose name is the problem as well is
+  described by its name's reason, as above.
 
 The choice of what to do with the account sits at the end of the name's line, and drops under it where the row is
 narrow; its accessible name is "What to do with" followed by the account's name. A new account offers **Create it**,
@@ -254,7 +267,11 @@ A **setting only a client holds** — Appearance, Language, Markdown style, Keep
 them (a language by its name in its own language, a Markdown style by its name); or **No change** when they are the
 same.
 
-The **default clone directory** has its line when the file carries one that can be used here: **No change** when it is
+The **default clone directory** has its line when the file carries one that can be used here, or one written on another
+operating system. A directory written on another operating system (see "The default clone directory on import" in
+`docs/product/settings-in-a-configuration.md`) is not offered: its line is badged **No change** and says that the
+file's default clone directory was written on another operating system, so it cannot be used here, and that the current
+default clone directory is kept; it has no checkbox. A directory that can be used here is **No change** when it is
 this machine's already. Otherwise the line is badged **Set to the file's**, with the file's directory and, in brackets,
 this machine's, and holds a checkbox, **Use the file's default clone directory**, checked whenever a file is opened.
 Unchecked, the badge is **No change**, and the line says that this machine's directory is kept instead of the file's;

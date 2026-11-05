@@ -1,9 +1,11 @@
 import { format, isMessageKey, messageText, globalParam, PROVIDER_PARAM_NAMES, translatorFor, type MessageKey } from "../i18n/catalog";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { isolate } from "../i18n/isolate";
+import { daemonOs, daemonOsName } from "../i18n/platformTerms";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "../accounts/quotaFormat";
 import type { Language } from "../i18n/languages";
+import type { PathStyle } from "../format/hostPath";
 import { leftBranchesText, leftBranchGroups, leftBranchItems } from "./branchCleanupItems";
 import { providerLabel } from "../agents/providers";
 import { CODE, codeRecord, messageFacets, messageKey } from "./codes";
@@ -28,6 +30,7 @@ export interface RecordNames {
   projects: Map<string, Project>;
   sessions: Map<string, Session>;
   homeDir?: string | null;
+  host?: { path_style: PathStyle } | null;
   shellTerminals?: Map<string, ShellTerminal>;
   accounts?: Settings["accounts"];
   settings?: Settings;
@@ -88,22 +91,25 @@ export function referenceNameParams(code: string, params: MessageParams): string
   if (!isMessageKey(key)) return [];
   const richKey = messageKey(richMessageCode(code, params));
   const text = messageText("en", key, params) + (isMessageKey(richKey) ? messageText("en", richKey, params) : "");
-  return ["agent", "appName", ...PROVIDER_PARAM_NAMES, "git", "macOS"].filter((name) => text.includes(`{${name}}`));
+  return ["agent", "appName", ...PROVIDER_PARAM_NAMES, "git", "osName"].filter((name) => text.includes(`{${name}}`));
 }
 
-/** The catalog suffix for a daemon code and its parameter-selected variant. Corrected meanings use a new suffix
- * across plain messages, summaries and remedies, so delivered translations keep their original keys. */
+/** The catalog suffix for a daemon code and its variant, selected by its params and by the operating system of the
+ * daemon's host. Corrected meanings use a new suffix across plain messages, summaries and remedies, so delivered
+ * translations keep their original keys. */
 export function messageCode(code: string, params: MessageParams): string {
-  const variant = codeRecord(code)?.variantOf?.(params);
+  const variant = codeRecord(code)?.variantOf?.(params, daemonOs());
   const message = variant === undefined ? code : `${code}.${variant}`;
   if (code === CODE.project_directory_shared || (code === CODE.project_directory_trash_failed && (variant === "unanswered" || variant === "unreadable"))) return `${message}.retryTrash`;
   if (code === CODE.shell_environment_timeout && ["shell", "command", "timeout"].every((name) => !!params[name])) return `${code}.sessionLaunchBlocked`;
   return message;
 }
 
-/** A message's params as the UI shapes them: the daemon's over the UI's own (`uiParams` in `codes.ts`). */
+/** A message's params as the UI shapes them: the daemon's over the UI's own (`uiParams` in `codes.ts`), and the name of
+ * the operating system of the daemon's host, where what the message tells of happened, which a message names as a
+ * reference. */
 export function withUiParams(code: string, params: MessageParams): MessageParams {
-  return { ...codeRecord(messageCode(code, params))?.uiParams, ...params };
+  return { osName: daemonOsName(), ...codeRecord(messageCode(code, params))?.uiParams, ...params };
 }
 
 /** The names of the providers the daemon serves, in their order, for a message that lists the supported agents. */
@@ -191,7 +197,7 @@ export function daemonParams<V = never>(
   const running = code === CODE.session_has_running_sessions ? runningSessionIds(all) : undefined;
   if (running) shown.sessions = joinPhrases(language, running.map((id) => paramText(records, "session", id, CODE.unknown_session, language)));
   const left = leftBranchItems(code, all);
-  if (left) shown.items = leftBranchesText(language, left, records.homeDir);
+  if (left) shown.items = leftBranchesText(language, left, records.homeDir, records.host?.path_style);
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   if ((code === CODE.account_in_use || code === CODE.account_has_running_sessions) && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);

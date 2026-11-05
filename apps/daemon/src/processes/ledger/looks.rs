@@ -106,7 +106,7 @@ impl Looks {
             });
         for id in &pass.timed_out {
             tracing::warn!(
-                pid = id.pid,
+                pid = id.pid.0,
                 "reading a process's working directory timed out; it counts as unknown"
             );
         }
@@ -115,6 +115,13 @@ impl Looks {
 
     /// Every path a look was asked for, for a test.
     #[cfg(test)]
+    #[cfg_attr(
+        windows,
+        allow(
+            dead_code,
+            reason = "only a test of what is left in a removed directory reads it"
+        )
+    )]
     pub(super) fn looked(&self) -> Vec<PathBuf> {
         self.looked
             .lock()
@@ -178,7 +185,7 @@ impl ProcessLedger {
         let mut roots: Vec<(usize, PathBuf)> = dirs.iter().cloned().enumerate().collect();
         let pass = self
             .looks
-            .at_paths(groups, |(_, dir)| std::fs::canonicalize(dir).ok());
+            .at_paths(groups, |(_, dir)| crate::hostfs::canonical(dir).ok());
         for ((index, dir), resolved) in pass.found {
             if resolved != dir {
                 roots.push((index, resolved));

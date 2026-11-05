@@ -351,7 +351,8 @@ In the browser, the listed directory's subdirectories are one list, with a paren
 the filesystem root — muted, marked with an up-arrow icon and labelled as the parent directory, which is also what it is
 announced as to assistive technology — each directory marked with a folder icon, and a "git" badge at the end of each
 entry that is a git repository. Under each directory's name its path is shown in small muted text, the host's home
-directory written as `~`, cut from its start when too long so the directory's own name stays visible; the full path is
+directory written as `~` (as in "How paths are shown" in `docs/product/settings.md`, so not on a Windows host), cut
+from its start when too long so the directory's own name stays visible; the full path is
 its tooltip while it is cut or written with `~`. A directory is announced to assistive technology by its name, with
 "git" for a repository, and its path as its description. While the entries scroll, the parent-directory entry stays
 pinned at the top of the list. Clicking an entry, or pressing Enter on it, lists that directory. The list is a single
@@ -370,8 +371,12 @@ directory) only when it is the newest navigation asked for; otherwise the field 
 the user typed. The directory can be selected only while the path field names the directory listed.
 
 A listing can fail, and that is a normal path rather than an edge case: a packaged application is granted file access
-per volume by macOS, and the user may decline the prompt or leave it unanswered. The reason names the path and gives
-the hint that per-volume access has to be granted. Where the failure is shown depends on who asked for the listing:
+per volume by macOS, and the user may decline the prompt or leave it unanswered. The reason names the path and, where
+the daemon runs on macOS, gives the hint that per-volume access has to be granted; where it runs on another system, it
+says instead that the daemon reads folders with the permissions of the user account it runs as, and asks to check that
+that account can read it. The same holds for every report that a directory could not be read
+(`directory_unreadable`), and a directory the daemon cannot reach (`directory_unreachable`) mentions the per-volume
+access prompt only where the daemon runs on macOS. Where the failure is shown depends on who asked for the listing:
 
 - **The listing made as the browser opens**, when it fails, leaves the browser with nothing to show, so the failure is
   shown in the browser itself, in an alert under the path field saying the directory could not be listed, with the

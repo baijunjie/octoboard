@@ -8,14 +8,13 @@
 //! repository. For that reason a file is opened only as a regular file and without blocking: a
 //! FIFO an agent left in the git directory would otherwise hold them up for good.
 
-use std::ffi::OsStr;
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::git::layout;
 use crate::hostfs::open_regular;
+use crate::platform::names;
 
 /// How much of `packed-refs` is searched for a reference: a line per reference, so this is far
 /// more than a repository's branches come to, and a file past it is searched only as far as this.
@@ -31,7 +30,7 @@ const MAX_SYMBOLIC_REF: u64 = 4 * 1024;
 /// repository.
 pub fn repository_of(dir: &Path) -> Option<PathBuf> {
     let ceiling = layout::home_ceiling();
-    let canonical = fs::canonicalize(dir).ok()?;
+    let canonical = crate::hostfs::canonical(dir).ok()?;
     let top = layout::find_dot_git(&canonical, ceiling.as_deref())?;
     let admin = layout::admin_dir(&top)?;
     common_dir_of(&admin)
@@ -44,7 +43,7 @@ pub(crate) fn common_dir_of(git_dir: &Path) -> Option<PathBuf> {
     // inside the common directory of a linked worktree: a folder holding the repository is still
     // found to hold it, where "no repository" would let a move to the Trash take it.
     let common_dir = layout::common_dir(git_dir).unwrap_or_else(|_| git_dir.to_path_buf());
-    fs::canonicalize(common_dir).ok()
+    crate::hostfs::canonical(common_dir).ok()
 }
 
 /// Whether the repository keeps its references in reftable format, which has no reflog files.
@@ -69,7 +68,7 @@ pub(crate) fn reference_exists(common_dir: &Path, name: &[u8]) -> bool {
     if !is_plain_ref_name(name) {
         return false;
     }
-    if common_dir.join(OsStr::from_bytes(name)).is_file() {
+    if names::path_from_name_bytes(name).is_some_and(|path| common_dir.join(path).is_file()) {
         return true;
     }
     let Ok(file) = open_regular(&common_dir.join("packed-refs")) else {
@@ -131,7 +130,7 @@ pub(crate) fn remote_default_branch_in_files(common_dir: &Path) -> Option<Vec<u8
         .flatten()
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
         .filter_map(|entry| {
-            let remote = entry.file_name().as_bytes().to_vec();
+            let remote = names::name_bytes(&entry.file_name()).into_owned();
             let mut text = Vec::new();
             open_regular(&entry.path().join("HEAD"))
                 .ok()?
@@ -153,7 +152,9 @@ pub(crate) fn remote_default_branch_in_files(common_dir: &Path) -> Option<Vec<u8
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{git, mkfifo, repo_with};
+    #[cfg(unix)]
+    use crate::test_support::mkfifo;
+    use crate::test_support::{git, repo_with};
 
     #[test]
     fn the_remote_default_branch_is_read_from_the_remotes_head_files() {
@@ -225,12 +226,15 @@ mod tests {
         assert_eq!(rebasing_branch(&git_dir), Some(b"feature/x".to_vec()));
         std::fs::write(&head_name, "detached HEAD\n").unwrap();
         assert_eq!(rebasing_branch(&git_dir), None);
-        std::fs::remove_file(&head_name).unwrap();
-        mkfifo(&head_name);
-        let (sender, receiver) = std::sync::mpsc::channel();
-        std::thread::spawn(move || sender.send(rebasing_branch(&git_dir)));
-        let read = receiver.recv_timeout(crate::test_support::PATIENCE);
-        assert_eq!(read.expect("the state read blocked"), None);
+        #[cfg(unix)]
+        {
+            std::fs::remove_file(&head_name).unwrap();
+            mkfifo(&head_name);
+            let (sender, receiver) = std::sync::mpsc::channel();
+            std::thread::spawn(move || sender.send(rebasing_branch(&git_dir)));
+            let read = receiver.recv_timeout(crate::test_support::PATIENCE);
+            assert_eq!(read.expect("the state read blocked"), None);
+        }
     }
 
     #[test]
@@ -253,6 +257,7 @@ mod tests {
     }
 
     /// Taken for "no repository", it would let a move to the Trash take the folder holding it.
+    #[cfg(unix)]
     #[test]
     fn an_unreadable_commondir_still_places_the_repository_inside_the_common_directory() {
         let repo = repo_with("repo-files-commondir-fifo", &[(b"a", b"a")]);

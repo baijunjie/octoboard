@@ -3,7 +3,9 @@
 //! which never changes meaning, so the reply identifies its content exactly.
 //!
 //! A path is looked up by listing exactly that path (`ls-files`, `ls-tree`), never by a revision
-//! expression such as `:<path>` or `<commit>:<path>`, whose syntax a filename could take part in.
+//! expression such as `:<path>` or `<commit>:<path>`, whose syntax a filename could take part in,
+//! and is given as `:(top,literal)<path>` ([`pathspec::literal`]) so that Windows never takes a
+//! name such as `a:b` for a drive.
 //! A branch name is checked as a reference name and looked up as exactly `refs/heads/<name>`
 //! before anything is read; a commit is accepted only as the full object id of a commit.
 
@@ -16,6 +18,7 @@ use anyhow::Result;
 use crate::browse::live::{too_large, unsupported};
 use crate::browse::{budget, git_error, git_failed};
 use crate::git::isolated::IsolatedGit;
+use crate::git::pathspec;
 use crate::git::run::GitError;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{error_code, CodedError};
@@ -52,10 +55,12 @@ pub fn read_index(
     cancel: &AtomicBool,
 ) -> Result<Blob> {
     let full = entry.in_repository();
-    let stdout = match env.run(
+    let spec = pathspec::literal(full.as_bytes());
+    let stdout = match env.run_pathspecs(
         root,
         "ls-files",
-        &[b"--stage", b"-z", b"--", full.as_bytes()],
+        &[b"--stage", b"-z"],
+        &[&spec],
         budget::GIT_METADATA_STDOUT,
         cancel,
     ) {
@@ -112,18 +117,13 @@ pub fn read_commit(
     cancel: &AtomicBool,
 ) -> Result<Blob> {
     let full = entry.in_repository();
+    let spec = pathspec::literal(full.as_bytes());
     let stdout = env
-        .run(
+        .run_pathspecs(
             root,
             "ls-tree",
-            &[
-                b"-z",
-                b"-l",
-                b"--full-tree",
-                commit.as_bytes(),
-                b"--",
-                full.as_bytes(),
-            ],
+            &[b"-z", b"-l", b"--full-tree", commit.as_bytes()],
+            &[&spec],
             budget::GIT_METADATA_STDOUT,
             cancel,
         )
@@ -211,9 +211,11 @@ pub fn tree_entry(
     path: &[u8],
     cancel: &AtomicBool,
 ) -> Result<Option<(Vec<u8>, String)>> {
-    let args: &[&[u8]] = &[b"-z", b"--full-tree", commit.as_bytes(), b"--", path];
+    let spec = pathspec::literal(path);
+    let args: &[&[u8]] = &[b"-z", b"--full-tree", commit.as_bytes()];
+    let limit = budget::GIT_METADATA_STDOUT;
     let stdout = env
-        .run(root, "ls-tree", args, budget::GIT_METADATA_STDOUT, cancel)
+        .run_pathspecs(root, "ls-tree", args, &[&spec], limit, cancel)
         .map_err(git_error)?;
     for record in stdout.split(|&b| b == 0).filter(|r| !r.is_empty()) {
         // `<mode> <type> <oid>\t<path>`

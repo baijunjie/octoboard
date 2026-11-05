@@ -2,6 +2,7 @@ import { appConfig } from "../appConfig";
 import { PROVIDER_PARAMS } from "../providers/registry";
 import { FALLBACK_LANGUAGE, textDirection, type Language } from "./languages";
 import { isolate } from "./isolate";
+import { type DaemonHost, osName, platformParam, platformParamBase, PLATFORM_PARAM_NAMES } from "./platformTerms";
 import { ar } from "./messages/ar";
 import { de } from "./messages/de";
 import { en } from "./messages/en";
@@ -39,24 +40,50 @@ export function isMessageKey(key: string): key is MessageKey {
 }
 
 /** The placeholders that are not a provider's: the app's own name (from the app config) and the products' names. */
-const CORE_PARAMS = { appName: appConfig.name, git: "Git", macOS: "macOS", tauri: "Tauri" } as const;
+const CORE_PARAMS = { appName: appConfig.name, git: "Git", tauri: "Tauri" } as const;
 
 /** The placeholders filled in every message, so callers never pass them: the core ones and the providers' brand names
  * (`params` of their modules). */
 const GLOBAL_PARAMS = { ...PROVIDER_PARAMS, ...CORE_PARAMS } as const;
 
-type GlobalParam = keyof typeof GLOBAL_PARAMS | "systemSettings";
+/** `osName` and the platform words (`platformTerms.ts`) are global too, but come from the hosts announced: the shell's,
+ * and for the words that name something on the daemon's machine, the daemon's. */
+type GlobalParam =
+  | keyof typeof GLOBAL_PARAMS
+  | "osName"
+  | "trash"
+  | "systemSettings"
+  | "hostSettings"
+  | "settingsApp"
+  | "menuBarIcon"
+  | "developerMode";
 
 /** The names of the placeholders that name a provider, which a message shows as references like `{agent}`. */
 export const PROVIDER_PARAM_NAMES: readonly string[] = Object.keys(PROVIDER_PARAMS);
 
-/** The names of the core placeholders, which no provider module may reuse; `systemSettings` is the one filled from the catalog. */
-export const CORE_PARAM_NAMES: readonly string[] = [...Object.keys(CORE_PARAMS), "systemSettings"];
+/** The names of the core placeholders, which no provider module may reuse: the products', the operating system's and
+ * the platform words'. */
+export const CORE_PARAM_NAMES: readonly string[] = [...Object.keys(CORE_PARAMS), "osName", ...PLATFORM_PARAM_NAMES];
 
-/** The value of a global placeholder, or `undefined` when `name` is not one. */
-export function globalParam(name: string, language: Language = FALLBACK_LANGUAGE): string | undefined {
-  if (name === "systemSettings") return messageText(language, "common.systemSettings");
-  return Object.hasOwn(GLOBAL_PARAMS, name) ? GLOBAL_PARAMS[name as keyof typeof GLOBAL_PARAMS] : undefined;
+/** The value of a global placeholder, or `undefined` when `name` is not one. The platform words are those of the hosts
+ * announced (`announceHost`, `announceDaemonHost`), in `language`; a caller that rendered under a daemon host passes
+ * it as `daemon`. */
+export function globalParam(name: string, language: Language = FALLBACK_LANGUAGE, daemon?: DaemonHost): string | undefined {
+  if (name === "osName") return osName();
+  if (Object.hasOwn(GLOBAL_PARAMS, name)) return GLOBAL_PARAMS[name as keyof typeof GLOBAL_PARAMS];
+  return platformParam(name, language, undefined, daemon);
+}
+
+/** The platform words that name a thing the user looks for on screen: a settings app (the client's or the daemon's) and
+ * a setting in it. */
+const REFERENCE_WORDS: ReadonlySet<string> = new Set(["systemSettings", "hostSettings", "settingsApp", "developerMode"]);
+
+/** Whether a message shows the placeholder as a reference to a product, which rich text sets as a chip: a name of the
+ * products, the system's, or one of `REFERENCE_WORDS`, in whichever form or capital a sentence asks for it. The other
+ * platform words are plain words of the sentence. */
+export function isReferenceParam(name: string): boolean {
+  const word = platformParamBase(name);
+  return Object.hasOwn(GLOBAL_PARAMS, name) || name === "osName" || (word !== undefined && REFERENCE_WORDS.has(word));
 }
 
 type Placeholders<S extends string> = S extends `${string}{${infer P}}${infer Rest}` ? Exclude<P, GlobalParam> | Placeholders<Rest> : never;
@@ -142,23 +169,24 @@ export function splitPlaceholders(text: string): string[] {
   return text.split(/\{(\w+)\}/);
 }
 
-/** The message in `language`, its placeholders (global ones included) filled; a number is formatted for the language. */
-export function format(language: Language, key: MessageKey, params?: Record<string, string | number>): string {
+/** The message in `language`, its placeholders (global ones included, the daemon's words from `daemon` when given)
+ * filled; a number is formatted for the language. */
+export function format(language: Language, key: MessageKey, params?: Record<string, string | number>, daemon?: DaemonHost): string {
   const parts = splitPlaceholders(messageText(language, key, params));
   return parts
     .map((part, index) => {
       if (index % 2 === 0) return part;
-      const value = params?.[part] ?? globalParam(part, language);
+      const value = params?.[part] ?? globalParam(part, language, daemon);
       if (value === undefined) return `{${part}}`;
       const text = typeof value === "number" ? value.toLocaleString(language) : value;
       // Global brand names also enter plain native labels, without a caller to isolate them.
-      return textDirection(language) === "rtl" && Object.hasOwn(GLOBAL_PARAMS, part) ? isolate(text) : text;
+      return textDirection(language) === "rtl" && (Object.hasOwn(GLOBAL_PARAMS, part) || part === "osName") ? isolate(text) : text;
     })
     .join("");
 }
 
 /** The message lookup in `language`, for code that words something in a language it is given rather than the current
- * one. */
-export function translatorFor(language: Language): Translate {
-  return (key, ...args) => format(language, key, args[0]);
+ * one; with `daemon`, the daemon's words are that host's rather than the one announced when a message is read. */
+export function translatorFor(language: Language, daemon?: DaemonHost): Translate {
+  return (key, ...args) => format(language, key, args[0], daemon);
 }

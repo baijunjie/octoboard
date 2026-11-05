@@ -12,7 +12,7 @@ import { createImportProgressListeners, type ImportProgressEvent } from "./impor
 import { createOwnTrustNotices } from "./ownTrustNotices";
 import { reducer, type Action } from "./reducer";
 import { createStateStore, type State } from "./state";
-import { broadcastNotification, type NotifiedBroadcast, type NotificationRequest } from "./notifications";
+import { broadcastNotification, type NotifiedBroadcast, type WindowNotification, type WithdrawnBroadcast } from "./notifications";
 
 /** The daemon connection and the state it feeds: one per window, created at startup (see
  * `main.tsx`) and alive until the window closes. The store is a vanilla one, so code outside React
@@ -29,8 +29,9 @@ export interface Daemon {
    * about no session, so the notice is the message alone. */
   showNotice: (message: string, content?: ReactNode) => void;
   /** Calls `listener` for every notification to show from now on: the daemon's errors and notices that
-   * belong to no request, and what `showNotice` is given. Returns the unsubscribe. */
-  onNotification: (listener: (notification: NotificationRequest) => void) => () => void;
+   * belong to no request, what `showNotice` is given, and a daemon notice's withdrawal, in the order they arrived.
+   * Returns the unsubscribe. */
+  onNotification: (listener: (notification: WindowNotification) => void) => () => void;
   /** Calls `listener` for each progress event of the configuration import `importId` names (the `import_id` its
    * request carried) until the returned unsubscribe is called. The daemon broadcasts them to every window, and one may
    * arrive after the import's reply, so the caller unsubscribes once that comes (the client does not do so itself) and
@@ -59,14 +60,14 @@ export function createDaemon(address: DaemonAddress): Daemon {
 
   const client = new DaemonClient(daemonWsUrl(address, "/ws/control"));
   const importProgress = createImportProgressListeners();
-  const notificationListeners = new Set<(notification: NotificationRequest) => void>();
-  const pendingNotifications: NotificationRequest[] = [];
-  const notify = (notification: NotificationRequest) => {
+  const notificationListeners = new Set<(notification: WindowNotification) => void>();
+  const pendingNotifications: WindowNotification[] = [];
+  const notify = (notification: WindowNotification) => {
     if (!notificationListeners.size) pendingNotifications.push(notification);
     else notificationListeners.forEach((listener) => listener(notification));
   };
 
-  const emitBroadcast = (event: NotifiedBroadcast) => notify(broadcastNotification(event, store.getState(), currentLanguage()));
+  const emitBroadcast = (event: NotifiedBroadcast | WithdrawnBroadcast) => notify(broadcastNotification(event, store.getState(), currentLanguage()));
   const ownTrustNotices = createOwnTrustNotices(emitBroadcast);
 
   client.onEvents(dispatchEvents);
@@ -82,7 +83,7 @@ export function createDaemon(address: DaemonAddress): Daemon {
     if (event.type === "session_notice" && ownTrustNotices.claim(event)) return;
     // A request's own `error` reply carries its request id and is delivered to its caller as a
     // rejected promise instead — only a genuine daemon broadcast (no id) is a notification.
-    if (event.type === "session_notice" || (event.type === "error" && !event.id)) {
+    if (event.type === "session_notice" || event.type === "session_notice_withdrawn" || (event.type === "error" && !event.id)) {
       emitBroadcast(event);
     }
   });

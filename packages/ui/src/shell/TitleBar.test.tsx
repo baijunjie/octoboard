@@ -8,6 +8,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { PlatformProvider } from "../platform/react";
 import { TitleBar } from "./TitleBar";
+import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -26,7 +27,7 @@ function mount(props: Partial<React.ComponentProps<typeof TitleBar>>) {
   const root = createRoot(container);
   const render = (next: Partial<React.ComponentProps<typeof TitleBar>>) => act(() =>
     root.render(
-      <PlatformProvider value={{ kind: "browser" }}>
+      <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
         <TitleBar
           sidebarShown
           hasSidebar

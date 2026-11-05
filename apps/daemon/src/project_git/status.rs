@@ -694,8 +694,6 @@ mod tests {
     /// gets. The `post-merge` hook of the fast-forward sees what the merge's environment holds.
     #[test]
     fn the_pull_runs_the_ssh_the_repository_is_configured_with() {
-        use std::os::unix::fs::PermissionsExt;
-
         let (state, _dir) = app_state("git-status-pull-ssh");
         let repo = repo_with("git-status-pull-ssh-repo", &[(b"a.txt", b"one\n")]);
         let branch = String::from_utf8(git(&repo, &["symbolic-ref", "--short", "HEAD"])).unwrap();
@@ -727,7 +725,7 @@ mod tests {
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_support::make_executable(&hook);
 
         let mut status = GitStatus {
             project: "project-1".to_string(),

@@ -1,6 +1,6 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { Language } from "../i18n/languages";
-import type { AvailableUpdate, MacosPermissionsStatus, UpdateProgress } from "../platform";
+import type { AvailableUpdate, HostFacts, MacosPermissionsStatus, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -118,17 +118,27 @@ export interface Scenario extends Fixture {
   /** With `macosPermissions`, the reason the system gives for not opening the System Settings pane a row's
    * Open System Settings points at; without it the pane opens (nothing is shown). */
   macosSettingsOpenError?: string;
+  /** What the shell reports about the machine (`PlatformAdapter.host`): which of the system's own words the copy uses,
+   * which Settings sections exist, whether the window controls overlay the top bar. Left out, the browser's own facts
+   * stand, as for every scenario that is not about a host. Give the whole set the real shell reports
+   * (`MAC_HOST`, `WINDOWS_HOST` of `test/hosts.ts`), with the snapshot's `state.host` and `state.homeDir` saying the
+   * same of the daemon's machine. A host whose `chrome` is `"native"` has no `windowChrome`, whatever the frame URL's
+   * `chrome=1` says, and one without an `appMenu` gives a `desktopApp` scenario no native menu. The key caps follow it
+   * (Ctrl, Alt and Shift as text on a host whose modifier is not ⌘), and so do the key presses of the steps (`ui.chord`)
+   * and the held modifier. */
+  host?: HostFacts;
   /** The platform has what the desktop app's window has, so a view that lists or uses it shows the app's: the
    * window chrome (the `chrome=1` of the frame URL, which a view that exists only in the app cannot leave to
-   * the address), the native menu bar and the desktop platform kind. */
+   * the address), the native menu bar and the desktop platform kind, by which the app's shortcuts exist (the
+   * console-session switch on any system, Back and Forward on macOS; `chrome=1` alone does not give those). */
   desktopApp?: boolean;
   /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
    * it is shown; the browser platform has none. */
   backgroundRun?: boolean;
-  /** The platform has the macOS app's notifications: the system manages them, so the app keeps no
-   * switch of its own and the Settings row links to System Settings instead. Nothing is shown or
-   * opened. */
-  systemNotifications?: boolean;
+  /** The platform has the desktop shell's notifications, which it grants without a prompt, so the app keeps no switch of
+   * its own. Whether the Settings row also links to the system's notification pane follows `host`
+   * (`notificationSettings: "system-pane"`, as the real shell does). Nothing is shown or opened. */
+  desktopNotifications?: boolean;
   /** Opening an external link fails with this text, as a refused desktop opener does. Without it the browser
    * platform's own opener stands and opens the address in a new tab. */
   externalLinkError?: string;

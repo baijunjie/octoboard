@@ -157,9 +157,14 @@ an account switch included:
 1. When Claude Code's own configuration names a model, Octoboard passes none and Claude Code applies its own. It counts
    as named by `ANTHROPIC_MODEL` in the launch environment or in the `env` block of a Claude Code settings file, or by
    the `model` of a settings file. The settings files are the managed settings (`managed-settings.json` and the `*.json`
-   files of `managed-settings.d/`, under `/Library/Application Support/ClaudeCode` on macOS and `/etc/claude-code` on
-   Linux), the project's `.claude/settings.local.json` and `.claude/settings.json` in the session's working directory,
-   and the user's `settings.json` in the account's configuration directory. Settings delivered through a device
+   files of `managed-settings.d/`, under `/Library/Application Support/ClaudeCode` on macOS, `/etc/claude-code` on
+   Linux, and on Windows `ClaudeCode` in the Program Files folder the registry names — `ProgramFilesDir` under
+   `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion`, so a Program Files folder on another drive is followed — else in
+   `%ProgramFiles%`, else in `C:\Program Files`; on Windows the `Settings` value of the registry policy
+   `SOFTWARE\Policies\ClaudeCode` counts too: the machine's (`HKLM`) in place of the files, and the user's (`HKCU`) only
+   where there is neither the machine's nor any managed file), the project's `.claude/settings.local.json` and
+   `.claude/settings.json` in the session's working directory, and the user's `settings.json` in the account's
+   configuration directory. Settings delivered through a device
    management profile or the claude.ai console are in no file and are not seen.
 2. Otherwise Octoboard passes the first of Fable, Opus, Sonnet and Haiku the account can use, as "The models offered"
    above reads it.

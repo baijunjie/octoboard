@@ -2,13 +2,12 @@
 //! path that leaves the roots, one in a temp root that others can change, and what the system
 //! could launch rather than show. This is the one place those rules are decided.
 
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::Result;
 
 use super::{ProjectRoots, TempRoots};
-use crate::hostfs::{is_not_found, lexically_normalise};
+use crate::hostfs::{is_not_found, lexically_normalise, lexically_within};
 use crate::protocol::{error_code, CodedError, PathLinkKind};
 
 /// Extensions of things the system launches instead of showing, matched without case on every
@@ -62,7 +61,8 @@ const ANY_COMPONENT_EXTENSIONS: &[&str] = &[
 /// Extensions of files that an interpreter or installer handles by default on macOS or Linux (Python
 /// launcher, Java Web Start, Wine for Windows programs, package and AppImage installers), matched
 /// without case on the final component only and only when it is a regular file: as a folder name
-/// (`vendor/github.com/`) the same text launches nothing.
+/// (`vendor/github.com/`) the same text launches nothing. The host's own such types
+/// ([`crate::platform::open::LAUNCHED_FILE_EXTENSIONS`]) are matched the same way.
 const FINAL_FILE_EXTENSIONS: &[&str] = &[
     "py",
     "pyw",
@@ -244,11 +244,15 @@ pub fn reach(
         let mut failure: Option<Refusal> = None;
         for root in &roots.canonical {
             let joined = lexically_normalise(&root.join(raw));
-            if !roots.lexical.iter().any(|root| joined.starts_with(root)) {
+            if !roots
+                .lexical
+                .iter()
+                .any(|root| lexically_within(&joined, root))
+            {
                 continue;
             }
             spellings += 1;
-            let canonical = match std::fs::canonicalize(&joined) {
+            let canonical = match crate::hostfs::canonical(&joined) {
                 Ok(canonical) => canonical,
                 Err(err) => {
                     if is_not_found(&err) {
@@ -293,14 +297,18 @@ pub fn reach(
             temp,
         );
     };
-    if temp.lexical.iter().any(|root| absolute.starts_with(root)) {
+    if temp
+        .lexical
+        .iter()
+        .any(|root| lexically_within(&absolute, root))
+    {
         // A gone path is the project's when it is spelled inside it too, as for a project kept
         // under a temp root: the project's files are where it is looked for again.
         let canonical = canonical_or_gone(&absolute, || {
             project()
                 .lexical
                 .iter()
-                .any(|root| absolute.starts_with(root))
+                .any(|root| lexically_within(&absolute, root))
         })?;
         let root = temp
             .canonical
@@ -323,7 +331,11 @@ pub fn reach(
         .map_err(Unreached::Refused);
     }
     let roots = project();
-    if !roots.lexical.iter().any(|root| absolute.starts_with(root)) {
+    if !roots
+        .lexical
+        .iter()
+        .any(|root| lexically_within(&absolute, root))
+    {
         return Err(Unreached::Refused(Refusal::Outside));
     }
     let canonical = canonical_or_gone(&absolute, || true)?;
@@ -358,7 +370,7 @@ fn in_project(
 /// `path` with its links resolved, or why not: gone when nothing is there (see [`is_not_found`]),
 /// `in_project` asked only then.
 fn canonical_or_gone(path: &Path, in_project: impl FnOnce() -> bool) -> Result<PathBuf, Unreached> {
-    std::fs::canonicalize(path).map_err(|err| {
+    crate::hostfs::canonical(path).map_err(|err| {
         if is_not_found(&err) {
             Unreached::Gone {
                 in_project: in_project(),
@@ -417,7 +429,7 @@ pub fn own_entry(
     project: &dyn Fn() -> ProjectRoots,
 ) -> Option<PathBuf> {
     let spelled = resolved.spelled.as_ref()?;
-    let own = std::fs::canonicalize(spelled.parent()?)
+    let own = crate::hostfs::canonical(spelled.parent()?)
         .ok()?
         .join(spelled.file_name()?);
     let in_project = resolved.project_root.is_some();
@@ -434,7 +446,7 @@ pub fn own_entry(
     let checked = temp.check_owner && (!in_project || resolved.kind == PathLinkKind::Directory);
     (below_root
         && std::fs::symlink_metadata(&own).ok()?.is_symlink()
-        && std::fs::canonicalize(&own).ok()? == resolved.path
+        && crate::hostfs::canonical(&own).ok()? == resolved.path
         && (!checked || private_in_temp(&own, temp)))
     .then_some(own)
 }
@@ -450,27 +462,22 @@ fn private_in_temp(path: &Path, temp: &TempRoots) -> bool {
 }
 
 /// Whether every entry from the one below `root` down to `canonical` belongs to the daemon's user
-/// and cannot be written by its group or others, as read without following links. A link at the
-/// end has no mode of its own to judge (it is always open on Linux), so only its owner counts.
+/// and cannot be written by anyone else, as read without following links (see
+/// [`crate::platform::fs::is_private_to_user`]).
 fn closed_to_others(canonical: &Path, root: &Path) -> bool {
     let Ok(below) = canonical.strip_prefix(root) else {
         return false;
     };
-    // SAFETY: `geteuid` takes no arguments and cannot fail.
-    let me = unsafe { libc::geteuid() };
     let mut current = root.to_path_buf();
     below.components().all(|component| {
         current.push(component);
-        std::fs::symlink_metadata(&current).is_ok_and(|metadata| {
-            metadata.uid() == me
-                && ((metadata.is_symlink() && current == canonical) || metadata.mode() & 0o022 == 0)
-        })
+        crate::platform::fs::is_private_to_user(&current)
     })
 }
 
 /// Whether the system could run what `canonical` names, or a bundle it sits in, rather than show it.
 fn launchable(canonical: &Path, root: &Path, metadata: &std::fs::Metadata) -> bool {
-    if metadata.is_file() && metadata.permissions().mode() & 0o111 != 0 {
+    if crate::platform::fs::is_executable(canonical) {
         return true;
     }
     let below = canonical.strip_prefix(root).unwrap_or(canonical);
@@ -484,7 +491,8 @@ fn launchable(canonical: &Path, root: &Path, metadata: &std::fs::Metadata) -> bo
     });
     in_bundle
         || (metadata.is_file()
-            && below
-                .file_name()
-                .is_some_and(|name| has_extension(name, FINAL_FILE_EXTENSIONS)))
+            && below.file_name().is_some_and(|name| {
+                has_extension(name, FINAL_FILE_EXTENSIONS)
+                    || has_extension(name, crate::platform::open::LAUNCHED_FILE_EXTENSIONS)
+            }))
 }

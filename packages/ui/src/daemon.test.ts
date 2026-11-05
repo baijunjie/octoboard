@@ -3,8 +3,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { daemonWsUrl, isLocalDaemon, resolveDaemonAddress, resolveRecovered } from "./daemon";
 import type { PlatformAdapter } from "./platform";
+import { BROWSER_HOST } from "./test/hosts";
 
-const platform = { kind: "tauri" } as PlatformAdapter;
+const platform = { kind: "tauri", host: BROWSER_HOST } as PlatformAdapter;
 
 it.each([
   ["ws://127.0.0.1:4242", true],

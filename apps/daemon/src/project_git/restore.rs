@@ -1,14 +1,14 @@
 //! Discarding tracked changes in one project's own worktree, without moving its branch.
 
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use crate::git::layout::is_git_repo;
+use crate::git::pathspec;
 use crate::git::repo_files::operation_in_progress;
 use crate::git::run::{Access, Limits, Policy, Runner, WorkDir};
 use crate::git::tree_entries::entries;
+use crate::platform::names;
 use crate::project_git::header;
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
@@ -68,7 +68,8 @@ fn restore(path: &Path, project: &str, git: &Runner) -> anyhow::Result<()> {
     }
     let directory = run(&[b"rev-parse", b"--absolute-git-dir"], Access::Read)?;
     let directory = directory.strip_suffix(b"\n").unwrap_or(&directory);
-    let directory = PathBuf::from(OsStr::from_bytes(directory));
+    let directory = names::path_from_name_bytes(directory)
+        .ok_or_else(|| failed("git printed a git directory this host cannot use."))?;
     if operation_in_progress(&directory).map_err(|err| failed(&err.to_string()))? {
         return Err(CodedError::raised(
             error_code::GIT_OPERATION_IN_PROGRESS,
@@ -85,7 +86,9 @@ fn restore(path: &Path, project: &str, git: &Runner) -> anyhow::Result<()> {
         entries(&index).map(|entry| entry.path).collect();
     for entry in entries(&head).filter(|entry| !entry.is_gitlink) {
         if !indexed_paths.contains(entry.path) {
-            match std::fs::symlink_metadata(path.join(OsStr::from_bytes(entry.path))) {
+            let entry_path = names::path_from_name_bytes(entry.path)
+                .ok_or_else(|| failed("git listed a path this host cannot use."))?;
+            match std::fs::symlink_metadata(path.join(entry_path)) {
                 Ok(_) => return Err(failed("a file removed from the index still exists on disk; move it aside before restoring changes.")),
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound
                     || err.kind() == std::io::ErrorKind::NotADirectory => {}
@@ -97,8 +100,8 @@ fn restore(path: &Path, project: &str, git: &Runner) -> anyhow::Result<()> {
     let mut has_files = false;
     for entry in entries(&index).chain(entries(&head)) {
         if entry.is_gitlink {
-            let mut spec = b":(exclude,literal)".to_vec();
-            spec.extend_from_slice(entry.path);
+            // From the root, which the project's directory is (a restore requires its `.git`).
+            let spec = pathspec::excluded(entry.path);
             if !exclusions.contains(&spec) {
                 exclusions.push(spec);
             }
@@ -127,7 +130,10 @@ fn restore(path: &Path, project: &str, git: &Runner) -> anyhow::Result<()> {
 // Git restore removes a directory, including its untracked and ignored children, when HEAD
 // expects a file there. Refuse such collisions rather than silently widening the discard.
 fn protect_untracked_collisions(root: &Path, name: &[u8]) -> anyhow::Result<()> {
-    let file = root.join(OsStr::from_bytes(name));
+    let file = root.join(
+        names::path_from_name_bytes(name)
+            .ok_or_else(|| anyhow::anyhow!("git listed a path this host cannot use."))?,
+    );
     let mut candidate = file.as_path();
     while candidate != root {
         match std::fs::symlink_metadata(candidate) {
@@ -176,7 +182,7 @@ fn restore_command(
     git.command(
         access,
         WorkDir::At(path),
-        args.iter().map(|arg| OsStr::from_bytes(arg)),
+        args.iter().map(|arg| crate::git::run::arg_from_bytes(arg)),
     )
 }
 
@@ -383,15 +389,17 @@ mod tests {
     #[test]
     fn tracked_symlinks_are_restored_without_touching_their_targets() {
         let repo = repo_with("restore-symlink", &[(b"a", b"original")]);
+        // Git for Windows checks a link out as a plain file unless told the host makes links.
+        git(&repo, &["config", "core.symlinks", "true"]);
         let outside = ScratchDir::new("restore-outside");
         std::fs::write(outside.join("target"), "outside").unwrap();
-        std::os::unix::fs::symlink(outside.join("target"), repo.join("link")).unwrap();
+        crate::test_support::symlink(outside.join("target"), repo.join("link")).unwrap();
         git(&repo, &["add", "link"]);
         git(&repo, &["commit", "-m", "link"]);
         std::fs::remove_file(repo.join("link")).unwrap();
         std::fs::write(repo.join("link"), "replacement").unwrap();
         std::fs::remove_file(repo.join("a")).unwrap();
-        std::os::unix::fs::symlink(outside.join("target"), repo.join("a")).unwrap();
+        crate::test_support::symlink(outside.join("target"), repo.join("a")).unwrap();
         discard(&repo).unwrap();
         assert!(repo.join("link").is_symlink());
         assert_eq!(std::fs::read(repo.join("a")).unwrap(), b"original");
@@ -401,6 +409,12 @@ mod tests {
     fn preserves_submodule_index_and_worktree_even_when_recursion_is_configured() {
         let repo = repo_with("restore-submodule", &[(b"a", b"original")]);
         let module = repo_with("restore-module", &[(b"file", b"module")]);
+        // A name a pathspec would read as a pattern; Windows forbids `*` in a name.
+        let name = if crate::test_support::creatable("sub*module") {
+            "sub*module"
+        } else {
+            "sub[m]odule"
+        };
         git(
             &repo,
             &[
@@ -409,24 +423,21 @@ mod tests {
                 "submodule",
                 "add",
                 module.to_str().unwrap(),
-                "sub*module",
+                name,
             ],
         );
         git(&repo, &["commit", "-m", "submodule"]);
         git(&repo, &["config", "submodule.recurse", "true"]);
-        let submodule = repo.join("sub*module");
+        let submodule = repo.join(name);
         std::fs::write(submodule.join("file"), "new module commit").unwrap();
         git(&submodule, &["add", "file"]);
         git(&submodule, &["commit", "-m", "module update"]);
-        git(&repo, &["add", "sub*module"]);
+        git(&repo, &["add", name]);
         std::fs::write(submodule.join("file"), "keep dirty module").unwrap();
-        let index = git(&repo, &["ls-files", "--stage", "--", "sub*module"]);
+        let index = git(&repo, &["ls-files", "--stage", "--", name]);
         std::fs::write(repo.join("a"), "discard").unwrap();
         discard(&repo).unwrap();
-        assert_eq!(
-            git(&repo, &["ls-files", "--stage", "--", "sub*module"]),
-            index
-        );
+        assert_eq!(git(&repo, &["ls-files", "--stage", "--", name]), index);
         assert_eq!(
             std::fs::read(submodule.join("file")).unwrap(),
             b"keep dirty module"
@@ -460,7 +471,7 @@ mod tests {
             std::fs::remove_file(repo.join("dir/a")).unwrap();
             std::fs::remove_dir(repo.join("dir")).unwrap();
             if symlink {
-                std::os::unix::fs::symlink(&*outside, repo.join("dir")).unwrap();
+                crate::test_support::symlink(&*outside, repo.join("dir")).unwrap();
             } else {
                 std::fs::write(repo.join("dir"), "keep untracked replacement").unwrap();
             }

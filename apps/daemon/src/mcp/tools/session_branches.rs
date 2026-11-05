@@ -270,7 +270,7 @@ mod tests {
 
         // A clean worktree goes with its merged branch.
         let tidy = &entry(&own, "tidy")["archive"];
-        assert_eq!(tidy["removed"], true);
+        assert_eq!(tidy["removed"], true, "{tidy}");
         assert_eq!(tidy["branch"]["state"], "removable");
         assert_eq!(tidy["worktree"]["state"], "removable");
 

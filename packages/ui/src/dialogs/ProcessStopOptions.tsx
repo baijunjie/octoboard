@@ -1,6 +1,7 @@
 import React, { useId, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import { isUnkeepable, unkeepableMessage } from "../process/processes";
 import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "../process/ProcessTreeDetails";
 import { useT } from "../i18n/react";
 import type { ProcessTree } from "../protocol";
@@ -38,15 +39,18 @@ function StopOption({ tree, isSelected, onChange }: {
 
 /** One tree that is always stopped, such as a console session's in an archive or a project process in a project's removal: a row of its own, with no checkbox, since
  * there is no choice to make (a disabled checkbox would show an option the user cannot reach, and drop out
- * of the Tab order), with the same details disclosure under it. */
-export function StoppedRow({ tree }: { tree: ProcessTree }): React.ReactElement {
+ * of the Tab order), with the same details disclosure under it. A tree that cannot be kept has `reason` under its
+ * command, since it is stopped for that and the user may have expected to keep it. In a list of checkboxes (`inList`)
+ * the row is set in by a checkbox and its gap, so its glyph and command line up with theirs. */
+export function StoppedRow({ tree, reason, inList = false }: { tree: ProcessTree; reason?: string; inList?: boolean }): React.ReactElement {
   const t = useT();
   const rowId = useId();
   return (
-    <div className="flex flex-col gap-1">
+    <div className={inList ? "flex flex-col gap-1 ps-7" : "flex flex-col gap-1"}>
       <div id={rowId} className="min-h-6">
         <ProcessCommand tree={tree} leading={<StopGlyph />} />
       </div>
+      {reason !== undefined && <p className="ps-5 text-xs text-app-muted">{reason}</p>}
       <div className="ps-5">
         <OptionDetails describedBy={rowId} name={t("processes.details")}>
           <ProcessTreeDetails tree={tree} />
@@ -59,7 +63,9 @@ export function StoppedRow({ tree }: { tree: ProcessTree }): React.ReactElement 
 /** The processes an archive can stop. Each checkbox starts selected; unchecked trees are sent as
  * `keep_process_ids`. Choices are kept by tree id across inspections, and a new tree starts selected.
  * A console session offers no Keep, so its trees are listed apart as rows that are stopped whatever is
- * chosen, under a line saying so, and count as stopped. */
+ * chosen, under a line saying so, and count as stopped. A tree the daemon says cannot be kept is a row of the
+ * same kind with the reason under it, never a checkbox: a Keep sent for it would be refused and nothing archived. Beside
+ * trees that can be kept it closes their list, set in to their glyphs, and with none it stands alone. */
 export function useProcessStopping(processes: ProcessTree[]): {
   choices: { keep_process_ids?: string[] };
   consequences: ConsequenceLine[];
@@ -71,7 +77,11 @@ export function useProcessStopping(processes: ProcessTree[]): {
     .map((tree) => tree.id)));
   const [keptIds, setKeptIds] = useState<ReadonlySet<string>>(new Set());
   const always = processes.filter((tree) => alwaysIds.includes(tree.id));
-  const keepable = processes.filter((tree) => !alwaysIds.includes(tree.id));
+  const unkeepable = processes.filter((tree) => !alwaysIds.includes(tree.id)).filter(isUnkeepable);
+  const keepable = processes.filter((tree) => !alwaysIds.includes(tree.id) && !isUnkeepable(tree));
+  const unkeepableRows = unkeepable.map((tree) => (
+    <StoppedRow key={tree.id} tree={tree} reason={t(unkeepableMessage(tree))} inList={keepable.length > 0} />
+  ));
   const kept = keepable.filter((tree) => keptIds.has(tree.id));
   const stopped = processes.length - kept.length;
   return {
@@ -99,7 +109,13 @@ export function useProcessStopping(processes: ProcessTree[]): {
                   })}
                 />
               ))}
+              {unkeepableRows}
             </div>
+          </div>
+        )}
+        {keepable.length === 0 && unkeepable.length > 0 && (
+          <div className="flex min-w-0 flex-col gap-2">
+            {unkeepableRows}
           </div>
         )}
         {always.length > 0 && (

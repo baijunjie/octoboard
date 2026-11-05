@@ -1,1 +1,4 @@
+# Checked out with LF on every host: scripts and expected outputs the daemon embeds or compares
+# byte for byte must not gain a carriage return on Windows.
+* text=auto eol=lf
 testdata/*.bin binary

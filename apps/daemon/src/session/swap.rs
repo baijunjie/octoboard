@@ -95,8 +95,8 @@ impl std::error::Error for HeldFragment {}
 
 /// The refusal of a write into a session whose output has been archived: gone for good, so unlike
 /// [`blocked`] it is never retried.
-pub(super) fn archived_refusal() -> ptyio::PartialWrite {
-    ptyio::PartialWrite {
+pub(super) fn archived_refusal() -> PartialWrite {
+    PartialWrite {
         written: 0,
         error: io::Error::new(
             io::ErrorKind::BrokenPipe,
@@ -105,8 +105,8 @@ pub(super) fn archived_refusal() -> ptyio::PartialWrite {
     }
 }
 
-pub(super) fn blocked(message: &str) -> ptyio::PartialWrite {
-    ptyio::PartialWrite {
+pub(super) fn blocked(message: &str) -> PartialWrite {
+    PartialWrite {
         written: 0,
         error: io::Error::new(io::ErrorKind::WouldBlock, message.to_string()),
     }
@@ -146,15 +146,12 @@ impl LiveSession {
             .is_some()
     }
 
-    pub(super) fn buffer_terminal_input(&self, data: &[u8]) -> Result<bool, ptyio::PartialWrite> {
+    pub(super) fn buffer_terminal_input(&self, data: &[u8]) -> Result<bool, PartialWrite> {
         self.route_terminal_input(data)
             .map(|route| route == InputRoute::Buffered)
     }
 
-    pub(super) fn route_terminal_input(
-        &self,
-        data: &[u8],
-    ) -> Result<InputRoute, ptyio::PartialWrite> {
+    pub(super) fn route_terminal_input(&self, data: &[u8]) -> Result<InputRoute, PartialWrite> {
         let mut swap = self.swap.lock().expect("input swap lock poisoned");
         if swap.phase.is_none() {
             return Ok(InputRoute::Direct);
@@ -203,7 +200,7 @@ impl LiveSession {
     }
 
     fn composer(&self) -> Option<String> {
-        super::input_box::input_box(self.agent, &self.screen_text_undimmed())
+        self.input_box(&self.screen_text_undimmed())
     }
 
     pub(super) fn note_message_written(&self) {
@@ -266,7 +263,7 @@ impl LiveSession {
         }
     }
 
-    fn swap_key(&self) -> Result<(), ptyio::PartialWrite> {
+    fn swap_key(&self) -> Result<(), PartialWrite> {
         let input = self.pty.lock_input();
         if self.is_frozen()
             || self.poll_exit()
@@ -279,19 +276,20 @@ impl LiveSession {
             ));
         }
         self.input_writes.fetch_add(1, Ordering::AcqRel);
-        self.pty.write_locked(&input, b"\x13")
+        // Ctrl-S: the key that stashes the draft, and restores it, where the agent has a stash.
+        self.pty.write_input_locked(&input, &[Input::Ctrl('s')])
     }
 
     /// `Ok` means the entire payload reached the CLI, even when restoration is still pending.
     /// An error counts only payload bytes, so callers never retry an already submitted message.
     pub(crate) fn write_message_input(
         &self,
-        data: &[u8],
+        message: &[Input],
         prompt: &str,
         allow_mixed: bool,
-    ) -> Result<(), ptyio::PartialWrite> {
+    ) -> Result<(), PartialWrite> {
         if allow_mixed || !self.checks_composer || self.settled_composer().as_deref() == Some("") {
-            return self.write_empty_message_input(data, prompt, allow_mixed);
+            return self.write_empty_message_input(message, prompt, allow_mixed);
         }
         let native = {
             let _input = self.pty.lock_input();
@@ -316,7 +314,7 @@ impl LiveSession {
             native
         };
         if !native {
-            return self.write_empty_message_input(data, prompt, allow_mixed);
+            return self.write_empty_message_input(message, prompt, allow_mixed);
         }
         let transaction = Transaction(self);
         let deadline = Instant::now() + SETTLE;
@@ -329,23 +327,16 @@ impl LiveSession {
             self.native_stash.store(false, Ordering::Release);
             // The stash key may already have taken effect. Do not toggle it again; submission
             // itself can restore a native stash, and the current editor is the fallback target.
-            let result = self.write_swap_payload_or_hold(data, prompt);
+            let result = self.write_swap_payload_or_hold(message, prompt);
             if !result.as_ref().err().is_some_and(|error| error.written > 0) {
                 self.release_input_protection();
             }
             return result;
         }
         self.set_swap_phase(RecoveryPhase::Stashed);
-        let result = self.write_swap_payload_or_hold(data, prompt);
-        match &result {
-            Ok(()) => self.set_swap_phase(RecoveryPhase::Submitted),
-            Err(error) if error.written > 0 => return result,
-            Err(_) => {
-                // Only this confirmed owned stash may be restored with a key, and a dialog may
-                // have appeared since the payload was refused.
-                self.set_swap_phase(RecoveryPhase::RestoreRequested);
-                let _ = self.swap_key();
-            }
+        let result = self.write_swap_payload_or_hold(message, prompt);
+        if !self.settle_stashed_payload(&result) {
+            return result;
         }
         if self.wait_for_swap(true, deadline) {
             if !self.finish_input_swap() {
@@ -359,39 +350,79 @@ impl LiveSession {
         result
     }
 
-    fn write_swap_payload(&self, data: &[u8], prompt: &str) -> Result<(), ptyio::PartialWrite> {
-        let input = self.pty.lock_input();
-        if self.is_frozen()
-            || self.poll_exit()
-            || !self.allows_automatic_input()
-            || self.trust.holds_writes()
-            || self.look_for_dialog().current.is_some()
-        {
-            return Err(blocked(
-                "the session cannot take a message while a dialog or trust confirmation is open",
-            ));
+    /// Moves a confirmed stash on once its payload's write `result` is in, and says whether the
+    /// write then waits for the agent to restore the draft.
+    fn settle_stashed_payload(&self, result: &Result<(), PartialWrite>) -> bool {
+        match result {
+            Ok(()) => self.set_swap_phase(RecoveryPhase::Submitted),
+            // The message is in the box but unsent, so the agent restores the draft only once the
+            // user sends it; a recovery pass recognises that restore as it does a submitted one's.
+            Err(error)
+                if error
+                    .error
+                    .get_ref()
+                    .is_some_and(|error| error.is::<super::NotSubmitted>()) =>
+            {
+                self.set_swap_phase(RecoveryPhase::Submitted);
+                return false;
+            }
+            Err(error) if error.written > 0 => return false,
+            Err(_) => {
+                // Only this confirmed owned stash may be restored with a key, and a dialog may
+                // have appeared since the payload was refused.
+                self.set_swap_phase(RecoveryPhase::RestoreRequested);
+                let _ = self.swap_key();
+            }
         }
-        self.draft
-            .lock()
-            .expect("draft lock poisoned")
-            .submission(None, prompt.to_string());
-        self.input_writes.fetch_add(1, Ordering::AcqRel);
-        self.pty.write_locked(&input, data)
+        true
+    }
+
+    fn write_swap_payload(&self, message: &[Input], prompt: &str) -> Result<(), PartialWrite> {
+        let (now, rest) = super::paste_apart::split(message, self.submits_paste_apart());
+        {
+            let input = self.pty.lock_input();
+            if self.is_frozen()
+                || self.poll_exit()
+                || !self.allows_automatic_input()
+                || self.trust.holds_writes()
+                || self.look_for_dialog().current.is_some()
+            {
+                return Err(blocked(
+                    "the session cannot take a message while a dialog or trust confirmation is open",
+                ));
+            }
+            self.draft
+                .lock()
+                .expect("draft lock poisoned")
+                .submission(None, prompt.to_string());
+            self.input_writes.fetch_add(1, Ordering::AcqRel);
+            self.pty.write_input_locked(&input, now)?;
+        }
+        // Not required to show the message alone: a stash the agent never confirmed leaves the
+        // draft in the box.
+        self.submit_rest(now, rest, false)
     }
 
     /// [`Self::write_swap_payload`], which after writing only part of the message leaves the input
     /// held ([`RecoveryPhase::Fragmented`]) and marks the error [`HeldFragment`].
     fn write_swap_payload_or_hold(
         &self,
-        data: &[u8],
+        message: &[Input],
         prompt: &str,
-    ) -> Result<(), ptyio::PartialWrite> {
-        self.write_swap_payload(data, prompt).map_err(|partial| {
-            if partial.written == 0 {
+    ) -> Result<(), PartialWrite> {
+        self.write_swap_payload(message, prompt).map_err(|partial| {
+            // A message written in full and left in the box is no fragment: nothing is missing
+            // from it for what comes next to join.
+            if partial.written == 0
+                || partial
+                    .error
+                    .get_ref()
+                    .is_some_and(|error| error.is::<super::NotSubmitted>())
+            {
                 return partial;
             }
             self.mark_input_fragmented(prompt);
-            ptyio::PartialWrite {
+            PartialWrite {
                 written: partial.written,
                 error: io::Error::new(
                     partial.error.kind(),
@@ -690,7 +721,7 @@ mod tests {
             live.write_terminal_input(b"X\r").unwrap();
             assert_eq!(live.swap.lock().unwrap().bytes, 2);
             assert!(!live
-                .write_keys_if(live.input_writes(), || true, b"\x03")
+                .write_keys_if(live.input_writes(), || true, &[Input::Ctrl('c')])
                 .unwrap());
             // A protocol response remains independent while the user's input is buffered.
             live.write_terminal_reply(b"\x1b[1;1R").unwrap();
@@ -1088,9 +1119,11 @@ mod tests {
             .unwrap();
         assert!(!live.allows_automatic_input());
         assert!(live
-            .write_empty_message_input(b"peer\r", "peer", true)
+            .write_empty_message_input(&[Input::Text("peer".into()), Input::Enter], "peer", true)
             .is_err());
-        assert!(live.write_swap_payload(b"peer\r", "peer").is_err());
+        assert!(live
+            .write_swap_payload(&[Input::Text("peer".into()), Input::Enter], "peer")
+            .is_err());
         assert!(live.swap_key().is_err());
         live.set_swap_phase(RecoveryPhase::Submitted);
         live.write_terminal_input(b"old edit\r").unwrap();
@@ -1247,6 +1280,42 @@ mod tests {
         assert_eq!(swap.bytes, b"old edit\r".len());
         drop(swap);
         assert_eq!(live.input_writes(), before);
+    }
+
+    /// A message written in full over a stashed draft but left unsent in the box waits for no
+    /// restore, and the restore that comes once the user sends it ends the protection. No agent
+    /// both stashes natively and has its submit key checked today, so the result is made here.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_message_left_unsent_over_a_stash_ends_with_the_restore_after_the_users_send() {
+        let id = "stash-not-submitted";
+        let (state, dir) = crate::test_support::app_state(id);
+        insert_session_record(&state, &dir, id);
+        let live = crate::test_support::fake_live_session(id, AgentId::CLAUDE, 120, 40, "sleep 30")
+            .with_composer();
+        state.register_live(live.clone());
+        live.enable_native_stash(true);
+        live.set_swap_phase(RecoveryPhase::Stashed);
+        live.on_output(&draw("peer", true, AgentId::CLAUDE));
+        let not_submitted = Err(PartialWrite {
+            written: "peer".len(),
+            error: io::Error::other(super::super::NotSubmitted),
+        });
+        assert!(
+            !live.settle_stashed_payload(&not_submitted),
+            "nothing comes back to wait for"
+        );
+        assert_eq!(
+            live.swap.lock().unwrap().phase,
+            Some(RecoveryPhase::Submitted)
+        );
+        drop(Transaction(&live));
+        assert!(
+            live.input_swap_active(),
+            "the unsent message holds the draft"
+        );
+        // The user sends the message, and the agent puts the draft back.
+        live.on_output(&draw("draft", false, AgentId::CLAUDE));
+        wait_until(|| !live.input_swap_active());
     }
 
     #[test]

@@ -10,6 +10,7 @@ import { HOVER_ACTIONS_CLASS } from "../components/rows/hoverActions";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { focusFellToPage, focusLanding } from "../components/focus/regionFocus";
 import { PaneFailure } from "../components/alerts/PaneFailure";
+import { raiseError } from "../components/alerts/raiseError";
 import { IconToggle } from "../components/controls/IconToggle";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "./ProcessTreeDetails";
@@ -19,19 +20,20 @@ import { useStickyHeadingFocus } from "../components/scroll/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
-import type { PlainMessageKey } from "../i18n/catalog";
+import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import { keepProcesses, stopProcesses } from "./processes";
+import { isUnkeepable, keepProcesses, stopProcesses, unkeepableMessage, unkeepableRefusal } from "./processes";
 import type { ProcessTree } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useSession } from "../store";
-import { useDaemon } from "../store";
+import { useDaemon, type Daemon } from "../store";
 import { ringForAutomaticFocus } from "../input/touchInput";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useProcessPanelContext } from "./useProcessPanel";
 import { ProcessSessionSelect } from "./ProcessSessionSelect";
+import { TitledControl } from "../components/hint/TitledControl";
 import { Button } from "../primitives";
 
 export function ProcessesPanel(): React.ReactElement | null {
@@ -43,10 +45,10 @@ export function ProcessesPanel(): React.ReactElement | null {
  * sends. */
 type ProcessAction = "stop" | "keep";
 
-const ACTIONS = {
+const ACTIONS: Record<ProcessAction, { title: PlainMessageKey; message: PlainMessageKey; confirm: PlainMessageKey; failedTitle: PlainMessageKey; done: PlainMessageKey; send: (request: Daemon["request"], ids: string[], t: Translate) => Promise<string[]> }> = {
   stop: { title: "processes.stopTitle", message: "processes.stopMessage", confirm: "processes.stop", failedTitle: "processes.stopFailedTitle", done: "processes.stopped", send: stopProcesses },
   keep: { title: "processes.keepTitle", message: "processes.keepMessage", confirm: "processes.keep", failedTitle: "processes.keepFailedTitle", done: "processes.kept", send: keepProcesses },
-} as const satisfies Record<ProcessAction, { title: PlainMessageKey; message: PlainMessageKey; confirm: PlainMessageKey; failedTitle: PlainMessageKey; done: PlainMessageKey; send: unknown }>;
+};
 
 function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof useProcessPanelContext>> }): React.ReactElement {
   const t = useT();
@@ -161,7 +163,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
           {failed ? (
             <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retryList} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} landing />
           ) : (
-            <ProcessList grouped={grouped} keepable={data.projectId !== undefined} trees={trees} error={error} acting={selected !== undefined} onStop={(tree) => ask("stop", tree)} onKeep={(tree) => ask("keep", tree)} />
+            <ProcessList grouped={grouped} offersKeep={data.projectId !== undefined} trees={trees} error={error} acting={selected !== undefined} onStop={(tree) => ask("stop", tree)} onKeep={(tree) => ask("keep", tree)} />
           )}
         </FadedScroller>
       </div>
@@ -196,7 +198,7 @@ function ProcessConfirmation({ action, tree, onCancel, onPending, onDone }: {
       message={<><p>{t(words.message)}</p><div className="flex min-w-0 flex-col gap-2"><ProcessCommand tree={tree} wrap leading={action === "stop" ? <StopGlyph /> : undefined} /><ProcessTreeDetails tree={tree} /></div></>}
       onCancel={onCancel} onConfirm={() => {
         onPending(true);
-        return words.send(request, [tree.id]).then(onDone, (error: unknown) => {
+        return words.send(request, [tree.id], t).then(onDone, (error: unknown) => {
           if (live.current) throw error;
         }).finally(() => onPending(false));
       }} />
@@ -226,10 +228,10 @@ function groupsOf(trees: ProcessTree[]): Group[] {
 /** The body: a loading line, the empty state, or the trees, under an Alert when a later refresh
  * failed. While a confirmation is open (`acting`) the buttons of every row are unavailable. A tree that
  * goes away while it or its button holds focus hands focus to the panel. */
-function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }: {
+function ProcessList({ grouped, offersKeep, trees, error, acting, onStop, onKeep }: {
   grouped: boolean;
-  /** Whether the trees of one session can be kept: not a console session's. */
-  keepable: boolean;
+  /** Whether the trees of one session offer Keep: not a console session's. */
+  offersKeep: boolean;
   trees: ProcessTree[] | undefined;
   error: ErrorPresentation | undefined;
   acting: boolean;
@@ -260,7 +262,7 @@ function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }
           <CenteredEmptyPanel icon={SquareActivity} message={t("processes.empty")} description={t(grouped ? "processes.empty.allSessions" : "processes.empty.session")} />
         )}
         {trees !== undefined && trees.length > 0 && (!grouped
-          ? <TreeList trees={trees} acting={acting} keepable={keepable} onStop={onStop} onKeep={onKeep} />
+          ? <TreeList trees={trees} acting={acting} offersKeep={offersKeep} onStop={onStop} onKeep={onKeep} />
           : <GroupedTrees trees={trees} acting={acting} onStop={onStop} onKeep={onKeep} />)}
       </div>
     </div>
@@ -303,7 +305,7 @@ function GroupedTrees({ trees, acting, onStop, onKeep }: {
       )}
       {project && (
         <ProcessCategory title={t("processes.project")} note={t("processes.project.note")}>
-          <TreeList trees={project.trees} acting={acting} keepable={false} onStop={onStop} onKeep={onKeep} />
+          <TreeList trees={project.trees} acting={acting} offersKeep={false} onStop={onStop} onKeep={onKeep} />
         </ProcessCategory>
       )}
     </>
@@ -326,15 +328,15 @@ function TreeGroup({ group, acting, onStop, onKeep }: {
       <h4 id={headingId} className="text-sm font-medium">
         <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={heading}>{heading}</FadeOverflow>
       </h4>
-      <TreeList trees={group.trees} acting={acting} keepable onStop={onStop} onKeep={onKeep} labelledBy={headingId} />
+      <TreeList trees={group.trees} acting={acting} offersKeep onStop={onStop} onKeep={onKeep} labelledBy={headingId} />
     </section>
   );
 }
 
-function TreeList({ trees, acting, keepable, onStop, onKeep, labelledBy }: {
+function TreeList({ trees, acting, offersKeep, onStop, onKeep, labelledBy }: {
   trees: ProcessTree[];
   acting: boolean;
-  keepable: boolean;
+  offersKeep: boolean;
   onStop: (tree: ProcessTree) => void;
   onKeep: (tree: ProcessTree) => void;
   labelledBy?: string;
@@ -344,25 +346,33 @@ function TreeList({ trees, acting, keepable, onStop, onKeep, labelledBy }: {
     <ul ref={listRef} aria-labelledby={labelledBy} className="relative flex min-w-0 flex-col gap-2">
       {trees.map((tree) => (
         <li key={tree.id} data-list-motion={tree.id} className="min-w-0">
-          <TreeRow tree={tree} acting={acting} keepable={keepable} onStop={() => onStop(tree)} onKeep={() => onKeep(tree)} />
+          <TreeRow tree={tree} acting={acting} offersKeep={offersKeep} onStop={() => onStop(tree)} onKeep={() => onKeep(tree)} />
         </li>
       ))}
     </ul>
   );
 }
 
-/** A tree: its command and details, and at the bottom end its Stop and, where `keepable`, Keep,
+/** A tree: its command and details, and at the bottom end its Stop and, where `offersKeep`, Keep,
  * shown while the row is hovered or holds focus and always where nothing can hover. Each is named with the command so
- * the rows' buttons can be told apart. An open confirmation makes them unavailable. */
-function TreeRow({ tree, acting, keepable, onStop, onKeep }: {
+ * the rows' buttons can be told apart. An open confirmation makes them unavailable. A tree the daemon says cannot be
+ * kept (`isUnkeepable`) leaves Keep focusable but unavailable, with the reason as its tooltip and description: it
+ * stays long enough for a user to look at it, so it says why, and a press explains rather than acts, raising the
+ * refusal the daemon would answer a keep with (see "Buttons" in `docs/ui-standard.md`). */
+function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
   tree: ProcessTree;
   acting: boolean;
-  keepable: boolean;
+  offersKeep: boolean;
   onStop: () => void;
   onKeep: () => void;
 }): React.ReactElement {
   const t = useT();
   const command = isolate(tree.command === "" ? t("processes.commandUnknown") : tree.command);
+  const reason = isUnkeepable(tree) ? t(unkeepableMessage(tree)) : undefined;
+  const keep = () => {
+    if (isUnkeepable(tree)) raiseError(unkeepableRefusal(tree, t), { title: t("processes.keepRefusedTitle") });
+    else onKeep();
+  };
   // In dark the Stop label is short of 4.5:1 on this card, a shortfall kept by the user's decision (see the
   // `--panel-row` comment in style.css and docs/ui-standard.md, "Conformance level and exceptions").
   return (
@@ -372,12 +382,15 @@ function TreeRow({ tree, acting, keepable, onStop, onKeep }: {
         /* Clipping keeps hidden actions reachable with Tab without taking width from the facts;
            revealing them leaves the command and directory at the card's full width. */
         <div className={`${HOVER_ACTIONS_CLASS} items-center gap-1 [@media(hover:none)]:ms-2 group-hover:ms-2 group-focus-within:ms-2`}>
-          {keepable && (
-            <Button data-region-landing size="xs" variant="secondary" label={t("processes.keepNamed", { command })} focusOnPress={false} disabled={acting} onPress={onKeep}>
-              {t("processes.keep")}
-            </Button>
+          {offersKeep && (
+            <TitledControl title={reason ?? ""} isDisabled={reason === undefined}>
+              <Button data-region-landing size="xs" variant="secondary" label={t("processes.keepNamed", { command })} focusOnPress={false} disabled={acting}
+                unavailable={reason} onPress={keep}>
+                {t("processes.keep")}
+              </Button>
+            </TitledControl>
           )}
-          <Button data-region-landing={keepable ? undefined : true} size="xs" variant="danger-soft" label={t("processes.stopNamed", { command })} focusOnPress={false} disabled={acting} onPress={onStop}>
+          <Button data-region-landing={offersKeep ? undefined : true} size="xs" variant="danger-soft" label={t("processes.stopNamed", { command })} focusOnPress={false} disabled={acting} onPress={onStop}>
             {t("processes.stop")}
           </Button>
         </div>

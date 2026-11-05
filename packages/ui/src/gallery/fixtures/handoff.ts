@@ -2,7 +2,8 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
+import { accountOf, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { WINDOWS_HOST } from "../../test/hosts";
 
 const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 
@@ -117,6 +118,16 @@ export const handoffScenarios: Scenario[] = [
     description: "The selected project session's menu offers Focus mode beside Lock and Pin, showing the current global shortcut rather than a single-letter key. Choosing it enters Hub's focus mode, since the session is bound to Hub. Three dividers separate that group, Rename and Copy session ID, account and binding actions, and Archive, with no group headings. Copy session ID stays directly after Rename, with the ID in smaller muted monospace text beneath its label inside the same clickable item. Change model, with a chip icon, is enabled and leads that group, directly before Hand off. Hand off, which is enabled, has Unbind directly after it, before the divider and Archive; Unbind is offered because Hub owns the session. Unbind opens a confirmation first (see the Unbind session dialog); the session keeps its binding badge, the dot in Hub's colour, until that is confirmed.",
     state,
     steps: [(ui) => ui.press(ui.session(coordinator.title)), openMenu(coordinator.title)],
+  },
+  {
+    id: "sidebar-session-menu-windows",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of a project session on Windows",
+    description: "The selected project session's menu offers Focus mode with the global shortcut written as text key caps, Ctrl, Shift and F, in place of the symbols of an Apple keyboard. The caps are wider than the symbols: look that the menu's width holds them beside the label and that no item's label is cut. Choose Spanish, Italian or Russian with the language control to see the longest labels (\"Modo de concentración\", \"Modalità concentrazione\", \"Режим фокусирования\") fit, and Arabic to see the caps keep their writing order with a gap between them.",
+    state: snapshotState({ consoles: [console_], projects: [web, api], sessions: [bare], ...WINDOWS_MACHINE }),
+    host: WINDOWS_HOST,
+    steps: [(ui) => ui.press(ui.session(bare.title)), openMenu(bare.title)],
   },
   {
     id: "sidebar-session-menu-unbound",

@@ -3,9 +3,8 @@ use crate::coordinator::handle;
 use crate::coordinator::test_support::{console, console_workdir_in};
 use crate::protocol::{error_code, AgentId, Event, RequestBody, Role, SessionKind};
 use crate::test_support::code_of;
-use crate::test_support::{bare_session, idle_stand_in};
+use crate::test_support::{bare_session, idle_stand_in, output_containing};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
 
 /// Two console sessions in one console each keep their own page history: a submission is
 /// written into the console session that pushed the page and no other, and "the newest page"
@@ -92,17 +91,7 @@ async fn a_page_submission_reaches_the_console_session_that_pushed_it() {
         .await
         .expect("owner-a's newest page, though owner-b has a later one");
 
-    let output_of = |id: &str| {
-        let deadline = Instant::now() + Duration::from_millis(500);
-        loop {
-            let output = live[id].recent_output(8 * 1024);
-            if !output.is_empty() || Instant::now() >= deadline {
-                return String::from_utf8_lossy(&output).into_owned();
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-    };
-    assert!(output_of("owner-a").contains("a-new"));
+    assert!(output_containing(&live["owner-a"], "a-new").contains("a-new"));
     // Read once, after owner-a's delivery has landed. A mistaken write to owner-b would most
     // likely have arrived by now; this cannot rule out one that is still on its way.
     assert!(!live["owner-b"]

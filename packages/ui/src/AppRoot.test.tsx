@@ -5,6 +5,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AppRoot } from "./AppRoot";
 import { testDaemon } from "./test/testDaemon";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -26,7 +27,7 @@ async function mount(element: React.ReactElement): Promise<HTMLElement> {
 
 it("shows its children under the providers", async () => {
   const container = await mount(
-    <AppRoot platform={{ kind: "browser" }} daemon={undefined} nativeSync={false}>
+    <AppRoot platform={{ kind: "browser", host: BROWSER_HOST }} daemon={undefined} nativeSync={false}>
       <p>screen</p>
     </AppRoot>,
   );
@@ -42,7 +43,7 @@ it("gives the crash page the daemon, which is outside the error boundary", async
     throw new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
   }
   const container = await mount(
-    <AppRoot platform={{ kind: "browser" }} daemon={daemon} nativeSync={false}>
+    <AppRoot platform={{ kind: "browser", host: BROWSER_HOST }} daemon={daemon} nativeSync={false}>
       <Crashing />
     </AppRoot>,
   );

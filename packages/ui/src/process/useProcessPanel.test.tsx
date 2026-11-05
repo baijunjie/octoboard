@@ -17,7 +17,7 @@ const console_ = consoleOf("c", "Main");
 const project = projectOf("p", console_.id, "App");
 const first = sessionOf("a", console_.id, project.id, "First", "idle");
 const second = sessionOf("b", console_.id, project.id, "Second", "idle");
-const tree = (id: string, session_id?: string): ProcessTree => ({ id, session_id, command: "dev", cwd: "/app", cwd_missing: false, kept: false, started_at: 0, process_count: 1, memory_bytes: 0, ports: [] });
+const tree = (id: string, session_id?: string): ProcessTree => ({ id, session_id, command: "dev", cwd: "/app", cwd_missing: false, kept: false, keepable: true, started_at: 0, process_count: 1, memory_bytes: 0, ports: [] });
 
 async function mount(handler: (body: ClientRequestBody) => Promise<Event>, initialSelection?: string) {
   vi.useFakeTimers();

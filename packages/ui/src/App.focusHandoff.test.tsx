@@ -11,6 +11,7 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/build
 import { isolate } from "./i18n/isolate";
 import type { UpdaterCapability } from "./platform";
 import { UpdatesProvider } from "./updates/UpdatesProvider";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -86,7 +87,7 @@ it("hands focus on the update notice's Later to the agent terminal as the notice
   stubWindow();
   const updater: UpdaterCapability = { currentVersion: async () => "0.1.0", check: async () => ({ version: "0.2.0" }), install: async () => {} };
   const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [live] }));
-  mountApp(daemon, { platform: { kind: "browser", updater }, wrap: (app) => <UpdatesProvider firstCheckDelayMs={0}>{app}</UpdatesProvider> });
+  mountApp(daemon, { platform: { kind: "browser", host: BROWSER_HOST, updater }, wrap: (app) => <UpdatesProvider firstCheckDelayMs={0}>{app}</UpdatesProvider> });
   await pressElement(row(live.title));
   await vi.waitFor(() => expect(document.querySelector("[data-region=update]")).not.toBeNull(), { timeout: 2000 });
   const later = byLabel("Later", document.querySelector("[data-region=update]")!);

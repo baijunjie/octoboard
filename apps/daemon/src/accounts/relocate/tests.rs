@@ -416,7 +416,7 @@ fn the_carried_items_complete_or_roll_back_together() {
 
     // The second item cannot be copied: the first is not left in the target.
     let target = temp_dir("together-target");
-    std::os::unix::fs::symlink("/etc/hosts", source.join(&sidecar).join("link")).unwrap();
+    crate::test_support::symlink("/etc/hosts", source.join(&sidecar).join("link")).unwrap();
     let err = copy(&source, &target, &record_path, &companions).expect_err("a link in the sidecar");
     assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
     assert_eq!(param_of(&err, "stage"), "copy");
@@ -488,7 +488,7 @@ fn a_session_with_no_record_in_the_account_is_not_found() {
     let err = locate(AgentId::CLAUDE, &source.join("missing"), CLAUDE_ID).expect_err("no dir");
     assert_eq!(code_of(&err), error_code::CONVERSATION_NOT_FOUND);
     // A link named like the record is not the record.
-    std::os::unix::fs::symlink(
+    crate::test_support::symlink(
         "/etc/hosts",
         source.join(format!("projects/slug/{CLAUDE_ID}.jsonl")),
     )
@@ -519,7 +519,7 @@ fn a_shared_directory_is_left_alone() {
 fn share(account: &Path, default: &Path, names: &[&str]) {
     for name in names {
         std::fs::create_dir_all(default.join(name)).unwrap();
-        std::os::unix::fs::symlink(default.join(name), account.join(name)).unwrap();
+        crate::test_support::symlink(default.join(name), account.join(name)).unwrap();
     }
 }
 
@@ -532,9 +532,8 @@ fn carry(agent: AgentId, source: &Path, target: &Path, id: &str) -> PathBuf {
 }
 
 /// The inode a path resolves to: a replaced item, even with the same content, has another.
-fn inode(root: &Path, relative: &str) -> u64 {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::metadata(root.join(relative)).unwrap().ino()
+fn inode(root: &Path, relative: &str) -> crate::platform::fs::Identity {
+    crate::platform::fs::identity(&root.join(relative), crate::platform::fs::Links::Follow).unwrap()
 }
 
 fn read(root: &Path, relative: &str) -> String {
@@ -621,11 +620,10 @@ fn a_switch_between_a_sharing_and_a_non_sharing_account_copies_either_way() {
 /// segment included: nothing is copied and every rollout is as it was.
 #[test]
 fn codex_accounts_sharing_their_sessions_copy_nothing() {
-    use std::os::unix::fs::MetadataExt;
     let stamp = |file: &PathBuf| {
         (
             std::fs::read(file).unwrap(),
-            std::fs::metadata(file).unwrap().ino(),
+            crate::platform::fs::identity(file, crate::platform::fs::Links::Follow).unwrap(),
         )
     };
     let default = temp_dir("codex-shared-default");
@@ -634,11 +632,13 @@ fn codex_accounts_sharing_their_sessions_copy_nothing() {
     share(&source, &default, &["sessions"]);
     share(&target, &default, &["sessions"]);
     let chain = crate::test_support::codex_chain(&source, CODEX_ID, true);
-    let before: Vec<(Vec<u8>, u64)> = chain.all().iter().map(stamp).collect();
+    let before: Vec<(Vec<u8>, crate::platform::fs::Identity)> =
+        chain.all().iter().map(stamp).collect();
 
     carry(AgentId::CODEX, &source, &target, CODEX_ID);
 
-    let after: Vec<(Vec<u8>, u64)> = chain.all().iter().map(stamp).collect();
+    let after: Vec<(Vec<u8>, crate::platform::fs::Identity)> =
+        chain.all().iter().map(stamp).collect();
     assert_eq!(before, after);
     assert!(!target.join(STAGING).exists());
 }
@@ -672,7 +672,7 @@ fn grok_accounts_sharing_their_sessions_copy_nothing() {
 fn an_incomplete_copy_fails_and_leaves_nothing_in_the_target() {
     let source = temp_dir("incomplete-source");
     write(&source, "sessions/enc/grok-id/messages.jsonl", "x");
-    std::os::unix::fs::symlink("/etc/hosts", source.join("sessions/enc/grok-id/link")).unwrap();
+    crate::test_support::symlink("/etc/hosts", source.join("sessions/enc/grok-id/link")).unwrap();
     let target = temp_dir("incomplete-target");
     let blocked = temp_dir("incomplete-blocked");
     std::fs::write(blocked.join("sessions"), "a file where a directory must be").unwrap();
@@ -820,6 +820,7 @@ fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
 }
 
 /// A copy the file system refuses names why, when it is one a user can act on.
+#[cfg(unix)]
 #[test]
 fn a_copy_refused_for_permissions_says_so() {
     use std::os::unix::fs::PermissionsExt;

@@ -8,6 +8,7 @@ import { useOctoboardTheme } from "../preferences/theme";
 import { usePlatform } from "../platform/react";
 import type { ViewedFile } from "../viewer/viewedFile";
 import { useDaemon } from "../store";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { revealPathTarget } from "./links/revealPathTarget";
 import { openPathTarget } from "./links/openPathTarget";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
@@ -54,11 +55,12 @@ export function useTerminalController({
   /** Shows a project file a path in the output named. Without it such a path opens in the default application. */
   viewFile?: (file: ViewedFile) => void;
   /** Read once, when the controller is built. */
-  options?: TerminalControllerOptions;
+  options?: Omit<TerminalControllerOptions, "host">;
 }): void {
   const t = useT();
   const { request } = useDaemon();
-  const { links, clipboard } = usePlatform();
+  const { links, clipboard, host } = usePlatform();
+  const { style: pathStyle } = useHostPaths();
   const { resolved: colorTheme } = useOctoboardTheme();
   const dragging = useResizeDrag();
   const holdingSize = resizing || dragging;
@@ -79,6 +81,7 @@ export function useTerminalController({
         onLinkHover: (link) => setLinkRef.current?.(link),
         copyToClipboard: programCopyHandler(clipboard, () => latest.current),
         pathLinks: {
+          pathStyle,
           probe: async (paths) => {
             const reply = await latest.current.request({ type: "probe_path_links", project: latest.current.project, paths });
             return reply.links.map(({ kind, view, viewer_only }) => ({ kind, view, viewerOnly: viewer_only }));
@@ -95,7 +98,7 @@ export function useTerminalController({
         },
       },
       appliedColorThemeRef.current,
-      options,
+      { ...options, host },
     );
     controllerRef.current = controller;
     if (containerRef.current) controller.mount(containerRef.current);

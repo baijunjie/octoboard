@@ -10,8 +10,9 @@ import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { appDataRecovery } from "../errors/errorRecovery";
-import { abbreviateHome } from "../format/pathDisplay";
+import { display } from "../format/hostPath";
 import { useDaemon, useDaemonStore } from "../store";
+import { useHostPaths } from "../components/hooks/useHostPaths";
 import { SettingRow } from "./SettingRow";
 import { LeadRows, SettingsLead } from "./SettingsLead";
 import { useSectionRefocus } from "./useSectionRefocus";
@@ -26,7 +27,7 @@ export function TrustedFoldersSection(): React.ReactElement {
   const { request } = useDaemon();
   const listRef = useListMotion<HTMLDivElement>();
   const directories = useDaemonStore((s) => s.trustedDirectories);
-  const home = useDaemonStore((s) => s.homeDir);
+  const paths = useHostPaths();
   const [removing, setRemoving] = useState<string>();
   // Bumped when a removal has gone through: the Remove button that was pressed goes with its row and
   // the confirmation closes with it, so focus has to be sent back to the section's tab. Cancelling
@@ -72,7 +73,7 @@ export function TrustedFoldersSection(): React.ReactElement {
           title={t("settings.trusted.removeTitle")}
           errorTitle={t("settings.trusted.removeFailedTitle")}
           errorRecovery={appDataRecovery}
-          subject={<Message id="settings.trusted.removeSubject" params={{ path: <InlineReference monospace wrap>{abbreviateHome(removing, home)}</InlineReference> }} />}
+          subject={<Message id="settings.trusted.removeSubject" params={{ path: <InlineReference monospace wrap>{display(removing, paths)}</InlineReference> }} />}
           message={t("settings.trusted.removeMessage")}
           confirmLabel={t("common.remove")}
           destructive

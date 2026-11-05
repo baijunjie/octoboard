@@ -16,7 +16,7 @@ watching), serde. The crate is a member of the root Cargo workspace beside the d
 
 `src/main.rs` hands a named CLI mode to `cli::run`; otherwise it takes the instance lock, opens the store, binds
 `127.0.0.1` on an OS-assigned port, generates the per-launch key, prints the handshake line (port and key) and runs the
-server. The CLI modes other processes start are `hook`, `git-ref`, `gate-hook`, `status-line` and `mcp`:
+server until a request to end arrives: the `shutdown` control request, `POST /shutdown` (`src/server/callbacks.rs`), a termination signal or the application's pid going away. The CLI modes other processes start are `hook`, `git-ref`, `gate-hook`, `status-line` and `mcp`:
 their dispatch is `src/cli/mod.rs`, and their code is `src/cli/hook.rs` (`hook`), a provider's `StatusLine`
 (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
 `src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`) and `src/mcp/stdio.rs` (`mcp`). The routes are in `src/server/`. Each mode takes the running
@@ -45,7 +45,8 @@ languages the interface is offered in, mirroring the UI's `i18n/languages.ts`), 
 hook modes and the MCP stdio bridge call the running daemon with), `paths.rs` (where Octoboard keeps its files under the
 data directory), `text.rs` (`trimmed_or_none`, free text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts around a paste taken off), `time.rs` (the clock, `now_millis` and `now_secs`,
 and the RFC 3339, compact and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire form of a path or
-branch name). Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and `store/test_support.rs`, and the
+branch name, made and validated through `platform::names`, with no OS token of its own; whether this host can name it is
+asked only where it meets the disk, by `RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` embeds `octoboardd.exe.manifest` (the long-path-aware declaration) in the Windows MSVC binary through the linker arguments `/MANIFEST:EMBED` and `/MANIFESTINPUT:<file>`, which `link.exe` and `lld-link` both take, so the manifest is expected in `octoboardd.exe` whichever of them links it. Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and `store/test_support.rs`, and the
 `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/` holds the captured agent screens
 and records tests replay.
 
@@ -56,7 +57,7 @@ and records tests replay.
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
   is the `Code` registry (a core code can be made only there; a provider's code only through `Code::of_provider` from
   its declaration), `errors.rs` the one mapping from a failure to an `error` reply (with `CodedError::require_offered`,
-  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `bindings.rs` the test
+  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
   that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`.
 - `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode.
 
@@ -138,6 +139,7 @@ and records tests replay.
   command shares, `run.rs` building and running (`Runner`), `layout.rs` and `repo_files.rs` where a repository's files
   are and what they say, `reflog.rs` a branch's creation entry, `worktrees.rs` worktrees and their changes,
   `isolated.rs` the reads isolated from the user's environment (with their deadline and stderr ceiling),
+  `pathspec.rs` how a path goes to `git` so that it names exactly that path on every host,
   `remote_branches.rs` the lookup of a branch's remote-tracking branch and of the remote default branch, and the small
   readings of git's text shared by several families (`object_id.rs`, `remote_branch.rs`, `tree_entries.rs`).
 - `src/project_git/` — git work on a project's own repository: header, status, push, switch, restore, remote, the ref
@@ -150,39 +152,84 @@ and records tests replay.
   `project_live_roots`); `changes.rs` lists the worktree's changes and `change_read.rs` reads one change for them, for
   `compare.rs` and for `commits.rs`; `content.rs` encodes a body for the wire.
 - `src/hostfs/` — host filesystem work: bounded reads, regular-file reads and appends, device/inode identity, listing,
-  whole-file replacement, Trash, small entry steps (`modified`, `remove_any`, `is_same_path`) and `dir_key`.
+  whole-file replacement, Trash, small entry steps (`modified`, `remove_any`, `is_same_path`), `dir_key`, and the one
+  place a path is resolved against the disk (`canonical`, over `platform::names::canonical`) and compared as written
+  (`lexical_key`, `lexically_within`, over `platform::names::lexical_key`).
 - `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal (every launcher runs
-  through one bounded runner); probing and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
+  through one bounded runner, and what each host's launcher is comes from `platform::open`); probing and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
   place that decides what a link may reach and what is only shown rather than launched.
-- `src/env_shell/` — the user's real shell environment agents are launched with, and resolving a binary on it.
+- `src/env_shell/` — the user's real shell environment agents are launched with (the host's login-shell snapshot from
+  `platform::shell`, less the variables that mark an agent session, kept under the freshness rules of `cache.rs`), and
+  resolving a binary on it into what starts it (`resolve_binary`, over `platform::shell::resolve_binary`).
 
 ### Running sessions
 
-- `src/terminal/` — PTY processes and what clients see of them (`pty.rs` the descriptor, input, reader thread and child
-  lifecycle, `fan.rs` the output fan-out of replay ring, parsed screen and attached clients, `ptyio.rs`, `ringbuf.rs`,
-  snapshots, titles and the spinner glyphs they start with, reply routing, `input_class.rs` input that is only the
+- `src/terminal/` — PTY processes and what clients see of them (`pty.rs` `PtyCore`, the lifecycle over a terminal
+  `platform::term` started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every
+  write into the terminal is made under), freezing, exit observation, scratch directory and
+  crash-cleanup entry, `fan.rs` the output fan-out of replay ring, parsed screen and attached clients, `ringbuf.rs`,
+  snapshots (which, once asked, report the title changes the output makes after it has drawn something), titles
+  (`title.rs` reads them off the output's own OSC 0/2 sequences, or off the snapshot's title changes where
+  `TermFacts::host_renders`) and the spinner glyphs they start with, reply routing, `input_class.rs` input that is only the
   terminal's own protocol traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell
   terminals).
-- `src/session/` — one running agent process (`LiveSession`), input and message-write gates, `term/` launch and writing
-  a message into the process through the guarded bracketed-paste write (and `AfterExit`, the work a launch leaves for
-  once its process has exited: `LaunchPlan::after_exit`), `draft.rs`,
+- `src/session/` — one running agent process (`LiveSession`; `LiveSession::host_renders` says whether its titles
+  come off the parsed screen's title changes and a provider's placeholder reads as an empty input box), input and
+  message-write gates (the daemon's own writes,
+  a message's paste and Enter, the stash, interrupt and trust keys, are `platform::term::Input` values; a client's
+  keystrokes and query replies go in raw), `term/` launch and writing a message into the process through the guarded
+  bracketed-paste write (and `AfterExit`, the work a launch leaves for once its process has exited:
+  `LaunchPlan::after_exit`), `draft.rs`,
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
-  a per-session home), `interrupt/`, `title_activity.rs` (what
+  a per-session home; `screen.rs` reads a provider's screen off the recent output, or off the parsed screen where
+  `TermFacts::host_renders` says the output is the host's repaint, `TrustState::reads_screen`; there Codex's watch ends
+  at its composer rather than its title, and Claude Code's readiness, otherwise its bracketed paste after the first
+  hook, also comes with its input box drawn after `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what
   a terminal title says about a turn), `title_interrupt.rs` (a cancel that left no other trace, read off the title),
   `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`).
   `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens, input box and title read, which
   `AgentProvider::screen` gives (`NoScreen` is the default that recognises nothing; `user_action_title` is the title
-  text a provider shows when only the user can act); the modules above keep only what is
+  text a provider shows when only the user can act; `input_placeholder` the hint an empty input box shows); the modules above keep only what is
   done with a reading (the dialogs are kept as `DialogPattern` and `DialogKind`), and read it through the session's
   provider.
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
 - [`src/processes/ledger/`](../../apps/daemon/src/processes/ledger/README.md) — attributing, listing, stopping, keeping
   and carrying over the processes an agent launch started.
-- `src/processes/native/` — the native reads of the system's process table (list, start time, parent and children, a
-  descriptor's path, sockets, working directory), one reader per platform; shared by the ledger's `table.rs` and
-  `terminal/shell/busy.rs`.
-- `src/processes/` — the rest: `subprocess.rs` and `leader.rs` (running a
-  spawned process within bounds, leading a session of its own), `pids.rs`, `crash_cleanup.rs`.
+- `src/processes/` — the rest: `subprocess.rs` (running a spawned process within bounds; what a stop reaches, the signals
+  and the pipe readers are `platform::proc`'s).
+- `src/platform/` — the only place OS-specific code lives, with no use of anything else in the crate, so any module may
+  use it. `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
+  children, a descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`,
+  `platform::proc` and `terminal/shell/busy.rs`; `open/` the launcher commands `host_open` starts (file manager, default
+  application, system terminal), chosen by an OS name so every OS's choice is tested anywhere
+  (`terminal.rs`'s `host_launch` decides whether the host looks its terminal up on a shell snapshot, so business code compares no OS name), and
+  `LAUNCHED_FILE_EXTENSIONS`, the file types the host's shell launches when opened (Windows only), which `path_links`
+  refuses; `fs/` what the host does with files: the identity that tells a
+  file apart (with its stat from one handle and the version tag built on it), opening a path without a link in it (the browse
+  boundary) or without waiting, the directory reader a listing walks, the permissions of what the daemon writes (private,
+  kept, owner-only, executable, read-only, private to the user), volume roots, the home directory, aliases to files and
+  directories, the exclusive lock `try_lock_file` that `instance_lock.rs` and the Grok trust store take, the host's
+  scratch directories (`temp_roots`), what git runs as a hook (`is_hook_script`) and setting a directory's modification time
+  (`set_dir_modified`) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour); `names/` how the host spells names (a name as bytes and back, the components a client may send, git bytes as a
+  path, the lexical comparison key of a path, the path style, the canonical path, which on Windows is the long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares equal to its long form; the Windows rules that need no OS call
+  are plain functions tested on every host, the rest a skeleton); `shell/` what the host asks of the user's shell (the login shell
+  and the environment snapshot it gives, finding a binary on a `PATH` as what starts it, the command line a hook runs, the owner-only script that holds one, the time an agent lets a command hook run (`COMMAND_HOOK_TIMEOUT_SECS`, longer on Windows, where a hook's first start of a launch is slow) and `FIRST_HOOK_SLOWDOWN`, the factor that gives the wait for a launch's first report the same slack (`messaging/write_queue.rs` applies it), the shell that runs a user's own command, the git hooks' interpreter, the architectures of the programs the machine runs, native first (`runnable_architectures`), the
+  installed version a binary reports, probed in the launch's environment, and `package_shims.rs`, where Node package
+  managers (npm, pnpm, with its numbered `global\<n>` layouts taken highest first, Yarn classic, Bun, Volta) install a global package beside the shims they write on Windows,
+  as plain path functions tested on every host: `shim_package` gives a `Shim`, none, the package's directory or an unresolved
+  script shim); `proc/` what the host does to the
+  processes the daemon starts (leading a session or a process group, the child handle that tells how an unreaped child stands, asks
+  it to end politely or kills it, sweeps what it left behind and reaps it, the containment that tells one launch's processes from any
+  other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again), a polite request to end or a kill sent to a process or a group, the process
+  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`) and the watch on the application that started it (`watch_parent`), and `crash/`, the table that kills every process the daemon runs on a PTY
+  when it goes down on an internal failure; contract tests in `proc/contract_tests.rs`); `term/` the terminal backend
+  (starting a process on a PTY from a plain command description, with its child handle; the `Pty` that is read, written,
+  resized and hung up, and tells whose job its foreground is and its slave path; the daemon's own `Input` values, encoded
+  as the host's terminal takes them (`vt.rs`); `TermFacts`, how the backend behaves where business code must know, such
+  as its settle window; contract tests in `term/contract_tests.rs`; on Windows the pseudoconsole is ConPTY, run on the bundled `conpty.dll` beside the daemon's executable when it loads, which starts `OpenConsole.exe` from the same directory or from a subdirectory named for the machine's native architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): the installer ships the x64 `conpty.dll` with an `OpenConsole.exe` in each of the two subdirectories (`scripts/fetch-conpty.mjs --installer`), so the x64 DLL on x64 hardware loads `x64\OpenConsole.exe` and under emulation on ARM64 finds `arm64\OpenConsole.exe`; with no DLL, or one that fails to load, the system's pseudoconsole is used (a failed load is logged as a warning), and a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed paste being written rather than landing inside it, and a failed wait in a transfer is reported as an error; `random/` bytes from the host's random source; `policy/` what an administrator sets for a product: the directory they keep its managed files in (`managed_dir`) and its
+  registry policy (the Windows registry's `Policies` key; elsewhere none), read through
+  `registry.rs`, the Windows-only reader of registry string values; `test_helper.rs` the test binary re-run as the
+  helper process both contract suites start; `HostFacts` (os, path style, file links, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
 
 ### Agent records, hooks, adapters and MCP
 
@@ -235,7 +282,8 @@ and records tests replay.
   turn ended, and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's stash keybinding gate; `claude/compatibility.rs` (with
   `compatibility.md`, the instruction text) is Claude Code's `CompatibilitySource`;
   `claude/transcript_watch.rs` is the Claude Code rejection and interrupt watch, `claude/status_line.rs` its
-  `StatusLine`, `codex/rollout_watch.rs`
+  `StatusLine`, `codex/native_binary.rs` the native program of a package-manager-installed Codex that a shim
+  launches (the one built for the machine's native architecture when it ships several, as on ARM64 Windows), `codex/rollout_watch.rs`
   the Codex failed-turn watch and `codex/rollout_files.rs` Codex's rollout file-name and segment-chain rules;
   `models.rs` is a provider's `ModelCatalogue`, and `accounts.rs` its `AccountOps` with the parts `quota.rs`
   (`QuotaProbe`), `login.rs` (`LoginFlow`) and `shared_config.rs` (the items it shares); Codex also has
@@ -290,11 +338,15 @@ type admits everything the type exposes; and a test-only field of a tuple struct
 inside angle brackets (`HashMap<K, V>`) is cut short at that comma, so the rest of its type is read as production code,
 which can only add an edge, never hide one.
 
+`platform` is a foundation module that uses nothing else in the crate: the same test fails on an edge from it to any other
+top-level module or to an item of the crate root, whatever the layer of the target. The OS-token rule below reads the
+same scan.
+
 ### Layers, lowest first
 
 | Layer | Modules |
 |---|---|
-| foundation | `blocking_pass`, `interface_language`, `loopback`, `text`, `time`, `wire_path` |
+| foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `text`, `time`, `wire_path` |
 | providers | `providers` |
 | wire | `protocol` |
 | host | `env_shell`, `git`, `host_open`, `hostfs`, `instance_lock`, `log_file`, `paths`, `processes` |
@@ -314,6 +366,36 @@ which can only add an edge, never hide one.
 | `state` | `project_git` | `header::apply_header` | the git status `AppState` holds takes a fresh header the way `project_git` reads it |
 | `state` | `titles` | `project_names`, `resolve` | a session's title is resolved where `AppState` publishes it |
 | `messaging` | `coordinator` | `lifecycle::archive_finished`, `lifecycle::Finish`, `lifecycle::Finished`, `lifecycle::Unfinished`, `lifecycle::unfinished` | `messaging::reporting` archives a session that reported it is done, and checks beforehand that it may be, through the coordinator's archive of a finished session |
+
+### OS-specific tokens
+
+Enforced by the test `layering_tests::os_tokens_appear_only_in_the_platform_layer` (the check is
+`layering_tests/os_tokens.rs`, the scan is the same `layering_tests/scan.rs` pass, so "production code" means exactly what
+it means for the dependency rule). Every OS-specific token belongs under `src/platform/`; anywhere else in production code
+it fails the test. The rule has no exceptions. The tokens, by the kind name
+the test reports:
+
+| Kind | Token |
+|---|---|
+| `libc` | a path starting with `libc::`, in a `use` or inline |
+| `windows_sys` | a path starting with `windows_sys::` |
+| `portable_pty` | a path starting with `portable_pty::`, the Unix PTY backend's crate |
+| `tokio::signal` | a path through `tokio::signal::unix` or `tokio::signal::windows` (the portable `tokio::signal::ctrl_c` is not one) |
+| `std::os` | any path through `std::os`, including `use std::os::unix::…` and an `os::…` inside a `use std::{…}` group |
+| `cfg(os)` | a `cfg` predicate naming `target_os`, `unix` or `windows`, at any nesting (`all`, `any`, `not`), in `#[cfg(…)]`, `#![cfg(…)]`, the predicate of `#[cfg_attr(…)]` and `cfg!(…)` |
+| `/bin/sh` | the text `/bin/sh` inside a string literal (the scan blanks literals but marks this one) |
+| `mode bits` | an octal literal (`0o…`), `set_mode(…)`, `from_mode(…)`, `.mode(…)` with an argument, and `permissions().mode()` |
+| `symlink` | the identifiers `symlink`, `symlink_file` and `symlink_dir`; `symlink_metadata`, `is_symlink` and `read_link` are portable and not listed |
+| `canonicalize` | the identifier `canonicalize`, so `std::fs::canonicalize` and `Path::canonicalize` alike: one OS call |
+
+The scan is lexical, like the dependency rule's: comments and literal contents are blanked (a `/bin/sh` in a comment does
+not count); a macro's expansion is not seen; and a bare `metadata.mode()` with no arguments is not a site by itself,
+because `alacritty_terminal`'s `Term::mode()` has the same shape, but the octal mask it is read with is one. Test code is
+exempt, exactly as for the dependency rule, yet it must still build on every OS: test-only code that needs a Unix call is
+gated by `cfg` or kept out of the shared tests.
+
+The rule has no exceptions and no allow-list: a site outside `platform` fails the test with its `file:line` and token. A
+new site is never excused: it goes under `platform`.
 
 ## Where new code goes
 
@@ -373,8 +455,10 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Read from the disk within a bound | `hostfs::read_bounded` (with cancel), `read_regular` / `open_regular` for files the project does not own (`src/hostfs/mod.rs`); a project's files go through `browse::live` |
 | Read an agent's record | `src/records/line_file.rs`, the bounded line reader (also what record watches use) |
 | Tell directories apart; move to Trash | `src/hostfs/identity.rs` (device and inode); `hostfs::trash::move_to_trash` under `src/removal_safety/`'s rules; account directories by `hostfs::dir_key` |
-| List every process id | `processes::pids::all` (only `crash_cleanup.rs` keeps its own listing, which must not allocate) |
+| List every process id | `platform::proc_table::pids::all` (only `platform::proc::crash` keeps its own listing, which must not allocate) |
 | Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`) |
+| Lead a session, signal a process or a group, sweep a session; wait for the host's request to end the daemon, watch the application's process; tell a launch's processes apart (`Containment`) and stop or kill a child (`ChildHandle`) | `platform::proc` |
+| Start a process on a terminal; write the daemon's own paste or key into one | `platform::term` (`spawn`, `Pty::write_input` with `Input`); the lifecycle around it is `terminal::pty::PtyCore` |
 | Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `last_stderr_line` words a failure |
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |
 | A provider's fact (names, install page, binary, instruction file, tool-name prefix, detection markers, declared capabilities) | its descriptor: `AgentId::descriptor` and `providers::descriptors` (`src/providers/mod.rs`) |
@@ -404,7 +488,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |
 | Cap a pass of blocking per-entity work | `blocking_pass::each_blocking` from async code; from a thread with no runtime, a pass waited for only until a deadline, with a stuck key skipped while it is stuck: `blocking_pass::within_deadline` (the async sibling for paths is `hostfs::place::looked_within`) |
-| Read the system's process table | `src/processes/native/` (`ledger/table.rs` and `terminal/shell/busy.rs` read through it) |
+| Read the system's process table | `src/platform/proc_table/` (`ledger/table.rs` and `terminal/shell/busy.rs` read through it) |
 | Resolve a project path for a host action, or judge what a terminal link may reach | `browse::scope::resolve_project_path` / `resolve_project_directory`; `path_links::resolve::reach`, which holds the refusal rules |
 | Check a directory exists and can be looked at | `hostfs::require_directory` (absence only from NotFound; any other failure is `directory_unreadable`) |
 | Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`; a non-2xx answer is an error whose status `error_status` gives) |

@@ -10,6 +10,7 @@ import type { Session } from "../protocol";
 import { ariaBinding } from "../shortcuts/binding";
 import { defaultBinding } from "../shortcuts/commands";
 import { restoreAllBindings } from "../shortcuts/store";
+import { BROWSER_HOST } from "../test/hosts";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { SessionActions } from "./SessionActions";
@@ -129,7 +130,7 @@ it("shows menu-only letters instead of selected-session window shortcuts", async
     expect(shown(label).getAttribute("aria-keyshortcuts")).toBe(letter);
   }
   expect(shown("Focus mode").querySelector("kbd")?.textContent?.endsWith("F")).toBe(true);
-  expect(shown("Focus mode").getAttribute("aria-keyshortcuts")).toBe(ariaBinding(defaultBinding("focusMode")));
+  expect(shown("Focus mode").getAttribute("aria-keyshortcuts")).toBe(ariaBinding(defaultBinding("focusMode"), BROWSER_HOST));
   expect(shown("Colour").querySelector("kbd")).toBeNull();
   expect(shown("Colour").getAttribute("aria-keyshortcuts")).toBeNull();
   act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true, cancelable: true })));

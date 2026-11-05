@@ -1,7 +1,7 @@
 import { Button as HeroButton } from "@heroui/react";
 import { Button as AriaButton } from "react-aria-components";
 import { buttonVariants } from "@heroui/styles";
-import React, { useEffect } from "react";
+import React, { useEffect, useId } from "react";
 
 import { useDisabled } from "./busy";
 import { useFieldClear } from "./Field";
@@ -40,6 +40,12 @@ export function buttonClassName({ variant, size }: { variant?: ButtonVariant; si
 
 /** The extra-small size on top of HeroUI's small one; the unlayered `.app-button--xs` rules extend HeroUI's scale. */
 const XS_CLASS = "app-button--xs";
+
+/** The look of an unavailable button over HeroUI's disabled one, which turns pointer events off for `aria-disabled`:
+ * they are turned back on, for the tooltip with the reason to open and a press to reach `onPress`, and the hover and
+ * pressed fills stay the resting one and the press shrink is left off, as nothing is done. A fill of the caller's own
+ * classes (a row icon's `hover:` tint) is the caller's to leave off. */
+const UNAVAILABLE_CLASS = "pointer-events-auto [--button-bg-hover:var(--button-bg)] [--button-bg-pressed:var(--button-bg)] ui-pressed:[transform:none] active:[transform:none]";
 
 /** What a plain button and a toggle button share: its name and description, and how it takes focus. */
 export interface ButtonBaseProps extends DataAttributes {
@@ -116,9 +122,12 @@ export function Button({ variant, size, type = "button", pending, unavailable, c
   /** Shows a spinner before the unchanged content and keeps the button where it is, unavailable and busy, while what it
    * started runs. */
   pending?: boolean;
-  /** Marks the button unavailable (`aria-disabled`) while it stays focusable and pressable, for one that says why it
-   * cannot act when reached; HeroUI's disabled style then applies, which the caller adjusts. */
-  unavailable?: boolean;
+  /** Why the button cannot act now, which makes it unavailable rather than disabled (see "Buttons" in
+   * `docs/ui-standard.md`): it stays focusable and pressable, reads as `aria-disabled` and in HeroUI's disabled style
+   * with neither hover fill nor press shrink, and has the reason as its description, from a visually hidden copy inside
+   * it, in place of `describedBy`; its name stays the action. A press still reaches `onPress`, which answers it, and
+   * the caller shows the reason as its tooltip. */
+  unavailable?: string;
   /** Marks the button as the current item of a set (`aria-current`). */
   current?: boolean;
   /** Overrides whether the button says it opens a popup (`aria-haspopup`), for a trigger whose press does not always
@@ -138,9 +147,11 @@ export function Button({ variant, size, type = "button", pending, unavailable, c
     return () => element?.removeAttribute("aria-busy");
   }, [pending, ref]);
   const spinner = pending && <Spinner color="current" size={size === "lg" ? "md" : "sm"} className={size === "xs" ? "size-3" : undefined} />;
+  const reasonId = useId();
+  const reason = unavailable !== undefined && <span id={reasonId} className="sr-only">{unavailable}</span>;
   return (
     <HeroButton
-      {...baseButtonProps({ ...rest, disabled })}
+      {...baseButtonProps({ ...rest, disabled, describedBy: unavailable === undefined ? rest.describedBy : reasonId })}
       ref={ref}
       {...fieldClear}
       type={type}
@@ -148,12 +159,13 @@ export function Button({ variant, size, type = "button", pending, unavailable, c
       size={size === "xs" ? "sm" : size}
       data-size={size}
       isPending={pending}
-      aria-disabled={unavailable || undefined}
+      aria-disabled={unavailable !== undefined || undefined}
       aria-current={current ? "true" : undefined}
       aria-haspopup={hasPopup}
       onPress={onPress && ((event) => onPress(toButtonPress(event)))}
-      className={[size === "xs" && XS_CLASS, className, placement].filter(Boolean).join(" ") || undefined}
+      className={[size === "xs" && XS_CLASS, unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ") || undefined}
     >
+      {reason}
       {spinner && rest.iconOnly ? spinner : <>{spinner}{children}</>}
     </HeroButton>
   );

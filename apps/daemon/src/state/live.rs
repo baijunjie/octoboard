@@ -154,7 +154,7 @@ impl AppState {
     pub fn register_live(self: &Arc<Self>, session: Arc<LiveSession>) {
         session.enter_crash_cleanup();
         self.process_ledger
-            .launch_started(&session.launch_id, &session.id, session.pid);
+            .launch_started(&session.launch_id, &session.id, session.handle());
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.sessions.insert(session.id.clone(), session.clone());
         drop(live);

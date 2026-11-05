@@ -11,6 +11,7 @@ import type { ExitCapability, PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
+import { BROWSER_HOST } from "./test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,7 +22,7 @@ function Crashing(): React.ReactElement {
 
 /** Mounts the boundary over a component that crashes, measuring every element as `scrollHeight`
  * tall in a `clientHeight` box, since jsdom has no layout and the fade's state follows those. */
-async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number }, Child: () => React.ReactElement = Crashing, platform: PlatformAdapter = { kind: "browser" }, daemon?: Daemon, beforeFrame?: (container: HTMLElement) => void): Promise<HTMLElement> {
+async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number }, Child: () => React.ReactElement = Crashing, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }, daemon?: Daemon, beforeFrame?: (container: HTMLElement) => void): Promise<HTMLElement> {
   const restore = (["scrollHeight", "clientHeight"] as const).map((key) => {
     const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
     Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => sizes[key] });
@@ -101,7 +102,7 @@ it("says the crash in the application's words on the page and keeps the error's 
 
 it("opens no error dialog over the page and announces the failure from the page itself, inserted after the first paint", async () => {
   let first: Element | null | undefined;
-  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "browser" }, undefined, (shown) => {
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "browser", host: BROWSER_HOST }, undefined, (shown) => {
     first = shown.querySelector('[role="alert"]');
   });
   expect(first).toBeNull();
@@ -127,7 +128,7 @@ it("offers Report issue after Try again, as a link to the prefilled Issue page, 
 });
 
 it("keeps the report guidance, naming the address, where the platform cannot open links", async () => {
-  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri" });
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri", host: BROWSER_HOST });
   expect(container.querySelector("a[data-external-link]")).toBeNull();
   const guidance = container.querySelector('[data-slot="empty-state"] > [data-slot="surface"] p')!;
   expect(guidance.textContent).toContain("This may be a bug");
@@ -142,7 +143,7 @@ it("removes the names of the user's records from the report, reading them from t
   function CrashingOnProject(): React.ReactElement {
     throw new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
   }
-  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingOnProject, { kind: "browser" }, daemon);
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingOnProject, { kind: "browser", host: BROWSER_HOST }, daemon);
   const prefilled = new URL(container.querySelector<HTMLAnchorElement>("a[data-external-link]")!.href).searchParams;
   expect(`${prefilled.get("title")}${prefilled.get("body")}`).not.toMatch(/Zeta|alice/);
 });
@@ -174,7 +175,7 @@ it("has no Quit button where the platform can quit, yet answers a quit gesture a
     heartbeat: async () => {},
     confirmQuit,
   };
-  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri", exit });
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri", host: BROWSER_HOST, exit });
   expect([...container.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Copy", "Try again"]);
   await act(async () => onQuitRequested());
   expect(confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: false });

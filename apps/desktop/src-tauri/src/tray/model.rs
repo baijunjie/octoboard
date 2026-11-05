@@ -14,7 +14,7 @@ use crate::menu::APP_NAME;
 /// which already has every agent's mark, status glyph and bar colour, so a new agent needs nothing
 /// here: `icons` holds each distinct picture once, as a base64 PNG under a key the lines name, at
 /// twice the size they show at, and a quota bar's colour is sent as sRGB bytes.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct TrayMenu {
     pub(super) sections: Vec<TraySection>,
     #[serde(default)]
@@ -43,13 +43,13 @@ pub struct TrayMenu {
 
 /// A picture: a base64 PNG, and whether it is a template image, drawn in black for its alpha alone
 /// so macOS tints it to suit the menu.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub(super) struct LineIcon {
     pub(super) png: String,
     pub(super) template: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub(super) struct TraySection {
     pub(super) heading: String,
     pub(super) icon: Option<String>,
@@ -75,7 +75,7 @@ pub struct TraySubmenu {
 }
 
 /// An item with no `session` is a line that cannot be chosen, such as "3 more…".
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub(super) struct TrayItem {
     pub(super) label: String,
     pub(super) icon: Option<String>,

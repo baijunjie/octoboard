@@ -399,7 +399,7 @@ Registering does not reach two places the window's listeners never see:
   options (`packages/ui/src/report/pageDocument.ts`, from `ReportPanel.tsx`); add a command there if it should work
   while a page holds focus;
 - a native menu item's key is the menu's accelerator, so a command that is one has its binding pushed to the shell as
-  the Settings item's is (`useNativeMenuLabels`, `set_menu_labels` in `apps/desktop/src-tauri/src/menu.rs`), and is
+  the Settings item's is (`useNativeMenuLabels`, `set_menu_labels` in `apps/desktop/src-tauri/src/menu/mod.rs`), and is
   refused ⇧ with a number or symbol key in `validate.ts` as `openSettings` is: AppKit matches a menu key against the
   character with Shift applied, so such a combination never fires.
 

@@ -14,8 +14,9 @@ import { errorPresentation, type ErrorPresentation } from "../../errors/errorPre
 import { joinPhrases } from "../../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { DirEntry } from "../../protocol";
-import { abbreviateHome, isAbsoluteOrHomePath } from "../../format/pathDisplay";
-import { useDaemon, useDaemonStore } from "../../store";
+import { display, isAbsoluteOrHome, parent, type PathStyle } from "../../format/hostPath";
+import { useDaemon } from "../../store";
+import { useHostPaths } from "../hooks/useHostPaths";
 import { Dialog } from "./Dialog";
 import { useRefocusIfLost } from "./dialogHooks";
 import { useTrimmedField } from "../form/useTrimmedField";
@@ -35,11 +36,8 @@ const EMPTY_KEY = "empty";
 const PARENT_ROW_HEIGHT = 40;
 
 /** The directory containing `path`, `~` once there is nothing above it. */
-function ancestorOf(path: string): string {
-  const trimmed = path.replace(/\/+$/, "");
-  const slash = trimmed.lastIndexOf("/");
-  if (slash < 0) return "~";
-  return slash === 0 ? "/" : trimmed.slice(0, slash);
+function ancestorOf(path: string, style: PathStyle): string {
+  return parent(path, style) ?? "~";
 }
 
 /**
@@ -69,6 +67,7 @@ export function DirectoryPicker({
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
+  const { style } = useHostPaths();
   const [path, setPath] = useState(initialPath ?? "~");
   const pathField = useTrimmedField(path, setPath);
   const [entries, setEntries] = useState<DirEntry[]>();
@@ -120,7 +119,7 @@ export function DirectoryPicker({
       // lists. Only that failure does: a declined volume prompt or an unreadable directory is
       // shown as it is.
       if (targetPath !== "~" && err instanceof CodedError && err.code === "path_not_found") {
-        return load(ancestorOf(targetPath), true, call);
+        return load(ancestorOf(targetPath, style), true, call);
       }
       setFailure({ target: targetPath, error: errorPresentation(err) });
     }
@@ -189,8 +188,8 @@ export function DirectoryPicker({
         <DirectoryList
           listRef={listRef}
           entries={entries}
-          showParent={!!resolvedPath && resolvedPath !== "/"}
-          onOpen={(key) => void load(key === PARENT_KEY ? ancestorOf(resolvedPath ?? "/") : key)}
+          showParent={!!resolvedPath && parent(resolvedPath, style) !== undefined}
+          onOpen={(key) => void load(key === PARENT_KEY ? ancestorOf(resolvedPath ?? "/", style) : key)}
         />
       )}
     </Dialog>
@@ -210,7 +209,7 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const home = useDaemonStore((s) => s.homeDir);
+  const paths = useHostPaths();
   // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach. The
   // rows' focus ring and its offset fit within the `ListBox`'s own `p-1`, so the scroller does not
   // clip it. The parent-directory row stays pinned above the entries, so the fade is the overlay
@@ -266,7 +265,7 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
                 <Description className="flex min-w-0">
                   {/* HeroUI turns pointer events off on an item's description, which would leave
                       the path without its tooltip and marquee. */}
-                  <PathText path={entry.path} shown={abbreviateHome(entry.path, home)} className="pointer-events-auto min-w-0 flex-1" />
+                  <PathText path={entry.path} shown={display(entry.path, paths)} className="pointer-events-auto min-w-0 flex-1" />
                 </Description>
               </span>
               {entry.is_git_repo && <StatusBadge separated={false}>git</StatusBadge>}
@@ -291,8 +290,8 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
 
 /** Where the picker opens for the directory typed in a field: the typed path when it names a place (absolute, `~` or under
  * it), otherwise the home directory. */
-export function pickerStart(value: string): string {
-  return isAbsoluteOrHomePath(value) ? value.trim() : "~";
+export function pickerStart(value: string, style: PathStyle = "unix"): string {
+  return isAbsoluteOrHome(value, style) ? value.trim() : "~";
 }
 
 /** The Browse button of a directory field and the picker it opens, which fills the field through `onPick`. A native
@@ -310,6 +309,7 @@ export function useDirectoryBrowse(
 } {
   const t = useT();
   const daemon = useDaemon();
+  const { style } = useHostPaths();
   const platform = useOptionalPlatform();
   const native = platform?.kind === "tauri" && daemon.isLocal ? platform.directoryPicker : undefined;
   const [pending, setPending] = useState<{
@@ -337,7 +337,7 @@ export function useDirectoryBrowse(
     if (operation.current?.pending !== pending) {
       operation.current = {
         pending,
-        promise: Promise.resolve().then(() => pending.native!.pick({ title: pending.title, initialPath: pickerStart(pending.value) })),
+        promise: Promise.resolve().then(() => pending.native!.pick({ title: pending.title, initialPath: pickerStart(pending.value, style) })),
         valid,
       };
     }
@@ -364,7 +364,7 @@ export function useDirectoryBrowse(
     return () => {
       active = false;
     };
-  }, [pending, value, daemon, native, pick]);
+  }, [pending, value, daemon, native, pick, style]);
   const close = () => {
     busy.current = false;
     setPending(undefined);
@@ -383,7 +383,7 @@ export function useDirectoryBrowse(
     picker: pending && !pending.native ? (
       <DirectoryPicker
         title={t("dialog.chooseDirectory")}
-        initialPath={pickerStart(value)}
+        initialPath={pickerStart(value, style)}
         onPick={(picked) => {
           onPick(picked);
           close();

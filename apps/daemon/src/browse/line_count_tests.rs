@@ -57,11 +57,14 @@ fn a_worktrees_changes_carry_what_each_adds_and_removes() {
     write(repo.join("fresh.txt"), b"p\nq\nr");
     write(repo.join("blob.dat"), b"\0binary");
     write(repo.join("empty.txt"), b"");
-    let mut mode = std::fs::metadata(repo.join("mode.sh"))
-        .unwrap()
-        .permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut mode, 0o755);
-    std::fs::set_permissions(repo.join("mode.sh"), mode).unwrap();
+    #[cfg(unix)]
+    {
+        let mut mode = std::fs::metadata(repo.join("mode.sh"))
+            .unwrap()
+            .permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut mode, 0o755);
+        std::fs::set_permissions(repo.join("mode.sh"), mode).unwrap();
+    }
     let project = fixture.project("p", &repo);
 
     let (_, changes, _) = fixture.changes(&project, None).unwrap();
@@ -86,6 +89,7 @@ fn a_worktrees_changes_carry_what_each_adds_and_removes() {
     );
     assert_eq!(stats_of(&changes, "untracked", "blob.dat"), None);
     assert_eq!(stats_of(&changes, "untracked", "empty.txt"), lines(0, 0));
+    #[cfg(unix)]
     assert_eq!(
         stats_of(&changes, "unstaged", "mode.sh"),
         lines(0, 0),

@@ -34,4 +34,19 @@
   - Focus reports remain each client's own input.
   - The per-connection activity tracking is shared with milestone 01. Whichever of the two lands first builds it, and
     the other reuses it.
+  - **`TermFacts::host_answers_queries` and `TermFacts::host_waits_on_queries`** (`apps/daemon/src/platform/term/mod.rs`)
+    say how the host's terminal backend treats queries. Where `host_answers_queries` is true (the system's console host
+    on Windows) the host answers the device attributes, status and cursor reports itself before anything else sees
+    them, so the daemon must not answer those there, or the program reads two answers. Where `host_waits_on_queries`
+    is true (the console host bundled on Windows) the host forwards every query and holds the program for about
+    500 ms while one goes unanswered, so whatever this milestone builds must answer promptly whether or not a client
+    is attached. Both are false on macOS and Linux.
+  - A narrow answer already exists for `host_waits_on_queries`: the daemon's emulator (`terminal/snapshot.rs`) keeps
+    only its DA1 (`CSI ? 6 c`) and cursor-position answers; `Fan::push` (`terminal/fan.rs`) takes them under the fan's
+    lock, only while no client is attached, records them in `ReplyRoute` as the answer of `ReplyRoute::DAEMON` to the
+    output up to that chunk (so a client attaching later finds that output settled and a client's late answer to it
+    is dropped), and a writer thread per terminal (`terminal/pty.rs`) writes them under the input lock, off the
+    reader. A query that arrives while a client is attached is left to the clients. This milestone replaces that
+    with answering every query it settles, attached or not, and keeps the `ReplyRoute::DAEMON` bookkeeping or its
+    successor.
 - **Reference docs**: `apps/daemon/PROTOCOL.md` ("Answers to the program's queries" under the terminal stream).

@@ -4,7 +4,6 @@
 //! the Git read of one file (`read_from_git`), and the resolution of a path for a host action
 //! under the same scope as live browsing.
 
-use std::os::unix::ffi::OsStrExt;
 use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
@@ -12,6 +11,7 @@ use anyhow::Result;
 use crate::browse::source::{self, Discovery, ProjectRoot, Repository};
 use crate::browse::{blob, live, BrowseGit};
 use crate::git::isolated::IsolatedGit;
+use crate::platform::names;
 use crate::protocol::{
     error_code, CodedError, ContentSource, GitSourceInfo, Project, ProjectSourceInfo, WorktreeInfo,
 };
@@ -36,13 +36,11 @@ pub fn resolve_project_path(
     }
     // Keep the final entry's name so revealing a symlink selects that entry, while both its
     // target and its containing directory must stay inside the project scope.
-    let lexical = scope.canonical.join(rel.as_path());
-    let parent = rel
-        .as_path()
-        .parent()
-        .expect("a relative entry has a parent");
-    let parent = RelPath::from_bytes(parent.as_os_str().as_bytes().to_vec())
-        .expect("a validated path has a valid parent");
+    let lexical = scope.canonical.join(
+        rel.host_path()
+            .expect("a path that resolved has a name on the disk"),
+    );
+    let parent = rel.parent().expect("a relative entry has a parent");
     let directory = live::resolve(&scope.canonical, &parent)?;
     Ok(directory.join(lexical.file_name().expect("a non-root entry has a name")))
 }
@@ -138,7 +136,7 @@ pub(super) fn project_source(
     let mut info = ProjectSourceInfo {
         project: record.id.clone(),
         root: wire_path::encode(record.path.as_bytes()),
-        resolved_root: wire_path::encode(root.canonical.as_os_str().as_bytes()),
+        resolved_root: wire_path::encode(&names::name_bytes(root.canonical.as_os_str())),
         root_id: root.id.clone(),
         git: None,
         git_error: None,
@@ -169,7 +167,7 @@ pub(super) fn project_source(
                 scope_present: scope.is_ok(),
                 scope_cause: scope.err().map(|err| source::unavailable_cause(&err)),
                 id: worktree.id,
-                root: wire_path::encode(worktree.root.as_os_str().as_bytes()),
+                root: wire_path::encode(&names::name_bytes(worktree.root.as_os_str())),
                 main: worktree.main,
                 head: worktree.head,
                 branch: worktree.branch.as_deref().map(wire_path::encode),
@@ -178,7 +176,7 @@ pub(super) fn project_source(
         .collect();
     info.git = Some(GitSourceInfo {
         repository: repository.id,
-        common_dir: wire_path::encode(repository.common_dir.as_os_str().as_bytes()),
+        common_dir: wire_path::encode(&names::name_bytes(repository.common_dir.as_os_str())),
         worktree: repository.worktree,
         scope: repository.scope.to_wire(),
         worktrees,

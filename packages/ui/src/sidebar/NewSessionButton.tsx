@@ -2,6 +2,7 @@ import { Plus, Zap } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
+import { useHost } from "../platform/react";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { isPrimaryModifier } from "../input/keys";
 import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
@@ -42,9 +43,10 @@ export function NewSessionButton({
   ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   const t = useT();
+  const host = useHost();
   const { quick, blocked, unavailable } = useNewSessionMode(target);
   useWindowShortcut((event) => {
-    const action = matchCreateShortcut(event);
+    const action = matchCreateShortcut(event, host);
     return action === undefined ? undefined : { action, repeat: event.repeat };
   }, ({ action, repeat }) => {
     if (repeat || blocked) return;
@@ -66,7 +68,7 @@ export function NewSessionButton({
       onPress={(event) => {
         const request = target();
         if (!request) return;
-        if (quick || isPrimaryModifier(event)) onQuickCreate(request);
+        if (quick || isPrimaryModifier(event, host)) onQuickCreate(request);
         else onOpen(request);
       }}
     />

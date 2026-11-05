@@ -3,20 +3,21 @@ import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/focus/refocusIfLost";
 import { MODAL_OPEN } from "../components/focus/selectors";
+import type { HostFacts } from "../platform/host";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
+import { commandExists } from "../shortcuts/commands";
 import { matchesCommand } from "../shortcuts/store";
 import { useDaemon, useDaemonStore } from "../store";
-import { IS_MAC } from "../input/keys";
 import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { canGo, EMPTY_HISTORY, go, type Location, locationKey, push, replaceCurrent } from "./history";
 import { setKeyboardModality } from "../primitives";
 
 /** Back and Forward, ⌘[ and ⌘] unless rebound, matched on the physical key so a keyboard layout does not move
  * them. Alt+arrow is not used, being the word motions in a terminal. */
-function shortcutDirection(event: KeyboardEvent): -1 | 1 | undefined {
-  if (matchesCommand("back", event)) return -1;
-  return matchesCommand("forward", event) ? 1 : undefined;
+function shortcutDirection(event: KeyboardEvent, host: HostFacts): -1 | 1 | undefined {
+  if (matchesCommand("back", event, host)) return -1;
+  return matchesCommand("forward", event, host) ? 1 : undefined;
 }
 
 export interface Navigation {
@@ -62,8 +63,8 @@ export interface Navigation {
  * has just become disabled) goes to the terminal, through `focusTerminal`. The history is in
  * memory only.
  *
- * The keys for Back and Forward (⌘[ and ⌘] unless rebound) work in the macOS application, where `windowChrome` is
- * present (`useWindowShortcut`).
+ * The keys for Back and Forward (⌘[ and ⌘] unless rebound) work where those commands exist, the macOS application
+ * (`commandExists`, `useWindowShortcut`).
  */
 export function useNavigationHistory({
   location,
@@ -78,7 +79,9 @@ export function useNavigationHistory({
   apply: (location: Location) => void;
   focusTerminal: () => void;
 }): Navigation {
-  const { windowChrome } = usePlatform();
+  const platform = usePlatform();
+  const { host } = platform;
+  const shortcutExists = commandExists("back", platform);
   const { store } = useDaemon();
   const [history, setHistory] = useState(EMPTY_HISTORY);
   // Set while a move is being applied, so that the location it arrives at is not a visit.
@@ -149,10 +152,10 @@ export function useNavigationHistory({
   // another page), so a move the shortcut makes sets the modality itself, for focus it hands on to
   // show its ring; one with nowhere to go leaves it alone.
   const moveByShortcut = (backward: boolean) => {
-    if (!windowChrome || document.querySelector(MODAL_OPEN)) return;
+    if (!shortcutExists || document.querySelector(MODAL_OPEN)) return;
     move(backward ? -1 : 1, true);
   };
-  useWindowShortcut(shortcutDirection, (direction) => moveByShortcut(direction === -1), windowChrome !== undefined && IS_MAC);
+  useWindowShortcut((event) => shortcutDirection(event, host), (direction) => moveByShortcut(direction === -1), shortcutExists);
 
   const canGoBack = useDaemonStore((s) => canGo(history, -1, (target) => isLive(target, s.sessions)));
   const canGoForward = useDaemonStore((s) => canGo(history, 1, (target) => isLive(target, s.sessions)));

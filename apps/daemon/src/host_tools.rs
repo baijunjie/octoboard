@@ -19,7 +19,7 @@ pub struct Tools {
     pub git: fn() -> Result<UserGit>,
     pub trash: fn(&Path) -> Result<(), TrashFailure>,
     /// The shell a shell terminal runs.
-    pub shell: fn() -> crate::terminal::shell::ShellCommand,
+    pub shell: fn() -> crate::platform::shell::ShellCommand,
     /// The environment a shell terminal is started in, as an agent launch takes it (and a launch
     /// resolves Claude Code's configuration in).
     pub shell_env: fn() -> Result<HashMap<String, String>>,
@@ -40,7 +40,7 @@ impl Default for HostTools {
             tools: Mutex::new(Tools {
                 git: UserGit::cached_shell,
                 trash: move_to_trash,
-                shell: crate::terminal::shell::login_shell,
+                shell: crate::platform::shell::login_shell,
                 shell_env: crate::env_shell::launch_snapshot,
                 scheduled_shell_env: crate::env_shell::cached_snapshot,
             }),

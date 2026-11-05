@@ -11,10 +11,12 @@
 //! 3. P's chain of parents, as this read shows it, reaches L's agent or a process of L's.
 //! 4. P sits in the terminal session of a kept process, or in one recorded as kept: it is kept
 //!    too (see below).
-//! 5. P's environment carries this instance's tag with L's launch id.
-//! 6. P sits in a terminal session recorded for L.
+//! 5. P is a member of L's containment, where the host lists one's members (on Windows, the job
+//!    of the launch or of a launch whose processes were carried over to L).
+//! 6. P's environment carries this instance's tag with L's launch id.
+//! 7. P sits in a terminal session recorded for L.
 //!
-//! The environment is asked for only when rules 1 to 4 decide nothing, so a process they decide
+//! The environment is asked for only when rules 1 to 5 decide nothing, so a process they decide
 //! never has it read.
 //!
 //! A tag naming a launch of this instance that is not in the book belongs to a launch that has
@@ -49,8 +51,10 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use super::table::{Identity, Proc, Protected, Table};
+use crate::platform::proc::{ContainerId, Containment, ProcessId};
 
 /// The launch id under which the processes of launches that have ended are held until they are
 /// stopped. Not a UUID, so no launch has it.
@@ -79,17 +83,21 @@ pub(crate) struct Launch {
     /// The terminal sessions recorded for the launch, each with its leader's start time when the
     /// leader was running when it was recorded.
     pub sessions: Sessions,
+    /// What tells the launch's processes apart where the host lists them (see
+    /// [`Containment::members`]): the launch's own, and those of the launches whose processes
+    /// were carried over to it. Empty for a launch whose host lists none, which is told by tag.
+    pub containments: Vec<Arc<Containment>>,
 }
 
 /// Terminal sessions by id, each with its leader's start time when the leader was running when
 /// it was recorded.
-pub(crate) type Sessions = HashMap<i32, Option<u64>>;
+pub(crate) type Sessions = HashMap<ContainerId, Option<u64>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Attributed {
     pub launch: String,
-    /// The terminal session the process was in when it was attributed.
-    pub sid: i32,
+    /// The terminal session the process was in when it was attributed, where the host has them.
+    pub sid: Option<ContainerId>,
 }
 
 /// What the ledger knows: the launches, the processes attributed to them, and the kept ones.
@@ -106,7 +114,7 @@ pub(crate) struct Book {
     /// or is found in its terminal session. A kept process with none is listed nowhere.
     pub kept_projects: HashMap<Identity, String>,
     /// The project of each kept terminal session, as [`Self::kept_projects`].
-    pub kept_session_projects: HashMap<i32, String>,
+    pub kept_session_projects: HashMap<ContainerId, String>,
     /// The launches that ended with their processes carried over to another, by launch id, each
     /// with the launch now holding them, so that a process found later carrying an earlier
     /// launch's tag is the current one's. Forgotten with the launch they point to.
@@ -118,6 +126,9 @@ pub(crate) struct Book {
     /// can carry a tag of this run's launches, so no earlier environment is read. `None` until
     /// the first agent starts.
     pub horizon: Option<u64>,
+    /// The processes the containments of the launches list as members, with the launch each is
+    /// of, as the last read of the table found them ([`Self::refresh_contained`]).
+    pub contained: HashMap<ProcessId, String>,
     /// The terminal sessions read back from a previous run's ledger file, not yet proven to be
     /// the ones it recorded (see [`Self::read_back_sessions`]).
     pub read_back: ReadBack,
@@ -134,9 +145,9 @@ pub(crate) struct Book {
 #[derive(Debug, Default)]
 pub(crate) struct ReadBack {
     /// Those recorded for [`ENDED`].
-    pub ended: HashSet<i32>,
+    pub ended: HashSet<ContainerId>,
     /// Those recorded as kept.
-    pub kept: HashSet<i32>,
+    pub kept: HashSet<ContainerId>,
     /// The processes the file named, attributed or kept.
     pub named: HashSet<Identity>,
 }
@@ -153,6 +164,7 @@ impl Default for Book {
             aliases: HashMap::new(),
             awaited: HashMap::new(),
             horizon: None,
+            contained: HashMap::new(),
             read_back: ReadBack::default(),
             dirty: false,
         }
@@ -176,11 +188,31 @@ impl Book {
             .map(|(launch_id, _)| launch_id.as_str())
     }
 
-    fn agent_pids(&self) -> HashSet<i32> {
+    fn agent_pids(&self) -> HashSet<ProcessId> {
         self.launches
             .values()
             .filter_map(|launch| launch.agent.map(|agent| agent.pid))
             .collect()
+    }
+
+    /// Reads the members of every launch's containments, for the host that lists them, and drops
+    /// the containments of ended launches that have none left.
+    pub fn refresh_contained(&mut self) {
+        self.contained.clear();
+        for (launch_id, launch) in &mut self.launches {
+            let ended = launch_id == ENDED;
+            launch.containments.retain(|containment| {
+                let members = containment.members();
+                let listed = members.as_ref().is_some_and(|members| !members.is_empty());
+                self.contained.extend(
+                    members
+                        .into_iter()
+                        .flatten()
+                        .map(|pid| (pid, launch_id.clone())),
+                );
+                listed || !ended
+            });
+        }
     }
 
     /// The launch id `launch` reads as in the book: itself, the launch its processes were carried
@@ -278,6 +310,9 @@ impl Book {
                 }
                 if let Some(launch) = self.launches.remove(from) {
                     moved_sessions = launch.sessions;
+                    if let Some(heir) = self.launches.get_mut(to) {
+                        heir.containments.extend(launch.containments);
+                    }
                 }
                 for target in self.aliases.values_mut() {
                     if target == from {
@@ -287,7 +322,7 @@ impl Book {
                 self.aliases.insert(from.to_string(), to.to_string());
             }
             Some((members, table)) => {
-                let mut sids: HashSet<i32> = HashSet::new();
+                let mut sids: HashSet<ContainerId> = HashSet::new();
                 for (id, attributed) in self.attributed.iter_mut() {
                     if attributed.launch == from && members.contains(id) {
                         attributed.launch = to.to_string();
@@ -295,16 +330,16 @@ impl Book {
                             table
                                 .get(id.pid)
                                 .filter(|proc| proc.id == *id)
-                                .map(|proc| proc.sid),
+                                .and_then(|proc| proc.sid),
                         );
                     }
                 }
-                let staying: HashSet<i32> = self
+                let staying: HashSet<ContainerId> = self
                     .attributed
                     .iter()
                     .filter(|(_, attributed)| attributed.launch == from)
                     .filter_map(|(id, _)| table.get(id.pid).filter(|proc| proc.id == *id))
-                    .map(|proc| proc.sid)
+                    .filter_map(|proc| proc.sid)
                     .collect();
                 if let Some(launch) = self.launches.get_mut(from) {
                     launch.sessions.retain(|sid, leader_start| {
@@ -332,8 +367,8 @@ impl Book {
     /// recorded: its leader running with that start time, or one of `named` running in it.
     pub fn read_back_sessions(
         &mut self,
-        ended: impl IntoIterator<Item = (i32, Option<u64>)>,
-        kept: impl IntoIterator<Item = (i32, Option<u64>)>,
+        ended: impl IntoIterator<Item = (ContainerId, Option<u64>)>,
+        kept: impl IntoIterator<Item = (ContainerId, Option<u64>)>,
         named: impl IntoIterator<Item = Identity>,
     ) {
         if let Some(launch) = self.launches.get_mut(ENDED) {
@@ -360,10 +395,10 @@ impl Book {
             return;
         }
         self.aliases.retain(|_, to| to != launch_id);
-        let sessions = self
+        let (sessions, containments) = self
             .launches
             .remove(launch_id)
-            .map(|launch| launch.sessions)
+            .map(|launch| (launch.sessions, launch.containments))
             .unwrap_or_default();
         let mut moved = !sessions.is_empty();
         for attributed in self.attributed.values_mut() {
@@ -376,6 +411,11 @@ impl Book {
             for (sid, leader_start) in sessions {
                 ended.sessions.entry(sid).or_insert(leader_start);
             }
+            ended.containments.extend(
+                containments
+                    .into_iter()
+                    .filter(|containment| containment.members().is_some()),
+            );
         }
         self.dirty |= moved;
     }
@@ -385,20 +425,23 @@ impl Book {
 fn never_attributed(
     book: &Book,
     protected: &Protected,
-    agent_pids: &HashSet<i32>,
+    agent_pids: &HashSet<ProcessId>,
     proc: &Proc,
 ) -> bool {
     protected.covers(proc)
-        || agent_pids.contains(&proc.sid)
+        || proc
+            .sid
+            .is_some_and(|sid| agent_pids.contains(&sid.leader()))
         || book.agent_launch(&proc.id).is_some()
 }
 
 /// The sessions of the kept processes running in `table`, and those recorded as kept.
-fn kept_sessions(book: &Book, table: &Table) -> HashSet<i32> {
+fn kept_sessions(book: &Book, table: &Table) -> HashSet<ContainerId> {
     table
         .procs()
-        .filter(|proc| book.kept.contains(&proc.id) && proc.sid > 1)
-        .map(|proc| proc.sid)
+        .filter(|proc| book.kept.contains(&proc.id))
+        .filter_map(|proc| proc.sid)
+        .filter(|sid| sid.0 > 1)
         .chain(book.kept_sessions.keys().copied())
         .collect()
 }
@@ -415,7 +458,7 @@ enum Verdict {
 pub(crate) fn tag_candidates<'a>(
     book: &Book,
     table: &'a Table,
-    own: i32,
+    own: ProcessId,
     horizon: Option<u64>,
 ) -> Vec<&'a Proc> {
     let Some(horizon) = horizon else {
@@ -427,11 +470,12 @@ pub(crate) fn tag_candidates<'a>(
     table
         .procs()
         .filter(|proc| {
-            proc.id.start >= horizon
+            proc.id.start_micros >= horizon
                 && !book.kept.contains(&proc.id)
+                && !book.contained.contains_key(&proc.id.pid)
                 && !book.attributed.contains_key(&proc.id)
                 && !never_attributed(book, &protected, &agent_pids, proc)
-                && !kept_sessions.contains(&proc.sid)
+                && !proc.sid.is_some_and(|sid| kept_sessions.contains(&sid))
                 && !table
                     .ancestors(proc)
                     .any(|ancestor| book.kept.contains(&ancestor.id))
@@ -444,12 +488,12 @@ pub(crate) fn tag_candidates<'a>(
 /// from kept processes, drops sessions that are not, or are not shown to be, the ones recorded,
 /// and attributes every process the rules give a launch. `own` is the daemon's pid. `tag_of`
 /// answers the launch id in a process's tag when the tag is this instance's, and `None` otherwise
-/// or when the environment cannot be read; it is asked only of a process rules 1 to 4 leave
+/// or when the environment cannot be read; it is asked only of a process rules 1 to 5 leave
 /// undecided.
 pub(crate) fn attribute(
     book: &mut Book,
     table: &Table,
-    own: i32,
+    own: ProcessId,
     tag_of: &mut dyn FnMut(&Proc) -> Option<String>,
 ) {
     prove_read_back(book, table);
@@ -469,9 +513,9 @@ pub(crate) fn attribute(
         }
     }
     book.kept_sessions
-        .retain(|sid, _| !agent_pids.contains(sid) && !protected.covers_session(*sid));
+        .retain(|sid, _| !agent_pids.contains(&sid.leader()) && !protected.covers_session(*sid));
     book.kept_session_projects
-        .retain(|sid, _| !agent_pids.contains(sid) && !protected.covers_session(*sid));
+        .retain(|sid, _| !agent_pids.contains(&sid.leader()) && !protected.covers_session(*sid));
     book.dirty |= kept_count
         != book.kept.len()
             + book.kept_projects.len()
@@ -499,9 +543,9 @@ pub(crate) fn attribute(
         }
     }
     for launch in book.launches.values_mut() {
-        launch
-            .sessions
-            .retain(|sid, _| !agent_pids.contains(sid) && !protected.covers_session(*sid));
+        launch.sessions.retain(|sid, _| {
+            !agent_pids.contains(&sid.leader()) && !protected.covers_session(*sid)
+        });
     }
 
     let mut tags: HashMap<Identity, Option<String>> = HashMap::new();
@@ -520,7 +564,17 @@ pub(crate) fn attribute(
             }
             let verdict = by_chain(book, table, proc)
                 .map(Verdict::Launch)
-                .or_else(|| kept_sessions.contains(&proc.sid).then_some(Verdict::Kept))
+                .or_else(|| {
+                    proc.sid
+                        .is_some_and(|sid| kept_sessions.contains(&sid))
+                        .then_some(Verdict::Kept)
+                })
+                .or_else(|| {
+                    book.contained
+                        .get(&proc.id.pid)
+                        .cloned()
+                        .map(Verdict::Launch)
+                })
                 .or_else(|| {
                     tags.entry(proc.id)
                         .or_insert_with(|| tag_of(proc))
@@ -543,7 +597,9 @@ pub(crate) fn attribute(
                     book.dirty = true;
                 }
                 Some(Verdict::Kept) => {
-                    let project = kept_session_project(book, table, proc.sid);
+                    let project = proc
+                        .sid
+                        .and_then(|sid| kept_session_project(book, table, sid));
                     keep(book, table, proc, project);
                 }
                 None => continue,
@@ -571,16 +627,16 @@ fn forget_gone(book: &mut Book, table: &Table) {
 /// read — since the reads after it follow the session.
 pub(crate) fn prove_read_back(book: &mut Book, table: &Table) {
     let read_back = std::mem::take(&mut book.read_back);
-    let named_in: HashSet<i32> = table
+    let named_in: HashSet<ContainerId> = table
         .procs()
         .filter(|proc| read_back.named.contains(&proc.id))
-        .map(|proc| proc.sid)
+        .filter_map(|proc| proc.sid)
         .collect();
-    let proven = |sid: i32, leader_start: Option<u64>| {
+    let proven = |sid: ContainerId, leader_start: Option<u64>| {
         named_in.contains(&sid)
-            || table
-                .get(sid)
-                .is_some_and(|leader| leader.sid == sid && leader_start == Some(leader.id.start))
+            || table.get(sid.leader()).is_some_and(|leader| {
+                leader.sid == Some(sid) && leader_start == Some(leader.id.start_micros)
+            })
     };
     if let Some(ended) = book.launches.get_mut(ENDED) {
         ended.sessions.retain(|sid, leader_start| {
@@ -594,13 +650,16 @@ pub(crate) fn prove_read_back(book: &mut Book, table: &Table) {
 /// Drops each recorded session that no process sits in any more, or whose id a process now leads
 /// that did not lead it when it was recorded: the id may since have been handed to another.
 fn check_sessions(book: &mut Book, table: &Table) {
-    let occupied: HashSet<i32> = table.procs().map(|proc| proc.sid).collect();
-    let still_recorded = |sid: &i32, leader_start: &mut Option<u64>| {
+    let occupied: HashSet<ContainerId> = table.procs().filter_map(|proc| proc.sid).collect();
+    let still_recorded = |sid: &ContainerId, leader_start: &mut Option<u64>| {
         if !occupied.contains(sid) {
             return false;
         }
-        match table.get(*sid).filter(|leader| leader.sid == *sid) {
-            Some(leader) => *leader_start == Some(leader.id.start),
+        match table
+            .get(sid.leader())
+            .filter(|leader| leader.sid == Some(*sid))
+        {
+            Some(leader) => *leader_start == Some(leader.id.start_micros),
             None => !table.led_by_another_user(*sid),
         }
     };
@@ -628,9 +687,10 @@ fn by_chain(book: &Book, table: &Table, proc: &Proc) -> Option<String> {
 
 /// The launch that `proc`'s terminal session is recorded for.
 fn by_session(book: &Book, proc: &Proc) -> Option<String> {
+    let sid = proc.sid?;
     book.launches
         .iter()
-        .find(|(_, launch)| launch.sessions.contains_key(&proc.sid))
+        .find(|(_, launch)| launch.sessions.contains_key(&sid))
         .map(|(launch_id, _)| launch_id.clone())
 }
 
@@ -641,14 +701,14 @@ fn session_to_record(
     table: &Table,
     proc: &Proc,
     ours: impl FnOnce(&Identity) -> bool,
-) -> Option<(i32, Option<u64>)> {
-    let sid = proc.sid;
-    if sid <= 1 {
-        return None;
-    }
-    match table.get(sid).filter(|leader| leader.sid == sid) {
+) -> Option<(ContainerId, Option<u64>)> {
+    let sid = proc.sid.filter(|sid| sid.0 > 1)?;
+    match table
+        .get(sid.leader())
+        .filter(|leader| leader.sid == Some(sid))
+    {
         Some(leader) if leader.id == proc.id || ours(&leader.id) => {
-            Some((sid, Some(leader.id.start)))
+            Some((sid, Some(leader.id.start_micros)))
         }
         Some(_) => None,
         None if table.led_by_another_user(sid) => None,
@@ -686,11 +746,11 @@ pub(crate) fn keep(book: &mut Book, table: &Table, proc: &Proc, project: Option<
 
 /// The project of the kept terminal session `sid`: as recorded for it, or else of a kept process
 /// running in it.
-fn kept_session_project(book: &Book, table: &Table, sid: i32) -> Option<String> {
+fn kept_session_project(book: &Book, table: &Table, sid: ContainerId) -> Option<String> {
     book.kept_session_projects.get(&sid).cloned().or_else(|| {
         table
             .procs()
-            .filter(|proc| proc.sid == sid)
+            .filter(|proc| proc.sid == Some(sid))
             .find_map(|proc| book.kept_projects.get(&proc.id).cloned())
     })
 }
@@ -719,13 +779,20 @@ mod tests {
 
     /// The daemon's pid in these tables: not in them, and no process's parent unless a test says
     /// so.
-    const OWN: i32 = 99;
+    const OWN: ProcessId = ProcessId(99);
+
+    fn sid(id: u32) -> ContainerId {
+        ContainerId(id)
+    }
 
     fn proc(pid: i32, start: u64, ppid: i32, sid: i32) -> Proc {
         Proc {
-            id: Identity { pid, start },
-            ppid,
-            sid,
+            id: Identity {
+                pid: ProcessId(pid as u32),
+                start_micros: start,
+            },
+            ppid: ProcessId(ppid as u32),
+            sid: Some(ContainerId(sid as u32)),
             comm: String::new(),
         }
     }
@@ -739,8 +806,8 @@ mod tests {
                 session_id: Some("s".to_string()),
                 started: true,
                 agent: Some(Identity {
-                    pid: 100,
-                    start: 1000,
+                    pid: ProcessId(100),
+                    start_micros: 1000,
                 }),
                 ..Launch::default()
             },
@@ -759,7 +826,7 @@ mod tests {
     fn launch_of(book: &Book, pid: i32) -> Option<&str> {
         book.attributed
             .iter()
-            .find(|(id, _)| id.pid == pid)
+            .find(|(id, _)| id.pid.0 as i32 == pid)
             .map(|(_, attributed)| attributed.launch.as_str())
     }
 
@@ -779,7 +846,7 @@ mod tests {
         ]);
         let mut asked = Vec::new();
         attribute(&mut book, &table, OWN, &mut |proc: &Proc| {
-            asked.push(proc.id.pid);
+            asked.push(proc.id.pid.0 as i32);
             None
         });
         assert_eq!(asked, Vec::<i32>::new());
@@ -817,6 +884,52 @@ mod tests {
         assert_eq!(launch_of(&book, 300), None);
     }
 
+    /// `proc` on a host that has no terminal sessions to group processes by.
+    fn sessionless(pid: i32, start: u64, ppid: i32) -> Proc {
+        Proc {
+            sid: None,
+            ..proc(pid, start, ppid, 0)
+        }
+    }
+
+    /// Where the host lists a launch's members, a member the chain no longer reaches (its parent
+    /// gone) is the launch's by the list, without its environment asked for; a process the list
+    /// leaves out is not.
+    #[test]
+    fn a_member_the_containment_lists_is_the_launchs_without_the_chain() {
+        let mut book = book();
+        book.contained.insert(ProcessId(300), LAUNCH.to_string());
+        let table = Table::from_procs([
+            sessionless(100, 1000, 1),
+            sessionless(300, 1005, 250),
+            sessionless(301, 1006, 1),
+        ]);
+        let mut asked = Vec::new();
+        attribute(&mut book, &table, OWN, &mut |proc: &Proc| {
+            asked.push(proc.id.pid.0 as i32);
+            None
+        });
+        assert_eq!(launch_of(&book, 300), Some(LAUNCH));
+        assert_eq!(launch_of(&book, 301), None);
+        assert_eq!(asked, vec![301]);
+    }
+
+    /// A parent's pid that a process started before the child holds now is not the child's
+    /// parent: on a host that never reparents, the pid passed to that process once the child's
+    /// parent exited.
+    #[test]
+    fn a_process_that_started_after_the_child_is_not_its_parent() {
+        let mut book = book();
+        let table = Table::from_procs([
+            sessionless(100, 1000, 1),
+            sessionless(200, 999, 100),
+            sessionless(201, 1001, 100),
+        ]);
+        attribute(&mut book, &table, OWN, &mut untagged);
+        assert_eq!(launch_of(&book, 200), None);
+        assert_eq!(launch_of(&book, 201), Some(LAUNCH));
+    }
+
     /// A process whose pid was attributed before but that started at another time is a new
     /// process: it is not the launch's, and neither is a session its pid leads now.
     #[test]
@@ -845,7 +958,7 @@ mod tests {
             proc(401, 1011, 1, 401),
             proc(402, 1012, 1, 402),
         ]);
-        let mut tag_of = |proc: &Proc| match proc.id.pid {
+        let mut tag_of = |proc: &Proc| match proc.id.pid.0 {
             400 => Some(LAUNCH.to_string()),
             401 => Some("gone-launch".to_string()),
             _ => None,
@@ -869,7 +982,7 @@ mod tests {
             proc(601, 1012, 1, 600),
             proc(602, 1013, 1, 600),
         ]);
-        let mut tag_of = |proc: &Proc| matches!(proc.id.pid, 501 | 601).then(|| LAUNCH.into());
+        let mut tag_of = |proc: &Proc| matches!(proc.id.pid.0, 501 | 601).then(|| LAUNCH.into());
         attribute(&mut book, &table, OWN, &mut tag_of);
         assert_eq!(launch_of(&book, 501), Some(LAUNCH));
         assert_eq!(
@@ -898,8 +1011,8 @@ mod tests {
         ]);
         attribute(&mut book, &table, OWN, &mut untagged);
         let kept = Identity {
-            pid: 201,
-            start: 1003,
+            pid: ProcessId(201),
+            start_micros: 1003,
         };
         book.attributed.remove(&kept);
         book.kept.insert(kept);
@@ -916,7 +1029,7 @@ mod tests {
         attribute(&mut book, &table, OWN, &mut tag_of);
         for pid in [202, 203] {
             assert_eq!(launch_of(&book, pid), None, "{pid}");
-            assert!(book.kept.iter().any(|id| id.pid == pid), "{pid}");
+            assert!(book.kept.iter().any(|id| id.pid.0 as i32 == pid), "{pid}");
         }
         assert_eq!(launch_of(&book, 200), Some(LAUNCH));
         assert_eq!(launch_of(&book, 701), Some(LAUNCH));
@@ -931,39 +1044,39 @@ mod tests {
         book.launches.get_mut(LAUNCH).unwrap().agent = None;
         let table = Table::from_procs([
             proc(98, 900, 1, 98),
-            proc(OWN, 901, 98, 98),
-            proc(100, 1000, OWN, 100),
+            proc(OWN.0 as i32, 901, 98, 98),
+            proc(100, 1000, OWN.0 as i32, 100),
             proc(101, 1001, 100, 100),
-            proc(300, 1002, OWN, 300),
+            proc(300, 1002, OWN.0 as i32, 300),
         ]);
         let mut tagged = |_: &Proc| Some(LAUNCH.to_string());
         attribute(&mut book, &table, OWN, &mut tagged);
         assert_eq!(launch_of(&book, 98), None, "the daemon's parent");
-        assert_eq!(launch_of(&book, OWN), None, "the daemon");
+        assert_eq!(launch_of(&book, OWN.0 as i32), None, "the daemon");
         assert_eq!(launch_of(&book, 100), None, "the daemon's child");
         assert_eq!(launch_of(&book, 300), None, "the daemon's child");
         assert_eq!(launch_of(&book, 101), None, "in the daemon child's session");
 
         let launch = book.launches.get_mut(LAUNCH).unwrap();
         launch.agent = Some(agent_id);
-        launch.sessions.insert(100, Some(1000));
+        launch.sessions.insert(sid(100), Some(1000));
         book.attributed.insert(
             agent_id,
             Attributed {
                 launch: LAUNCH.to_string(),
-                sid: 100,
+                sid: Some(sid(100)),
             },
         );
         attribute(&mut book, &table, OWN, &mut tagged);
         assert_eq!(launch_of(&book, 101), None, "in the agent's session");
         assert_eq!(launch_of(&book, 100), None, "the agent");
-        assert!(!book.launches[LAUNCH].sessions.contains_key(&100));
+        assert!(!book.launches[LAUNCH].sessions.contains_key(&sid(100)));
     }
 
     #[test]
     fn a_session_led_by_a_daemon_child_is_internal_but_its_detached_tasks_are_followed() {
         let mut book = book();
-        let leader = proc(300, 1001, OWN, 300);
+        let leader = proc(300, 1001, OWN.0 as i32, 300);
         let helper = proc(301, 1002, 300, 300);
         let task = proc(302, 1003, 300, 302);
         let table = Table::from_procs([
@@ -973,28 +1086,28 @@ mod tests {
             task,
             proc(303, 1004, 302, 302),
             // A direct child sharing another session does not make that session internal.
-            proc(400, 1005, OWN, 98),
+            proc(400, 1005, OWN.0 as i32, 98),
             proc(401, 1006, 1, 98),
         ]);
         book.attributed.insert(
             helper.id,
             Attributed {
                 launch: LAUNCH.to_string(),
-                sid: 300,
+                sid: Some(sid(300)),
             },
         );
         book.launches
             .get_mut(LAUNCH)
             .unwrap()
             .sessions
-            .insert(300, Some(1001));
+            .insert(sid(300), Some(1001));
         let candidates = tag_candidates(&book, &table, OWN, Some(0));
         assert!(!candidates
             .iter()
-            .any(|proc| [300, 301].contains(&proc.id.pid)));
+            .any(|proc| [300, 301].contains(&proc.id.pid.0)));
         let mut tagged = |proc: &Proc| {
             assert!(
-                ![300, 301].contains(&proc.id.pid),
+                ![300, 301].contains(&proc.id.pid.0),
                 "an internal's tag was read"
             );
             Some(LAUNCH.to_string())
@@ -1006,7 +1119,7 @@ mod tests {
         for pid in [302, 303, 401] {
             assert_eq!(launch_of(&book, pid), Some(LAUNCH), "task {pid}");
         }
-        assert!(!book.launches[LAUNCH].sessions.contains_key(&300));
+        assert!(!book.launches[LAUNCH].sessions.contains_key(&sid(300)));
     }
 
     #[test]
@@ -1016,7 +1129,7 @@ mod tests {
         let already_kept = proc(303, 1004, 301, 303);
         let table = Table::from_procs([
             agent(),
-            proc(300, 1001, OWN, 300),
+            proc(300, 1001, OWN.0 as i32, 300),
             helper.clone(),
             proc(302, 1003, 301, 302),
             already_kept.clone(),
@@ -1024,16 +1137,17 @@ mod tests {
         for proc in [&helper, &already_kept] {
             book.kept.insert(proc.id);
             book.kept_projects.insert(proc.id, "project".to_string());
-            book.kept_sessions.insert(proc.sid, Some(proc.id.start));
+            book.kept_sessions
+                .insert(proc.sid.unwrap(), Some(proc.id.start_micros));
             book.kept_session_projects
-                .insert(proc.sid, "project".to_string());
+                .insert(proc.sid.unwrap(), "project".to_string());
         }
         attribute(&mut book, &table, OWN, &mut |_| Some(LAUNCH.to_string()));
         assert_eq!(launch_of(&book, 302), Some(LAUNCH));
         assert!(!book.kept.contains(&helper.id));
         assert!(!book.kept_projects.contains_key(&helper.id));
-        assert!(!book.kept_sessions.contains_key(&300));
-        assert!(!book.kept_session_projects.contains_key(&300));
+        assert!(!book.kept_sessions.contains_key(&sid(300)));
+        assert!(!book.kept_session_projects.contains_key(&sid(300)));
         assert!(book.kept.contains(&already_kept.id));
         assert_eq!(
             book.kept_projects.get(&already_kept.id).map(String::as_str),
@@ -1054,7 +1168,7 @@ mod tests {
         let mut ended = |_: &Proc| Some("gone-launch".to_string());
         attribute(&mut book, &table, OWN, &mut ended);
         assert_eq!(launch_of(&book, 501), None);
-        assert!(book.kept.iter().any(|id| id.pid == 501));
+        assert!(book.kept.iter().any(|id| id.pid.0 == 501));
     }
 
     /// A session whose leader runs as another user is not taken for one whose leader is gone:
@@ -1063,8 +1177,8 @@ mod tests {
     fn a_session_led_by_another_user_is_not_recorded() {
         let mut book = book();
         let table = Table::from_procs([agent(), proc(601, 1012, 1, 600), proc(602, 1013, 1, 600)])
-            .with_foreign_leaders([600]);
-        let mut tag_of = |proc: &Proc| (proc.id.pid == 601).then(|| LAUNCH.to_string());
+            .with_foreign_leaders([sid(600)]);
+        let mut tag_of = |proc: &Proc| (proc.id.pid.0 == 601).then(|| LAUNCH.to_string());
         attribute(&mut book, &table, OWN, &mut tag_of);
         assert_eq!(launch_of(&book, 601), Some(LAUNCH));
         assert_eq!(launch_of(&book, 602), None);
@@ -1091,19 +1205,19 @@ mod tests {
         ]);
         attribute(&mut book, &table, OWN, &mut untagged);
         let moved = HashSet::from([Identity {
-            pid: 200,
-            start: 1002,
+            pid: ProcessId(200),
+            start_micros: 1002,
         }]);
         book.transfer(LAUNCH, "other", Some((&moved, &table)));
         assert_eq!(launch_of(&book, 200), Some("other"));
         assert_eq!(launch_of(&book, 300), Some(LAUNCH));
-        assert!(book.launches["other"].sessions.contains_key(&200));
-        assert!(!book.launches[LAUNCH].sessions.contains_key(&200));
-        assert!(book.launches[LAUNCH].sessions.contains_key(&300));
+        assert!(book.launches["other"].sessions.contains_key(&sid(200)));
+        assert!(!book.launches[LAUNCH].sessions.contains_key(&sid(200)));
+        assert!(book.launches[LAUNCH].sessions.contains_key(&sid(300)));
 
         book.transfer(LAUNCH, "other", None);
         assert_eq!(launch_of(&book, 301), Some("other"));
-        assert!(book.launches["other"].sessions.contains_key(&300));
+        assert!(book.launches["other"].sessions.contains_key(&sid(300)));
         assert!(!book.launches.contains_key(LAUNCH));
         assert_eq!(book.followed_as(LAUNCH), Some("other"));
         book.hand_to_ended("other");
@@ -1141,15 +1255,19 @@ mod tests {
         let mut book = book();
         let named = [
             Identity {
-                pid: 301,
-                start: 900,
+                pid: ProcessId(301),
+                start_micros: 900,
             },
             Identity {
-                pid: 501,
-                start: 901,
+                pid: ProcessId(501),
+                start_micros: 901,
             },
         ];
-        book.read_back_sessions([(300, None), (500, None)], [(400, Some(800))], named);
+        book.read_back_sessions(
+            [(sid(300), None), (sid(500), None)],
+            [(sid(400), Some(800))],
+            named,
+        );
         let table = Table::from_procs([
             agent(),
             // Session 300's named member is gone; 301 is another process with its pid.
@@ -1162,11 +1280,11 @@ mod tests {
         attribute(&mut book, &table, OWN, &mut untagged);
         for pid in [301, 302, 402] {
             assert_eq!(launch_of(&book, pid), None, "{pid}");
-            assert!(!book.kept.iter().any(|id| id.pid == pid), "{pid}");
+            assert!(!book.kept.iter().any(|id| id.pid.0 as i32 == pid), "{pid}");
         }
-        assert!(!book.launches[ENDED].sessions.contains_key(&300));
-        assert!(!book.kept_sessions.contains_key(&400));
+        assert!(!book.launches[ENDED].sessions.contains_key(&sid(300)));
+        assert!(!book.kept_sessions.contains_key(&sid(400)));
         assert_eq!(launch_of(&book, 502), Some(ENDED), "proven by 501");
-        assert!(book.launches[ENDED].sessions.contains_key(&500));
+        assert!(book.launches[ENDED].sessions.contains_key(&sid(500)));
     }
 }

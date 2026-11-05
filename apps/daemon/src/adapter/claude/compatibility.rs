@@ -185,7 +185,6 @@ mod tests {
     use super::*;
     use crate::test_support::ScratchDir;
     use serde_json::json;
-    use std::os::unix::ffi::OsStrExt;
     use std::path::PathBuf;
 
     fn write(path: &Path, value: Value) {
@@ -306,18 +305,19 @@ mod tests {
         assert_eq!(servers["t"]["command"], "t");
     }
 
+    #[cfg(unix)]
     #[test]
-    fn a_fifo_or_an_oversized_file_is_skipped_without_blocking() {
+    fn a_fifo_is_skipped_without_blocking() {
         let (root, cwd, env) = world();
-        let fifo = |path: &Path| {
-            let c = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
-            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
-        };
         // Inside the project (through `browse::live`) and above it (a bounded read).
-        fifo(&cwd.join(".mcp.json"));
-        fifo(&root.join(".mcp.json"));
+        crate::test_support::mkfifo(&cwd.join(".mcp.json"));
+        crate::test_support::mkfifo(&root.join(".mcp.json"));
         assert!(load(&env, &cwd).is_empty());
+    }
 
+    #[test]
+    fn an_oversized_file_is_skipped_without_blocking() {
+        let (root, _, _) = world();
         std::fs::write(root.join(".claude.json"), vec![b' '; SMALL_FILE_LIMIT + 1]).unwrap();
         assert!(read_json(&root.join(".claude.json"), None, SMALL_FILE_LIMIT).is_none());
         // The global config file may be larger.
@@ -353,9 +353,9 @@ mod tests {
             &home.join(".mcp.json"),
             json!({"mcpServers": {"p": {"command": "approved"}}}),
         );
-        std::os::unix::fs::symlink(dotfiles.join(".claude.json"), home.join(".claude.json"))
+        crate::test_support::symlink(dotfiles.join(".claude.json"), home.join(".claude.json"))
             .unwrap();
-        std::os::unix::fs::symlink(dotfiles.join("claude"), home.join(".claude")).unwrap();
+        crate::test_support::symlink(dotfiles.join("claude"), home.join(".claude")).unwrap();
         let servers = load(&env, &home);
         assert_eq!(servers["s"]["command"], "linked");
         assert_eq!(servers["p"]["command"], "approved");

@@ -43,6 +43,37 @@ case ${GIT_CONFIG_COUNT-} in
 	;;
 esac
 
+# Sets octo_key to a name for the words $@, the same wherever it is computed from the same words:
+# two numbers folded from the first 64 characters of each of the first 64 words, and the number of
+# words. Letters, digits and a few marks count as themselves and any other character as one more.
+# It is made of parameter expansions and arithmetic alone, as every process a hook starts costs a
+# Windows git tens of milliseconds, and it takes words rather than a string to cut at, which
+# removing a suffix from a long string is quadratic in.
+octo_hash() {
+	octo_count=$#
+	octo_h1=7
+	octo_h2=11
+	octo_cs='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ/._-'
+	octo_cut=????????????????????????????????????????????????????????????????
+	octo_pos=0
+	for octo_word; do
+		[ "$octo_pos" -lt 64 ] || break
+		octo_pos=$((octo_pos + 1))
+		if [ "${#octo_word}" -gt 64 ]; then
+			octo_word=${octo_word%"${octo_word#$octo_cut}"}
+		fi
+		while [ -n "$octo_word" ]; do
+			octo_char=${octo_word%"${octo_word#?}"}
+			octo_word=${octo_word#?}
+			octo_prefix=${octo_cs%%"$octo_char"*}
+			octo_h1=$(((octo_h1 * 31 + ${#octo_prefix} + 1) % 1000000007))
+			octo_h2=$(((octo_h2 * 131 + ${#octo_prefix} + octo_pos) % 998244353))
+		done
+		octo_h1=$(((octo_h1 * 31 + 67) % 1000000007))
+	done
+	octo_key=$octo_h1-$octo_h2-$octo_count
+}
+
 # Whether a piece of configuration could set core.hooksPath, itself or through an include. Keys
 # and section names are case-insensitive and a key cannot be split, so anything that sets either
 # contains one of these words; matching more than that only costs the slow path.
@@ -83,7 +114,7 @@ octo_default_hook() {
 	# repository is not the .git found there.
 	if [ -n "${GIT_DIR+set}" ]; then
 		case $GIT_DIR in
-		/*) octo_gd=$GIT_DIR ;;
+		/* | [A-Za-z]:/*) octo_gd=$GIT_DIR ;;
 		*) return 1 ;;
 		esac
 	elif [ -d .git ]; then
@@ -91,7 +122,7 @@ octo_default_hook() {
 	elif [ -f .git ]; then
 		IFS= read -r octo_line <.git || [ -n "$octo_line" ] || return 1
 		case $octo_line in
-		'gitdir: '/*) octo_gd=${octo_line#gitdir: } ;;
+		'gitdir: '/* | 'gitdir: '[A-Za-z]:/*) octo_gd=${octo_line#gitdir: } ;;
 		'gitdir: '?*) octo_gd=./${octo_line#gitdir: } ;;
 		*) return 1 ;;
 		esac
@@ -100,13 +131,13 @@ octo_default_hook() {
 	fi
 	if [ -n "${GIT_COMMON_DIR+set}" ]; then
 		case $GIT_COMMON_DIR in
-		/*) octo_cd=$GIT_COMMON_DIR ;;
+		/* | [A-Za-z]:/*) octo_cd=$GIT_COMMON_DIR ;;
 		*) return 1 ;;
 		esac
 	elif [ -f "$octo_gd/commondir" ]; then
 		IFS= read -r octo_line <"$octo_gd/commondir" || [ -n "$octo_line" ] || return 1
 		case $octo_line in
-		/*) octo_cd=$octo_line ;;
+		/* | [A-Za-z]:/*) octo_cd=$octo_line ;;
 		?*) octo_cd=$octo_gd/$octo_line ;;
 		*) return 1 ;;
 		esac
@@ -139,9 +170,11 @@ if ! octo_default_hook; then
 		exit 1
 	}
 fi
+# A path git prints with a drive letter is as absolute as one that starts with a slash, whichever
+# way a configuration spelled it; any other is relative to here and is made so for [ and exec.
 case $octo_hook in
 "$octo_dir"/*) octo_hook= ;;
-/* | ./*) ;;
+/* | [A-Za-z]:[/\\]* | ./*) ;;
 ?*) octo_hook=./$octo_hook ;;
 esac
 [ -n "$octo_hook" ] && [ -x "$octo_hook" ] || octo_hook=
@@ -277,7 +310,7 @@ octo_pushes_branch() {
 }
 
 if [ -n "$octo_watch" ]; then
-	if octo_read_input @STATE@/$PPID.in; then
+	if octo_read_input @STATE@/$$.in; then
 		if [ -n "$octo_spool" ]; then
 			octo_lines=$(grep -E '^0+ [0-9a-f]+ refs/heads/.' "$octo_spool")
 		else
@@ -318,8 +351,12 @@ if [ -n "$octo_watch" ]; then
 		# written, and handed to the same git's committed call: only one that did not exist was
 		# created. Nothing later can tell: a forced update to the value a branch already holds
 		# writes no reflog entry at all. A reference name holds no whitespace or glob character, so the lists split as
-		# written, and each is matched whole.
-		octo_known=@STATE@/$PPID
+		# written, and each is matched whole. The two calls find each other by the transaction's
+		# own branches, in the directory they ran in, not by a process id: every hook a git for
+		# Windows runs has the same parent. Two transactions that agree on all of it write to one
+		# file, and the check below turns away what neither wrote.
+		octo_hash "$PWD" "${GIT_DIR-}" $octo_refs
+		octo_known=@STATE@/$octo_key
 		if [ "$1" = prepared ]; then
 			if octo_existing=$(git for-each-ref --format='%(refname)' $octo_names 2>/dev/null); then
 				octo_marks=
@@ -407,7 +444,7 @@ fi
 
 if [ "$octo_name" = pre-push ] && [ -n "$octo_session" ]; then
 	# The refs of a push, with the user's hook and the gate run as for a transaction.
-	if octo_read_input @STATE@/$PPID.push; then
+	if octo_read_input @STATE@/$$.push; then
 		octo_run_hook "$@"
 		if [ "$octo_status" -eq 0 ] && octo_pushes_branch; then
 			octo_run_gate pre-push

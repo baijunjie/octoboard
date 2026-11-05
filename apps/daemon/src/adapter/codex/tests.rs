@@ -128,7 +128,15 @@ fn injects_one_hook_override_per_event_and_gets_past_the_trust_gate() {
     }
     for override_ in overrides.iter().filter(|o| o.starts_with("hooks.")) {
         assert!(override_.contains("async=true"));
-        assert!(override_.contains(&format!("timeout={HOOK_TIMEOUT_SECS}")));
+        let event = override_
+            .trim_start_matches("hooks.")
+            .split('=')
+            .next()
+            .unwrap();
+        assert!(override_.contains(&format!("timeout={},", hook_timeout_secs(event))));
+        if event == "Interrupt" {
+            assert!(override_.contains("timeout=3,"));
+        }
     }
     // Without clearing the hook trust gate an interactive session raises a blocking review
     // modal and a headless one hangs indefinitely.
@@ -575,9 +583,10 @@ fn a_fifo_or_an_oversized_config_counts_as_unreadable() {
         home.to_string_lossy().into_owned(),
     );
     let config = home.join("config.toml");
-    for path in [&config, &home.join("models_cache.json")] {
-        let c = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
-        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+    let cache = home.join("models_cache.json");
+    #[cfg(unix)]
+    for path in [&config, &cache] {
+        crate::test_support::mkfifo(path);
     }
     let (done, finished) = std::sync::mpsc::channel();
     let fixture = std::thread::spawn(move || {
@@ -592,7 +601,7 @@ fn a_fifo_or_an_oversized_config_counts_as_unreadable() {
     );
     let fixture = fixture.join().expect("planned");
 
-    let cache = home.join("models_cache.json");
+    #[cfg(unix)]
     std::fs::remove_file(&cache).expect("FIFO removed");
     let models = json!({ "models": [{ "slug": "a", "upgrade": { "model": "b" } }] });
     std::fs::write(&cache, models.to_string()).expect("cache");
@@ -602,6 +611,7 @@ fn a_fifo_or_an_oversized_config_counts_as_unreadable() {
     std::fs::write(&cache, padded.to_string()).expect("cache");
     assert_eq!(model_migrations(&home), None);
 
+    #[cfg(unix)]
     std::fs::remove_file(&config).expect("FIFO removed");
     std::fs::write(
         &config,
@@ -634,7 +644,7 @@ fn a_linked_codex_home_under_a_home_opened_as_the_project_is_read() {
         "[mcp_servers.mine]\ncommand = \"x\"\n",
     )
     .expect("config");
-    std::os::unix::fs::symlink(dotfiles.join("codex"), home.join(".codex")).expect("link");
+    crate::test_support::symlink(dotfiles.join("codex"), home.join(".codex")).expect("link");
     assert_eq!(
         project_server_names(&home, &home.join(".codex")),
         Some(BTreeSet::from(["mine".to_string()]))

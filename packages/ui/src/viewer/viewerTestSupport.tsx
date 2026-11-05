@@ -7,6 +7,7 @@ import type { PlatformAdapter } from "../platform";
 import type { Daemon } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
+import { BROWSER_HOST } from "../test/hosts";
 
 const NO_NOTIFICATIONS = { notice: () => {}, error: () => {} };
 
@@ -32,7 +33,7 @@ export function ViewerHost({
   // A layout effect, so it is installed before the children's passive effects (where an alert raised as they mount
   // would be missed otherwise) and is replaced when `notifications.error` changes.
   React.useLayoutEffect(() => forwardAlerts(notifications.error), [notifications.error]);
-  return <TestHost daemon={daemon} platform={{ kind: "browser", clipboard, links }}>{children}</TestHost>;
+  return <TestHost daemon={daemon} platform={{ kind: "browser", host: BROWSER_HOST, clipboard, links }}>{children}</TestHost>;
 }
 
 /** The accessible names of the status marks under `root`, in document order: a popover mark is a

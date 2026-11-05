@@ -27,7 +27,7 @@ export interface ShellTerminalViewHandle {
 // drew least recently, which can be the agent terminal's. So a shell keeps the DOM renderer, which
 // costs nothing while its tab is hidden. A hidden tab cannot be fitted, so the shell is told no size
 // until the tab has been shown.
-const SHELL_CONTROLLER_OPTIONS: TerminalControllerOptions = { gpu: false, fittedSizesOnly: true };
+const SHELL_CONTROLLER_OPTIONS: Omit<TerminalControllerOptions, "host"> = { gpu: false, fittedSizesOnly: true };
 
 /**
  * One shell terminal of the Terminal panel: its own `TerminalController`, attached to the

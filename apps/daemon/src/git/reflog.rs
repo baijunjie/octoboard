@@ -8,13 +8,12 @@
 //! reflog files ([`uses_reftable`](super::repo_files::uses_reftable)), so nothing here finds
 //! anything in one.
 
-use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read};
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::git::repo_files::is_plain_ref_name;
 use crate::hostfs::open_regular;
+use crate::platform::names;
 
 /// How much of a reflog's first line is read. A line is two object ids, an identity, a time and
 /// a message.
@@ -40,11 +39,11 @@ pub struct Creation {
 }
 
 fn reflog_path(common_dir: &Path, branch: &[u8]) -> Option<PathBuf> {
-    is_plain_ref_name(branch).then(|| {
-        common_dir
-            .join("logs/refs/heads")
-            .join(OsStr::from_bytes(branch))
-    })
+    if !is_plain_ref_name(branch) {
+        return None;
+    }
+    names::path_from_name_bytes(branch)
+        .map(|branch| common_dir.join("logs/refs/heads").join(branch))
 }
 
 /// How a reflog line begins: whether its old value is no value at all.
@@ -110,7 +109,9 @@ fn parse_reflog_line(line: &[u8]) -> Option<Line<'_>> {
 mod tests {
     use super::*;
     use crate::git::repo_files::repository_of;
-    use crate::test_support::{git, mkfifo, repo_with};
+    #[cfg(unix)]
+    use crate::test_support::mkfifo;
+    use crate::test_support::{git, repo_with};
 
     #[test]
     fn a_reflog_line_is_read_from_the_right() {
@@ -183,6 +184,7 @@ mod tests {
     }
 
     /// The read runs under the repository's gate, so a FIFO there must not block it.
+    #[cfg(unix)]
     #[test]
     fn a_reflog_that_is_no_regular_file_is_read_as_none() {
         let repo = repo_with("reflog-fifo", &[(b"a", b"a")]);

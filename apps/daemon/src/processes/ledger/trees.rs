@@ -16,7 +16,8 @@ use super::attribute::{keep, Attributed, Launch, ENDED};
 use super::looks::Roots;
 use super::table::{self, Cwd, Identity, Table};
 use super::ProcessLedger;
-use crate::protocol::{ProcessCount, ProcessTree};
+use crate::platform::proc::{self, ContainerId, ProcessId};
+use crate::protocol::{ProcessCount, ProcessTree, UnkeepableReason, UnstoppedProcess};
 
 /// The longest command a tree reports, in bytes.
 const COMMAND_LIMIT: usize = 1024;
@@ -25,6 +26,26 @@ const COMMAND_LIMIT: usize = 1024;
 /// members still run are kept at all, so this bounds what a long run of listings could make the
 /// ledger hold.
 const LISTINGS_LIMIT: usize = 1024;
+
+/// The processes tests take as attached to their agent's console, in place of what the host says.
+/// Process-wide, as a keep the request layer asks for runs on a blocking thread, and keyed by the
+/// processes a test started, so that no other test's are affected.
+#[cfg(test)]
+pub(crate) static AGENT_CONSOLE_OVERRIDE: std::sync::Mutex<Vec<Identity>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Whether `member` is attached to the console of `agent` (`platform::proc::shares_console`).
+fn shares_console(agent: &Identity, member: &Identity) -> Option<bool> {
+    #[cfg(test)]
+    if AGENT_CONSOLE_OVERRIDE
+        .lock()
+        .expect("agent console override lock poisoned")
+        .contains(member)
+    {
+        return Some(true);
+    }
+    proc::shares_console(agent, member)
+}
 
 /// Why [`ProcessLedger::move_trees`] moved nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +57,25 @@ pub enum MoveRefused {
     NotFrom(Vec<String>),
     /// The process table could not be read.
     Unreadable,
+}
+
+/// Why [`ProcessLedger::keep_trees`] kept nothing: the process `pid`, named `name`, of a tree it
+/// was asked to keep is attached to its agent's own console, which ends it with the launch
+/// whatever keeps it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharesAgentConsole {
+    pub pid: ProcessId,
+    pub name: String,
+}
+
+/// What [`ProcessLedger::stop_trees`] came to.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TreesStopped {
+    /// The ids of the trees it stopped, every process of them included.
+    pub stopped: Vec<String>,
+    /// The processes it left running, each with the tree it was stopped with, which `stopped`
+    /// leaves out.
+    pub not_stopped: Vec<UnstoppedProcess>,
 }
 
 impl ProcessLedger {
@@ -105,13 +145,11 @@ impl ProcessLedger {
                 .iter()
                 .map(|(top, members, _)| (*top, members.as_slice())),
         );
-        unowned.sort_by_key(|(top, _, _)| (top.start, top.pid));
+        unowned.sort_by_key(|(top, _, _)| (top.start_micros, top.pid));
         let mut cwds = self.cwds(unowned.iter().map(|(top, _, _)| *top), None);
-        trees.extend(
-            unowned
-                .into_iter()
-                .map(|(top, members, kept)| describe(top, &members, None, kept, cwds.remove(&top))),
-        );
+        trees.extend(unowned.into_iter().map(|(top, members, kept)| {
+            describe(top, &members, None, kept, None, cwds.remove(&top))
+        }));
         trees
     }
 
@@ -274,12 +312,15 @@ impl ProcessLedger {
 
     /// Stops each tree `ids` names that is still one: a tree of a launch being followed, one left
     /// behind in `leftover_dirs`, or one the user kept (see [`Self::trees_of_project`]). A kept
-    /// tree is the user's no more once the user asks for it to be stopped: what is left of it,
-    /// or starts from it meanwhile, is stopped as an ended launch's. Returns the ids of the trees
-    /// it stopped. **Blocks.**
-    pub fn stop_trees(&self, ids: &[String], leftover_dirs: &[PathBuf]) -> Vec<String> {
+    /// tree is the user's no more once the user asks for it to be stopped: what starts from it
+    /// meanwhile is stopped as an ended launch's. A kept process the stop leaves running is the
+    /// user's again, still listed under its project, rather than an ended launch's that no list
+    /// shows. Returns the ids of the trees it stopped, and the processes it left running with the
+    /// tree of each: one the system refused to end, as it refuses a process with more rights than
+    /// the daemon, or one that outlived being ended. **Blocks.**
+    pub fn stop_trees(&self, ids: &[String], leftover_dirs: &[PathBuf]) -> TreesStopped {
         let Some(table) = self.scan(false) else {
-            return Vec::new();
+            return TreesStopped::default();
         };
         let roots = self.roots(leftover_dirs);
         let named = self.resolve(ids, &table, &roots, |_| true, true);
@@ -287,17 +328,47 @@ impl ProcessLedger {
             .iter()
             .flat_map(|(_, members)| members.iter().copied())
             .collect();
-        self.unkeep(&targets, &table);
+        let unkept = self.unkeep(&targets, &table);
+        let mut unstopped = Vec::new();
         if !targets.is_empty() {
             tracing::info!(
                 trees = named.len(),
                 count = targets.len(),
                 "stopping process trees on request"
             );
-            self.stop_set(targets, &table);
+            unstopped = self.stop_set(targets, &table);
+            self.rekeep(unkept);
             self.forget_lists();
         }
-        named.into_iter().map(|(id, _)| id).collect()
+        let tree_of: HashMap<Identity, &str> = named
+            .iter()
+            .flat_map(|(id, members)| members.iter().map(move |member| (*member, id.as_str())))
+            .collect();
+        let not_stopped: Vec<UnstoppedProcess> = unstopped
+            .into_iter()
+            .filter_map(|unstopped| {
+                Some(UnstoppedProcess {
+                    tree_id: tree_of.get(&unstopped.origin)?.to_string(),
+                    pid: unstopped.id.pid.0,
+                    name: unstopped.name,
+                    reason: unstopped.reason,
+                })
+            })
+            .collect();
+        if !not_stopped.is_empty() {
+            tracing::warn!(
+                count = not_stopped.len(),
+                "a stop of process trees on request left processes running"
+            );
+        }
+        TreesStopped {
+            stopped: named
+                .into_iter()
+                .map(|(id, _)| id)
+                .filter(|id| !not_stopped.iter().any(|process| process.tree_id == *id))
+                .collect(),
+            not_stopped,
+        }
     }
 
     /// Makes each tree `ids` names that is still one the user's — a tree of a launch being
@@ -307,20 +378,29 @@ impl ProcessLedger {
     /// among the project's processes (see [`Self::trees_of_project`]). The project is the one
     /// `session_projects` gives the session whose tree it was (by session id), or the one whose
     /// directory a tree left behind is in; a tree of a session that `session_projects` gives no
-    /// project, a console session's, is not kept. Returns the ids of the trees it kept.
-    /// **Blocks.**
+    /// project, a console session's, is not kept. Returns the ids of the trees it kept, or, with
+    /// nothing kept, the first process of a tree named that is attached to its agent's own
+    /// console ([`Self::on_agent_console`]). **Blocks.**
     pub fn keep_trees(
         &self,
         ids: &[String],
         projects: &[(String, PathBuf)],
         session_projects: &HashMap<String, String>,
-    ) -> Vec<String> {
+    ) -> Result<Vec<String>, SharesAgentConsole> {
         let Some(table) = self.scan(false) else {
-            return Vec::new();
+            return Ok(Vec::new());
         };
         let leftover_dirs: Vec<PathBuf> = projects.iter().map(|(_, dir)| dir.clone()).collect();
         let roots = self.roots(&leftover_dirs);
         let named = self.resolve(ids, &table, &roots, |launch| !launch.ending, false);
+        // Refused as a whole rather than leaving the tree out: the user is told why it cannot
+        // be kept instead of seeing it stopped with the session after asking for it to be kept.
+        if let Some(shared) = named
+            .iter()
+            .find_map(|(_, members)| self.on_agent_console(members, &table))
+        {
+            return Err(shared);
+        }
         // Read before the lock is taken, and only what may lie in a project: only a tree no
         // session owns is placed by its directory.
         let cwds = self.cwds(
@@ -375,7 +455,7 @@ impl ProcessLedger {
             self.forget_lists();
         }
         self.persist(true);
-        kept
+        Ok(kept)
     }
 
     /// Stops the processes of the project `project`, the trees no session owns: those left behind
@@ -527,13 +607,23 @@ impl ProcessLedger {
                 .map(|(_, top, members)| (*top, members.as_slice())),
         );
         let oldest = table::now().saturating_sub(min_age.as_micros() as u64);
-        found.retain(|(_, top, _)| top.start <= oldest);
-        found.sort_by_key(|(_, top, _)| (top.start, top.pid));
+        found.retain(|(_, top, _)| top.start_micros <= oldest);
+        found.sort_by_key(|(_, top, _)| (top.start_micros, top.pid));
         let mut cwds = self.cwds(found.iter().map(|(_, top, _)| *top), None);
         found
             .into_iter()
             .map(|(session, top, members)| {
-                describe(top, &members, Some(&session), false, cwds.remove(&top))
+                let unkeepable = self
+                    .on_agent_console(&members, table)
+                    .map(|_| UnkeepableReason::AgentConsole);
+                describe(
+                    top,
+                    &members,
+                    Some(&session),
+                    false,
+                    unkeepable,
+                    cwds.remove(&top),
+                )
             })
             .collect()
     }
@@ -629,7 +719,7 @@ impl ProcessLedger {
         }
         if listings.len() > LISTINGS_LIMIT {
             let mut tops: Vec<Identity> = listings.keys().copied().collect();
-            tops.sort_by_key(|top| (top.start, top.pid));
+            tops.sort_by_key(|top| (top.start_micros, top.pid));
             for top in &tops[..tops.len() - LISTINGS_LIMIT] {
                 listings.remove(top);
             }
@@ -706,8 +796,8 @@ impl ProcessLedger {
 
     /// Makes those of `targets` that are kept the user's no more, as processes of an ended
     /// launch, to be stopped, with the terminal sessions recorded as kept that no other kept
-    /// process sits in.
-    fn unkeep(&self, targets: &[Identity], table: &Table) {
+    /// process sits in. Returns them, each with the project it was kept under.
+    fn unkeep(&self, targets: &[Identity], table: &Table) -> Vec<(Identity, Option<String>)> {
         let mut book = self.book();
         let unkept: Vec<Identity> = targets
             .iter()
@@ -715,17 +805,18 @@ impl ProcessLedger {
             .filter(|id| book.kept.contains(id))
             .collect();
         if unkept.is_empty() {
-            return;
+            return Vec::new();
         }
-        let mut sids: HashSet<i32> = HashSet::new();
+        let mut sids: HashSet<ContainerId> = HashSet::new();
+        let mut projects = Vec::with_capacity(unkept.len());
         for id in &unkept {
             book.kept.remove(id);
-            book.kept_projects.remove(id);
+            projects.push((*id, book.kept_projects.remove(id)));
             let sid = table
                 .get(id.pid)
                 .filter(|proc| proc.id == *id)
-                .map_or(0, |proc| proc.sid);
-            sids.insert(sid);
+                .and_then(|proc| proc.sid);
+            sids.extend(sid);
             book.attributed.insert(
                 *id,
                 Attributed {
@@ -734,10 +825,10 @@ impl ProcessLedger {
                 },
             );
         }
-        let still_kept: HashSet<i32> = table
+        let still_kept: HashSet<ContainerId> = table
             .procs()
             .filter(|proc| book.kept.contains(&proc.id))
-            .map(|proc| proc.sid)
+            .filter_map(|proc| proc.sid)
             .collect();
         for sid in sids.difference(&still_kept) {
             if let Some(leader_start) = book.kept_sessions.remove(sid) {
@@ -748,6 +839,59 @@ impl ProcessLedger {
             }
         }
         book.dirty = true;
+        projects
+    }
+
+    /// Keeps again, under the project each was kept under, those of `unkept` (as
+    /// [`Self::unkeep`] returned them) still running after a stop: a stop the system refused, or
+    /// that a process outlived, leaves the user's process theirs, listed under its project, and
+    /// spares it the ended launch's retries. **Blocks.**
+    fn rekeep(&self, unkept: Vec<(Identity, Option<String>)>) {
+        if unkept.is_empty() {
+            return;
+        }
+        let Some(table) = self.scan(false) else {
+            return;
+        };
+        let mut book = self.book();
+        for (id, project) in unkept {
+            if let Some(proc) = table.get(id.pid).filter(|proc| proc.id == id) {
+                keep(&mut book, &table, proc, project);
+            }
+        }
+        // A terminal session kept again is the ended launch's no more, as `unkeep` made it.
+        let kept_sessions: HashSet<ContainerId> = book.kept_sessions.keys().copied().collect();
+        if let Some(ended) = book.launches.get_mut(ENDED) {
+            ended.sessions.retain(|sid, _| !kept_sessions.contains(sid));
+        }
+    }
+
+    /// The first of `members` attached to the console of the agent of the launch it is
+    /// attributed to (`platform::proc::shares_console`), which ends it with that launch whatever
+    /// keeps it, with the name `table` gives it. A member whose console cannot be told is taken
+    /// not to be: only a console known to be shared refuses a keep.
+    fn on_agent_console(&self, members: &[Identity], table: &Table) -> Option<SharesAgentConsole> {
+        let pairs: Vec<(Identity, Identity)> = {
+            let book = self.book();
+            members
+                .iter()
+                .filter_map(|member| {
+                    let launch = book.launches.get(&book.attributed.get(member)?.launch)?;
+                    Some((launch.agent?, *member))
+                })
+                .filter(|(agent, member)| agent != member)
+                .collect()
+        };
+        let (_, member) = pairs
+            .into_iter()
+            .find(|(agent, member)| shares_console(agent, member) == Some(true))?;
+        Some(SharesAgentConsole {
+            pid: member.pid,
+            name: table
+                .get(member.pid)
+                .map(|proc| proc.comm.clone())
+                .unwrap_or_default(),
+        })
     }
 
     /// The processes left behind in `roots`' directories (see [`Self::trees_of_project`]), each
@@ -771,9 +915,10 @@ impl ProcessLedger {
                             .attributed
                             .get(&proc.id)
                             .is_none_or(|attributed| attributed.launch == ENDED)
-                        && !agents
-                            .iter()
-                            .any(|agent| *agent == proc.id || agent.pid == proc.sid)
+                        && !agents.iter().any(|agent| {
+                            *agent == proc.id
+                                || proc.sid.is_some_and(|sid| sid.leader() == agent.pid)
+                        })
                 })
                 .map(|proc| proc.id)
                 .collect()
@@ -809,9 +954,10 @@ fn describe(
     members: &[Identity],
     session_id: Option<&str>,
     kept: bool,
+    unkeepable: Option<UnkeepableReason>,
     cwd: Option<Cwd>,
 ) -> ProcessTree {
-    let pids: Vec<i32> = members.iter().map(|id| id.pid).collect();
+    let pids: Vec<ProcessId> = members.iter().map(|id| id.pid).collect();
     ProcessTree {
         id: top.key(),
         session_id: session_id.map(str::to_string),
@@ -823,6 +969,8 @@ fn describe(
         process_count: members.len(),
         memory_bytes: members.iter().filter_map(|id| table::memory(*id)).sum(),
         ports: table::listening_ports(&pids),
+        keepable: unkeepable.is_none(),
+        unkeepable_reason: unkeepable,
     }
 }
 
@@ -874,29 +1022,29 @@ mod tests {
         let ledger = ProcessLedger::new(&dir);
         let server = Proc {
             id: Identity {
-                pid: 300,
-                start: 1000,
+                pid: ProcessId(300),
+                start_micros: 1000,
             },
             ppid: ledger.own,
-            sid: 300,
+            sid: Some(ContainerId(300)),
             comm: String::new(),
         };
         let helper = Proc {
             id: Identity {
-                pid: 301,
-                start: 1001,
+                pid: ProcessId(301),
+                start_micros: 1001,
             },
-            ppid: 300,
-            sid: 300,
+            ppid: ProcessId(300),
+            sid: Some(ContainerId(300)),
             comm: String::new(),
         };
         let task = Proc {
             id: Identity {
-                pid: 302,
-                start: 1002,
+                pid: ProcessId(302),
+                start_micros: 1002,
             },
-            ppid: 300,
-            sid: 302,
+            ppid: ProcessId(300),
+            sid: Some(ContainerId(302)),
             comm: String::new(),
         };
         let table = Table::from_procs([server, helper.clone(), task.clone()]);

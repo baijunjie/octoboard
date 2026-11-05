@@ -11,6 +11,7 @@ use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
+use crate::platform::fs;
 use crate::protocol::{error_code, CodedError};
 
 pub mod identity;
@@ -19,23 +20,50 @@ pub mod place;
 pub mod replace;
 pub mod trash;
 
+/// `path` made absolute with every link resolved, as the file system spells it; the one place a
+/// path is resolved against the disk, so that every caller gets the host's canonical form.
+pub fn canonical(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+    crate::platform::names::canonical(path.as_ref())
+}
+
 /// Expands a leading `~` and makes the path absolute. The UI sends whatever the user typed.
+///
+/// `~/<relative>` is the form a configuration document carries between machines, so its `/` reads
+/// as the host's own separator; `~\` is taken too where the host writes paths with a backslash.
 pub fn expand(path: &str) -> PathBuf {
     let trimmed = path.trim();
     if trimmed == "~" {
         return crate::paths::home_dir();
     }
+    let windows = crate::platform::names::PATH_STYLE == crate::platform::names::PathStyle::Windows;
     if let Some(rest) = trimmed.strip_prefix("~/") {
-        return crate::paths::home_dir().join(rest);
+        return under_home(rest, windows);
+    }
+    if let Some(rest) = trimmed.strip_prefix("~\\").filter(|_| windows) {
+        return under_home(rest, windows);
     }
     PathBuf::from(trimmed)
+}
+
+/// `relative` under the home directory; on a host with a backslash for separator, both
+/// separators split it into components.
+fn under_home(relative: &str, windows: bool) -> PathBuf {
+    let home = crate::paths::home_dir();
+    if !windows {
+        return home.join(relative);
+    }
+    relative
+        .split(['/', '\\'])
+        .filter(|component| !component.is_empty())
+        .fold(home, |path, component| path.join(component))
 }
 
 /// Whether `err` means nothing is at a path: none there, a link that leads nowhere or round in a
 /// loop, or a file where a folder on the way should be.
 pub fn is_not_found(err: &std::io::Error) -> bool {
     err.kind() == std::io::ErrorKind::NotFound
-        || matches!(err.raw_os_error(), Some(libc::ENOTDIR | libc::ELOOP))
+        || fs::is_not_a_directory(err)
+        || fs::is_symlink_loop(err)
 }
 
 /// A path with its `.` components dropped, each `..` folded into the component before it, and no
@@ -55,39 +83,43 @@ pub fn lexically_normalise(path: &Path) -> PathBuf {
     normalised
 }
 
+/// The key `path` is compared by where the question is whether two paths are the same one as
+/// written: the path normalised ([`lexically_normalise`]) and spelled as the host reads one path
+/// (`names::lexical_key`: on Windows `/` as `\` and case folded). Use it as the key of a set or a
+/// map of paths, and in `==` or [`lexically_within`] between paths. Never display text.
+pub fn lexical_key(path: &Path) -> PathBuf {
+    PathBuf::from(crate::platform::names::lexical_key(&lexically_normalise(
+        path,
+    )))
+}
+
+/// Whether `path` is `root` or lies below it, as written: the path-wise `starts_with`, on the
+/// [`lexical_key`] of each, so that spellings of one path the host reads alike match.
+pub fn lexically_within(path: &Path, root: &Path) -> bool {
+    lexical_key(path).starts_with(lexical_key(root))
+}
+
 /// Opens `path` for reading, following links, without blocking, and refuses anything but a regular
 /// file: a FIFO's open would otherwise wait for a writer, and a device reads forever.
 pub fn open_regular(path: &Path) -> std::io::Result<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
-        .open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "not a regular file",
-        ));
-    }
-    Ok(file)
+    fs::open_regular(path)
 }
 
 /// Opens `path` to read and append to, without blocking, refusing anything but a regular file.
 pub fn open_regular_to_append(path: &Path) -> std::io::Result<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .append(true)
-        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
-        .open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("`{}` is not a regular file", path.display()),
-        ));
+    fs::open_regular_to_append(path)
+}
+
+/// Makes `at` an alias for `target`, a directory where `leads_to_dir` says it is one, a file
+/// otherwise. How the alias was made is of no matter to the caller; where the host cannot make one
+/// the error says so.
+pub fn alias(target: &Path, at: &Path, leads_to_dir: bool) -> std::io::Result<()> {
+    if leads_to_dir {
+        fs::alias_dir(target, at)
+    } else {
+        fs::alias_file(target, at)
     }
-    Ok(file)
+    .map(drop)
 }
 
 /// When the file or directory `path` leads to was last modified, links followed: the epoch when
@@ -103,7 +135,7 @@ pub fn modified(path: &Path) -> std::time::SystemTime {
 pub fn remove_any(path: &Path) -> std::io::Result<()> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_dir() => std::fs::remove_dir_all(path),
-        Ok(_) => std::fs::remove_file(path),
+        Ok(_) => fs::remove_file_or_link(path),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(err) => Err(err),
     }
@@ -112,18 +144,19 @@ pub fn remove_any(path: &Path) -> std::io::Result<()> {
 /// Whether the two spellings resolve, links followed, to one file or directory. A path that cannot
 /// be resolved (nothing there, unreadable) matches nothing. Blocking.
 pub fn is_same_path(a: &Path, b: &Path) -> bool {
-    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+    match (canonical(a), canonical(b)) {
         (Ok(a), Ok(b)) => a == b,
         _ => false,
     }
 }
 
 /// The comparison key for a directory collision. The stored text stays as typed; only the key
-/// folds case on macOS, whose default file system is case-insensitive, so `~/.Claude` and
-/// `~/.claude` read as one directory there. Other platforms compare byte for byte. Unicode
-/// normalisation is not folded: no crate for it is in the dependency tree.
+/// folds case where the host's default file system is case-insensitive
+/// ([`crate::platform::names::FOLDS_CASE`]: macOS), so `~/.Claude` and `~/.claude` read as one
+/// directory there. Other hosts compare byte for byte. Unicode normalisation is not folded: no
+/// crate for it is in the dependency tree.
 pub fn dir_key(dir: &str) -> String {
-    if cfg!(target_os = "macos") {
+    if crate::platform::names::FOLDS_CASE {
         dir.to_lowercase()
     } else {
         dir.to_string()
@@ -257,7 +290,7 @@ pub fn directory_exists_or_creatable(path: &Path) -> Result<bool> {
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 candidate = candidate.parent().ok_or_else(|| not_a_directory(path))?;
             }
-            Err(err) if err.raw_os_error() == Some(libc::ENOTDIR) => {
+            Err(err) if fs::is_not_a_directory(&err) => {
                 return Err(not_a_directory(path));
             }
             Err(err) => {
@@ -302,6 +335,22 @@ mod tests {
     }
 
     #[test]
+    fn a_tilde_path_is_taken_from_home_with_either_separator_where_the_host_has_both() {
+        let home = crate::paths::home_dir();
+        assert_eq!(expand("~"), home);
+        assert_eq!(expand(" ~/a/b "), home.join("a").join("b"));
+        assert_eq!(expand("/a/b"), PathBuf::from("/a/b"));
+        if cfg!(windows) {
+            assert_eq!(expand("~\\a\\b"), home.join("a").join("b"));
+            assert_eq!(expand("~/a\\b"), home.join("a").join("b"));
+        } else {
+            // A backslash is an ordinary character of a Unix name.
+            assert_eq!(expand("~\\a"), PathBuf::from("~\\a"));
+            assert_eq!(expand("~/a\\b"), home.join("a\\b"));
+        }
+    }
+
+    #[test]
     fn a_directory_is_required_to_exist_and_to_be_one() {
         let dir = ScratchDir::new("hostfs-require-directory");
         std::fs::write(dir.join("file"), "x").unwrap();
@@ -317,6 +366,7 @@ mod tests {
     }
 
     /// A path that cannot be looked at is not a path that is absent.
+    #[cfg(unix)]
     #[test]
     fn a_directory_that_cannot_be_looked_at_is_unreadable_not_missing() {
         use std::os::unix::fs::PermissionsExt;
@@ -347,7 +397,7 @@ mod tests {
 
     #[test]
     fn creatable_directories_exclude_occupied_and_unresolvable_paths() {
-        use std::os::unix::fs::symlink;
+        use crate::test_support::symlink;
 
         let dir = ScratchDir::new("hostfs-creatable-directory");
         assert!(!directory_exists_or_creatable(&dir.join("missing/nested")).unwrap());
@@ -399,6 +449,7 @@ mod tests {
     }
 
     /// A FIFO is refused at once rather than waited on for a writer, and a directory is refused.
+    #[cfg(unix)]
     #[test]
     fn anything_but_a_regular_file_is_refused() {
         let dir = ScratchDir::new("hostfs-read-regular-fifo");

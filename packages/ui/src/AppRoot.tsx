@@ -1,6 +1,7 @@
 import React from "react";
 
 import { ErrorBoundary } from "./ErrorBoundary";
+import { announceHost } from "./i18n/platformTerms";
 import { LanguageProvider } from "./i18n/react";
 import { useBackgroundRunSync } from "./lifecycle/useBackgroundRunSync";
 import { useNativeMenuLabels } from "./lifecycle/useNativeMenuLabels";
@@ -9,7 +10,7 @@ import { ThemeProvider } from "./preferences/theme";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { ErrorAlerts } from "./shell/ErrorAlerts";
-import { DaemonProvider, type Daemon } from "./store";
+import { DaemonHostAnnouncement, DaemonProvider, type Daemon } from "./store";
 import { UpdatesProvider } from "./updates/UpdatesProvider";
 
 // Mounted once, as a sibling of the screen, rather than from inside any screen: `App` is not on
@@ -60,7 +61,9 @@ export interface AppRootProps {
  * nothing where the platform cannot update itself.
  *
  * `DaemonProvider` is outside `ErrorBoundary` too, so the crash page's report can remove the names of the user's
- * records (it reads them from the daemon in context); there is none for the screens that have no daemon.
+ * records (it reads them from the daemon in context); there is none for the screens that have no daemon. The daemon's
+ * host is announced to the catalog beside it, outside the boundary too, so the error alerts and the crash page word
+ * what happened on the daemon's machine in its terms.
  *
  * One render for every screen, so none of them is outside the boundary. `ErrorBoundary` wraps `ThemeProvider`, not the
  * other way around: `useTheme`'s state initialiser reads `localStorage` unguarded, and a throw there must still land on
@@ -70,6 +73,8 @@ export interface AppRootProps {
  * instance (see its own comment).
  */
 export function AppRoot({ platform, daemon, nativeSync, firstCheckDelayMs, insideUpdates, children }: AppRootProps): React.ReactElement {
+  // Before the first message below reads it; the host does not change, so announcing it again is a no-op.
+  announceHost(platform.host);
   return (
     <PlatformProvider value={platform}>
       <LanguageProvider>
@@ -82,6 +87,7 @@ export function AppRoot({ platform, daemon, nativeSync, firstCheckDelayMs, insid
         <UpdatesProvider firstCheckDelayMs={firstCheckDelayMs}>
           {insideUpdates}
           <DaemonProvider value={daemon}>
+            <DaemonHostAnnouncement />
             <ErrorBoundary>
               <ThemeProvider>
                 {nativeSync && <NativeWindowThemeSync />}

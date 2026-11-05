@@ -4,6 +4,8 @@
 
 use super::*;
 
+use crate::platform::term;
+
 /// One agent's folder-trust confirmation as [`normalise`] leaves its text, and how it is pressed.
 pub(crate) struct Screen {
     /// The known first drawings: any one sequence of pieces, in order, anything between them.
@@ -174,16 +176,22 @@ impl Screen {
 
     /// Whether this output holds the screen as it is first drawn.
     pub(super) fn is_shown_in(&self, raw: &[u8]) -> bool {
-        let text = normalise(raw);
+        first_drawn_in(&normalise(raw), self.first_draw)
+    }
+
+    /// Whether this parsed screen shows the screen, wherever its cursor is: its first drawing with
+    /// the cursor glyph left out of both. The parsed screen keeps only what is up now, so a screen
+    /// whose cursor has moved since it was first drawn no longer holds that drawing, and is still
+    /// up; the output it was first drawn in would still hold it.
+    pub(super) fn is_up_in(&self, screen: &[u8]) -> bool {
+        let Some(glyph) = self.cursor else {
+            return self.is_shown_in(screen);
+        };
+        let without = |text: &str| text.chars().filter(|c| *c != glyph).collect::<String>();
+        let text = without(&normalise(screen));
         self.first_draw.iter().any(|drawing| {
-            let mut rest = text.as_str();
-            drawing.iter().all(|piece| match rest.find(piece) {
-                Some(at) => {
-                    rest = &rest[at + piece.len()..];
-                    true
-                }
-                None => false,
-            })
+            let pieces: Vec<String> = drawing.iter().map(|piece| without(piece)).collect();
+            in_order(&text, pieces.iter().map(String::as_str))
         })
     }
 
@@ -194,6 +202,13 @@ impl Screen {
     /// sequences, which Codex prints for every key it ignores, is not the screen going.
     pub(super) fn gone_in(&self, raw: &[u8]) -> bool {
         self.other_text_in(&normalise(raw))
+    }
+
+    /// [`Self::gone_in`] for the parsed screen, which shows what is up now rather than what was
+    /// printed after the key: it has changed since `before`, what it showed as the key was sent,
+    /// and shows the screen gone. A frame of bare escape sequences changes nothing on it.
+    pub(super) fn gone_from(&self, before: &[u8], now: &[u8]) -> bool {
+        now != before && self.gone_in(now)
     }
 
     /// Whether `text` is something to read with none of the screen's own in it.
@@ -216,6 +231,21 @@ impl Screen {
             )
             .filter_map(|piece| text.rfind(piece))
             .max()
+    }
+
+    /// [`Self::replaced_in`] for the parsed screen, which shows what is up now rather than what
+    /// was drawn after what: where the agent's next screen can be told apart, its text is there
+    /// and none of this screen's own, either option included; otherwise, as [`Self::gone_in`]. The
+    /// screen was up when it was sighted, so a parsed screen without any of its text has changed
+    /// since.
+    pub(super) fn replaced_on(&self, screen: &[u8]) -> bool {
+        let text = normalise(screen);
+        let Some(marker) = self.next_screen else {
+            return self.other_text_in(&text);
+        };
+        text.contains(marker)
+            && self.last_drawn(&text).is_none()
+            && !self.decline.iter().any(|piece| text.contains(piece))
     }
 
     /// Whether this output, printed since the screen was sighted and then typed at by the person,
@@ -260,6 +290,42 @@ impl Screen {
             None
         }
     }
+
+    /// Which option the cursor is on, read off the cells drawn in inverse video (`inverse`, the
+    /// parsed screen with every other cell blank), as Codex draws the option its cursor is on:
+    /// the one option whose text is there. `None` for a screen without a cursor, or when neither
+    /// option or both are.
+    pub(super) fn cursor_in_inverse(&self, inverse: &[u8]) -> Option<Cursor> {
+        self.cursor?;
+        let text = normalise(inverse);
+        let decline = self.decline.iter().any(|piece| text.contains(piece));
+        let accept = self.accept.is_some_and(|accept| text.contains(accept));
+        match (decline, accept) {
+            (true, false) => Some(Cursor::Decline),
+            (false, true) => Some(Cursor::Accept),
+            _ => None,
+        }
+    }
+}
+
+/// Whether `text` holds any one of the `drawings`, each a sequence of pieces in order with anything
+/// between them.
+fn first_drawn_in(text: &str, drawings: &[&[&str]]) -> bool {
+    drawings
+        .iter()
+        .any(|drawing| in_order(text, drawing.iter().copied()))
+}
+
+/// Whether `text` holds the `pieces` in order, anything between them.
+fn in_order<'a>(text: &str, pieces: impl IntoIterator<Item = &'a str>) -> bool {
+    let mut rest = text;
+    pieces.into_iter().all(|piece| match rest.find(piece) {
+        Some(at) => {
+            rest = &rest[at + piece.len()..];
+            true
+        }
+        None => false,
+    })
 }
 
 /// What the first hook on a session left to do ([`TrustState::note_hook`]).
@@ -284,16 +350,22 @@ pub(super) struct CarryRendezvous {
 
 /// One session's watch for its trust screen, owned by its [`LiveSession`].
 pub struct TrustState {
+    /// The session's agent, whose input box says where the parsed screen is read that its
+    /// startup is behind it ([`Self::feed_screen`]).
+    agent: AgentId,
     /// The screen this session's agent shows, and how it is pressed.
     pub(super) screen: &'static Screen,
     /// Where the trust entry is carried from and to after a press, for a provider that records
     /// the trust in a store of the session's own (`Capabilities::per_session_trust`, Grok Build).
     pub(super) carried: Option<Arc<dyn TrustCarrier>>,
-    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it. Released when the
-    /// watch ends.
+    /// Whether the screen is read off the session's parsed screen rather than its output
+    /// ([`Self::reads_screen`]).
+    reads_screen: AtomicBool,
+    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it, where the output
+    /// is read; empty where the parsed screen is. Released when the watch ends.
     pub(super) window: Mutex<Vec<u8>>,
-    /// The watch has ended without a sighting: the agent's terminal title came. Never set for an
-    /// agent that runs a hook at start.
+    /// The watch has ended without a sighting: the agent's terminal title came, or, where the
+    /// parsed screen is read, its input box. Never set for an agent that runs a hook at start.
     pub(super) expired: AtomicBool,
     /// The agent's hook fallback ([`Screen::hook_fallback`]) has let its messages through with no
     /// hook seen. Outranked by a sighting of the screen after it.
@@ -314,6 +386,12 @@ pub struct TrustState {
     /// Taken around the hook's arrival and around undoing a sighting of bracketed paste, so that
     /// none is undone once the hook has come.
     paste_mode_order: Mutex<()>,
+    /// The agent's `SessionStart` hook has come ([`Self::note_session_start`]).
+    session_started: AtomicBool,
+    /// Where the parsed screen is read, the agent's input box has been seen on it since its
+    /// `SessionStart` hook, which stands for bracketed paste turned on
+    /// ([`Self::note_input_box`]).
+    input_box_seen: AtomicBool,
     /// An answer has been started. A session is answered at most once.
     pub(super) answered: AtomicBool,
     /// Octoboard's press of the screen succeeded.
@@ -337,8 +415,10 @@ impl TrustState {
     pub fn new(agent: AgentId, carried: Option<Arc<dyn TrustCarrier>>) -> Self {
         let (sightings, receiver) = unbounded_channel();
         Self {
+            agent,
             screen: screen_of(agent),
             carried: carried.filter(|_| agent.descriptor().capabilities.per_session_trust),
+            reads_screen: AtomicBool::new(term::facts().host_renders),
             window: Mutex::new(Vec::new()),
             expired: AtomicBool::new(false),
             released_without_hook: AtomicBool::new(false),
@@ -349,6 +429,8 @@ impl TrustState {
             hook_seen: AtomicBool::new(false),
             paste_mode_seen: AtomicBool::new(false),
             paste_mode_order: Mutex::new(()),
+            session_started: AtomicBool::new(false),
+            input_box_seen: AtomicBool::new(false),
             answered: AtomicBool::new(false),
             pressed: AtomicBool::new(false),
             dismissed: AtomicBool::new(false),
@@ -359,16 +441,63 @@ impl TrustState {
         }
     }
 
+    /// Whether the screen is read off the session's parsed screen rather than its output: where
+    /// the host renders what the program draws (`TermFacts::host_renders`), the output is the
+    /// host's repaint, in an order of its own, and only the parsed screen says what is drawn.
+    /// Elsewhere the output is read, since its order also says what was drawn after what, which
+    /// the parsed screen, holding only what is up now, cannot: a first drawing and the redraw after
+    /// a Down that arrive in one read leave only the redraw on it, and a redraw of the options
+    /// followed by the next screen leaves only the next screen.
+    pub(crate) fn reads_screen(&self) -> bool {
+        self.reads_screen.load(Ordering::Relaxed)
+    }
+
+    /// Reads the screen off the parsed screen from now on, as a host that renders what the program
+    /// draws has it read, for a test of that reading on a host that does not.
+    #[cfg(test)]
+    pub(crate) fn read_the_screen(&self) {
+        self.reads_screen.store(true, Ordering::Relaxed);
+    }
+
+    /// Reads the screen off the output from now on, as a host that passes the program's output
+    /// through has it read, for a test of that reading on a host that renders it.
+    #[cfg(test)]
+    pub(crate) fn read_the_output(&self) {
+        self.reads_screen.store(false, Ordering::Relaxed);
+    }
+
+    /// Looks at the session's terminal after one more chunk of its output: the chunk, or the parsed
+    /// screen it left, which `screen` gives and is asked for only while the screen is looked for
+    /// ([`Self::reads_screen`]). Called from the PTY reader thread for every chunk, so it must stay
+    /// quick and must not block; `input_writes` and `output_total` are as for [`Self::feed`].
+    pub fn on_output(
+        &self,
+        chunk: &[u8],
+        screen: impl FnOnce() -> String,
+        input_writes: u64,
+        output_total: u64,
+    ) {
+        if self.reads_screen() {
+            self.feed_screen(screen, input_writes, output_total);
+        } else {
+            self.feed(chunk, input_writes, output_total);
+        }
+    }
+
+    /// Whether the screen is still looked for.
+    fn looking(&self) -> bool {
+        self.screen.can_be_sighted()
+            && !self.hook_seen.load(Ordering::Acquire)
+            && !self.sighted.load(Ordering::Acquire)
+            && !self.expired.load(Ordering::Acquire)
+    }
+
     /// Looks at one more chunk of the session's output; called from the PTY reader thread for
     /// every chunk, so it must stay quick and must not block. `input_writes` is the session's count
     /// of foreign writes as it stands, and `output_total` how much it has printed, this chunk
     /// included. Signals a sighting the first time the screen is complete in what has been seen.
     pub fn feed(&self, chunk: &[u8], input_writes: u64, output_total: u64) {
-        if !self.screen.can_be_sighted()
-            || self.hook_seen.load(Ordering::Acquire)
-            || self.sighted.load(Ordering::Acquire)
-            || self.expired.load(Ordering::Acquire)
-        {
+        if !self.looking() {
             return;
         }
         let mut watched = self.window.lock().expect("trust window mutex poisoned");
@@ -379,14 +508,46 @@ impl TrustState {
         }
         if self.screen.is_shown_in(&watched) {
             *watched = Vec::new();
-            self.writes_at_sighting
-                .store(input_writes, Ordering::Release);
-            self.output_at_sighting
-                .store(output_total, Ordering::Release);
-            if !self.sighted.swap(true, Ordering::AcqRel) {
-                // The receiver is gone only once the session is, and nothing is left to tell.
-                let _ = self.sightings.send(());
-            }
+            self.note_sighting(input_writes, output_total);
+        }
+    }
+
+    /// [`Self::feed`] for the parsed screen as the latest chunk left it, which `screen` gives: a
+    /// sighting the first time it shows the screen as first drawn. For an agent whose start signal
+    /// is its terminal title ([`StartSignal::TerminalTitle`]) the watch ends, with no screen
+    /// sighted, once the parsed screen shows the agent's input box instead: its session has
+    /// started, and that is read off what is drawn rather than off a title, which the host can set
+    /// and send at a moment of its own ([`Self::note_title`]).
+    pub(crate) fn feed_screen(
+        &self,
+        screen: impl FnOnce() -> String,
+        input_writes: u64,
+        output_total: u64,
+    ) {
+        if !self.looking() {
+            return;
+        }
+        // Read before the window's lock is taken, as the parsed screen has a lock of its own.
+        let text = screen();
+        let _watched = self.window.lock().expect("trust window mutex poisoned");
+        if self.screen.is_shown_in(text.as_bytes()) {
+            self.note_sighting(input_writes, output_total);
+        } else if self.screen.start_signal == StartSignal::TerminalTitle
+            && crate::session::input_box::input_box_rows(self.agent, &text).is_some()
+        {
+            self.expired.store(true, Ordering::Release);
+        }
+    }
+
+    /// The screen has been sighted, under the window's lock; signalled once.
+    fn note_sighting(&self, input_writes: u64, output_total: u64) {
+        self.writes_at_sighting
+            .store(input_writes, Ordering::Release);
+        self.output_at_sighting
+            .store(output_total, Ordering::Release);
+        if !self.sighted.swap(true, Ordering::AcqRel) {
+            // The receiver is gone only once the session is, and nothing is left to tell.
+            let _ = self.sightings.send(());
         }
     }
 
@@ -394,9 +555,11 @@ impl TrustState {
     /// [`Self::feed`] sees, so the session reads it off the raw output. For an agent whose start
     /// signal is the title ([`StartSignal::TerminalTitle`]) that ends the watch if no screen has
     /// been sighted: its startup is behind it and nothing comes that is the screen. Called after
-    /// [`Self::feed`] has seen the same chunk, so a chunk that holds both sights the screen.
+    /// [`Self::feed`] has seen the same chunk, so a chunk that holds both sights the screen. Where
+    /// the parsed screen is read the title ends nothing: the watch ends at the input box drawn
+    /// instead ([`Self::feed_screen`]).
     pub fn note_title(&self) {
-        if self.screen.start_signal != StartSignal::TerminalTitle {
+        if self.screen.start_signal != StartSignal::TerminalTitle || self.reads_screen() {
             return;
         }
         let mut watched = self.window.lock().expect("trust window mutex poisoned");
@@ -446,7 +609,8 @@ impl TrustState {
     /// For an agent that turns bracketed paste on only once it reads its input
     /// ([`Screen::waits_for_paste_mode`], Claude Code) the hook is not the end of the hold: it
     /// lasts until the terminal has also been seen with bracketed paste on at the hook or after,
-    /// with no time limit, like a hook that never comes.
+    /// or, where the parsed screen is read, the agent's input box on it after its `SessionStart`
+    /// hook, with no time limit, like a hook that never comes.
     pub fn holds_writes(&self) -> bool {
         if self.hook_seen.load(Ordering::Acquire) {
             return self.awaits_paste_mode();
@@ -474,18 +638,50 @@ impl TrustState {
     }
 
     /// Whether the agent has yet to turn bracketed paste on, and that is still what its messages
-    /// wait for ([`Screen::waits_for_paste_mode`]).
+    /// wait for ([`Screen::waits_for_paste_mode`]). Where the parsed screen is read, its input box
+    /// seen since its `SessionStart` hook does as well ([`Self::note_input_box`]).
     fn awaits_paste_mode(&self) -> bool {
-        self.screen.waits_for_paste_mode && !self.paste_mode_seen.load(Ordering::Acquire)
+        self.screen.waits_for_paste_mode && !self.reads_its_input()
+    }
+
+    /// Whether the agent has been seen to read its input: bracketed paste on, or, where the parsed
+    /// screen is read, its input box shown since its `SessionStart` hook.
+    fn reads_its_input(&self) -> bool {
+        self.paste_mode_seen.load(Ordering::Acquire) || self.input_box_seen.load(Ordering::Acquire)
     }
 
     /// Whether the session's bracketed paste is still to be followed ([`Self::note_paste_mode`]):
-    /// for an agent that waits for it, until the hook has come and bracketed paste has been seen
-    /// on.
+    /// for an agent that waits for it, until the hook has come and the agent has been seen to read
+    /// its input.
     pub fn follows_paste_mode(&self) -> bool {
         self.screen.waits_for_paste_mode
-            && !(self.hook_seen.load(Ordering::Acquire)
-                && self.paste_mode_seen.load(Ordering::Acquire))
+            && !(self.hook_seen.load(Ordering::Acquire) && self.reads_its_input())
+    }
+
+    /// The agent's `SessionStart` hook has come. Where the parsed screen is read, the host may
+    /// keep the program's bracketed paste to itself (a console host that renders what the program
+    /// draws need not pass `ESC [ ? 2004 h` on), so from then on the agent's input box drawn on
+    /// the parsed screen also says that it reads its input ([`Self::note_input_box`]). Elsewhere
+    /// bracketed paste alone does.
+    pub(crate) fn note_session_start(&self) {
+        if self.reads_screen() && self.screen.waits_for_paste_mode {
+            self.session_started.store(true, Ordering::Release);
+        }
+    }
+
+    /// Whether the parsed screen is to be looked at for the agent's input box
+    /// ([`Self::note_input_box`]): from its `SessionStart` hook on, until it has been seen to read
+    /// its input.
+    pub(crate) fn watches_input_box(&self) -> bool {
+        self.session_started.load(Ordering::Acquire) && !self.reads_its_input()
+    }
+
+    /// Records whether the parsed screen shows the agent's input box, as looked at while
+    /// [`Self::watches_input_box`] says to; once shown, it stays seen.
+    pub(crate) fn note_input_box(&self, shown: bool) {
+        if shown && self.session_started.load(Ordering::Acquire) {
+            self.input_box_seen.store(true, Ordering::Release);
+        }
     }
 
     /// Records whether the parsed terminal has bracketed paste on after a piece of output.

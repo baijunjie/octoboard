@@ -11,6 +11,7 @@ import { ActionMenu } from "../components/menus/ActionMenu";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
+import { useHost } from "../platform/react";
 import type { Account, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
@@ -45,6 +46,7 @@ export function SessionActions({
 }): React.ReactElement {
   const t = useT();
   const inFocusMode = useContext(FocusModeContext);
+  const host = useHost();
   const focusBinding = useBinding("focusMode");
   const focusTarget = useDaemonStore(useShallow((s) => selected && !inFocusMode ? selectedSessionFocusTarget(session, s.projects, s.sessions) : undefined));
   const { store } = useDaemon();
@@ -77,7 +79,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, focusTarget, focusShortcut: ariaBinding(focusBinding), hasBoundSessions, canHandoff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { host, placement, focusTarget, focusShortcut: ariaBinding(focusBinding, host), hasBoundSessions, canHandoff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
     </>
   );
 }

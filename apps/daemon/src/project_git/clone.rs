@@ -264,7 +264,7 @@ mod tests {
         use crate::test_support::{pinned_shell_env, CommandLine};
 
         let env = pinned_shell_env();
-        let git = crate::env_shell::resolve_binary("git", &env).expect("a git on the pinned PATH");
+        let git = crate::env_shell::resolve_program("git", &env).expect("a git on the pinned PATH");
         let runner = remote_work_git(&env, CLONE_LIMITS).unwrap();
         let url = "https://example.com/r.git";
         let based = |args: &[&'static str]| {

@@ -1,7 +1,8 @@
 //! Template canvases for the menu bar icon. A quota keeps the original canvas size, with a
 //! full-size octopus behind an outlined capsule and an orange attention dot at the upper right.
 //! An account with a 5-hour and a weekly window gets a slimmer outlined capsule for the 5-hour
-//! window with a thinner outlined one beneath it for the weekly one.
+//! window with a thinner outlined one beneath it for the weekly one. Windows has its own coloured
+//! picture instead (`app_icon`).
 
 use image::{ImageFormat, Rgba, RgbaImage};
 use tauri::image::Image;
@@ -27,6 +28,8 @@ const DOT_Y: f64 = 9.0;
 const DOT_RADIUS: f64 = 8.0;
 const DOT_CLEARANCE: f64 = 2.0;
 const BORDER: f64 = 2.0;
+/// The attention dot's colour on the coloured picture, the system orange the macOS dot is tinted with.
+const DOT_COLOUR: [u8; 3] = [255, 149, 0];
 
 /// What the quota bars show, in percent remaining: the main window's, and the weekly window's
 /// beneath it when the account has both.
@@ -65,6 +68,34 @@ pub(super) fn octopus(attention: bool, quota: Option<Quota>) -> Image<'static> {
     Image::new_owned(canvas.into_raw(), SIDE, SIDE)
 }
 
+/// The notification area's picture: the app icon in its own colours, since a template octopus would
+/// vanish on a dark taskbar. Attention swaps in a copy with the dot at its upper right, laid out as
+/// in the template canvas (scaled to the picture) and drawn the same way, a ring of the icon cleared
+/// around it. A quota is not drawn here.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub(super) fn app_icon(attention: bool) -> Image<'static> {
+    let original = tauri::include_image!("icons/32x32.png");
+    if !attention {
+        return original;
+    }
+    let mut canvas = pixels(&original);
+    let scale = f64::from(canvas.width()) / f64::from(SIDE);
+    let (centre_x, centre_y) = (DOT_X * scale, DOT_Y * scale);
+    let (radius, clearance) = (DOT_RADIUS * scale, DOT_CLEARANCE * scale);
+    for y in 0..canvas.height() {
+        for x in 0..canvas.width() {
+            let distance = (f64::from(x) + 0.5 - centre_x).hypot(f64::from(y) + 0.5 - centre_y);
+            if distance > radius + clearance + 0.5 {
+                continue;
+            }
+            let alpha = ((radius + 0.5 - distance).clamp(0.0, 1.0) * 255.0) as u8;
+            let [red, green, blue] = DOT_COLOUR;
+            canvas.put_pixel(x, y, Rgba([red, green, blue, alpha]));
+        }
+    }
+    Image::new_owned(canvas.into_raw(), original.width(), original.height())
+}
+
 /// AppKit tints this independent template layer orange, including without a readable quota.
 pub(super) fn dot_png() -> Option<Vec<u8>> {
     let mut canvas = RgbaImage::new(SIDE, SIDE);
@@ -86,7 +117,7 @@ fn pixels(original: &Image<'_>) -> RgbaImage {
         original.height(),
         original.rgba().to_vec(),
     )
-    .expect("embedded tray template has one RGBA pixel per position")
+    .expect("embedded tray picture has one RGBA pixel per position")
 }
 
 /// A transparent ring separates the attention dot from the octopus below it.
@@ -149,6 +180,35 @@ mod tests {
             main,
             thin: Some(thin),
         })
+    }
+
+    #[test]
+    fn the_coloured_icon_gains_an_orange_dot_in_a_cleared_corner() {
+        let plain = app_icon(false);
+        let attention = app_icon(true);
+        assert_eq!((attention.width(), attention.height()), (32, 32));
+        assert_ne!(plain.rgba(), attention.rgba());
+        let pixel = |image: &Image<'_>, x: u32, y: u32| {
+            let at = ((y * image.width() + x) * 4) as usize;
+            image.rgba()[at..at + 4].to_vec()
+        };
+        // The dot's centre is solid orange.
+        assert_eq!(pixel(&attention, 25, 6), [255, 149, 0, 255]);
+        // Only the corner around the dot changes, and the icon has colour of its own.
+        let reach = (DOT_RADIUS + DOT_CLEARANCE) * 32.0 / f64::from(SIDE) + 0.5;
+        for y in 0..32 {
+            for x in 0..32 {
+                let distance = (f64::from(x) + 0.5 - DOT_X * 32.0 / f64::from(SIDE))
+                    .hypot(f64::from(y) + 0.5 - DOT_Y * 32.0 / f64::from(SIDE));
+                if distance > reach {
+                    assert_eq!(pixel(&attention, x, y), pixel(&plain, x, y));
+                }
+            }
+        }
+        assert!(plain
+            .rgba()
+            .chunks(4)
+            .any(|p| p[3] > 0 && p[..3] != [0, 0, 0]));
     }
 
     #[test]

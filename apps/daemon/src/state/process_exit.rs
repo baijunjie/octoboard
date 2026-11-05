@@ -166,7 +166,7 @@ mod tests {
         spawn_reader_thread(live.clone(), 8 * 1024);
         state.register_live(live.clone());
         let deadline = Instant::now() + PATIENCE;
-        while live.recent_output(64).is_empty() {
+        while crate::test_support::printed(&live, 64).is_empty() {
             assert!(Instant::now() < deadline, "the stand-in printed nothing");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }

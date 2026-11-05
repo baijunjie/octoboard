@@ -13,6 +13,7 @@ mod events;
 mod fields;
 mod git_workflow;
 mod history;
+mod host;
 mod models;
 mod path_links;
 mod processes;

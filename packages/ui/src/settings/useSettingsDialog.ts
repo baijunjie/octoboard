@@ -5,7 +5,10 @@ import { useLatest } from "../components/hooks/useLatest";
 import { canTakeFocus } from "../components/focus/regionFocus";
 import { focusAfterModalCloses, focusOpenDialog } from "../components/focus/modalFocus";
 import { usePressedControl } from "../components/controls/usePressedControl";
-import { usePlatform } from "../platform/react";
+import { useHost, usePlatform } from "../platform/react";
+import { setKeyboardModality } from "../primitives";
+import { matchesCommand } from "../shortcuts/store";
+import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { useUpdateStore } from "../updates/UpdatesProvider";
 import type { SettingsNavigation, SettingsSectionId } from "./sections";
 import type { OpenSettings } from "./settingsLauncher";
@@ -13,7 +16,8 @@ import type { OpenSettings } from "./settingsLauncher";
 /**
  * Whether the settings dialog is open, and how to open it (on its first section, or at a given one with
  * `openSettingsAt`, optionally with the Add agent dialog in front, or on an account's sharing switch) and close it,
- * including from the native menu's Settings item (Cmd+,). That request is ignored while anything else holds the user's
+ * including from the native menu's Settings item (Cmd+,), or, where there is no native menu, from the page's own
+ * handling of the same key as the user has bound it. That request is ignored while anything else holds the user's
  * attention: another modal (`otherModalOpen`), an open action menu, the settings themselves, or before the UI has
  * anything to show (`ready` is false), where it would otherwise pop the dialog up later, unasked. The native menu's
  * About item opens Settings on its About section the same way, and moves an open Settings there unless another modal or
@@ -47,6 +51,7 @@ export function useSettingsDialog({
   const [account, setAccount] = useState<string>();
   const [nonce, setNonce] = useState(0);
   const { appMenu, statusItem } = usePlatform();
+  const host = useHost();
   const updates = useUpdateStore();
   // Whether Settings was open as of the last commit, which the close effect below compares against.
   const wasOpenRef = useRef(false);
@@ -99,11 +104,21 @@ export function useSettingsDialog({
     show();
   };
 
-  // Read through a ref so the subscription is made once.
-  const requestFromMenuRef = useLatest(() => {
-    if (ready && !open && !otherModalOpen && !isActionMenuOpen()) show();
+  // Read through a ref so the subscription is made once. `byKey` is the page's own handling of the key, which draws the
+  // ring on what Settings focuses, as a keyboard handler that moves focus does (`docs/ui-standard.md`, "A keyboard
+  // handler that moves focus itself"), and only once the dialog will open.
+  const requestFromMenuRef = useLatest((byKey = false) => {
+    if (!ready || open || otherModalOpen || isActionMenuOpen()) return;
+    if (byKey) setKeyboardModality();
+    show();
   });
   useEffect(() => appMenu?.onSettingsRequested(() => requestFromMenuRef.current()), [appMenu]);
+  // The key is the native menu's where there is one, so the page leaves it alone there and it never fires twice.
+  useWindowShortcut(
+    (event) => matchesCommand("openSettings", event, host) || undefined,
+    () => requestFromMenuRef.current(true),
+    appMenu === undefined,
+  );
   const requestAboutFromMenuRef = useLatest(() => {
     if (ready && !otherModalOpen && !isActionMenuOpen()) openSettingsAt("about");
   });

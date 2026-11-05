@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{fake_agent, read_pid_file, ScratchDir, PATIENCE};
+use crate::test_support::{fake_agent, is_running, read_pid_file, ScratchDir, PATIENCE, SHELL_PID};
 
 struct Setup {
     state: Arc<AppState>,
@@ -183,7 +183,7 @@ async fn cancelling_ends_the_login_and_kills_the_cli() {
     let setup = setup(
         "login-cancel",
         AgentId::CLAUDE,
-        "echo $$ > \"$HOME/pid\"; sleep 30",
+        &format!("echo {SHELL_PID} > \"$HOME/pid\"; sleep 30"),
     );
     let mut events = setup.state.subscribe();
     setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
@@ -197,8 +197,7 @@ async fn cancelling_ends_the_login_and_kills_the_cli() {
     let ended = until_ended(&mut events).await.pop().unwrap();
     assert_eq!(ended.status, LoginStatus::Cancelled);
     // Announced only once the CLI has gone, not while it is still dying.
-    // SAFETY: signal 0 only probes whether the pid exists.
-    assert_ne!(unsafe { libc::kill(pid, 0) }, 0);
+    assert!(!is_running(pid));
     // And its scratch directory is gone with it.
     assert_eq!(std::fs::read_dir(setup.dir.join("run")).unwrap().count(), 0);
 
@@ -219,7 +218,7 @@ async fn a_login_nobody_authorizes_is_given_up_on_and_its_process_group_killed()
     let setup = setup(
         "login-timeout",
         AgentId::CLAUDE,
-        "(sleep 30 & echo $! > \"$HOME/child.pid\"; wait) & echo $$ > \"$HOME/pid\"; wait",
+        &format!("{} & echo {SHELL_PID} > \"$HOME/pid\"; wait", cli_child()),
     );
     let (pid, child_pid) = (setup.dir.join("bin/pid"), setup.dir.join("bin/child.pid"));
     // A CLI that is slow to exec can be given up on before it has written anything, which
@@ -368,7 +367,7 @@ async fn stopping_every_login_kills_its_cli_without_announcing_anything() {
     let setup = setup(
         "login-stop-all",
         AgentId::CLAUDE,
-        "echo $$ > \"$HOME/pid\"; sleep 30",
+        &format!("echo {SHELL_PID} > \"$HOME/pid\"; sleep 30"),
     );
     let mut events = setup.state.subscribe();
     setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
@@ -379,6 +378,23 @@ async fn stopping_every_login_kills_its_cli_without_announcing_anything() {
     until_gone(pid).await;
     assert!(setup.state.account_logins.running().is_empty());
     assert!(events.try_recv().is_err());
+}
+
+/// A subshell of a fake CLI's script that runs a child writing its pid to `$HOME/child.pid` and
+/// sleeping 30 s. On Windows the child is a fixture process (`test_support::fixture`), whose pid is
+/// Windows' own: under Git Bash `$!` is a pid of its own numbering.
+fn cli_child() -> String {
+    #[cfg(unix)]
+    return "(sleep 30 & echo $! > \"$HOME/child.pid\"; wait)".to_string();
+    #[cfg(windows)]
+    return format!(
+        "(cd \"$HOME\" && {})",
+        crate::test_support::fixture::Steps::new()
+            .write_pid(std::path::Path::new("child.pid"))
+            .sleep(30)
+            .program("child")
+            .posix_line()
+    );
 }
 
 async fn until_pid(path: &std::path::Path) -> i32 {
@@ -396,8 +412,7 @@ async fn until_pid(path: &std::path::Path) -> i32 {
 
 async fn until_gone(pid: i32) {
     tokio::time::timeout(PATIENCE, async {
-        // SAFETY: signal 0 only probes whether the pid exists.
-        while unsafe { libc::kill(pid, 0) } == 0 {
+        while is_running(pid) {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
@@ -462,7 +477,7 @@ fn codex_server(completes: bool) -> String {
     format!(
         r#"
     echo "$CODEX_HOME" > "$HOME/home"
-    echo $$ > "$HOME/pid"
+    echo {SHELL_PID} > "$HOME/pid"
     while read line; do
       case "$line" in
         *'"initialize"'*) echo '{{"id":1,"result":{{"userAgent":"fake"}}}}';;

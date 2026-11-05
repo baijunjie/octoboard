@@ -83,7 +83,7 @@ function DocumentSurface({
   theme: "light" | "dark";
 }): React.ReactElement {
   const t = useT();
-  const links = usePlatform().links;
+  const { links, host } = usePlatform();
   const location = useMarkdownLocation();
   const colours = CODE_THEMES[theme];
   const region = useFadeRegion({ label: t("viewer.contents", { name: isolate(name) }), always: true });
@@ -123,7 +123,7 @@ function DocumentSurface({
           {...fade}
           {...FIND_REGION}
           onKeyDown={(event) => {
-            if (isSelectAll(event) && selectDocument(event.currentTarget)) event.preventDefault();
+            if (isSelectAll(event, host) && selectDocument(event.currentTarget)) event.preventDefault();
           }}
           onCopy={(event) => void copyDocument(event, event.currentTarget, text)}
         >

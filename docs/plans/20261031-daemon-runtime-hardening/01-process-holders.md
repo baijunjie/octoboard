@@ -58,6 +58,8 @@
 
 - **Reusable capabilities**:
   - The launch tag in each launch's environment.
+  - The daemon's `platform::term` and `platform::proc` layers (ConPTY or a Unix pseudoterminal, a job object or a
+    process group): a holder process would own them, with their `Pty` and `Containment` APIs as its protocol.
 - **Development notes**:
   - Builds on the daemon's first paint on attach, which is planned separately and has to exist first.
   - The Linux detach and the stop order, with the Linux shutdown criterion, need the daemon running on Linux as a

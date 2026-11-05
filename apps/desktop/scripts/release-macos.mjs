@@ -1,0 +1,240 @@
+#!/usr/bin/env node
+// Builds the distributable macOS bundle, universal (both Mac architectures): `tauri build --target
+// universal-apple-darwin`, whose own `beforeBuildCommand` (see `tauri.conf.json`) builds the daemon
+// sidecar and the frontend first, then produces the `.app` and, per `bundle.targets` in the macOS overlay
+// `tauri.macos.conf.json`, the `.dmg` around it.
+// Signing and notarization are driven by the `APPLE_*` environment variables the bundled Tauri CLI itself reads — this
+// script does not pass credentials to it directly — but the CLI's own failure mode for a half-configured environment is
+// to either skip signing silently or fail deep inside a bundling step, neither of which says what to set. So this
+// script checks the environment itself first, with one actionable message, before spending the minutes a full build
+// takes. The credentials come from the gitignored `.env.secret` (see `.env.secret.example`), loaded below, or from the
+// environment it is started in.
+//
+// A signed build also makes the update archive the application's in-app updates download and signs it with the update
+// key (`TAURI_SIGNING_PRIVATE_KEY`, see `.env.secret.example`), which has nothing to do with Apple's signing: it is
+// required then and the archive and its signature are verified below. `tauri build` never holds that key: the
+// archive is packed and signed after it (`update-archive.mjs`), so that the build scripts and dependencies it runs
+// find no key in their environment. `--no-sign-update` stops after the archive, for a caller that signs it in a
+// step of its own with `sign-update.mjs`. `publish-release.mjs` publishes the result.
+//
+// It also *verifies* the result rather than trusting that signing/notarization happened just
+// because the right variables were set: see `verify()` below.
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { parseArgs } from "node:util";
+import { loadEnv } from "../../../scripts/lib/env.mjs";
+import {
+  appDir,
+  appVersion,
+  assertLayeredIcon,
+  findBundle,
+  tauriBuild,
+  UNIVERSAL_ARCHITECTURES,
+  UNIVERSAL_TARGET,
+  universalBundleDir as bundleDir,
+  verifySignature,
+  withoutUpdateKey,
+} from "./bundle.mjs";
+import { createUpdateArchive, removeUpdateArchives, signUpdateArchive } from "./update-archive.mjs";
+
+const { values: options } = parseArgs({ options: { "no-sign-update": { type: "boolean", default: false } } });
+const signUpdate = !options["no-sign-update"];
+
+// Read only `.env.secret`: a `VITE_` entry in `.env.local` would reach the bundle `tauri build` makes.
+// The variables are then in the Tauri CLI's inherited environment.
+loadEnv(".env.secret");
+
+// Three states, in increasing order of what Gatekeeper will accept:
+//
+// 1. No `APPLE_SIGNING_IDENTITY` at all — the only mode anyone can run on a machine with no
+//    Apple Developer ID certificate installed. Produces an unsigned `.app`/`.dmg`; the
+//    signing-dependent verifications below are skipped and that is announced, not silently
+//    assumed.
+// 2. `APPLE_SIGNING_IDENTITY` set but the App Store Connect API key trio incomplete — refused here,
+//    loudly, rather than handed to `tauri build` to fail on in whatever way it fails on it: a
+//    signed-but-not-notarized `.dmg` still trips Gatekeeper on a downloaded copy, so half this
+//    configuration is not a useful state to build in.
+// 3. Both present — signed and notarized, stapled, the actual release artifact.
+const signingIdentity = process.env.APPLE_SIGNING_IDENTITY;
+const hasAppleApiKeyAuth =
+  process.env.APPLE_API_KEY && process.env.APPLE_API_ISSUER && process.env.APPLE_API_KEY_PATH;
+
+// The Tauri CLI reads `APPLE_ID` + `APPLE_PASSWORD` + `APPLE_TEAM_ID` as a notarization credential
+// too, and which set it prefers is undocumented. This project notarizes through the API key only
+// (`notarizeDiskImage` below uses it for the `.dmg`), so with an Apple ID present the `.app` could
+// come out notarized under it and the `.dmg` under the key: one build, two identities. Only the
+// first two are refused — `APPLE_TEAM_ID` cannot select that route on its own, so its presence is
+// harmless. Refused rather than dropped from the child environment, so a credential somebody set on
+// purpose is never discarded silently.
+//
+// Presence is what counts here, not a non-empty value: the CLI reads these through Rust, which
+// reports an exported-but-empty `APPLE_ID=` as present, so it would reach the CLI as a credential
+// that a truthiness test had waved through. The loader instead treats an empty value as unset, so a
+// template's `KEY=` cannot become an empty credential. The two rules answer different questions and
+// must not be unified.
+const appleIdVariables = ["APPLE_ID", "APPLE_PASSWORD"].filter((name) =>
+  Object.hasOwn(process.env, name),
+);
+if (appleIdVariables.length > 0) {
+  throw new Error(
+    `${appleIdVariables.join(" and ")} found in the environment. This project notarizes ` +
+      "through the App Store Connect API key only (APPLE_API_KEY + APPLE_API_ISSUER + " +
+      "APPLE_API_KEY_PATH), and a second credential set could notarize the .app and the .dmg " +
+      "under different identities. Unset APPLE_ID and APPLE_PASSWORD, or remove them from " +
+      ".env.secret, for `pnpm release`. See apps/desktop/scripts/README.md.",
+  );
+}
+
+let mode;
+if (!signingIdentity) {
+  mode = "unsigned";
+  console.log(
+    "APPLE_SIGNING_IDENTITY is not set — building unsigned. Gatekeeper will block this on " +
+      "another machine; see the \"Release builds\" section of apps/desktop/scripts/README.md for what to " +
+      "set to produce a signed, notarized build, and .env.secret.example for the credentials.",
+  );
+} else if (!hasAppleApiKeyAuth) {
+  // The Tauri CLI itself also accepts `APPLE_API_KEY` + `APPLE_API_ISSUER` without
+  // `APPLE_API_KEY_PATH`, resolving the `.p8` from one of the well-known key directories — that is
+  // not good enough here because `notarizeDiskImage` below passes `--key` straight to
+  // `notarytool`, which needs an actual path, not a lookup to perform itself.
+  throw new Error(
+    "APPLE_SIGNING_IDENTITY is set but the App Store Connect API key is incomplete. Set " +
+      "APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_KEY_PATH (this script's own notarization step " +
+      "needs the key's path, not just its id) — a signed-but-not-notarized build still fails " +
+      "Gatekeeper on a downloaded copy, so this script refuses to produce one. See " +
+      "apps/desktop/scripts/README.md.",
+  );
+} else {
+  mode = "notarized";
+}
+
+// An unsigned build is for checking only and is never published, so it makes no update archive and needs no key. An
+// empty value counts as unset, as the loader treats it (see `APPLE_ID` above); the value is a path to the key file or
+// the key itself. Refused here, before the build, though the key is first used after it.
+if (mode !== "unsigned" && signUpdate && !process.env.TAURI_SIGNING_PRIVATE_KEY) {
+  throw new Error(
+    "A signed release signs the update archive with the update key, and TAURI_SIGNING_PRIVATE_KEY is not set. " +
+      "Set it to the path of the key file (the one `pnpm tauri signer generate` wrote) in .env.secret, and " +
+      "TAURI_SIGNING_PRIVATE_KEY_PASSWORD too when the key has a password. See .env.secret.example and " +
+      "apps/desktop/scripts/README.md.",
+  );
+}
+
+// A release runs on both Mac architectures: one universal `.app`, so one update archive serves every Mac. Their Rust
+// targets are added here rather than in `rust-toolchain.toml`, which would make every build that uses the toolchain,
+// the checks included, download them; adding a target that is already installed does nothing. It runs in the app
+// directory so that rustup adds them to the toolchain `rust-toolchain.toml` pins, the one the build uses.
+//
+// What follows `--` goes to cargo: a release is built `--locked`, so a `Cargo.lock` that no longer matches the
+// manifests fails the build instead of being rewritten under it.
+const TARGET = ["--target", UNIVERSAL_TARGET, "--", "--locked"];
+try {
+  execFileSync("rustup", ["target", "add", ...UNIVERSAL_ARCHITECTURES], { stdio: "inherit", cwd: appDir });
+} catch (err) {
+  throw new Error(
+    `Could not add the Rust targets ${UNIVERSAL_ARCHITECTURES.join(" and ")} a universal build needs ` +
+      `(${err.message}). The toolchain is managed by rustup: make sure it is on the PATH, add them with ` +
+      `\`rustup target add ${UNIVERSAL_ARCHITECTURES.join(" ")}\`, then run \`pnpm release\` again.`,
+    { cause: err },
+  );
+}
+
+// The archive is named without a version, so one an earlier signed build left would pass for this build's when
+// this one makes none (an unsigned build) or fails before writing it.
+removeUpdateArchives(path.join(bundleDir, "macos"));
+
+// `tauri.conf.json` has the build make no update archive; it is made after the build, so the key stays out of the
+// build's environment.
+tauriBuild(TARGET, withoutUpdateKey(process.env));
+if (mode !== "unsigned") {
+  const app = findBundle(path.join(bundleDir, "macos"), ".app");
+  const archive = createUpdateArchive(app);
+  if (signUpdate) signUpdateArchive(archive, appVersion(app));
+}
+
+verify();
+
+// Confirms what the build actually produced instead of assuming it from the environment
+// variables that went in — those only say what the Tauri CLI was *told* to do, not what it did.
+function verify() {
+  const app = findBundle(path.join(bundleDir, "macos"), ".app");
+  assertLayeredIcon(app);
+  const dmg = findBundle(path.join(bundleDir, "dmg"), ".dmg");
+  console.log(`found app bundle: ${app}`);
+  console.log(`found disk image: ${dmg}`);
+  if (mode !== "unsigned") {
+    // The update archive and its signature are what the in-app update downloads and checks; a build that
+    // lacks either cannot be published.
+    const macosDir = path.join(bundleDir, "macos");
+    console.log(`found update archive: ${findBundle(macosDir, ".app.tar.gz")}`);
+    if (signUpdate) console.log(`found update signature: ${findBundle(macosDir, ".app.tar.gz.sig")}`);
+  }
+
+  // `tauri build` signs the nested `octoboardd` sidecar itself, with the same identity and
+  // hardened runtime it gives the bundle around it, so no sign-inside-out step is needed here.
+  // This check stays because notarization rejects an app with any unsigned nested Mach-O, and
+  // that would otherwise only surface as a notarization rejection minutes later, with nothing
+  // pointing at which binary caused it.
+  const sidecarPath = path.join(app, "Contents", "MacOS", "octoboardd");
+  console.log(`checking the nested sidecar's signature (${sidecarPath}):`);
+  runReporting("codesign", ["-dv", "--verbose=4", sidecarPath]);
+
+  if (mode === "unsigned") {
+    console.log("unsigned build — skipping codesign/spctl/stapler verification.");
+    return;
+  }
+
+  console.log("verifying the app bundle's signature:");
+  verifySignature(app);
+  // Both `spctl` verdicts here are on files this machine just built, which carry no quarantine
+  // attribute, so they show the signature and notarization are accepted but prove little about a
+  // download. A real Gatekeeper test needs a copy that was quarantined on its way (another machine, a
+  // browser download, `xattr -w com.apple.quarantine`), assessed after it is opened.
+  console.log("checking Gatekeeper's own verdict on the app bundle:");
+  execFileSync("spctl", ["-a", "-vvv", app], { stdio: "inherit" });
+
+  notarizeDiskImage(dmg);
+  console.log("validating the staple on the disk image:");
+  execFileSync("xcrun", ["stapler", "validate", dmg], { stdio: "inherit" });
+  console.log("checking Gatekeeper's own verdict on the disk image:");
+  execFileSync(
+    "spctl",
+    ["-a", "-vvv", "-t", "open", "--context", "context:primary-signature", dmg],
+    { stdio: "inherit" },
+  );
+}
+
+// The Tauri CLI notarizes and staples the `.app` only — the `.dmg` it then builds around it comes
+// out signed but unnotarized, and a *downloaded* one is therefore refused at mount time
+// (`spctl`: "source=Unnotarized Developer ID") even though the app inside it is fine. So the disk
+// image goes through notarization a second time, on its own. This submission is quick: the app
+// inside is already notarized, so there is nothing new for Apple to scan.
+function notarizeDiskImage(dmg) {
+  console.log("notarizing the disk image (the Tauri CLI only notarizes the .app inside it):");
+  const credentials = [
+    "--key",
+    process.env.APPLE_API_KEY_PATH,
+    "--key-id",
+    process.env.APPLE_API_KEY,
+    "--issuer",
+    process.env.APPLE_API_ISSUER,
+  ];
+  execFileSync("xcrun", ["notarytool", "submit", dmg, ...credentials, "--wait"], {
+    stdio: "inherit",
+  });
+  console.log("stapling the notarization ticket to the disk image:");
+  execFileSync("xcrun", ["stapler", "staple", dmg], { stdio: "inherit" });
+}
+
+// `codesign -dv` exits non-zero for an unsigned binary — expected and informative in unsigned
+// mode, not a build failure — so this reports its output instead of letting a thrown error from
+// `execFileSync` stop the script.
+function runReporting(command, args) {
+  try {
+    execFileSync(command, args, { stdio: "inherit" });
+  } catch {
+    // Non-zero exit already printed its own diagnostic (codesign writes to stderr even when it
+    // is only reporting "not signed at all"); nothing more to add.
+  }
+}

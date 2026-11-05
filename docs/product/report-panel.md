@@ -173,8 +173,8 @@ not refused, and the rest of the page is shown without them:
 - elements that load or embed something: `<link>`, `<iframe>`, `<frame>`, `<object>`, `<embed>`,
   `<meta>`, `<base>`, `<audio>`, `<video>`, `<source>` and `<track>`; `<noscript>` and `<template>` go
   as well;
-- a form's `action`, `method`, `enctype` and `target`, and a button's `formaction`; `ping`, `srcset`
-  and `sizes`;
+- a form's `action`, `method`, `enctype` and `target`, and a button's `formaction`; `ping`, `srcset`,
+  `sizes` and `nonce`; `rel` on any element, which carries the resource hints;
 - any URL with a scheme — `http:`, `https:`, `mailto:`, `data:` and the like — and any scheme-relative
   `//host` URL, wherever a URL is given (`href`, `src` and the like). The one exception is a `data:`
   URL as an image's source.
@@ -192,15 +192,20 @@ script (a chart has to be static, for example inline SVG) — submit by itself, 
 the flat text fields of a form. A form never navigates the frame, and a page cannot navigate its own
 frame to an external URL either.
 
-**A page has no route to the network.** No `fetch`, `XMLHttpRequest`, WebSocket, `sendBeacon` or
-WebRTC, since no script of the page's own runs, and no connection opened or name looked up ahead of
-time by `<link rel="preconnect">` or `rel="dns-prefetch"`, since no `<link>` is kept. In the macOS
-application the window adds a second barrier underneath: it blocks non-image `http` and `https`
-requests. HTTP(S) images are allowed for Markdown documents elsewhere in the window; a report
-page's own content security policy restricts its images to `data:` URLs, so report images still
-cannot load from the network. Development builds also allow the local development server's
-resources. If the window's block cannot be set up at launch, the window opens without it; the
-page's cleaning, sandbox and content security policy still apply.
+**A page has no route to the network.** No `fetch`, `XMLHttpRequest`, WebSocket, `sendBeacon` or WebRTC,
+since no script of the page's own runs, and no connection opened or name looked up ahead of time by a
+resource hint (`preconnect`, `dns-prefetch`, `prefetch`, `prerender`, `modulepreload`, `preload`), since
+no `<link>` is kept, no element of the page keeps a `rel` attribute, and an element the cleaning does
+not know, a custom one, is dropped with only its text kept. In the desktop application the window adds a
+second barrier underneath: it blocks non-image `http` and `https` requests (on Windows by answering them
+with a 403). Under WebView2 that barrier sees requests, not the connections a browser opens ahead of
+them: a `preconnect` was measured opening its connection to an address the barrier refuses (no request
+was sent on it). Whether WebKit consults its rule list before a `preconnect` is not established. So on
+both systems it is the page's cleaning alone that keeps resource hints out. HTTP(S) images are allowed
+for Markdown documents elsewhere in the window; a report page's own content security policy restricts
+its images to `data:` URLs, so report images still cannot load from the network. Development builds also
+allow the local development server's resources. If the window's block cannot be set up at launch, the
+window opens without it; the page's cleaning, sandbox and content security policy still apply.
 
 Each page is rendered in a sandboxed frame of its own, with no access to the application around it or
 to any other page, and on a light surface whatever the window's appearance is — see "A report page
@@ -260,18 +265,20 @@ Neither this signal nor Escape's carries anything from the page.
 
 ## Window shortcuts inside a page
 
-In the macOS application, two of the window's keyboard shortcuts are passed to the window when pressed while focus is
-inside a page, on a history page too, and are kept from the page itself:
+In the desktop application, two of the window's keyboard shortcuts are passed to the window when pressed while focus
+is inside a page, on a history page too, and are kept from the page itself, each where the window has it:
 
 - Back and Forward's shortcuts, `Cmd+[` and `Cmd+]` by default, go back and forward (see "Keyboard shortcuts" in
-  `docs/product/navigation-history.md`).
-- Next and Previous console session's shortcuts, `Ctrl+Tab` and `Ctrl+Shift+Tab` by default, move to the next or
-  previous console session (see "The switch strip" in `docs/product/focus-mode.md`). The page never gets them, even
-  when the window has nowhere to move at that moment; a key held down is passed on once.
+  `docs/product/navigation-history.md`); in the macOS application only.
+- Next and Previous console session's shortcuts, `Ctrl+Tab` and `Ctrl+Shift+Tab` by default (`⌃Tab` and `⌃⇧Tab` on a
+  Mac), move to the next or previous console session (see "The switch strip" in `docs/product/focus-mode.md`); in the
+  desktop application on any system. The page never gets them, even when the window has nowhere to move at that
+  moment; a key held down is passed on once.
 
 As with Escape and `F6`, neither is passed on during an input method's composition, the signal is acted on only while
-focus is inside the page's frame, and it carries nothing from the page. In a browser neither is passed on, and the
-page keeps the browser's own handling of the keys.
+focus is inside the page's frame, and it carries nothing from the page. Where the window does not have a shortcut —
+in a browser neither, in the Windows application Back and Forward — it is not passed on, and the page keeps the
+browser's own handling of the keys.
 
 The keys are passed on only as the exact combinations they are bound to, as the window matches them (see "How a
 combination is written and matched" in `docs/product/keyboard-shortcuts.md`). Changing one of these four shortcuts

@@ -540,7 +540,7 @@ async fn the_users_own_switches_are_out_of_the_agents_reach() {
                 "auto_approve_account_switches": passed,
                 "auto_approve_handoffs": passed,
                 "ask_questions_as_choices": passed,
-                "default_clone_dir": "/tmp/clones",
+                "default_clone_dir": crate::test_support::host_path("/tmp/clones"),
             })),
         )
         .await
@@ -550,7 +550,10 @@ async fn the_users_own_switches_are_out_of_the_agents_reach() {
         assert!(updated.get("auto_approve_account_switches").is_none());
         assert!(updated.get("auto_approve_handoffs").is_none());
         assert!(updated.get("ask_questions_as_choices").is_none());
-        assert_eq!(updated["default_clone_dir"], "/tmp/clones");
+        assert_eq!(
+            updated["default_clone_dir"],
+            crate::test_support::host_path("/tmp/clones")
+        );
         assert_eq!(state.store.auto_approve_session_requests().unwrap(), stored);
         assert_eq!(state.store.auto_approve_resume_requests().unwrap(), stored);
         assert_eq!(state.store.auto_approve_account_switches().unwrap(), stored);
@@ -663,12 +666,15 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
             "provider_settings": { "codex": { "claude_compatibility": true } },
             "claude_compatibility": { "codex": true, "grok": false },
             "agent_tags": { "codex": [], "grok": ["research"] },
-            "default_clone_dir": "/tmp/clones",
+            "default_clone_dir": crate::test_support::host_path("/tmp/clones"),
         })),
     )
     .await
     .unwrap();
-    assert_eq!(updated["default_clone_dir"], "/tmp/clones");
+    assert_eq!(
+        updated["default_clone_dir"],
+        crate::test_support::host_path("/tmp/clones")
+    );
     assert_eq!(
         updated["auto_select_account"],
         before["auto_select_account"]
@@ -752,13 +758,16 @@ async fn the_quota_window_setting_is_out_of_the_agents_reach() {
         "update_settings",
         &arguments(json!({
             "auto_start_quota_windows": true,
-            "default_clone_dir": "/tmp/clones",
+            "default_clone_dir": crate::test_support::host_path("/tmp/clones"),
         })),
     )
     .await
     .unwrap();
     assert!(updated.get("auto_start_quota_windows").is_none());
-    assert_eq!(updated["default_clone_dir"], "/tmp/clones");
+    assert_eq!(
+        updated["default_clone_dir"],
+        crate::test_support::host_path("/tmp/clones")
+    );
     assert!(!state.store.auto_start_quota_windows().unwrap());
 }
 
@@ -771,11 +780,14 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
         &state,
         "a",
         "update_settings",
-        &arguments(json!({ "default_clone_dir": "/tmp/clones" })),
+        &arguments(json!({ "default_clone_dir": crate::test_support::host_path("/tmp/clones") })),
     )
     .await
     .unwrap();
-    assert_eq!(updated["default_clone_dir"], "/tmp/clones");
+    assert_eq!(
+        updated["default_clone_dir"],
+        crate::test_support::host_path("/tmp/clones")
+    );
     assert_eq!(updated["auto_delete_unresumable_archives"], true);
     let updated = call(
         &state,

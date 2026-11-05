@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { CodedError } from "../errors/codedError";
 import type { Event } from "../protocol";
 import { createDaemon } from ".";
-import type { NotificationRequest } from "./notifications";
+import type { WindowNotification } from "./notifications";
 
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
@@ -25,12 +25,12 @@ vi.mock("../daemon-client", async (importOriginal) => ({
 const notice = (session: string, code = "trust_answer_failed"): Event => ({ type: "session_notice", session, code, params: {}, message: "raw" });
 const snapshot = {
   type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-  agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+  agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, shell_terminals: [],
 } as unknown as Event;
 const prompt = (session: string): Event => ({ type: "trust_prompt", session, agent: "claude", project: "p", path: "/work/app", trust_dir: null });
 
 let daemon: ReturnType<typeof createDaemon>;
-let notifications: NotificationRequest[];
+let notifications: WindowNotification[];
 const receive = (event: Event) => {
   client.onEvents!([event]);
   client.onEvent!(event);

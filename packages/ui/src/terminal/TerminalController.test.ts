@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { IS_MAC } from "../input/keys";
+import type { HostFacts } from "../platform/host";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { TerminalController } from "./TerminalController";
 
 /** Enough of xterm for the controller: writes are parsed in a later task, in order, as xterm's are,
@@ -243,6 +244,11 @@ beforeEach(async () => {
     clearTimeout(frame);
     framesPending.delete(frame);
   });
+  await mountController(BROWSER_HOST);
+});
+
+/** Makes `controller` anew on `host`, its terminal `term` mounted in `container`. */
+async function mountController(host: HostFacts) {
   painted = [];
   copied = [];
   controller = new TerminalController(
@@ -252,12 +258,13 @@ beforeEach(async () => {
       copyToClipboard: (text) => copied.push(text),
     },
     "dark",
+    { host },
   );
   term = FakeTerminal.last;
   container = document.createElement("div");
   controller.mount(container);
   await settle();
-});
+}
 
 afterEach(() => {
   // Disposing the controller bumps its generation, so a paint frame still pending does nothing when it
@@ -480,7 +487,7 @@ describe("xterm's answers to queries in the output", () => {
 
   it("are not given for output of the connection before, while no reset holds them back", async () => {
     // Before its first frame after mounting, a reset of the screen holds nothing back.
-    const fresh = new TerminalController({ onStatusChange: () => {} }, "dark");
+    const fresh = new TerminalController({ onStatusChange: () => {} }, "dark", { host: BROWSER_HOST });
     fresh.attach("a", url("a"), false);
     const first = lastSocket();
     first.open();
@@ -589,12 +596,17 @@ describe("text a program asks to copy (OSC 52)", () => {
     expect(controller.programCopiedText).toBe("picked");
   });
 
-  it("stays on offer through a Control-click only on macOS, where it opens the editing menu", async () => {
-    await liveCopy("picked");
-    container.appendChild(term.textarea!);
-    term.textarea!.dispatchEvent(new MouseEvent("mousedown", { button: 0, ctrlKey: true, bubbles: true }));
-    expect(controller.programCopiedText).toBe(IS_MAC ? "picked" : undefined);
-  });
+  it.each([["macOS", MAC_HOST, "picked"], ["Windows", WINDOWS_HOST, undefined]] as const)(
+    "stays on offer through a Control-click only on macOS, where it opens the editing menu (%s)",
+    async (_name, host, offered) => {
+      controller.dispose();
+      await mountController(host);
+      await liveCopy("picked");
+      container.appendChild(term.textarea!);
+      term.textarea!.dispatchEvent(new MouseEvent("mousedown", { button: 0, ctrlKey: true, bubbles: true }));
+      expect(controller.programCopiedText).toBe(offered);
+    },
+  );
 
   it.each<[string, () => void]>([
     ["a key", () => term.press("x", "x")],

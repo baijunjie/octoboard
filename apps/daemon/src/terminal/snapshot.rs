@@ -1,16 +1,20 @@
-//! A bounded terminal state, flattened into ordinary scrolling output for archived previews, and
-//! the source of the mode preamble a live replay opens with once its ring has lost the start.
+//! A bounded terminal state, flattened into ordinary scrolling output for archived previews, the
+//! source of the mode preamble a live replay opens with once its ring has lost the start, and,
+//! once asked, of the title changes the program's output makes.
 
 use std::fmt::Write;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use alacritty_terminal::event::VoidListener;
+use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::{Dimensions, Grid};
 use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::{Config, TermMode};
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Processor, Timeout};
 use alacritty_terminal::Term;
+
+use crate::terminal::title::TitleChange;
 
 /// The UI retains this many lines too. Complete cells and their attributes survive even when
 /// the escape sequence that established them is no longer in the raw replay ring.
@@ -47,10 +51,73 @@ impl Timeout for ImmediateUpdates {
     }
 }
 
+/// What the parsed terminal reports as it takes the output in, of which only title changes and
+/// the answers to two queries are kept, each only once asked for
+/// ([`TerminalSnapshot::report_titles`], [`TerminalSnapshot::answer_queries`]). The rest (bells,
+/// other answers to the program's queries, clipboard requests) is dropped, as before there was
+/// anything to keep: the attached clients answer and act on the output themselves.
+#[derive(Clone, Default)]
+struct Events {
+    titles: Arc<Mutex<Option<Vec<TitleChange>>>>,
+    answers: Arc<Mutex<Option<Vec<u8>>>>,
+}
+
+impl Events {
+    fn titles(&self) -> std::sync::MutexGuard<'_, Option<Vec<TitleChange>>> {
+        self.titles.lock().expect("terminal events mutex poisoned")
+    }
+
+    fn answers(&self) -> std::sync::MutexGuard<'_, Option<Vec<u8>>> {
+        self.answers.lock().expect("terminal events mutex poisoned")
+    }
+}
+
+impl EventListener for Events {
+    fn send_event(&self, event: Event) {
+        let change = match event {
+            Event::Title(title) => Some(title),
+            Event::ResetTitle => None,
+            Event::PtyWrite(answer) => {
+                if let Some(answers) = self.answers().as_mut().filter(|_| is_kept(&answer)) {
+                    answers.extend_from_slice(answer.as_bytes());
+                }
+                return;
+            }
+            _ => return,
+        };
+        if let Some(titles) = self.titles().as_mut() {
+            titles.push(change);
+        }
+    }
+}
+
+/// Whether `answer`, which the parsed terminal writes to the program's input, is the answer to
+/// the primary device attributes query (`CSI c`: `CSI ? 6 c`) or to the cursor position report
+/// (`CSI 6 n`: `CSI row ; column R`). Every other answer it has (the secondary attributes, the
+/// status report, mode reports, the keyboard mode) is left to the clients.
+fn is_kept(answer: &str) -> bool {
+    if answer == "\x1b[?6c" {
+        return true;
+    }
+    answer
+        .strip_prefix("\x1b[")
+        .and_then(|rest| rest.strip_suffix('R'))
+        .and_then(|position| position.split_once(';'))
+        .is_some_and(|(row, column)| {
+            [row, column]
+                .iter()
+                .all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        })
+}
+
 pub struct TerminalSnapshot {
-    terminal: Term<VoidListener>,
+    terminal: Term<Events>,
     parser: Processor<ImmediateUpdates>,
     frozen: Option<Vec<u8>>,
+    events: Events,
+    /// The screen has shown something other than blanks since titles have been reported, so a
+    /// title is no longer one that precedes any drawing ([`Self::report_titles`]).
+    drawn: bool,
 }
 
 impl TerminalSnapshot {
@@ -59,6 +126,7 @@ impl TerminalSnapshot {
             rows: usize::from(rows.clamp(1, MAX_ROWS)),
             cols: usize::from(cols.clamp(2, MAX_COLS)),
         };
+        let events = Events::default();
         Self {
             terminal: Term::new(
                 // `kitty_keyboard` stays off: in alacritty_terminal, `push_keyboard_mode` panics
@@ -70,15 +138,74 @@ impl TerminalSnapshot {
                     ..Config::default()
                 },
                 &size,
-                VoidListener,
+                events.clone(),
             ),
             parser: Processor::new(),
             frozen: None,
+            events,
+            drawn: false,
         }
     }
 
     pub fn process(&mut self, bytes: &[u8]) {
-        self.parser.advance(&mut self.terminal, bytes);
+        if self.drawn || self.events.titles().is_none() {
+            self.parser.advance(&mut self.terminal, bytes);
+            return;
+        }
+        // Until the screen shows anything, a byte at a time, so that a title is known to precede
+        // every drawing or not whatever reads the output was cut into. A byte draws something or
+        // completes a title, never both, and what it draws is on the cursor's row once it has.
+        for (at, byte) in bytes.iter().enumerate() {
+            self.parser
+                .advance(&mut self.terminal, std::slice::from_ref(byte));
+            if self.cursor_row_shows_anything() {
+                self.drawn = true;
+                self.parser.advance(&mut self.terminal, &bytes[at + 1..]);
+                return;
+            }
+            self.events.titles().iter_mut().for_each(Vec::clear);
+        }
+    }
+
+    /// Keeps the title changes the output makes from now on, for [`Self::take_titles`], leaving out
+    /// any made before the screen shows anything but blanks: a host that renders what the program
+    /// draws can set a title of its own as it starts (conhost names the console after the program it
+    /// runs), and the program has drawn nothing by then.
+    pub fn report_titles(&mut self) {
+        self.events.titles().get_or_insert_with(Vec::new);
+    }
+
+    /// Keeps the answers the parsed terminal gives to the output's primary device attributes and
+    /// cursor position queries from now on, for [`Self::take_answers`].
+    pub fn answer_queries(&mut self) {
+        self.events.answers().get_or_insert_with(Vec::new);
+    }
+
+    /// The answers to those queries the output has made since the last call, written one after
+    /// the other; none until [`Self::answer_queries`] has asked for them.
+    pub fn take_answers(&mut self) -> Vec<u8> {
+        self.events
+            .answers()
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+
+    /// The title changes the output has made since the last call, in order; none until
+    /// [`Self::report_titles`] has asked for them.
+    pub fn take_titles(&mut self) -> Vec<TitleChange> {
+        self.events
+            .titles()
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+
+    /// Whether any cell of the row the cursor is on shows something other than a blank.
+    fn cursor_row_shows_anything(&self) -> bool {
+        let grid = self.terminal.grid();
+        let cells = &grid[grid.cursor.point.line];
+        (0..grid.columns()).any(|col| !matches!(cells[Column(col)].c, ' ' | '\t'))
     }
 
     /// Whether bracketed paste is on now, read off the parsed state so that a sequence split
@@ -168,6 +295,13 @@ impl TerminalSnapshot {
         self.visible_text_where(|cell, next| {
             !faint(cell) && !(cell.flags.contains(Flags::INVERSE) && next.is_some_and(faint))
         })
+    }
+
+    /// [`Self::visible_text`] with every cell that is not drawn in inverse video shown as a space:
+    /// what a menu marks as its selected row by swapping foreground and background, as Codex
+    /// marks the option its cursor is on.
+    pub fn visible_text_inverse(&self) -> String {
+        self.visible_text_where(|cell, _| cell.flags.contains(Flags::INVERSE))
     }
 
     /// The visible rows, a cell `shown` rejects written as a space. `shown` is given the cell
@@ -379,6 +513,25 @@ mod tests {
             lines.pop();
         }
         lines.join("\n")
+    }
+
+    #[test]
+    fn only_the_device_attributes_and_cursor_position_answers_are_kept_and_only_when_asked_for() {
+        let queries = b"\x1b[c\x1b[0c\x1b[>c\x1b[5n\x1b[?2004$p\x1b[?u\x1b]11;?\x07";
+        let mut terminal = TerminalSnapshot::new(24, 80);
+        terminal.process(queries);
+        assert!(
+            terminal.take_answers().is_empty(),
+            "nothing is kept unasked"
+        );
+
+        terminal.answer_queries();
+        terminal.process(queries);
+        assert_eq!(terminal.take_answers(), b"\x1b[?6c\x1b[?6c");
+        assert!(terminal.take_answers().is_empty());
+
+        terminal.process(b"abc\x1b[6n");
+        assert_eq!(terminal.take_answers(), b"\x1b[1;4R");
     }
 
     #[test]

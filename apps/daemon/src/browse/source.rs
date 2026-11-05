@@ -5,10 +5,7 @@
 //! is checked here again before anything is read; nothing a client sends is ever used as a
 //! directory.
 
-use std::fs;
 use std::io;
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -19,21 +16,24 @@ use crate::git::isolated::IsolatedGit;
 use crate::git::layout::{admin_dir, find_dot_git};
 use crate::git::run::GitError;
 use crate::git::worktrees::parse_worktree_list;
+use crate::platform::fs::{self as platform, Links, Stat};
+use crate::platform::names;
 use crate::protocol::{error_code, CodedError};
 use crate::wire_path::{self, RelPath};
 
-/// A directory's or a file's identity on its filesystem, as sent on the wire: its device and inode
-/// numbers, and its creation time where the filesystem records one. It survives a rename, and
+/// A directory's or a file's identity on its filesystem, as sent on the wire: its file system
+/// identity, and its creation time where the filesystem records one. It survives a rename, and
 /// changes when the thing is removed and another put in its place — the creation time is what
 /// tells the two apart on a filesystem that hands a freed inode number straight out again.
-pub fn file_id(metadata: &fs::Metadata) -> String {
-    let born = metadata
+pub fn file_id(stat: &Stat) -> String {
+    let born = stat
+        .metadata
         .created()
         .ok()
         .and_then(|at| at.duration_since(std::time::UNIX_EPOCH).ok());
     match born {
-        Some(born) => format!("{}:{}:{}", metadata.dev(), metadata.ino(), born.as_nanos()),
-        None => format!("{}:{}", metadata.dev(), metadata.ino()),
+        Some(born) => format!("{}:{}", stat.identity.token(), born.as_nanos()),
+        None => stat.identity.token(),
     }
 }
 
@@ -46,9 +46,11 @@ pub struct ProjectRoot {
 
 /// Resolves the project's stored path, following symbolic links, to a directory that exists.
 pub fn resolve_root(path: &str) -> Result<ProjectRoot> {
-    let canonical = fs::canonicalize(path).map_err(|err| io_failure(Path::new(path), &err))?;
-    let metadata = fs::metadata(&canonical).map_err(|err| io_failure(&canonical, &err))?;
-    if !metadata.is_dir() {
+    let canonical =
+        crate::hostfs::canonical(path).map_err(|err| io_failure(Path::new(path), &err))?;
+    let metadata =
+        platform::stat(&canonical, Links::Follow).map_err(|err| io_failure(&canonical, &err))?;
+    if !metadata.metadata.is_dir() {
         return Err(unavailable(&canonical, NOT_A_DIRECTORY, "not a directory"));
     }
     Ok(ProjectRoot {
@@ -98,8 +100,14 @@ pub fn discover(root: &ProjectRoot, git: &BrowseGit, cancel: &AtomicBool) -> Res
                 // One value per call, so the single trailing newline is the only one that is not
                 // part of the path.
                 let path = stdout.strip_suffix(b"\n").unwrap_or(&stdout);
-                let path = Path::new(std::ffi::OsStr::from_bytes(path));
-                Ok(fs::canonicalize(path).map_err(|err| format!("{}: {err}", path.display())))
+                let Some(path) = names::path_from_name_bytes(path) else {
+                    return Ok(Err(format!(
+                        "git printed a path this host cannot use: {}",
+                        String::from_utf8_lossy(path)
+                    )));
+                };
+                Ok(crate::hostfs::canonical(&path)
+                    .map_err(|err| format!("{}: {err}", path.display())))
             }
             Err(GitError::Exited { stderr, .. }) => Ok(Err(stderr)),
             Err(err) => Err(git_error(err)),
@@ -117,20 +125,17 @@ pub fn discover(root: &ProjectRoot, git: &BrowseGit, cancel: &AtomicBool) -> Res
         Ok(path) => path,
         Err(message) => return Ok(Discovery::Unreadable(message)),
     };
-    let Some(scope) = root
-        .canonical
-        .strip_prefix(&toplevel)
-        .ok()
-        .and_then(|scope| RelPath::from_bytes(scope.as_os_str().as_bytes().to_vec()))
-    else {
+    let Some(scope) = RelPath::below(&toplevel, &root.canonical) else {
         return Ok(Discovery::Unreadable(format!(
             "{} is not inside the worktree at {}",
             root.canonical.display(),
             toplevel.display()
         )));
     };
-    let common = fs::metadata(&common_dir).map_err(|err| io_failure(&common_dir, &err))?;
-    let admin = fs::metadata(&git_dir).map_err(|err| io_failure(&git_dir, &err))?;
+    let common =
+        platform::stat(&common_dir, Links::Follow).map_err(|err| io_failure(&common_dir, &err))?;
+    let admin =
+        platform::stat(&git_dir, Links::Follow).map_err(|err| io_failure(&git_dir, &err))?;
     Ok(Discovery::Repository(Repository {
         id: file_id(&common),
         common_dir,
@@ -177,8 +182,10 @@ pub fn worktrees(
         if record.bare || record.prunable {
             continue;
         }
-        let path = Path::new(std::ffi::OsStr::from_bytes(&record.path));
-        let Ok(root) = fs::canonicalize(path) else {
+        let Some(path) = names::path_from_name_bytes(&record.path) else {
+            continue;
+        };
+        let Ok(root) = crate::hostfs::canonical(&path) else {
             continue;
         };
         let Some(admin) = admin_dir(&root) else {
@@ -188,7 +195,7 @@ pub fn worktrees(
         if !main && admin.parent() != Some(linked_parent.as_path()) {
             continue;
         }
-        let Ok(metadata) = fs::metadata(&admin) else {
+        let Ok(metadata) = platform::stat(&admin, Links::Follow) else {
             continue;
         };
         found.push(Worktree {
@@ -227,8 +234,15 @@ pub fn find_worktree(
 /// without anyone choosing it, so a scope that resolves anywhere else is unavailable in that
 /// worktree.
 pub fn scope_root(root: &Path, scope: &RelPath) -> Result<ProjectRoot> {
-    let candidate = root.join(scope.as_path());
-    let canonical = match fs::canonicalize(&candidate) {
+    let Some(below) = scope.host_path() else {
+        return Err(unavailable(
+            root,
+            MISSING,
+            "the project's directory is not in this worktree",
+        ));
+    };
+    let candidate = root.join(below);
+    let canonical = match crate::hostfs::canonical(&candidate) {
         Ok(path) => path,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             return Err(unavailable(
@@ -247,8 +261,9 @@ pub fn scope_root(root: &Path, scope: &RelPath) -> Result<ProjectRoot> {
             "the path to the project's directory goes through a link in this worktree",
         ));
     }
-    let metadata = fs::metadata(&canonical).map_err(|err| io_failure(&canonical, &err))?;
-    if !metadata.is_dir() {
+    let metadata =
+        platform::stat(&canonical, Links::Follow).map_err(|err| io_failure(&canonical, &err))?;
+    if !metadata.metadata.is_dir() {
         return Err(unavailable(&candidate, NOT_A_DIRECTORY, "not a directory"));
     }
     Ok(ProjectRoot {
@@ -268,7 +283,7 @@ const OTHER: &str = "other";
 /// A source directory that cannot be read from, for the `cause` given. Its `path` is absolute, as a
 /// wire path.
 fn unavailable(path: &Path, cause: &str, detail: &str) -> anyhow::Error {
-    let shown = wire_path::encode(path.as_os_str().as_bytes());
+    let shown = wire_path::encode(&names::name_bytes(path.as_os_str()));
     CodedError::raised(
         error_code::SOURCE_UNAVAILABLE,
         format!("{shown} is unavailable: {detail}"),
@@ -298,7 +313,7 @@ pub fn unavailable_cause(err: &anyhow::Error) -> &'static str {
 
 /// An I/O failure on a source directory, as the code a client words it by.
 fn io_failure(path: &Path, err: &io::Error) -> anyhow::Error {
-    let shown = wire_path::encode(path.as_os_str().as_bytes());
+    let shown = wire_path::encode(&names::name_bytes(path.as_os_str()));
     if err.kind() == io::ErrorKind::PermissionDenied {
         return CodedError::raised(
             error_code::PERMISSION_DENIED,
