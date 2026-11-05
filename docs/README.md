@@ -129,9 +129,9 @@ Where to start, by question:
 
 - [Window layout](product/window-layout.md) — the chrome, top bar, rail, panes, minimum size and responsive layout.
 - [Pane docking and resizing](product/pane-docking.md) — docking capacity, pane widths, resizing, hiding and hover previews.
-- [The floating sidebar](product/sidebar-drawer.md) — the sidebar as a floating overlay when it cannot dock, and below 594 px
-  the rail coming in with it as one card.
-- [Touch swipes](product/touch-swipes.md) — below 594 px, finger swipes that open, close and switch the floating sidebar
+- [The floating sidebar](product/sidebar-drawer.md) — the sidebar as a floating overlay when it cannot dock, and at 768 px
+  and below the rail coming in with it as one card.
+- [Touch swipes](product/touch-swipes.md) — at 768 px and below, finger swipes that open, close and switch the floating sidebar
   and right-pane panels.
 - [Window size and position](product/window-size-and-position.md) — where the window opens across launches.
 - [Sidebar](product/sidebar.md) — the console header, session and project lists, and how selection works.

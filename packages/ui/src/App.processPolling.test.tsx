@@ -14,6 +14,7 @@ import type { ProcessTree, Project } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
+import { matchesWidthQuery } from "./test/viewport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const renders = vi.hoisted(() => ({ app: 0, rows: 0 }));
@@ -43,8 +44,8 @@ async function mountApp(phone: boolean) {
   renders.app = 0;
   renders.rows = 0;
   vi.useFakeTimers({ now: Date.UTC(2026, 9, 28, 12) });
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !phone && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
-  for (const [key, value] of Object.entries({ "--rail-width": "48px", "--breakpoint-docked": "1168px", "--breakpoint-phone": "782px" })) document.documentElement.style.setProperty(key, value);
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, phone ? 390 : 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  for (const [key, value] of Object.entries({ "--rail-width": "48px", "--breakpoint-tablet": "768px", "--breakpoint-phone": "390px" })) document.documentElement.style.setProperty(key, value);
   const console_ = consoleOf("c-poll", "Main");
   const project = projectOf("p-poll", console_.id, "Website");
   const session = sessionOf("s-poll", console_.id, project.id, "Fix header", "idle");
@@ -66,7 +67,7 @@ async function mountApp(phone: boolean) {
     expect(vi.getTimerCount()).toBe(0);
     vi.useRealTimers();
     vi.unstubAllGlobals();
-    for (const key of ["--rail-width", "--breakpoint-docked", "--breakpoint-phone"]) document.documentElement.style.removeProperty(key);
+    for (const key of ["--rail-width", "--breakpoint-tablet", "--breakpoint-phone"]) document.documentElement.style.removeProperty(key);
     localStorage.clear();
   });
   const sessionRow = [...document.querySelectorAll<HTMLElement>("[data-region=sidebar] [role=button]")].filter((item) => item.textContent?.includes(session.title!)).at(-1);

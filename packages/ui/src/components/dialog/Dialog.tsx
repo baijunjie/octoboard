@@ -281,19 +281,10 @@ function DialogFrame({
       onOpenChange={(open) => !open && dismissable && onClose()}
       data-react-aria-top-layer={topLayer ? "true" : undefined}
     >
-      {/* On phones the viewer fills the container without margins or rounded corners.
-          HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
-          little of a narrow window for code; the viewer asks for a 16px margin there and the 40px
-          one above it. The narrow margin is a `max-docked:` utility, not an `sm:` one paired with a
-          `docked:` twin: a `docked:` utility loses to an `sm:` twin on the same property, and the
-          band `max-docked:` covers instead is one where HeroUI's own 40px rule is beaten anyway,
-          since it sits in HeroUI's components layer and this is a Tailwind utility. The 40px above
-          the breakpoint is then HeroUI's. The height is the window's own less those
-          margins, and less the connection banner's strip, which the container also ends above
-          (`style.css`): without that the strip, stacked above the dialog as well as above the
-          backdrop, would cross the dialog's own bottom edge and swallow the presses landing
-          there. */}
-      <Frame.Container size={containerSize} className={!fullScreen && size === "viewer" ? "max-docked:p-4" : undefined}>
+      {/* The viewer fills narrow screens. Between tablet and desktop it keeps a 16px margin;
+          from desktop up HeroUI supplies 40px. Its height also leaves room for the bottom
+          banners, matching the container's inset in `style.css`. */}
+      <Frame.Container size={containerSize} className={!fullScreen && size === "viewer" ? "max-desktop:p-4" : undefined}>
         <Frame.Dialog
           {...(failing && { role: "alertdialog" })}
           aria-describedby={alerting ? bodyId : undefined}
@@ -301,7 +292,7 @@ function DialogFrame({
             fullScreen
               ? "control-fills overflow-hidden p-0"
               : size === "viewer"
-                ? "control-fills overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
+                ? "control-fills overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none desktop:h-[calc(100dvh-80px-var(--bottom-chrome-height))] desktop:w-[min(1440px,calc(100vw-80px))]"
                 : size === "wide"
                   ? "control-fills max-w-3xl"
                   : "control-fills"

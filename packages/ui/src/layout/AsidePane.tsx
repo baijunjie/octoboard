@@ -51,7 +51,7 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
  * (`panels/useFloatingPanel.ts`), positioned in `main` beneath the top bar, padded by `--peek-gap`
  * all round as there is no width grip, and above the scrim that dismisses it (`z-35`, the scrim's
  * `z-30`). It leaves a strip of the scrim beside it to dismiss it by, a rail's width, or 24px in a
- * viewport 360px wide or less (a small phone, or the website's preview frame on one) where the
+ * viewport below 390px (a compact phone) where the
  * panel needs the room more, and passes presses in its gaps through to the scrim. It fades into
  * place and back out of it, sliding in from the end edge and back to it (`useFadeUp`, replayed when
  * another panel takes its place, at once under reduced motion), staying inert while it goes, with no hover's card taking its place until it
@@ -94,7 +94,7 @@ export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLay
       data-floating-panel={open ? "" : undefined}
       // A panel on its way out takes no presses and no focus.
       inert={(floating && !open) || (peek !== undefined && !dock.insetShown)}
-      // The pane fades; each card in it moves (below `phone` sliding from the end edge, else rising by
+      // The pane fades; each card in it moves (at tablet width and below sliding from the end edge, else rising by
       // 4% of its own height, `style.css`), so the card's frame, background and shadow move with its
       // content and the percentage is the card's.
       data-card-motion={peek ? motionOf(dock.insetShown, dock.preparingInset) : floating ? motionOf(fade.shown, fade.preparing) : undefined}
@@ -109,7 +109,7 @@ export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLay
           : folded
             ? "h-full"
             : floating
-              ? `pointer-events-none absolute inset-y-0 end-0 z-35 max-w-[calc(100%-var(--rail-width))] [@media(max-width:360px)]:max-w-[calc(100%-24px)] transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "opacity-0"}${fade.preparing ? " transition-none" : ""}`
+              ? `pointer-events-none absolute inset-y-0 end-0 z-35 max-w-[calc(100%-var(--rail-width))] max-phone:max-w-[calc(100%-24px)] transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "opacity-0"}${fade.preparing ? " transition-none" : ""}`
               : "h-full shrink"
       }`}
     >

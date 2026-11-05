@@ -5,7 +5,7 @@ import { keepsEscape } from "../components/focus/keepsEscape";
 import { useLatest } from "../components/hooks/useLatest";
 import { isImeKey } from "../input/imeKey";
 import { CANNOT_HOVER } from "../input/touchInput";
-import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
+import { useIsNarrow, useMediaQuery } from "../components/hooks/breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "../components/focus/selectors";
@@ -180,7 +180,7 @@ export function usePaneToggles({
   drawer?: readonly [boolean, (open: boolean) => void];
 }): PaneToggles {
   const closeFloating = useLatest(closeFloatingPanel);
-  const mobile = !useMediaQuery(() => minWidthQuery("phone"));
+  const mobile = useIsNarrow();
   // A device whose primary input cannot hover (a phone or a tablet's touch screen) floats no pane in:
   // a tap on a toggle or an avatar is a press, never a rest of the pointer.
   const canHover = !useMediaQuery(() => CANNOT_HOVER);

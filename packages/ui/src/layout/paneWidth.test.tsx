@@ -158,10 +158,8 @@ it("keeps a floating width above 720 across docking and viewport changes", () =>
   expect(test.aside().width).toBe(1000);
 });
 
-// Below this breakpoint a two-column floating group no longer fits beside the rail.
-it("sets the phone breakpoint to the rail and the minimum two-column floating group", () => {
+it("keeps the minimum two-column group consistent with the panel spacing tokens", () => {
   const style = readFileSync(join(import.meta.dirname, "../style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const token = (name: string) => Number(new RegExp(`--${name}:\\s*([\\d.]+)px`).exec(style)?.[1]);
   expect(MIN_TWO_COLUMN_ASIDE_WIDTH).toBe(2 * MIN_PANEL_COLUMN_WIDTH + token("panel-stack-gap") + token("panel-grip-gap") + token("peek-gap"));
-  expect(token("breakpoint-phone")).toBe(token("rail-width") + MIN_TWO_COLUMN_ASIDE_WIDTH);
 });

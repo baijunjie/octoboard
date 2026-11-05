@@ -9,6 +9,7 @@ import { PlatformProvider } from "./platform/react";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
+import { matchesWidthQuery } from "./test/viewport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -27,16 +28,16 @@ vi.mock("./terminal/TerminalController", () => ({
 }));
 
 it.each(["sidebar", "terminal"] as const)("opens console session settings from the %s before launching", async (entry) => {
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   onTestFinished(() => {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   const console_ = consoleOf("c-main", "Main");
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_] }),

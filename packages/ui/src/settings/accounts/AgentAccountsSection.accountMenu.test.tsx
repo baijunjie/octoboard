@@ -15,6 +15,7 @@ import { TestHost } from "../../test/TestHost";
 import { registerSettingsLauncher } from "../settingsLauncher";
 import { accountLogins, request, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
 import { buttonNamed, chooseItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
+import { matchesWidthQuery } from "../../test/viewport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -806,13 +807,13 @@ it.each([false, true])("keeps an active login for navigation requesting Add agen
 it("lets Manage accounts recovery dismiss a stale editor and focus the real Settings section", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   onTestFinished(() => {
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
   });
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   onTestFinished(() => { vi.unstubAllGlobals(); });
   const daemon = startDaemon();
   let nonce = 1;

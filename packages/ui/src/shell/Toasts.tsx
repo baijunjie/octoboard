@@ -19,9 +19,9 @@ import { useLatest } from "../components/hooks/useLatest";
 /** How long a notice stays before it dismisses itself. */
 const NOTICE_DURATION_MS = 5000;
 
-/** Matches a window at least as wide as HeroUI's toast breakpoint (its `sm:`); the narrow window is
+/** Matches a window at least as wide as HeroUI's toast breakpoint (its `tablet:`); the narrow window is
  * the one it does not match. */
-const WIDE_QUERY = `(min-width: ${TOAST_BREAKPOINT}px)`;
+const WIDE_QUERY = `(width > ${TOAST_BREAKPOINT}px)`;
 
 /** The toasts on screen, by what makes two of them identical (kind, message, session), to the
  * queue's key for each. Module-level because the queue is: the stack unmounts and remounts when

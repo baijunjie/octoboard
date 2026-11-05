@@ -13,6 +13,7 @@ import { testDaemon } from "../test/testDaemon";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { Toasts } from "./Toasts";
+import { matchesWidthQuery } from "../test/viewport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,11 +25,11 @@ class FakeResizeObserver {
   disconnect(): void {}
 }
 
-/** A `matchMedia` that answers the toast breakpoint's `min-width` query for a window `width` wide. */
+/** A `matchMedia` that answers the toast breakpoint's width query for a window `width` wide. */
 function stubWidth(width: number): void {
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: width >= Number(/min-width: (\d+)px/.exec(query)?.[1]),
+    matches: matchesWidthQuery(query, width),
     addEventListener: () => {},
     removeEventListener: () => {},
   }));
@@ -67,7 +68,7 @@ it.each(["model_change_did_not_stop", "model_change_did_not_come_up"])("names th
 });
 
 // The toast region only mounts once a toast is queued, so the placement is read off a shown one.
-it("puts the toasts at the top in a window narrower than 640px and at the bottom end otherwise", () => {
+it("puts the toasts at the top through iPad portrait and at the bottom end above 768px", () => {
   // The toast queue is a module-level singleton that closes a toast on a timer of its own, which an
   // unmounted root cannot cancel; faked timers let the test run those exits to the end itself.
   vi.useFakeTimers();
@@ -76,8 +77,10 @@ it("puts the toasts at the top in a window narrower than 640px and at the bottom
   });
   for (const [width, expected] of [
     [390, "toast-region--top"],
-    [639, "toast-region--top"],
-    [640, "toast-region--bottom-end"],
+    [767, "toast-region--top"],
+    [768, "toast-region--top"],
+    [768.5, "toast-region--bottom-end"],
+    [769, "toast-region--bottom-end"],
     [1280, "toast-region--bottom-end"],
   ] as const) {
     stubWidth(width);

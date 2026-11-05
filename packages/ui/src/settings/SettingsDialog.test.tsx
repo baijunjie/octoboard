@@ -7,6 +7,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { SettingsDialog } from "./SettingsDialog";
 import type { SettingsNavigation } from "./sections";
+import { matchesWidthQuery } from "../test/viewport";
 
 beforeEach(() => {
   const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -40,17 +41,28 @@ vi.mock("./AgentBehaviorSection", () => ({ AgentBehaviorSection: () => <p>Agent 
 vi.mock("./NotificationsSection", () => ({ NotificationsSection: () => <p>Notifications</p> }));
 vi.mock("./ConfigurationSection", () => ({ ConfigurationSection: () => <p>Configuration</p> }));
 
-function mount(first: SettingsNavigation) {
+function mount(first: SettingsNavigation, width = 1440) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const show = (navigation: typeof first) => act(() => root.render(<SettingsDialog navigation={navigation} onClose={() => {}} />));
   taken.count = 0;
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
+  const listeners = new Set<() => void>();
+  vi.stubGlobal("matchMedia", (media: string) => ({
+    media,
+    get matches() { return matchesWidthQuery(media, width); },
+    addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    addListener() {}, removeListener() {},
+  }));
+  const resize = (next: number) => act(async () => {
+    width = next;
+    for (const listener of [...listeners]) listener();
+  });
   onTestFinished(() => {
     vi.unstubAllGlobals();
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   show(first);
@@ -59,8 +71,19 @@ function mount(first: SettingsNavigation) {
     container.remove();
   });
   const selected = () => document.querySelector('[role="tab"][aria-selected="true"]');
-  return { show, selected };
+  return { show, selected, resize };
 }
+
+it("keeps iPad portrait in horizontal navigation and switches above 768px without losing the selected section", async () => {
+  const { selected, resize } = mount({ nonce: 1, section: "git", addAgent: false }, 768);
+  const orientation = () => document.querySelector('[role="tablist"]')?.getAttribute("aria-orientation");
+  expect(orientation()).toBe("horizontal");
+  for (const width of [767, 768, 768.5, 769, 1024, 1440, 768]) {
+    await resize(width);
+    expect(orientation()).toBe(width <= 768 ? "horizontal" : "vertical");
+    expect(selected()?.textContent).toContain("Git");
+  }
+});
 
 it("opens on the section it is asked for and takes the Add agent request up once", async () => {
   const { selected } = mount({ nonce: 1, section: "accounts", addAgent: true });

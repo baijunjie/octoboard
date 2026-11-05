@@ -42,7 +42,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Fresh install, detected supported tools",
-    description: "New console is the primary action beside the secondary Import configuration button, in a centred row that wraps on narrow windows. Claude Code and Grok Build carry a soft success Installed badge with a check, and Codex a neutral Not detected one, each tool with its provider icon. Narrow or shorten the window to inspect wrapping and scrolling: with no console there is no sidebar drawer to bring the rail in, so below 594px it stays in the row beside the content as the way to New console and Settings, and the content panel keeps its rounded top corner at the rail.",
+    description: "New console is the primary action beside the secondary Import configuration button, in a centred row that wraps on narrow windows. Claude Code and Grok Build carry a soft success Installed badge with a check, and Codex a neutral Not detected one, each tool with its provider icon. Narrow or shorten the window to inspect wrapping and scrolling: with no console there is no sidebar drawer to bring the rail in, so at 768px and narrower it stays in the row beside the content as the way to New console and Settings, and the content panel keeps its rounded top corner at the rail.",
     state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
   },
   {

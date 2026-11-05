@@ -10,6 +10,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   vi.useRealTimers();
   document.body.replaceChildren();
+  document.body.removeAttribute("data-sidebar-dockable");
 });
 
 function exiting(text: string): HTMLElement {
@@ -224,8 +225,8 @@ it("floatPane fails where the toggle floats in no pane, as one whose pane is doc
   await done;
 });
 
-it("floatPane opens its mobile card without looking for the absent group trigger", async () => {
-  windowOfWidth(420);
+it.each([390, 768])("floatPane opens its mobile card at %ipx without looking for the absent group trigger", async (width) => {
+  windowOfWidth(width);
   document.body.innerHTML = '<button aria-label="Show report panel"></button>';
   const pressed = vi.fn();
   document.querySelector("button")!.addEventListener("click", pressed);
@@ -299,9 +300,8 @@ const SHOW_SESSIONS = format("en", "titleBar.sidebar.show");
 const HIDE_SESSIONS = format("en", "titleBar.sidebar.hide");
 
 function windowOfWidth(width: number): void {
-  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: width >= Number(/min-width: ([\d.]+)px/.exec(query)![1]) }));
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: width <= Number(/width <= ([\d.]+)px/.exec(query)![1]) }));
 }
 afterEach(() => vi.unstubAllGlobals());
 
@@ -318,8 +318,8 @@ function drawerWithToggle(): { toggle: HTMLButtonElement; hub: HTMLButtonElement
   return { toggle, hub: document.getElementById("hub") as HTMLButtonElement, drawer };
 }
 
-it("press opens the sidebar's drawer first for a control that is only inside it, below the docked breakpoint", async () => {
-  windowOfWidth(420);
+it("press opens the sidebar's drawer first for a control that is only inside it, at the tablet boundary", async () => {
+  windowOfWidth(768);
   const { hub, drawer } = drawerWithToggle();
   const pressed = vi.fn();
   hub.addEventListener("click", pressed);
@@ -353,7 +353,7 @@ it("press follows a floating sidebar's layout marker even in a wide window", asy
   document.body.removeAttribute("data-sidebar-dockable");
 });
 
-it("closeDrawer leaves a sidebar docked by the actual layout alone below the old breakpoint", async () => {
+it("closeDrawer leaves a sidebar docked by the actual layout alone independently of the viewport breakpoint", async () => {
   windowOfWidth(1168);
   const { toggle } = drawerWithToggle();
   document.body.setAttribute("data-sidebar-dockable", "true");
@@ -425,11 +425,13 @@ it("showPanel waits for a toggle that is drawn late and fails where there is non
 
 it.each([
   [420, true],
+  [768, true],
+  [769, false],
   [1440, false],
 ])("closeDrawer closes the drawer when it is open in a window of %i px and does nothing docked", async (width, closes) => {
   windowOfWidth(width);
   const { toggle } = drawerWithToggle();
-  if (width < 1394) toggle.click();
+  if (width <= 768) toggle.click();
   else toggle.setAttribute("aria-label", HIDE_SESSIONS);
   const done = createUi(document, "en").closeDrawer();
   await vi.advanceTimersByTimeAsync(500);
@@ -439,6 +441,7 @@ it.each([
 
 it.each([true, false])("closeDrawer uses Escape for a medium sidebar only while expanded=%s", async (expanded) => {
   windowOfWidth(800);
+  document.body.setAttribute("data-sidebar-dockable", "false");
   document.body.innerHTML = `<button aria-label="${SHOW_SESSIONS}" aria-expanded="${expanded}"></button>`;
   const toggle = document.querySelector("button")!;
   const clicked = vi.fn();

@@ -14,7 +14,7 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   chosen lives in the URL. On a scenario whose frame shows a modal (every viewer scenario) the modal pulls focus back
   into the frame, so the shell's scenario list and controls can only be used with the mouse there (a known limitation).
   Scenarios are listed by functional area, normal previews first and exceptional second. The chosen scenario renders in
-  an iframe (`gallery-frame.html`, `frame.tsx`), so the width control decides pane docking from the available space and the `phone` breakpoint for
+  an iframe (`gallery-frame.html`, `frame.tsx`), so the width control decides pane docking from the available space and the inclusive `tablet` breakpoint for
   real. The frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…` with `held=1`
   and `chrome=1` as needed, and, for a file-viewer scenario, `markdown=tailwind|github|newsprint|latex` (it stands over
   the scenario's own `preferences.markdownStyle`).
@@ -59,8 +59,10 @@ The Width presets use CSS viewport pixels: Desktop (1440), Tablet landscape (102
 is a representative desktop window width. These presets change only the width; Height remains independent.
 
 Use the numeric width field for other devices or layout boundaries, such as 983/984 (one right column with the sidebar), 1253/1254 (two columns with the sidebar),
-993/994 (two columns with the sidebar hidden), and 593/594. Device presets do
-not define the app's responsive breakpoints. A scenario with `minWidth` raises a narrower selection to that minimum,
+993/994 (two columns with the sidebar hidden), and 768/769 (single-panel versus multi-panel interaction). The fixed
+viewport boundaries are 390, 768 and 1024px: 768px and narrower uses the drawer and one panel at a time, below 390px
+uses compact spacing, and desktop presentation starts at 1024px. Pane docking is calculated independently from the
+space required by the open columns. A scenario with `minWidth` raises a narrower selection to that minimum,
 so a view that only exists in a docked window remains docked; the numeric field shows the actual preview width.
 
 Nothing in `packages/ui/src/fixtures/` or `packages/ui/src/website-preview/` imports this directory (enforced by the
@@ -90,11 +92,11 @@ new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
   disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`.
 - **Widths.** Steps run at any width the page's width control picks (the frame reloads at the chosen width), so they
   name controls as they would in a docked window. A session row or rail control that sits only in the sidebar's closed
-  drawer (inert while the sidebar floats for the rows, below `phone` for the rail) makes the lookup press the drawer's toggle
-  first. A panel of the right pane is not reached so: below `phone` the panels float, none is open and a closed one is
+  drawer (inert while the sidebar floats for the rows, at 768px and narrower for the rail) makes the lookup press the drawer's toggle
+  first. A panel of the right pane is not reached so: at 768px and narrower the panels float, none is open and a closed one is
   not in the page, so a step that presses a control in one calls `ui.showPanel("files" | "terminal" | "report")` after
   selecting the session. Where a session pick leaves the drawer up over the terminal area the target is in (the floating
-  sidebar, from 594 px while it cannot dock or is hidden), follow the pick with `ui.closeDrawer()`.
+  sidebar, above 768 px while it cannot dock or is hidden), follow the pick with `ui.closeDrawer()`.
 - **Width and height fields.** Write no `width` unless the window itself is part of the scenario (the page opens at
   1440). A copy of a scenario made to open the drawer first, or because its layout differs at a width, earns nothing:
   choose the width with the control, and write the pointer ("choose 560px to see the rows stack") in the description of
@@ -102,7 +104,7 @@ new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
   default is outside of and steps cannot get there at whatever width the control picks (a swipe, or the open drawer card
   itself, where pressing the drawer's toggle is fine because the open drawer is the target:
   `focus-console-session-drawer`, `focus-project-drawer`); pick a width inside that band and say in the title or
-  description what it buys. What exists only from a breakpoint up (a card floated in by hovering a toggle, from 594 px;
+  description what it buys. What exists only from a breakpoint up (a card floated in by hovering a toggle, above 768 px;
   a docked pane's width grip and Maximize panel, from the width its visible panes need) states `minWidth` instead, the
   narrowest window it exists in, which a width chosen with the control or by `--width` is raised to; a scenario carries
   one or the other, and a comment beside `minWidth` says why. Write a `height` only where a step needs the window too

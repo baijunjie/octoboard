@@ -19,7 +19,7 @@ const TERMINAL_ONLY: Preferences = { panelStacks: { project: { open: ["terminal"
 const WIDE_TERMINAL: Preferences = { ...TERMINAL_ONLY, asideWidth: 560 };
 
 const openWebsite = (ui: Ui) => ui.press(ui.session("Fix the summary layout"));
-/** Reveals Terminal when its floating group is hidden; below 594px, opens its mobile card. */
+/** Reveals Terminal when its floating group is hidden; at 768px and narrower, opens its mobile card. */
 const showTerminal = (ui: Ui) => ui.showPanel("terminal");
 /** Opens the session, then lets the Files panel read its folder, which draws nothing until it has. */
 const openWebsiteWithFiles = [openWebsite, (ui: Ui) => ui.wait(400)];
@@ -49,7 +49,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal panel with one tab",
     description:
-      "The Terminal panel alone in the right pane, as the top bar's Terminal toggle (pressed) opens it. Its first row runs only the Terminal name, Maximize panel and Close panel. The selected shell and its always-visible close mark sit on the left of a separate row below; New terminal and the terminal actions menu stay fixed on that row's right. The selected tab is a rounded rectangle with a blue outline and tinted fill. Terminal offers maximize even as the only panel. The shell draws on the card's own terminal background, inset as the agent terminal is. Choose Phone (390px) to see it float over the agent terminal as a card, with a dimmed strip of the terminal beside it, and no Maximize panel, which a floating card does not offer; Escape closes the card only outside the shell: typing in the shell leaves it open. At 360px or less the strip narrows from 48px to 24px to leave the card room, and the first row still shows the Terminal name and panel controls, with the tab and terminal controls kept on the second row. Compare desktop, 420px and 360px with the width controls.",
+      "The Terminal panel alone in the right pane, as the top bar's Terminal toggle (pressed) opens it. Its first row runs only the Terminal name, Maximize panel and Close panel. The selected shell and its always-visible close mark sit on the left of a separate row below; New terminal and the terminal actions menu stay fixed on that row's right. The selected tab is a rounded rectangle with a blue outline and tinted fill. Terminal offers maximize even as the only panel. The shell draws on the card's own terminal background, inset as the agent terminal is. Choose Phone (390px) to see it float over the agent terminal as a card, with a dimmed strip of the terminal beside it, and no Maximize panel, which a floating card does not offer; Escape closes the card only outside the shell: typing in the shell leaves it open. Below 390px the strip narrows from 48px to 24px to leave the card room, and the first row still shows the Terminal name and panel controls, with the tab and terminal controls kept on the second row. Compare Desktop, Phone (390px) and 389px with the width controls.",
     state: stateOf(oneShell),
     preferences: TERMINAL_ONLY,
     steps: [openWebsite, (ui) => ui.showPanel("terminal")],
@@ -165,7 +165,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal panel with no terminals",
     description:
-      "The panel open for a project with no shell: \"No terminals\", the line saying a terminal runs your own shell for this project, and New terminal, which starts one. The header keeps the Terminal title and panel controls. The second row remains below it with New terminal alone on the right; the terminal actions menu disappears when the last tab closes. Compare desktop, 420px and 360px with the width controls. Opening the panel from the top bar's toggle starts a shell on its own, so this is the panel as it stands when the last tab was closed.",
+      "The panel open for a project with no shell: \"No terminals\", the line saying a terminal runs your own shell for this project, and New terminal, which starts one. The header keeps the Terminal title and panel controls. The second row remains below it with New terminal alone on the right; the terminal actions menu disappears when the last tab closes. Compare Desktop, Phone (390px) and 389px with the width controls. Opening the panel from the top bar's toggle starts a shell on its own, so this is the panel as it stands when the last tab was closed.",
     state: stateOf(oneShell),
     preferences: TERMINAL_ONLY,
     steps: [openWebsite, showTerminal, ...terminalClosed("close-last-shell", "Close the last terminal", "sh-1").steps],
@@ -199,8 +199,8 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Floating Terminal card",
-    // Hover reveals a pane from 594px up; below that only a press opens a single mobile card.
-    minWidth: 594,
+    // Hover reveals a pane above 768px; at that width and narrower only a press opens a single mobile card.
+    minWidth: 769,
     description:
       "The Terminal card floated in over the agent terminal by hovering the Terminal toggle with no panel open, the pointer now resting on the card. Only the Terminal card floats, with the same rounded corners, hairline edge and shadow as the floating Files card, over the agent terminal, which shows in the gaps around it. The Terminal toggle is not pressed: pressing it opens the panel, which docks when its minimum width fits beside the visible sidebar and a 400px terminal, or stays in the floating group.",
     state: stateOf(oneShell),

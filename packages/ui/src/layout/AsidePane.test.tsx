@@ -70,7 +70,7 @@ it("floats an open panel over the terminal's area in a window too narrow to dock
   test.render(true, false, undefined, true, "files");
   expect(test.pane()).toBe(pane);
   expect(pane.className).toContain("absolute inset-y-0 end-0");
-  expect(pane.className).toContain("max-w-[calc(100%-var(--rail-width))] [@media(max-width:360px)]:max-w-[calc(100%-24px)]");
+  expect(pane.className).toContain("max-w-[calc(100%-var(--rail-width))] max-phone:max-w-[calc(100%-24px)]");
   // No width grip beside it: the gap is the same all round.
   expect(pane.className).toContain("p-(--peek-gap)");
   expect(pane.className).not.toMatch(/fixed|min-w-|invisible/);

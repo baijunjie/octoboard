@@ -19,7 +19,7 @@ import { closeIdleShellTerminals, startShellTerminal } from "../terminal/shell/s
 /**
  * The window's panes around the agent terminal: the sidebar, as a docked column, a drawer or a
  * peek, the right pane's stack of its owner's panels, docked, folded or floating over the terminal,
- * and the rail, which comes in with the drawer on a phone. It hands back what the layout, the
+ * and the rail, which comes in with the drawer at tablet width and below. It hands back what the layout, the
  * toggles, the F6 cycle and the panes' widths read, and the handlers the top bar and the swipes use;
  * `revealArchive` clears what covers the agent terminal's area for the archive view.
  */
@@ -63,7 +63,7 @@ export function usePaneLayout({
   // A session's kind has no toggle and no panel while its session has no pages to show.
   const unavailableKinds = unavailableKindsOf(ownerKind, reportSessionId);
   const availableKinds = ownerKind ? OWNER_KINDS[ownerKind].filter((kind) => !unavailableKinds.includes(kind)) : [];
-  // Too narrow a window to dock the pane (a phone): one panel at a time floats over the agent
+  // At tablet width and below: one panel at a time floats over the agent
   // terminal, which keeps the whole width (`useAsideFloats`, `panels/useFloatingPanel.ts`). The
   // drawer's open state is kept here, as the floating panel has to know it before the pane toggles
   // run.
@@ -213,7 +213,7 @@ export function usePaneLayout({
   useEffect(() => {
     if (peekedId && peeking && !consoles.has(peekedId)) leaveConsole();
   }, [peekedId, peeking, consoles]);
-  // Below the `phone` breakpoint the rail leaves the row and comes in with the sidebar's drawer; the
+  // At the tablet boundary and below the rail leaves the row and comes in with the sidebar's drawer; the
   // welcome screen has no drawer, and the rail stays as the way to New console and Settings.
   const railOnDemand = !noConsoles;
   const railAway = railOnDemand && asideFloats && !panes.sidebarOpen;

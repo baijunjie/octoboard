@@ -10,6 +10,7 @@ import { TestHost } from "../test/TestHost";
 import { account, accountLogins, settings, startDaemon } from "./accounts/agentAccountsSectionTestState";
 import { SettingsDialog } from "./SettingsDialog";
 import type { SettingsSectionId } from "./sections";
+import { matchesWidthQuery } from "../test/viewport";
 
 vi.mock("../components/icons/AgentIcon", async (importOriginal) => (await import("./accounts/agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./accounts/agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -32,10 +33,10 @@ beforeEach(() => {
   settings.added_agents = ["claude", "codex", "grok"];
   settings.accounts = [account("claude-work", "claude"), account("codex-work", "codex")];
   accountLogins.length = 0;
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   onTestFinished(() => {
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
   });
 });
@@ -49,7 +50,7 @@ function openSettings(navigation: { account?: string; addAgent?: boolean }, stri
   const opener = document.body.appendChild(document.createElement("button"));
   opener.focus();
   // Stubbed after `framesAsTimers`, which puts every global back when the test finishes.
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {

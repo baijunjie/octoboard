@@ -2,7 +2,7 @@ import { FIXTURE_AGENTS } from "./fixtureProviders";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitStatusLabel";
 import { translatorFor, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
-import { minWidthQuery } from "../components/hooks/breakpoint";
+import { maxWidthQuery } from "../components/hooks/breakpoint";
 import { panelId } from "../panels/stackState";
 import type { PanelKind } from "../layout/panelKind";
 import type { AccountQuota, Agent, AgentAvailability, Event as DaemonEvent, GitStatus } from "../protocol";
@@ -538,11 +538,11 @@ export async function settleMotion(doc: Document, limit: number): Promise<void> 
 export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-  /** Whether the window is narrower than `breakpoint`. A document whose stylesheet does not declare the breakpoint (a
-   * unit test's) is never narrow. */
-  const below = (breakpoint: "docked" | "phone"): boolean => {
+  /** Whether the window uses the single-panel tablet layout. A document whose stylesheet does not declare the
+   * breakpoint (a unit test's) is never narrow. */
+  const mobile = (): boolean => {
     try {
-      return !(doc.defaultView ?? window).matchMedia(minWidthQuery(breakpoint)).matches;
+      return (doc.defaultView ?? window).matchMedia(maxWidthQuery("tablet")).matches;
     } catch {
       return false;
     }
@@ -552,12 +552,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
    * A fixture driver without an app root falls back to the declared breakpoint. */
   const sidebarFloats = (): boolean => {
     const layout = doc.querySelector("[data-sidebar-dockable]");
-    return layout ? layout.getAttribute("data-sidebar-dockable") === "false" : below("docked");
+    return layout ? layout.getAttribute("data-sidebar-dockable") === "false" : mobile();
   };
 
   /** Whether the last lookup (`findAll`) found nothing it could press but did find, in the sidebar's closed drawer,
-   * what it was looking for. When the sidebar cannot dock its session rows are in the drawer and, below the
-   * phone one, the rail too, both inert until the drawer is open; a step names such a control as it would in a docked
+   * what it was looking for. When the sidebar cannot dock its session rows are in the drawer and, at tablet widths
+   * and narrower, the rail too, both inert until the drawer is open; a step names such a control as it would in a docked
    * window, and `waitFor` then opens the drawer, as the person pressing the toggle first would, so that no step needs
    * to know the window's width. It does so only once the lookup has found nothing else for `DRAWER_REACH_AFTER_MS`,
    * so a control that is merely slow to render is not met by a drawer opened for a same-named one inside it. */
@@ -1015,7 +1015,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await expectAnchoredTooltip(`The label of the menu item matching ${String(item)}`, tooltip);
     },
     async floatPane(toggle, mobilePanel) {
-      if (mobilePanel && below("phone")) return this.showPanel(mobilePanel);
+      if (mobilePanel && mobile()) return this.showPanel(mobilePanel);
       const control = await waitFor(() => find(toggle), `Nothing to hover matching ${String(toggle)}`);
       const paneId = control.getAttribute("data-pane-toggle") ?? control.getAttribute("aria-controls");
       pointAt(control);
@@ -1256,7 +1256,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (!sidebarFloats()) return;
       const [show, hide] = [t("titleBar.sidebar.show"), t("titleBar.sidebar.hide")];
       const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to close the drawer with`);
-      if (below("phone")) {
+      if (mobile()) {
         if (nameOf(toggle) === hide) await clickWhenFound(() => toggle, "");
       } else if (toggle.getAttribute("aria-expanded") === "true") {
         toggle.focus();

@@ -83,12 +83,12 @@ Forward moving to a place in another console likewise show that place's own sess
 
 ## Previewing a console from the rail
 
-At 594 px and wider, while the sidebar floats automatically or its docked column is hidden, resting
-the mouse on a console's avatar floats the sidebar in showing **that** console — when it comes up, how it looks and when
-it goes away are in "A hidden pane floats in on hover" in `docs/product/pane-docking.md`. The sidebar's toggle in the
-top bar floats it in as well, but always showing the **current** console, so that way in is never a preview: a pointer
-moving from an avatar onto the toggle puts the floating card back on the current console. For any console other than the
-current one, resting on its avatar is a **preview**:
+Above 768 px, while the sidebar floats automatically or its docked column is hidden, resting the mouse on a console's
+avatar floats the sidebar in showing **that** console — when it comes up, how it looks and when it goes away are in "A
+hidden pane floats in on hover" in `docs/product/pane-docking.md`. The sidebar's toggle in the top bar floats it in as
+well, but always showing the **current** console, so that way in is never a preview: a pointer moving from an avatar
+onto the toggle puts the floating card back on the current console. For any console other than the current one, resting
+on its avatar is a **preview**:
 
 - It shows the console's own view — the header, its console sessions and its projects — never a focus mode, which
   belongs to the current console only. Resting on the current console's avatar shows the sidebar as it is, focus mode

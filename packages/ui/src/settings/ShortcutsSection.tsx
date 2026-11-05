@@ -128,13 +128,13 @@ export function ShortcutsSection(): React.ReactElement {
   return (
     <div ref={root}>
       <StatusAnnouncer text={announcement && (announcement.count % 2 === 0 ? `${announcement.text}\u00A0` : announcement.text)} />
-      <div className="flex flex-col items-start gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="flex flex-col items-start gap-3 pb-2 tablet:flex-row tablet:items-center tablet:justify-between tablet:gap-6">
         <p className="min-w-0 text-sm text-app-muted">{t("settings.shortcuts.intro")}</p>
         {customised && (
           <Button
             size="sm"
             variant="secondary"
-            className="shrink-0 max-sm:self-end-safe"
+            className="shrink-0 max-tablet:self-end-safe"
             onPress={() => {
               // The button goes away with the change, so focus is handed to the list first.
               root.current?.querySelector<HTMLElement>("[data-shortcut-change]")?.focus();

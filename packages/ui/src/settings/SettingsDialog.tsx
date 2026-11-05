@@ -12,7 +12,7 @@ import { tryEachFrame } from "../components/focus/tryEachFrame";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
-import { minWidthQuery, useIsNarrow, useMediaQuery } from "../components/hooks/breakpoint";
+import { useIsNarrow } from "../components/hooks/breakpoint";
 import { AboutSection } from "./AboutSection";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./accounts/AgentAccountsSection";
@@ -60,11 +60,11 @@ const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
  * padding's; `stickyHeadingHeight` is the height of such a heading (see `FadedScroller`). */
 function SectionPanel({ id, stickyHeadingHeight, children }: { id: string; stickyHeadingHeight?: number; children: React.ReactNode }): React.ReactElement {
   return (
-    <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col max-phone:p-0">
+    <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col max-tablet:p-0">
       <FadedScroller
         stickyHeadingHeight={stickyHeadingHeight}
         stickySurface="overlay"
-        className="min-h-0 flex-1 px-4 py-(--section-padding) [--section-padding:calc(var(--spacing)*4)] max-phone:px-3 max-phone:[--section-padding:calc(var(--spacing)*3)] docked:px-8 docked:[--section-padding:calc(var(--spacing)*6)]"
+        className="min-h-0 flex-1 px-4 py-(--section-padding) [--section-padding:calc(var(--spacing)*4)] max-phone:px-3 max-phone:[--section-padding:calc(var(--spacing)*3)] desktop:px-8 desktop:[--section-padding:calc(var(--spacing)*6)]"
       >{children}</FadedScroller>
     </Tabs.Panel>
   );
@@ -72,7 +72,7 @@ function SectionPanel({ id, stickyHeadingHeight, children }: { id: string; stick
 
 /**
  * The settings: a large modal over the whole window, the sections as vertical tabs on the start
- * side and the selected one beside it. Below the `docked` breakpoint the modal fills the window
+ * side and the selected one beside it. At the `tablet` breakpoint and below the modal fills the window
  * and the sections become a row of tabs along the top, scrolling sideways when they overflow. It
  * is a plain modal, so everything under it, the terminal included, stays mounted and sized.
  *
@@ -101,7 +101,7 @@ export function SettingsDialog({
 }): React.ReactElement {
   const t = useT();
   const isNarrow = useIsNarrow();
-  const fullScreen = !useMediaQuery(() => minWidthQuery("phone"));
+  const fullScreen = isNarrow;
   const [sectionId, setSectionId] = useState<string>(navigation?.section ?? initialSection);
   const addAgentOnOpen = navigation?.addAgent ?? false;
   // Both ask the Agent accounts section to take focus, in place of the section's tab.
@@ -160,12 +160,12 @@ export function SettingsDialog({
 
   return (
     <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()}>
-      {/* Native full size removes phone margins and uses an edge-to-edge transition. Wider
+      {/* Native full size removes narrow-screen margins and uses an edge-to-edge transition. Wider
           windows retain their inset layout; the container ends above the bottom notices. */}
-      <Modal.Container size={fullScreen ? "full" : undefined} className={fullScreen ? undefined : "max-docked:p-4"}>
+      <Modal.Container size={fullScreen ? "full" : undefined} className={fullScreen ? undefined : "max-desktop:p-4"}>
         <Modal.Dialog
           aria-label={t("settings.title")}
-          className={`control-fills flex flex-col overflow-hidden p-0 ${fullScreen ? "" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] docked:w-[min(1000px,calc(100vw-96px))] docked:flex-row"}`}
+          className={`control-fills flex flex-col overflow-hidden p-0 ${fullScreen ? "" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[min(1000px,calc(100vw-32px))] max-w-none desktop:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] desktop:w-[min(1000px,calc(100vw-96px))] tablet:flex-row"}`}
         >
           <span ref={markerRef} hidden />
           <TitledControl title={t("common.close")}>
@@ -184,11 +184,11 @@ export function SettingsDialog({
                 `self-start` keeps the column at its own height rather than the dialog's, which is
                 what bounds how many sections fit — see `SETTINGS_SECTION_IDS`. */}
             <LocalizedTabListContainer
-              className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-phone:ms-3 max-phone:mt-2 max-phone:max-w-[calc(100%-3.75rem)] max-docked:w-max max-docked:max-w-[calc(100%-4rem)] max-docked:self-start docked:my-6 docked:me-0 docked:w-48 docked:self-start"
+              className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-phone:ms-3 max-phone:mt-2 max-phone:max-w-[calc(100%-3.75rem)] max-tablet:w-max max-tablet:max-w-[calc(100%-4rem)] max-tablet:self-start tablet:my-4 tablet:me-0 tablet:w-48 tablet:self-start desktop:my-6"
             >
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
-              <Tabs.List aria-label={t("settings.sections")} className="max-docked:min-w-0 max-docked:p-1.5 docked:w-full">
+              <Tabs.List aria-label={t("settings.sections")} className="max-tablet:min-w-0 max-tablet:p-1.5 tablet:w-full">
                 {/* Hovered labels take the foreground colour for clear feedback. Each tab keeps its own
                     composited layer while the indicator moves inside WebKit's masked scroller. */}
                 {SETTINGS_SECTION_IDS.map((id) => {
@@ -197,7 +197,7 @@ export function SettingsDialog({
                     <Tabs.Tab
                       key={id}
                       id={id}
-                      className="transform-gpu justify-start gap-2 whitespace-nowrap hover:text-foreground max-docked:w-auto max-docked:flex-none max-docked:scroll-mx-1.5"
+                      className="transform-gpu justify-start gap-2 whitespace-nowrap hover:text-foreground max-tablet:w-auto max-tablet:flex-none max-tablet:scroll-mx-1.5"
                       ref={id === sectionId ? attachSelected : undefined}
                       {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
                     >

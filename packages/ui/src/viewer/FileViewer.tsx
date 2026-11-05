@@ -9,7 +9,7 @@ import { RowIconGroup } from "../components/controls/RowControls";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { Dialog } from "../components/dialog/Dialog";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
+import { useIsNarrow } from "../components/hooks/breakpoint";
 import { displayWirePath, wireBaseName } from "../format/wirePath";
 import { useRendererScope } from "./code/codeRenderer";
 import { changeStatus, type ViewerSubject } from "./content";
@@ -59,7 +59,7 @@ export function FileViewer({
   location?: Omit<MarkdownLocation, "path">;
 }): React.ReactElement {
   const t = useT();
-  const fullScreen = !useMediaQuery(() => minWidthQuery("phone"));
+  const fullScreen = useIsNarrow();
   const language = useCurrentLanguage();
   // The user's last choice, kept across files and restarts (`diffLayout`).
   const layout = diffLayout.useValue();
@@ -202,7 +202,7 @@ export function FileViewer({
       resetKey={subject.key}
     >
       <NoticeSlotsProvider>
-        <div ref={headerRef} data-viewer-description="" className="flex min-w-0 shrink-0 flex-col groove-b px-6 max-phone:px-3 text-xs leading-5">
+        <div ref={headerRef} data-viewer-description="" className="flex min-w-0 shrink-0 flex-col groove-b px-6 max-tablet:px-3 text-xs leading-5">
           {/* Every details row but the last takes the whole width above. The last row shares a line with
               the controls, which end it bottom-aligned; its basis is its content width, so the controls
               wrap to a line of their own above the content only when that row does not fit beside them.

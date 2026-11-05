@@ -15,7 +15,7 @@ import { useFadeUp } from "../layout/paneDockMotion";
  * viewport, so the bar's toggles, the rail's controls and the banner's Retry button stay reachable
  * while a drawer is open instead of being dimmed and swallowing the press into a close instead.
  *
- * The drawer's scrim leaves the rail clear while it is in the row; below the `phone` breakpoint the
+ * The drawer's scrim leaves the rail clear while it is in the row; at the tablet boundary and below the
  * rail is part of the drawer's card (`Rail`'s `onDemand`), and the scrim covers the whole width
  * behind it. A panel's (`clearOfRail` false) does so at every width, as the rail is out of the window
  * there and the strip it would leave beside the panel could not dismiss anything.
@@ -45,7 +45,7 @@ export function Scrim({ open, label, onClose, clearOfRail = true }: { open: bool
       inert={!open}
       style={{ top: "var(--top-chrome-height)", bottom: "var(--bottom-chrome-height)" }}
       onTransitionEnd={fade.onTransitionEnd}
-      className={`fixed ${clearOfRail ? "start-(--rail-width) max-phone:start-0" : "start-0"} end-0 z-30 bg-black/40 sidebar-docked:hidden transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "pointer-events-none opacity-0"}${fade.preparing ? " transition-none" : ""}`}
+      className={`fixed ${clearOfRail ? "start-(--rail-width) max-tablet:start-0" : "start-0"} end-0 z-30 bg-black/40 sidebar-docked:hidden transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "pointer-events-none opacity-0"}${fade.preparing ? " transition-none" : ""}`}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClose}
     />

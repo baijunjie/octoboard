@@ -113,7 +113,7 @@ export function SidebarFrame({
   const drawerClassName = dock.inset
     ? `sidebar-docked:rounded-xl ${drawerClass("floating", open, dock.insetShown)}${dock.preparingInset ? " sidebar-docked:transition-none" : ""}`
     : `${drawerClass("drawer", open)} sidebar-docked:h-full`;
-  const handleOverflow = dock.inset ? "phone:overflow-visible!" : "phone:sidebar-floating:overflow-visible!";
+  const handleOverflow = dock.inset ? "tablet:overflow-visible!" : "tablet:sidebar-floating:overflow-visible!";
 
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another
@@ -164,8 +164,8 @@ export function SidebarFrame({
           // included; at or above it the `sidebar-docked:` variants in `drawerClass` put it back exactly
           // where it always was, a plain row sibling, regardless of `open`. With the docked sidebar
           // hidden, that column is clipped away; only a hover on a console's avatar (`dock.inset`)
-          // makes it the fixed card. Drawers share that card's inset from the chrome. Below the `phone`
-          // breakpoint the card also holds the rail, which lies over its padded start.
+          // makes it the fixed card. Drawers share that card's inset from the chrome. At tablet width and
+          // below the card also holds the rail, which lies over its padded start.
           // Starting below `--top-chrome-height` leaves the top bar, and
           // with it the sidebar toggle, visible while the drawer is open; ending above
           // `--bottom-chrome-height` does the same for the connection banner and the update notice.
@@ -194,9 +194,9 @@ export function SidebarFrame({
           id={PANE_ID.sidebar}
           data-pane="sidebar"
           data-region="sidebar"
-          // The width cap keeps a strip at the end to tap to dismiss. Below `phone` the card carries the
+          // The width cap keeps a strip at the end to tap to dismiss. At tablet width and below the card carries the
           // rail inside its width, so the cap holds the rail and the sidebar together.
-          className={`flex max-phone:w-[calc(var(--spacing)*70+var(--rail-width))]! max-phone:ps-(--rail-width) sidebar-floating:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 ${handleOverflow} ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " sidebar-docked:invisible" : ""}`}
+          className={`flex max-tablet:w-[calc(var(--spacing)*70+var(--rail-width))]! max-tablet:ps-(--rail-width) sidebar-floating:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 ${handleOverflow} ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " sidebar-docked:invisible" : ""}`}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
           onPointerDownCapture={peek ? onPeekPress : undefined}
@@ -207,7 +207,7 @@ export function SidebarFrame({
           <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[inherit]">
             {children}
           </div>
-          <div className={dock.inset ? "hidden phone:contents" : "hidden phone:contents sidebar-docked:hidden"}>
+          <div className={dock.inset ? "hidden tablet:contents" : "hidden tablet:contents sidebar-docked:hidden"}>
             <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} floating />
           </div>
         </nav>

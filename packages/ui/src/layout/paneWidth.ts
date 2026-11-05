@@ -3,7 +3,7 @@ import { useState, useSyncExternalStore } from "react";
 import { MIN_PANEL_COLUMN_WIDTH, MIN_SINGLE_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
 import { createPersistedPreference } from "../preferences/persistedPreference";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
-import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
+import { useIsNarrow } from "../components/hooks/breakpoint";
 
 /** The two panes whose docked width the user can change. */
 export type PaneSide = "sidebar" | "aside";
@@ -152,10 +152,9 @@ export function usePaneWidth(side: PaneSide, docked: DockedPanes, asideMin = PAN
   };
 }
 
-/** Whether the window needs mobile interaction: a two-column floating group no longer fits
- * beside the rail. Below this CSS breakpoint, one panel floats at a time and swipes switch it. */
+/** At tablet width and below, one panel floats at a time and swipes switch it. */
 export function useAsideFloats(): boolean {
-  return !useMediaQuery(() => minWidthQuery("phone"));
+  return useIsNarrow();
 }
 
 /** Sidebar precedence keeps navigation steady as the open right-hand group grows. Closed panes
@@ -163,8 +162,9 @@ export function useAsideFloats(): boolean {
 export function usePaneDocking(sidebarRequested: boolean, asideMinimum: number) {
   const [railWidth] = useState(railWidthPx);
   const width = useSyncExternalStore(subscribeToViewport, () => viewportWidth);
-  const sidebarDockable = width >= railWidth + PANES.sidebar.min + TERMINAL_FLOOR;
+  const narrow = useIsNarrow();
+  const sidebarDockable = !narrow && width >= railWidth + PANES.sidebar.min + TERMINAL_FLOOR;
   const sidebarReserve = sidebarRequested && sidebarDockable ? PANES.sidebar.min : 0;
-  const asideDockable = width >= railWidth + sidebarReserve + TERMINAL_FLOOR + asideMinimum;
+  const asideDockable = !narrow && width >= railWidth + sidebarReserve + TERMINAL_FLOOR + asideMinimum;
   return { sidebarDockable, asideDockable };
 }

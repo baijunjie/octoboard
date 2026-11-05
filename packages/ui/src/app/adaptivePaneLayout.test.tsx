@@ -1,27 +1,44 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import type { Console } from "../protocol";
 import { usePaneLayout } from "./usePaneLayout";
 import { usePaneWidths } from "./usePaneWidths";
+import { matchesWidthQuery } from "../test/viewport";
 
 vi.mock("../process/useProcessPanel", () => ({ useProcessPanel: () => ({ trees: [] }) }));
 
 it("docks only the open columns, protects 400px and restores preferences after resizing", () => {
+  const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const actEnvironment = globals.IS_REACT_ACT_ENVIRONMENT;
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  const previousWidth = Object.getOwnPropertyDescriptor(document.documentElement, "clientWidth");
   document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  const listeners = new Set<() => void>();
   const viewport = (width: number) => act(() => {
     Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, value: width });
     window.dispatchEvent(new Event("resize"));
+    for (const listener of [...listeners]) listener();
   });
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: query.includes("min-width") ? document.documentElement.clientWidth >= Number(/([\d.]+)px/.exec(query)?.[1]) : false,
-    addEventListener: () => {}, removeEventListener: () => {},
+    get matches() { return matchesWidthQuery(query, document.documentElement.clientWidth); },
+    addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
   }));
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+    if (actEnvironment === undefined) delete globals.IS_REACT_ACT_ENVIRONMENT;
+    else globals.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+    if (previousWidth) Object.defineProperty(document.documentElement, "clientWidth", previousWidth);
+    else Reflect.deleteProperty(document.documentElement, "clientWidth");
+    for (const name of ["--rail-width", "--breakpoint-phone", "--breakpoint-tablet"]) document.documentElement.style.removeProperty(name);
+    localStorage.clear();
+  });
   viewport(1168);
   const currentConsole = { id: "c" } as Console;
   let layout!: ReturnType<typeof usePaneLayout>;
@@ -85,13 +102,24 @@ it("docks only the open columns, protects 400px and restores preferences after r
   expect(layout.asideDocked).toBe(true);
   expect(widths.sidebarWidth.width).toBe(280);
   expect(widths.asideWidth.width).toBe(546);
-  viewport(707);
-  expect(layout.isNarrow).toBe(true);
-  expect(layout.panes.sidebarDocked).toBe(true);
-  viewport(708);
-  expect(layout.isNarrow).toBe(false);
+  const storedStack = layout.panelStacks.project;
+  for (const width of [769, 768.5]) {
+    viewport(width);
+    expect(layout.asideFloats).toBe(false);
+    expect(layout.isNarrow).toBe(false);
+    expect(layout.panes.sidebarShown).toBe(true);
+  }
+  for (const width of [768, 767, 390, 389]) {
+    viewport(width);
+    expect(layout.asideFloats).toBe(true);
+    expect(layout.isNarrow).toBe(true);
+    expect(layout.panes.sidebarShown).toBe(false);
+    expect(layout.asideDocked).toBe(false);
+    expect(layout.panelStacks.project).toBe(storedStack);
+  }
+  viewport(1274);
+  expect(layout.asideFloats).toBe(false);
   expect(layout.panes.sidebarShown).toBe(true);
-  viewport(593);
-  expect(layout.asideFloats).toBe(true);
-  vi.unstubAllGlobals();
+  expect(layout.asideDocked).toBe(true);
+  expect(layout.panelStacks.project).toBe(storedStack);
 });

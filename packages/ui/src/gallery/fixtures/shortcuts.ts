@@ -72,7 +72,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, some changed",
     description:
-      "Toggle focus mode, Lock or unlock the session and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: below 640px each row stacks its keys and buttons under its name, aligned to the end edge, and the intro line stacks Restore defaults under itself, also at the end edge.",
+      "Toggle focus mode, Lock or unlock the session and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: at 768px and narrower each row stacks its keys and buttons under its name, aligned to the end edge, and the intro line stacks Restore defaults under itself, also at the end edge.",
     state,
     preferences: customisedPreferences(customised),
     steps: openSection,
@@ -114,7 +114,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a key that edits text",
     description:
-      "Recording continues on the Lock or unlock row after pressing the left arrow with the shortcut modifier; its line says that with it the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used. This is the longest refusal and wraps over several lines: choose 560px to see it wrap under the row's name, where each row stacks below 640px.",
+      "Recording continues on the Lock or unlock row after pressing the left arrow with the shortcut modifier; its line says that with it the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used. This is the longest refusal and wraps over several lines: choose 560px to see it wrap under the row's name, where each row stacks at 768px and narrower.",
     state,
     steps: [...openSection, recordFor("lock"), chord({ code: "ArrowLeft", primary: true })],
   },

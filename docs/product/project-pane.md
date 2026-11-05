@@ -322,12 +322,12 @@ has the same button, uncommitted and committed alike, flat or grouped by folder,
 groups its changes under. **Right-clicking a row opens the same menu at the pointer** (Control-click also works in the
 desktop app).
 
-- The menu's order is **Copy path**, then the **Open in** submenu, omitting unavailable actions. On a file's row Open
-  in holds **File manager**, then **Default application**; on a folder's row — a symbolic link listed as a folder
-  included — **File manager**, then **Terminal**.
-- **File manager** shows the entry in the file manager: a file, or a symbolic link whatever it leads to, is selected
-  in its containing folder, and a folder is opened. On macOS a folder that macOS treats as a package, such as an `.app`
-  or an `.xcodeproj`, which opening would launch, is selected in its containing folder instead, and so is a folder whose
+- The menu's order is **Copy path**, then the **Open in** submenu, omitting unavailable actions. On a file's row Open in
+  holds **File manager**, then **Default application**; on a folder's row — a symbolic link listed as a folder included
+  — **File manager**, then **Terminal**.
+- **File manager** shows the entry in the file manager: a file, or a symbolic link whatever it leads to, is selected in
+  its containing folder, and a folder is opened. On macOS a folder that macOS treats as a package, such as an `.app` or
+  an `.xcodeproj`, which opening would launch, is selected in its containing folder instead, and so is a folder whose
   name has an extension when Spotlight cannot tell its type. **Default application** opens the live file with the
   operating system's default application. Both act on the machine running the daemon, including when the client is a
   browser on another machine. Files uses the project directory; a change, uncommitted or committed, uses the worktree
@@ -336,14 +336,14 @@ desktop app).
   the change list uses the same place as the changes under it. They act on what is on disk now, including for a staged
   change or a change under an individual commit; they do not open a historical version, and the current file can differ
   from the change shown in the viewer. Neither says anything when it succeeds. A refusal or a failure raises an error
-  alert titled for the action — that it could not open in the file manager, or in the default application —
-  with the reason. When the file or folder is no longer there, its remedy says it may have been moved, renamed or
-  deleted, and that one moved or renamed can be found in the project's files and the action tried again from there; a
-  project directory or worktree place that itself cannot be read gets the remedy of a folder a request is scoped to,
-  worded by why it cannot be read (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The
-  viewer's own header actions follow "The header" in `docs/product/file-viewer.md`.
-- **Terminal** starts a new shell terminal in that folder, in the same place File manager would use, opens the
-  project's Terminal panel — floating it over the terminal below 594 px — and shows the new terminal as its tab, which
+  alert titled for the action — that it could not open in the file manager, or in the default application — with the
+  reason. When the file or folder is no longer there, its remedy says it may have been moved, renamed or deleted, and
+  that one moved or renamed can be found in the project's files and the action tried again from there; a project
+  directory or worktree place that itself cannot be read gets the remedy of a folder a request is scoped to, worded by
+  why it cannot be read (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The viewer's own
+  header actions follow "The header" in `docs/product/file-viewer.md`.
+- **Terminal** starts a new shell terminal in that folder, in the same place File manager would use, opens the project's
+  Terminal panel — floating it over the terminal at 768 px and below — and shows the new terminal as its tab, which
   takes keyboard focus (see "Starting a terminal" in `docs/product/terminal-panel.md`). It always starts another shell,
   however many the project has. A symbolic link listed as a folder starts the shell in the folder it leads to. A start
   the daemon refuses raises an error alert titled that the terminal could not be created, and adds no tab; when the
@@ -360,27 +360,26 @@ desktop app).
 - **The Git mode's commit rows have no button**, and neither does a row that says something about a folder instead of
   listing an entry (loading, empty; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
-  open**, and always on a device whose primary input cannot hover — a phone, or a tablet's touch screen. It is
-  reachable from the keyboard either way. In Files it fades and opens out as it appears, as the
-  sidebar's row controls do (see "Rows, names and keyboard focus" in `docs/product/sidebar.md`), and while hidden it
-  takes up no width, so the entry's name has the room. In the Git mode's change list it keeps its room while hidden and
-  only fades in, so the line counts before it do not move (see "Line counts" in
-  `docs/product/project-pane-git-change-list.md`).
+  open**, and always on a device whose primary input cannot hover — a phone, or a tablet's touch screen. It is reachable
+  from the keyboard either way. In Files it fades and opens out as it appears, as the sidebar's row controls do (see
+  "Rows, names and keyboard focus" in `docs/product/sidebar.md`), and while hidden it takes up no width, so the entry's
+  name has the room. In the Git mode's change list it keeps its room while hidden and only fades in, so the line counts
+  before it do not move (see "Line counts" in `docs/product/project-pane-git-change-list.md`).
 - **The keyboard reaches it along the row, not with Tab.** Tab moves into the tree or the change list and out of it
   again, never along a row's parts; it is the arrow key that runs along the row — Right, Left under a right-to-left
   language — that moves from the row to its button; the opposite key moves back to the row. On a collapsed folder that
   first key expands it, and a second press reaches the button. On an expanded folder the opposite key still collapses it
   while focus is on the row.
 - **The row keeps its own action**: a click or Enter on the row opens the file or the change in the file viewer, or
-  opens or closes a folder. Opening the menu or choosing one of its actions does none of those. A menu opened from
-  the keyboard hands keyboard focus back to the button when it closes; one opened with the pointer hands it back to
-  whatever had it before, as a sidebar row's menu does.
+  opens or closes a folder. Opening the menu or choosing one of its actions does none of those. A menu opened from the
+  keyboard hands keyboard focus back to the button when it closes; one opened with the pointer hands it back to whatever
+  had it before, as a sidebar row's menu does.
 - Its **accessible name names the file or folder** — "Actions for file server.ts" or "Actions for folder src" — so each
   row's button is told apart, while its tooltip is the short one every such button has (see "Tooltips on icon-only
   controls" in `docs/product/labels-and-tooltips.md`).
 - **Where the platform has no clipboard, Copy path still works**, through the browser's selection copy. A plain browser
-  whose page is not a secure context — served over `http` from anywhere but `localhost` — has no clipboard; the
-  packaged desktop app always does.
+  whose page is not a secure context — served over `http` from anywhere but `localhost` — has no clipboard; the packaged
+  desktop app always does.
 
 Default application and File manager raise no success notice; failures raise an error alert saying the file or folder,
 or the file manager, could not be opened, with the reason under its **Error details**. A missing
@@ -401,7 +400,6 @@ waiting for the application window to close. Linux Default application succeeds 
 launcher failure is not reported. Unsupported operating systems, unavailable launchers or desktop services, and launcher
 failures are reported as `path_open_failed` for Default application and `directory_unavailable` for File manager,
 carrying the reason as `detail`.
-
 
 ## What is remembered
 

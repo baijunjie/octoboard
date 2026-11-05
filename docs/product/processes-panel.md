@@ -133,8 +133,8 @@ own announcement has finished. Then the list is read again:
 
 - every **3 seconds** while the panel is on screen — open, or floating in (see "Floating a panel in" in
   `docs/product/right-pane-panels.md`);
-- every **15 seconds** while it is not on screen in a window where the right pane floats (below 594 px), so that a
-  swipe knows whether it has anything to show (see "What a swipe does" in `docs/product/touch-swipes.md`);
+- every **15 seconds** while it is not on screen in a window where the right pane floats (at 768 px and below), so that
+  a swipe knows whether it has anything to show (see "What a swipe does" in `docs/product/touch-swipes.md`);
 - not at all otherwise.
 
 A reading that falls due while the window is hidden waits until it is shown again.

@@ -1,9 +1,9 @@
 # Touch swipes
 
-In a window narrower than 594 px — where the sidebar is a sidebar overlay that comes in from the start side, with the
-rail in it (see `docs/product/sidebar-drawer.md`), and the right pane's panels float over the terminal one at a time
-from the end side (see "Below 594 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`) — a
-finger swiping sideways opens and closes them. At 594 px and wider swipes do nothing.
+In a window 768 px or narrower — where the sidebar is a sidebar overlay that comes in from the start side, with the rail
+in it (see `docs/product/sidebar-drawer.md`), and the right pane's panels float over the terminal one at a time from the
+end side (see "At 768 px and below: one panel floats over the terminal" in `docs/product/right-pane-panels.md`) — a
+finger swiping sideways opens and closes them. Above 768 px swipes do nothing.
 
 ## What counts as a swipe
 
@@ -37,8 +37,8 @@ one moving left towards the start; under a right-to-left language the other way 
 
 - with the sidebar overlay open, closes it;
 - otherwise, while the right pane has an owner (see "What the right pane shows" in `docs/product/window-layout.md`):
-  - with no panel floating over the terminal, floats the panel last on screen for the owner's kind (see "Below 594 px:
-    one panel floats over the terminal" in `docs/product/right-pane-panels.md`) while a swipe can open it, or,
+  - with no panel floating over the terminal, floats the panel last on screen for the owner's kind (see "At 768 px and
+    below: one panel floats over the terminal" in `docs/product/right-pane-panels.md`) while a swipe can open it, or,
     when it cannot, the first panel a swipe can open, in the top bar's order of toggles (see "The panel toggles in the
     top bar" in `docs/product/right-pane-panels.md`);
   - with a panel floating, puts the next panel a swipe can open in its place, in that order, the last one wrapping round
@@ -61,6 +61,6 @@ overlay nor a right pane, so no swipe does anything.
   `docs/product/moving-focus-between-regions.md`).
 - **A swipe that opens the sidebar overlay** leaves focus where it is; a tooltip already showing on a top bar control
   that has keyboard focus stays until focus moves.
-- **A swipe that closes the sidebar overlay or a panel** hands focus on as any other close does (see "When the
-  sidebar cannot dock" in `docs/product/sidebar-drawer.md` and "Below 594 px: one panel floats over the terminal" in
+- **A swipe that closes the sidebar overlay or a panel** hands focus on as any other close does (see "When the sidebar
+  cannot dock" in `docs/product/sidebar-drawer.md` and "At 768 px and below: one panel floats over the terminal" in
   `docs/product/right-pane-panels.md`).

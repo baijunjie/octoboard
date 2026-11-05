@@ -13,15 +13,13 @@ afterEach(() => {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** Mounts the hook in a window below or at and above the `docked` breakpoint, returning its latest
- * value and a way to re-render it with other panes present. The `matchMedia` stub answers
- * `matches: !narrow` to every query but the one for a device that cannot hover (`noHover`), so the
- * wide case does not exercise the reduced-motion path. */
+/** Mounts the hook with the given docking capacity and interaction mode. Queries unrelated to
+ * width remain false, except for the requested device's hover capability. */
 function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}, noHover = false, mobile = narrow) {
-  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: query === "(hover: none)" ? noHover : query === "(min-width: 594px)" ? !mobile : !narrow,
+    matches: query === "(hover: none)" ? noHover : query === "(width <= 768px)" ? mobile : false,
     media: query,
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -36,7 +34,8 @@ function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}, noH
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
     // Hiding a docked pane persists the choice, which the next test would start from.
     localStorage.clear();
   });
@@ -167,13 +166,13 @@ it("leaves focus in a docked card when the aside stops being peekable as a colum
 });
 
 it("hands focus in the docked sidebar to the terminal when the window narrows it into the closed drawer", () => {
-  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   let narrow = false;
   const listeners = new Set<() => void>();
   vi.stubGlobal("matchMedia", (query: string) => ({
     get matches() {
-      return !narrow;
+      return query === "(width <= 768px)" && narrow;
     },
     media: query,
     addEventListener: (_: string, listener: () => void) => listeners.add(listener),
@@ -193,7 +192,8 @@ it("hands focus in the docked sidebar to the terminal when the window narrows it
     act(() => root.unmount());
     container.remove();
     sidebar.remove();
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
     localStorage.clear();
   });
   act(() => root.render(createElement(Probe, { isNarrow: false })));

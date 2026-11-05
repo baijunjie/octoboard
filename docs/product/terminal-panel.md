@@ -57,9 +57,9 @@ panel** switch in General changes this (see that section in `docs/product/settin
 close also closes the project's idle and exited terminals, without confirmation. Busy terminals are kept. The panel
 closes at once; the terminals are checked and closed in the background, and any failure raises an error alert.
 
-An explicit close is the panel header's **Close panel**, its top bar toggle or its keyboard shortcut while it closes
-the panel. Below 594 px, dismissing the Terminal panel by pressing its dimmed strip or outer gap, `Escape` where it
-closes the panel, or a closing swipe also counts (see "Below 594 px: one panel floats over the terminal" in
+An explicit close is the panel header's **Close panel**, its top bar toggle or its keyboard shortcut while it closes the
+panel. At 768 px and below, dismissing the Terminal panel by pressing its dimmed strip or outer gap, `Escape` where it
+closes the panel, or a closing swipe also counts (see "At 768 px and below: one panel floats over the terminal" in
 `docs/product/right-pane-panels.md`). `Escape` inside the shell still goes to the shell and leaves the panel open.
 
 Only terminals of the project being closed that were already present at that close are considered. Which terminals

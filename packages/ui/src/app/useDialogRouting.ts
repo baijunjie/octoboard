@@ -7,7 +7,7 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console } from "../protocol";
 import { useDaemon } from "../store";
 
-/** What the open drawer is made of: the sidebar and, below the `phone` breakpoint, the rail inside its card. */
+/** What the open drawer is made of: the sidebar and, at tablet width and below, the rail inside its card. */
 export const DRAWER_CONTROLS = "[data-pane=sidebar], [data-region=rail]";
 
 /**

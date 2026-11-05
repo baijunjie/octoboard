@@ -1,9 +1,9 @@
 # File viewer
 
-The **file viewer** is a read-only dialog that shows one file, or one change, at a time. Below 594 px window width it
-fills the available window area, without outer margins, rounded corners or a shadow; connection and update notices
-at the bottom remain outside it. At wider widths it is nearly as large as the window, at most 1440 px wide. It is
-opened from three places:
+The **file viewer** is a read-only dialog that shows one file, or one change, at a time. At a window width of 768 px or
+less it fills the available window area, without outer margins, rounded corners or a shadow; connection and update
+notices at the bottom remain outside it. At wider widths it is nearly as large as the window, at most 1440 px wide. It
+is opened from three places:
 
 - **a file's row in the project pane's Files mode**, by a click or Enter on the row (see "A row's actions" in
   `docs/product/project-pane.md`);

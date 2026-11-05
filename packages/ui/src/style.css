@@ -97,15 +97,26 @@
 @custom-variant sidebar-floating (&:where([data-sidebar-dockable="false"] *));
 
 @theme {
-  /* Dialog and settings layout retains its own width threshold. Pane docking follows the
-     currently open columns and their minimum widths instead. */
-  --breakpoint-docked: 1394px;
+  --breakpoint-*: initial;
+  --breakpoint-phone: 390px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
 
-  /* Below this width a two-column floating group (546) no longer fits beside the rail (48).
-     Mobile interaction shows one panel at a time and brings the rail in with the sidebar.
-     layout/paneWidth.test.tsx checks this breakpoint sum against the layout tokens. */
-  --breakpoint-phone: 594px;
+  /* HeroUI's responsive utilities share the app's three width boundaries. */
+  --breakpoint-sm: 768px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
 }
+
+/* iPad portrait belongs to the narrow layout, including exactly 768px. */
+@custom-variant tablet (@media (width > theme(--breakpoint-tablet)));
+@custom-variant max-tablet (@media (width <= theme(--breakpoint-tablet)));
+@custom-variant desktop (@media (width >= theme(--breakpoint-desktop)));
+@custom-variant max-desktop (@media (width < theme(--breakpoint-desktop)));
+@custom-variant sm (@media (width > theme(--breakpoint-tablet)));
+@custom-variant max-sm (@media (width <= theme(--breakpoint-tablet)));
+@custom-variant md (@media (width > theme(--breakpoint-tablet)));
+@custom-variant max-md (@media (width <= theme(--breakpoint-tablet)));
 
 /* Line heights for the sizes whose stock ratio comes to a hair under a whole pixel: `text-xs` is
    `calc(1 / 0.75)`, which comes to 15.99996px at 12px. Blink keeps that as the 16px line it was
@@ -320,7 +331,7 @@ html {
      `0.5rem` would be read as 0.5px. Phone-width cards use the smaller gap below. */
   --peek-gap: 8px;
 
-  /* How far a panel is shifted towards its edge while it is away, below the `phone` breakpoint, where
+  /* How far a panel is shifted towards its edge while it is away, at the tablet boundary and below, where
      it slides in from that edge instead of rising (`PHONE_SLIDE_AWAY` in `layout/paneOverlay.tsx`;
      the right pane's floating card below). */
   --phone-slide: 40px;
@@ -493,7 +504,7 @@ html {
 }
 
 /* The end segment likewise spans the aside while it is docked (`--aside-span`), so the breadcrumb ends
-   where the aside begins, below the `docked` breakpoint too; a panel floating over the terminal on a
+   where the aside begins, below the desktop breakpoint too; a panel floating over the terminal on a
    phone takes none of it. It does not ease: the aside docks and goes at once. Under right-to-left
    the aside is at the window's left, where the bar's own padding already covers
    `--window-controls-inset` of it. */
@@ -518,8 +529,7 @@ html {
      (`--window-background` below); in a browser it is `--chrome`. Glyphs on it use the theme's
      `--foreground`, secondary text on it `--chrome-muted`, and `--chrome-hover` / `--chrome-active`
      / `--chrome-current` are the tints a control, a pressed control and the current console's tile
-     take on it: translucent, so they read on the material and on `--chrome`. Below 594 px (the
-     `phone` breakpoint) the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
+     take on it: translucent, so they read on the material and on `--chrome`. At 768px and below the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
      instead, where the current tile stands apart just as well. The current tile is the one that has to be found at a
      glance, so it is the strongest of the three tints on the material and on `--chrome` in both appearances, with
      `--chrome-hover` and `--chrome-active` fainter steps.
@@ -995,7 +1005,7 @@ html {
   bottom: calc(1rem + max(var(--bottom-chrome-height), var(--dialog-footer-clearance, 0px)));
 }
 
-/* In a window narrower than HeroUI's 40rem toast breakpoint the region is at the top, centred, and
+/* In a window at the tablet breakpoint or narrower the region is at the top, centred, and
    starts below the top bar so the bar's controls stay reachable. */
 .toast-region--top {
   top: calc(1rem + var(--top-chrome-height));
@@ -1228,8 +1238,8 @@ html.pane-resizing * {
   transition: none;
 }
 
-/* Below the `phone` breakpoint the card slides in from the end edge instead of rising, and out to it. */
-@media (width < theme(--breakpoint-phone)) {
+/* At the `tablet` breakpoint and below the card slides in from the end edge instead of rising, and out to it. */
+@media (width <= theme(--breakpoint-tablet)) {
   :root {
     --peek-gap: 4px;
   }

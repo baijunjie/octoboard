@@ -16,6 +16,7 @@ import { TEST_AGENTS } from "./test/testProviders";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
+import { matchesWidthQuery } from "./test/viewport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -56,7 +57,7 @@ vi.mock("./terminal/TerminalController", () => ({
   },
 }));
 
-/** A window `width` px wide, which `resize` changes: the media queries answer `min-width` by it and
+/** A window `width` px wide, which `resize` changes: the media queries answer width queries by it and
  * tell their listeners when the answer may have changed. */
 function stubWidth(width: number, touch = false) {
   let current = width;
@@ -69,11 +70,10 @@ function stubWidth(width: number, touch = false) {
   });
   const listeners = new Set<() => void>();
   vi.stubGlobal("matchMedia", (media: string) => {
-    const min = Number(/min-width:\s*([\d.]+)px/.exec(media)?.[1]);
     return {
       media,
       get matches() {
-        return media === "(hover: none)" ? touch : Number.isFinite(min) && current >= min;
+        return media === "(hover: none)" ? touch : matchesWidthQuery(media, current);
       },
       addEventListener: (_: string, listener: () => void) => listeners.add(listener),
       removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
@@ -100,8 +100,8 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
   document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: touch ? "touch" : "mouse", bubbles: true }));
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--peek-gap", "8px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   onTestFinished(() => {
     act(() => {
       stacks.setStack("project", defaultStack("project"));
@@ -110,7 +110,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--peek-gap");
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
     try {
       localStorage.clear();
@@ -232,12 +232,12 @@ it("closes every floating panel when the drawer opens, shows none while it is op
   expect(scrims()).toEqual(["Close panel"]);
 });
 
-it("floats no panel when the window narrows while the drawer is open", async () => {
-  const { resize } = mountApp(680, true);
+it("floats no panel over an open iPad drawer when the window narrows further", async () => {
+  const { resize } = mountApp(768, true);
   await pressElement(toggle("Show sessions"));
   await pressElement(row("Fix header"));
-  // Touch keeps the middle-width sidebar open over the terminal; the right group stays hidden.
-  expect(toggle("Show sessions")!.getAttribute("aria-expanded")).toBe("true");
+  await pressElement(toggle("Show sessions"));
+  expect(toggle("Hide sessions")!.getAttribute("aria-expanded")).toBe("true");
   expect(cards()).toEqual([]);
   await resize(390);
   expect(cards()).toEqual([]);
@@ -435,10 +435,12 @@ it("hands focus on when Escape closes the drawer from a rail control on a phone"
   expect(rail().contains(document.activeElement)).toBe(false);
 });
 
-it("leaves the rail in the row from the phone breakpoint up", async () => {
+it("keeps the rail in the drawer at 768px and restores the row above it", async () => {
   const { resize } = mountApp(390);
   expect(rail().hasAttribute("inert")).toBe(true);
-  await resize(800);
+  await resize(768);
+  expect(rail().hasAttribute("inert")).toBe(true);
+  await resize(768.5);
   expect(rail().hasAttribute("inert")).toBe(false);
   await resize(390);
   expect(rail().hasAttribute("inert")).toBe(true);
@@ -453,7 +455,7 @@ it("lets the scrims reach the window's edge on a phone, the rail being away or p
   expect(scrim.classList.contains("start-0")).toBe(true);
   await pressElement(toggle("Hide files panel"));
   await pressElement(toggle("Show sessions"));
-  expect(document.querySelector("button.fixed.z-30:not([inert])")!.className).toContain("start-(--rail-width) max-phone:start-0");
+  expect(document.querySelector("button.fixed.z-30:not([inert])")!.className).toContain("start-(--rail-width) max-tablet:start-0");
 });
 
 /** A finger swiping by `dx` px sideways from the middle of the agent terminal. */
@@ -517,11 +519,11 @@ it("opens no panel on a swipe towards the start when the pane has no owner", asy
   expect(toggle("Show sessions")).not.toBeNull();
 });
 
-it("ignores swipes from the phone breakpoint up", async () => {
-  const { resize } = mountApp(680, true);
+it("ignores swipes above 768px and enables them at iPad portrait width", async () => {
+  const { resize } = mountApp(769, true);
   await swipe(120);
-  expect(toggle("Show sessions")).not.toBeNull();
-  await resize(390);
+  expect(toggle("Hide sessions")).not.toBeNull();
+  await resize(768);
   await swipe(120);
   expect(toggle("Hide sessions")).not.toBeNull();
 });

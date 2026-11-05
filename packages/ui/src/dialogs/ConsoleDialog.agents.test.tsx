@@ -7,6 +7,7 @@ import type { Account } from "../protocol";
 import { withoutIsolates } from "../test/dom";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { work, lastStore, render, buttons, click, clickButton, choose, sent, asked, type, openAdvanced, clickTab, groupPicker, optionTexts, picker, tabNames } from "./consoleDialogTestSupport";
+import { matchesWidthQuery } from "../test/viewport";
 
 const codexWork: Account = accountOf("a-codex", "codex", "Codex work", "/home/dev/.codex-work");
 
@@ -90,12 +91,12 @@ it("sends an account chosen for an agent that is not the console session agent",
 
 it("opens Settings at the agent accounts from the section's Manage accounts button", async () => {
   // The Settings dialog sizes itself by a breakpoint the stylesheet defines.
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   onTestFinished(() => {
     vi.unstubAllGlobals();
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   render();
@@ -106,12 +107,12 @@ it("opens Settings at the agent accounts from the section's Manage accounts butt
 });
 
 it("keeps the console dialog open and unsaved while an account is added in the Settings over it", async () => {
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   onTestFinished(() => {
     vi.unstubAllGlobals();
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   const request = render(consoleOf("c-1", "Main"), [], (body) => Promise.resolve(body.type === "list_dir"
@@ -137,12 +138,12 @@ it("keeps the console dialog open and unsaved while an account is added in the S
 });
 
 it("restores Manage accounts after virtual activation followed by a pointer backdrop dismissal", async () => {
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   onTestFinished(() => {
     vi.unstubAllGlobals();
-    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   render();

@@ -5,26 +5,27 @@ other regions are in `docs/product/window-layout.md`.
 
 ## Docking capacity
 
-At **594 px and wider**, docking depends on the panes actually shown. The terminal keeps **400 px**, the rail **48
-px**, and the sidebar and each right-pane card keep **260 px** of usable width. The right group also reserves **16
-px** of outer gaps and, with two columns, **10 px** between them. One or two open cards need at least one column;
-three or four need two columns (see "Opening and closing panels" in `docs/product/right-pane-panels.md`).
+Above **768 px**, docking depends on the panes actually shown. The terminal keeps **400 px**, the rail **48 px**, and
+the sidebar and each right-pane card keep **260 px** of usable width. The right group also reserves **16 px** of outer
+gaps and, with two columns, **10 px** between them. One or two open cards need at least one column; three or four need
+two columns (see "Opening and closing panels" in `docs/product/right-pane-panels.md`).
 
-- The sidebar can dock from **708 px**: rail + sidebar + terminal. Its saved docking choice takes priority over the
-  right group; insufficient space for both makes the right group float while the sidebar stays docked.
-- With the sidebar hidden or floating, a right group of one or two cards can dock from **724 px**, and one of three
-  or four cards from **994 px**.
-- With the sidebar shown, both sides can dock from **984 px** with one or two right cards, or **1254 px** with three
-  or four.
+- Above **768 px**, the sidebar can dock: the rail, sidebar and terminal fit their minimum widths. Its saved docking
+  choice takes priority over the right group; insufficient space for both makes the right group float while the sidebar
+  stays docked.
+- With the sidebar hidden or floating, a right group of one or two cards can also dock above **768 px**, and one of
+  three or four cards from **994 px**.
+- With the sidebar shown, both sides can dock from **984 px** with one or two right cards, or **1254 px** with three or
+  four. These capacities follow the panes' actual minimum widths, independently of the desktop presentation.
 
 Capacity uses minimum widths, so widening a pane cannot force the other side to float: the displayed widths first
 shrink within their limits. Closing cards, hiding the sidebar or widening the window can make room to dock the right
 group again. An absent or closed right group reserves no width. Automatically floating either side does not change
 its remembered docking choice; it is restored when space allows. The two sides can dock or float independently.
 
-Below **594 px**, the rail comes in with the floating sidebar and only one right panel floats at a time (see
-"Below 594 px: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md` and "Below 594 px: one panel
-floats over the terminal" in `docs/product/right-pane-panels.md`).
+At **768 px and below**, the rail comes in with the floating sidebar and only one right panel floats at a time (see "At
+768 px and below: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md` and "At 768 px and below: one
+panel floats over the terminal" in `docs/product/right-pane-panels.md`).
 
 ## Pane widths
 
@@ -60,9 +61,9 @@ terminal, alone or as a whole floating group, coming or going does not.
 
 ### Resizing the sidebar and the right pane
 
-At 594 px and wider, each pane has a resize handle on its inner edge while it is shown, running the pane's full
-height. A docked handle runs from below the top bar to above the connection banner; a floating handle follows the
-card's inset edge:
+Above 768 px, each pane has a resize handle on its inner edge while it is shown, running the pane's full height. A
+docked handle runs from below the top bar to above the connection banner; a floating handle follows the card's inset
+edge:
 
 - the **docked sidebar's** on its right edge, drawn on hover and keyboard focus as a line along the whole edge;
 - the **floating sidebar's** in the 8 px gap outside its inner edge, drawn as the same grip as the right pane's;
@@ -86,10 +87,10 @@ The handles work the same way:
   the pointer shows the resize cursor wherever it is.
 
 The sidebar's handle is available while docked and while floating, including a hover preview or an automatically
-floating sidebar. Its pointer target is 6 px wide while docked and 24 px wide while floating, centred on the 8 px
-gap outside the floating card's inner edge. It is absent while the docked column is easing and below 594 px. The
-floating sidebar uses the same remembered width as the docked sidebar, within **260–480 px**, with a default of
-**280 px**.
+floating sidebar. Its pointer target is 6 px wide while docked and 24 px wide while floating, centred on the 8 px gap
+outside the floating card's inner edge. It is absent while the docked column is easing and at 768 px and below. The
+floating sidebar uses the same remembered width as the docked sidebar, within **260–480 px**, with a default of **280
+px**.
 
 The right pane's handle is available while docked and while its whole group floats, including when it floats
 automatically. It remains reachable at the floating group's inner edge and changes the group's total width. It is
@@ -101,7 +102,7 @@ not resize the agent terminal.
 **A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum
 total width is the window's width less the **48 px rail** and the width of the docked sidebar while shown. With the
 sidebar hidden or itself floating, only the rail is reserved. This applies to both a floating group and a single-card
-hover preview, at 594 px and wider; floating widths have no fixed 720 px cap.
+hover preview, above 768 px; floating widths have no fixed 720 px cap.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
@@ -140,16 +141,16 @@ and size" in `docs/product/session-terminal.md`).
 
 ### A hidden pane floats in on hover
 
-At 594 px and wider, the sidebar can float in while its docked column is hidden or it cannot dock. The right pane
-can reveal its whole floating group, or preview one card when its docked column is empty or folded under a maximized
-panel (see "Floating a panel in" in `docs/product/right-pane-panels.md`). This is a **floating pane**. The sidebar
-floats in as a card inset from the window chrome and the window's edges, with rounded corners, a hairline edge and
-the light card shadow (see "The window chrome and the content panel" in `docs/product/window-layout.md`); the right
-pane floats in as its panel's own card, which looks the same (see "The panel cards" in
-`docs/product/right-pane-panels.md`). The hairline is 0.5 px on a display of 2× pixel density or more and 1 px below
-that, and it takes no space, so the card is exactly its box. An automatically floating sidebar shares this card
-appearance (see "When the sidebar cannot dock" in `docs/product/sidebar-drawer.md`). The docked sidebar opens and
-closes as a full-height column (see "Hiding the sidebar" above).
+Above 768 px, the sidebar can float in while its docked column is hidden or it cannot dock. The right pane can reveal
+its whole floating group, or preview one card when its docked column is empty or folded under a maximized panel (see
+"Floating a panel in" in `docs/product/right-pane-panels.md`). This is a **floating pane**. The sidebar floats in as a
+card inset from the window chrome and the window's edges, with rounded corners, a hairline edge and the light card
+shadow (see "The window chrome and the content panel" in `docs/product/window-layout.md`); the right pane floats in as
+its panel's own card, which looks the same (see "The panel cards" in `docs/product/right-pane-panels.md`). The hairline
+is 0.5 px on a display of 2× pixel density or more and 1 px below that, and it takes no space, so the card is exactly
+its box. An automatically floating sidebar shares this card appearance (see "When the sidebar cannot dock" in
+`docs/product/sidebar-drawer.md`). The docked sidebar opens and closes as a full-height column (see "Hiding the sidebar"
+above).
 
 - **What brings up the sidebar**: reaching its top bar toggle reveals the current console immediately. Resting on blank
   space anywhere along the **48 px rail for 200 ms** also reveals the current console. Crossing that space briefly
@@ -167,16 +168,15 @@ closes as a full-height column (see "Hiding the sidebar" above).
   pressing its toggle.
 - **How it shows**: both cards fade from transparent to opaque while rising into place by **4% of the card's own
   height**, over **240 ms**, with the same `cubic-bezier(0.2, 0, 0, 1)` easing as switching consoles. The whole card
-  fades and rises together — its edge, fill, shadow and content. Neither slides horizontally. Where the system asks
-  for reduced motion, they appear at once. Each uses the pane's chosen width within its current limits (see
-  "Resizing the sidebar and the right pane" above), with a shadow and no dimming behind it. It overlays the
-  terminal, so **the terminal is not resized** and the agent is sent no size change. - The **sidebar's card** keeps
-  an 8 px gap from the rail, from the top bar and from the window's bottom (or the connection banner), never drawn
-  over the rail. - The **right pane's card** keeps the gaps it keeps docked: 8 px from the top bar, from the
-  window's end edge and from the window's bottom (or the connection banner), and 8 px on the terminal's side. - A
-  card's own headers are 8 px shorter than the docked sidebar's — the 8 px gap, the card's edge taking no space — so
-  the line under a header stays level across the panel (see "The window chrome and the content panel" in
-  `docs/product/window-layout.md`).
+  fades and rises together — its edge, fill, shadow and content. Neither slides horizontally. Where the system asks for
+  reduced motion, they appear at once. Each uses the pane's chosen width within its current limits (see "Resizing the
+  sidebar and the right pane" above), with a shadow and no dimming behind it. It overlays the terminal, so **the
+  terminal is not resized** and the agent is sent no size change. - The **sidebar's card** keeps an 8 px gap from the
+  rail, from the top bar and from the window's bottom (or the connection banner), never drawn over the rail. - The
+  **right pane's card** keeps the gaps it keeps docked: 8 px from the top bar, from the window's end edge and from the
+  window's bottom (or the connection banner), and 8 px on the terminal's side. - A card's own headers are 8 px shorter
+  than the docked sidebar's — the 8 px gap, the card's edge taking no space — so the line under a header stays level
+  across the panel (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
 - **How it goes away**: 200 ms after the pointer has left it, the card fades out while sinking back by 4% of its height
   over 240 ms, with the same easing as its entrance, or disappears at once where the system asks for reduced motion.
   Having left means the pointer is on none of the card, the gap around it, or what brought it up in the top bar — the
@@ -184,17 +184,16 @@ closes as a full-height column (see "Hiding the sidebar" above).
   avatars on the rail either, or the blank rail area that can reveal it. The right pane's end-edge strip also keeps it
   up. **The gap counts as part of the card**: the 8 px around the sidebar's card, and the gaps the right pane keeps
   around its card. The narrow strip directly below a pane toggle, from the button's bottom to the card's surrounding
-  gap, also keeps it up where the button and card overlap horizontally. The pointer can cross or rest in that strip
-  in either direction without starting dismissal; the rest of the top bar remains outside. A tooltip neither takes
-  pointer events nor determines whether the pane stays revealed. A pointer that moves from the card into its gap, or
-  rests in it, keeps the card up for as long as it stays. Moving past these areas, or out of the window altogether,
-  sends the card away. `Escape` starts its exit
-  without that delay and **does not reach the running agent**, except that in a field holding text (the project pane's
-  change filter) it only clears the field, and the next one sends the pane away; so does `Escape` pressed inside a
-  report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). Inside a shell terminal of the
-  Terminal panel `Escape` goes to the shell and never sends the pane away (see "The shell terminal" in
-  `docs/product/terminal-panel.md`). A floating pane that holds keyboard focus as it goes away hands focus to the
-  terminal, except a floating right pane that goes because the pane's column takes its place — a panel docked, a
+  gap, also keeps it up where the button and card overlap horizontally. The pointer can cross or rest in that strip in
+  either direction without starting dismissal; the rest of the top bar remains outside. A tooltip neither takes pointer
+  events nor determines whether the pane stays revealed. A pointer that moves from the card into its gap, or rests in
+  it, keeps the card up for as long as it stays. Moving past these areas, or out of the window altogether, sends the
+  card away. `Escape` starts its exit without that delay and **does not reach the running agent**, except that in a
+  field holding text (the project pane's change filter) it only clears the field, and the next one sends the pane away;
+  so does `Escape` pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`).
+  Inside a shell terminal of the Terminal panel `Escape` goes to the shell and never sends the pane away (see "The shell
+  terminal" in `docs/product/terminal-panel.md`). A floating pane that holds keyboard focus as it goes away hands focus
+  to the terminal, except a floating right pane that goes because the pane's column takes its place — a panel docked, a
   maximized panel restored (see "Maximizing a panel" in `docs/product/right-pane-panels.md`): focus is then not moved. A
   floating sidebar previewing a console that is deleted goes away as if the pointer had left that console's avatar.
 - **What keeps it up**, whatever the pointer does: keyboard focus inside it, an open menu, a dialog or a resize drag. A
@@ -204,26 +203,24 @@ closes as a full-height column (see "Hiding the sidebar" above).
   button, does not, and the card goes once the pointer leaves, as it would have before the press.
 - **Only one at a time**: bringing one up sends the other away. Floating the right pane in also closes the sidebar's
   overlay, and opening the floating sidebar sends a floating right pane away.
-- **Pressing the sidebar toggle or the right group toggle** when that side cannot dock reveals it without hiding it
-  or changing a docking preference. Individual right-panel toggles open or close their cards, keeping the other
-  cards revealed and hiding the group when the last card closes. Activating a stored open card's toggle while the
-  group is hidden only reveals it. See "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`.
-  When that side can dock, the right group toggle docks the group, the sidebar toggle docks its hover card, and a
-  docked right pane's panel toggle opens or closes its panel normally.
-- Hover reveal is unavailable below 594 px: only explicit controls and swipes open the mobile overlays.
+- **Pressing the sidebar toggle or the right group toggle** when that side cannot dock reveals it without hiding it or
+  changing a docking preference. Individual right-panel toggles open or close their cards, keeping the other cards
+  revealed and hiding the group when the last card closes. Activating a stored open card's toggle while the group is
+  hidden only reveals it. See "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`. When that side
+  can dock, the right group toggle docks the group, the sidebar toggle docks its hover card, and a docked right pane's
+  panel toggle opens or closes its panel normally.
+- Hover reveal is unavailable at 768 px and below: only explicit controls and swipes open the mobile overlays.
 
 ## Floating pane widths
 
-At **594 px and wider**, floating panes take no width from the terminal. Only one floating side is revealed at a
-time, without changing the terminal's size; the other side can remain docked. The right group uses the remembered
-total width and the automatic adjustments in "Opening and closing panels" in `docs/product/right-pane-panels.md`,
-within the floating bounds in "Resizing the sidebar and the right pane" above. Its minimum is **546 px with three or
-four cards**, and **276 px with one or two cards**: a 260 px column and two 8 px outer gaps. These bounds do not
-rewrite the remembered width. The group retains its column-width and panel-height handles as well as its total-width
-handle.
+Above **768 px**, floating panes take no width from the terminal. Only one floating side is revealed at a time, without
+changing the terminal's size; the other side can remain docked. The right group uses the remembered total width and the
+automatic adjustments in "Opening and closing panels" in `docs/product/right-pane-panels.md`, within the floating bounds
+in "Resizing the sidebar and the right pane" above. Its minimum is **546 px with three or four cards**, and **276 px
+with one or two cards**: a 260 px column and two 8 px outer gaps. These bounds do not rewrite the remembered width. The
+group retains its column-width and panel-height handles as well as its total-width handle.
 
-**Below 594 px**, only one right-pane panel floats at a time, or the sidebar with its rail. The terminal has no
-minimum width and keeps the content panel's whole width, so the row never scrolls sideways. See "Below 594 px: one
-panel floats over the terminal" in `docs/product/right-pane-panels.md` and "Below 594 px: the rail comes in with the
-sidebar" in `docs/product/sidebar-drawer.md`.
-
+**At 768 px and below**, only one right-pane panel floats at a time, or the sidebar with its rail. The terminal has no
+minimum width and keeps the content panel's whole width, so the row never scrolls sideways. See "At 768 px and below:
+one panel floats over the terminal" in `docs/product/right-pane-panels.md` and "At 768 px and below: the rail comes in
+with the sidebar" in `docs/product/sidebar-drawer.md`.

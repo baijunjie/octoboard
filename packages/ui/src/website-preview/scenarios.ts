@@ -1,3 +1,4 @@
+import { maxWidthQuery } from "../components/hooks/breakpoint";
 import type { Language } from "../i18n/languages";
 import { type Agent, type AgentAvailability, type Session } from "../protocol";
 import type { State } from "../store";
@@ -264,20 +265,14 @@ export function createPreviewScenario(
         // Match the application's CSS breakpoint: the standalone demo also runs on phones, where
         // the sessions list is a drawer that has to be opened to select a session and closed to see
         // the scene's panel, which docks beside the agent terminal, or floats over it on a phone.
-        const breakpoint = parseFloat(
-          getComputedStyle(document.documentElement).getPropertyValue(
-            "--breakpoint-docked",
-          ),
-        );
-        const narrow = !window.matchMedia(`(min-width: ${breakpoint}px)`)
-          .matches;
+        const narrow = window.matchMedia(maxWidthQuery("tablet")).matches;
         if (narrow) await ui.press(ui.t("titleBar.sidebar.show"));
         await ui.press(
           ui.session(
             scene === "focus" ? copy.serverTask : scene === "changes" ? copy.review : coordinator.title,
           ),
         );
-        // On a phone picking the session closes the drawer already; between the two widths it stays.
+        // Selecting a session normally closes the tablet drawer; close it here if it remains open.
         const hide = ui.t("titleBar.sidebar.hide");
         if (narrow && document.querySelector(`[aria-label="${hide}"]`))
           await ui.press(hide);

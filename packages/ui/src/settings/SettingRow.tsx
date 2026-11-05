@@ -15,7 +15,7 @@ import { MarkLineBox } from "../components/status/MarkLineBox";
  * `compact`, pass `fill` when the control is an input (a select, a text field, a path picker with its Browse
  * button): under the text it then spans the row and its one child grows to fill it, whatever width
  * the child has beside the text; a child that holds buttons next to the input is a flex row whose
- * input has `flex-1` and whose buttons keep their size. At `sm` and wider `fill` changes
+ * input has `flex-1` and whose buttons keep their size. Above the tablet boundary `fill` changes
  * nothing. `help` is a help tip that ends the name's line (see "Explanations in help tips" in
  * `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across
  * its whole width (a progress bar, a full-width field such as a tags input), inside its divider. */
@@ -40,7 +40,7 @@ export function SettingRow({
 }): React.ReactElement {
   return (
     <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit])))]:border-b-0">
-      <div className={compact ? "flex items-center justify-between gap-4 sm:gap-6" : "flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6"}>
+      <div className={compact ? "flex items-center justify-between gap-4 tablet:gap-6" : "flex flex-col items-start gap-3 tablet:flex-row tablet:items-center tablet:justify-between tablet:gap-6"}>
         <div className="min-w-0">
           <div className="flex items-start gap-2 text-sm font-medium text-foreground">
             <div className="min-w-0">{label}</div>
@@ -49,7 +49,7 @@ export function SettingRow({
           {description && <div className="text-sm text-app-muted">{description}</div>}
         </div>
         {/* A row whose controls all render nothing (`false`) draws no empty box taking the gap. */}
-        {React.Children.toArray(children).length > 0 && <div className={compact ? "shrink-0" : fill ? "shrink-0 max-sm:flex max-sm:w-full max-sm:*:min-w-0 max-sm:*:flex-1" : "shrink-0 max-sm:self-end-safe"}>{children}</div>}
+        {React.Children.toArray(children).length > 0 && <div className={compact ? "shrink-0" : fill ? "shrink-0 max-tablet:flex max-tablet:w-full max-tablet:*:min-w-0 max-tablet:*:flex-1" : "shrink-0 max-tablet:self-end-safe"}>{children}</div>}
       </div>
       {below}
     </div>

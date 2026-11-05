@@ -1,11 +1,11 @@
 import React from "react";
 
 /** The rows of a `LabelledGroup` whose controls each carry a name of their own. Every name sits over its
- * control at any width and the rows sit side by side in equal columns from the `md` breakpoint up, one under
+ * control at any width and the rows sit side by side in equal columns above the tablet boundary, one under
  * another below it: a control then has its column's full width, for values too long to share a row with a
  * name. With `stacked` they sit one under another at every width, for more rows than fit side by side. */
 export function GroupRows({ children, stacked }: { children: React.ReactNode; stacked?: boolean }): React.ReactElement {
-  return <div className={`grid grid-cols-[minmax(0,1fr)] gap-3 ${stacked ? "" : "md:grid-flow-col md:gap-x-6 md:grid-cols-none md:auto-cols-fr"}`}>{children}</div>;
+  return <div className={`grid grid-cols-[minmax(0,1fr)] gap-3 ${stacked ? "" : "tablet:grid-flow-col tablet:gap-x-6 tablet:grid-cols-none tablet:auto-cols-fr"}`}>{children}</div>;
 }
 
 /** One row of `GroupRows`. `label` is only the visible name: the control is named for assistive

@@ -168,7 +168,7 @@ export function AccountQuotaSummary({ quota, single, usedUp }: {
   // other windows (a model's weekly limit) keep a meter of their own.
   const layers = twoLayerWindows(windows);
   return (
-    <div className={`grid grid-cols-1 gap-x-6 gap-y-3 ${single ? "" : "sm:grid-cols-2"}`}>
+    <div className={`grid grid-cols-1 gap-x-6 gap-y-3 ${single ? "" : "tablet:grid-cols-2"}`}>
       {orderedQuotaWindows(windows).map((window) => {
         if (layers?.weekly && window === layers.weekly) return null;
         const key = `${window.kind}:${window.label ?? ""}`;

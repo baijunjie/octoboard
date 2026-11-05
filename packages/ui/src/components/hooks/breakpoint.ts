@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 
-/** The named breakpoints `style.css` declares in `@theme`: `docked` and `phone`. */
-type Breakpoint = "docked" | "phone";
+/** The named breakpoints `style.css` declares in `@theme`: `phone`, `tablet` and `desktop`. */
+type Breakpoint = "phone" | "tablet" | "desktop";
 
 /** Memoised once resolved: the value cannot change at runtime, so re-reading it on every call
  * would just be a repeated DOM read for the same answer (see `breakpointPx`). */
@@ -26,23 +26,20 @@ function breakpointPx(name: Breakpoint): number {
   return raw;
 }
 
-/** `min-width` rather than Tailwind's own `max-width: <breakpoint - 1>px` complement: a query
- * built that way leaves a fractional-width gap matching neither (1099.5px, say), where the
- * `docked:` variants and `useIsNarrow` would disagree about which mode the window is in. The
- * `phone` breakpoint's query (`useAsideFloats`) is built the same way. */
-export function minWidthQuery(name: Breakpoint): string {
-  return `(min-width: ${breakpointPx(name)}px)`;
+/** Inclusive so iPad portrait at exactly 768px shares the single-panel interaction. */
+export function maxWidthQuery(name: Breakpoint): string {
+  return `(width <= ${breakpointPx(name)}px)`;
 }
 
-/** Whether settings and dialogs should use their compact presentation. Pane docking uses
- * the actual open columns' space requirements independently of this breakpoint. */
+/** Settings, dialogs and single-panel interaction use the same inclusive tablet boundary.
+ * Pane docking above it follows the actual open columns' space requirements. */
 export function useIsNarrow(): boolean {
-  return !useMediaQuery(() => minWidthQuery("docked"));
+  return useMediaQuery(() => maxWidthQuery("tablet"));
 }
 
 /**
  * Whether the window matches the media query `query` returns, kept current as the window changes, and right from the
- * first render. `query` is a function so a query built from what the stylesheet sets (`minWidthQuery`) is read only
+ * first render. `query` is a function so a query built from what the stylesheet sets (`maxWidthQuery`) is read only
  * in the subscription and the snapshot, not by this hook's own body. It is the function given as the component mounts
  * that is kept: what the query is built from cannot change at runtime, so neither can the query.
  */

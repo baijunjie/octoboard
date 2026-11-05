@@ -10,17 +10,17 @@ Under a right-to-left language — Arabic, see "What follows the language" in `d
 window is mirrored. Every left and right named in `docs/product/window-layout.md` swaps, and so do the sides the other
 product docs name for parts of the window:
 
-- The rail is down the window's right edge — below 594 px, where it comes in with the floating sidebar, along the
-  sidebar overlay card's right side (see "Below 594 px: the rail comes in with the sidebar" in
+- The rail is down the window's right edge — at 768 px and below, where it comes in with the floating sidebar, along the
+  sidebar overlay card's right side (see "At 768 px and below: the rail comes in with the sidebar" in
   `docs/product/sidebar-drawer.md`) — the sidebar on the right inside the content panel, beside the rail, and the right
   pane on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and sidebar toggle
   are at its right end, in mirrored order, the panel toggles at its left end, and the breadcrumb runs leftward from
   them, starting over the terminal's area while the sidebar is shown and ending where the right pane does, on the
   window's left, while the right pane is docked, following each pane's inner edge while that pane is resized or eases,
   as in "The top bar" in `docs/product/window-layout.md`.
-- From 594 px up the floating sidebar and the floating cards keep their vertical fade and drift in either reading
-  direction. Below 594 px the sidebar overlay slides in from the window's right edge and a panel floating over the
-  terminal from its left edge, and the touch swipes that open and close them are mirrored with them (see
+- Above 768 px the floating sidebar and the floating cards keep their vertical fade and drift in either reading
+  direction. At 768 px and below the sidebar overlay slides in from the window's right edge and a panel floating over
+  the terminal from its left edge, and the touch swipes that open and close them are mirrored with them (see
   `docs/product/touch-swipes.md`).
 - Each resize handle stays on its pane's inner edge, the sidebar's left edge and the right pane's right one. Dragging
   toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
@@ -47,10 +47,9 @@ product docs name for parts of the window:
   the user typed all read in the direction of their own text inside right-to-left prose — one the sentence sets as code
   reads left to right — and the quotation marks, parentheses and full stop the sentence puts around them stay where the
   sentence puts them.
-- The rail's waiting count carries its badge at the button's top left rather than its top right, and so does the
-  rail's Processes button, so the badge points into the content panel and the overflow pill stays clear of the window's
-  edge, the rail being down the window's right edge (see "The rail" in
-  `docs/product/window-layout.md`).
+- The rail's waiting count carries its badge at the button's top left rather than its top right, and so does the rail's
+  Processes button, so the badge points into the content panel and the overflow pill stays clear of the window's edge,
+  the rail being down the window's right edge (see "The rail" in `docs/product/window-layout.md`).
 - The rail's Account usage indicator fills its capsules from the right (see "The selected session's quota indicator" in
   `docs/product/account-quotas.md`).
 - Icons that point a direction or show a side are mirrored: Back and Forward, the sidebar toggle, whose pane is drawn on

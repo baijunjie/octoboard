@@ -51,7 +51,7 @@ export function CodeGallery(): React.ReactElement {
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="chip-sizes-title">
             <h2 id="chip-sizes-title" className="font-semibold">Sizes are padding steps, each in a line it fits</h2>
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 desktop:grid-cols-2">
               {COPY_LINES.map(({ font, line, use, sizes }) => (
                 <div key={`${font}/${line}`} data-chip-line-sample={`${font}/${line}`} className="flex min-w-0 flex-col items-start gap-3 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                   <h3 className="text-sm font-medium">{font}px text on {line}px lines</h3>
@@ -67,7 +67,7 @@ export function CodeGallery(): React.ReactElement {
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="status-badges-title">
             <h2 id="status-badges-title" className="font-semibold">Status badges: colour, variant and size</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 tablet:grid-cols-2">
               {BADGE_VARIANTS.map((variant) => (
                 <div key={variant} data-badge-variant-sample={variant} className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                   <h3 className="text-sm font-medium">{variant === "soft" ? "soft: borderless, for a state" : "bordered: a hairline edge, for a qualifier of the name"}</h3>
@@ -81,7 +81,7 @@ export function CodeGallery(): React.ReactElement {
                 </div>
               ))}
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 tablet:grid-cols-3">
               {BADGE_SIZES.map((size) => (
                 <div key={size} data-badge-size-sample={size} className="flex min-w-0 flex-col items-start gap-3 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                   <h3 className="text-sm font-medium">{size}: {size === "sm" ? "20px, default" : size === "md" ? "24px" : "28px"}</h3>
@@ -98,7 +98,7 @@ export function CodeGallery(): React.ReactElement {
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="status-marks-title">
             <h2 id="status-marks-title" className="font-semibold">Status marks: danger, warning and note</h2>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 tablet:grid-cols-3">
               <div data-status-mark-sample="danger" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                 <h3 className="text-sm font-medium">danger: the row has nothing to show</h3>
                 <p className="flex items-center gap-1.5 text-sm">Default <StatusMark label="Usage unavailable">Claude Code took too long to report its usage.</StatusMark></p>
@@ -123,7 +123,7 @@ export function CodeGallery(): React.ReactElement {
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="code-colors-title">
             <h2 id="code-colors-title" className="font-semibold">Six colors outside alerts</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 tablet:grid-cols-2 desktop:grid-cols-3">
               {COLORS.map((color) => (
                 <div key={color} data-code-sample={color} className="min-w-0 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                   <p className="mb-2 text-sm">{color}: <InlineReference monospace wrap color={color}>VITE_DAEMON_PORT</InlineReference></p>

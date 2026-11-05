@@ -27,23 +27,27 @@ read nor change (see "Who reads and changes what" and
 
 ## In a narrow window
 
-Below 1394 px, independently of whether the main panes dock or float, the list of sections becomes a row of tabs
-along the dialog's top, above the selected section. From 594 px up to that breakpoint, the dialog fills the window
-inside a 16 px margin on every side. Below 594 px it fills the available window area without outer margins, rounded
-corners or a shadow. In either case, connection and update notices at the bottom remain outside the dialog: the
-full-screen view ends above them, and the inset view keeps its 16 px margin above them (see "What an open dialog,
-menu or popover covers" in `docs/product/window-layout.md`). When the tabs do not fit the row's width, the row
-scrolls sideways, fading at the end with more beyond it (see "The surfaces that fade" in
-`docs/product/scrolling-surfaces.md`), and the selected section's tab is scrolled into view when the dialog opens.
+At **768 px and below**, including a portrait iPad at exactly 768 px, the list of sections becomes a row of tabs along
+the dialog's top, above the selected section. The dialog fills the available window area without outer margins, rounded
+corners or a shadow. Connection and update notices at the bottom remain outside it (see "What an open dialog, menu or
+popover covers" in `docs/product/window-layout.md`). When the tabs do not fit the row's width, the row scrolls sideways,
+fading at the end with more beyond it (see "The surfaces that fade" in `docs/product/scrolling-surfaces.md`), and the
+selected section's tab is scrolled into view when the dialog opens.
+
+Above **768 px**, the sections stay in a vertical list beside the selected section. Below 1024 px the dialog keeps a 16
+px outer margin; at **1024 px and wider** it keeps at least 48 px and is at most 1000 px wide. Every wider desktop
+window uses this same presentation. The section's horizontal padding is 16 px below 1024 px and 32 px at 1024 px and
+wider. Below **390 px**, the section padding becomes 12 px and the tab row's spacing tightens. This compact spacing
+keeps the same single-panel interaction as the rest of the narrow range.
 
 A setting row whose control is one small control of a bounded width — a switch, a single button, a status badge or a
-short link, with a status mark beside it at most — keeps it beside its name and its line of text at every width. Below
-640 px any other control (a select, a text field, a group of controls, a URL) goes under the name and the text instead.
-There it sits at the row's trailing edge (the left edge under a right-to-left language), its controls keeping their
-order, unless it is wider than the row, when it starts from the leading edge instead. A field — a select, a text field,
-the default clone directory's path field with its **Browse** button — fills the row's width instead, any button beside
-it keeping its size. The same trailing edge holds the Keyboard shortcuts section's **Restore defaults** button, which
-below 640 px goes under the section's introduction.
+short link, with a status mark beside it at most — keeps it beside its name and its line of text at every width. At 768
+px and below any other control (a select, a text field, a group of controls, a URL) goes under the name and the text
+instead. There it sits at the row's trailing edge (the left edge under a right-to-left language), its controls keeping
+their order, unless it is wider than the row, when it starts from the leading edge instead. A field — a select, a text
+field, the default clone directory's path field with its **Browse** button — fills the row's width instead, any button
+beside it keeping its size. The same trailing edge holds the Keyboard shortcuts section's **Restore defaults** button,
+which at 768 px and below goes under the section's introduction.
 
 ## Moving between sections
 

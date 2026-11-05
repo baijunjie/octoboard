@@ -101,8 +101,8 @@ export function ConsoleAccountsField({
           const nameId = `${idPrefix}-${agent}`;
           return (
           // The same two columns as the Default agent pickers above: the agent's name where the first
-          // picker is, the account picker where the second is, one under the other below `md`.
-            <div key={agent} className="grid grid-cols-[minmax(0,1fr)] items-center gap-x-6 gap-y-1.5 md:grid-cols-2">
+          // picker is, the account picker where the second is, one under the other at the tablet boundary and below.
+            <div key={agent} className="grid grid-cols-[minmax(0,1fr)] items-center gap-x-6 gap-y-1.5 tablet:grid-cols-2">
               <div aria-hidden="true" className="flex min-w-0 items-center gap-2 text-sm">
                 <AgentName id={nameId} agent={agent} badge={agentChoiceBadge(t, agentAvailability, addedAgents, agent)} dimmed={marked} />
               </div>

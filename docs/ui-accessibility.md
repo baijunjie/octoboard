@@ -442,7 +442,7 @@ shown or deleted, Reconnect, a creation action) hands focus on as focus meant fo
 press brings up over the agent area takes it rather than the inert terminal. A region whose focus goes through a method
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
-Below the `phone` breakpoint the rail is out of the row and comes in only inside the sidebar's drawer card: while the
+At the `tablet` breakpoint and below the rail is out of the row and comes in only inside the sidebar's drawer card: while the
 drawer is closed the rail is `inert` and not a stop, and focus inside it when the drawer closes is handed on before the
 browser can drop it to `<body>` (a layout effect, since a swipe closes the drawer from a touch listener React does not
 flush before paint).
@@ -670,7 +670,7 @@ opened a dialog is a restore, not a handoff: its ring follows the input that clo
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
 control the press ended on (a menu's trigger, for a dialog opened from its menu) and focuses it as the dialog opens, so
-the restore lands back on it. Below the `phone` breakpoint the rail is part of the drawer's card, so a dialog opened
+the restore lands back on it. At the `tablet` breakpoint and below the rail is part of the drawer's card, so a dialog opened
 from the rail there (Settings included, by press or by key) is the same case and returns to the rail's control.
 
 A dialog's submit or confirm button that becomes disabled while it holds focus (a quota reading landing under an
@@ -2231,7 +2231,7 @@ as the content folds, whose end Chrome does not report until the content is show
 focus at once places it itself rather than leaving it to react-aria's deferred focus (`ConfirmDialog`, and a caller of
 `focusesItselfOnOpen`).
 
-Below the `phone` breakpoint a pane slides in from the side it lives on as it fades — the sidebar's drawer, with its
+At the `tablet` breakpoint and below a pane slides in from the side it lives on as it fades — the sidebar's drawer, with its
 rail, from the start edge, a floating right-pane card from the end edge — mirrored under a right-to-left language.
 Under `prefers-reduced-motion: reduce` neither slides: the drawer's and the rail's transitions are off and the card's
 own reduced-motion rule applies, so each simply appears and goes.

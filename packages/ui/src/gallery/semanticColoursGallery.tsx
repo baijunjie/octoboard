@@ -188,7 +188,7 @@ export function SemanticColoursGallery(): React.ReactElement {
           </section>
           <section className="flex flex-col gap-4" aria-labelledby="semantic-surfaces-title">
             <h2 id="semantic-surfaces-title" className="font-semibold">Components on each surface</h2>
-            <div className="grid items-start gap-6 lg:grid-cols-2">
+            <div className="grid items-start gap-6 desktop:grid-cols-2">
               <Surface name="Card" note="--surface" className="rounded-lg bg-surface shadow-(--panel-shadow)">
                 {MEANINGS.map((meaning) => <Specimen key={meaning.color} meaning={meaning} chip alert />)}
               </Surface>

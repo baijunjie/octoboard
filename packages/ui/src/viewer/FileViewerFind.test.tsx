@@ -61,7 +61,8 @@ let root: Root;
 const onClose = vi.fn();
 
 beforeEach(() => {
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   localStorage.clear();
   onClose.mockClear();
   container = document.body.appendChild(document.createElement("div"));

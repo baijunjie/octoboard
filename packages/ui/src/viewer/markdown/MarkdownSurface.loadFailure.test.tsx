@@ -41,7 +41,8 @@ window.matchMedia ??= (query: string) =>
   ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList;
 
 beforeEach(() => {
-  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "390px");
 });
 
 const markdownFile = (path: string): ViewerSubject => ({

@@ -30,8 +30,8 @@ const TOOLTIP_STATUSES: readonly ShownStatusKind[] = ["waiting_user", "dormant",
 
 const NEW_CONSOLE_ID = "rail-new-console";
 
-/** Below the `phone` breakpoint a rail that is `onDemand` leaves the row and lies over the open
- * drawer's card (`drawerClass` in `layout/paneOverlay.tsx`, whose `max-phone:` padding leaves the
+/** At the tablet boundary and below a rail that is `onDemand` leaves the row and lies over the open
+ * drawer's card (`drawerClass` in `layout/paneOverlay.tsx`, whose `max-tablet:` padding leaves the
  * rail's width free for it): the same inset from the window's edge, the top bar and the bottom
  * chrome as the card, so the two are one card. The rail paints nothing of its own but the groove
  * on its end edge, which is the seam between it and the sidebar; the card's surface, edge, shadow and
@@ -40,9 +40,9 @@ const NEW_CONSOLE_ID = "rail-new-console";
  * finished and then keeping the away rail out of reach. `z-41` keeps it above the card (`z-40`),
  * which comes later in the document and would otherwise paint over it. */
 const ON_DEMAND_FRAME =
-  "max-phone:fixed max-phone:start-(--peek-gap) max-phone:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-phone:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-phone:z-41 max-phone:groove-e max-phone:transition-[translate,opacity,visibility] max-phone:duration-240 max-phone:ease-[cubic-bezier(0.2,0,0,1)] max-phone:motion-reduce:transition-none";
-const ON_DEMAND_OPEN = "max-phone:opacity-100";
-const ON_DEMAND_AWAY = `max-phone:opacity-0 max-phone:invisible ${PHONE_SLIDE_AWAY}`;
+  "max-tablet:fixed max-tablet:start-(--peek-gap) max-tablet:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-tablet:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-tablet:z-41 max-tablet:groove-e max-tablet:transition-[translate,opacity,visibility] max-tablet:duration-240 max-tablet:ease-[cubic-bezier(0.2,0,0,1)] max-tablet:motion-reduce:transition-none";
+const ON_DEMAND_OPEN = "max-tablet:opacity-100";
+const ON_DEMAND_AWAY = `max-tablet:opacity-0 max-tablet:invisible ${PHONE_SLIDE_AWAY}`;
 
 /** Puts focus on the rail's New console button, by identity: the console tiles come before it. */
 export function focusNewConsole(): void {
@@ -162,11 +162,11 @@ interface RailProps extends ConsoleMenuHandlers {
   onOpenSettingsAt: OpenSettings;
   /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
-  /** Below the `phone` breakpoint the rail is not in the row but comes in with the sidebar's
+  /** At the tablet boundary and below the rail is not in the row but comes in with the sidebar's
    * drawer. False where there is no drawer (no console): the rail is then the only way to New
    * console and Settings, so it stays in the row. */
   onDemand: boolean;
-  /** The rail is out of the window for now (`onDemand`, below the `phone` breakpoint, the drawer
+  /** The rail is out of the window for now (`onDemand`, at the tablet boundary and below, the drawer
    * closed): out of reach too, not focusable, skipped by the region cycle and hidden from assistive
    * technology. */
   away: boolean;
@@ -177,7 +177,7 @@ interface RailProps extends ConsoleMenuHandlers {
  * switcher (one avatar per console, in their order, then New console), at the bottom, pushed down,
  * the waiting count, the notifications bell (browser only, while the permission is undecided), the
  * account quota entry and Settings. It sits at the reading direction's start, like the sidebar, and
- * holds only glyphs and avatars. Below the `phone` breakpoint an `onDemand` rail leaves the row and
+ * holds only glyphs and avatars. At the tablet boundary and below an `onDemand` rail leaves the row and
  * comes in with the sidebar's drawer (`ON_DEMAND_FRAME`).
  */
 export function Rail({

@@ -29,7 +29,7 @@ export interface ConsoleAgentSettings {
  * The console dialog's Advanced section: the model and reasoning effort of the console's console
  * sessions and of its project sessions, for one agent at a time, chosen on a row of tabs above them.
  * Each agent's panel is a table, the kinds of session as columns and the settings as rows, which
- * stacks below the `md` breakpoint (see `LaunchMatrix`).
+ * stacks at the tablet boundary and below (see `LaunchMatrix`).
  * Until a tab is picked it follows `defaultAgent`, the console session agent, as the user changes
  * it; a picked tab stays. Every agent's values are kept in `values` whichever tab is showing. The tabs
  * are the added agents, in the order they were added; an agent known to be missing or not added has no
@@ -117,7 +117,7 @@ export function ConsoleLaunchFields({
 }
 
 /**
- * One agent's two pairs of settings as a table from the `md` breakpoint up: a column for each kind
+ * One agent's two pairs of settings as a table above the tablet boundary: a column for each kind
  * of session, a row for each setting, so a row is as tall as the taller of its two pickers. Below
  * it the cells stack under a heading for each kind, and each picker shows the name of its setting
  * above it. The headers are for the eye alone, hidden from assistive technology: each picker is
@@ -154,9 +154,9 @@ export function LaunchMatrix({
   // the next kind's) is the stacked order and the order of the tab stops. A row header is as high
   // as a picker and at its top, so it stays with the picker when a note makes the cell taller.
   const cell = "flex min-w-0 flex-col gap-1.5";
-  const settingName = "text-sm md:hidden";
-  const kindHeading = "text-sm font-medium md:font-normal";
-  const rowHeader = "hidden text-sm md:col-start-1 md:flex md:h-9 md:items-center md:gap-1 md:self-start";
+  const settingName = "text-sm tablet:hidden";
+  const kindHeading = "text-sm font-medium tablet:font-normal";
+  const rowHeader = "hidden text-sm tablet:col-start-1 tablet:flex tablet:h-9 tablet:items-center tablet:gap-1 tablet:self-start";
   // The mark on the Model setting's name, a button, stands beside the name rather than in it: the name is what
   // the pickers are labelled by, and is hidden from assistive technology, which the mark must not be.
   const modelMarkId = `${id}-model-mark`;
@@ -168,34 +168,34 @@ export function LaunchMatrix({
   const modelMarkHandoff = launch.modelFailure !== undefined && handoffFrom(`[data-status-mark-id="${modelMarkId}"]`);
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 md:grid-cols-[max-content_repeat(2,minmax(0,1fr))]">
-        <div className={`${rowHeader} md:row-start-2`}>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 tablet:grid-cols-[max-content_repeat(2,minmax(0,1fr))]">
+        <div className={`${rowHeader} tablet:row-start-2`}>
           <span id={modelRowId} aria-hidden="true">{model}</span>
           {modelMarkHandoff}
           {modelMark}
         </div>
-        <div id={effortRowId} aria-hidden="true" className={`${rowHeader} md:row-start-3`}>{effort}</div>
-        <div id={consoleKindId} aria-hidden="true" className={`${kindHeading} md:col-start-2 md:row-start-1`}>{t("dialog.console.launchConsole")}</div>
-        <div ref={consoleModelCell} className={`${cell} md:col-start-2 md:row-start-2`}>
+        <div id={effortRowId} aria-hidden="true" className={`${rowHeader} tablet:row-start-3`}>{effort}</div>
+        <div id={consoleKindId} aria-hidden="true" className={`${kindHeading} tablet:col-start-2 tablet:row-start-1`}>{t("dialog.console.launchConsole")}</div>
+        <div ref={consoleModelCell} className={`${cell} tablet:col-start-2 tablet:row-start-2`}>
           <span className={`${settingName} flex items-center gap-1`}>
             <span aria-hidden="true">{model}</span>
             {modelMark}
           </span>
           <ModelPicker launch={launch} model={consoleSessions.model} onChange={(value) => onConsoleChange("model", value)} hideLabel labelledBy={`${consoleKindId} ${modelRowId}`} />
         </div>
-        <div className={`${cell} md:col-start-2 md:row-start-3`}>
+        <div className={`${cell} tablet:col-start-2 tablet:row-start-3`}>
           <span aria-hidden="true" className={settingName}>{effort}</span>
           <EffortPicker launch={launch} model={consoleSessions.model} effort={consoleSessions.effort} onChange={(value) => onConsoleChange("effort", value)} hideLabel labelledBy={`${consoleKindId} ${effortRowId}`} />
         </div>
-        <div id={projectKindId} aria-hidden="true" className={`mt-1 md:mt-0 ${kindHeading} md:col-start-3 md:row-start-1`}>{t("dialog.console.launchProject")}</div>
-        <div className={`${cell} md:col-start-3 md:row-start-2`}>
+        <div id={projectKindId} aria-hidden="true" className={`mt-1 tablet:mt-0 ${kindHeading} tablet:col-start-3 tablet:row-start-1`}>{t("dialog.console.launchProject")}</div>
+        <div className={`${cell} tablet:col-start-3 tablet:row-start-2`}>
           <span className={`${settingName} flex items-center gap-1`}>
             <span aria-hidden="true">{model}</span>
             {modelMark}
           </span>
           <ModelPicker launch={launch} model={projectSessions.model} onChange={(value) => onProjectChange("model", value)} hideLabel labelledBy={`${projectKindId} ${modelRowId}`} describedBy={projectNoteId} />
         </div>
-        <div className={`${cell} md:col-start-3 md:row-start-3`}>
+        <div className={`${cell} tablet:col-start-3 tablet:row-start-3`}>
           <span aria-hidden="true" className={settingName}>{effort}</span>
           <EffortPicker launch={launch} model={projectSessions.model} effort={projectSessions.effort} onChange={(value) => onProjectChange("effort", value)} hideLabel labelledBy={`${projectKindId} ${effortRowId}`} describedBy={projectNoteId} />
         </div>

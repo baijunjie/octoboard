@@ -76,7 +76,7 @@ export interface Scenario extends Fixture {
   width?: number;
   /** The narrowest window its target exists in: a width chosen with the page's control, or by the sweep's `--width`,
    * below it is raised to it. For what exists only from a breakpoint up (a card floated in by hovering a toggle,
-   * from 594px; a docked pane's width grip or Maximize panel, from the width its visible panes need), which no width
+   * above 768px; a docked pane's width grip or Maximize panel, from the width its visible panes need), which no width
    * chosen below it shows. A comment beside it says why. A scenario carries this or `width`, not both. */
   minWidth?: number;
   /** The window height the gallery page opens it at, as `width` is for the width; left out for a

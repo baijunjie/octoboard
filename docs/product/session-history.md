@@ -138,8 +138,8 @@ scrolling region and the history view show a visible ring when focused from the 
 
 The owner link is a `Tab` stop in the history, with a visible ring when focused from the keyboard. Pressing it while it
 holds keyboard focus hands focus to the terminal once the owner is shown: into a panel covering the terminal when
-showing the owner brings one up, such as a console session owner's report panel floating over the terminal below
-594 px (see "Below 594 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and
-otherwise into the owner's terminal, or, for an archived owner, its history as described above. When the link goes
-away while holding focus, because its owner did, focus is handed to the terminal the same way, so it lands in this
-session's history.
+showing the owner brings one up, such as a console session owner's report panel floating over the terminal at 768 px and
+below (see "At 768 px and below: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and
+otherwise into the owner's terminal, or, for an archived owner, its history as described above. When the link goes away
+while holding focus, because its owner did, focus is handed to the terminal the same way, so it lands in this session's
+history.

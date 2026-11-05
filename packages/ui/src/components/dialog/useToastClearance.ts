@@ -23,7 +23,7 @@ const stack: Entry[] = [];
  * supply their bounds. Reserving expansion even while collapsed keeps a hover from moving the
  * stack off the pointer, collapsing it, and bringing it back under the pointer repeatedly. */
 function overlapsToasts(footer: DOMRect, region: HTMLElement | null): boolean {
-  if (window.innerWidth < TOAST_BREAKPOINT || !region) return false;
+  if (window.innerWidth <= TOAST_BREAKPOINT || !region) return false;
   const rtl = getComputedStyle(document.documentElement).direction === "rtl";
   const left = rtl ? TOAST_MARGIN : window.innerWidth - TOAST_MARGIN - TOAST_WIDTH;
   if (footer.right <= left || footer.left >= left + TOAST_WIDTH) return false;
