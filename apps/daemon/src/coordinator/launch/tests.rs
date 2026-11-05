@@ -9,7 +9,7 @@ use crate::session::term;
 use crate::test_support::code_of;
 use crate::test_support::{
     bare_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
-    project_session,
+    output_containing, project_session,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -422,8 +422,19 @@ fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value()
 #[tokio::test]
 async fn a_relaunched_process_that_ends_at_once_did_not_come_up() {
     let settle = Duration::from_millis(400);
-    let gone = fake_live_session("gone", AgentId::CLAUDE, 80, 24, "exit 1");
     let up = idle_stand_in("up");
+    let gone = fake_live_session(
+        "gone",
+        AgentId::CLAUDE,
+        80,
+        24,
+        "printf 'fixture-started\\n'; exit 1",
+    );
+    crate::session::spawn_reader_thread(gone.clone(), 8 * 1024);
+    // Exec can stall under parallel load. Start the settling window after the shell has run;
+    // only its built-in exit remains, so starting the fixture cannot consume that window.
+    let ready = output_containing(&gone, "fixture-started");
+    assert!(ready.contains("fixture-started"), "{ready}");
 
     assert!(!came_up(&gone, settle).await);
     assert!(came_up(&up, settle).await);
