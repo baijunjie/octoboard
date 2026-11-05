@@ -1,6 +1,5 @@
 import React, { useId, useRef, useState } from "react";
 
-import { appConfig } from "../appConfig";
 import { Button } from "../components/controls/Button";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
@@ -11,6 +10,7 @@ import { OptionSelect } from "../components/form/OptionSelect";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { UpdateChannel } from "../platform";
+import { releaseUrl } from "../components/text/releaseUrl";
 import { updateChannel } from "../updates/updateChannel";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
@@ -37,11 +37,6 @@ function versionStatus(t: ReturnType<typeof useT>, state: UpdateState): string {
 /** Whether the row shows that the last check did not finish: nothing newer is known, and nothing else is under way. */
 function checkFailed(state: UpdateState): boolean {
   return state.phase === "idle" && !state.update && state.lastCheck?.outcome === "failed";
-}
-
-/** The GitHub release of a version, whose page holds its release notes; releases are tagged `desktop-v<version>`. */
-function releaseUrl(version: string): string {
-  return `${appConfig.repositoryUrl}/releases/tag/desktop-v${version}`;
 }
 
 /** The running version with the control that moves it on — Check for updates, then Download and install once a

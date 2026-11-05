@@ -66,7 +66,7 @@ A check ends in one of three ways:
 - **Up to date**: the channel offers no version newer than the one running. A channel with no release published yet,
   and a release with no build for this Mac, count as up to date too.
 - **A newer version is available**: it is offered in the update notice (see "The update notice" below) and in
-  Settings, with its release notes where the release has any.
+  Settings, with a link to its release page.
 - **The check failed**: the update server could not be reached, did not answer within **30 seconds**, or answered with
   any error other than the channel having no release (an HTTP `404` for the channel's manifest). A failed check is never
   read as "up to date". A version offered by an earlier check stays offered after a later check fails, and is withdrawn
@@ -85,8 +85,8 @@ show. Its row wraps onto more lines in a narrow window. It says one of three thi
 
 The notice names the version, with:
 
-- **What is new**, only when the release has notes: a disclosure that opens the release notes, as plain text keeping
-  their line breaks, in a box under the strip's row that scrolls when the notes are longer than it is tall;
+- **What is new**, a link drawn as a button with an external-link icon, which opens the offered version's GitHub
+  release page in the browser, whether or not the update includes release notes (see "Where updates come from" above);
 - **Download and install**, which starts the download (see "Downloading and installing" below);
 - **Later**, an icon button, which hides the notice. The update is still offered in Settings. The notice comes back
   when a later check finds a different version, or when an update is found after the channel was switched; the same
@@ -187,8 +187,7 @@ Before that button, a **What is new** link, drawn as a button, opens in the brow
 version the row's sentence is about, `https://github.com/baijunjie/octoboard/releases/tag/desktop-v<version>` (see
 "Where updates come from" above): the newer version while one is available or downloading, the installed version once
 an update is installed, and otherwise the version running. There is no link while the version running is not yet
-known, nor for an installed update whose version is not known. Unlike the update notice's What is new (see "A newer
-version is available" above), it is there for any version the row names, not only an offered one with release notes.
+known, nor for an installed update whose version is not known.
 When the link goes away while it holds keyboard focus — the row turning to an installed update of unknown version —
 focus moves to the row's button.
 

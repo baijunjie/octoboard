@@ -45,30 +45,9 @@ export const updateScenarios: Scenario[] = [
     category: "normal",
     title: "Update notice, a newer version found",
     description:
-      "A strip along the bottom edge under the terminal, in the accent colour: a download icon, the sentence naming the version, What is new (closed, chevron down), Download and install and an X icon named Later (its tooltip says so) that puts the notice off.",
+      "A strip along the bottom edge under the terminal, in the accent colour: a download icon, the sentence naming the version, What is new (an external-link icon, opening the offered version's GitHub release page), Download and install and an X icon named Later (its tooltip says so) that puts the notice off. The link stays available even when the update has no notes. Choose Phone (390px) to see the sentence and controls wrap without an expanded notes box.",
     state: quiet,
     updater: { check: newer, checked: true },
-    steps: [openSession],
-  },
-  {
-    id: "updates-notice-notes-open",
-    group: GROUP,
-    category: "normal",
-    title: "Update notice, release notes open",
-    description:
-      "What is new is open (chevron up) and the plain-text notes fill a tinted box under the strip's row, keeping their line breaks; the box scrolls when the notes are longer than it is tall, and the terminal above is pushed up by the strip's height. Choose Phone (390px) to see the sentence and the buttons wrap onto more than one line, the notes box taking the strip's width.",
-    state: quiet,
-    updater: { check: newer, checked: true },
-    steps: [openSession, (ui) => ui.press(ui.t("updates.notice.notes"))],
-  },
-  {
-    id: "updates-notice-no-notes",
-    group: GROUP,
-    category: "normal",
-    title: "Update notice, a release without notes",
-    description: "The strip has no What is new button: only the sentence, Download and install and the Later icon.",
-    state: quiet,
-    updater: { check: { version: "0.2.0" }, checked: true },
     steps: [openSession],
   },
   {

@@ -116,15 +116,21 @@ it("tells the user a newer version is available and offers it without taking it"
   expect(updater.check).toHaveBeenCalledExactlyOnceWith("beta");
 });
 
-it("keeps the release notes behind a disclosure", async () => {
-  const { container, store } = mount({ kind: "tauri", updater: fakeUpdater().updater });
+it.each([FOUND, { version: "0.2.0-beta.2" }])("opens the offered version's release page with or without inline notes: %j", async (update) => {
+  const { updater } = fakeUpdater();
+  updater.check = vi.fn(async () => update);
+  const open = vi.fn(async () => {});
+  const { container, store } = mount({ kind: "tauri", updater, links: { open } });
   await find(store());
-  const toggle = button(container, "What is new")!;
-  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  const link = container.querySelector<HTMLAnchorElement>("a[data-external-link]")!;
+  const address = `https://github.com/baijunjie/octoboard/releases/tag/desktop-v${update.version}`;
+  expect(link.textContent).toContain("What is new");
+  expect(link.getAttribute("href")).toBe(address);
+  expect(link.hasAttribute("aria-expanded")).toBe(false);
   expect(container.textContent).not.toContain("Fixes and more fixes.");
-  await act(async () => toggle.click());
-  expect(toggle.getAttribute("aria-expanded")).toBe("true");
-  expect(container.textContent).toContain("Fixes and more fixes.");
+  await act(async () => link.click());
+  expect(open).toHaveBeenCalledExactlyOnceWith(address);
+  expect(container.textContent).not.toContain("Fixes and more fixes.");
 });
 
 it("hides the notice on Later", async () => {

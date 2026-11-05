@@ -15,8 +15,9 @@ export { ExternalLinkIcon } from "./ExternalLinkIcon";
 type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick" | "onAuxClick" | "target" | "rel"> & {
   href: string;
   appearance?: "text" | "button";
-  /** The button appearance's size, `sm` beside small buttons. */
-  size?: "sm";
+  /** The button appearance's size, matching the adjacent controls. */
+  size?: "xs" | "sm";
+  variant?: "secondary" | "outline";
   onOpen?: (href: string) => void | Promise<void>;
   /** Takes the failure to open the link in place of the default alert, which names the address for the user to open by hand. */
   onFailure?: (cause: unknown) => void;
@@ -78,7 +79,7 @@ export function useExternalLinkAction({ href, onOpen, onFailure, isPending = fal
 }
 
 /** A browser destination stays a real anchor while native shells open it outside the application. */
-export function ExternalLink({ href, appearance = "text", size, onOpen, onFailure, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
+export function ExternalLink({ href, appearance = "text", size, variant = "secondary", onOpen, onFailure, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
   const t = useT();
   const focus = useFocusVisibleProps();
   const action = useExternalLinkAction({ href, onOpen, onFailure, isPending });
@@ -95,7 +96,7 @@ export function ExternalLink({ href, appearance = "text", size, onOpen, onFailur
       aria-disabled={action.busy || undefined}
       aria-busy={action.busy || undefined}
       data-external-link=""
-      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? buttonVariants({ variant: "secondary", size }) : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
+      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? `${buttonVariants({ variant, size: size === "xs" ? "sm" : size })} ${size === "xs" ? "app-button--xs" : ""}` : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
       onClick={action.onClick}
       onAuxClick={action.onAuxClick}
     >
