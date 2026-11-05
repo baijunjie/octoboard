@@ -1,8 +1,9 @@
 # Desktop build, install and release scripts
 
 The Node scripts of `@octoboard/desktop` that generate native resources, build the sidecar and the app, install it
-locally, produce the signed release and publish it for the in-app updates. They run from `apps/desktop/` through its
-`package.json` scripts (and the root `install:macos`); the shared pieces are in `bundle.mjs`. Credentials come from the
+locally, prepare version tags, produce the signed release and publish it for the in-app updates. They run through the
+`apps/desktop/package.json` scripts, directly in that directory or with `pnpm --filter @octoboard/desktop` from the
+repository root; the shared build pieces are in `bundle.mjs`. Credentials come from the
 gitignored repo-root `.env.secret` (template `.env.secret.example`), read by `scripts/lib/env.mjs`; a variable already
 in the environment wins.
 
@@ -30,6 +31,9 @@ in the environment wins.
   while Octoboard runs, refuses to replace a symlink or another application, stages the copy on the destination volume
   and keeps the previous bundle for rollback if the replacement fails.
 - `release.mjs` (`pnpm release`) — the universal, signed and notarized release build (below).
+- `release-desktop.mjs` (`pnpm release:version`) — prepares a version commit in an isolated worktree, checks it and
+  pushes it with its annotated tag to start release CI (see "Releasing by tag"). Its version-file preparation,
+  argument parsing and release orchestration are tested by `release-desktop.test.mjs`.
 - `sign-update.mjs` (`pnpm sign-update`) — signs the update archive `pnpm release --no-sign-update` left with the update
   key and checks that a fresh `.sig` came out (below).
 - `publish-release.mjs` (`pnpm publish-release`) — publishes what `pnpm release` built (below).
@@ -117,7 +121,56 @@ described in `docs/product/in-app-updates.md`, section "Where updates come from"
 
 Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which does the two steps above on a macOS
 runner after the application checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and
-`publish-release` path stays available. The workflow:
+`publish-release` path stays available.
+
+### Prepare and push a version
+
+Run from the clean main checkout on `main`, with dependencies installed and Git access to `origin`:
+
+```sh
+pnpm --filter @octoboard/desktop release:version 0.1.0-beta.2 --notes-file /tmp/octoboard-release-notes.md --dry-run
+pnpm --filter @octoboard/desktop release:version 0.1.0-beta.2 --notes-file /tmp/octoboard-release-notes.md
+```
+
+Supply exactly one nonempty notes source: `--notes "text"` or `--notes-file path`. A relative notes path is resolved
+from the repository root, even when pnpm runs the command in the desktop package; absolute paths work too. Keep an
+uncommitted notes file outside the tracked tree or in an ignored location so the main checkout stays clean. The tag
+message is the same text shown on the release page and in the application's update notice; Markdown headings are
+preserved.
+
+The version must be a semantic version strictly newer than the current one, without build metadata. The command
+refuses an existing local or remote version tag, release branch or release worktree. `.worktrees/` must be ignored
+(for example in `.git/info/exclude`). `--dry-run` checks the inputs and queries the remote refs, then prints the plan
+and notes without changing files or refs; it does not fetch or run the checks.
+
+The command:
+
+1. Fetches `origin/main`, fast-forwards a behind-only local `main`, and refuses divergent history. It creates
+   `release/desktop-v<version>` in `.worktrees/desktop-v<version>` from main.
+2. Updates `apps/desktop/package.json`, the root `Cargo.toml` and only the two workspace package versions in
+   `Cargo.lock`. `cargo metadata --locked` validates that lockfile without updating external dependencies. It installs
+   dependencies with `pnpm install --frozen-lockfile`, stages exactly the three version files and makes one version
+   commit through the normal Git hooks.
+3. Rebases onto main, runs `pnpm verify --quick`, fast-forwards main and removes the release worktree and branch. It
+   then runs the full checks selected by the changes since the fetched remote main, including other unpushed main
+   commits. It stops if main changes while preparation or verification is running.
+4. Creates the annotated version tag on the checked commit and atomically pushes that exact commit to remote main
+   together with its tag. Git hooks stay enabled, and a refused push updates neither remote ref.
+
+Successful command completion means the tag was pushed, not that the application has been published. Follow the
+**Release** workflow in GitHub Actions through its checks, build, signing, notarization and publishing steps before
+announcing the release.
+
+Failures leave the current state for inspection; the command never resets history or force-removes a worktree. Before
+the merge, inspect the named release branch and worktree, correct the cause, and finish or clean up that attempt before
+starting another. After the merge, the version commit stays on main; the same `release:version` command cannot be
+rerun because the version must increase. Correct the failure, check main with `pnpm verify --base origin/main --head
+<release-commit>`, create the annotated tag only if it is absent, and atomically push the checked commit and tag after
+confirming any existing local tag has the intended commit and notes. Do not delete or replace a published tag to retry.
+
+### Release CI
+
+The workflow:
 
 1. `validate` runs `.github/release-notes.sh`: the tag must equal `desktop-v<version>` from `apps/desktop/package.json`
    and be an annotated tag with a non-empty message. The message, minus any signature, is the release notes, which the
@@ -146,12 +199,12 @@ Repository secrets: `APPLE_CERTIFICATE` (base64 of the Developer ID Application 
 to the agent CLIs. `src-tauri/build.rs` fails every build and test of the shell when the two differ, when
 `tauri.conf.json` names a version of its own, or when the daemon's manifest does not take the workspace version.
 
-**To release**: raise the version in `apps/desktop/package.json` and in the root `Cargo.toml`, run `cargo check` so that
-`Cargo.lock` records it, push that commit to `main`, write the notes to a file, then `git tag -a desktop-v<version>
---cleanup=whitespace -F <notes-file>` and `git push origin desktop-v<version>`. `--cleanup=whitespace` keeps the notes'
-Markdown heading lines, which the default `--cleanup=strip` drops; the file rather than the editor keeps git's `#`
-template lines out of them. Push tags one at a time: GitHub creates no push event when more than three tags are pushed
-at once.
+For manual tag preparation, raise the version in `apps/desktop/package.json` and in the root `Cargo.toml`, run
+`cargo check` so that `Cargo.lock` records it, check and push that commit to `main`, write the notes to a file, then
+`git tag -a desktop-v<version> --cleanup=whitespace -F <notes-file>` and `git push origin desktop-v<version>`.
+`--cleanup=whitespace` keeps the notes' Markdown heading lines, which the default `--cleanup=strip` drops; the file
+rather than the editor keeps Git's `#` template lines out of them. Push tags one at a time: GitHub creates no push
+event when more than three tags are pushed at once.
 
 When a run fails after `gh release create` but before the manifests are uploaded, re-running it rebuilds with a
 different signature, and `publish-release` refuses it. Delete the release but keep the tag

@@ -7,8 +7,10 @@ How the repository is built, checked and released, outside the code of any one e
 
 - **pnpm workspace** (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`): the packages are the `apps/*` and
   `packages/*` directories that have a `package.json` (`apps/web/`, `apps/desktop/`, `packages/ui/`); `apps/daemon/` has
-  none. The root `package.json` holds the cross-package commands (`verify`, `lint`, `format`, `test:rust`,
-  `clippy:rust`, `hooks:install`) and the shared lint dev dependencies. `patchedDependencies` in `pnpm-workspace.yaml`
+  none. The root `package.json` holds repository-wide verification, formatting, Rust workspace checks, identity
+  maintenance and hook installation, with shared lint dev dependencies. Commands that build, type-check, install or
+  release one package live in that package's `package.json`, invoked with `pnpm --filter <package> <command>` from the
+  root. `patchedDependencies` in `pnpm-workspace.yaml`
   registers the patches in `patches/` (currently one for jsdom's selector engine, used by the UI's tests).
 - **Cargo workspace** (`Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `rustfmt.toml`): members `apps/daemon` and
   `apps/desktop/src-tauri`, built into one `target/`. The workspace `version` is the application's version and must

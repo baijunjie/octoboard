@@ -29,7 +29,10 @@ root with `pnpm test:rust`, which needs no sidecar.
   certificate in your keychain) in the gitignored repository-root `.env.secret`, copy
   [`.env.local.example`](../../.env.local.example) to `.env.local` and set `OCTOBOARD_INSTALL_DIR` to an absolute
   directory, quit any running Octoboard, then run it. It needs Xcode 26 selected as the developer directory.
-- `pnpm release` and `pnpm publish-release` — the distributable build and its publication for in-app updates.
+- `pnpm release:version <version> --notes-file <path>` — prepare and push a version from the clean main checkout;
+  CI builds, signs, notarizes and publishes it. The notes path is relative to the repository root, or absolute.
+  Add `--dry-run` to preview the release without changing files or refs.
+- `pnpm release` and `pnpm publish-release` — build and publish a signed release manually.
 
 How each script works, the release signing modes and the tag-driven release are in
 [`scripts/README.md`](scripts/README.md).

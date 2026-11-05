@@ -34,10 +34,11 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 ### [`scripts/`](../../apps/desktop/scripts/README.md) (`apps/desktop/scripts/`)
 
-The native-resource generation, sidecar build, local build, local install, release, update-signing and
-release-publishing scripts, with their shared `bundle.mjs`, `update-archive.mjs` (packs and signs the update archive),
-the testable `release-manifest.mjs` and the temporary `actool/` shim. Its README holds their interfaces, how the release
-is built, published and tagged, and the rule that the version lives in two places.
+The native-resource generation, sidecar build, local build, local install, version preparation, release, update-signing
+and release-publishing scripts, with their shared `bundle.mjs`, `update-archive.mjs` (packs and signs the update
+archive), the testable `release-manifest.mjs` and the temporary `actool/` shim. `release-desktop.mjs` owns the
+`release:version` command that prepares and pushes a version for CI. The module README holds the scripts' interfaces,
+the automated and manual release procedures, failure recovery, and the rule that the version lives in two places.
 
 ## IPC surface
 
@@ -64,8 +65,9 @@ only counterpart of this surface.
   `packages/ui/src/platform/`. A command that carries daemon data does not belong here.
 - Menu bar icon work stays inside `src/tray/`: parse in `model.rs`, build in `items.rs`, native-only finishing in
   `finish.rs`, `status_item.rs`, `icon.rs`, `lines.rs` and `openers.rs`.
-- A build or release step is a script in `scripts/` sharing `bundle.mjs`; the pure part of a publishing decision goes in
-  `release-manifest.mjs` so it can be tested without GitHub.
+- A desktop build or release command belongs in this package's `scripts/` and `package.json`. Build steps share
+  `bundle.mjs`; the pure part of a publishing decision goes in `release-manifest.mjs` so it can be tested without
+  GitHub.
 
 ## Shared entry points
 

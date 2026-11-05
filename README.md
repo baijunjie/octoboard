@@ -142,6 +142,27 @@ The git hooks format staged files on commit and run the affected checks on push;
 checks a change selects and `pnpm verify` runs them. How the checks are scoped is in
 [scripts/verify/README.md](scripts/verify/README.md).
 
+The root commands cover the repository as a whole:
+
+| Command | Purpose |
+|---|---|
+| `pnpm verify` | Run the checks selected by the changed files; `--dry-run` shows the plan. |
+| `pnpm lint` | Lint JavaScript, TypeScript and Vue across the repository; add `--fix` to apply lint fixes. |
+| `pnpm format` | Format supported source files across the repository with ESLint and rustfmt. |
+| `pnpm format:staged` | Format only staged source files, preserving unstaged changes; also run by the commit hook. |
+| `pnpm clippy:rust` | Run clippy for both Rust crates and all their targets. |
+| `pnpm test:rust` | Run the Rust workspace tests. |
+| `pnpm identity:sync` | Regenerate literal identity fields from `config/app.json`. |
+| `pnpm identity:check` | Check that generated identity fields match their source. |
+| `pnpm hooks:install` | Install or refresh the repository's Git hooks from the main checkout. |
+| `prepare` | Lifecycle hook that installs Git hooks when dependencies are installed in the main checkout. |
+
+Build, type-check, install and release commands belong to the package they operate on. For example,
+`pnpm --filter @octoboard/ui typecheck`, `pnpm --filter @octoboard/web build`,
+`pnpm --filter @octoboard/desktop install:macos`, and
+`pnpm --filter @octoboard/desktop release:version <version> --notes-file <path>`.
+The desktop package's [release procedure](apps/desktop/scripts/README.md#releasing-by-tag) covers automated releases.
+
 Where to read next: the [documentation index](docs/README.md) answers which doc to open for which question, the
 [project map](docs/project-map.md) gives the technology stack and directory map, and
 [architecture](docs/architecture.md) explains why it is built this way.
