@@ -535,12 +535,12 @@ are now wrong or it leaves out one thing, the meaning has changed.
 - **Input placeholders**: an optional input names the default or empty state it takes when left empty, and a
   multi-value field's input, once its list holds an item, invites adding another; neither is an example. This
   replaces "Input placeholders" above for those inputs. (the "Input placeholders" section of
-  `docs/ui-accessibility.md`)
+  `docs/ui-standard.md`)
 - **Empty-state copy**: an empty state's title carries no punctuation at all, a comma inside it included, which is
   stricter than the "Empty-state titles" rule above; what the title cannot hold goes in the line under it, and a
   state said in one breath somewhere else — a notice over content shown anyway, a live region speaking for a panel
   hidden from screen readers — is a `.sentence` message of its own rather than the two joined in code. (the "An empty
-  state is a glyph, a heading, and what fills it" section of `docs/ui-accessibility.md`)
+  state is a glyph, a heading, and what fills it" section of `docs/ui-standard.md`)
 - **Per-language rules beyond the generic tables**: these extend "Register per language" (its "Button form" column),
   "Simplified Chinese" and "Pitfalls in other languages" above.
   - ko: requests use 해 주세요 only in explanatory sentences, never on a button (buttons are nouns, per the "Button form"
@@ -592,7 +592,7 @@ are now wrong or it leaves out one thing, the meaning has changed.
   single string, so the "two strings to change together" warning under "Capitalization" has nothing to match here. The
   optional control under the message settles what Confirm does rather than gating it, and Enter submits even from that
   control, so the Confirm label and the control's own label must each read correctly with it left untouched.
-  (`packages/ui/src/components/dialog/ConfirmDialog.tsx`; `docs/ui-accessibility.md`, "Keyboard")
+  (`packages/ui/src/components/dialog/ConfirmDialog.tsx`; `docs/ui-standard.md`, "Keyboard")
 - **Codex usage limit resets**: the copy for a Codex account's usage limit resets follows Codex's own wording rather
   than terms of our own: "usage limit reset(s)" for the credit, "Redeem reset" for the command and the confirmation's
   title, "Use reset" for its Confirm, "Usage reset" once used. The title and Confirm deliberately use different verbs,

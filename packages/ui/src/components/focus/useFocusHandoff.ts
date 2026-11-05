@@ -16,7 +16,7 @@ import { focusTopBar } from "./regionFocus";
  * control when that leaves it on `<body>`. The user did not ask for the move, so the modality is
  * set to keyboard first: the previous input was often a pointer press, which would leave the
  * destination without a ring (see "Focus moved by a change the user did not make" in
- * `docs/ui-accessibility.md`).
+ * `docs/ui-standard.md`).
  *
  * The caller must stay mounted while the control goes away (render `null`, not unmount): the check
  * runs in the caller's own effect. */

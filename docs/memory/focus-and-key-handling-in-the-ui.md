@@ -68,7 +68,7 @@ that look right both fail, and a test that checks only `document.activeElement` 
   queued microtask, so an enclosing `useFocusHandoff` or `useSectionRefocus` has already found focus on `<body>` and
   sent it elsewhere. Decide in a layout effect of a component that renders in that commit, as
   `useHandoffAfterRemoval` in the same file does; which of the two a source uses is set out in
-  `docs/ui-accessibility.md`, "Focus moved by a change the user did not make".
+  `docs/ui-standard.md`, "Focus moved by a change the user did not make".
 
 So a test of such a handoff asserts `data-focus-visible` on the element react-aria marks (a switch's `label`) after
 `await act(async () => {})`, not only where focus is, and makes the change the way the store sends it — a new array,
@@ -169,7 +169,7 @@ to a frame, and drops it if focus has moved by then. So:
   `useLayoutEffect`, as `DirectoryPicker` does, never through the DOM element's own `autoFocus`: React applies that as it
   inserts the node, before the new dialog's focus scope exists, so a dialog opened over another one loses it to the
   outer dialog's containment, which pulls focus back to its trigger, and then focuses its own dialog element. Such a
-  control is also marked as `docs/ui-accessibility.md`, "The error alert dialog", sets out.
+  control is also marked as `docs/ui-standard.md`, "The error alert dialog", sets out.
 
 The two failures show under opposite presses, so test both: the mount refocus only after a press without a pointer
 (`framesAsTimers()` from `packages/ui/src/components/dialog/dialogTestSupport.ts`, under `StrictMode` as well), the DOM
@@ -306,7 +306,7 @@ tooltip open, that press only dismisses the tooltip, as everywhere else.
 A tooltip anchored to an element that is not its trigger (`AnchoredHint` in
 `packages/ui/src/components/hint/hintTooltips.tsx`, a clipped label's tooltip) gets no such listener from react-aria and
 stops the key itself in one case only: while it is shown and focus is inside the react-aria popover its anchor sits in
-(a menu, a submenu, a select's list), as `docs/ui-accessibility.md`'s "A tooltip is the application's own, never the
+(a menu, a submenu, a select's list), as `docs/ui-standard.md`'s "A tooltip is the application's own, never the
 browser's `title`" sets out. Anywhere else — a dialog, a view, the terminal — it lets Escape through, which is why
 `useEscapeWhileTooltipOpen` leaves it out.
 

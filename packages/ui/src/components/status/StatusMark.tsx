@@ -49,7 +49,7 @@ interface StatusMarkProps {
  * The minimal mark of a warning, an error or a note that belongs to one point (a row, a cell, a name, a
  * field, a setting, a section's heading or a title, a spot in text): a glyph named by `label` whose
  * content opens from the glyph in one floating surface, never two. What each tone opens, how a popover
- * opens and takes focus, and the in-header and inline forms are in `docs/ui-accessibility.md`, "How a
+ * opens and takes focus, and the in-header and inline forms are in `docs/ui-standard.md`, "How a
  * mark is drawn and opened".
  *
  * Every tone is the same mark: a button (`MarkButton`) that opens its content in a popover

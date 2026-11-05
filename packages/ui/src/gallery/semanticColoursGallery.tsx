@@ -12,7 +12,7 @@ import { InlineReference } from "../i18n/InlineReference";
 import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 
-/** One semantic meaning and how the application draws it. The role tokens follow docs/ui-accessibility.md's "One
+/** One semantic meaning and how the application draws it. The role tokens follow docs/ui-standard.md's "One
  * definition per semantic colour"; the purple help colour has no HeroUI token, so its icon colour is its text tint
  * and it has no solid text colour; an Alert has only the warning and danger statuses. */
 interface Meaning {

@@ -12,7 +12,7 @@ export type { AlertStatus };
  * Durable failure or warning content shown among other content: one that blocks (a lookup a form makes), one about a
  * whole area laid out top down, or one about the whole view; never a whole subject that failed (`EmptyPanel`) or one
  * at a point (`StatusMark`). It is shown here and nowhere else. The Alert is compact ("Errors shown among other
- * content" in `docs/ui-accessibility.md`): the `title`, required, saying what happened; `children`, the one short
+ * content" in `docs/ui-standard.md`): the `title`, required, saying what happened; `children`, the one short
  * description, which says why rather than repeating the title (inline content only, since `Alert.Description` is a
  * `span`); then `remedy`, the one main thing to do about it, also always visible and also inline content, so the
  * visible copy is at most two sentences in the application's own words; then at its end, where HeroUI's own Alert puts

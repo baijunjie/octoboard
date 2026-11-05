@@ -27,7 +27,7 @@ change to how raw text looks goes into the component, not into one caller.
 This is the user's design rule for every destructive confirmation in `packages/ui` (removing, deleting, archiving)
 that offers options, such as taking more along with what is deleted. A confirmation that is not destructive, such as
 the trust prompt, has no consequences block: the risk an option brings is a warning Alert under it while it is ticked
-(`ChoiceWarning`, see `docs/ui-accessibility.md`, "On the screen: an Alert when it matters, a mark at its point
+(`ChoiceWarning`, see `docs/ui-standard.md`, "On the screen: an Alert when it matters, a mark at its point
 otherwise").
 
 - A checkbox never goes inside the consequences. It is a plain block of its own: its label says what ticking it
@@ -49,7 +49,7 @@ The consequences take one of two shapes, and each dialog keeps the shape it has:
   (the archive) still passes `consequences={null}`, which keeps the warning icon.
 - **One block** — deleting a session, deleting archived sessions. The consequences are one block, `ConfirmConsequences`
   passed as `ConfirmDialog`'s `consequences`, which renders it as body text under the options and over the buttons;
-  passing it makes the dialog a warning modal (see `docs/ui-accessibility.md`, "Where an error is shown"), never a
+  passing it makes the dialog a warning modal (see `docs/ui-standard.md`, "Where an error is shown"), never a
   modal with a warning box in its body. What the dialog says it takes along before any option is ticked (the sessions
   it ends) is that same block, not one above the options. If the dialog had nothing else to say, the block appears
   with the first ticked option and goes away when none are.
@@ -59,7 +59,7 @@ shape.
 
 ## Read the project's placeholder standard before adding or changing a field
 
-For an input in `packages/ui`, follow `docs/ui-accessibility.md`, "Input placeholders", before choosing its
+For an input in `packages/ui`, follow `docs/ui-standard.md`, "Input placeholders", before choosing its
 placeholder. That project standard takes precedence over the generic "Input placeholders" guidance in
 `.claude/skills/knowledge-i18n-copy/SKILL.md`.
 
@@ -89,7 +89,7 @@ In a `packages/ui` dialog, a message about one field's value — empty, malforme
 field: `TextInput` (`packages/ui/src/components/form/TextInput.tsx`) takes it as `errorMessage`, which marks the field
 invalid and renders the message right under it. Only the form's own check at submit goes there: anything that fails
 once the submit has passed it — a daemon refusal about that same field's value included — opens the error alert
-instead, as the "Where an error is shown" section of `docs/ui-accessibility.md` sets out.
+instead, as the "Where an error is shown" section of `docs/ui-standard.md` sets out.
 
 Compute each field's message on every render from the current value and pass it through `useSubmitValidation`
 (`packages/ui/src/components/dialog/dialogHooks.ts`): `shown(message)` holds it back until `attempt(...messages)` has gated a

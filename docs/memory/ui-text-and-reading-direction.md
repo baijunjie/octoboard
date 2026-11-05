@@ -49,7 +49,7 @@ in from the start:
   own label whatever script it starts with, even though the user typed it; free-form names (a session title, a
   project, tag or account name) `dir="auto"`. `FadeOverflow` takes the same `dir` and fades along it. A tooltip is
   portalled out and does not inherit the label's `dir`; the full list of left-to-right values and the tooltip rule
-  are in the "Text direction" section of `docs/ui-accessibility.md`.
+  are in the "Text direction" section of `docs/ui-standard.md`.
 - `dir="auto"` only decides for an element that holds the text itself: the engine reads the element's own text and
   stops at every descendant carrying a `dir` of its own, so a container whose text all sits in such descendants — the
   paragraphs of a rendered Markdown list or quote — can never resolve. An unresolved `auto` falls back to `ltr`

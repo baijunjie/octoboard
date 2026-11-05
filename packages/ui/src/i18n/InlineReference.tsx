@@ -17,7 +17,7 @@ export type InlineReferenceProps = Omit<React.ComponentProps<typeof Chip<"span">
 };
 
 /** A reference mixed into running copy. It always takes the font of the text it sits in; the sizes differ only in
- * padding, and `xs`, the default, is safe in every line (see `docs/ui-accessibility.md`'s "A chip's size follows the
+ * padding, and `xs`, the default, is safe in every line (see `docs/ui-standard.md`'s "A chip's size follows the
  * line it sits in" section). */
 export function InlineReference({
   children,

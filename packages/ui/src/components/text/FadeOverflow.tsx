@@ -314,7 +314,7 @@ interface FadeOverflowProps {
  *
  * While clipped, the text runs as a marquee while the pointer is over it. A single-label control
  * may use `data-marquee-scope` for its whole target; independent labels and actions must not share
- * that scope. See docs/ui-accessibility.md's "Hover marquees belong to one text label" section.
+ * that scope. See docs/ui-standard.md's "Hover marquees belong to one text label" section.
  *
  * It sets `overflow` and `whitespace-nowrap` itself, so the caller supplies only the sizing
  * (`min-w-0 flex-1` inside a flex row). It has to lay out as a block or a flex item: rendered

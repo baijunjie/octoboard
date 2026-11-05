@@ -142,7 +142,7 @@ export function StatusGlyph({ entry, size }: { entry: StatusEntry; size: string 
 export type Shown = ReturnType<typeof useSubmitValidation>["shown"];
 
 /** A labelled path or URL on a line of its own, shown as plain monospace text (see the "References in copy use
- * `InlineReference`" section of docs/ui-accessibility.md). It is a pair of cells of a `dl` laid out as a two-column
+ * `InlineReference`" section of docs/ui-standard.md). It is a pair of cells of a `dl` laid out as a two-column
  * grid. */
 export function Field({ label, value }: { label: string; value: string }): React.ReactElement {
   return (

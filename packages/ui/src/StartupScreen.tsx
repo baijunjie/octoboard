@@ -49,7 +49,7 @@ export function StartupScreen({ message }: { message: React.ReactNode }): React.
 /**
  * A failure that is the whole page: the empty state's shape in the danger tone, its heading `title`, the line under it
  * `description` in the application's own words, the `remedy` after that, and `details` (any further explanation, then
- * the raw text) on a surface of its own under them (see "A whole subject that failed" in `docs/ui-accessibility.md`). It
+ * the raw text) on a surface of its own under them (see "A whole subject that failed" in `docs/ui-standard.md`). It
  * is the failure's only presentation, so the page announces its heading and `description`, inserted after the first
  * paint. `action` is the failure's recovery, its primary button.
  *

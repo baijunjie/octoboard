@@ -7,4 +7,4 @@ content panel" in `docs/product/window-layout.md`), whose colour shifts with wha
 rejected a layout that put the text-heavy sidebar on it, and one that floated the content as a card with gutters of
 material around it. So nothing beyond an icon, an avatar or the breadcrumb's one line goes on the chrome; anything
 else belongs in the opaque content panel. A glyph or tint that does go there is measured against the material itself,
-not only against `--chrome` (the "A glyph or tint on the window material" section of `docs/ui-accessibility.md`).
+not only against `--chrome` (the "A glyph or tint on the window material" section of `docs/ui-standard.md`).

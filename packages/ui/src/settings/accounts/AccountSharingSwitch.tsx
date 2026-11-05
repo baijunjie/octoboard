@@ -25,7 +25,7 @@ import { alertFailure } from "../../components/alerts/raiseError";
  * turning it off does is behind the label's help tip, with the idle sessions it would end; and under the
  * description, why the switch is locked. A change is carried out at once, so the switch is either free or
  * unavailable, and says which. Unavailable, it stays focusable and describes itself, so a keyboard user hears why
- * (see "Buttons" in `docs/ui-accessibility.md`):
+ * (see "Buttons" in `docs/ui-standard.md`):
  * - free: nothing under it;
  * - unavailable while sessions of the account run or start under its directory, or it is being signed in (`in_use`),
  *   saying so;

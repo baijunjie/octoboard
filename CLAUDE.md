@@ -166,9 +166,9 @@ the earlier steps do not run them separately (the related tests a step runs to c
   the copy conventions this round changes), the gallery scenarios that show the changed states, and the address of
   any gallery this checkout is serving; work through its findings as `agent-change-check` does with
   `change-checker`'s, and re-dispatch it until it passes.
-- Within "Documentation update": `docs/ui-accessibility.md`, the UI's accessibility standard, has no writer subagent
-  of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
-  belonging to it. Skip it when this round's changes touch nothing it states.
+- Within "Documentation update": `docs/ui-standard.md`, the UI standard, has no writer subagent of its own — you
+  maintain it yourself, from what the change turned up and from what a writer subagent hands back as belonging to it.
+  Skip it when this round's changes touch nothing it states.
 - Timing override for "Formatting and checks", including the pre-merge flow and other skills' verification
   baselines: by the user's explicit workflow choice, routine development completion and local merges do not run
   the full checks. Before a local merge only, once the branch is aligned with its target branch and right before

@@ -140,7 +140,7 @@ function diffCss(theme: "light" | "dark"): string {
        A SHORTFALL THE USER HAS KEPT ON PURPOSE: the library halves a two-control bar between its
        controls (grid-template-rows: 50% 50%, under pointer: fine), so at 2 lines each of them is
        a 20px pointer target, under the 24px this project otherwise holds to — see
-       docs/ui-accessibility.md's "Pointer target size" section. The user chose GitHub's
+       docs/ui-standard.md's "Pointer target size" section. The user chose GitHub's
        proportions over the floor, knowing GitHub's own arrows miss it the same way. Raising this
        multiplier to 2.4 is the fix if that is ever reconsidered; the one-control bar, the
        separator's text and Show whole file all clear 24 as they are.

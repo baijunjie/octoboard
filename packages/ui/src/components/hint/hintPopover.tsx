@@ -180,7 +180,7 @@ interface HoverPopoverTrigger {
  * `data-escape-topmost`); a mouse click opens nothing; a tap, a pen, assistive technology and the keyboard
  * open it with focus inside (modal), and such a press on a hover-opened surface turns it into that form.
  * After any close but the grace's own, a pointer still resting on the trigger does not open it again until
- * it has left and come back. What each says is in `docs/ui-accessibility.md`.
+ * it has left and come back. What each says is in `docs/ui-standard.md`.
  *
  * Props:
  * - `trigger` draws the trigger from the wiring it is handed.

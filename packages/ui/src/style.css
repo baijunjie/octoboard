@@ -399,7 +399,7 @@ html {
 
 /* The session context mark's ring (`ContextRing`) and its card's meter, in the tone of how full the
    window is. A mark of meaning drawn on a surface takes HeroUI's soft foreground of that colour (see
-   docs/ui-accessibility.md's "One definition per semantic colour" section), not the solid colour. The
+   docs/ui-standard.md's "One definition per semantic colour" section), not the solid colour. The
    ring's track is the foreground at 20% rather than HeroUI's `--default`, which vanishes on a selected
    sidebar row and a control fill. Its stroke is 6 of the 36-unit view box (about 2px at its 12px size)
    in place of HeroUI's 4, which reads as a hairline that small; the radius stays HeroUI's, which its
@@ -437,7 +437,7 @@ html {
    `--provider-fill-dark`, the way `.session-colour-dot` takes its pair; a provider without a colour sets neither, and its
    bars take the foreground, as its mark does. Claude's is its provider colour, an orange darkened to keep 3:1 against every track it
    is drawn on at full opacity, lightened on the dark tracks, though the bar is decorative and not held to it (see
-   docs/ui-accessibility.md, "A colour mark whose meaning is in words"); Codex's is a blue. Inside `.control-fills`
+   docs/ui-standard.md, "A colour mark whose meaning is in words"); Codex's is a blue. Inside `.control-fills`
    (Settings, the dialogs, the rail panel) `--default` is `--control-fill`, and the compact bar's dark track lightens that
    a step (see `.quota-bar-track`): the lightest dark track, and the one that sets Claude's dark value. From the module
    colours, light then dark: the compact bar on `--control-fill` (a table cell, a select trigger; in dark also a popover
@@ -617,7 +617,7 @@ html {
      lighter still: a secondary button's `--control-fill` (L 0.33) stays a step off it, where it vanished on
      a card of its own colour, and a danger-soft label reads 4.47:1 on it (4.2:1 with the button hovered),
      the lighter the card the lower. That shortfall in dark is kept by the user's decision; see
-     docs/ui-accessibility.md, "Conformance level and exceptions". */
+     docs/ui-standard.md, "Conformance level and exceptions". */
   --panel-row: oklch(0.29 0.006 286);
   /* Dark: `--app-muted` holds 4.69:1 on the hover fill and 4.65:1 on the selected one. */
   --panel-row-hover: oklch(1 0 0 / 0.045);
@@ -674,7 +674,7 @@ html {
 
    A tooltip or popover is portalled to the end of `<body>`, outside the pane or dialog that carries
    this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
-   visual choices" in docs/ui-accessibility.md). Everything a dialog, the pane or such a tooltip or
+   visual choices" in docs/ui-standard.md). Everything a dialog, the pane or such a tooltip or
    popover draws from `--default` takes the fills: a secondary button, a tab list, a ghost button's
    hover, a toggle button, a search field and a select in their secondary variant, and the file
    viewer's image checkerboard (`.viewer-checkerboard`), whose squares step faintly from its ground
@@ -715,7 +715,7 @@ html {
 
 /* The one palette the application keeps beside HeroUI's: the secondary text colour, the help purple, and
    (below) the tints built from them. Every other colour is HeroUI's own token, read where it is drawn
-   (docs/ui-accessibility.md's "One definition per semantic colour"). `--app-muted` is HeroUI's `--muted`
+   (docs/ui-standard.md's "One definition per semantic colour"). `--app-muted` is HeroUI's `--muted`
    in dark and a step darker in light, where `--muted` is 3.70:1 on a selected sidebar row and this is
    4.62:1. `--help` is Tailwind's purple 500, the base of `--tint-help-*`. */
 :root {
@@ -915,7 +915,7 @@ html {
 
 /* A mark that opens a touch popover is a touch target (`IndicatorTooltip`), so on a device that has
    a coarse pointer its hit area reaches 24 by 24 CSS pixels, as "Pointer target size" in
-   docs/ui-accessibility.md asks, where the drawing is smaller: an `::after` that grows to that size
+   docs/ui-standard.md asks, where the drawing is smaller: an `::after` that grows to that size
    and never shrinks, so a larger mark is untouched. The query asks about the device, not the input
    in use, so a hybrid device's mouse gets the grown area too; the cost is a hover that begins a
    little early beside a neighbouring mark. The `::after` sits behind the mark's own content
@@ -949,7 +949,7 @@ html {
    recessed frame of raw diagnostics, a confirmation's branch list, licence texts and the file viewer's checkerboard)
    below the surface. Every floating surface is the one colour, as in light, so one over another (a tooltip over a menu,
    a confirmation over Settings) is set apart by `--overlay-shadow`. A deliberate departure from HeroUI's look, kept in
-   docs/ui-accessibility.md's "Confirmed visual choices" section; light keeps HeroUI's own.
+   docs/ui-standard.md's "Confirmed visual choices" section; light keeps HeroUI's own.
 
    The step is small because HeroUI's `--muted` on a fill that holds secondary text (a placeholder, a menu item's
    description under the pointer) keeps 4.5:1 only up to L 0.335, the resting fill; on the hovered fill it is 4.05:1.
@@ -1013,7 +1013,7 @@ html {
 
 /* HeroUI tints a success, warning or danger toast's indicator to match its title, but leaves the
    accent variant's, which a notice uses, in the plain foreground under an accent title (see
-   `docs/ui-accessibility.md`'s "Confirmed visual choices"). Unlayered, so it wins over HeroUI's
+   `docs/ui-standard.md`'s "Confirmed visual choices"). Unlayered, so it wins over HeroUI's
    layered rule. */
 .toast--accent .toast__indicator {
   color: var(--accent-soft-foreground);
@@ -1099,7 +1099,7 @@ html.pane-resizing * {
    as they rise, from 1.6 times the large Z where one enters to 0.3 where it leaves (a speck by then). Three copies
    run the same loop a third of a period apart (`-second`, `-third`: the same animation with a negative delay), so
    a new Z enters at the bottom left as the top one leaves. Full opacity throughout, so the glyph keeps the 3:1
-   contrast a state indicator needs at every frame (docs/ui-accessibility.md, "Contrast"); a copy is wholly
+   contrast a state indicator needs at every frame (docs/ui-standard.md, "Contrast"); a copy is wholly
    outside the glyph's box at both ends, so its jump back to the start is never seen, and the svg clips it as it
    crosses the edges (`overflow-hidden`), so nothing leaves the slot.
 
@@ -1118,7 +1118,7 @@ html.pane-resizing * {
    A kept shortfall, by the user's decision: each Z's stroke shrinks with it, so on a 1x display a Z in the upper
    half of its rise (below about 0.8 times the large one) renders under the 3:1 a state indicator needs, fading
    further as it dwindles to the exit speck; on a 2x display only that speck does. The large Z stays at full
-   contrast. See "Conformance level and exceptions" in docs/ui-accessibility.md. */
+   contrast. See "Conformance level and exceptions" in docs/ui-standard.md. */
 @keyframes status-scroll {
   0% { transform: translate(-16.500px, 16.500px) scale(1.6000); }
   2.5% { transform: translate(-14.745px, 14.745px) scale(1.5344); }
@@ -1327,7 +1327,7 @@ html.pane-resizing * {
 /* A hovered tab keeps full opacity; HeroUI dims it. Both of HeroUI's hover selectors are matched: react-aria's
    `data-hovered` outlives `:hover` by a frame when the pointer leaves, and dimming in that frame starts an
    opacity transition that has WKWebView repaint the whole masked tab strip, shaking every tab's icon and label.
-   An approved exception (`docs/ui-accessibility.md`'s "Confirmed visual choices"). In `@layer components`, after
+   An approved exception (`docs/ui-standard.md`'s "Confirmed visual choices"). In `@layer components`, after
    HeroUI's rule. */
 @layer components {
   .tabs__tab:not([data-selected="true"]):not([data-disabled="true"]):hover,

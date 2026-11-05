@@ -10,7 +10,7 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 
 ## Read first
 
-- `docs/ui-accessibility.md` (the UI standard) and `.claude/skills/knowledge-i18n-copy/SKILL.md` (UI copy), in full,
+- `docs/ui-standard.md` (the UI standard) and `.claude/skills/knowledge-i18n-copy/SKILL.md` (UI copy), in full,
   every section.
 - `docs/memory/verifying-the-desktop-ui.md`, for what a gallery screenshot can and cannot settle.
 - The requirement, the user decisions and any rule this round adds or changes, as the dispatcher hands them over: a

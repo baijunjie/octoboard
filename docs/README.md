@@ -210,8 +210,8 @@ Where to start, by question:
   decisions, known pitfalls and the data model.
 - [Agent CLI reference](agent-cli-reference.md) — facts about the three agent CLIs themselves: hooks, payloads,
   injection, config directories and plan quota.
-- [UI accessibility standard](ui-accessibility.md) — the accessibility bar `packages/ui` is held to and the rules that
-  follow from it.
+- [UI standard](ui-standard.md) — the bar `packages/ui` is held to: accessibility, the confirmed visual and
+  interaction conventions, and the rules that follow from them.
 - [VoiceOver verification cases](voiceover-cases.md) — real-device VoiceOver results kept as reusable cases.
 
 ## Code

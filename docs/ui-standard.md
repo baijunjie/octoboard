@@ -1,8 +1,10 @@
-# UI accessibility standard
+# UI standard
 
-The accessibility bar `packages/ui` is held to, and the rules and measured facts that follow from it. It is a standard
-to check a control or a view against: a code comment may cite a rule here by this file's path and the heading it sits
-under.
+The bar `packages/ui` is held to: its accessibility conformance level, the visual and interaction conventions the user
+has confirmed (semantic colours, where an error is shown, tooltips, empty states, links and references in copy), and the
+rules and measured facts that follow from them. It is a standard to check a control or a view against: a code comment
+may cite a rule here by this file's path and the heading it sits under. UI copy has its own conventions, in the
+`knowledge-i18n-copy` skill.
 
 ## Conformance level and exceptions
 

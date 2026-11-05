@@ -61,7 +61,7 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
  *
  * The button covers the label and its free space rather than only the chevron, which settles three things at once:
  * a press anywhere before the trailing controls folds the section, the pointer target is the band itself rather
- * than a 14-pixel glyph (the "Pointer target size" section of `docs/ui-accessibility.md`), and the
+ * than a 14-pixel glyph (the "Pointer target size" section of `docs/ui-standard.md`), and the
  * name assistive technology announces is the band's own text, so no label of its own has to repeat
  * the count beside the section's name (the same document's "Accessible names"). It is a react-aria
  * button rather than HeroUI's because HeroUI's brings a fill, a size and a padding of its own, where
@@ -114,7 +114,7 @@ export function ChangeSectionHeading({
       // Folding takes every row of the section away, and one of them may hold keyboard focus. It
       // goes to the heading, which stands whenever its rows do, and the ring follows how the press
       // came, this press being the trigger ("Focus moved by a change the user did not make" in
-      // `docs/ui-accessibility.md`). `handFocusOff` is given the band rather than the button itself,
+      // `docs/ui-standard.md`). `handFocusOff` is given the band rather than the button itself,
       // whose tab index is -1, so that it reaches the button inside it.
       handFocusOff(button.current?.closest("[role=rowgroup]"), button.current?.closest<HTMLElement>("[role=row]"), false);
       keepHeadingFocus(button.current);

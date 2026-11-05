@@ -4,7 +4,7 @@
 
 A surface in `packages/ui` that hides content behind its own edge fades that edge, and no site works out how: the fade
 comes from `packages/ui/src/components/scroll/scrollFade.tsx`, which supplies the fade's size and the matching scroll padding
-(the "Focus scrolled to the edge of a scroller that fades there" section of `docs/ui-accessibility.md`), so no site
+(the "Focus scrolled to the edge of a scroller that fades there" section of `docs/ui-standard.md`), so no site
 states either. Never reach for HeroUI's `ScrollShadow` directly and never hand-build a fade: HeroUI's own default size
 is a larger one (40px) that nothing here uses, and a bare `ScrollShadow` carries no scroll padding at all. The library
 fades exactly one thing of its own — a `Tabs` tab strip, over a size nothing outside it can configure — and that one is
@@ -59,7 +59,7 @@ border box, so:
   scroller inside still shrinks with it; a wrapper with only `overflow-hidden` shrinks alone in a short window and
   cuts the scroller off, leaving its last rows out of reach.
 - Where the scroller is focusable (`useFadeRegion`, whose own conditions are the "A scroller nothing else on screen
-  scrolls takes focus itself" section of `docs/ui-accessibility.md`), its ring is drawn on the element around it — the
+  scrolls takes focus itself" section of `docs/ui-standard.md`), its ring is drawn on the element around it — the
   project's custom `ring-2 ring-app-focus`, from the `focused` that hook hands back — because a ring on the scroller
   itself is cut away and an inset one lands inside the fade band and is eaten by it. That ring paints outside the
   wrapping element's border box, so the room it needs is clear space *around* that element, which whatever lays it out

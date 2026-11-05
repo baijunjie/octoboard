@@ -106,7 +106,7 @@ Giving the pointer back inside a `Label` changes two more things, neither visibl
   `data-hovered` or `data-pressed` on a disabled item, so cancel the pseudo-class forms on the row
   (`data-[disabled=true]:hover:` / `data-[disabled=true]:active:` variants) and give the `Label` the row's cursor.
   For a menu item that cancellation is an approved departure from HeroUI's look, recorded under "Confirmed visual
-  choices" in `docs/ui-accessibility.md`; anywhere else it is a change of HeroUI's look and goes by "Do not change how
+  choices" in `docs/ui-standard.md`; anywhere else it is a change of HeroUI's look and goes by "Do not change how
   a HeroUI component looks" there.
 
 ## An ancestor's context decides a react-aria element's props, so the default in its own file is not what renders
@@ -218,7 +218,7 @@ carrying the indicator's fill and shadow), as the Terminal panel's strip in
 Which controls carry a tooltip beside their `aria-label`, which wrapper a tooltip takes — `TitledControl` for a
 control, `IndicatorTooltip` for a mark, `AnchoredTooltip` where nothing can be a trigger — and how its text reaches
 assistive technology are set out in the "An icon-only control: tooltip and `aria-label`" and "A tooltip is the
-application's own, never the browser's `title`" sections of `docs/ui-accessibility.md`. Wiring them has traps nothing
+application's own, never the browser's `title`" sections of `docs/ui-standard.md`. Wiring them has traps nothing
 warns about:
 
 - Passing `title` to a HeroUI control does nothing: its react-aria base filters `title` out of the DOM props.

@@ -15,7 +15,7 @@ const BADGE_COLORS: StatusBadgeColor[] = ["default", "accent", "success", "warni
 const BADGE_VARIANTS: StatusBadgeVariant[] = ["soft", "bordered"];
 const BADGE_SIZES: StatusBadgeSize[] = ["sm", "md", "lg"];
 
-/** The copy styles a chip sits in (docs/ui-accessibility.md, "A chip's size follows the line it sits in"), each with
+/** The copy styles a chip sits in (docs/ui-standard.md, "A chip's size follows the line it sits in"), each with
  * the sizes whose drawn height stays below its line height: the content area, about 1.2 times the font size, plus
  * twice the size's block padding. */
 const COPY_LINES: { font: number; line: number; use: string; sizes: InlineReferenceSize[] }[] = [

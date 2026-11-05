@@ -149,7 +149,7 @@ pointer events at all (a virtual press), and a jsdom test dispatches its events 
 to a press's pointer handling does to a real mouse press: a field focused early on `pointerdown` passed both and
 closed the list it opened on every real click. The same holds for where focus scrolls a scroller:
 the engines' focus scrolls differ in timing and in what CSS they honour (see the "Focus scrolled to the edge of a
-scroller that fades there" section of `docs/ui-accessibility.md`), so a `scroll-margin` fix that holds a list still in
+scroller that fades there" section of `docs/ui-standard.md`), so a `scroll-margin` fix that holds a list still in
 Chrome can leave it jumping in WebKit. Playwright is a pinned devDependency of `packages/ui`,
 so `pnpm install` is all such a check needs from the repository; the dependency downloads no browser of its own, and the
 browser is fetched explicitly with `pnpm exec playwright install webkit`, run from `packages/ui` — from the workspace
@@ -163,7 +163,7 @@ gives 2 image pixels per CSS pixel), and settle a question of overlap or reachab
 point, since a capture only ever shows what is on top. Colours read off such a capture carry the display's own profile,
 so a contrast ratio measured from one differs from the ratio the tokens give by a few tenths, either way: it is good for
 confirming which side of a threshold a pair lands on, and never for correcting a token-derived ratio recorded in the
-stylesheet or the accessibility standard.
+stylesheet or the UI standard.
 
 When an installed app shows a paint defect that a verification clone does not, compare in the same packaged native
 shell, on the same display and at the same window size before treating the difference as a code result. First

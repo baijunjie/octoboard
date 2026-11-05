@@ -3,7 +3,7 @@
 ## Keep a HeroUI component's default look through supported variants and slots
 
 A HeroUI component in `packages/ui` keeps its default look (the priority is the "Conformance level and exceptions"
-section of `docs/ui-accessibility.md`), but layout and sizing adaptations (filling a column, truncating) may stay
+section of `docs/ui-standard.md`), but layout and sizing adaptations (filling a column, truncating) may stay
 without redrawing the component. So when asked to strip custom styling, separate those adaptations from appearance
 overrides rather than removing them wholesale: dropping a sizing override with the look ones broke the layout.
 Equally, what a composite the project builds on top of a HeroUI component adds around it to mark out its own region —
@@ -205,7 +205,7 @@ neither a divider nor a card outline, it keeps `border border-separator`. A card
 its shadow depends on whether it floats:
 
 - A card lying in the layout takes the short two-layer `shadow-(--panel-shadow)`, as the "Hand-built rows and cards"
-  section of `docs/ui-accessibility.md` sets out — unless it is a panel card, below.
+  section of `docs/ui-standard.md` sets out — unless it is a panel card, below.
 - Anything else floating over the content — the notice floating over the terminal, a popover — keeps its elevation
   shadow (`shadow-lg`, `shadow-xl`) and drops only its outline border; it never takes the short shadow or the panel
   card's shadow in its place.

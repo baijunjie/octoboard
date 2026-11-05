@@ -2,7 +2,7 @@
 
 Real-device VoiceOver results for the packaged macOS application, kept as reusable cases. A new implementation that
 matches a passing case below needs no further real-device testing; one that matches none needs one listening pass and a
-case of its own. How to build an announcement lives in `docs/ui-accessibility.md` ("Announcing a change"); this file
+case of its own. How to build an announcement lives in `docs/ui-standard.md` ("Announcing a change"); this file
 holds what was actually heard.
 
 ## Rules
@@ -71,7 +71,7 @@ result and they are not a listening result themselves; report them as checks.
   behavior around the write.
 - Browser inspection of the rendered DOM: the effective role, accessible name and description, the live attributes, and
   that neither the region nor an ancestor is hidden by `aria-hidden` or `inert` while the real overlay is open (a marked
-  element is left exposed with its ancestors; the rule is in `docs/ui-accessibility.md`, "Announcing a change").
+  element is left exposed with its ancestors; the rule is in `docs/ui-standard.md`, "Announcing a change").
 - A statement of which case is matched and, item by item, why each point under "What \"matches a case\" means" holds.
 
 ### When a new listening pass is needed
@@ -882,7 +882,7 @@ mapping.
   Thus content was reachable through the item chooser; this record does not call sequential navigation a pass or explain
   why it did not reach the panels. A bare mark's hover panel is now also named by its tone, so the mark listing above
   is not the current wiring, and the chooser route for tone-named panels was not heard. The hover form is the mouse's
-  and the keyboard and assistive technology open the press form (`docs/ui-accessibility.md`, "A floating panel that
+  and the keyboard and assistive technology open the press form (`docs/ui-standard.md`, "A floating panel that
   does not take the window"), so sequential navigation not reaching a hover-opened panel is the designed behaviour, not
   an open defect.
 - **Result, Enter.** **Fail for the E6 bare mark's naming (recorded as KNW-9, which holds the exact phrase):** the SVG
