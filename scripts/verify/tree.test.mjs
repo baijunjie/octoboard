@@ -6,6 +6,10 @@ import path from "node:path";
 import { test } from "node:test";
 import { workingTree } from "./tree.mjs";
 
+import { assertRepositoryEnvironmentCleared } from "./environment.mjs";
+
+assertRepositoryEnvironmentCleared();
+
 function repository(run) {
   const root = mkdtempSync(path.join(os.tmpdir(), "tree-"));
   try {

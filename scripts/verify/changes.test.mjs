@@ -7,6 +7,10 @@ import { test } from "node:test";
 import { changedFiles, chooseBase, requirePushedTree, resolveBase, resolveLocalTargetBase, remoteTargetBase, resolveRemoteTargetBase } from "./changes.mjs";
 import { workingTree } from "./tree.mjs";
 
+import { assertRepositoryEnvironmentCleared } from "./environment.mjs";
+
+assertRepositoryEnvironmentCleared();
+
 function repository(run) {
   const root = mkdtempSync(path.join(os.tmpdir(), "changes-"));
   try {

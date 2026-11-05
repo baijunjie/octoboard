@@ -37,8 +37,11 @@ it is Octoboard's built-in gate, which applies only to git run inside Octoboard 
   unchanged and reports the offending line so the author can remove it and retry. Human attribution and ordinary
   descriptions of AI tools are allowed. The recognized names and emails live in this script.
 - Push (`scripts/hooks/pre-push.mjs`): runs `pnpm verify` for each pushed branch, measured from the destination's
-  advertised commit to the exact pushed commit. How the baseline, scope and reuse work is in
-  [`scripts/verify/README.md`](../scripts/verify/README.md).
+  advertised commit to the exact pushed commit. Its verification child receives an environment with repository-local
+  Git locations removed, while the caller's configuration and injected hook policy stay inherited. The hook itself
+  retains its original environment. The baseline, scope and reuse rules are in
+  [`scripts/verify/README.md`](../scripts/verify/README.md); its "Git environment boundary" section defines the exact
+  boundary, refusal message and execution requirements.
 
 ## External interfaces
 

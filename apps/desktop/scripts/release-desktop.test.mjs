@@ -6,6 +6,10 @@ import { test } from "node:test";
 import { gitChecked, runResult } from "../../../scripts/lib/git.mjs";
 import { parseOptions, releaseDesktop, versionFiles } from "./release-desktop.mjs";
 
+import { assertRepositoryEnvironmentCleared } from "../../../scripts/verify/environment.mjs";
+
+assertRepositoryEnvironmentCleared();
+
 function fixture(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "desktop-release-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

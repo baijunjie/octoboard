@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { git, run } from "./lib/git.mjs";
 import { changedFiles, chooseBase, requirePushedTree } from "./verify/changes.mjs";
+import { assertRepositoryEnvironmentCleared } from "./verify/environment.mjs";
 import { acquireSlot, describeWait } from "./verify/lock.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
 import { quickSteps } from "./verify/quick.mjs";
@@ -37,6 +38,13 @@ if (flag("--release-group") && (!flag("--release") || flag("--full") || !["front
 
 if (flag("--quick") && (flag("--full") || flag("--release"))) {
   console.error("verify: --quick cannot be combined with --full or --release");
+  process.exit(2);
+}
+
+try {
+  assertRepositoryEnvironmentCleared();
+} catch (error) {
+  console.error(`verify: ${error.message}`);
   process.exit(2);
 }
 

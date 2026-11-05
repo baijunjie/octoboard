@@ -8,6 +8,10 @@ import { fileURLToPath } from "node:url";
 import { clearFailure, failedFiles, isolatedTestFile, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./rerun.mjs";
 import { workingTree } from "./tree.mjs";
 
+import { assertRepositoryEnvironmentCleared } from "./environment.mjs";
+
+assertRepositoryEnvironmentCleared();
+
 const X = "packages/ui/src/a/X.test.tsx";
 const Y = "packages/ui/src/a/Y.test.tsx";
 const SHARED = "packages/ui/src/a/Shared.test.ts";

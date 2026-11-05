@@ -47,6 +47,7 @@ const CASES = [
   ["scripts/lib/env.d.mts", ["verify", "ui", "desktop"]],
   ["scripts/lib/git.mjs", ["verify", "ui", "desktop"], ["ui"]],
   ["scripts/cargo.mjs", ["verify", "daemon", "native"]],
+  ["scripts/verify/environment.mjs", ["verify", "desktop"]],
   ["scripts/sync-identity.mjs", ["verify"]],
   ["scripts/sync-identity.test.mjs", ["verify"]],
   [".githooks/hook.sh", ["verify"]],

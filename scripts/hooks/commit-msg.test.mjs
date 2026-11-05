@@ -6,6 +6,10 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { assertRepositoryEnvironmentCleared } from "../verify/environment.mjs";
+
+assertRepositoryEnvironmentCleared();
+
 test("commit message checks reject AI attribution while preserving human trailers and tool descriptions", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "commit-msg-"));
   const messageFile = path.join(dir, "message with spaces");

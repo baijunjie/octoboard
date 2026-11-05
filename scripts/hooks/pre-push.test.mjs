@@ -4,7 +4,12 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpat
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { parseUpdates, verifyPush } from "./pre-push.mjs";
+
+import { assertRepositoryEnvironmentCleared } from "../verify/environment.mjs";
+
+assertRepositoryEnvironmentCleared();
 
 const zero = "0".repeat(40);
 function fixture(run) {
@@ -133,6 +138,49 @@ test("passes each distinct update to verify in order and propagates refusal", ()
       verify: (args) => { calls.push(args); throw new Error("checkout is dirty or wrong HEAD"); },
     }), /dirty or wrong HEAD/);
     assert.equal(calls.length, 1);
+  });
+});
+
+test("the verification child cannot inherit the pushed repository into a nested Git fixture", () => {
+  fixture(({ root, git, remote, base, head }) => {
+    const bin = path.join(root, "bin");
+    mkdirSync(bin);
+    const pnpm = path.join(bin, "pnpm");
+    writeFileSync(pnpm, `#!/usr/bin/env node
+const { execFileSync } = require("node:child_process");
+const path = require("node:path");
+const locations = ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CONFIG"];
+if (locations.some((name) => process.env[name] !== undefined)) {
+  console.error("unsafe repository environment reached verification");
+  process.exit(42);
+}
+execFileSync("git", ["init", "--bare", "-q", path.join(process.cwd(), "inner.git")]);
+console.log("the nested fixture stayed isolated");
+`);
+    chmodSync(pnpm, 0o755);
+    const config = readFileSync(path.join(root, ".git/config"), "utf8");
+    const index = git("ls-files", "--stage");
+    const script = fileURLToPath(new URL("./pre-push.mjs", import.meta.url));
+    const result = spawnSync(process.execPath, [script, "destination", remote], {
+      cwd: root,
+      encoding: "utf8",
+      input: update(head, base),
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        GIT_DIR: path.join(root, ".git"),
+        GIT_COMMON_DIR: path.join(root, ".git"),
+        GIT_WORK_TREE: root,
+        GIT_INDEX_FILE: path.join(root, ".git/index"),
+        GIT_CONFIG: path.join(root, ".git/config"),
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /the nested fixture stayed isolated/);
+    assert.equal(git("rev-parse", "HEAD"), head);
+    assert.equal(git("ls-files", "--stage"), index);
+    assert.equal(readFileSync(path.join(root, ".git/config"), "utf8"), config);
+    assert.match(readFileSync(path.join(root, "inner.git/config"), "utf8"), /bare = true/);
   });
 });
 

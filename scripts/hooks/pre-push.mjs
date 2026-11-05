@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { git as defaultGit } from "../lib/git.mjs";
 import { OBJECT_ID as objectId, remoteTargetBase } from "../verify/changes.mjs";
+import { withoutRepositoryEnvironment } from "../verify/environment.mjs";
 
 const deleted = /^0+$/;
 
@@ -19,7 +20,7 @@ export function parseUpdates(input) {
 }
 
 function verifyCommand(args) {
-  const result = spawnSync("pnpm", ["verify", ...args], { stdio: "inherit" });
+  const result = spawnSync("pnpm", ["verify", ...args], { stdio: "inherit", env: withoutRepositoryEnvironment() });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error("Push verification failed; fix the checks before pushing.");
 }

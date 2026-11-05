@@ -7,6 +7,10 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createFormatter, formatStaged } from "./format-staged.mjs";
 
+import { assertRepositoryEnvironmentCleared } from "../verify/environment.mjs";
+
+assertRepositoryEnvironmentCleared();
+
 async function repository(run) {
   const cwd = mkdtempSync(path.join(os.tmpdir(), "staged-"));
   const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });

@@ -59,6 +59,30 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    Rust tests narrow to what the changes reach (`vitest related`, and cargo module filters), falling back to a full
    suite where the reach cannot be traced. Narrowed steps are never recorded as a pass of the whole.
 
+## Git environment boundary
+
+Run verification and tests with Git fixtures from the intended working tree with no repository-local Git location
+variables in their environment. Git exports these variables to hooks, where they can override a child process's
+working directory and make a temporary repository command operate on the caller's repository instead.
+
+`environment.mjs` defines this boundary in one place. Before the pre-push hook launches `pnpm verify`, it removes
+repository locations from that child's environment: `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+`GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_SHALLOW_FILE`, `GIT_GRAFT_FILE`, `GIT_CONFIG`,
+`GIT_PREFIX`, `GIT_IMPLICIT_WORK_TREE`, `GIT_INTERNAL_SUPER_PREFIX` and `GIT_QUARANTINE_PATH`. The hook's own environment
+stays intact for its operations on the pushed repository.
+
+Configuration and hook policy remain inherited, including `GIT_CONFIG_COUNT`, its `GIT_CONFIG_KEY_n` and
+`GIT_CONFIG_VALUE_n` entries, `GIT_CONFIG_PARAMETERS` and `GIT_CONFIG_GLOBAL`. Clearing locations must not remove the
+caller's injected hooks or replace the entire Git environment.
+
+The verification entry point checks this boundary before invoking Git. A leaked location produces
+`Refusing to run verification with repository-local Git variables: ...` and exit status 2, before repository
+discovery, snapshotting or tests. Tests that create temporary Git repositories also assert the boundary at module
+startup, so direct `node --test` invocations refuse the same environment before any Git operation. If this refusal
+appears, run again from an ordinary working-tree shell with the listed locations cleared; retain the user's
+configuration and hook-policy variables. A pre-push invocation prepares its verification child's environment
+automatically.
+
 ## Hosted application checks
 
 `.github/workflows/quality.yml` runs on request and is called by the release workflow. Its three independent jobs
@@ -87,6 +111,9 @@ retention and timing measurements are documented in the [Rust cache module](../.
   `steps.test.mjs` checks that their combined commands equal the complete release plan.
 - A script that other packages import is named in the matching rule (`scripts/lib/git.mjs`, `scripts/lib/env.mjs`,
   `lock.mjs`).
+- A test that creates a temporary Git repository calls `assertRepositoryEnvironmentCleared` at module startup before
+  any Git operation. A hook launcher uses `withoutRepositoryEnvironment` for its verification child; changing the
+  working directory alone does not isolate a Git fixture.
 
 ## External interfaces
 
@@ -98,3 +125,4 @@ retention and timing measurements are documented in the [Rust cache module](../.
   `changedFiles`, `requirePushedTree`.
 - `lock.mjs`: `acquireSlot`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record; `tree.mjs`:
   `workingTree`.
+- `environment.mjs`: `withoutRepositoryEnvironment`, `assertRepositoryEnvironmentCleared`.

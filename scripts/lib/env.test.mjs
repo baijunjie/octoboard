@@ -6,6 +6,10 @@ import path from "node:path";
 import { test } from "node:test";
 import { localValue } from "./env.mjs";
 
+import { assertRepositoryEnvironmentCleared } from "../verify/environment.mjs";
+
+assertRepositoryEnvironmentCleared();
+
 const NAME = "OCTOBOARD_TEST_LOCAL_VALUE";
 
 function sandbox(run) {

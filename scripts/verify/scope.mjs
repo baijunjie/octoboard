@@ -95,6 +95,7 @@ export const RULES = [
   { match: ["scripts/lib/git.mjs"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify.mjs`, `scripts/hooks/*.mjs`, `scripts/verify/tree.mjs` and `scripts/lib/env.mjs` (so by the UI's `vite.config.ts` too), and by the desktop release publishing script" },
   { match: ["scripts/lib/env.mjs", "scripts/lib/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },
   { match: ["scripts/cargo.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the command the Rust check steps run (and the Linux CI job), linted with the scripts" },
+  { match: ["scripts/verify/environment.mjs"], consumers: ["verify", "desktop"], why: "verification entry points and foreign Git fixtures, including desktop release tests, refuse inherited repository locations" },
   { match: ["scripts/sync-identity.mjs", "scripts/sync-identity.test.mjs"], consumers: ["verify"], why: "generates and checks the LICENSE and Cargo author fields from config/app.json" },
   { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },
   { match: [".gitignore"], consumers: ["verify"], why: "decides which files the working-tree snapshot (`tree.mjs`) counts; no other check reads it" },
