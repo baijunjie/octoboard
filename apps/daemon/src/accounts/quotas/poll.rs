@@ -4,7 +4,7 @@
 //! each kick), runs the probe and the kick for each under the daemon-wide limit on CLI runs, and
 //! records what they return in the registry `mod.rs` keeps.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -106,14 +106,27 @@ pub(super) enum Trigger {
 pub struct Scope {
     pub agent: Option<AgentId>,
     pub account: Option<String>,
-    /// Leave out the accounts the user turned off.
-    pub enabled_only: bool,
 }
 
 /// The accounts worth reading: the default account and every stored account of each agent whose
-/// binary was found on the login shell's `PATH` and that has a quota to read.
+/// binary was found on the login shell's `PATH` and that has a quota to read, except the ones the
+/// user turned off, which no trigger reads unless a session is running on them (the rail's
+/// indicator and the automatic account switch go on needing their reading).
 fn targets(state: &AppState) -> anyhow::Result<Vec<Key>> {
     let accounts = state.store.list_accounts()?;
+    let disabled_defaults = state.store.disabled_default_accounts()?;
+    let in_use: HashSet<(AgentId, Option<String>)> =
+        if disabled_defaults.is_empty() && accounts.iter().all(|account| !account.disabled) {
+            HashSet::new()
+        } else {
+            state
+                .store
+                .list_sessions()?
+                .into_iter()
+                .filter(|session| !session.status.has_no_process())
+                .map(|session| (session.agent, session.account_id))
+                .collect()
+        };
     let mut keys = Vec::new();
     for agent in AgentId::ALL {
         if state.agent_availability_of(agent).availability != Availability::Available
@@ -124,15 +137,33 @@ fn targets(state: &AppState) -> anyhow::Result<Vec<Key>> {
         {
             continue;
         }
-        keys.push(Key::of(agent, None, None));
+        if !disabled_defaults.contains(agent.wire_name()) || in_use.contains(&(agent, None)) {
+            keys.push(Key::of(agent, None, None));
+        }
         keys.extend(
             accounts
                 .iter()
-                .filter(|account| account.agent == agent)
+                .filter(|account| {
+                    account.agent == agent
+                        && (!account.disabled
+                            || in_use.contains(&(agent, Some(account.id.clone()))))
+                })
                 .map(|account| Key::of(agent, Some(&account.id), Some(&account.config_dir))),
         );
     }
     Ok(keys)
+}
+
+/// Drops the readings of the accounts that are not among [`targets`], announcing it when one
+/// went, and returns the targets. Under the lock of `inner`, which the caller holds.
+fn retain_targets(inner: &mut Inner, state: &AppState) -> anyhow::Result<Vec<Key>> {
+    let all = targets(state)?;
+    if retain_locked(inner, &all) {
+        state.broadcast(Event::AccountQuotasUpdated {
+            account_quotas: inner.list(),
+        });
+    }
+    Ok(all)
 }
 
 impl AccountQuotas {
@@ -198,11 +229,20 @@ impl AccountQuotas {
         claims
     }
 
+    /// Drops the readings of the accounts that are no longer worth reading, such as one the user
+    /// just turned off with no session running on it, and announces the change.
+    pub fn drop_untargeted(&self, state: &AppState) -> anyhow::Result<()> {
+        let mut inner = self.lock();
+        retain_targets(&mut inner, state)?;
+        Ok(())
+    }
+
     /// What `scope` selects among the accounts worth reading, claimed if due. The accounts are
     /// listed and the readings of any that are not among them dropped (an account that was
-    /// deleted or repointed, or belongs to an agent that is not available), in the same lock as
-    /// the claiming, so a refresh working from an older list can never cancel a claim another
-    /// one just made.
+    /// deleted, repointed, or turned off with no session running on it, or belongs to an agent that
+    /// is not available), in the same lock as the claiming, so a refresh working from an older list
+    /// can never cancel a claim another one just made. A refresh on demand also leaves out every
+    /// turned-off account: a session asking is never the reason one is read.
     fn claim_scope(
         &self,
         state: &AppState,
@@ -211,12 +251,7 @@ impl AccountQuotas {
         trigger: Trigger,
     ) -> anyhow::Result<Vec<Claim>> {
         let mut inner = self.lock();
-        let all = targets(state)?;
-        if retain_locked(&mut inner, &all) {
-            state.broadcast(Event::AccountQuotasUpdated {
-                account_quotas: inner.list(),
-            });
-        }
+        let all = retain_targets(&mut inner, state)?;
         let selected = all
             .into_iter()
             .filter(|key| scope.agent.is_none_or(|agent| key.agent == agent))
@@ -227,7 +262,7 @@ impl AccountQuotas {
                     .is_none_or(|account| key.account.as_ref() == Some(account))
             })
             .filter(|key| {
-                !scope.enabled_only
+                trigger != Trigger::Demand
                     || !state
                         .store
                         .account_disabled(key.agent, key.account.as_deref())
@@ -404,22 +439,32 @@ pub(super) async fn refresh_with(
 
 /// Kicks the accounts whose held readings call for it, as many at a time as the daemon-wide limit
 /// allows, and reads each again once its kick has ended. Starts the work in the background and
-/// returns at once. Run when the setting that starts quota windows is turned on, or when an account
-/// is turned back on, so that the readings already held count without waiting for the next one.
+/// returns at once. Run when the setting that starts quota windows is turned on, so that the
+/// readings already held count without waiting for the next one.
 pub fn kick_held(state: &Arc<AppState>) {
     let state = state.clone();
-    tokio::spawn(async move { kick_held_with(&state, held_shell()).await });
+    tokio::spawn(async move { kick_held_with(&state, background_shell()).await });
 }
 
-/// The shell environment the kicks of [`kick_held`] run in. A test has none: a kick under test
-/// must not start the agent installed on the machine running it.
+/// Reads the accounts of `scope` that are due, as [`refresh`] does, in the background. Run when an
+/// account is turned back on.
+pub fn refresh_in_background(state: &Arc<AppState>, scope: Scope) {
+    let state = state.clone();
+    tokio::spawn(
+        async move { refresh_with(&state, &scope, Trigger::Poll, background_shell()).await },
+    );
+}
+
+/// The shell environment the readings and kicks of [`kick_held`] and [`refresh_in_background`] run
+/// in. A test has none: a reading or kick under test must not start the agent installed on the
+/// machine running it.
 #[cfg(not(test))]
-fn held_shell() -> ShellSource {
+fn background_shell() -> ShellSource {
     Arc::new(crate::env_shell::cached_snapshot)
 }
 
 #[cfg(test)]
-fn held_shell() -> ShellSource {
+fn background_shell() -> ShellSource {
     Arc::new(|| anyhow::bail!("no shell environment under test"))
 }
 

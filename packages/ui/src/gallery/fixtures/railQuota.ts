@@ -154,21 +154,21 @@ function turnedOff(accounts: Account[], ...ids: string[]): Account[] {
 }
 
 /** Every agent installed and read. Claude Code: its default account and Work turned off, Side project on. Codex: its
- * default account and Personal, its only accounts, turned off. Grok Build's default account on. */
+ * default account and Personal, its only accounts, turned off. Grok Build's default account on. The sample's sessions
+ * run on Claude Code's default account, so it keeps its reading though it is off; the daemon holds none for Work or
+ * for Codex's accounts. */
 const turnedOffHiddenState = railQuotaState(
   turnedOff([sideProject, accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"), accountOf("a-codex", "codex", "Personal", "/Users/dev/.codex-personal")], "a-work", "a-codex"),
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
-    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
     quotaOf("claude", "a-side", "pro", [quotaWindow("session", 30, 150), quotaWindow("weekly", 22, 4 * 24 * 60)]),
-    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
-    quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
     quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)]),
   ],
   { installed: FIXTURE_AGENTS, turnedOffDefaults: ["claude", "codex"] },
 );
 
-/** Hub runs on Claude Code's Work, which is turned off, as is Side project; the default account and Client are on. */
+/** Hub runs on Claude Code's Work, which is turned off, as is Side project; the default account and Client are on.
+ * Work keeps its reading for the session running on it; Side project, with none, has none. */
 const turnedOffRunningOwnedState = railQuotaState(
   turnedOff(
     [
@@ -182,14 +182,13 @@ const turnedOffRunningOwnedState = railQuotaState(
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
-    quotaOf("claude", "a-side", "pro", [quotaWindow("session", 30, 150), quotaWindow("weekly", 22, 4 * 24 * 60)]),
     quotaOf("claude", "a-client", "pro", [quotaWindow("session", 8, 240), quotaWindow("weekly", 14, 5 * 24 * 60)]),
     quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
   ],
 );
 
 /** Codex with every account turned off (the default one, Personal and Automation), Hub running on its default
- * account; Claude Code's default account and Work are on. */
+ * account, which is the one Codex reading held; Claude Code's default account and Work are on. */
 const turnedOffAgentRunningState = railQuotaState(
   turnedOff(
     [
@@ -203,21 +202,16 @@ const turnedOffAgentRunningState = railQuotaState(
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
     quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
-    quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
-    quotaOf("codex", "a-codex-auto", null, [quotaWindow("session", 3, 295), quotaWindow("weekly", 9, 6 * 24 * 60)]),
   ],
   { turnedOffDefaults: ["codex"] },
 );
 
-/** Every account of both installed agents turned off, with readings that stay: Claude Code's default account and Work,
- * Codex's default account and Personal. */
+/** Every account of both installed agents turned off: Claude Code's default account and Work, Codex's default account
+ * and Personal. Only Claude Code's default account keeps a reading, the sample's sessions running on it. */
 const noneOnState = railQuotaState(
   turnedOff([...claudeAccounts.slice(0, 1), codexAccounts[0]], "a-work", "a-codex"),
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
-    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
-    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
-    quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
   ],
   { turnedOffDefaults: ["claude", "codex"] },
 );
@@ -357,7 +351,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel, turned-off accounts left out",
-    description: "Claude Code's tab lists Side project alone: its default account and Work are turned off and have no row, though both have readings. The tabs are Claude Code and Grok Build; Codex has none, since both its accounts are turned off. Manage accounts is the way to the turned-off ones.",
+    description: "Claude Code's tab lists Side project alone: its default account and Work are turned off and have no row. The tabs are Claude Code and Grok Build; Codex has none, since both its accounts are turned off. Manage accounts is the way to the turned-off ones.",
     state: turnedOffHiddenState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },

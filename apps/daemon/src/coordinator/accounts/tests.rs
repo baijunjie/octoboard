@@ -111,27 +111,23 @@ async fn turning_an_account_off_broadcasts_only_a_real_change() {
     );
 }
 
-/// Turning an account back on starts the usage window its held reading shows unstarted, when
-/// the setting for that is on; turning it off starts nothing.
+/// Turning an account off drops the reading held for it, and only that one, while a session
+/// running on it keeps it; turning it back on reads it at once with no failures held against it.
 #[tokio::test]
-async fn turning_an_account_back_on_kicks_its_held_window() {
-    use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+async fn turning_an_account_off_drops_its_held_reading_unless_a_session_runs_on_it() {
+    use crate::protocol::{AccountQuota, SessionStatus};
 
-    let (state, _dir) = console_with_project_and_accounts("coordinator-disabled-kick");
-    let unstarted = AccountQuota {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-disabled-reading");
+    set_availability(&state, AgentId::CLAUDE, Availability::Available);
+    let quotas = &state.account_quotas;
+    let reading = |account: Option<&str>| AccountQuota {
         reset_credits: None,
         agent: AgentId::CLAUDE,
-        account: Some("claude-a".to_string()),
+        account: account.map(str::to_string),
         fetched_at: 1,
         plan: None,
         email: None,
-        windows: vec![QuotaWindow {
-            kind: QuotaWindowKind::Session,
-            label: None,
-            used_percent: 0.0,
-            resets_at: None,
-            window_minutes: Some(300),
-        }],
+        windows: Vec::new(),
         unavailable: None,
     };
     let dir = state
@@ -139,23 +135,40 @@ async fn turning_an_account_back_on_kicks_its_held_window() {
         .account_dir(&Some("claude-a".to_string()))
         .unwrap()
         .unwrap();
-    state.account_quotas.hold_in_dir_for_test(&unstarted, &dir);
-    state.store.set_auto_start_quota_windows(true).unwrap();
-    let kicked = || {
-        state
-            .account_quotas
-            .is_kicked_for_test(AgentId::CLAUDE, Some("claude-a"))
+    quotas.hold_in_dir_for_test(&reading(Some("claude-a")), &dir);
+    quotas.hold_for_test(&reading(None));
+    let held = || {
+        quotas
+            .list()
+            .into_iter()
+            .map(|quota| quota.account)
+            .collect::<Vec<_>>()
     };
 
     set_account_disabled(&state, AgentId::CLAUDE, Some("claude-a"), true).unwrap();
-    assert!(!kicked(), "turning it off starts nothing");
-
+    assert_eq!(held(), [None], "only the turned-off account's reading goes");
     set_account_disabled(&state, AgentId::CLAUDE, Some("claude-a"), false).unwrap();
-    let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-    while !kicked() && std::time::Instant::now() < deadline {
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-    }
-    assert!(kicked(), "turning it back on counts its unstarted window");
+
+    // With a session running on it, the reading stays through the turning off, with the
+    // failures it has built up, and the turning back on wipes them and makes it due.
+    let mut session = crate::test_support::sessions::project_session(
+        "s1",
+        AgentId::CLAUDE,
+        SessionStatus::Working,
+    );
+    session.account_id = Some("claude-a".to_string());
+    state.store.insert_session(&session).unwrap();
+    quotas.hold_in_dir_for_test(&reading(Some("claude-a")), &dir);
+    quotas.set_failures_for_test(AgentId::CLAUDE, Some("claude-a"), 4);
+    set_account_disabled(&state, AgentId::CLAUDE, Some("claude-a"), true).unwrap();
+    assert_eq!(held().len(), 2, "a running session keeps the reading");
+    set_account_disabled(&state, AgentId::CLAUDE, Some("claude-a"), false).unwrap();
+    // The current-thread runtime has not yet run the background read turning it back on spawned.
+    assert_eq!(
+        quotas.failures_for_test(AgentId::CLAUDE, Some("claude-a")),
+        0
+    );
+    assert!(quotas.is_due_for_test(AgentId::CLAUDE, Some("claude-a")));
 }
 
 /// `~` is the home directory of the host the daemon runs on, like every other path it takes.

@@ -165,7 +165,6 @@ pub(crate) async fn use_reset_credit(
             Scope {
                 agent: Some(agent),
                 account: account.clone(),
-                ..Default::default()
             },
         );
         tokio::spawn(async move { refresh_with(&state, &scope, Trigger::Request, shell).await });

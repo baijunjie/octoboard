@@ -2,13 +2,29 @@
 // account's name and the use of a Codex reset credit, and the refusals a session gets on an account.
 import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, servedLabel } from "./fixtureProviders";
-import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type SharingCause } from "../protocol";
+import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type SharingCause, type Session } from "../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
+import { accountDisabled } from "../accounts/choiceEntries";
+import { isLive } from "../sessions/sessionStatus";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../accounts/quotaFormat";
 import { applyDaemonEvent } from "../store";
 import type { FixtureError } from "./sampleFiles";
 import { neverReplied, normalizedPath, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
+
+/** The readings among `quotas` that the daemon would not hold: those of an account turned off with no session that has a
+ * process running on it, as it reads no quota for one. The fixture daemon drops them when an account is turned off, and
+ * the gallery's test keeps scenario states from holding any, so the rule is written once. */
+export function readingsOfAccountsLeftOff(
+  settings: { accounts: Account[]; disabled_default_accounts?: readonly Agent[] },
+  quotas: readonly AccountQuota[],
+  sessions: Iterable<Session>,
+): AccountQuota[] {
+  const running = [...sessions].filter((session) => isLive(session.status));
+  return quotas.filter((quota) =>
+    accountDisabled(settings.accounts, settings.disabled_default_accounts, quota.agent, quota.account)
+    && !running.some((session) => session.agent === quota.agent && session.account_id === quota.account));
+}
 
 /** Whether a held reading has a credit a use can take: the first the list names that has not expired (the list is in
  * the order they are used), or any, where the reading holds only the count. */
@@ -205,6 +221,16 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
     return { type: "ack", id: null };
   };
 
+  /** The daemon reads no quota for an account that is turned off unless a session is running on it, so turning one off
+   * drops the reading it held and announces the list. Turning one back on reads it again, which the fixtures do not
+   * model: it waits for its first reading. The reading of an account whose last session ends is dropped by the daemon
+   * a little later, which the fixtures do not model either. */
+  const dropReadingsOfAccountsLeftOff = () => {
+    const current = store.getState();
+    const dropped = readingsOfAccountsLeftOff(current.settings, current.accountQuotas, current.sessions.values());
+    if (dropped.length > 0) applyDaemonEvent(store, { type: "account_quotas_updated", account_quotas: current.accountQuotas.filter((quota) => !dropped.includes(quota)) });
+  };
+
   return {
     set_account_disabled: (body) => {
       // `null` is the agent's default account, kept by agent in `disabled_default_accounts`; an owned account carries
@@ -215,12 +241,14 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
         if (held.includes(body.agent) === body.disabled) return { type: "ack", id: null };
         const disabled_default_accounts = body.disabled ? [...held, body.agent] : held.filter((agent) => agent !== body.agent);
         store.setState({ settings: { ...current.settings, disabled_default_accounts } });
+        dropReadingsOfAccountsLeftOff();
         return { type: "ack", id: null };
       }
       const account = current.settings.accounts.find((item) => item.id === body.account && item.agent === body.agent);
       if (!account) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
       if ((account.disabled === true) === body.disabled) return { type: "ack", id: null };
       store.setState({ settings: { ...current.settings, accounts: current.settings.accounts.map((item) => item.id === account.id ? { ...item, disabled: body.disabled } : item) } });
+      dropReadingsOfAccountsLeftOff();
       return { type: "ack", id: null };
     },
     set_account_sharing: (body) => {

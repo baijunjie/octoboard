@@ -75,7 +75,6 @@ async fn list_agents_with(
         let scope = quotas::Scope {
             agent: only,
             account: None,
-            enabled_only: true,
         };
         quotas::refresh_on_demand(state, &scope, shell).await;
     }

@@ -334,15 +334,17 @@ While an account is turned off:
   line draws its bars.
 
 The sessions already running on it are not affected, and resuming, restarting or reopening a session on it is never
-refused for this. Its quota goes on being read in the background. Its row in the accounts table looks like any other,
-but for its switch and its Status cell, which says **Disabled** in place of its login state, with no Log in icon button
-(see "The accounts table" above); its account dialogs do not show it as turned off.
+refused for this. Its quota is not read, and the reading held for it is discarded, so its Usage cell shows a dash,
+except while a session is running on it, which keeps its quota read as before (see "Which accounts have a quota" in
+`docs/product/account-quotas.md`). Its row in the accounts table looks like any other, but for its switch and its
+Status cell, which says **Disabled** in place of its login state, with no Log in icon button (see "The accounts table"
+above); its account dialogs do not show it as turned off.
 
 **The switch** saves at once, on its own, and shows the daemon's recorded choice, which every window shares, moving
 when it changes. A refusal is shown in an error alert, the switch keeping its position; a press while the previous one
 is still unanswered is ignored. A client turns an account off or on with the protocol request `set_account_disabled`.
-Turning an account back on while **Start usage windows automatically** is on starts at once any window its held reading
-shows has not begun counting, as turning that setting on does.
+Turning an account back on reads its quota at once, and while **Start usage windows automatically** is on, that reading
+starts any window it shows has not begun counting.
 
 Whether an account is turned off is kept by the daemon on this machine. A configuration export that includes the
 accounts carries it for the accounts the user owns, not for the default account, and an import gives it to the accounts

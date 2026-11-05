@@ -179,7 +179,6 @@ impl AccountLogins {
                 quotas::Scope {
                     agent: Some(login.agent),
                     account: login.account.clone(),
-                    ..Default::default()
                 },
             );
             tokio::spawn(async move { quotas::refresh(&state, &scope).await });

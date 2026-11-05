@@ -22,6 +22,12 @@ determined, are not read, and nothing about a quota is shown for them. A reading
 directory it points at: removing an account discards its reading at once, and so does pointing it at another
 directory, after which it is read afresh from the new one; renaming it keeps the reading.
 
+An account the user turned off is not read either, by any trigger, unless a session is running on it (starting,
+working, waiting for the user or awaiting instructions): that account keeps being read, except when a session asks for
+fresh readings, so that the indicator below and the automatic account switch keep working for it. Otherwise it shows no
+reading and no failure: turning it off discards the reading held, the poller's next look discards that of an account
+whose last running session has stopped, and turning it back on reads it at once with no failures held against it.
+
 ## Quota windows
 
 What each agent reports, and what each window is called. A window is named the way the agent's own interface names

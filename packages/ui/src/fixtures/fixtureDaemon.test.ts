@@ -2030,6 +2030,36 @@ describe("the fixture daemon's disabled accounts", () => {
   });
 });
 
+describe("the fixture daemon's quota readings of accounts turned off", () => {
+  const accounts = [
+    accountOf("a-running", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("a-idle", "claude", "Personal", "/Users/dev/.claude-personal"),
+  ];
+  const windows = [quotaWindow("session", 20, 120)];
+  const daemon = () => createFixtureDaemon({
+    state: snapshotState({
+      consoles: [consoleOf("c", "Main")],
+      projects: [projectOf("p", "c", "Website")],
+      sessions: [
+        sessionOf("s", "c", "p", "Work", "idle", { account_id: "a-running" }),
+        sessionOf("s-ended", "c", "p", "Done", "archived", { account_id: "a-idle" }),
+      ],
+      settings: { ...DEFAULT_SETTINGS, added_agents: ["claude"], default_clone_dir: "/Users/dev/Projects", accounts },
+      accountQuotas: [quotaOf("claude", null, "max", windows), quotaOf("claude", "a-running", "pro", windows), quotaOf("claude", "a-idle", "pro", windows)],
+    }),
+  });
+
+  it("drops the reading of an account turned off, except one a session with a process runs on", async () => {
+    const fixture = daemon();
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: "a-running", disabled: true });
+    expect(fixture.store.getState().accountQuotas.map((quota) => quota.account)).toEqual([null, "a-running", "a-idle"]);
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: "a-idle", disabled: true });
+    expect(fixture.store.getState().accountQuotas.map((quota) => quota.account)).toEqual([null, "a-running"]);
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: null, disabled: true });
+    expect(fixture.store.getState().accountQuotas.map((quota) => quota.account)).toEqual(["a-running"]);
+  });
+});
+
 describe("the fixture daemon's accounts that are not logged in", () => {
   const accounts = [
     accountOf("a-out", "claude", "Work", "/Users/dev/.claude-work"),

@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from ".";
+import { readingsOfAccountsLeftOff } from "../../fixtures/fixtureAccounts";
 import { CATALOGS, format, messageText, translatorFor, splitPlaceholders, type Message, type MessageKey } from "../../i18n/catalog";
 import type { Language } from "../../i18n/languages";
 import { en } from "../../i18n/messages/en";
@@ -155,6 +156,17 @@ describe("gallery scenarios", () => {
     }
     expect(GROUPS.map(({ title }) => title)).not.toContain("Empty");
     expect(GROUPS.map(({ title }) => title)).not.toContain("Dialogs");
+  });
+
+  it("holds no quota reading of an account that is turned off, unless a session runs on it, as the daemon reads none", () => {
+    const stale: Record<string, string[]> = {};
+    for (const scenario of SCENARIOS) {
+      const { settings, accountQuotas, sessions } = scenario.state ?? {};
+      if (!settings || !accountQuotas) continue;
+      const held = readingsOfAccountsLeftOff(settings, accountQuotas, sessions?.values() ?? []).map((quota) => `${quota.agent}/${quota.account ?? "default"}`);
+      if (held.length > 0) stale[scenario.id] = held;
+    }
+    expect(stale).toEqual({});
   });
 
   it("keeps mocked Git warnings out of normal branch badge previews", () => {

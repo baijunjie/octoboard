@@ -6,6 +6,7 @@ import type { Account, AccountQuota, AgentAvailability } from "../../protocol";
 import { press } from "../../components/hint/tooltipTestSupport";
 import { trackMountRefocus } from "../../components/dialog/dialogTestSupport";
 import { accountQuotas, availability, request } from "./agentAccountsSectionTestState";
+import { sessionOf } from "../../fixtures/builders";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { buttonNamed, mount, openDetailsOf, rowLogin, rowOf } from "./agentAccountsSectionTestSupport";
 
@@ -338,6 +339,20 @@ it("waits for the first reading of an account of an available agent that has no 
   availability.set("codex", { agent: "codex", availability: "available", default_account_dir: null });
   const { container } = mount("Codex");
   expect(container.textContent?.match(/Reading usage/g)).toHaveLength(2);
+});
+
+it("waits for no reading of an account that is turned off unless a session with a process runs on it", () => {
+  availability.set("codex", { agent: "codex", availability: "available", default_account_dir: null });
+  const { container, setAccount, set } = mount("Codex");
+  expect(container.textContent?.match(/Reading usage/g)).toHaveLength(2);
+  setAccount("codex-work", { disabled: true });
+  expect(rowOf(container, "codex-work").textContent).not.toContain("Reading usage");
+  expect(rowOf(container, "default:codex").textContent).toContain("Reading usage");
+  const onIt = (status: "working" | "interrupted") => new Map([["s", sessionOf("s", "c", "p", "On it", status, { agent: "codex", account_id: "codex-work" })]]);
+  set({ sessions: onIt("working") });
+  expect(rowOf(container, "codex-work").textContent).toContain("Reading usage");
+  set({ sessions: onIt("interrupted") });
+  expect(rowOf(container, "codex-work").textContent).not.toContain("Reading usage");
 });
 
 it("leaves an account whose agent is not available without a quota block", () => {

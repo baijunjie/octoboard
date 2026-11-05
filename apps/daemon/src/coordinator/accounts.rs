@@ -129,8 +129,10 @@ fn write_default_account_name(state: &Arc<AppState>, agent: AgentId, name: &str)
 
 /// Turns an account off for new work, or back on, and broadcasts the settings when the flag
 /// changed. `None` is `agent`'s default account. A running session is not looked at: it keeps its
-/// account. Turning an account back on starts the usage window its held reading shows unstarted,
-/// when the setting that does that is on ([`quotas::kick_held`]).
+/// account. A quota is not read for an account that is off, unless a session is running on it, so
+/// turning it off drops its held reading when none is, and turning it back on reads it at once with
+/// no failures held against it; that reading starts the usage window it shows unstarted, when the
+/// setting that does that is on.
 pub(super) fn set_account_disabled(
     state: &Arc<AppState>,
     agent: AgentId,
@@ -149,10 +151,17 @@ pub(super) fn set_account_disabled(
     };
     if changed {
         broadcast_settings(state)?;
-        // The held readings are looked over again, as when the setting that starts quota windows
-        // is turned on, so a window the re-enabled account shows unstarted is not left waiting.
-        if !disabled {
-            quotas::kick_held(state);
+        if disabled {
+            if let Err(err) = state.account_quotas.drop_untargeted(state) {
+                tracing::warn!(%err, "dropping the quota reading of a disabled account failed");
+            }
+        } else {
+            state.account_quotas.restart_reading(agent, account);
+            let scope = quotas::Scope {
+                agent: Some(agent),
+                account: account.map(str::to_string),
+            };
+            quotas::refresh_in_background(state, scope);
         }
     }
     Ok(())
@@ -486,7 +495,6 @@ pub(super) fn refresh_account_quotas(
             quotas::Scope {
                 agent: Some(agent),
                 account,
-                ..Default::default()
             }
         }
         (None, Some(account)) => {
@@ -494,7 +502,6 @@ pub(super) fn refresh_account_quotas(
             quotas::Scope {
                 agent: Some(stored.agent),
                 account: Some(account),
-                ..Default::default()
             }
         }
         (None, None) => quotas::Scope::default(),

@@ -85,6 +85,13 @@ the menu bar icon or a session's information — and a session is not given it (
 
 ## When quotas are read
 
+- **Not for an account that is turned off** (see "Turning an account off" in `docs/product/agent-accounts.md`),
+  unless a session is running on it (a session with a process: starting, working, waiting for the user or awaiting
+  instructions): no trigger below reads it otherwise, no kick is ever started on it, and a session asking for fresh
+  readings never reads it, a running session or not. Turning it off with no session running on it discards its held
+  reading, so no stale reading or failure is shown for it and its backoff does not survive; with one running, it goes
+  on being read as before, and the poller's next look discards its reading once the last such session has stopped, and
+  does not read it again. Turning it back on reads it at once with no failure held against it.
 - **In the background**, every account is read about every **5 minutes** while the daemon runs. An account whose
   reading fails is tried again after 10, then 20, then 40 minutes, and every 40 minutes after that, until a reading
   succeeds and the interval goes back to 5 minutes. An account that is not logged in, or that the agent says has no

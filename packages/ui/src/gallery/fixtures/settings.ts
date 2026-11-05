@@ -176,8 +176,10 @@ const unavailableQuotaState: Scenario["state"] = {
 /** A model's display name as long as one can be, long enough to wrap in a narrow window. */
 const LONG_MODEL_NAME = "Claude Opus Extended Context Research Preview";
 
-/** Claude Code's default account and Work turned off for new sessions, and Trial, signed out and turned off too;
- * Client, with no reading yet, stays on. Work keeps its reading, which its row keeps showing while it is off. */
+/** Claude Code's default account and Work turned off for new sessions, and Trial, turned off too and signed out. The
+ * sample's sessions run on the default account, so it keeps its reading; a session started since runs on Trial, so the
+ * daemon reads it, and finds it signed out. The daemon reads no quota for Work, which has none, and Client stays on, its
+ * first reading not in yet. */
 const disabledState: Scenario["state"] = {
   ...quotaState,
   settings: {
@@ -188,8 +190,9 @@ const disabledState: Scenario["state"] = {
       accountOf("a-trial", "claude", "Trial", "/Users/dev/.claude-trial", { disabled: true }),
     ],
   },
+  sessions: new Map([...quotaState.sessions!.values(), sessionOf("s-web-trial", SAMPLE.console.id, SAMPLE.web.id, "Try the sign-in flow", "working", { account_id: "a-trial" })].map((session) => [session.id, session])),
   accountQuotas: [
-    ...quotaState.accountQuotas!,
+    ...quotaState.accountQuotas!.filter((quota) => quota.agent !== "claude" || quota.account !== "a-work"),
     quotaOf("claude", "a-trial", null, [], {
       unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "Claude Code is not signed in: Error: not logged in"),
     }),
@@ -786,9 +789,9 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, accounts turned off",
-    description: "The default account, Work and Trial are turned off: their Disable switches are on and their Status cells read a neutral \"Disabled\" badge in place of the login state, while the rest of each row is unchanged: the default account keeps its name, plan and usage bar, and Work its muted name and grey bar with \"Limit reached\". Trial is signed out, so it has no Log in icon beside \"Disabled\", where a signed-out account that is on has one; its menu still offers Log in. Client's switch is off, and its Status cell has no badge as it has no reading yet. The header's \"?\" next to Disable explains that a disabled account no longer appears in account choices or usage displays, except while a running session still uses it, new sessions do not use it, and running sessions keep running. Turn Disable off for any of them and the switch moves back; turn it on for Client and it does.",
+    description: "The default account, Work and Trial are turned off: their Disable switches are on and their Status cells read a neutral \"Disabled\" badge in place of the login state. The default account has a session running on it, so it keeps its name, plan and usage bar. Work has no usage reading, as none is taken for a turned-off account: a dash in the usage cell, not \"Reading usage…\", and no plan badge, beside \"Disabled\"; its details, from its menu, read \"Unknown\" for the login with a dash under Usage. Trial has a session running on it and is signed out: a dash in the usage cell and no plan, and no Log in icon beside \"Disabled\", where a signed-out account that is on has one; its menu still offers Log in. Client's switch is off, and its Status cell has no badge as its first reading is still coming (\"Reading usage…\"). The header's \"?\" next to Disable explains that a disabled account no longer appears in account choices or usage displays, except while a running session still uses it, new sessions do not use it, and running sessions keep running. Turn Disable off for any of them and the switch moves back; turn it on for Client and it does.",
     // Four rows under the three switches and the tab strip: taller than the default window, whose body would scroll.
-    height: 1000,
+    height: 1060,
     state: disabledState,
     steps: openAccounts,
   },
@@ -889,7 +892,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: accounts, sign-in emails under the names",
     description: "Claude Code's table with each account's sign-in email under its name, muted and smaller, on a single line: Default (dev@octoboard.example) and Work (dev@work.octoboard.example) show theirs whole; Client's address is longer than the name column, so it is cut on one line and fades at the end, with the whole address in a tooltip while the pointer rests on it. Trial is signed out, so its row has no email line and no gap where it would be, and its name sits as it does in the rows without a reading.",
     // Four rows under the three switches and the tab strip: taller than the default window, whose body would scroll.
-    height: 1000,
+    height: 1100,
     state: emailsState,
     steps: openAccounts,
   },

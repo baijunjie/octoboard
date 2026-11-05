@@ -81,7 +81,7 @@ pub use judgement::{preferred_signal, AccountSignal, Exhausted};
 #[cfg(test)]
 pub(crate) use poll::finish_probe_for_test;
 use poll::MAX_CONCURRENT_CLI_RUNS;
-pub use poll::{kick_held, refresh, refresh_requested, spawn, Scope};
+pub use poll::{kick_held, refresh, refresh_in_background, refresh_requested, spawn, Scope};
 pub(crate) use poll::{refresh_on_demand, ShellSource};
 pub(crate) use reset_credit::CONSUME_TIMEOUT as RESET_CREDIT_TIMEOUT;
 pub(crate) use use_credit::use_reset_credit;
@@ -462,6 +462,29 @@ impl AccountQuotas {
         );
     }
 
+    /// Sets how many consecutive failures the held reading of the account has.
+    #[cfg(test)]
+    pub fn set_failures_for_test(&self, agent: AgentId, account: Option<&str>, failures: u32) {
+        for (_, entry) in self
+            .lock()
+            .entries
+            .iter_mut()
+            .filter(|(key, _)| key.agent == agent && key.account.as_deref() == account)
+        {
+            entry.failures = failures;
+        }
+    }
+
+    /// How many consecutive failures the held reading of the account has; none held counts as 0.
+    #[cfg(test)]
+    pub fn failures_for_test(&self, agent: AgentId, account: Option<&str>) -> u32 {
+        self.lock()
+            .entries
+            .iter()
+            .find(|(key, _)| key.agent == agent && key.account.as_deref() == account)
+            .map_or(0, |(_, entry)| entry.failures)
+    }
+
     /// Whether a window of the account has been kicked in an episode that has not ended.
     #[cfg(test)]
     pub fn is_kicked_for_test(&self, agent: AgentId, account: Option<&str>) -> bool {
@@ -489,6 +512,20 @@ impl AccountQuotas {
         inner.in_flight.retain(|key, _| !is_it(key));
         for (_, entry) in inner.entries.iter_mut().filter(|(key, _)| is_it(key)) {
             entry.due = true;
+        }
+    }
+
+    /// Makes the account's reading due and drops any claim on it, as [`AccountQuotas::make_due`]
+    /// does, and forgets the failures it had, so the next refresh reads it at once and the wait
+    /// after that starts afresh. For an account turned back on, which must not inherit a backoff
+    /// built up before.
+    pub fn restart_reading(&self, agent: AgentId, account: Option<&str>) {
+        let mut inner = self.lock();
+        let is_it = |key: &Key| key.agent == agent && key.account.as_deref() == account;
+        inner.in_flight.retain(|key, _| !is_it(key));
+        for (_, entry) in inner.entries.iter_mut().filter(|(key, _)| is_it(key)) {
+            entry.due = true;
+            entry.failures = 0;
         }
     }
 

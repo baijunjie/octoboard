@@ -20,10 +20,10 @@ fn the_wait_before_another_attempt_doubles_with_failures_up_to_a_cap() {
     assert_eq!(wait_after(40), POLL_INTERVAL * 8);
 }
 
-/// A scope that leaves out the accounts the user turned off selects the others only, the
-/// default account among them, while the default scope selects every account.
+/// No trigger selects an account the user turned off, the default account included; its held
+/// reading goes, and turning it back on makes it read at once with no failures held against it.
 #[tokio::test]
-async fn a_scope_can_leave_out_the_accounts_the_user_turned_off() {
+async fn an_account_the_user_turned_off_is_read_by_no_trigger() {
     let (state, dir) = crate::test_support::app_state("quota-scope-enabled");
     state.set_agent_availability(vec![crate::protocol::AgentAvailability {
         agent: AgentId::CODEX,
@@ -44,10 +44,10 @@ async fn a_scope_can_leave_out_the_accounts_the_user_turned_off() {
             })
             .unwrap();
     }
-    let selected = |scope: Scope| {
+    let selected = |trigger: Trigger| {
         let mut accounts: Vec<Option<String>> = state
             .account_quotas
-            .claim_scope(&state, &scope, Instant::now(), Trigger::Poll)
+            .claim_scope(&state, &Scope::default(), Instant::now(), trigger)
             .unwrap()
             .into_iter()
             .map(|claim| claim.key.account.clone())
@@ -58,17 +58,146 @@ async fn a_scope_can_leave_out_the_accounts_the_user_turned_off() {
         accounts
     };
 
-    assert_eq!(
-        selected(Scope::default()),
-        [None, Some("off".to_string()), Some("on".to_string())]
+    for trigger in [Trigger::Poll, Trigger::Request, Trigger::Demand] {
+        assert_eq!(selected(trigger), [None, Some("on".to_string())]);
+    }
+    state
+        .store
+        .set_default_account_disabled(AgentId::CODEX, true)
+        .unwrap();
+    for trigger in [Trigger::Poll, Trigger::Request, Trigger::Demand] {
+        assert_eq!(selected(trigger), [Some("on".to_string())]);
+    }
+}
+
+/// Turning an account off drops the reading it held, and turning it back on finds it unread, so
+/// it is claimed at once whatever backoff it had built up.
+#[tokio::test]
+async fn a_turned_off_account_loses_its_reading_and_is_read_at_once_when_turned_back_on() {
+    let (state, dir) = crate::test_support::app_state("quota-scope-reenabled");
+    state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+        agent: AgentId::CODEX,
+        availability: Availability::Available,
+        default_account_dir: None,
+    }]);
+    state
+        .store
+        .insert_account(&crate::protocol::Account {
+            id: "a".to_string(),
+            agent: AgentId::CODEX,
+            name: "a".to_string(),
+            config_dir: dir.join("a").to_string_lossy().into_owned(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+        })
+        .unwrap();
+    let quotas = &state.account_quotas;
+    let account = Key::of(
+        AgentId::CODEX,
+        Some("a"),
+        Some(&dir.join("a").to_string_lossy()),
     );
-    assert_eq!(
-        selected(Scope {
-            enabled_only: true,
-            ..Scope::default()
-        }),
-        [None, Some("on".to_string())]
+    for _ in 0..4 {
+        quotas.recorded(
+            &state,
+            account.clone(),
+            unavailable_quota(
+                &account,
+                QuotaUnavailable::new(code::COMMAND_FAILED, "failed", &[]),
+            ),
+        );
+    }
+    assert_eq!(quotas.lock().entries[&account].failures, 4);
+    let claims = |now: Instant| {
+        let claims = quotas
+            .claim_scope(&state, &Scope::default(), now, Trigger::Poll)
+            .unwrap();
+        quotas.lock().in_flight.clear();
+        claims.iter().filter(|claim| claim.key == account).count()
+    };
+    assert_eq!(claims(Instant::now()), 0);
+
+    state.store.set_account_disabled("a", true).unwrap();
+    quotas.drop_untargeted(&state).unwrap();
+    assert!(quotas
+        .held(AgentId::CODEX, Some("a"), account.config_dir.as_deref())
+        .is_none());
+
+    state.store.set_account_disabled("a", false).unwrap();
+    assert_eq!(claims(Instant::now()), 1);
+}
+
+/// A turned-off account with a session running on it is still read, and keeps its reading, so the
+/// rail's indicator and the automatic account switch have it; once no session runs on it, the
+/// reading is dropped, and it is not read again.
+#[tokio::test]
+async fn a_turned_off_account_with_a_running_session_is_still_read_until_the_session_stops() {
+    let (state, dir) =
+        crate::test_support::app::console_with_project_and_accounts("quota-scope-in-use");
+    state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+        agent: AgentId::CODEX,
+        availability: Availability::Available,
+        default_account_dir: None,
+    }]);
+    let config_dir = dir.join("off").to_string_lossy().into_owned();
+    state
+        .store
+        .insert_account(&crate::protocol::Account {
+            id: "off".to_string(),
+            agent: AgentId::CODEX,
+            name: "off".to_string(),
+            config_dir: config_dir.clone(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: true,
+        })
+        .unwrap();
+    let mut session = crate::test_support::sessions::project_session(
+        "s1",
+        AgentId::CODEX,
+        crate::protocol::SessionStatus::Working,
     );
+    session.account_id = Some("off".to_string());
+    state.store.insert_session(&session).unwrap();
+    let quotas = &state.account_quotas;
+    let off = Key::of(AgentId::CODEX, Some("off"), Some(&config_dir));
+    quotas.hold_in_dir_for_test(&quota_of(&off, false), &config_dir);
+    let claimed = |trigger: Trigger| {
+        let claims = quotas
+            .claim_scope(&state, &Scope::default(), Instant::now(), trigger)
+            .unwrap();
+        quotas.lock().in_flight.clear();
+        claims.iter().any(|claim| claim.key == off)
+    };
+    quotas.make_due(AgentId::CODEX, Some("off"));
+    assert!(claimed(Trigger::Poll));
+    assert!(quotas
+        .held(AgentId::CODEX, Some("off"), Some(&config_dir))
+        .is_some());
+    // A session asking is never the reason it is read, however long ago its last attempt was.
+    for entry in quotas.lock().entries.values_mut() {
+        entry.attempted = Instant::now() - Duration::from_secs(10 * 60);
+    }
+    assert!(!claimed(Trigger::Demand));
+    assert!(claimed(Trigger::Request));
+    // A kick is still never started on it.
+    state.store.set_auto_start_quota_windows(true).unwrap();
+    assert!(!quotas.kick_allowed(&state, &off));
+
+    state
+        .store
+        .update_session_status_if(
+            "s1",
+            crate::protocol::SessionStatus::Working,
+            crate::protocol::SessionStatus::Interrupted,
+        )
+        .unwrap();
+    quotas.make_due(AgentId::CODEX, Some("off"));
+    assert!(!claimed(Trigger::Poll));
+    assert!(quotas
+        .held(AgentId::CODEX, Some("off"), Some(&config_dir))
+        .is_none());
 }
 
 /// A missing directory is reported without running anything, and read for real once it exists.
@@ -110,7 +239,6 @@ async fn a_missing_config_directory_is_a_state_found_before_the_cli_is_run() {
     let scope = Scope {
         agent: Some(AgentId::CODEX),
         account: Some("work".to_string()),
-        ..Scope::default()
     };
 
     refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
@@ -306,7 +434,6 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
     let scope = Scope {
         agent: Some(AgentId::CODEX),
         account: Some("work".to_string()),
-        ..Scope::default()
     };
     refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
     assert_eq!(held(&state), [(AgentId::CODEX, Some("work".to_string()))]);
@@ -323,7 +450,6 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
     let scope = Scope {
         agent: Some(AgentId::GROK),
         account: None,
-        ..Scope::default()
     };
     refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
     assert_eq!((runs("codex"), runs("grok")), (1, 1));
@@ -592,10 +718,10 @@ async fn a_window_is_kicked_again_once_a_reading_has_shown_its_reset_time() {
     assert_eq!((fixture.count("runs"), fixture.count("kicks")), (5, 2));
 }
 
-/// A disabled account, the default one included, has no window started on it, and one that is
-/// turned back on is kicked again.
+/// A disabled account, the default one included, is not read and has no window started on it, and
+/// one that is turned back on is read and kicked.
 #[tokio::test]
-async fn a_disabled_account_has_no_window_kicked() {
+async fn a_disabled_account_is_not_read_or_kicked() {
     let fixture = KickFixture::new("quota-kick-disabled", true);
     fixture
         .state
@@ -603,11 +729,8 @@ async fn a_disabled_account_has_no_window_kicked() {
         .set_default_account_disabled(AgentId::CODEX, true)
         .unwrap();
     fixture.refresh().await;
-    assert_eq!((fixture.count("runs"), fixture.count("kicks")), (1, 0));
-    assert!(!fixture
-        .state
-        .account_quotas
-        .is_kicked_for_test(AgentId::CODEX, None));
+    assert_eq!((fixture.count("runs"), fixture.count("kicks")), (0, 0));
+    assert!(fixture.state.account_quotas.list().is_empty());
 
     fixture
         .state
@@ -615,7 +738,7 @@ async fn a_disabled_account_has_no_window_kicked() {
         .set_default_account_disabled(AgentId::CODEX, false)
         .unwrap();
     fixture.refresh().await;
-    assert_eq!((fixture.count("runs"), fixture.count("kicks")), (3, 1));
+    assert_eq!((fixture.count("runs"), fixture.count("kicks")), (2, 1));
 }
 
 #[tokio::test]
