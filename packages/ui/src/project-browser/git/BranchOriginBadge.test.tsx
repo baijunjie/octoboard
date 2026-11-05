@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { enter, leave, openTooltip } from "../../components/hint/tooltipTestSupport";
@@ -28,6 +28,7 @@ const state = snapshotState({
   sessions: [
     sessionOf("s-live", console_.id, project.id, "Fix the layout, renamed", "working"),
     sessionOf("s-task", console_.id, project.id, "Fix the header", "idle", { terminal_title: "Center the header" }),
+    sessionOf("s-with-no-branches", console_.id, project.id, "Finished work", "idle"),
     sessionOf("s-archived", console_.id, project.id, "Old experiment", "archived"),
   ],
 });
@@ -140,4 +141,32 @@ it("marks the selected session's branches in the accent colour and in words", ()
   expect(mark("worked-by-session").className).toContain("bg-accent-soft-foreground");
   expect(mark("worked-by-archived").className).toContain("border-app-muted");
   expect(mark("worked-by-archived").className).not.toContain("bg-");
+});
+
+it.each([true, false])("updates cached branch badges when the session changes with the list open: %s", (keepOpen) => {
+  const items = [...branches, { name: "another-live-branch", commit: "f".repeat(40), origin: origin("s-live", "Fix the layout") }];
+  let selectSession!: (id: string | undefined) => void;
+  function Harness() {
+    const [selected, setSelected] = useState<string | undefined>("s-live");
+    selectSession = setSelected;
+    return <BranchSelect label="From" branches={items} value="unattributed" gone={false} selectedSessionId={selected} onChange={() => {}} />;
+  }
+  const container = mountRows(<Harness />, { state });
+  const toggle = () => act(() => container.querySelector<HTMLElement>("button")!.click());
+  const expectSelected = (session: string | undefined) => {
+    for (const branch of items.filter((item) => item.origin)) {
+      const selected = branch.origin!.responsible_session === session;
+      expect(ringOf(branch.name).firstElementChild!.className.includes("bg-accent-soft-foreground")).toBe(selected);
+      expect(ringOf(branch.name).getAttribute("aria-label")?.startsWith("The selected session ")).toBe(selected);
+    }
+    expect(container.querySelector("button")!.textContent).toContain("unattributed");
+  };
+  toggle();
+  expectSelected("s-live");
+  for (const session of ["s-task", "s-with-no-branches", undefined, "s-live"]) {
+    if (!keepOpen) toggle();
+    act(() => selectSession(session));
+    if (!keepOpen) toggle();
+    expectSelected(session);
+  }
 });

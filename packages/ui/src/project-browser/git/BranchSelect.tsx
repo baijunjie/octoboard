@@ -90,7 +90,7 @@ export function BranchSelect({
           {/* The fade goes on the list, never on the popover around it: the popover is what animates
               away, and the fade's scroll-timeline animation never ends, so the popover's exit
               transition would wait for it forever. */}
-          <MotionListBox virtualized items={branches} {...branchFade}>
+          <MotionListBox virtualized items={branches} dependencies={[selectedSessionId]} {...branchFade}>
             {(branch) => {
               const branchName = displayWirePath(branch.name);
               return (
