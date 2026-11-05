@@ -59,7 +59,7 @@ export const SessionRow = memo(function SessionRow({
       {/* No touch popover on the marks of a pressable row: a tap on one is the row's press. */}
       <StatusIcon status={status} decorative withTooltip touchPopover={false} />
       <SessionAgentIcon providers={providers} session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-(--row-control-gap)">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
         {hasVisibleContext(session.context) && <span id={metadataId} className="shrink-0"><SessionContextLabel context={session.context} touchPopover={false} /></span>}
       </div>

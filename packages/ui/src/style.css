@@ -263,8 +263,8 @@ html {
   /* Shared icon columns for sidebar rows, cards and headers. */
   --row-control-size: 24px;
   --row-leading-icon-size: 16px;
-  --row-leading-icon-gap: 8px;
   --row-control-gap: 4px;
+  --row-leading-icon-gap: var(--row-control-gap);
   --row-controls-max-width: calc(2 * var(--row-control-size) + 2 * var(--row-control-gap));
 
   /* The horizontal inset shared by the sidebar and the right pane: a header, a bar, a heading or a

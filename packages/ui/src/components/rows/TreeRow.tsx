@@ -51,7 +51,7 @@ export function TreeRow({
   selected,
   locked,
   expanded,
-  className = "min-h-8 items-center gap-2 [--row-controls-gap:8px] px-(--row-content-inset)",
+  className = "min-h-8 items-center gap-(--row-control-gap) [--row-controls-gap:var(--row-control-gap)] px-(--row-content-inset)",
   children,
   ref,
 }: {

@@ -668,7 +668,7 @@ const SessionCard = memo(function SessionCard({
         >
           {agentLine}
         </FadeOverflow>
-        <div id={metadataId} className="flex shrink-0 items-center gap-2">
+        <div id={metadataId} className="flex shrink-0 items-center gap-(--row-control-gap)">
           {hasVisibleContext(session.context) && <div><SessionContextLabel context={session.context} touchPopover={false} /></div>}
           <SessionRelativeTime session={session} touchPopover={false} />
         </div>

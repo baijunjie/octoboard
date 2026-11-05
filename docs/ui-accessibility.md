@@ -2025,7 +2025,9 @@ Icon buttons in sidebar rows, cards and headers, the right pane and the file vie
 glyph size and does not increase the text line's height. Leading glyphs use the 16-pixel `--row-leading-icon-size`
 column through `RowIconSlot`'s leading placement. In a focus card, the binding dot precedes the title in reading order
 and shares its horizontal centre with the status and agent glyphs. All three lines use `RowIconLine` with the same
-8-pixel `--row-leading-icon-gap`, so their text starts in one column; an unbound title keeps the empty leading slot.
+4-pixel `--row-leading-icon-gap`, which follows `--row-control-gap`, so their text starts in one column; an unbound
+title keeps the empty leading slot. Sidebar rows use that same gap between their horizontal elements, including the
+branch badge and trailing controls, the project name and chevron, and session metadata.
 `RowControls` keeps persistent pins and markers outside the hidden actions' clip and collapses the actions' leading gap
 with them. Do not space individual trailing icons with the text row's gap or add local offsets. Verify the shared
 columns with actions hidden, hovered, focused and open, including right-to-left layout.
