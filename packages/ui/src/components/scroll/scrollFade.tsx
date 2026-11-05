@@ -29,6 +29,11 @@ function scrollPadding(orientation: Orientation, endInset = 0): CSSProperties {
 /** What draws no fade: the scroll-driven mask and its animation, off. */
 const NO_FADE: CSSProperties = { maskImage: "none", WebkitMaskImage: "none", animation: "none" };
 
+/** Keep the mask composited while descendants animate, so WKWebView does not shift their rasterized
+ * text and icons between pixel rows. The transform makes the scroller a containing block for
+ * positioned descendants. Unmasked overlay fades need no such layer. */
+const MASKED_FADE_CLASS = "transform-gpu";
+
 /**
  * The scroll-driven fade, taken off while the scroller has nothing to scroll. A scroll timeline goes
  * inactive once its scroller stops overflowing, which should drop both fades to 0px, but Chromium and
@@ -295,7 +300,7 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
         maskImage: "none", WebkitMaskImage: "none", animation: "none",
         scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight),
       }) }}
-      className={joinClasses(className, region?.className)}
+      className={joinClasses(fade && stickyHeadingHeight === undefined ? MASKED_FADE_CLASS : undefined, className, region?.className)}
     />
   );
   if (stickyHeadingHeight === undefined) return scroller;
@@ -433,7 +438,7 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
     ...region?.props,
     ...strips.marker,
     ref,
-    className: joinClasses(scrollShadowVariants({ orientation }).base(), className, region?.className),
+    className: joinClasses(scrollShadowVariants({ orientation }).base(), MASKED_FADE_CLASS, className, region?.className),
     style: { "--scroll-shadow-size": `${FADE_SIZE}px`, ...scrollPadding(orientation), ...style, ...strips.style, ...rest.style } as CSSProperties,
     "data-scroll-shadow-mode": "auto",
   };
