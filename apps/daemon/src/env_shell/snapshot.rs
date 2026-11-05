@@ -410,11 +410,20 @@ fn kill_group_and_reap(child: &mut Child) -> Result<ExitStatus> {
     let pid = child.id() as libc::pid_t;
     if leader::unreaped_state(pid).is_some() {
         leader::signal_group(pid, libc::SIGHUP);
-        let hangup_deadline = Instant::now() + HANGUP_GRACE;
-        while leader::group_has_members(pid) == Some(true) && Instant::now() < hangup_deadline {
+        let hangup_started = Instant::now();
+        let hangup_deadline = hangup_started + HANGUP_GRACE;
+        let mut members = leader::group_has_members(pid);
+        while members == Some(true) && Instant::now() < hangup_deadline {
             thread::sleep(Duration::from_millis(20));
+            members = leader::group_has_members(pid);
         }
+        #[cfg(test)]
+        let hangup_elapsed = hangup_started.elapsed();
         leader::kill_group(pid);
+        #[cfg(test)]
+        eprintln!(
+            "snapshot cleanup: pid={pid}, elapsed since SIGHUP={hangup_elapsed:?}, group members={members:?}, grace={HANGUP_GRACE:?}; requested SIGKILL"
+        );
     }
     let reap_deadline = Instant::now() + REAP_GRACE;
     loop {

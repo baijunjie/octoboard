@@ -177,16 +177,28 @@ The workflow:
    in-app update notice shows too. It also checks that the tagged commit is on `main`, that the repository secrets
    below are set, and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build
    would otherwise find only after the checks.
-2. `checks` runs `quality.yml`; then `release` builds, signs and notarizes with
-   `pnpm --filter @octoboard/desktop release --no-sign-update`, signs the update archive in a step of its own
+2. `checks` calls `quality.yml`, which runs three independent hosted jobs. Ubuntu runs
+   `pnpm verify --release --release-group frontend --fresh` for identity, application lint, production UI type checks
+   and application UI tests, without installing Rust. macOS runs the `native` group for identity, desktop script tests
+   (including BSD tar archive cases), rustfmt, clippy and both Rust crates' tests. Another Ubuntu job compiles both
+   crates with `node scripts/cargo.mjs check --locked`. Every job must pass; the grouped commands come from the same
+   plan as a complete `pnpm verify --release` run.
+3. `release` restores the universal-build Rust dependency cache, then builds, signs and notarizes with
+   `pnpm --filter @octoboard/desktop release --no-sign-update`. It signs the update archive in a step of its own
    (`sign-update`), the only step given the update key (no build step has it in its environment; code planted for
-   later steps of the same runner could still read it), and publishes with `publish-release --notes-file`, the only one
-   given the workflow's own token (for `gh`; checkouts keep no credential in `.git/config`). The signing certificate and
-   the Developer ID G2 intermediate go into a keychain that exists for that run only, and the API key is written to a
-   temporary file; both are removed right after the build. `validate` learns whether the secrets are set from boolean
-   expressions, without their values reaching a step.
-3. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
+   later steps of the same runner could still read it), and publishes with `publish-release --notes-file`, the only
+   one given the workflow's own token (for `gh`; checkouts keep no credential in `.git/config`). The signing certificate
+   and the Developer ID G2 intermediate go into a keychain that exists for that run only, and the API key is written
+   to a temporary file; both are removed right after the build. `validate` learns whether the secrets are set from
+   boolean expressions, without their values reaching a step.
+4. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
    third tag pushed while one runs replaces the waiting one, which must then be re-run.
+
+Before the first release, or after dependency or toolchain changes, run **Warm Rust caches** manually on `main` to
+prepare compatible dependency caches. Warming uses an unsigned universal build with no signing credentials and never
+publishes an application. Tag runs restore main's caches; different version tags cannot restore one another's caches.
+All release checks still run. The [Rust cache module](../../../.github/actions/rust-cache/README.md) documents the
+command, profiles, GitHub retention limits and the measurements to inspect before judging a speed change.
 
 Repository secrets: `APPLE_CERTIFICATE` (base64 of the Developer ID Application `.p12`, private key included),
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`

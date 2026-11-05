@@ -24,15 +24,17 @@ const RUST_STEPS = [
 
 export function checkSteps(scope) {
   if (scope.mode === "release") {
-    return lightFirst([
-      IDENTITY_CHECK,
+    const frontend = [
       lint("application lint", ["packages/ui", "apps/desktop/scripts", "scripts/lib/env.mjs", "scripts/lib/git.mjs"], ["**/src/gallery/**", "**/src/fixtures/**", "**/src/website-preview/**", "**/scripts/gallery*", "**/scripts/wkbench/**"]),
       pnpm("application type check", ["--filter", "@octoboard/ui", "typecheck:app"]),
-      pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
-      RUST_STEPS[0],
       pnpm("application UI tests", ["--filter", "@octoboard/ui", "test:app"], { heavy: true }),
-      ...RUST_STEPS.slice(1),
-    ]);
+    ];
+    const native = [
+      pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
+      ...RUST_STEPS,
+    ];
+    if (scope.group && !["frontend", "native"].includes(scope.group)) throw new Error(`Unknown release check group: ${scope.group}`);
+    return lightFirst([IDENTITY_CHECK, ...(scope.group === "native" ? [] : frontend), ...(scope.group === "frontend" ? [] : native)]);
   }
   const packages = scope.mode === "full" ? ALL_PACKAGES : scope.packages;
   const steps = scope.mode === "unread" ? [] : [IDENTITY_CHECK];

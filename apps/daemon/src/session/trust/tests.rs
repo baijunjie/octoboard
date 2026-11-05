@@ -2426,6 +2426,30 @@ async fn a_grok_entry_that_never_appears_is_reported_and_records_nothing() {
 /// store all the same, and no permission of Octoboard's is recorded.
 #[tokio::test]
 async fn grok_answered_in_the_terminal_still_has_its_entry_carried() {
+    struct ObservedCarry {
+        inner: crate::adapter::grok::trust::CarriedTrust,
+        started: AtomicBool,
+        outcome: Mutex<Option<(Duration, Result<(), CarryFailure>)>>,
+    }
+    impl TrustCarrier for ObservedCarry {
+        fn carry(&self) -> Result<(), CarryFailure> {
+            let started = std::time::Instant::now();
+            self.started.store(true, Ordering::Release);
+            let outcome = self.inner.carry();
+            *self.outcome.lock().expect("carry observation") =
+                Some((started.elapsed(), outcome.clone()));
+            outcome
+        }
+
+        fn longest(&self) -> Duration {
+            self.inner.longest()
+        }
+
+        fn user_store(&self) -> &Path {
+            self.inner.user_store()
+        }
+    }
+
     let (state, dir) = state_with_project("grok-in-terminal");
     let received = dir.join("received");
     let session_store = dir.join("session-store.toml");
@@ -2449,18 +2473,23 @@ async fn grok_answered_in_the_terminal_still_has_its_entry_carried() {
         Some("project-1"),
     );
     state.store.insert_session(&record).expect("session");
+    let carrier = Arc::new(ObservedCarry {
+        inner: crate::adapter::grok::trust::CarriedTrust {
+            session_store: session_store.clone(),
+            user_store: user_store.clone(),
+            folder: "/work/project".to_string(),
+            record_wait: PATIENCE,
+        },
+        started: AtomicBool::new(false),
+        outcome: Mutex::new(None),
+    });
     let live = watched_live_session(
         "grok-1",
         AgentId::GROK,
         120,
         32,
         &format!("stty raw -echo; {script}"),
-        Some(Arc::new(crate::adapter::grok::trust::CarriedTrust {
-            session_store,
-            user_store: user_store.clone(),
-            folder: "/work/project".to_string(),
-            record_wait: PATIENCE,
-        })),
+        Some(carrier.clone()),
     );
     spawn_reader_thread(live.clone(), 8 * 1024);
     state.register_live(live.clone());
@@ -2469,12 +2498,22 @@ async fn grok_answered_in_the_terminal_still_has_its_entry_carried() {
     live.write_input(YES).expect("the person's key");
     on_hook(&state, &live);
 
+    let observed_user_store = user_store.clone();
     let carried = tokio::task::spawn_blocking(move || {
         wait_for(PATIENCE, || {
             std::fs::read_to_string(&user_store).is_ok_and(|text| text == entry)
         })
     });
-    assert!(carried.await.unwrap(), "the entry reaches the user's store");
+    assert!(
+        carried.await.unwrap(),
+        "the entry reaches the user's store; received: {:?}; session store: {:?}; user store: {:?}; carry started: {}; carry outcome: {:?}; PTY tail: {:?}",
+        std::fs::read(&received),
+        std::fs::read_to_string(&session_store),
+        std::fs::read_to_string(&observed_user_store),
+        carrier.started.load(Ordering::Acquire),
+        *carrier.outcome.lock().expect("carry observation"),
+        String::from_utf8_lossy(&live.recent_output(4096))
+    );
     assert!(!consented_in_store(&state));
     assert!(trusted_in_store(&state).is_empty());
 }

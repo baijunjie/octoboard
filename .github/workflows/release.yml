@@ -97,6 +97,9 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: release
       - run: pnpm install --frozen-lockfile
       # A keychain of this run's own holds the Developer ID certificate, and the G2 intermediate without which the
       # chain cannot be built (see .env.secret.example).
@@ -134,7 +137,7 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: pnpm --filter @octoboard/desktop release --no-sign-update
+        run: /usr/bin/time -l pnpm --filter @octoboard/desktop release --no-sign-update
       # The Apple credentials are not needed past the build; the later steps run without them on the disk.
       - name: Remove the Apple credentials
         if: always()

@@ -1,0 +1,74 @@
+name: Warm Rust caches
+
+# Run on main before a release or after dependency/toolchain updates. The dependency caches this creates
+# can be restored by every release tag; caches written by one tag cannot be restored by another tag.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: warm-rust-caches
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main cache scope
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != refs/heads/main ]; then
+            echo "::error::Run this workflow on main so release tags can restore its caches."
+            exit 1
+          fi
+
+  macos:
+    needs: validate
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [checks, release]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: ${{ matrix.profile }}
+      - run: pnpm install --frozen-lockfile
+      - name: Compile check and test dependencies
+        if: matrix.profile == 'checks'
+        run: |
+          /usr/bin/time -l pnpm clippy:rust
+          /usr/bin/time -l pnpm test:rust --no-run
+      # No signing credentials enter this workflow. The unsigned universal build warms both architectures;
+      # the cache action keeps dependencies and removes workspace binaries and bundle outputs before saving.
+      - name: Compile unsigned universal release
+        if: matrix.profile == 'release'
+        run: /usr/bin/time -l pnpm --filter @octoboard/desktop release
+
+  linux:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: linux-check
+      - run: /usr/bin/time -v node scripts/cargo.mjs check --locked

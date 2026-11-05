@@ -1,0 +1,51 @@
+name: Rust dependency cache
+description: Restore compatible Rust dependencies and save reusable caches from main.
+inputs:
+  profile:
+    description: Separate checks, release and Linux compilation caches.
+    required: true
+outputs:
+  cache-hit:
+    description: Whether an exact cache key was restored.
+    value: ${{ steps.cache.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - id: platform
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = macOS ]; then
+          sdk=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)
+          printf 'sdk=xcode-%s\n' "$sdk" >> "$GITHUB_OUTPUT"
+        elif [ -r /etc/os-release ]; then
+          . /etc/os-release
+          printf 'sdk=%s-%s\n' "$ID" "$VERSION_ID" >> "$GITHUB_OUTPUT"
+        else
+          printf 'sdk=%s\n' "$RUNNER_OS" >> "$GITHUB_OUTPUT"
+        fi
+    # Install the pinned toolchain before this action so its compiler identity is part of the key.
+    - id: cache
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      with:
+        shared-key: octoboard-${{ inputs.profile }}-${{ steps.platform.outputs.sdk }}-v1
+        env-vars: CARGO CC CFLAGS CXX CMAKE RUST SDKROOT DEVELOPER_DIR MACOSX_DEPLOYMENT_TARGET
+        cache-bin: "false"
+        cache-workspace-crates: "false"
+        cache-on-failure: "true"
+        # Different release tags cannot read one another's caches. Keep reusable entries on main.
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Report cache restoration
+      shell: bash
+      env:
+        CACHE_PROFILE: ${{ inputs.profile }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        {
+          printf '### Rust cache: %s\n\n' "$CACHE_PROFILE"
+          printf -- '- Runner: %s / %s\n' "$RUNNER_OS" "$RUNNER_ARCH"
+          printf -- '- Exact cache hit: %s\n' "${CACHE_HIT:-false}"
+          if [ -d target ]; then
+            printf -- '- Restored target size: '
+            du -sh target
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"

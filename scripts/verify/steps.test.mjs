@@ -64,3 +64,14 @@ test("the UI build runs only for the scope that names it", () => {
   assert.ok(labels(["packages/ui/vite.config.ts"]).includes("ui build"));
   assert.ok(!labels(["packages/ui/src/App.tsx"]).includes("ui build"));
 });
+
+test("release groups together run every release check with identical commands and no macOS tests moved to Linux", () => {
+  const all = checkSteps({ mode: "release" });
+  const frontend = checkSteps({ mode: "release", group: "frontend" });
+  const native = checkSteps({ mode: "release", group: "native" });
+  const commands = (items) => [...new Set(items.map((step) => JSON.stringify(step.cmd)))].sort();
+  assert.deepEqual(commands([...frontend, ...native]), commands(all));
+  assert.deepEqual(frontend.map((step) => step.label), ["identity check", "application lint", "application type check", "application UI tests"]);
+  assert.deepEqual(native.map((step) => step.label), ["identity check", "desktop script tests", "rustfmt check", "rust clippy", "rust tests"]);
+  assert.throws(() => checkSteps({ mode: "release", group: "unknown" }), /Unknown release check group/);
+});

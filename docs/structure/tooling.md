@@ -40,7 +40,8 @@ How the repository is built, checked and released, outside the code of any one e
 | `scripts/cargo.mjs` | `pnpm test:rust`, `pnpm clippy:rust` and the Linux CI `cargo check`: both crates in one cargo invocation, without needing the daemon sidecar (the one place that empties `bundle.externalBin`) |
 | `scripts/sync-identity.mjs` | Generates the required literal author fields in `LICENSE` and `Cargo.toml` from `config/app.json`, or checks them without writing |
 | [`.githooks/`](../../.githooks/README.md) | The hook entry point and its installers for the commit and push hooks |
-| `.github/workflows/` | `quality.yml` (the application checks: `pnpm verify --release --fresh` and a Linux `cargo check` of both crates), `release.yml` (on a version tag: validate, run the checks, build, notarize, sign the update archive in a step of its own that alone holds the update key, and publish), `website.yml` (generate the website, run its tests and lint, deploy it to GitHub Pages) |
+| `.github/workflows/` | `quality.yml` (independent hosted frontend, macOS native and Linux compilation jobs), `release.yml` (on a version tag: validate, require every quality job, build, notarize, sign the update archive in a step of its own that alone holds the update key, and publish), `warm-rust-cache.yml` (manual dependency-cache warming on main), `website.yml` (generate the website, run its tests and lint, deploy it to GitHub Pages) |
+| [`.github/actions/rust-cache/`](../../.github/actions/rust-cache/README.md) | Shared Rust dependency-cache profiles for checks, universal release builds and Linux compilation; its README holds the save/restore policy, warming procedure, retention and measurement guidance |
 | `.github/release-notes.sh`, `.github/dependabot.yml` | Validates a release tag and prints its notes for `release.yml`; Dependabot's updates of the actions the workflows use |
 | `patches/` | The pnpm dependency patches |
 

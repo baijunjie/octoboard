@@ -22,10 +22,16 @@ const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const baseArg = args.includes("--base") ? args[args.indexOf("--base") + 1] : undefined;
 const headArg = args.includes("--head") ? args[args.indexOf("--head") + 1] : undefined;
-const known = new Set(["--full", "--release", "--quick", "--fresh", "--dry-run", "--base", "--head", baseArg, headArg]);
+const releaseGroup = args.includes("--release-group") ? args[args.indexOf("--release-group") + 1] : undefined;
+const known = new Set(["--full", "--release", "--quick", "--fresh", "--dry-run", "--base", "--head", "--release-group", baseArg, headArg, releaseGroup]);
 const unknown = args.filter((arg) => !known.has(arg));
 if (unknown.length > 0 || (flag("--base") && (!baseArg || baseArg.startsWith("--"))) || (flag("--head") && (!headArg || headArg.startsWith("--")))) {
   console.error(`verify: unknown or incomplete argument: ${unknown.join(" ") || "--base / --head needs a ref"}`);
+  process.exit(2);
+}
+
+if (flag("--release-group") && (!flag("--release") || flag("--full") || !["frontend", "native"].includes(releaseGroup))) {
+  console.error("verify: --release-group requires --release and one of frontend or native");
   process.exit(2);
 }
 
@@ -44,7 +50,9 @@ const stampDir = stampDirectory(root, git("rev-parse", "--git-common-dir"));
 const toolchain = [
   `node ${process.version}`,
   `pnpm ${run("pnpm", ["--version"]) ?? "?"}`,
-  `rustc ${run("rustc", ["--version"]) ?? "none"}`,
+  // A frontend-only runner needs no Rust toolchain. Invoking its rustup shim here would install
+  // the pinned compiler even though this group runs no Rust command.
+  ...(releaseGroup === "frontend" ? [] : [`rustc ${run("rustc", ["--version"]) ?? "none"}`]),
 ];
 
 // The UI's message catalog holds the `menu.*` keys the desktop shell's menu reads, a relation
@@ -61,7 +69,7 @@ function plan(base) {
   let scope;
   let files = null;
   if (flag("--release")) {
-    scope = { mode: "release", reason: "shipping application", packages: [] };
+    scope = { mode: "release", reason: releaseGroup ? `shipping application (${releaseGroup})` : "shipping application", packages: [], group: releaseGroup };
   } else if (flag("--full")) {
     scope = { mode: "full", reason: "--full", packages: [] };
   } else if (!base.commit) {
