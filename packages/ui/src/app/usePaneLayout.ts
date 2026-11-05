@@ -3,8 +3,8 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { useStableHandler } from "../components/hooks/useLatest";
 import type { AsideOwner } from "../layout/asideOwner";
 import { useDockedPanelVisible } from "../layout/panelVisibility";
-import { useIsNarrow } from "../components/hooks/breakpoint";
-import { useAsideFloats } from "../layout/paneWidth";
+import { useAsideFloats, usePaneDocking } from "../layout/paneWidth";
+import { MIN_SINGLE_COLUMN_ASIDE_WIDTH, MIN_TWO_COLUMN_ASIDE_WIDTH } from "../layout/panelColumnWidth";
 import { usePaneToggles } from "../layout/usePaneToggles";
 import { maximizedKind, openPanel, OWNER_KINDS, restoreStack, shownKinds, stackedKinds, toggleKind, unavailableKinds as unavailableKindsOf, type OwnerKind } from "../panels/stackState";
 import type { PanelKind } from "../layout/panelKind";
@@ -68,9 +68,7 @@ export function usePaneLayout({
   // drawer's open state is kept here, as the floating panel has to know it before the pane toggles
   // run.
   const asideFloats = useAsideFloats();
-  const isNarrow = useIsNarrow();
   const [asidePinned, setAsidePinned] = useDockedPanelVisible("aside");
-  const asideOverlay = !asideFloats && (isNarrow || !asidePinned);
   const [revealAside, setRevealAside] = useState(false);
   const drawer = useState(false);
   const floating = useFloatingPanel({ floats: asideFloats, owner: ownerKind, stacks: panelStacks, drawerOpen: drawer[0], focusTerminal, unavailable: unavailableKinds });
@@ -86,6 +84,12 @@ export function usePaneLayout({
   const ownerStack = asideFloats && ownerKind ? { open: floating.kind ? [floating.kind] : [], shares: {} } : storedStack;
   const openPanels = ownerStack ? shownKinds(ownerStack, ownerOrder) as PanelKind[] : [];
   const paneShown = openPanels.length > 0;
+  const [sidebarRequested] = useDockedPanelVisible("sidebar");
+  const dockedPanelCount = ownerStack ? stackedKinds(ownerStack, ownerOrder).length : 0;
+  const { sidebarDockable, asideDockable } = usePaneDocking(!noConsoles && sidebarRequested,
+    dockedPanelCount > 2 ? MIN_TWO_COLUMN_ASIDE_WIDTH : MIN_SINGLE_COLUMN_ASIDE_WIDTH);
+  const isNarrow = !sidebarDockable;
+  const asideOverlay = !asideFloats && (!asideDockable || !asidePinned);
   // A maximized panel (`PanelStack.tsx`) leaves the pane's column and covers
   // the agent terminal's area, which is inert meanwhile and not an F6 stop; the sidebar and the
   // panels left in the column stay as they are. With none left there, the column folds away and the
@@ -97,6 +101,7 @@ export function usePaneLayout({
   // floats in while the pointer rests on its toggle.
   const panes = usePaneToggles({
     hasSidebar: !noConsoles,
+    isNarrow,
     // Below the width that floats panels over the terminal a panel opens only on a press.
     asidePeekable: hasAside && (asideOverlay || !columnShown) && !asideFloats,
     focusTerminal,
@@ -239,12 +244,13 @@ export function usePaneLayout({
     asideFloats,
     asideOverlay,
     asidePinned,
+    asideDockable,
     notePanelOpened: (owner: OwnerKind, kind: PanelKind) => {
       floating.noteOpened(owner, kind);
       if (asideOverlay) panes.asidePeek.reveal(true);
     },
     toggleAsideDocked: () => {
-      if (isNarrow) {
+      if (!asideDockable) {
         setPeekKind(openPanels[0] ?? availableKinds[0]);
         panes.asidePeek.reveal(true);
         return;

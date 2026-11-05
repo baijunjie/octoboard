@@ -100,10 +100,10 @@ keyboard focus. With reduced motion requested by the system, the view opens and 
 
 It takes keyboard focus as it opens, so keystrokes stop reaching the terminal it covers. Focus stays in it after a
 deletion: when the deletion takes away the control focus was on or would go back to — a row's Delete, or Delete all,
-including a Delete all confirmation that closes by itself because the scope has emptied — focus goes to the view's Close
-button, its focus ring showing (except after a tap, see "Focus after a tap" in
+including a Delete all confirmation that closes by itself because the scope has emptied — focus goes to the view's
+Close button, its focus ring showing (except after a tap, see "Focus after a tap" in
 `docs/product/moving-focus-between-regions.md`). The same goes for a Delete all pressed with the pointer once its
-confirmed deletion is done; cancelling that confirmation leaves focus on the view itself. It is a region of its own in
-the `F6` cycle (see "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). Below
-1394 px, opening the archive view closes an explicitly opened sidebar overlay. A sidebar revealed by hover follows its
-usual pointer and keyboard-focus dismissal rules.
+confirmed deletion is done; cancelling that confirmation leaves focus on the view itself. It is a region of its own
+in the `F6` cycle (see "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
+When the sidebar cannot dock, opening the archive view closes an explicitly opened sidebar overlay. A sidebar
+revealed by hover follows its usual pointer and keyboard-focus dismissal rules.

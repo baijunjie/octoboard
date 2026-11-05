@@ -60,6 +60,13 @@ vi.mock("./terminal/TerminalController", () => ({
  * tell their listeners when the answer may have changed. */
 function stubWidth(width: number, touch = false) {
   let current = width;
+  const previousWidth = Object.getOwnPropertyDescriptor(document.documentElement, "clientWidth");
+  Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, get: () => current });
+  window.dispatchEvent(new Event("resize"));
+  onTestFinished(() => {
+    if (previousWidth) Object.defineProperty(document.documentElement, "clientWidth", previousWidth);
+    else Reflect.deleteProperty(document.documentElement, "clientWidth");
+  });
   const listeners = new Set<() => void>();
   vi.stubGlobal("matchMedia", (media: string) => {
     const min = Number(/min-width:\s*([\d.]+)px/.exec(media)?.[1]);
@@ -77,6 +84,7 @@ function stubWidth(width: number, touch = false) {
   return (next: number) =>
     act(() => {
       current = next;
+      window.dispatchEvent(new Event("resize"));
       for (const listener of [...listeners]) listener();
     });
 }
@@ -225,7 +233,7 @@ it("closes every floating panel when the drawer opens, shows none while it is op
 });
 
 it("floats no panel when the window narrows while the drawer is open", async () => {
-  const { resize } = mountApp(900, true);
+  const { resize } = mountApp(680, true);
   await pressElement(toggle("Show sessions"));
   await pressElement(row("Fix header"));
   // Touch keeps the middle-width sidebar open over the terminal; the right group stays hidden.
@@ -510,7 +518,7 @@ it("opens no panel on a swipe towards the start when the pane has no owner", asy
 });
 
 it("ignores swipes from the phone breakpoint up", async () => {
-  const { resize } = mountApp(800, true);
+  const { resize } = mountApp(680, true);
   await swipe(120);
   expect(toggle("Show sessions")).not.toBeNull();
   await resize(390);

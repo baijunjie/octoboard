@@ -19,7 +19,7 @@ import type { FocusTarget } from "./types";
  * xterm does on a refit. */
 function columnClipClass(easing: boolean): string {
   return (
-    "contents docked:block docked:h-full docked:min-h-0 docked:min-w-0 docked:shrink-0 docked:overflow-hidden" +
+    "contents sidebar-docked:block sidebar-docked:h-full sidebar-docked:min-h-0 sidebar-docked:min-w-0 sidebar-docked:shrink-0 sidebar-docked:overflow-hidden" +
     (easing ? ` ${COLUMN_EASE_CLASS}` : "")
   );
 }
@@ -29,11 +29,11 @@ interface SidebarFrameProps {
   shownConsoleId: string;
   /** The project or console session in focus mode, if any. */
   focus?: FocusTarget;
-  /** Whether the drawer is open below the `docked` breakpoint; above it the docked sidebar is
+  /** Whether the drawer is open below the sidebar's docking threshold; above it the docked sidebar is
    * shown or, with `peek`, hidden (`usePaneToggles` owns the state, resetting it once the window no
    * longer needs it). */
   open: boolean;
-  /** The drawer is closed below the `docked` breakpoint, its exit included: out of reach. */
+  /** The drawer is closed below the sidebar's docking threshold, its exit included: out of reach. */
   drawerAway?: boolean;
   /** The hover reveal of the sidebar while the user has hidden it from the top bar. The card
    * (fixed, inset from the rail and the other chrome, rounded, edged) is only up
@@ -111,9 +111,9 @@ export function SidebarFrame({
   // that; the inset card is a later state, only once the column is out of the row.
   const dock = usePaneDockMotion(peek === undefined, peek?.active ?? false, onColumnPhase);
   const drawerClassName = dock.inset
-    ? `docked:rounded-xl ${drawerClass("floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
-    : `${drawerClass("drawer", open)} docked:h-full`;
-  const handleOverflow = dock.inset ? "phone:overflow-visible!" : "phone:max-docked:overflow-visible!";
+    ? `sidebar-docked:rounded-xl ${drawerClass("floating", open, dock.insetShown)}${dock.preparingInset ? " sidebar-docked:transition-none" : ""}`
+    : `${drawerClass("drawer", open)} sidebar-docked:h-full`;
+  const handleOverflow = dock.inset ? "phone:overflow-visible!" : "phone:sidebar-floating:overflow-visible!";
 
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another
@@ -159,9 +159,9 @@ export function SidebarFrame({
         onTransitionEnd={dock.onColumnTransitionEnd}
       >
         <nav
-          // Below the `docked` breakpoint this is a fixed overlay, closed by default, faded up into
+          // Below the sidebar's docking threshold this is a fixed overlay, closed by default, faded up into
           // place and back down with `open`, and out of reach (inert) once closed, its exit
-          // included; at or above it the `docked:` variants in `drawerClass` put it back exactly
+          // included; at or above it the `sidebar-docked:` variants in `drawerClass` put it back exactly
           // where it always was, a plain row sibling, regardless of `open`. With the docked sidebar
           // hidden, that column is clipped away; only a hover on a console's avatar (`dock.inset`)
           // makes it the fixed card. Drawers share that card's inset from the chrome. Below the `phone`
@@ -196,7 +196,7 @@ export function SidebarFrame({
           data-region="sidebar"
           // The width cap keeps a strip at the end to tap to dismiss. Below `phone` the card carries the
           // rail inside its width, so the cap holds the rail and the sidebar together.
-          className={`flex max-phone:w-[calc(var(--spacing)*70+var(--rail-width))]! max-phone:ps-(--rail-width) max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 ${handleOverflow} ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
+          className={`flex max-phone:w-[calc(var(--spacing)*70+var(--rail-width))]! max-phone:ps-(--rail-width) sidebar-floating:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 ${handleOverflow} ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " sidebar-docked:invisible" : ""}`}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
           onPointerDownCapture={peek ? onPeekPress : undefined}
@@ -207,7 +207,7 @@ export function SidebarFrame({
           <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[inherit]">
             {children}
           </div>
-          <div className={dock.inset ? "hidden phone:contents" : "hidden phone:contents docked:hidden"}>
+          <div className={dock.inset ? "hidden phone:contents" : "hidden phone:contents sidebar-docked:hidden"}>
             <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} floating />
           </div>
         </nav>

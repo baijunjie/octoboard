@@ -10,7 +10,7 @@ since it forked (see `docs/product/project-pane-git-mode.md`). Either one opens 
 viewer** (see `docs/product/file-viewer.md`). The pane is shown in the window's right pane, in the place a console
 session's report panel takes (see "What the right pane shows" in `docs/product/window-layout.md`, which also says what
 puts it there and what takes it away), and it needs no session: the project is all it reads from. How wide the right
-pane is and how it floats in is in `docs/product/window-layout.md`, how the Files panel is opened, closed and drawn in
+pane is and how it floats in is in `docs/product/pane-docking.md`, how the Files panel is opened, closed and drawn in
 `docs/product/right-pane-panels.md`, and where `F6` lands in it in `docs/product/moving-focus-between-regions.md`.
 
 The Files panel itself is read-only: there is no editing, saving, creating, renaming or deleting of files, and
@@ -406,11 +406,11 @@ carrying the reason as `detail`.
 ## What is remembered
 
 **Per project, per client**, in that client's own browser storage (as the right pane's width is, see "Resizing the
-sidebar and the right pane" in `docs/product/window-layout.md`): the mode, Files or Git, whether the Changes tab's list
-is flat or grouped by folder and whether it groups its committed changes by commit, and which folders are expanded in
-the ordinary Files tree, so the pane comes back as it was after a reload or a restart. At most 200 expanded folders are
-kept per project, the earliest expanded dropped first, and the state of at most 50 projects, the one shown least
-recently dropped first. A removed project's state is dropped.
+sidebar and the right pane" in `docs/product/pane-docking.md`): the mode, Files or Git, whether the Changes tab's
+list is flat or grouped by folder and whether it groups its committed changes by commit, and which folders are
+expanded in the ordinary Files tree, so the pane comes back as it was after a reload or a restart. At most 200
+expanded folders are kept per project, the earliest expanded dropped first, and the state of at most 50 projects,
+the one shown least recently dropped first. A removed project's state is dropped.
 
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
 project with no file selected. So are the Git mode's chosen branch, its selected change and the sections and folders it

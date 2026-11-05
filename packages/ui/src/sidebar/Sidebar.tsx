@@ -25,11 +25,11 @@ interface SidebarProps extends SidebarHandlers {
   shownConsole: Console;
   /** The project or console session in focus mode, if any; it belongs to `shownConsole`. */
   focus?: FocusTarget;
-  /** Whether the drawer is open below the `docked` breakpoint; above it the docked sidebar is
+  /** Whether the drawer is open below the sidebar's docking threshold; above it the docked sidebar is
    * shown or, with `peek`, hidden (`usePaneToggles` owns the state, resetting it once the window no
    * longer needs it). */
   open: boolean;
-  /** The drawer is closed below the `docked` breakpoint, its exit included: out of reach. */
+  /** The drawer is closed below the sidebar's docking threshold, its exit included: out of reach. */
   drawerAway?: boolean;
   /** The hover reveal of the sidebar while the user has hidden it from the top bar. The card
    * (fixed, inset from the rail and the other chrome, rounded, edged) is only up

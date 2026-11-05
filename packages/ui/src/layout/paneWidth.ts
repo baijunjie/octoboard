@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
 
-import { MIN_SINGLE_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
+import { MIN_PANEL_COLUMN_WIDTH, MIN_SINGLE_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
 import { createPersistedPreference } from "../preferences/persistedPreference";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
@@ -11,19 +11,12 @@ export type PaneSide = "sidebar" | "aside";
 /** Remembered widths and bounds. Responsive modes change the rendered allocation without
  * replacing the user's choices. Floating groups use the same chosen width as docked groups. */
 const PANES = {
-  sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 280, default: 280, max: 480 },
+  sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: MIN_PANEL_COLUMN_WIDTH, default: 280, max: 480 },
   aside: { key: PREFERENCE_KEYS.asideWidth, min: MIN_SINGLE_COLUMN_ASIDE_WIDTH, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
-/** The agent terminal's floor beside docked panes. Below the docked breakpoint both sides
- * float over it; a narrower floor still protects the agent view until mobile mode removes it. */
-const TERMINAL_FLOOR = 520;
-export const NARROW_TERMINAL_FLOOR = 398;
-
-/** The terminal's floor in a window narrower than the `docked` breakpoint or not. */
-function terminalFloor(narrow: boolean): number {
-  return narrow ? NARROW_TERMINAL_FLOOR : TERMINAL_FLOOR;
-}
+/** The agent terminal keeps about 40 columns beside docked panes. */
+export const TERMINAL_FLOOR = 400;
 
 /** Memoised once resolved: the rail's width cannot change at runtime. */
 let railWidthPxCache: number | undefined;
@@ -90,20 +83,20 @@ export interface DockedPanes {
  * or the rail when the sidebar is hidden. The two-column aside minimum is reserved before the
  * sidebar receives spare width.
  */
-function maxWidthFor(side: PaneSide, docked: DockedPanes, narrow: boolean, chosenSidebar: number | undefined, railWidth: number, asideMin: number): number {
+function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number | undefined, railWidth: number, asideMin: number): number {
   const { max } = PANES[side];
   const min = side === "aside" ? asideMin : PANES.sidebar.min;
   if (side === "sidebar") {
     if (!docked.sidebar) return max;
     const asideReserve = docked.aside ? asideMin : 0;
-    return clamp(viewportWidth - railWidth - terminalFloor(narrow) - asideReserve, min, max);
+    return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - asideReserve, min, max);
   }
   const sidebar = PANES.sidebar;
   const sidebarWidth = docked.sidebar
-    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, narrow, chosenSidebar, railWidth, asideMin))
+    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, chosenSidebar, railWidth, asideMin))
     : 0;
   const available = viewportWidth - railWidth - sidebarWidth;
-  return docked.aside ? clamp(available - terminalFloor(narrow), min, max) : Math.max(min, available);
+  return docked.aside ? clamp(available - TERMINAL_FLOOR, min, max) : Math.max(min, available);
 }
 
 export interface PaneWidth {
@@ -129,18 +122,18 @@ export interface PaneWidth {
 /**
  * One pane's docked-mode width: the user's persisted choice (a separate `localStorage` entry per
  * side, every access guarded) clamped at render time by the rule at `maxWidthFor`, never below the
- * pane's minimum. `narrow` is whether the window is below the `docked` breakpoint (`useIsNarrow`).
+ * pane's minimum.
  * `asideMin` is the column's effective floor; both panes must receive the same value. It changes
  * allocation only, leaving the persisted choice available when the column's contents change.
  * State is shared module-wide, so every caller sees the same value.
  */
-export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolean, asideMin = PANES.aside.min, widthAdjustment = 0): PaneWidth {
+export function usePaneWidth(side: PaneSide, docked: DockedPanes, asideMin = PANES.aside.min, widthAdjustment = 0): PaneWidth {
   const chosen = chosenWidths[side].useValue();
   const chosenSidebar = chosenWidths.sidebar.useValue();
   // Subscribing to the answer rather than to the viewport itself is what keeps a window resize
   // from re-rendering the caller while the answer is unchanged.
   const [railWidth] = useState(railWidthPx);
-  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, narrow, chosenSidebar, railWidth, asideMin));
+  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, chosenSidebar, railWidth, asideMin));
   const { default: defaultWidth } = PANES[side];
   const min = side === "aside" ? asideMin : PANES.sidebar.min;
   const preference = chosenWidths[side];
@@ -163,4 +156,15 @@ export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolea
  * beside the rail. Below this CSS breakpoint, one panel floats at a time and swipes switch it. */
 export function useAsideFloats(): boolean {
   return !useMediaQuery(() => minWidthQuery("phone"));
+}
+
+/** Sidebar precedence keeps navigation steady as the open right-hand group grows. Closed panes
+ * reserve no room; responsive floating never changes either saved docking preference. */
+export function usePaneDocking(sidebarRequested: boolean, asideMinimum: number) {
+  const [railWidth] = useState(railWidthPx);
+  const width = useSyncExternalStore(subscribeToViewport, () => viewportWidth);
+  const sidebarDockable = width >= railWidth + PANES.sidebar.min + TERMINAL_FLOOR;
+  const sidebarReserve = sidebarRequested && sidebarDockable ? PANES.sidebar.min : 0;
+  const asideDockable = width >= railWidth + sidebarReserve + TERMINAL_FLOOR + asideMinimum;
+  return { sidebarDockable, asideDockable };
 }

@@ -5,6 +5,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
+import { stubWindow } from "./appTestSupport";
 import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
@@ -53,20 +54,13 @@ function mountApp(narrow = false) {
     stacks[session ?? "plain"] = usePanelStacks(session);
     return null;
   }
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
-  document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
+  stubWindow(narrow ? 390 : 1400);
   onTestFinished(() => {
     act(() => {
       for (const session of SESSIONS) stacks[session].setStack("project", { ...defaultStack("project"), open: ["report", "files"] });
       stacks.plain.setStack("project", defaultStack("project"));
       stacks.plain.setStack("report", defaultStack("report"));
     });
-    vi.unstubAllGlobals();
-    document.documentElement.style.removeProperty("--rail-width");
-    document.documentElement.style.removeProperty("--breakpoint-docked");
-    document.documentElement.style.removeProperty("--breakpoint-phone");
     try {
       localStorage.clear();
     } catch {

@@ -339,6 +339,35 @@ it("press leaves the drawer alone in a docked window and fails for a control ine
   expect(toggle.getAttribute("aria-label")).toBe(SHOW_SESSIONS);
 });
 
+it("press follows a floating sidebar's layout marker even in a wide window", async () => {
+  windowOfWidth(1440);
+  const { hub, drawer } = drawerWithToggle();
+  document.body.setAttribute("data-sidebar-dockable", "false");
+  const pressed = vi.fn();
+  hub.addEventListener("click", pressed);
+  const done = createUi(document, "en").press("Hub");
+  await vi.advanceTimersByTimeAsync(2000);
+  await done;
+  expect(drawer.hasAttribute("inert")).toBe(false);
+  expect(pressed).toHaveBeenCalledOnce();
+  document.body.removeAttribute("data-sidebar-dockable");
+});
+
+it("closeDrawer leaves a sidebar docked by the actual layout alone below the old breakpoint", async () => {
+  windowOfWidth(1168);
+  const { toggle } = drawerWithToggle();
+  document.body.setAttribute("data-sidebar-dockable", "true");
+  toggle.setAttribute("aria-label", HIDE_SESSIONS);
+  const clicked = vi.fn();
+  toggle.addEventListener("click", clicked);
+  const done = createUi(document, "en").closeDrawer();
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(clicked).not.toHaveBeenCalled();
+  expect(toggle.getAttribute("aria-label")).toBe(HIDE_SESSIONS);
+  document.body.removeAttribute("data-sidebar-dockable");
+});
+
 it("press does not open the drawer for a control that only takes a moment to appear outside it", async () => {
   windowOfWidth(420);
   const { toggle } = drawerWithToggle();

@@ -546,8 +546,15 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     }
   };
 
+  /** Docking follows the app's actual pane layout rather than a fixed viewport breakpoint.
+   * A fixture driver without an app root falls back to the declared breakpoint. */
+  const sidebarFloats = (): boolean => {
+    const layout = doc.querySelector("[data-sidebar-dockable]");
+    return layout ? layout.getAttribute("data-sidebar-dockable") === "false" : below("docked");
+  };
+
   /** Whether the last lookup (`findAll`) found nothing it could press but did find, in the sidebar's closed drawer,
-   * what it was looking for. Below the docked breakpoint the sidebar's session rows are in the drawer and, below the
+   * what it was looking for. When the sidebar cannot dock its session rows are in the drawer and, below the
    * phone one, the rail too, both inert until the drawer is open; a step names such a control as it would in a docked
    * window, and `waitFor` then opens the drawer, as the person pressing the toggle first would, so that no step needs
    * to know the window's width. It does so only once the lookup has found nothing else for `DRAWER_REACH_AFTER_MS`,
@@ -612,7 +619,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     inClosedDrawer = false;
     const named = Array.from(root.querySelectorAll<HTMLElement>(PRESSABLE)).filter((element) => isEnabled(element) && matches(matcher, nameOf(element)));
     if (named.length === 0 && root === doc) {
-      if (below("docked")) {
+      if (sidebarFloats()) {
         inClosedDrawer = Array.from(root.querySelectorAll<HTMLElement>(PRESSABLE)).some((element) => {
           const away = element.closest("[inert]");
           return away !== null && away.matches(DRAWER_REGIONS) && !element.hasAttribute("disabled") && matches(matcher, nameOf(element));
@@ -1235,7 +1242,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       }
     },
     async closeDrawer() {
-      if (!below("docked")) return;
+      if (!sidebarFloats()) return;
       const [show, hide] = [t("titleBar.sidebar.show"), t("titleBar.sidebar.hide")];
       const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to close the drawer with`);
       if (below("phone")) {

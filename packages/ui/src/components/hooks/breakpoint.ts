@@ -34,17 +34,8 @@ export function minWidthQuery(name: Breakpoint): string {
   return `(min-width: ${breakpointPx(name)}px)`;
 }
 
-/**
- * Whether the window is currently narrower than the `docked` breakpoint. Every other narrow-mode
- * behaviour (swapping the sidebar's layout) uses the `docked:` Tailwind variant directly, so it
- * tracks the breakpoint with no JavaScript at all and no hydration/resize flicker. This hook exists
- * only for the behaviour that genuinely needs the current mode in JS: closing the sidebar's drawer
- * when the window widens past the breakpoint, since an overlay left open there would otherwise
- * cover the row it no longer needs to; the sidebar's toggle, which drives a drawer below the
- * breakpoint and shows or hides the docked pane above it; the width clamps, which count the
- * sidebar as a column in the row only above it; and the settings dialog's tabs, whose orientation
- * sets react-aria's arrow keys and `aria-orientation`, not only their layout.
- */
+/** Whether settings and dialogs should use their compact presentation. Pane docking uses
+ * the actual open columns' space requirements independently of this breakpoint. */
 export function useIsNarrow(): boolean {
   return !useMediaQuery(() => minWidthQuery("docked"));
 }

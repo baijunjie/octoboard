@@ -28,7 +28,7 @@ function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}, noH
   }));
   let latest!: PaneToggles;
   function Probe({ panes }: { panes: { hasSidebar: boolean; asidePeekable: boolean } }) {
-    latest = usePaneToggles({ ...panes, focusTerminal });
+    latest = usePaneToggles({ ...panes, isNarrow: narrow, focusTerminal });
     return null;
   }
   const container = document.body.appendChild(document.createElement("div"));
@@ -183,8 +183,8 @@ it("hands focus in the docked sidebar to the terminal when the window narrows it
   sidebar.setAttribute("data-pane", "sidebar");
   const row = sidebar.appendChild(document.createElement("button"));
   const focusTerminal = vi.fn();
-  function Probe() {
-    usePaneToggles({ hasSidebar: true, asidePeekable: false, focusTerminal });
+  function Probe({ isNarrow }: { isNarrow: boolean }) {
+    usePaneToggles({ hasSidebar: true, isNarrow, asidePeekable: false, focusTerminal });
     return null;
   }
   const container = document.body.appendChild(document.createElement("div"));
@@ -196,11 +196,12 @@ it("hands focus in the docked sidebar to the terminal when the window narrows it
     document.documentElement.style.removeProperty("--breakpoint-docked");
     localStorage.clear();
   });
-  act(() => root.render(createElement(Probe)));
+  act(() => root.render(createElement(Probe, { isNarrow: false })));
   row.focus();
   expect(focusTerminal).not.toHaveBeenCalled();
   act(() => {
     narrow = true;
+    root.render(createElement(Probe, { isNarrow: true }));
     for (const listener of [...listeners]) listener();
   });
   expect(focusTerminal).toHaveBeenCalledTimes(1);

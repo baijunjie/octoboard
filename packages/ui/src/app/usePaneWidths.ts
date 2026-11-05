@@ -51,13 +51,12 @@ export function usePaneWidths({
   // finished. The aside does not ease.
   const [sidebarColumnPhase, setSidebarColumnPhase] = useState<DockPhase>(sidebarDocked ? "open" : "closed");
   // A closing sidebar column keeps its width clamp until it leaves the row, so its content cannot
-  // widen and reflow on the first frame. The sidebar is a column in the row only at and above the
-  // breakpoint, where it is docked; below it, a drawer, which takes no room from the aside beside it.
+  // widen and reflow on the first frame. A sidebar that cannot fit floats and takes no room from the aside beside it.
   const asideMin = !asideFloats && stackedPanelCount > 2 ? MIN_TWO_COLUMN_ASIDE_WIDTH : MIN_SINGLE_COLUMN_ASIDE_WIDTH;
   const sidebarWidth = usePaneWidth("sidebar", {
     sidebar: !noConsoles && !isNarrow && (sidebarDocked || sidebarColumnPhase !== "closed"),
     aside: asideDocked,
-  }, isNarrow, asideMin);
+  }, asideMin);
   const [allocation, setAllocation] = useState<{
     kinds: readonly string[];
     columns: string[][];
@@ -74,7 +73,7 @@ export function usePaneWidths({
   const asideWidth = usePaneWidth("aside", {
     sidebar: !noConsoles && !isNarrow && sidebarDocked,
     aside: asideDocked,
-  }, isNarrow, asideMin, allocation?.adjustment ?? 0);
+  }, asideMin, allocation?.adjustment ?? 0);
   const kinds = stackedPanelKinds ?? Array.from({ length: stackedPanelCount }, (_, index) => String(index));
   const contentWidth = asideWidth.width - PANEL_ASIDE_INSET;
   const columns = panelColumns(kinds, contentWidth, PANEL_COLUMN_GAP);

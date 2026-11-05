@@ -39,7 +39,7 @@ const STARTUP_AND_CONNECTION = "Startup and connection";
 const TERMINAL = "Terminal";
 
 /** Selects the session titled `title`, whose terminal the scenarios look at, then closes the drawer a pick leaves up
- * from 594px to 1394px (below 594px a pick closes it), where it would cover the terminal's left side. */
+ * when the sidebar floats (below 594px a pick closes it), where it would cover the terminal's left side. */
 const pickSessionTitled = (title: string): Step => async (ui) => {
   await ui.press(ui.session(title));
   await ui.closeDrawer();

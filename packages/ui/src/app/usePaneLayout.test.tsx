@@ -9,7 +9,7 @@ import type { ClientRequestBody, Console, ShellTerminal } from "../protocol";
 import { usePaneLayout } from "./usePaneLayout";
 
 const viewport = vi.hoisted(() => ({ floats: false, narrow: false }));
-vi.mock("../layout/paneWidth", () => ({ useAsideFloats: () => viewport.floats }));
+vi.mock("../layout/paneWidth", () => ({ useAsideFloats: () => viewport.floats, usePaneDocking: () => ({ sidebarDockable: !viewport.narrow, asideDockable: !viewport.narrow }) }));
 vi.mock("../components/hooks/breakpoint", () => ({
   useIsNarrow: () => viewport.narrow,
   useMediaQuery: () => false,

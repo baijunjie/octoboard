@@ -21,18 +21,14 @@ offering the one thing there is to do, and the top bar carries no sidebar toggle
 `docs/product/welcome-screen.md`). Everything this doc says of the three panes is what the window looks like once a
 console exists.
 
-The panes use three width ranges:
+At **594 px and wider**, each side docks only when the panes actually shown leave the terminal its **400 px**
+minimum. The sidebar has priority; a right pane that cannot fit floats as a group. Each side keeps its own docking
+preference through these changes. Widths, capacity thresholds and resizing are in "Docking capacity" and "Pane widths"
+in `docs/product/pane-docking.md`.
 
-- **1394 px and wider**: both sides can dock beside the terminal. Each side has its own remembered docking choice;
-  the right pane can also float all its open panels as one group.
-- **594–1393 px**: both sides float over the terminal automatically, taking none of its width. The docking choices
-  are kept, so widening the window restores them.
-- **Below 594 px**: only one overlay is shown at a time, the sidebar with the rail or one right-pane panel. Touch
-  swipes open, close and switch them (see `docs/product/touch-swipes.md`).
-
-The large-screen threshold fits the rail, the sidebar, the terminal and a two-column right pane at their minimum
-widths: **48 + 280 + 520 + 546 = 1394 px**. The mobile threshold fits the rail beside that floating group:
-**48 + 546 = 594 px**. The macOS window's separate minimum remains 1168×600, so it can use the middle range too.
+**Below 594 px**, only one overlay is shown at a time, the sidebar with the rail or one right-pane panel. Touch
+swipes open, close and switch them (see `docs/product/touch-swipes.md`). This threshold fits the **48 px** rail beside
+a two-column floating group's **546 px** minimum. The macOS window's separate minimum remains **1168×600**.
 
 The right pane's cards and floating behavior are the same whoever owns it.
 
@@ -56,30 +52,30 @@ Below 594 px the rail, when it comes in with the floating sidebar, lies on the c
 (see "Below 594 px: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`).
 
 The **content panel** is always opaque, whatever is behind the window. Its top left corner (top right under a
-right-to-left language), where the top bar meets the rail, is rounded; below 594 px, where the rail is not in the row
-while there is a console, the content panel starts at the window's edge and that corner is square. No line runs along
-its edges: it is set apart from the chrome by the contrast between its surfaces and the chrome and by a soft shadow
-along its edges, and it reaches the window's other side and its bottom (or the connection banner) with no gap. Inside it
-no line runs down the inner edge of the docked sidebar either: at 1394 px and wider the terminal's area casts the same
-soft shadow as the panel's edges over the docked sidebar, so the terminal reads as the layer above it. Where the sidebar
-is closed the terminal's area reaches the content panel's edge and casts no shadow on that side. It casts none on the
-right pane's side either: the right pane has no surface of its own, only its panel cards, which lie on the terminal's
-area across a gap of its background (see "The panel cards" in `docs/product/right-pane-panels.md`). The terminal's area
-is the colour of the terminal's own background. The sidebar and the right pane's cards share the same background — a
-touch greyer than the terminal in the light appearance, a touch lighter in the dark one — whether docked or floating. A
-report page keeps its own light surface inside its panel (see "A report page stays on a light surface in both
-appearances" in `docs/product/appearance.md`).
+right-to-left language), where the top bar meets the rail, is rounded; below 594 px, where the rail is not in the
+row while there is a console, the content panel starts at the window's edge and that corner is square. No line runs
+along its edges: it is set apart from the chrome by the contrast between its surfaces and the chrome and by a soft
+shadow along its edges, and it reaches the window's other side and its bottom (or the connection banner) with no
+gap. Inside it no line runs down the inner edge of the docked sidebar either: while the sidebar is docked the
+terminal's area casts the same soft shadow as the panel's edges over the docked sidebar, so the terminal reads as
+the layer above it. Where the sidebar is closed the terminal's area reaches the content panel's edge and casts no
+shadow on that side. It casts none on the right pane's side either: the right pane has no surface of its own, only
+its panel cards, which lie on the terminal's area across a gap of its background (see "The panel cards" in
+`docs/product/right-pane-panels.md`). The terminal's area is the colour of the terminal's own background. The
+sidebar and the right pane's cards share the same background — a touch greyer than the terminal in the light
+appearance, a touch lighter in the dark one — whether docked or floating. A report page keeps its own light surface
+inside its panel (see "A report page stays on a light surface in both appearances" in `docs/product/appearance.md`).
 
-**Every docked sidebar header inside the content panel is 48 px high** — the sidebar's console header and a focus mode's
-header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`) — and so is the archive view's header (see "The
-archive view" in `docs/product/archive-view.md`), so the lines under them run on as one line across the panel. The top
-bar's 40 px is a tier of its own and no part of this. A floating sidebar and every card of the right pane are inset **8
-px** from the top bar at 594 px and wider, and **4 px** below 594 px (see "A hidden pane floats in on hover" below,
-"Below 1394 px: the sidebar floats" in `docs/product/sidebar-drawer.md` and "The panel cards" in
-`docs/product/right-pane-panels.md`). Their headers are **40 px** at 594 px and wider, and **44 px** below it — shorter
-than the docked headers by the inset, the card's edge taking no space — so the line under a card's header stays level
-with the line under the headers docked beside it. The text in a card's header therefore sits 4 px lower than theirs at
-594 px and wider, and 2 px lower below it.
+**Every docked sidebar header inside the content panel is 48 px high** — the sidebar's console header and a focus
+mode's header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`) — and so is the archive view's header
+(see "The archive view" in `docs/product/archive-view.md`), so the lines under them run on as one line across the
+panel. The top bar's 40 px is a tier of its own and no part of this. A floating sidebar and every card of the right
+pane are inset **8 px** from the top bar at 594 px and wider, and **4 px** below 594 px (see "A hidden pane floats
+in on hover" in `docs/product/pane-docking.md`, "When the sidebar cannot dock" in `docs/product/sidebar-drawer.md`
+and "The panel cards" in `docs/product/right-pane-panels.md`). Their headers are **40 px** at 594 px and wider, and
+**44 px** below it — shorter than the docked headers by the inset, the card's edge taking no space — so the line
+under a card's header stays level with the line under the headers docked beside it. The text in a card's header
+therefore sits 4 px lower than theirs at 594 px and wider, and 2 px lower below it.
 
 **The lines that divide a pane's parts are grooves**: the line under every pane header, and the lines that divide
 parts and rows elsewhere in the window — under the project pane's filter bar, the Git mode's worktree selector bar and
@@ -91,16 +87,15 @@ nearly so — a dialog such as Settings, or the archive view — the light line 
 single 0.5 px dark line. The borders of controls and of a selected item, the session tree's connectors, the dashed
 outline of an empty column in the file viewer and the lines a rendered document draws are not grooves.
 
-**Panel cards take a light card shadow; whatever else floats over the content is raised by a large shadow; what
-lies in the layout takes the soft one.** The panel cards — the floating sidebar (see "A
-hidden pane floats in on hover" below and "Below 1394 px: the sidebar floats" in
-`docs/product/sidebar-drawer.md`), and the right pane's cards,
-docked and floating alike (see "The panel cards" in `docs/product/right-pane-panels.md`) — have the hairline edge and a
-light card shadow, short and faint. Whatever else floats over the content, such as the notice floating over the
-terminal (see "Interrupted and archived sessions" in `docs/product/session-terminal.md`), casts a large
-elevation shadow. A card lying in the layout, such as a focus mode's session card (see "What both views show" in
-`docs/product/focus-mode.md`), has no outline and is set apart by the same soft shadow as the content panel's
-edges.
+**Panel cards take a light card shadow; whatever else floats over the content is raised by a large shadow; what lies
+in the layout takes the soft one.** The panel cards — the floating sidebar (see "A hidden pane floats in on hover"
+in `docs/product/pane-docking.md` and "When the sidebar cannot dock" in `docs/product/sidebar-drawer.md`), and the
+right pane's cards, docked and floating alike (see "The panel cards" in `docs/product/right-pane-panels.md`) — have
+the hairline edge and a light card shadow, short and faint. Whatever else floats over the content, such as the
+notice floating over the terminal (see "Interrupted and archived sessions" in `docs/product/session-terminal.md`),
+casts a large elevation shadow. A card lying in the layout, such as a focus mode's session card (see "What both
+views show" in `docs/product/focus-mode.md`), has no outline and is set apart by the same soft shadow as the content
+panel's edges.
 
 **The sidebar and the right pane share one horizontal inset**, docked or floating alike: a
 header, a bar, a section heading, a notice or a row's content starts **16 px** from the pane's edge, and a row's hover
@@ -221,25 +216,26 @@ It runs, left to right:
   `docs/product/navigation-history.md`); each is disabled while there is nowhere to go in its direction.
 - The sidebar toggle ("Show sessions" / "Hide sessions"), there only while there is a sidebar — so not while the
   window shows the welcome screen (see `docs/product/welcome-screen.md`).
-- The selected session's **breadcrumb** — *console › project › session title* for a project session, *console › session
-  title* for a console session, which belongs to no project — followed by the session's status icon. The session title
-  follows "Displayed names" in `docs/product/session-titles.md`. Nothing in the bar reports the session's terminal
-  connection; the terminal itself does (see "Reconnecting" in `docs/product/session-terminal.md`). At 1394 px and wider,
-  while the sidebar is shown, the breadcrumb starts where the terminal's area does, over the sidebar's inner edge, and
-  follows that edge while the sidebar is resized and while the docked column eases open or closed (see "Hiding the
-  sidebar" below). The start of the bar never becomes narrower than the buttons there — in the macOS application, that
-  includes the clear space kept for the window buttons. Once the column no longer reaches past that start, the
-  breadcrumb stays beside the sidebar toggle, which is also where it sits while the sidebar is hidden. Below 1394 px it
-  starts right after the sidebar toggle as well. Its end mirrors this: while the right pane is docked, the breadcrumb's
-  space ends where the right pane does, rather than running on over it, and follows the pane's edge while it is resized.
-  The end of the bar never becomes narrower than the toggles there, so once the pane no longer reaches past them, and
-  while the right pane is not docked — not shown, or a floating group or a mobile panel — the breadcrumb's
-  space runs on to the toggles, or to the bar's end where there are none. A trail too long for its space fades out at
-  its right edge, as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`, and the status icon
+- The selected session's **breadcrumb** — *console › project › session title* for a project session, *console ›
+  session title* for a console session, which belongs to no project — followed by the session's status icon. The
+  session title follows "Displayed names" in `docs/product/session-titles.md`. Nothing in the bar reports the
+  session's terminal connection; the terminal itself does (see "Reconnecting" in
+  `docs/product/session-terminal.md`). While the sidebar is docked and shown, the breadcrumb starts where the
+  terminal's area does, over the sidebar's inner edge, and follows that edge while the sidebar is resized and while
+  the docked column eases open or closed (see "Hiding the sidebar" in `docs/product/pane-docking.md`). The start of
+  the bar never becomes narrower than the buttons there — in the macOS application, that includes the clear space
+  kept for the window buttons. Once the column no longer reaches past that start, the breadcrumb stays beside the
+  sidebar toggle, which is also where it sits while the sidebar is hidden. While the sidebar floats it starts right
+  after the sidebar toggle as well. Its end mirrors this: while the right pane is docked, the breadcrumb's space
+  ends where the right pane does, rather than running on over it, and follows the pane's edge while it is resized.
+  The end of the bar never becomes narrower than the toggles there, so once the pane no longer reaches past them,
+  and while the right pane is not docked — not shown, or a floating group or a mobile panel — the breadcrumb's space
+  runs on to the toggles, or to the bar's end where there are none. A trail too long for its space fades out at its
+  right edge, as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`, and the status icon
   always stays visible. With no session selected there is no breadcrumb. While the archive view is open (see "The
   archive view" in `docs/product/archive-view.md`) the breadcrumb shows where that is instead, with no status icon:
-  *console › project › Archived sessions*, *console › console session › Archived bound sessions*, or *console › Archived
-  console sessions*.
+  *console › project › Archived sessions*, *console › console session › Archived bound sessions*, or *console ›
+  Archived console sessions*.
 - At the **end of the bar**, the **panel toggles**: one per kind of panel the right pane's owner has, there only while
   the right pane has an owner (see "What the right pane shows" below), each showing or hiding its panel and so the right
   pane (see "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`). The end is the reading
@@ -265,16 +261,17 @@ sidebar to show (see `docs/product/welcome-screen.md`), the panel toggles while 
 the right pane shows" below). A toggle with nothing to control is left out rather than shown disabled. The right pane
 has its own docking toggle beside its panel toggles (see `docs/product/right-pane-panels.md`).
 
-The sidebar toggle is at the top bar's start. What it does depends on the window's width: see "Hiding the sidebar" below
-and "Below 1394 px: the sidebar floats" in `docs/product/sidebar-drawer.md`. Its label says what pressing it
-will do — "Show sessions" while the sidebar is hidden, "Hide sessions" while it is shown — and its icon shows the
-sidebar's current state: a window with that side's pane drawn solid while the sidebar is shown, and drawn dashed while
-it is hidden. It also tells assistive technology whether the sidebar is expanded: expanded while it is shown, which
-below 1394 px means the floating sidebar is revealed. In the middle range the label always offers to show sessions:
-pressing it reveals the sidebar and never hides it or changes the stored docking choice. At 1394 px and wider a hidden
-sidebar that is only floating in counts as hidden for both. Shown and
-hidden follow the docked state at once, including while the column is still easing open or closed (see "Hiding the
-sidebar" below): the toggle already reads "Hide sessions" as the column opens and "Show sessions" as it closes.
+The sidebar toggle is at the top bar's start. What it does depends on whether the sidebar can dock: see "Hiding the
+sidebar" in `docs/product/pane-docking.md` and "When the sidebar cannot dock" in `docs/product/sidebar-drawer.md`.
+Its label says what pressing it will do — "Show sessions" while the sidebar is hidden, "Hide sessions" while it is
+shown — and its icon shows the sidebar's current state: a window with that side's pane drawn solid while the sidebar
+is shown, and drawn dashed while it is hidden. It also tells assistive technology whether the sidebar is expanded:
+expanded while it is shown, which means the floating sidebar is revealed when it cannot dock. From 594 px up, when
+the sidebar cannot dock, the label always offers to show sessions: pressing it reveals the sidebar and never hides
+it or changes the stored docking choice. When docking is available, a hidden sidebar that is only floating in counts
+as hidden for both. Shown and hidden follow the docked state at once, including while the column is still easing
+open or closed (see "Hiding the sidebar" in `docs/product/pane-docking.md`): the toggle already reads "Hide
+sessions" as the column opens and "Show sessions" as it closes.
 
 The panel toggles are at the top bar's end; their labels, icons and states are in "The panel toggles in the top bar"
 in `docs/product/right-pane-panels.md`.
@@ -285,30 +282,27 @@ The rail runs from under the top bar to the window's bottom (or the connection b
 
 - **At the top, the consoles**: one avatar per console, in the order the consoles were created, the current console
   marked by a tile behind its avatar, then **New console**, which opens the new-console dialog (see
-  `docs/product/consoles.md`). Choosing a console, what each avatar's badge says and what a right-click on one offers
-  are in "The console switcher" in `docs/product/console-switcher.md`. While the docked sidebar is hidden, resting the
-  mouse on an avatar floats the sidebar in showing that console (see "A hidden pane floats in on hover" below). When
-  there are more consoles than fit, the avatars scroll, with no scrollbar drawn — so the fade at the column's edge is
-  the only sign there are more (see "The edge that hides content fades" in `docs/product/scrolling-surfaces.md`); New
-  console stays below them.
-- **At the bottom**, top to bottom:
-  - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge at the button's
-    top right, its top left under a right-to-left language (see `docs/product/right-to-left-layout.md`), shown only while
-    at least one is (99+ beyond 99); pressing it goes to the next waiting session (see "The raised hand" in
-    `docs/product/session-statuses.md`);
-  - **Processes**, the Processes panel's glyph with the number of background process trees running across every
-    project and console session in a badge placed as the waiting count's, shown only while at least one is (99+ beyond
-    99); its popover lists where they run, each row leading to the Processes panel that lists them (see
-    `docs/product/processes-on-the-rail.md`);
-  - **Turn on notifications**, a bell with a small circular badge at the button's top right, shown only in a browser
-    whose answer to notifications is still undecided; pressing it asks the browser (see "Notifications" in
-    `docs/product/settings.md`);
-  - **Account usage**, a gauge with a small quota indicator for the selected session's account (see "The selected
-    session's quota indicator" in `docs/product/account-quotas.md`), whose floating panel shows the available agents'
-    accounts and their quotas (see `docs/product/account-quota-panel.md`);
-  - **Settings**, which opens the settings dialog.
+  `docs/product/consoles.md`). Choosing a console, what each avatar's badge says and what a right-click on one
+  offers are in "The console switcher" in `docs/product/console-switcher.md`. While the docked sidebar is hidden,
+  resting the mouse on an avatar floats the sidebar in showing that console (see "A hidden pane floats in on hover"
+  in `docs/product/pane-docking.md`). When there are more consoles than fit, the avatars scroll, with no scrollbar
+  drawn — so the fade at the column's edge is the only sign there are more (see "The edge that hides content fades"
+  in `docs/product/scrolling-surfaces.md`); New console stays below them.
+- **At the bottom**, top to bottom: - the **waiting count**, a raised hand with the number of sessions waiting for
+  the user in a badge at the button's top right, its top left under a right-to-left language (see
+  `docs/product/right-to-left-layout.md`), shown only while at least one is (99+ beyond 99); pressing it goes to the
+  next waiting session (see "The raised hand" in `docs/product/session-statuses.md`); - **Processes**, the Processes
+  panel's glyph with the number of background process trees running across every project and console session in a
+  badge placed as the waiting count's, shown only while at least one is (99+ beyond 99); its popover lists where
+  they run, each row leading to the Processes panel that lists them (see `docs/product/processes-on-the-rail.md`); -
+  **Turn on notifications**, a bell with a small circular badge at the button's top right, shown only in a browser
+  whose answer to notifications is still undecided; pressing it asks the browser (see "Notifications" in
+  `docs/product/settings.md`); - **Account usage**, a gauge with a small quota indicator for the selected session's
+  account (see "The selected session's quota indicator" in `docs/product/account-quotas.md`), whose floating panel
+  shows the available agents' accounts and their quotas (see `docs/product/account-quota-panel.md`); - **Settings**,
+  which opens the settings dialog.
 
-From 594 px up the rail is the same at every width; below 1394 px it stays beside the floating sidebar, which opens past
+From 594 px up the rail is the same at every width; while the sidebar floats it stays beside that card, which opens past
 it, does not dim it, and leaves it usable while it is open. **Below 594 px, while there is a console, the rail is not in
 the row**: it comes in only as part of the open sidebar overlay's card, and is out of reach while the sidebar overlay is
 closed (see "Below 594 px: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`). With no console it
@@ -346,10 +340,10 @@ Report panel" in `docs/product/right-pane-panels.md`).
   is up to which of that owner's panels are open (see "What is remembered" in `docs/product/right-pane-panels.md`).
 - **Open panel** in a project's action menu (see "Opening a panel from a project's action menu" in
   `docs/product/right-pane-panels.md`) gives the right pane to that project and opens the chosen panel (see "Opening
-  and closing panels" in `docs/product/right-pane-panels.md`), which puts the pane on screen — below 594 px it floats
-  the panel over the terminal instead (see "Below 594 px: one panel floats over the terminal" in
-  `docs/product/right-pane-panels.md`); below 1394 px it also closes the floating sidebar. It selects, starts and
-  resumes no session: the selected session's terminal stays, and the breadcrumb still names it.
+  and closing panels" in `docs/product/right-pane-panels.md`), which puts the pane on screen — below 594 px it
+  floats the panel over the terminal instead (see "Below 594 px: one panel floats over the terminal" in
+  `docs/product/right-pane-panels.md`); when the sidebar floats automatically it also closes its overlay. It
+  selects, starts and resumes no session: the selected session's terminal stays, and the breadcrumb still names it.
 - **Open panel while a console session's report panel is shown** puts the project's chosen panel in its place.
   Selecting the console session again brings the report panel back, on its newest page; anything typed into a page's
   form and not submitted is gone (see "Paging through the history" in `docs/product/report-panel.md`).
@@ -373,209 +367,13 @@ When the owner changes while keyboard focus is inside the right pane, focus goes
 ## The window's minimum size
 
 The macOS window has a **minimum size of 1168×600**. This native limit is separate from the responsive
-layout thresholds: at this width both sides automatically float over the terminal. The minimum height leaves the
+layout capacities: at this width the sidebar and a right pane of one or two cards can both dock; a right pane of
+three or four cards floats while the sidebar is shown. The minimum height leaves the
 terminal about 30 rows.
 
 Nothing enforces a minimum when the UI is opened in a browser, so it can also reach the mobile layout.
 
-## Pane widths at 1394 px and wider
-
-| Pane | Default | Range the user can choose |
-|---|---|---|
-| Sidebar | 280 px | 280–480 px |
-| Docked right pane | 420 px | 276–720 px; at least 546 px with three or four cards |
-| Terminal | everything left over | never below 520 px (about 53 columns) |
-
-The right pane's width includes the gaps around its cards (see "The panel cards" in
-`docs/product/right-pane-panels.md`). The sidebar and the right pane are drawn at the width the user chose (see
-"Resizing the sidebar and the right pane" below), subject to the effective minimums below and automatic adjustments when
-opening or closing panels changes the number of columns (see "Opening and closing panels" in
-`docs/product/right-pane-panels.md`). Extra width a wider window frees goes to the terminal. The right pane has one
-width, whoever owns it.
-
-**The terminal always keeps its 520 px.** Where the window cannot afford every pane its chosen width, the right pane
-gives up width first, down to its effective minimum, and only then the sidebar, down to 280 px. Three or four cards
-require a 546 px right pane: two 260 px columns, their 10 px gap and 8 px at each outer edge. These bounds do not
-rewrite the width preference. When the window widens again, each pane gets its chosen width back, including any
-current automatic column-width adjustment in the right pane.
-
-A sidebar the user has hidden takes no width at all once it is hidden, and neither does one only floating in: its
-width goes to the terminal. While the sidebar's docked column is easing closed, it still takes the width it has
-reached (see "Hiding the sidebar" below). A right pane with none of its panels open, or with no owner, is not in the
-row, takes no width and stops holding back the sidebar's width; one only floating a panel in takes none either, and
-nor does a whole floating right group or a mobile panel.
-
-Anything that changes the terminal's size — resizing the window, resizing a pane, hiding or showing the sidebar, the
-right pane coming or going as its first panel opens or its last closes or with its owner — resizes the agent's
-terminal (see "Output, scrollback and size" in `docs/product/session-terminal.md`). A panel floating over the
-terminal, alone or as a whole floating group, coming or going does not.
-
-### Resizing the sidebar and the right pane
-
-At 594 px and wider, each pane has a resize handle on its inner edge while it is shown, running the pane's full
-height. A docked handle runs from below the top bar to above the connection banner; a floating handle follows the
-card's inset edge:
-
-- the **docked sidebar's** on its right edge, drawn on hover and keyboard focus as a line along the whole edge;
-- the **floating sidebar's** in the 8 px gap outside its inner edge, drawn as the same grip as the right pane's;
-- the **right pane's** in the 8 px gap between the terminal and the cards, drawn as a **grip**: a short rounded bar
-  in the middle of the gap's height, light grey while the pointer or keyboard focus is on the handle, and strong only
-  while it is pressed or dragged. While a mouse pointer rests on it, a tooltip saying "Resize" opens beside the grip,
-  toward the pane. It is named "Resize panel area". The floating sidebar's grip has the same tooltip, facing into
-  the sidebar; it mirrors with the layout under a right-to-left language. Both vertical grips are 4×40 px.
-
-The handles work the same way:
-
-- **Dragging** the handle sets the pane's width within its current limits; the right pane's minimum follows the
-  number of cards (see "Pane widths below 1394 px" below).
-- **Double-clicking** it returns the pane to its default width.
-- The handle is also reachable with Tab and is then operated from the keyboard: the arrow pointing away from the pane
-  widens it and the other narrows it (Right widens the sidebar and Left the right pane; the other way round under a
-  right-to-left language, where the panes have swapped sides), by 16 px, by 64 px with Shift held; Home sets the pane's
-  minimum, and End the widest the window currently allows. While it has keyboard focus the docked sidebar's handle
-  is drawn as a solid accent-coloured bar with a focus ring around it, and a grip shows with a focus ring around the
-  handle. Pressing the handle with the mouse does not take keyboard focus off the terminal, and while it is dragged
-  the pointer shows the resize cursor wherever it is.
-
-The sidebar's handle is available while docked and while floating, including a hover preview on a large screen and
-the middle width range. Its pointer target is 6 px wide while docked and 24 px wide while floating, centred on the
-8 px gap outside the floating card's inner edge. It is absent while the docked column is easing and below 594 px.
-The floating sidebar uses the same remembered width as the docked sidebar, within **280–480 px**, with a default
-of **280 px**.
-
-The right pane's handle is available while docked and while its whole group floats, including the middle width range. It
-remains reachable at the floating group's inner edge and changes the group's total width. It is absent for a single-card
-preview of an empty docked column, a mobile panel and a column folded away under a maximized panel (see "Maximizing a
-panel" in `docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 8 px gap. Resizing a
-floating sidebar or right group keeps it revealed throughout the drag and does not resize the agent terminal.
-
-**A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum
-total width is the window's width less the **48 px rail** and the width of the docked sidebar while shown. With the
-sidebar hidden or itself floating, only the rail is reserved. This applies to both a floating group and a single-card
-hover preview, at 594 px and wider; floating widths have no fixed 720 px cap.
-
-**Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
-is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
-page is reloaded. A stored sidebar width below 280 px is used as 280 px. A right-pane width above 720 px is remembered
-too: docking the pane or narrowing the window limits its rendered width without replacing that choice. Floating it
-again or widening the available space restores the chosen width as far as the current bounds allow.
-
-## Hiding the sidebar
-
-At 1394 px and wider, the sidebar toggle in the top bar hides and shows the docked sidebar. The sidebar is shown by
-default, and **whether it is hidden is remembered per client**, the same way as the panes' widths. Hiding it hands
-its width to the terminal. The right pane has a separate remembered docking choice (see "Floating a panel in" in
-`docs/product/right-pane-panels.md`).
-
-Hiding the sidebar while it holds keyboard focus — a sidebar row reached with Tab, say — moves focus to the terminal,
-or to the top bar when no session is selected.
-
-At 1394 px and wider, hiding or showing the docked sidebar eases its column over **200 ms**. Where the system asks
-for reduced motion, the column opens or closes at once. Pressing the toggle again while the column is still moving
-reverses the ease. Below 1394 px the sidebar floats and fades into place instead (see "Below 1394 px: the
-sidebar floats" in `docs/product/sidebar-drawer.md`).
-
-During the ease the sidebar stays a full-height column, from below the top bar to above the connection banner when
-that banner is shown, and does not become the rounded card in "A hidden pane floats in on hover" below. Its contents
-stay at the width the open column is drawn at, including where the window is holding that width back (see "Pane
-widths at 1394 px and wider" above), anchored against the rail. The inner edge covers them as the column closes and
-uncovers them as it opens, so the text does not reflow. The shadow the terminal's area casts over the sidebar follows
-the column's inner edge through the ease and is gone once the column has closed. A hover card comes up only once the
-column has closed.
-
-As the sidebar's column closes, the width it gives up goes to the terminal. When the right pane is docked and had been
-held below the width the user chose, it can grow into that room as the room appears. Showing the sidebar limits the
-right pane again as soon as the sidebar is shown, when the window cannot afford both panes their chosen widths, and
-the opening column takes its own width from the terminal as it eases open. The terminal is not refitted while the
-column moves: it keeps its size through the ease and is fitted once the column comes to rest (see "Output, scrollback
-and size" in `docs/product/session-terminal.md`).
-
-### A hidden pane floats in on hover
-
-At 594 px and wider, the sidebar can float in while hidden on a large screen or automatically floating in the middle
-range. The right pane can reveal its whole floating group, or preview one card when its docked column is empty or folded
-under a maximized panel (see "Floating a panel in" in `docs/product/right-pane-panels.md`). This is a **floating pane**.
-The sidebar floats in as a card inset from the window chrome and the window's edges, with rounded corners, a hairline
-edge and the light card shadow (see "The window chrome and the content panel" above); the right pane floats in as its
-panel's own card, which looks the same (see "The panel cards" in `docs/product/right-pane-panels.md`). The hairline is
-0.5 px on a display of 2× pixel density or more and 1 px below that, and it takes no space, so the card is exactly its
-box. Below 1394 px the floating sidebar shares this card appearance (see "Below 1394 px: the sidebar floats" in
-`docs/product/sidebar-drawer.md`). The docked sidebar opens and closes as a full-height column (see "Hiding the sidebar"
-above).
-
-- **What brings up the sidebar**: reaching its top bar toggle reveals the current console immediately. Resting on blank
-  space anywhere along the **48 px rail for 200 ms** also reveals the current console. Crossing that space briefly
-  cancels the pending reveal. Interactive controls — including New console, Account usage, Settings, links and menu
-  items — are excluded, so aiming at them does not open the sidebar. Console avatars have their own **130 ms** preview:
-  an avatar reveals that console, and moving between avatars while the sidebar is out previews them immediately. Moving
-  to the sidebar toggle or resting on blank rail space restores the current console. Hover never selects a console (see
-  "Previewing a console from the rail" in `docs/product/console-switcher.md`).
-- **What brings up the right pane**: reaching its group toggle or a panel toggle reveals it immediately. While the group
-  floats, resting for **200 ms** in the **48 px strip at the window's end edge**, below the top bar, reveals it too.
-  Briefly crossing the strip cancels the reveal. The strip follows the logical end edge under a right-to-left language.
-  With no cards open it previews an available card; with cards open it reveals their whole group.
-- Touch and pen bring up neither, and on a device whose primary input cannot hover — a phone, or a tablet's touch screen
-  — neither floats in at all, whatever pointer is used: the sidebar is shown with its toggle and a panel opened by
-  pressing its toggle.
-- **How it shows**: both cards fade from transparent to opaque while rising into place by **4% of the card's own
-  height**, over **240 ms**, with the same `cubic-bezier(0.2, 0, 0, 1)` easing as switching consoles. The whole card
-  fades and rises together — its edge, fill, shadow and content. Neither slides horizontally. Where the system asks for
-  reduced motion, they appear at once. Each uses the pane's chosen width within its current limits (see "Resizing the
-  sidebar and the right pane" above), with a shadow and no dimming behind it. It overlays the terminal, so **the terminal
-  is not resized** and the agent is sent no size change. - The **sidebar's card** keeps an 8 px gap from the rail, from the top
-  bar and from the window's bottom (or the connection banner), never drawn over the rail. - The **right pane's card**
-  keeps the gaps it keeps docked: 8 px from the top bar, from the window's end edge and from the window's bottom (or the
-  connection banner), and 8 px on the terminal's side. - A card's own headers are 8 px shorter than the docked sidebar's
-  — the 8 px gap, the card's edge taking no space — so the line under a header stays level across the panel (see "The
-  window chrome and the content panel" above).
-- **How it goes away**: 200 ms after the pointer has left it, the card fades out while sinking back by 4% of its height
-  over 240 ms, with the same easing as its entrance, or disappears at once where the system asks for reduced motion.
-  Having left means the pointer is on none of the card, the gap around it, or what brought it up in the top bar — the
-  sidebar's toggle, the group toggle or any panel toggle for the right pane — and, for the sidebar, none of the console
-  avatars on the rail either, or the blank rail area that can reveal it. The right pane's end-edge strip also keeps it
-  up. **The gap counts as part of the card**: the 8 px around the sidebar's card, and the gaps the right pane keeps
-  around its card. The narrow strip directly below a pane toggle, from the button's bottom to the card's surrounding
-  gap, also keeps it up where the button and card overlap horizontally. The pointer can cross or rest in that strip
-  in either direction without starting dismissal; the rest of the top bar remains outside. A tooltip neither takes
-  pointer events nor determines whether the pane stays revealed. A pointer that moves from the card into its gap, or
-  rests in it, keeps the card up for as long as it stays. Moving past these areas, or out of the window altogether,
-  sends the card away. `Escape` starts its exit
-  without that delay and **does not reach the running agent**, except that in a field holding text (the project pane's
-  change filter) it only clears the field, and the next one sends the pane away; so does `Escape` pressed inside a
-  report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). Inside a shell terminal of the
-  Terminal panel `Escape` goes to the shell and never sends the pane away (see "The shell terminal" in
-  `docs/product/terminal-panel.md`). A floating pane that holds keyboard focus as it goes away hands focus to the
-  terminal, except a floating right pane that goes because the pane's column takes its place — a panel docked, a
-  maximized panel restored (see "Maximizing a panel" in `docs/product/right-pane-panels.md`): focus is then not moved. A
-  floating sidebar previewing a console that is deleted goes away as if the pointer had left that console's avatar.
-- **What keeps it up**, whatever the pointer does: keyboard focus inside it, an open menu, a dialog or a resize drag. A
-  file viewer opened from the Files panel counts as a dialog (see `docs/product/file-viewer.md`). So closing a viewer
-  opened from a floating Files panel, by the pointer or the keyboard, finds the pane still there to hand focus back to.
-  For the right pane, focus keeps it up only when the keyboard put it there: focus a press put inside it, on a tab or a
-  button, does not, and the card goes once the pointer leaves, as it would have before the press.
-- **Only one at a time**: bringing one up sends the other away. Floating the right pane in also closes the sidebar's
-  sidebar overlay, and opening the floating sidebar sends a floating right pane away.
-- **Pressing the sidebar toggle or the right group toggle** in the middle range reveals that side without hiding it
-  or changing a docking preference. Individual right-panel toggles open or close their cards, keeping the other cards
-  revealed and hiding the group when the last card closes. Activating a stored open card's toggle while the group is
-  hidden only reveals it. See "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`. On a large
-  screen the right group toggle docks the group, the sidebar toggle docks its hover card, and a docked right pane's
-  panel toggle opens or closes its panel normally.
-- Hover reveal is unavailable below 594 px: only explicit controls and swipes open the mobile overlays.
-
-## Pane widths below 1394 px
-
-From **594–1393 px**, neither side takes width from the terminal. Both float, one revealed side at a time,
-without changing the terminal's size. The right group uses the remembered total width and the automatic adjustments
-in "Opening and closing panels" in `docs/product/right-pane-panels.md`, within the floating bounds in "Resizing the
-sidebar and the right pane" above. Its minimum is **546 px with three or four cards**, and **276 px with one or two
-cards**: a 260 px column and two 8 px outer gaps. These bounds do not rewrite the remembered width. The group retains
-its column-width and panel-height handles as well as its total-width handle.
-
-**Below 594 px**, only one right-pane panel floats at a time, or the sidebar with its rail. The terminal has no
-minimum width and keeps the content panel's whole width, so the row never scrolls sideways. See "Below 594 px: one
-panel floats over the terminal" in `docs/product/right-pane-panels.md` and "Below 594 px: the rail comes in with the
-sidebar" in `docs/product/sidebar-drawer.md`.
+For pane sizing, docking, hiding and hover reveal, see `docs/product/pane-docking.md`.
 
 ## Right-click menus
 

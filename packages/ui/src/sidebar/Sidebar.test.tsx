@@ -187,14 +187,14 @@ it.each([
 it("keeps the docked column while hidden, and uses the inset card only while a peek is up", () => {
   const hidden = mountSidebar({ open: false, peek: { active: false, keep: vi.fn(), leave: vi.fn() } });
   const hiddenClass = hidden.container.querySelector("nav")!.className;
-  expect(hiddenClass.split(" ")).not.toContain("docked:rounded-xl");
-  expect(hiddenClass.split(" ")).not.toContain("docked:start-[calc(var(--rail-width)+var(--peek-gap))]");
+  expect(hiddenClass.split(" ")).not.toContain("sidebar-docked:rounded-xl");
+  expect(hiddenClass.split(" ")).not.toContain("sidebar-docked:start-[calc(var(--rail-width)+var(--peek-gap))]");
   act(() => hidden.root.unmount());
 
   const peeking = mountSidebar({ open: false, peek: { active: true, keep: vi.fn(), leave: vi.fn() } });
   const peekClass = peeking.container.querySelector("nav")!.className;
-  expect(peekClass.split(" ")).toContain("docked:rounded-xl");
-  expect(peekClass.split(" ")).toContain("docked:start-[calc(var(--rail-width)+var(--peek-gap))]");
+  expect(peekClass.split(" ")).toContain("sidebar-docked:rounded-xl");
+  expect(peekClass.split(" ")).toContain("sidebar-docked:start-[calc(var(--rail-width)+var(--peek-gap))]");
   act(() => peeking.root.unmount());
 });
 
@@ -206,18 +206,18 @@ it("positions a new hover card without motion, then enables its enter and leave 
   const { container, render } = mountSidebar({ open: false, peek });
   render({ open: false, peek: { ...peek, active: true } });
   const nav = container.querySelector("nav")!;
-  expect(nav.classList.contains("docked:transition-none")).toBe(true);
-  expect(nav.classList.contains("docked:invisible")).toBe(true);
+  expect(nav.classList.contains("sidebar-docked:transition-none")).toBe(true);
+  expect(nav.classList.contains("sidebar-docked:invisible")).toBe(true);
   // Fake timers run animation frames at 16ms intervals. The first paints the offscreen card;
   // the next applies the destination with its transition enabled.
   act(() => void vi.advanceTimersByTime(16));
-  expect(nav.classList.contains("docked:invisible")).toBe(true);
+  expect(nav.classList.contains("sidebar-docked:invisible")).toBe(true);
   act(() => void vi.advanceTimersByTime(16));
-  expect(nav.classList.contains("docked:transition-none")).toBe(false);
-  expect(nav.classList.contains("docked:invisible")).toBe(false);
+  expect(nav.classList.contains("sidebar-docked:transition-none")).toBe(false);
+  expect(nav.classList.contains("sidebar-docked:invisible")).toBe(false);
   render({ open: false, peek });
-  expect(nav.classList.contains("docked:transition-none")).toBe(false);
-  expect(nav.classList.contains("docked:invisible")).toBe(true);
+  expect(nav.classList.contains("sidebar-docked:transition-none")).toBe(false);
+  expect(nav.classList.contains("sidebar-docked:invisible")).toBe(true);
 });
 
 it("shows the console it is given, and a hover alone commits nothing", () => {

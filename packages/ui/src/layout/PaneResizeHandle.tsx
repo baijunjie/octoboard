@@ -21,7 +21,7 @@ const SIDES = {
     grow: 1,
     centre: "0px",
     appearance: "line",
-    layout: "hidden docked:block w-1.5",
+    layout: "hidden sidebar-docked:block w-1.5",
   },
   aside: {
     label: "pane.resizeAside",

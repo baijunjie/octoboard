@@ -92,15 +92,18 @@
 /* The typography plugin with selectors WebKit can file by tag; `../typography.mjs` has the reason. */
 @plugin "../typography.mjs";
 
+@custom-variant pane-docked (&:where([data-pane-docked="true"] *));
+@custom-variant sidebar-docked (&:where([data-sidebar-dockable="true"] *));
+@custom-variant sidebar-floating (&:where([data-sidebar-dockable="false"] *));
+
 @theme {
-  /* Docking both sides must fit the rail (48), sidebar (280), agent terminal (520) and a
-     two-column right pane (546). Keep this in px: breakpoint.ts reads the emitted token and
-     Tailwind must sort it consistently with the built-in media queries. */
+  /* Dialog and settings layout retains its own width threshold. Pane docking follows the
+     currently open columns and their minimum widths instead. */
   --breakpoint-docked: 1394px;
 
   /* Below this width a two-column floating group (546) no longer fits beside the rail (48).
      Mobile interaction shows one panel at a time and brings the rail in with the sidebar.
-     layout/paneWidth.test.tsx checks both breakpoint sums against the layout tokens. */
+     layout/paneWidth.test.tsx checks this breakpoint sum against the layout tokens. */
   --breakpoint-phone: 594px;
 }
 
@@ -478,7 +481,7 @@ html {
    clip's (`PANE_SPAN_MS` in `layout/paneDockMotion.ts`); a drag of the pane's edge changes it with
    no transition. A transitioned `width` rather than a registered custom property: WebKit snaps
    such a property to its end when a stylesheet is rewritten mid-ease. */
-@media (width >= theme(--breakpoint-docked)) {
+[data-sidebar-dockable="true"] {
   .title-bar-start {
     width: calc(var(--rail-width) + var(--sidebar-span, 0px));
     min-width: min-content;

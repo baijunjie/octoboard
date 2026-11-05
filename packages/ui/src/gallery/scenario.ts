@@ -67,8 +67,8 @@ export interface Scenario extends Fixture {
   title: string;
   /** Said under the title in the gallery; what to look at. */
   description?: string;
-  /** The window width the gallery page opens it at, over a width chosen for an earlier scenario; the `docked`
-   * breakpoint is 1394. Left out for `DEFAULT_WIDTH`. Only for a target that can be reached in a band of widths the
+  /** The window width the gallery page opens it at, over a width chosen for an earlier scenario.
+   * Left out for `DEFAULT_WIDTH`. Only for a target that can be reached in a band of widths the
    * default is outside of, where the steps cannot get there at whatever width the page's control picks (a swipe, the
    * open drawer card itself): a width inside that band, and the title or description says what it buys. Never for the
    * same state seen at another width, which the control shows; see "The UI state gallery" in
@@ -76,7 +76,7 @@ export interface Scenario extends Fixture {
   width?: number;
   /** The narrowest window its target exists in: a width chosen with the page's control, or by the sweep's `--width`,
    * below it is raised to it. For what exists only from a breakpoint up (a card floated in by hovering a toggle,
-   * from 594px; a docked pane's width grip, Maximize panel, the hidden docked sidebar, from 1394px), which no width
+   * from 594px; a docked pane's width grip or Maximize panel, from the width its visible panes need), which no width
    * chosen below it shows. A comment beside it says why. A scenario carries this or `width`, not both. */
   minWidth?: number;
   /** The window height the gallery page opens it at, as `width` is for the width; left out for a

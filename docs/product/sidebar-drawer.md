@@ -1,19 +1,20 @@
 # The floating sidebar
 
-Below 1394 px the sidebar floats over the terminal instead of taking a column beside it. Below 594 px the rail
-comes in with it as part of the same card. The layout thresholds and hover entry areas are in "A hidden pane floats
-in on hover" in `docs/product/window-layout.md`; what the sidebar shows is in `docs/product/sidebar.md`.
+When the sidebar cannot fit beside the terminal, it floats instead of taking a column (see "Docking capacity" in
+`docs/product/pane-docking.md`). Below 594 px the rail comes in with it as part of the same card. The layout
+thresholds and hover entry areas are in "A hidden pane floats in on hover" in `docs/product/pane-docking.md`; what
+the sidebar shows is in `docs/product/sidebar.md`.
 
-## Below 1394 px: the sidebar floats
+## When the sidebar cannot dock
 
 The sidebar starts closed and overlays the terminal, so opening or closing it never resizes the agent terminal.
-Its large-screen docking preference is kept separately: widening to 1394 px restores the sidebar as the user left it.
+Its docking preference is kept separately: widening until it can dock restores the sidebar as the user left it.
 The top bar stays reachable, and from 594 px up the rail stays in the row beside the floating card.
 
 - **From 594 px up**, the top bar's sidebar button reveals the sidebar. Pressing it again keeps the sidebar open; it
   never changes the docking preference at this width. A mouse can also reveal it from the button, blank rail space or
   console avatars, and leaving hides it under the rules in "A hidden pane floats in on hover" in
-  `docs/product/window-layout.md`. Hover-revealed cards have no dimmed background. On a device whose primary input
+  `docs/product/pane-docking.md`. Hover-revealed cards have no dimmed background. On a device whose primary input
   cannot hover, pressing the button opens the sidebar with a dimmed area behind it; another press still keeps it open.
 - **Below 594 px**, pressing that button opens or closes the sidebar, and touch swipes do too (see
   `docs/product/touch-swipes.md`). There is no hover reveal. The dimmed area covers the content panel around the card,
@@ -27,7 +28,7 @@ The top bar stays reachable, and from 594 px up the rail stays in the row beside
   240 ms with `cubic-bezier(0.2, 0, 0, 1)` easing. Reduced motion removes the movement and delay. While closed, its exit
   included, the sidebar takes no presses or keyboard focus and is hidden from assistive technology.
 - **Width**: from 594 px up, it uses the sidebar's remembered width and can be resized at its inner edge (see
-  "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`). Below that, it is 328 px including the
+  "Resizing the sidebar and the right pane" in `docs/product/pane-docking.md`). Below that, it is 328 px including the
   48 px rail, with no width handle. It is capped at the window's width less the rail and two surrounding gaps, so it
   leaves room beside the card to dismiss an explicitly opened overlay.
 - **Dismissal**: `Escape` closes it without reaching the running agent; in a text field holding text it clears the field
@@ -35,10 +36,10 @@ The top bar stays reachable, and from 594 px up the rail stays in the row beside
   opening the sidebar hides a floating right pane: only one floating side is revealed at a time.
 - **Selection**: below 594 px, selecting a session in the sidebar or its rail closes the card so the session's terminal
   shows. From 594 px up, selecting a session leaves the floating sidebar up until its normal dismissal.
-- **Focus**: dismissing the sidebar while it holds keyboard focus hands focus to the terminal. A dialog opened from an
-  explicitly opened sidebar or its rail can return focus to its opening control when it closes. Widening to 1394 px
-  closes the overlay, handing focus to the terminal if the restored docked sidebar is hidden. Deleting the last console
-  also closes it because no sidebar remains (see `docs/product/welcome-screen.md`).
+- **Focus**: dismissing the sidebar while it holds keyboard focus hands focus to the terminal. A dialog opened from
+  an explicitly opened sidebar or its rail can return focus to its opening control when it closes. Widening until
+  the sidebar can dock closes the overlay, handing focus to the terminal if the restored docked sidebar is hidden.
+  Deleting the last console also closes it because no sidebar remains (see `docs/product/welcome-screen.md`).
 
 ## Below 594 px: the rail comes in with the sidebar
 

@@ -61,6 +61,6 @@ overlay nor a right pane, so no swipe does anything.
   `docs/product/moving-focus-between-regions.md`).
 - **A swipe that opens the sidebar overlay** leaves focus where it is; a tooltip already showing on a top bar control
   that has keyboard focus stays until focus moves.
-- **A swipe that closes the sidebar overlay or a panel** hands focus on as any other close does (see "Below 1394 px: the
-  sidebar floats" in `docs/product/sidebar-drawer.md` and "Below 594 px: one panel floats over the terminal" in
+- **A swipe that closes the sidebar overlay or a panel** hands focus on as any other close does (see "When the
+  sidebar cannot dock" in `docs/product/sidebar-drawer.md` and "Below 594 px: one panel floats over the terminal" in
   `docs/product/right-pane-panels.md`).

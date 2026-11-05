@@ -7,8 +7,8 @@ import { useFadeUp } from "../layout/paneDockMotion";
  * terminal in a window too narrow to dock the right pane): pressing it closes the overlay. Sits on
  * an ordinary low `z-index`, well under the modal overlay's and HeroUI's toast region's
  * (`--z-index-overlay` and `--z-index-toast`, overlay + 1), so a dialog opened from inside the
- * drawer, or a toast, still renders above it. Hidden outright at or above the `docked` breakpoint
- * via the variant rather than a width check, matching the drawers themselves.
+ * drawer, or a toast, still renders above it. Hidden outright while the sidebar can dock,
+ * matching the drawer's layout mode.
  *
  * Runs between the top bar and the connection banner (`--top-chrome-height`,
  * `--bottom-chrome-height`) and clear of the left rail (`--rail-width`) rather than the whole
@@ -45,7 +45,7 @@ export function Scrim({ open, label, onClose, clearOfRail = true }: { open: bool
       inert={!open}
       style={{ top: "var(--top-chrome-height)", bottom: "var(--bottom-chrome-height)" }}
       onTransitionEnd={fade.onTransitionEnd}
-      className={`fixed ${clearOfRail ? "start-(--rail-width) max-phone:start-0" : "start-0"} end-0 z-30 bg-black/40 docked:hidden transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "pointer-events-none opacity-0"}${fade.preparing ? " transition-none" : ""}`}
+      className={`fixed ${clearOfRail ? "start-(--rail-width) max-phone:start-0" : "start-0"} end-0 z-30 bg-black/40 sidebar-docked:hidden transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "pointer-events-none opacity-0"}${fade.preparing ? " transition-none" : ""}`}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClose}
     />

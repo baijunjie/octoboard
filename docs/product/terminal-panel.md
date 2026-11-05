@@ -154,7 +154,7 @@ program decides how it interprets their commands.
 **`Escape` goes to the shell**, also while the right pane is only floating in, so programs that need it (vim, less,
 fzf) get it there too: from inside a shell terminal it does not send a floating pane away. A floating Terminal card is
 then sent away with its Close panel button or by moving the pointer away. In the agent terminal in the centre,
-`Escape` behaves as described in "A hidden pane floats in on hover" in `docs/product/window-layout.md`.
+`Escape` behaves as described in "A hidden pane floats in on hover" in `docs/product/pane-docking.md`.
 
 - **Copy, paste and select all**: the same editing menu as a session's terminal, opened the same ways (see "Copy,
   paste and selection" in `docs/product/session-terminal.md`). Paste is unavailable while the terminal is not

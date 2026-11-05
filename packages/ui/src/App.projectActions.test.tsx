@@ -8,6 +8,7 @@ import { CodedError } from "./errors/codedError";
 import { ErrorAlerts } from "./shell/ErrorAlerts";
 import { errorAlerts } from "./components/alerts/errorAlerts";
 import { App } from "./App";
+import { stubWindow } from "./appTestSupport";
 import { setProjectBrowserMode } from "./project-browser/browserPreferences";
 import { useProjectBrowserState } from "./project-browser/browserState";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "./components/announce/StatusAnnouncer";
@@ -58,16 +59,9 @@ vi.mock("./terminal/TerminalController", () => ({
 }));
 
 function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }, withSession = false, links?: PlatformAdapter["links"]) {
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
-  document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
+  stubWindow(narrow ? 390 : 1400);
   onTestFinished(() => {
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-    vi.unstubAllGlobals();
-    document.documentElement.style.removeProperty("--rail-width");
-    document.documentElement.style.removeProperty("--breakpoint-docked");
-    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   const console_ = consoleOf("c-actions", "Main");
   const projects = [projectOf("p-actions", console_.id, "Website"), projectOf("p-other", console_.id, "API")];

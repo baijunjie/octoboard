@@ -40,8 +40,8 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
 
 - **No sidebar and no right pane.** Neither is rendered: there is no console for the sidebar to show (see
   `docs/product/sidebar.md`) and nothing to own the right pane (see "What the right pane shows" in
-  `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, no sidebar overlay to open below
-  1394 px, and no panel to float in.
+  `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, no sidebar overlay to open,
+  and no panel to float in.
 - **No terminal.** None of the terminal's empty states appears here: the panel asking for a session to be selected, or
   the panel offering **Add project**, **New session** or **New console session** for the current scope (see "With no
   session selected" and "A console with nothing in it" in `docs/product/session-terminal.md`).
@@ -60,10 +60,11 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
 
 ## The panes' saved preferences are left alone
 
-Whether each pane is hidden and each pane's chosen width (see "Resizing the sidebar and the right pane" and "Hiding the
-sidebar" in `docs/product/window-layout.md`, and "What is remembered" in `docs/product/right-pane-panels.md`) are **not
-touched** by there being no console: no console is an absence of content, not a choice the user made. So when the first
-console appears, the panes come back exactly as the user had left them — a sidebar the user had hidden is still hidden.
+Whether each pane is hidden and each pane's chosen width (see "Resizing the sidebar and the right pane" and "Hiding
+the sidebar" in `docs/product/pane-docking.md`, and "What is remembered" in `docs/product/right-pane-panels.md`) are
+**not touched** by there being no console: no console is an absence of content, not a choice the user made. So when
+the first console appears, the panes come back exactly as the user had left them — a sidebar the user had hidden is
+still hidden.
 
 ## Keyboard focus
 

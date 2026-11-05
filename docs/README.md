@@ -127,8 +127,9 @@ Where to start, by question:
 
 ### Window and interface
 
-- [Window layout](product/window-layout.md) — the chrome, top bar, rail, panes, minimum size and responsive widths.
-- [The floating sidebar](product/sidebar-drawer.md) — the sidebar as a floating overlay below 1394 px, and below 594 px
+- [Window layout](product/window-layout.md) — the chrome, top bar, rail, panes, minimum size and responsive layout.
+- [Pane docking and resizing](product/pane-docking.md) — docking capacity, pane widths, resizing, hiding and hover previews.
+- [The floating sidebar](product/sidebar-drawer.md) — the sidebar as a floating overlay when it cannot dock, and below 594 px
   the rail coming in with it as one card.
 - [Touch swipes](product/touch-swipes.md) — below 594 px, finger swipes that open, close and switch the floating sidebar
   and right-pane panels.

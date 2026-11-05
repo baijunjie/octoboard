@@ -50,7 +50,7 @@ docked sidebar hidden does not get to read it, is in "Tooltips on icon-only cont
 the sidebar's header carries (see "The console header" in `docs/product/sidebar.md`). It does not switch to the console.
 
 **The current console is remembered per client**, in that client's own browser storage, as the panes' widths are
-(see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`). A remembered console that no
+(see "Resizing the sidebar and the right pane" in `docs/product/pane-docking.md`). A remembered console that no
 longer exists falls back to the first console. Switching console switches the terminal's area and the right pane with
 it (see "What switching console shows" below). Selecting a session anywhere switches the sidebar to that session's
 console (see "Selecting a session" in `docs/product/sidebar.md`).
@@ -83,9 +83,9 @@ Forward moving to a place in another console likewise show that place's own sess
 
 ## Previewing a console from the rail
 
-While the sidebar floats automatically from 594–1393 px, or its docked column is hidden at 1394 px and wider, resting
+At 594 px and wider, while the sidebar floats automatically or its docked column is hidden, resting
 the mouse on a console's avatar floats the sidebar in showing **that** console — when it comes up, how it looks and when
-it goes away are in "A hidden pane floats in on hover" in `docs/product/window-layout.md`. The sidebar's toggle in the
+it goes away are in "A hidden pane floats in on hover" in `docs/product/pane-docking.md`. The sidebar's toggle in the
 top bar floats it in as well, but always showing the **current** console, so that way in is never a preview: a pointer
 moving from an avatar onto the toggle puts the floating card back on the current console. For any console other than the
 current one, resting on its avatar is a **preview**:
@@ -105,6 +105,6 @@ current one, resting on its avatar is a **preview**:
   keeps what the press gave it. In the window's history the console change together with the press's selection, or with
   the remembered session shown at its end, counts as one visit (see "What counts as a place" in
   `docs/product/navigation-history.md`).
-- At 1394 px and wider, showing the sidebar for good with its toggle while it previews a console shows the current
+- When the sidebar can dock, showing it for good with its toggle while it previews a console shows the current
   console, not the one the card was previewing. The card goes away and the column eases open; see "Hiding the sidebar"
-  and "A hidden pane floats in on hover" in `docs/product/window-layout.md`.
+  and "A hidden pane floats in on hover" in `docs/product/pane-docking.md`.

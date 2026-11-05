@@ -23,9 +23,9 @@ function mount() {
   viewport(1440);
   let aside!: PaneWidth;
   let sidebar!: PaneWidth;
-  function Probe({ min, narrow, docked }: { min: number; narrow: boolean; docked: DockedPanes }) {
-    aside = usePaneWidth("aside", docked, narrow, min);
-    sidebar = usePaneWidth("sidebar", docked, narrow, min);
+  function Probe({ min, docked }: { min: number; docked: DockedPanes }) {
+    aside = usePaneWidth("aside", docked, min);
+    sidebar = usePaneWidth("sidebar", docked, min);
     return <PaneResizeHandle side="aside" paneWidth={aside} />;
   }
   const container = document.body.appendChild(document.createElement("div"));
@@ -34,8 +34,8 @@ function mount() {
     act(() => root.unmount());
     container.remove();
   });
-  const render = (min = 320, narrow = false, docked = { sidebar: true, aside: true }) =>
-    act(() => root.render(<Probe min={min} narrow={narrow} docked={docked} />));
+  const render = (min = 320, docked = { sidebar: true, aside: true }) =>
+    act(() => root.render(<Probe min={min} docked={docked} />));
   render();
   act(() => {
     aside.reset();
@@ -44,16 +44,34 @@ function mount() {
   return { render, viewport, container, aside: () => aside, sidebar: () => sidebar };
 }
 
+it("keeps the sidebar default while allowing a remembered 260px minimum", () => {
+  const test = mount();
+  expect(test.sidebar().width).toBe(280);
+  expect(test.sidebar().min).toBe(260);
+  act(() => test.sidebar().setWidth(200));
+  expect(test.sidebar().width).toBe(260);
+  expect(localStorage.getItem(PREFERENCE_KEYS.sidebarWidth)).toBe("260");
+  act(() => test.sidebar().setWidth(360));
+  test.viewport(1028);
+  test.render(320);
+  expect(test.sidebar().width).toBe(260);
+  expect(localStorage.getItem(PREFERENCE_KEYS.sidebarWidth)).toBe("360");
+  test.viewport(1440);
+  expect(test.sidebar().width).toBe(360);
+  act(() => test.sidebar().reset());
+  expect(test.sidebar().width).toBe(280);
+});
+
 it("restores the chosen width after a conditional minimum without rewriting the preference", () => {
   const test = mount();
   act(() => test.aside().setWidth(320));
   test.viewport(600);
-  test.render(336, true, { sidebar: false, aside: true });
+  test.render(336, { sidebar: false, aside: true });
   expect(test.aside().width).toBe(336);
   expect(test.aside().min).toBe(336);
   expect(test.aside().max).toBe(336);
   expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("320");
-  test.render(320, true, { sidebar: false, aside: true });
+  test.render(320, { sidebar: false, aside: true });
   expect(test.aside().width).toBe(320);
   test.viewport(1440);
   test.render();
@@ -64,7 +82,7 @@ it("restores the chosen width after a conditional minimum without rewriting the 
 it("shares the effective floor with the handle and keyboard resize bounds", () => {
   const test = mount();
   test.viewport(600);
-  test.render(336, true, { sidebar: false, aside: true });
+  test.render(336, { sidebar: false, aside: true });
   const handle = test.container.querySelector<HTMLElement>("[role=separator]")!;
   expect(handle.getAttribute("aria-valuemin")).toBe("336");
   expect(handle.getAttribute("aria-valuemax")).toBe("336");
@@ -78,32 +96,32 @@ it("reserves the same aside minimum when sharing space with the sidebar", () => 
   act(() => test.sidebar().setWidth(480));
   test.viewport(1200);
   test.render(336);
-  expect(test.sidebar().width).toBe(296);
+  expect(test.sidebar().width).toBe(416);
   expect(test.aside().width).toBe(336);
   test.render();
-  expect(test.sidebar().width).toBe(312);
+  expect(test.sidebar().width).toBe(432);
   expect(test.aside().width).toBe(320);
 });
 
 it("caps a floating pane to the viewport and restores the saved width when widened", () => {
   const test = mount();
-  test.render(320, false, { sidebar: false, aside: true });
+  test.render(320, { sidebar: false, aside: true });
   act(() => test.aside().setWidth(600));
   test.viewport(600);
-  test.render(336, true, { sidebar: false, aside: true });
+  test.render(336, { sidebar: false, aside: true });
   expect(test.aside().width).toBe(336);
-  test.render(320, true, { sidebar: false, aside: false });
+  test.render(320, { sidebar: false, aside: false });
   expect(test.aside().width).toBe(552);
   expect(test.aside().max).toBe(552);
   test.viewport(1440);
-  test.render(320, false, { sidebar: false, aside: true });
+  test.render(320, { sidebar: false, aside: true });
   expect(test.aside().width).toBe(600);
   expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("600");
 });
 
 it("lets a floating pane reach the docked sidebar and follows changes to that boundary", () => {
   const test = mount();
-  test.render(320, false, { sidebar: true, aside: false });
+  test.render(320, { sidebar: true, aside: false });
   act(() => test.aside().setWidth(2000));
   expect(test.aside().width).toBe(1112);
   expect(test.aside().max).toBe(1112);
@@ -112,7 +130,7 @@ it("lets a floating pane reach the docked sidebar and follows changes to that bo
   act(() => test.sidebar().setWidth(480));
   expect(test.aside().width).toBe(912);
   expect(test.aside().max).toBe(912);
-  test.render(320, false, { sidebar: false, aside: false });
+  test.render(320, { sidebar: false, aside: false });
   expect(test.aside().width).toBe(1112);
   expect(test.aside().max).toBe(1392);
 
@@ -125,7 +143,7 @@ it("lets a floating pane reach the docked sidebar and follows changes to that bo
 it("keeps a floating width above 720 across docking and viewport changes", () => {
   const test = mount();
   test.viewport(1200);
-  test.render(320, true, { sidebar: false, aside: false });
+  test.render(320, { sidebar: false, aside: false });
   act(() => test.aside().setWidth(1000));
   expect(test.aside().width).toBe(1000);
   expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1000");
@@ -136,7 +154,7 @@ it("keeps a floating width above 720 across docking and viewport changes", () =>
   test.render();
   expect(test.aside().width).toBe(720);
   expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1000");
-  test.render(320, false, { sidebar: true, aside: false });
+  test.render(320, { sidebar: true, aside: false });
   expect(test.aside().width).toBe(1000);
 });
 
@@ -146,10 +164,4 @@ it("sets the phone breakpoint to the rail and the minimum two-column floating gr
   const token = (name: string) => Number(new RegExp(`--${name}:\\s*([\\d.]+)px`).exec(style)?.[1]);
   expect(MIN_TWO_COLUMN_ASIDE_WIDTH).toBe(2 * MIN_PANEL_COLUMN_WIDTH + token("panel-stack-gap") + token("panel-grip-gap") + token("peek-gap"));
   expect(token("breakpoint-phone")).toBe(token("rail-width") + MIN_TWO_COLUMN_ASIDE_WIDTH);
-});
-
-it("sets the docked breakpoint to the rail and the minimum widths of all three panes", () => {
-  const style = readFileSync(join(import.meta.dirname, "../style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-  const token = (name: string) => Number(new RegExp(`--${name}:\\s*([\\d.]+)px`).exec(style)?.[1]);
-  expect(token("breakpoint-docked")).toBe(token("rail-width") + 280 + 520 + MIN_TWO_COLUMN_ASIDE_WIDTH);
 });

@@ -5,7 +5,7 @@ import { keepsEscape } from "../components/focus/keepsEscape";
 import { useLatest } from "../components/hooks/useLatest";
 import { isImeKey } from "../input/imeKey";
 import { CANNOT_HOVER } from "../input/touchInput";
-import { minWidthQuery, useIsNarrow, useMediaQuery } from "../components/hooks/breakpoint";
+import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "../components/focus/selectors";
@@ -106,7 +106,7 @@ function usePanePeek(panel: Pane, peekable: boolean, focusTerminal: () => void, 
     setPeek(true);
   };
 
-  // A floating pane only means something while it is hidden at and above the breakpoint. The aside
+  // A floating pane only means something while no docked column takes its place. The aside
   // stops being peekable as a column takes its place (a maximized card restored, a panel docked),
   // and that column may hold the focus: it is not the floating pane's to hand on.
   useEffect(() => {
@@ -139,10 +139,10 @@ export interface PaneToggles {
 
 /**
  * The state behind the sidebar's toggle in the top bar, and the hover reveal of the aside.
- * Below the `docked` breakpoint the sidebar is a closed-by-default overlay (its component's doc
- * comment has the layout); at and above it the toggle shows or hides the docked pane instead
+ * When the sidebar cannot fit, it is a closed-by-default overlay (its component's doc
+ * comment has the layout); when it fits the toggle shows or hides the docked pane instead
  * (`panelVisibility.ts`). Both states live in one place since the toggle sits in the window chrome,
- * and widening the window past the breakpoint has to be able to close the overlay.
+ * and widening the window until it fits has to be able to close the overlay.
  *
  * The aside's stored panel stack is independent of its docking choice. A floating group uses
  * `asidePeek` to reveal all its open cards; with none open it previews a hovered kind instead.
@@ -151,6 +151,7 @@ export interface PaneToggles {
  * (`sidebarPeek`). Leaving a floating pane (or Escape) hides it again. The two never float
  * together: revealing one hides the other.
  *
+ * `isNarrow` means the sidebar cannot fit beside the terminal.
  * `hasSidebar` is whether the sidebar is rendered at all (it is not while there is no console);
  * `asidePeekable` is whether the aside may reveal its floating group or preview an empty docked
  * column, with an owner and outside mobile interaction. Neither pane floats in on a
@@ -161,6 +162,7 @@ export interface PaneToggles {
  */
 export function usePaneToggles({
   hasSidebar,
+  isNarrow,
   asidePeekable,
   focusTerminal,
   floatingPanel = false,
@@ -168,6 +170,7 @@ export function usePaneToggles({
   drawer,
 }: {
   hasSidebar: boolean;
+  isNarrow: boolean;
   asidePeekable: boolean;
   focusTerminal: () => void;
   /** A panel floats over the agent terminal in a window too narrow to dock the aside: an overlay
@@ -177,7 +180,6 @@ export function usePaneToggles({
   drawer?: readonly [boolean, (open: boolean) => void];
 }): PaneToggles {
   const closeFloating = useLatest(closeFloatingPanel);
-  const isNarrow = useIsNarrow();
   const mobile = !useMediaQuery(() => minWidthQuery("phone"));
   // A device whose primary input cannot hover (a phone or a tablet's touch screen) floats no pane in:
   // a tap on a toggle or an avatar is a press, never a rest of the pointer.
@@ -197,14 +199,14 @@ export function usePaneToggles({
 
   // The drawer left open stops meaning anything once the window is wide enough to show its
   // content in the row instead — without this, widening past the breakpoint with it open
-  // would leave the scrim gone (`docked:hidden`) but the drawer's own `open` state still true, so
+  // would leave the scrim gone (`sidebar-docked:hidden`) but the drawer's own `open` state still true, so
   // reopening it narrow again would show it already open with no toggle press in between. A
   // drawer closing into a docked pane the user has hidden takes focus along with it, so that is
   // handed to the terminal first. This catches focus still inside the pane only because React
   // treats the media query's `change` event as discrete and runs this effect before the browser
-  // applies the hidden pane's `docked:invisible` in that frame's style recalc.
+  // applies the hidden pane's `sidebar-docked:invisible` in that frame's style recalc.
   //
-  // Narrowing below the breakpoint turns the docked sidebar into the closed drawer, out of reach
+  // Narrowing beyond the sidebar's capacity turns the docked sidebar into the closed drawer, out of reach
   // (inert), so focus inside it is handed to the terminal before it falls to `<body>`.
   useEffect(() => {
     if (isNarrow) {

@@ -124,6 +124,7 @@ export function App(): React.ReactElement {
     asideFloats,
     asideOverlay,
     asidePinned,
+    asideDockable,
     toggleAsideDocked,
     notePanelOpened,
     notePanelClosed,
@@ -497,7 +498,7 @@ export function App(): React.ReactElement {
   }
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div data-sidebar-dockable={!isNarrow} data-pane-docked={(!isNarrow && panes.sidebarDocked) || asideDocked} className="relative flex h-full flex-col">
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
         sidebarShown={panes.sidebarShown}
@@ -511,7 +512,7 @@ export function App(): React.ReactElement {
         asideSpan={asideDocked ? asideWidth.width : 0}
         asidePinned={asidePinned}
         onToggleAsideDocked={ownerKind && !asideFloats ? toggleAsideDocked : undefined}
-        asideAutomatic={isNarrow}
+        asideAutomatic={!asideDockable}
         asideRevealed={panes.asidePeek.active}
         onAsideHoverChange={stableHoverAside}
         panelToggles={ownerKind ? availableKinds.map((kind) => {
@@ -617,25 +618,15 @@ export function App(): React.ReactElement {
                 onColumnPhase={setSidebarColumnPhase}
                 sidebarWidth={sidebarWidth}
               />
-              {panes.sidebarDocked && sidebarColumnPhase === "open" && (
+              {!isNarrow && panes.sidebarDocked && sidebarColumnPhase === "open" && (
                 <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
               )}
               {/* Floating panes leave the agent area its full width; horizontal overflow remains a
                   guard while the docked sidebar's column is changing width. */}
-              <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
-                {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
-                    aside beside it; the terminal fills it. Above the `docked` breakpoint the 520px basis
-                    and floor are the aside's counterpart: with a 0 basis free space stays positive at any
-                    window wider than the aside's own basis, flexbox never leaves the grow phase, and the
-                    aside clip's shrink factor is never consulted. The open clip can shrink while the
-                    sidebar's width eases, keeping the report within the viewport. 520px is about 53 columns at ~9.2px/column
-                    off a real agent CLI (the terminal's padding eats the rest). Below the breakpoint the
-                    side panes both float over the terminal. Its 398px floor is 40 columns at
-                    the same ~9.2px/column plus the same padding allowance, under which the terminal stops
-                    being usable at all. Mobile mode shows a single floating card and removes this
-                    floor, so the terminal takes whatever width
-                    there is, so the row never scrolls. */}
-                {/* At the breakpoint it casts the content panel's soft shadow (`--panel-shadow`) over the
+              <main className="relative flex min-w-0 flex-1 overflow-x-auto">
+                {/* The flex basis matches the width allocator's 400px floor, so the pane keeps its
+                    allocated width and the terminal grows into the remaining space. Phone mode removes the floor. */}
+                {/* Beside docked panes it casts the content panel's soft shadow (`--panel-shadow`) over the
                     docked panes on either side, so the terminal reads as the layer above them. `z-1`
                     lifts it, with what it holds, over everything in the panes, the aside's positioned
                     content (sticky headings, scroll fades) included, which comes later in the row and
@@ -644,7 +635,7 @@ export function App(): React.ReactElement {
                     closed. The clip-path cuts it on the aside's side: the aside's cards sit apart from the
                     terminal across a gap of the terminal's own background, which a shadow would draw a
                     line in. */}
-                <div ref={agentAreaRef} inert={covered || floatingShown} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[398px] flex-[1_1_398px]"} docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow) docked:[clip-path:inset(-12px_0_-12px_-12px)] docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]`}>
+                <div ref={agentAreaRef} inert={covered || floatingShown} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1 pane-docked:shadow-(--panel-shadow) pane-docked:[clip-path:inset(-12px_0_-12px_-12px)] pane-docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]`}>
                   <ArchiveLayer
                     focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {

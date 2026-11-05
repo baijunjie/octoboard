@@ -22,7 +22,7 @@ the panel shows those of the selected session only, so two sessions never share 
 When the right pane shows something else instead — a project's Files panel in a console session's place, or nothing — is
 in "What the right pane shows" in `docs/product/window-layout.md`. How the panel is opened, closed, floated in and
 maximized is in `docs/product/right-pane-panels.md`, and how wide the pane is and how the user resizes it in
-`docs/product/window-layout.md`.
+"Resizing the sidebar and the right pane" in `docs/product/pane-docking.md`.
 
 A page is a whole HTML document the session wrote, for anything better shown than typed into the terminal — a table, a
 comparison, a set of choices. A page may carry a form, and what the user submits comes back into the session as a

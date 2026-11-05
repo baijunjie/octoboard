@@ -227,7 +227,7 @@ export const gitScenarios: Scenario[] = [
     id: "git-badges-errors", group: GROUP, category: "exceptional",
     title: "Fetch and branch-read failures",
     description: "A deliberate fetch error and a HEAD read error each put a danger-coloured circled \"!\" named Git check failed at the start of the badge, in place of the branch glyph. It is a button of its own: pressing it opens a popover with the reason, the remedy and then Git's own text in a block of its own, held open here for the unreadable branch (the top row). Its short diagnostic takes only the height it needs, with no unnecessary scroll region; the floating Copy button copies the complete original text. The badge's tooltip (hover the branch or counts) covers only the branch and counts and never mentions the failure; the unreadable-branch row has no branch or counts, so only the mark stands there with no tooltip. The third row's next check is already running after a failure: the spinning glyph takes the mark's place, with no mark and no failure in the row's name, and the mark returns only if that run fails again.",
-    state: failureState, preferences: { sidebarWidth: 280 },
+    state: failureState, preferences: { sidebarWidth: 260 },
     steps: [(ui) => ui.openGitFailure((name) => name.startsWith(unreadableProject.name))],
   },
   {
@@ -235,7 +235,7 @@ export const gitScenarios: Scenario[] = [
     title: "Fetch failure at the narrowest project focus header",
     description: "The failure is deliberate: fetch cannot resolve origin. The failure mark's popover is open with the reason, remedy and a single long diagnostic line. Scroll all the way to the right: END-OF-DIAGNOSTIC must be fully readable clear of the floating Copy button, which stays at the top right and copies the entire line. At the narrowest sidebar the mark and the two counts take more than half of the header's free width, so the branch has no room and the badge shows only them, while the title (console over project name) keeps the rest and fades at its end. Hovering the counts shows the badge's tooltip, which does not mention the failure.",
     state: longFailureState,
-    preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+    preferences: { sidebarWidth: 260, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
     steps: [(ui) => ui.openGitFailure()],
   },
   {
@@ -359,7 +359,7 @@ export const gitScenarios: Scenario[] = [
     category: "normal",
     title: "Branch badges",
     state: badgesState,
-    preferences: { sidebarWidth: 280 },
+    preferences: { sidebarWidth: 260 },
     description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. A clipped branch loses its beginning and keeps its end. Hover a clipped project name or branch to scroll only that text, while state glyphs, arrows and counts stay visible; hovering row controls leaves both labels still. Hover badges for their full details, and drag the sidebar wider to inspect clipping.",
   },
   {

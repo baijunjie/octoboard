@@ -352,8 +352,8 @@ export const focusScenarios: Scenario[] = [
     title: "Project session hierarchy",
     state: hierarchyState,
     sessionRecords: { "s-unused": "absent" },
-    preferences: { sidebarWidth: 280, sidebarConsole: console_.id },
-    description: "At the sidebar’s 280px minimum width, context marks follow console, project and nested session titles, staying visible beside long clipped titles; a zero or missing size leaves no mark. Every mark is a badge with the compact size; where the agent reported a window a small ring filled to the share used leads the number, in the accent colour at about 30% (Review release readiness), warning at about 65% (Hub) and danger at about 90% (Chase the flaky test); where it did not, the badge is the number alone (Prevent duplicate API requests, Compare ranking strategies, Review search result accuracy). Hover a mark for its Context window card. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: Done, Awaiting instructions or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
+    preferences: { sidebarWidth: 260, sidebarConsole: console_.id },
+    description: "At the sidebar’s 260px minimum width, context marks follow console, project and nested session titles, staying visible beside long clipped titles; a zero or missing size leaves no mark. Every mark is a badge with the compact size; where the agent reported a window a small ring filled to the share used leads the number, in the accent colour at about 30% (Review release readiness), warning at about 65% (Hub) and danger at about 90% (Chase the flaky test); where it did not, the badge is the number alone (Prevent duplicate API requests, Compare ranking strategies, Review search result accuracy). Hover a mark for its Context window card. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: Done, Awaiting instructions or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
   },
   {
     id: "sidebar-session-agent-tooltip",
@@ -468,7 +468,7 @@ export const focusScenarios: Scenario[] = [
     state: consoleFocusState,
     sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Below the docked breakpoint the sidebar is a floating card whose header is 40px tall instead of 48px. The back button, the single-line console name Main and the plus menu fit without clipping, and the switch strip and Hub's own card follow it.",
+    description: "At phone width the sidebar is a floating card whose header is 40px tall instead of 48px. The back button, the single-line console name Main and the plus menu fit without clipping, and the switch strip and Hub's own card follow it.",
     steps: [
       (ui) => ui.press(ui.t("titleBar.sidebar.show")),
     ],
@@ -482,7 +482,7 @@ export const focusScenarios: Scenario[] = [
     state: scrollingFocusState,
     sessionRecords: { "s-scroll-unused": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Below the docked breakpoint the sidebar is a floating card whose header is 40px tall instead of 48px. The project header keeps both lines inside it, the console name Main over Search API with the gap between them no larger than the margins above and below, beside the back button, the + button and the actions menu without clipping.",
+    description: "At phone width the sidebar is a floating card whose header is 40px tall instead of 48px. The project header keeps both lines inside it, the console name Main over Search API with the gap between them no larger than the margins above and below, beside the back button, the + button and the actions menu without clipping.",
     steps: [
       (ui) => ui.press(ui.t("titleBar.sidebar.show")),
     ],

@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import type { PanePeek } from "./usePaneToggles";
 
-/** How a pane that is a row sibling at and above the `docked` breakpoint is laid out:
+/** How a pane that is a row sibling at and above the sidebar's docking threshold is laid out:
  * - `drawer`: a closed-by-default overlay below the breakpoint, a plain row sibling at and above it;
  * - `floating`: the user has hidden the docked pane, which still floats in over the content on
  *   request, so it stays a fixed overlay at every width. */
@@ -26,18 +26,18 @@ export function isRailPeekArea(target: EventTarget | null): boolean {
  * clipped to the corner, the sidebar's colour, the `panel-edge` hairline and the `--panel-card-shadow`
  * elevation, kept `--peek-gap` (`--panel-grip-gap` on the terminal side, `--panel-stack-gap` between cards) from
  * everything around it (`AsidePane.tsx`). The sidebar's card
- * spells the same utilities out under `docked:`/`max-docked:` in `drawerClass` below, and
+ * spells the same utilities out under `sidebar-docked:`/`sidebar-floating:` in `drawerClass` below, and
  * Tailwind needs them as literal text, so a change to the look is made in both. */
 export const PANEL_CARD_CLASS = "overflow-hidden rounded-xl bg-panel-sidebar panel-edge shadow-(--panel-card-shadow)";
 
 /** The vertical inset and header height of the desktop floating card. */
 const FLOATING_INSET =
-  "docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] docked:[--pane-header-height:var(--pane-header-height-floating)]";
+  "sidebar-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] sidebar-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] sidebar-docked:[--pane-header-height:var(--pane-header-height-floating)]";
 
 /** Drawers use the same card geometry as desktop peeks. Scope it below the breakpoint so the
  * docked sidebar can still ease as a full-height column without changing shape. */
 const DRAWER_FRAME =
-  "max-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-docked:[--pane-header-height:var(--pane-header-height-floating)] max-docked:rounded-xl max-docked:overflow-hidden max-docked:pointer-events-auto max-docked:panel-edge max-docked:shadow-(--panel-card-shadow)";
+  "sidebar-floating:top-[calc(var(--top-chrome-height)+var(--peek-gap))] sidebar-floating:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] sidebar-floating:[--pane-header-height:var(--pane-header-height-floating)] sidebar-floating:rounded-xl sidebar-floating:overflow-hidden sidebar-floating:pointer-events-auto sidebar-floating:panel-edge sidebar-floating:shadow-(--panel-card-shadow)";
 
 /** The sidebar is on the reading direction's start side, so under right-to-left it is on the right.
  * It is anchored past the rail (`--rail-width` in `style.css`) while the rail is in the row. The
@@ -47,7 +47,7 @@ const DRAWER_FRAME =
  * the rail (`Rail.tsx`) lies over it. A card's headers take
  * `--pane-header-height-floating` (`style.css`) so that their bottom line lines up with the docked
  * headers' in the same row; `FLOATING_INSET` sets it for everything inside. */
-const ANCHOR = "start-(--rail-width) max-docked:phone:start-[calc(var(--rail-width)+var(--peek-gap))] max-phone:start-(--peek-gap)";
+const ANCHOR = "start-(--rail-width) sidebar-floating:phone:start-[calc(var(--rail-width)+var(--peek-gap))] max-phone:start-(--peek-gap)";
 /** Below the `phone` breakpoint a panel that is away is shifted `--phone-slide` (`style.css`) towards
  * the edge it lives on, the start edge for the sidebar's drawer and its rail, in place of the vertical
  * drift of the wider layouts, so that it slides in from that edge as it fades in and back out to it.
@@ -59,9 +59,9 @@ export const PHONE_SLIDE_AWAY = "max-phone:translate-y-0 max-phone:-translate-x-
  * edge and shadow (`DRAWER_FRAME`) with it; `visibility` stays on until the exit has finished and
  * then keeps the away drawer out of reach. Below the `phone` breakpoint it slides instead, in from
  * the start edge by `--phone-slide` and back out to it (`PHONE_SLIDE_AWAY`). */
-const DRAWER_OPEN = "max-docked:translate-y-0 max-docked:opacity-100";
-const DRAWER_AWAY = `max-docked:translate-y-[4%] max-docked:opacity-0 max-docked:invisible ${PHONE_SLIDE_AWAY}`;
-const FLOATING_FRAME = `docked:start-[calc(var(--rail-width)+var(--peek-gap))] ${FLOATING_INSET}`;
+const DRAWER_OPEN = "sidebar-floating:translate-y-0 sidebar-floating:opacity-100";
+const DRAWER_AWAY = `sidebar-floating:translate-y-[4%] sidebar-floating:opacity-0 sidebar-floating:invisible ${PHONE_SLIDE_AWAY}`;
+const FLOATING_FRAME = `sidebar-docked:start-[calc(var(--rail-width)+var(--peek-gap))] ${FLOATING_INSET}`;
 
 /**
  * The geometry of the sidebar's overlay forms (`Sidebar.tsx`): fixed between `style.css`'s
@@ -75,13 +75,13 @@ const FLOATING_FRAME = `docked:start-[calc(var(--rail-width)+var(--peek-gap))] $
  * it at all times below the breakpoint, so it fades with the card, and the fade and `invisible`
  * hide it while the drawer is away.
  *
- * In `drawer` mode `docked:` turns the pane back into a plain row sibling — no fixed positioning,
- * no stacking context, no transition. The drawer's motion classes are all `max-docked:`, and
- * `docked:translate-none` keeps `translate` at `none` at and above the breakpoint, so the pane is
+ * In `drawer` mode `sidebar-docked:` turns the pane back into a plain row sibling — no fixed positioning,
+ * no stacking context, no transition. The drawer's motion classes are all `sidebar-floating:`, and
+ * `sidebar-docked:translate-none` keeps `translate` at `none` at and above the breakpoint, so the pane is
  * no stacking context and no containing block for fixed descendants there, where the layout must
  * stay exactly as it was before the pane had a `translate` at all.
  *
- * In `floating` mode none of the `docked:` resets apply, and `peeking` takes the place of `open`
+ * In `floating` mode none of the `sidebar-docked:` resets apply, and `peeking` takes the place of `open`
  * for whether the pane is on screen there. The card fades up from 4% of its height below its
  * resting position and fades down when dismissed, with the console-switch view's easing. It is `invisible` while
  * away, so a faded card stays out of the tab order. Drawers are likewise invisible while away. A
@@ -97,11 +97,11 @@ const FLOATING_FRAME = `docked:start-[calc(var(--rail-width)+var(--peek-gap))] $
  * still operable, focus staying on the terminal, and what it shows staying mounted.
  */
 export function drawerClass(mode: PaneMode, open: boolean, peeking = false): string {
-  const dockedReset = "docked:static docked:z-auto docked:translate-none docked:transition-none";
+  const dockedReset = "sidebar-docked:static sidebar-docked:z-auto sidebar-docked:translate-none sidebar-docked:transition-none";
   const form =
     mode === "drawer"
-      ? `max-docked:transition-[translate,opacity,visibility] max-docked:duration-240 max-docked:ease-[cubic-bezier(0.2,0,0,1)] max-docked:motion-reduce:transition-none ${dockedReset}`
-      : `${FLOATING_FRAME} docked:panel-edge docked:shadow-(--panel-card-shadow) docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] docked:motion-reduce:transition-none ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-[4%] docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
+      ? `sidebar-floating:transition-[translate,opacity,visibility] sidebar-floating:duration-240 sidebar-floating:ease-[cubic-bezier(0.2,0,0,1)] sidebar-floating:motion-reduce:transition-none ${dockedReset}`
+      : `${FLOATING_FRAME} sidebar-docked:panel-edge sidebar-docked:shadow-(--panel-card-shadow) sidebar-docked:transition-[translate,opacity,visibility] sidebar-docked:duration-240 sidebar-docked:ease-[cubic-bezier(0.2,0,0,1)] sidebar-docked:motion-reduce:transition-none ${peeking ? "sidebar-docked:translate-y-0 sidebar-docked:opacity-100 sidebar-docked:pointer-events-auto" : "sidebar-docked:translate-y-[4%] sidebar-docked:opacity-0 sidebar-docked:pointer-events-none sidebar-docked:invisible"}`;
   const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 motion-reduce:transition-none";
   return `${base} ${DRAWER_FRAME} ${ANCHOR} ${open ? DRAWER_OPEN : DRAWER_AWAY} ${form}`;
 }
@@ -112,8 +112,8 @@ export function drawerClass(mode: PaneMode, open: boolean, peeking = false): str
  * shadow is not cut), keeping the card and its shadow off the rail. The rail paints nothing of its
  * own on the translucent macOS window, so stacking the pane beneath it would show it through. The
  * wrapper takes no pointer events, the pane (`drawerClass`) does, and the pane stays `fixed`
- * itself: a clip does not make its element a containing block. With the pane docked at the desktop
- * breakpoint (`floating` false), the wrapper is `display: contents` and so is not there; so it is
+ * itself: a clip does not make its element a containing block. With the pane docked at the sidebar's
+ * docking threshold (`floating` false), the wrapper is `display: contents` and so is not there; so it is
  * below the `phone` breakpoint, where the card starts at the window's edge and the rail is part of
  * it, with nothing to keep it off. It is always
  * rendered, so docking the pane does not remount what is in it.
@@ -121,9 +121,9 @@ export function drawerClass(mode: PaneMode, open: boolean, peeking = false): str
 export function RailClip({ floating, children }: { floating: boolean; children: React.ReactNode }): React.ReactElement {
   return (
     <div
-      className={`contents max-docked:phone:pointer-events-none max-docked:phone:fixed max-docked:phone:inset-y-0 max-docked:phone:start-(--rail-width) max-docked:phone:z-40 max-docked:phone:block max-docked:phone:w-0 max-docked:phone:[clip-path:inset(-100vh_-100vw_-100vh_0)] max-docked:phone:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)] ${
+      className={`contents sidebar-floating:phone:pointer-events-none sidebar-floating:phone:fixed sidebar-floating:phone:inset-y-0 sidebar-floating:phone:start-(--rail-width) sidebar-floating:phone:z-40 sidebar-floating:phone:block sidebar-floating:phone:w-0 sidebar-floating:phone:[clip-path:inset(-100vh_-100vw_-100vh_0)] sidebar-floating:phone:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)] ${
         floating
-          ? "docked:pointer-events-none docked:fixed docked:inset-y-0 docked:start-(--rail-width) docked:z-40 docked:block docked:w-0 docked:[clip-path:inset(-100vh_-100vw_-100vh_0)] docked:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)]"
+          ? "sidebar-docked:pointer-events-none sidebar-docked:fixed sidebar-docked:inset-y-0 sidebar-docked:start-(--rail-width) sidebar-docked:z-40 sidebar-docked:block sidebar-docked:w-0 sidebar-docked:[clip-path:inset(-100vh_-100vw_-100vh_0)] sidebar-docked:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)]"
           : ""
       }`}
     >

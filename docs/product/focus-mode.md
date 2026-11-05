@@ -239,9 +239,9 @@ selecting its row does, it resumes the console session when it is interrupted (s
 end, starting from the console session in focus. They exist only in the macOS application; a browser keeps the keys
 for its own tabs.
 
-- It works only while the sidebar is shown — docked, or revealed below 1394 px; not while it is hidden or only
-  previewing on a large screen (see "Hiding the sidebar" in `docs/product/window-layout.md`) — in a console session's
-  focus mode, with the strip there. Anywhere else the keys go on to the terminal as usual.
+- It works only while the sidebar is shown — docked, or revealed while it cannot dock; not while it is hidden or
+  only previewing while docking is available (see "Hiding the sidebar" in `docs/product/pane-docking.md`) — in a
+  console session's focus mode, with the strip there. Anywhere else the keys go on to the terminal as usual.
 - Where it works, the keys never reach the terminal, so the agent never receives them. It does nothing while a dialog or
   a menu is open, and is left alone during an input-method composition. A key held down moves one chip only.
 - It enters the next console session's focus mode and selects it, like pressing its chip, except that **it does not

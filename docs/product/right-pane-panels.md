@@ -12,26 +12,27 @@ are depends on the pane's owner:
 A project's Terminal, Files and Processes panels are the project's own, the same whichever of its sessions is selected;
 its Report panel is the selected project session's own.
 
-**At 1394 px and wider the right pane docks beside the terminal by default.** Its separate top bar toggle switches
-all open cards between docked and floating as a group. From **594–1393 px** the group floats automatically, without
-taking width from the terminal; the stored docking choice is unchanged. Below **594 px**, one panel floats at a time
+**At 594 px and wider the right pane docks beside the terminal by default when there is room.** Its separate top
+bar toggle switches all open cards between docked and floating as a group when docking is available. With insufficient
+room the group floats automatically without changing the stored choice or taking width from the terminal (see
+"Docking capacity" in `docs/product/pane-docking.md`). Below **594 px**, one panel floats at a time
 (see "Below 594 px: one panel floats over the terminal" below).
 
 The panel toggles and each card's Close panel control decide which cards are open. With none open the pane takes no
 width, and hover can preview one card without opening it. A docked Report or Terminal panel can be maximized over
 the terminal's area (see "Maximizing a panel" below).
 
-How wide the right pane is and how it is resized is in "Pane widths at 1394 px and wider" and "Resizing the sidebar
-and the right pane" in `docs/product/window-layout.md`.
+How wide the right pane is and how it is resized is in "Pane widths" and "Resizing the sidebar and the right pane"
+in `docs/product/pane-docking.md`.
 
 ## The panel cards
 
 The right pane has **no frame or surface of its own**: it is its cards. Each card looks exactly like the sidebar's
-floating card (see "A hidden pane floats in on hover" in `docs/product/window-layout.md`): rounded corners, the hairline
+floating card (see "A hidden pane floats in on hover" in `docs/product/pane-docking.md`): rounded corners, the hairline
 edge, the light card shadow and the sidebar's background, docked and floating alike. At 594 px and wider the cards keep
 **8 px** from the top bar, from the window's end edge and from its bottom (or the connection banner), **8 px** from the
 terminal and **10 px** from each other; the gaps on the terminal's side and between cards hold the resize grips (see
-"Resizing the sidebar and the right pane" in `docs/product/window-layout.md` and "Resizing panels" below). Below 594 px
+"Resizing the sidebar and the right pane" in `docs/product/pane-docking.md` and "Resizing panels" below). Below 594 px
 the gaps are in "Below 594 px: one panel floats over the terminal" below. What shows around and between the cards is the
 terminal's area, in the terminal's own background, so the cards read as lying on the content. A single panel in a column
 takes that column's full height. Columns divide the pane's chosen total width, with a 10 px gap between them; their
@@ -110,12 +111,13 @@ The group layout depends on how many panels remain and the width available for t
   trailing column.
 
 With three or four cards the pane is at least **546 px** wide, including two 260 px columns, the 10 px column gap
-and two 8 px outer gaps. When opening or closing panels adds or removes a column, the pane adjusts its total width to
-keep the surviving cards at their displayed column width, within the pane's current minimum and maximum (see "Resizing
-the sidebar and the right pane" in `docs/product/window-layout.md`). In particular, opening a third panel beside two
-stacked cards adds width for the new column; closing it removes that width. If two cards were already side by side,
-opening and closing the third keeps their two-column layout and the pane's total width. If cards from unequal-width
-columns combine into one column, the first surviving kind in the fixed order determines the width to keep.
+and two 8 px outer gaps. When opening or closing panels adds or removes a column, the pane adjusts its total width
+to keep the surviving cards at their displayed column width, within the pane's current minimum and maximum (see
+"Resizing the sidebar and the right pane" in `docs/product/pane-docking.md`). In particular, opening a third panel
+beside two stacked cards adds width for the new column; closing it removes that width. If two cards were already
+side by side, opening and closing the third keeps their two-column layout and the pane's total width. If cards from
+unequal-width columns combine into one column, the first surviving kind in the fixed order determines the width to
+keep.
 
 Closing one of two side-by-side cards keeps the surviving card's width; reopening the same card restores the pair's
 previous total width and column widths, within the current limits. Two stacked cards return stacked instead. The
@@ -204,13 +206,13 @@ mirrored under a right-to-left language (see "What is mirrored" in `docs/product
 
 At **594 px and wider**, the right pane has a group toggle before its individual panel toggles in the top bar.
 
-- **At 1394 px and wider**, the toggle switches between docking the whole group and floating it over the terminal.
-  The choice is remembered per client and independently of which cards are open. Floating immediately reveals the
-  group; docking keeps the open cards and returns their width to the row. Its icon distinguishes docked and floating,
-  and its label describes the action it will take.
-- **From 594–1393 px**, both sides float automatically. The group toggle only reveals the right group, including
+- **When the right group can dock**, the toggle switches between docking the whole group and floating it over the
+  terminal. The choice is remembered per client and independently of which cards are open. Floating immediately
+  reveals the group; docking keeps the open cards and returns their width to the row. Its icon distinguishes docked
+  and floating, and its label describes the action it will take.
+- **When the right group cannot dock**, it floats automatically. The group toggle only reveals it, including
   when pressed repeatedly, and never changes the docking preference. Its label offers to show the panels.
-- **Hover entry and dismissal** follow "A hidden pane floats in on hover" in `docs/product/window-layout.md`: the
+- **Hover entry and dismissal** follow "A hidden pane floats in on hover" in `docs/product/pane-docking.md`: the
   group icon and individual panel icons reveal immediately; the 48 px end-edge strip reveals after 200 ms. No hover
   entry operates below 594 px or on a device whose primary input cannot hover.
 - **All open cards float together**, using their usual columns, gaps and height proportions, with no dimmed layer
@@ -229,7 +231,7 @@ At **594 px and wider**, the right pane has a group toggle before its individual
 ## Below 594 px: one panel floats over the terminal
 
 A window narrower than **594 px** cannot fit the rail's 48 px beside a two-column floating group's 546 px minimum (see
-"Pane widths below 1394 px" in `docs/product/window-layout.md`). There the right pane's open panel **floats over the
+"Floating pane widths" in `docs/product/pane-docking.md`). There the right pane's open panel **floats over the
 terminal**, the agent terminal taking the content panel's whole width under it. The threshold is the same whichever
 panels are open.
 
@@ -245,12 +247,13 @@ panels are open.
   on the side away from the window's end, reaching the window's start edge, the rail not being in the row there (see
   "Below 594 px: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`); it is **48 px** wide, or **24
   px** when the window — for the website's embedded preview, the preview frame — is 360 px wide or less.
-- **How it comes and goes**: the card fades in while sliding in from the window's end edge by **40 px**, and fades out
-  while sliding back towards it, over 240 ms with the easing of a pane floating in on hover (see "A hidden pane floats
-  in on hover" in `docs/product/window-layout.md`); under a right-to-left language the end edge is the window's left.
-  Opening another panel in its place plays the entrance again for the new panel. The dimmed strip fades in and out with
-  the card over the same 240 ms. While they fade out, neither the card nor the strip takes presses, and the card takes
-  no keyboard focus. Where the system asks for reduced motion both appear and go at once.
+- **How it comes and goes**: the card fades in while sliding in from the window's end edge by **40 px**, and fades
+  out while sliding back towards it, over 240 ms with the easing of a pane floating in on hover (see "A hidden pane
+  floats in on hover" in `docs/product/pane-docking.md`); under a right-to-left language the end edge is the
+  window's left. Opening another panel in its place plays the entrance again for the new panel. The dimmed strip
+  fades in and out with the card over the same 240 ms. While they fade out, neither the card nor the strip takes
+  presses, and the card takes no keyboard focus. Where the system asks for reduced motion both appear and go at
+  once.
 - **Opening or closing it never resizes the terminal**, and the terminal has no minimum width here, so the row never
   scrolls sideways.
 - **It closes** on Close panel in its header, on its toggle, on a press on the dimmed strip or in the card's 4 px gap,
@@ -303,7 +306,7 @@ remembered" below.
 
 **Panel heights.** Between the two panels sharing a column, in the gap that separates them, is a **resize handle**,
 drawn as a grip like the right pane's width handle (see "Resizing the sidebar and the right pane" in
-`docs/product/window-layout.md`), with the same "Resize" tooltip. It moves only the boundary between that pair: the pair
+`docs/product/pane-docking.md`), with the same "Resize" tooltip. It moves only the boundary between that pair: the pair
 keeps its combined height, neither panel goes under 120 px, and the other panels and the stack's own height stay as they
 are, so **resizing panels never resizes the terminal**. Its name says which pair it resizes, naming both panels' kinds,
 upper one first. Each column's pair is resized independently, whether the group is docked or floating. No panel-height
@@ -402,8 +405,8 @@ The report and Processes panels play none. The system's Reduce motion setting di
 
 ## What is remembered
 
-**Per kind of owner, per client**, in that client's own browser storage, as the right pane's width is (see "Resizing the
-sidebar and the right pane" in `docs/product/window-layout.md`): which panels are open, each one's height weight
+**Per kind of owner, per client**, in that client's own browser storage, as the right pane's width is (see "Resizing
+the sidebar and the right pane" in `docs/product/pane-docking.md`): which panels are open, each one's height weight
 within its column, and the chosen column-width proportion, so the stack comes back as it was after a reload or a
 restart. Without that storage they last until the page is reloaded.
 

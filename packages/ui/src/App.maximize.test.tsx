@@ -3,6 +3,7 @@ import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
+import { stubWindow } from "./appTestSupport";
 import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
@@ -55,19 +56,12 @@ function mountApp() {
     stacks = usePanelStacks();
     return null;
   }
-  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
-  document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
+  stubWindow();
   onTestFinished(() => {
     act(() => {
       stacks.setStack("project", defaultStack("project"));
       stacks.setStack("report", defaultStack("report"));
     });
-    vi.unstubAllGlobals();
-    document.documentElement.style.removeProperty("--rail-width");
-    document.documentElement.style.removeProperty("--breakpoint-docked");
-    document.documentElement.style.removeProperty("--breakpoint-phone");
     try {
       localStorage.clear();
     } catch {

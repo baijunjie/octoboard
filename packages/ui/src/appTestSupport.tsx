@@ -17,12 +17,15 @@ import { applyDaemonEvent, DaemonProvider, type Daemon, type State } from "./sto
 import { ThemeProvider } from "./preferences/theme";
 import { testDaemon } from "./test/testDaemon";
 
-const CSS_VARS = { "--rail-width": "48px", "--breakpoint-docked": "1168px", "--breakpoint-phone": "782px" };
+const CSS_VARS = { "--rail-width": "48px", "--breakpoint-docked": "1394px", "--breakpoint-phone": "594px" };
 
 /** A window `width` px wide for one test: the media queries answer `min-width` by it, and the breakpoints the layout
  * reads are set on the document. Motion is reduced, as jsdom has no Web Animations API for the sidebar's view change,
  * and what leaves with an exit (the archive view) leaves at once. */
 export function stubWindow(width = 1400): void {
+  const previousWidth = Object.getOwnPropertyDescriptor(document.documentElement, "clientWidth");
+  Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, value: width });
+  window.dispatchEvent(new Event("resize"));
   vi.stubGlobal("matchMedia", (media: string) => {
     const min = Number(/min-width:\s*([\d.]+)px/.exec(media)?.[1]);
     const matches = media === "(prefers-reduced-motion: reduce)" || (Number.isFinite(min) && width >= min);
@@ -30,6 +33,8 @@ export function stubWindow(width = 1400): void {
   });
   for (const [key, value] of Object.entries(CSS_VARS)) document.documentElement.style.setProperty(key, value);
   onTestFinished(() => {
+    if (previousWidth) Object.defineProperty(document.documentElement, "clientWidth", previousWidth);
+    else Reflect.deleteProperty(document.documentElement, "clientWidth");
     vi.unstubAllGlobals();
     for (const key of Object.keys(CSS_VARS)) document.documentElement.style.removeProperty(key);
     try {

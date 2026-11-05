@@ -130,8 +130,8 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files pane's width handle in focus and under the pointer",
-    // The grip in the gap beside a docked pane exists only where the right pane docks (from 1394px); a floating group has its own total-width handle at its inner edge.
-    minWidth: 1394,
+    // The docked grip requires rail 48px, sidebar 260px, terminal 400px and one-column pane 276px.
+    minWidth: 984,
     description: "The handle in the gap on the pane's inner edge shows its grip, a short rounded pill centred in the gap, and a Resize tooltip opening beside it, on its end side and centred on it, while the pointer is on it. The grip is drawn here through keyboard focus (with its focus ring), as the gallery cannot hold a CSS hover; with the pointer alone it shows on hover and during a drag, and is hidden otherwise. Arrow keys resize the pane from the focused handle, and double-clicking resets its width.",
     state,
     steps: [...openFiles, (ui) => ui.focusControl(ui.t("pane.resizeAside")), (ui) => ui.hoverAnchored(ui.t("pane.resizeAside"), ui.t("pane.resize"))],

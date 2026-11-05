@@ -113,7 +113,7 @@ interface TitleBarProps {
   /** Whether there is a sidebar at all; with no console there is none, and its toggle would control nothing. */
   hasSidebar: boolean;
   /** The docked sidebar column's target width in px (0 while hidden), which the start segment
-   * follows above the `docked` breakpoint. */
+   * follows while the sidebar can dock. */
   sidebarSpan: number;
   /** The column is easing to `sidebarSpan`, so the segment eases with it instead of jumping. */
   sidebarEasing: boolean;
@@ -164,7 +164,7 @@ const toggleId = (kind: string) => `panel-toggle-${kind}`;
  * end one toggle per panel kind the aside's owner has. The rest of the end is the window's drag
  * area: the other window controls are on the rail (`Rail.tsx`). The end is the reading direction's,
  * so under right-to-left it is at the window's left, where the bar's own padding keeps the macOS
- * window buttons clear (`BarFrame`). Above the `docked` breakpoint, the start segment tracks the
+ * window buttons clear (`BarFrame`). While the sidebar can dock, the start segment tracks the
  * docked sidebar's clip (`.title-bar-start`); the end segment tracks the aside's while it is docked
  * (`.title-bar-end`), so the breadcrumb stays over the main area while either column eases open or
  * closed (the aside's does not ease).
@@ -196,9 +196,9 @@ export function TitleBar({
   const t = useT();
   return (
     <BarFrame>
-      {/* Above the `docked` breakpoint, as wide as the rail plus the sidebar's clip, and never
+      {/* While the sidebar fits, as wide as the rail plus its clip, and never
           narrower than these buttons. The breadcrumb after it stays over the main area while the
-          column eases; below the breakpoint the class does not apply. */}
+          column eases; a floating sidebar contributes no span. */}
       <div
         className={`title-bar-start flex shrink-0 items-center ${sidebarEasing ? "title-bar-start-easing" : ""}`}
         style={{ "--sidebar-span": `${sidebarSpan}px` } as React.CSSProperties}

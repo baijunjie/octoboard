@@ -8,7 +8,7 @@ export const PANE_SPAN_MS = 200;
 
 /** The classes that ease a docked column's width over `PANE_SPAN_MS`. Kept a literal so Tailwind
  * finds the classes. */
-export const COLUMN_EASE_CLASS = "docked:transition-[width] docked:duration-200 docked:ease-in-out motion-reduce:transition-none";
+export const COLUMN_EASE_CLASS = "sidebar-docked:transition-[width] sidebar-docked:duration-200 sidebar-docked:ease-in-out motion-reduce:transition-none";
 
 /** A little past the ease, so a transition that never reports its end (a backgrounded tab, a
  * browser that skips the event) cannot leave the column mid-gesture. */
@@ -18,8 +18,8 @@ const SPAN_END_SLACK_MS = 50;
 export const PANE_INSET_MS = 240;
 
 /** Where the docked pane is in its show/hide ease. `open` and `closed` are settled; the other
- * two are the ease itself. Its classes are `docked:` ones, as the sidebar is a drawer below the
- * breakpoint. */
+ * two are the ease itself. Its classes apply only while the sidebar can dock; otherwise it
+ * floats as a drawer. */
 export type DockPhase = "open" | "closing" | "closed" | "opening";
 
 export interface DockMotion {

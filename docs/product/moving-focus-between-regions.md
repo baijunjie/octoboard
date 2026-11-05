@@ -33,23 +33,25 @@ has floated it in. A panel opened by a tap or the keyboard is modal, as a menu i
 "Opening the panel" in `docs/product/account-quota-panel.md`). The rail's Processes popover is the same (see "Opening
 and closing the popover" in `docs/product/processes-on-the-rail.md`).
 
-**A region not on screen is skipped**: a docked sidebar the user has hidden, the floating sidebar while it is closed,
-the rail below 594 px while that sidebar overlay is closed, the rail then coming in only with it (see "Below 594 px: the
-rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`), a large-screen sidebar hover preview, a
-single-card hover preview, hidden floating groups, the right pane's panels when nothing owns the pane or none of its
-panels is open, a panel with nothing to take focus (a Files panel while it is still loading, see "Loading the project
-pane" in `docs/product/project-pane.md`), the terminal and the archive view while a maximized panel covers them (see
-"Maximizing a panel" in `docs/product/right-pane-panels.md`) or a panel floats over them below 594 px (see "Below 594
-px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal when no session is
-selected — unless its area is then offering a creation action, which makes it a stop (see "A console with nothing in it"
-in `docs/product/session-terminal.md`) — or while the archive view covers it. With no console the sidebar, the archive
-view, the terminal and the right pane are all skipped together, none of them being on screen, and the welcome screen is
-the only stop between the rail and the update notice or the connection banner; with a console the welcome screen is the
-one skipped. The sidebar counts as shown when it is docked in the row at 1394 px and wider, or the floating sidebar is
-revealed below that. A docked sidebar column that is still easing closed already counts as hidden, and one that is still
-easing open already counts as shown (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`).
-A right pane panel counts as shown while it is open, docked in the pane's column or maximized, in a revealed floating
-group, or floating alone below 594 px.
+**A region not on screen is skipped**: a docked sidebar the user has hidden, the floating sidebar while it is
+closed, the rail below 594 px while that sidebar overlay is closed, the rail then coming in only with it (see "Below
+594 px: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`), a hover preview of a hidden
+sidebar that could dock, a single-card hover preview, hidden floating groups, the right pane's panels when nothing
+owns the pane or none of its panels is open, a panel with nothing to take focus (a Files panel while it is still
+loading, see "Loading the project pane" in `docs/product/project-pane.md`), the terminal and the archive view while
+a maximized panel covers them (see "Maximizing a panel" in `docs/product/right-pane-panels.md`) or a panel floats
+over them below 594 px (see "Below 594 px: one panel floats over the terminal" in
+`docs/product/right-pane-panels.md`), and the terminal when no session is selected — unless its area is then
+offering a creation action, which makes it a stop (see "A console with nothing in it" in
+`docs/product/session-terminal.md`) — or while the archive view covers it. With no console the sidebar, the archive
+view, the terminal and the right pane are all skipped together, none of them being on screen, and the welcome screen
+is the only stop between the rail and the update notice or the connection banner; with a console the welcome screen
+is the one skipped. The sidebar counts as shown when it is docked and visible in the row, or its automatic floating
+overlay is revealed. A hover preview of a hidden sidebar that could dock remains excluded. A docked sidebar column
+that is still easing closed already counts as hidden, and one that is still easing open already counts as shown (see
+"The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`). A right pane panel counts as shown
+while it is open, docked in the pane's column or maximized, in a revealed floating group, or floating alone below
+594 px.
 
 Where focus lands in each region:
 
