@@ -253,7 +253,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Put a panel of the aside's owner (a project, or a console session) on screen | `showPanel` from `useProjectPanels` (`src/app/`); a jump from the global process list is `useProcessJump` |
 | Send focus into a panel the user opened deliberately | `landInPanel` (`src/panels/panelLanding.ts`), as `useFloatingPanel` and `useProcessJump` do |
 | Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/components/hooks/useSerialPush.ts`) |
-| Browse directories in a picker | `useDirectoryBrowse` with `DirectoryPicker` (`src/components/dialog/`) |
+| Browse directories in a picker | `useDirectoryBrowse` (`src/components/dialog/DirectoryPicker.tsx`), which routes local desktop browsing through the platform's `directoryPicker` capability and otherwise uses the daemon-backed `DirectoryPicker`; locality comes from `Daemon.isLocal`, derived by `isLocalDaemon` (`src/daemon.ts`) |
 | Delete options of a dialog that deletes sessions | `useSessionDeletionOptions` (`src/dialogs/`) |
 | A provider's name, install page or configuration directory | `providerLabel`, `providerShortName`, `providerInstallUrl`, `providerConfigDir` (`src/agents/providers.ts`) over `useProviders()` |
 | A provider's setting in Settings; its copy | `AgentProviderSettings` (`src/settings/accounts/AgentProviderSettings.tsx`) over the served `ProviderInfo.settings`; copy keys by `settingMessageKey` (`src/agents/providers.ts`), messages in the provider's module |
@@ -261,7 +261,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A provider's mark and colour | `providerMark`, `providerColour` (`src/providers/registry.ts`); `AgentIcon` (`src/components/icons/`) draws the mark, `providerFillVars` (`src/quota/providerFill.ts`) paints a quota bar |
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |
-| Platform capabilities (native menu, updater, clipboard, permissions) | the `PlatformAdapter` through `src/platform/` |
+| Platform capabilities (native menu, updater, clipboard, directory picker, permissions) | the `PlatformAdapter` through `src/platform/` |
 | Read the store | the barrel `src/store/index.ts` (`useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, session hooks); below `src/` the barrel is the only store import allowed |
 | The provider tree around `App` in a new host of the app | `AppRoot` (`src/AppRoot.tsx`), as `main.tsx`, the gallery frame and the website preview use it |
 | Data for the gallery, the website preview and application tests | `src/fixtures/` (builders, `snapshotState`, `createFixtureDaemon`), never gallery scenarios |

@@ -5,7 +5,7 @@ import { DaemonClient } from "../daemon-client";
 import type { RequestSender } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
-import { daemonWsUrl, type DaemonAddress } from "../daemon";
+import { daemonWsUrl, isLocalDaemon, type DaemonAddress } from "../daemon";
 import { currentLanguage } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
 import { createOwnTrustNotices } from "./ownTrustNotices";
@@ -17,6 +17,8 @@ import { broadcastNotification, type NotifiedBroadcast, type NotificationRequest
  * `main.tsx`) and alive until the window closes. The store is a vanilla one, so code outside React
  * can read and subscribe to it; components use `useDaemonStore`. */
 export interface Daemon {
+  /** True only when the connection establishes that the daemon runs on this machine. Unknown counts as remote. */
+  readonly isLocal?: boolean;
   store: StoreApi<State>;
   /** Sends a request and resolves with its correlated reply, of the type the request is answered with (`ReplyOf`), or
    * rejects with a `CodedError` worded in the current language. Callers present failures, allowing field validation to
@@ -96,6 +98,7 @@ export function createDaemon(address: DaemonAddress): Daemon {
   };
 
   return {
+    isLocal: isLocalDaemon(address),
     store,
     request,
     showNotice: (message, content) => notify({ kind: "notice", message, content }),

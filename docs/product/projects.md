@@ -72,7 +72,7 @@ either alert opens an error alert (see "Errors under a field" and "Failures show
 `docs/product/error-alerts.md`). A success enables them and preselects the detected agent. The check is bounded by a
 timeout, and its scratch directory is removed when it ends.
 
-A path may be entered by hand or picked with the directory browser. A leading `~` is expanded to the home directory
+A path may be entered by hand or picked with the directory picker. A leading `~` is expanded to the home directory
 of the host the daemon runs on. The path must then be absolute: a relative path is refused, for every source. It is
 recorded lexically normalised — `.` components dropped, each `..` folded into the component before it, no trailing
 slash — without resolving symbolic links, so a path through a link is kept as written. Whether a trusted folder covers
@@ -329,14 +329,23 @@ is in "Reading and changing them" in `docs/product/git-workflow-settings.md`.
 
 ## Browsing directories
 
-The directory browser lists directories only — a project is a directory — including entries whose name begins with a
-dot. Each entry is flagged with whether it is a git repository. Entries are sorted case-insensitively by name. The
-listing always comes from the host the projects live on, never from the application's own filesystem view.
-
 **Browse** beside a directory field — the project dialog's directory or parent directory, an account's directory, a
-configuration import's Another directory field, and Settings' **Default clone directory** — opens the browser on the
+configuration import's Another directory field, and Settings' **Default clone directory** — opens a directory picker on the
 path the field holds, without its surrounding spaces, when that path is absolute, is `~` or starts with `~/`; on an
 empty field or anything else, such as a relative path, it opens on the home directory.
+
+**The desktop application connected to a local daemon uses the system's directory picker** when it is available. The
+picker is modal to the application window; browsing and keyboard interaction follow the operating system's controls.
+`~` is expanded to the home directory before opening it. A starting path that does not exist opens at its nearest
+existing ancestor instead; a `~/` path goes no higher than the home directory. The selected directory fills the field
+as an absolute path. Cancelling leaves the field unchanged. Browse cannot open another picker while one is already
+open. A failure to open or complete the picker opens the error alert titled
+"Could not open the directory" (see "The error alert" in `docs/product/error-alerts.md`).
+
+**A browser, a remote daemon connection, or a client without a system directory picker uses the application's directory
+browser.** An unconfirmed daemon location also uses this browser, so Browse always selects from the host the projects
+live on. It lists directories only — a project is a directory — including entries whose name begins with a dot. Each
+entry is flagged with whether it is a git repository. Entries are sorted case-insensitively by name.
 
 In the browser, the listed directory's subdirectories are one list, with a parent-directory entry at its top except at
 the filesystem root — muted, marked with an up-arrow icon and labelled as the parent directory, which is also what it is

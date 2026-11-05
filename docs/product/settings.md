@@ -240,7 +240,7 @@ gate** (see "Protection" below).
 
 ### Default clone directory
 
-A text field with a folder icon in it and a **Browse** button beside it (the directory browser, see "Browsing
+A text field with a folder icon in it and a **Browse** button beside it (the directory picker, see "Browsing
 directories" in `docs/product/projects.md`), showing the directory a repository is cloned into when a project is added
 from a git URL and no other directory is named. It is `~/Projects` until the user sets one. The field shows the
 directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as in "How
@@ -249,14 +249,14 @@ differ; the tooltip is in monospace like the field and reads left to right in ev
 behaves" in `docs/product/labels-and-tooltips.md`). The daemon stores the directory expanded, as an absolute path
 without a trailing slash; a leading `~/` in what is sent is expanded again. The value is sent when the field loses focus
 or Enter is pressed, and at once when a directory is picked; a value equal to what the field shows unedited, or to the
-full path it stands for, sends nothing. Focus moving from the field into its Browse directory browser is not leaving it
-and sends nothing: a pick replaces what was typed and sends the picked directory, and a cancelled browser hands focus
+full path it stands for, sends nothing. Focus moving from the field into its Browse directory picker is not leaving it
+and sends nothing: a pick replaces what was typed and sends the picked directory, and a cancelled picker hands focus
 back to the field, whose next loss of focus sends what is typed. A mouse press on Browse leaves focus in the field until
-the browser opens. `Escape` while the field holds keyboard focus closes Settings and discards what was typed. It is the
+the picker opens. `Escape` while the field holds keyboard focus closes Settings and discards what was typed. It is the
 only exit that loses it: the close button, a press on the dimmed area around the dialog, and moving focus out of the
 field all save the typed path first. Once a send is answered the field shows the stored directory again, written as
 above. A value that is neither absolute nor starts with `~/` is refused with an error alert and the field returns to the
-stored one, and a blank value goes back to `~/Projects`. Browse opens the browser on the path the field holds — the
+stored one, and a blank value goes back to `~/Projects`. Browse opens the picker on the path the field holds — the
 stored directory until something is typed — by the rules every directory field's Browse follows, which also say where it
 opens on a relative path or on a directory that does not exist yet (see "Browsing directories" in
 `docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document.

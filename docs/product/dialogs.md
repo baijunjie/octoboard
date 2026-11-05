@@ -102,8 +102,8 @@ account.
 A form dialog opens with keyboard focus in its first text field, so the user can type at once and Enter submits the
 form, however it was opened — by the mouse, the keyboard, or a press without a pointer such as one from assistive
 technology: the Name field of a console, session or account dialog and of editing a project, the Directory field of adding a
-project, the field of a rename dialog, and the path field of the directory browser, where Enter lists the path typed. A
-field that appears only after a choice in the dialog does not take focus when it appears: switching a project session's
+project, the field of a rename dialog, and the path field of the application's directory browser, where Enter lists the
+path typed. A field that appears only after a choice in the dialog does not take focus when it appears: switching a project session's
 dialog between its **New conversation** and **Resume conversation** tabs leaves focus on the tab, and switching **Add
 project**'s **Source** to a git repository leaves it on that picker. A form dialog with no text field opens with focus
 on its submit button instead: the export dialog's **Export** button, and the import dialog's **Choose file** button in

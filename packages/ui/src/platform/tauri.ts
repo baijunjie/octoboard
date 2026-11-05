@@ -5,6 +5,7 @@ import type {
   BadgeCapability,
   ClipboardCapability,
   ConfigurationFileCapability,
+  DirectoryPickerCapability,
   ExitCapability,
   LinkCapability,
   MacosPermissionsCapability,
@@ -36,6 +37,7 @@ export function tauriPlatform(): PlatformAdapter {
     statusItem: tauriStatusItem(),
     clipboard: tauriClipboard(),
     configurationFile: tauriConfigurationFile(),
+    directoryPicker: tauriDirectoryPicker(),
     links: tauriLinks(),
     macosPermissions: tauriMacosPermissions(),
     backgroundRun: tauriBackgroundRun(),
@@ -281,6 +283,18 @@ function tauriConfigurationFile(): ConfigurationFileCapability {
         throw failure(err);
       });
       return opened ?? undefined;
+    },
+  };
+}
+
+function tauriDirectoryPicker(): DirectoryPickerCapability {
+  return {
+    async pick({ title, initialPath }) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const picked = await invoke<string | null>("pick_directory", { title, initialPath }).catch((err: unknown) => {
+        throw new Error(shellFailure(err).detail ?? (err instanceof Error ? err.message : String(err)));
+      });
+      return picked ?? undefined;
     },
   };
 }

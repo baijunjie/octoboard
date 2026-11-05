@@ -1,10 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { daemonWsUrl, resolveDaemonAddress, resolveRecovered } from "./daemon";
+import { daemonWsUrl, isLocalDaemon, resolveDaemonAddress, resolveRecovered } from "./daemon";
 import type { PlatformAdapter } from "./platform";
 
 const platform = { kind: "tauri" } as PlatformAdapter;
+
+it.each([
+  ["ws://127.0.0.1:4242", true],
+  ["ws://localhost:4242", true],
+  ["wss://[::1]:4242", true],
+  ["ws://192.168.1.2:4242", false],
+  ["wss://remote.example", false],
+  ["ws://localhost.remote.example", false],
+  ["not an address", false],
+])("identifies whether %s shares the local filesystem", (origin, local) => {
+  expect(isLocalDaemon({ origin, key: "test" })).toBe(local);
+});
 
 function openAt(search: string): void {
   window.history.replaceState({}, "", `/${search}`);

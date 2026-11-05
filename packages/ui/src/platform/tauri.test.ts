@@ -53,6 +53,20 @@ it("answers nothing for a dialog the user dismissed", async () => {
   await expect(tauriPlatform().configurationFile!.save("a.json", "{}")).resolves.toBeUndefined();
 });
 
+it("returns the system directory choice and sends the starting path and localized title", async () => {
+  invoke.mockResolvedValue("/Users/me/code");
+  const options = { title: "Choose directory", initialPath: "~/code" };
+  await expect(tauriPlatform().directoryPicker!.pick(options)).resolves.toBe("/Users/me/code");
+  expect(invoke).toHaveBeenCalledWith("pick_directory", options);
+  invoke.mockResolvedValue(null);
+  await expect(tauriPlatform().directoryPicker!.pick(options)).resolves.toBeUndefined();
+});
+
+it("turns a directory command failure into an Error for the shared error route", async () => {
+  invoke.mockRejectedValue({ kind: "io", detail: "Could not open picker" });
+  await expect(tauriPlatform().directoryPicker!.pick({ title: "Choose directory", initialPath: "~" })).rejects.toThrow("Could not open picker");
+});
+
 it("asks the shell to relaunch only when told to", async () => {
   invoke.mockResolvedValue(undefined);
   await tauriPlatform().exit!.confirmQuit();

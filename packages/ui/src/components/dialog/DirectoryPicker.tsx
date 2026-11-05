@@ -23,6 +23,9 @@ import { Dialog } from "./Dialog";
 import { useRefocusIfLost } from "./dialogHooks";
 import { useTrimmedField } from "../form/useTrimmedField";
 import { raiseError } from "../alerts/raiseError";
+import { useOptionalPlatform } from "../../platform/react";
+import type { DirectoryPickerCapability } from "../../platform";
+import { useLatest } from "../hooks/useLatest";
 
 /** The ids of the list's two entries that are not a directory. A real entry's id is its absolute
  * path, which neither of these can be. */
@@ -295,7 +298,8 @@ export function pickerStart(value: string): string {
   return isAbsoluteOrHomePath(value) ? value.trim() : "~";
 }
 
-/** The Browse button of a directory field and the picker it opens, which fills the field through `onPick`. The picker is
+/** The Browse button of a directory field and the picker it opens, which fills the field through `onPick`. A native
+ * picker is used only when the daemon shares the shell's filesystem. The fallback picker is
  * returned apart from the button: it goes beside the field's form, never inside the field (a `TextInput`'s `trailing`), whose
  * react-aria contexts the picker's own input would otherwise take over. `picking` is whether the picker is open,
  * for a field that must tell focus moving into the picker from the user leaving it. */
@@ -308,22 +312,86 @@ export function useDirectoryBrowse(
   picking: boolean;
 } {
   const t = useT();
-  const [picking, setPicking] = useState(false);
+  const daemon = useDaemon();
+  const platform = useOptionalPlatform();
+  const native = platform?.kind === "tauri" && daemon.isLocal ? platform.directoryPicker : undefined;
+  const [pending, setPending] = useState<{
+    value: string;
+    daemon: typeof daemon;
+    native: DirectoryPickerCapability | undefined;
+    title: string;
+    failureTitle: string;
+    focus: HTMLElement | null;
+  }>();
+  const busy = useRef(false);
+  const operation = useRef<{ pending: typeof pending; promise: Promise<string | undefined>; valid: boolean } | undefined>(undefined);
+  const pick = useLatest(onPick);
+  useEffect(() => {
+    if (!pending) return;
+    const valid = pending.value === value && pending.daemon === daemon && pending.native === native;
+    if (!pending.native && !valid) {
+      busy.current = false;
+      setPending(undefined);
+      return;
+    }
+    if (!pending.native) return;
+    // Opening after the state commits lets a field's blur handler see `picking`. Keep the same
+    // operation through an effect replay: a system dialog cannot be closed by an effect cleanup.
+    if (operation.current?.pending !== pending) {
+      operation.current = {
+        pending,
+        promise: Promise.resolve().then(() => pending.native!.pick({ title: pending.title, initialPath: pickerStart(pending.value) })),
+        valid,
+      };
+    }
+    const current = operation.current;
+    if (!valid) current.valid = false;
+    let active = true;
+    const finish = () => {
+      busy.current = false;
+      setPending(undefined);
+      if (current.valid && pending.focus?.isConnected) pending.focus.focus();
+    };
+    void current.promise.then(
+      (path) => {
+        if (!active) return;
+        finish();
+        if (current.valid && path !== undefined) pick.current(path);
+      },
+      (err: unknown) => {
+        if (!active) return;
+        finish();
+        if (current.valid) raiseError(err, { title: pending.failureTitle });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [pending, value, daemon, native, pick]);
+  const close = () => {
+    busy.current = false;
+    setPending(undefined);
+  };
+  const picking = !!pending;
   return {
     browseButton: ({ isDisabled, preventFocusOnPress } = {}) => (
-      <Button type="button" variant="secondary" isDisabled={isDisabled} preventFocusOnPress={preventFocusOnPress} onPress={() => setPicking(true)}>
+      <Button type="button" variant="secondary" isDisabled={isDisabled} isPending={picking} preventFocusOnPress={preventFocusOnPress} onPress={() => {
+        if (busy.current) return;
+        busy.current = true;
+        setPending({ value, daemon, native, title: t("dialog.chooseDirectory"), failureTitle: t("directoryPicker.navigationFailedTitle"), focus: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+      }}>
         {t("common.browse")}
       </Button>
     ),
-    picker: picking ? (
+    picker: pending && !pending.native ? (
       <DirectoryPicker
         title={t("dialog.chooseDirectory")}
         initialPath={pickerStart(value)}
         onPick={(picked) => {
           onPick(picked);
-          setPicking(false);
+          close();
         }}
-        onClose={() => setPicking(false)}
+        onClose={close}
       />
     ) : null,
     picking,

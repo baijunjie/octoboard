@@ -51,6 +51,16 @@ export function daemonWsUrl(address: DaemonAddress, path: string): string {
   return `${address.origin}${path}?key=${encodeURIComponent(address.key)}`;
 }
 
+/** Only loopback addresses establish that the daemon shares this machine's filesystem. */
+export function isLocalDaemon(address: DaemonAddress): boolean {
+  try {
+    const { hostname, protocol } = new URL(address.origin);
+    return (protocol === "ws:" || protocol === "wss:") && ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * When the daemon failed to start at all (another instance already holds its lock, a corrupt
  * database, ...), the Tauri shell still opens the window rather than leaving the user staring at

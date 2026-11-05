@@ -9,6 +9,7 @@
 mod background;
 mod configuration_file;
 mod diagnostics;
+mod directory_picker;
 mod exit;
 mod menu;
 mod notification_settings;
@@ -58,8 +59,7 @@ pub fn run() {
         // The frontend writes text to the clipboard through it (the webview's own clipboard API is
         // refused outside a secure context, which the custom scheme may not count as).
         .plugin(tauri_plugin_clipboard_manager::init())
-        // The system's save and open dialogs, which `configuration_file.rs` raises itself for the
-        // configuration export and import; the page is given none of the plugin's own commands.
+        // The system's file and directory dialogs; the page is given none of the plugin's own commands.
         .plugin(tauri_plugin_dialog::init())
         // Driven from `updater.rs` through its own commands; the page is given none of the plugin's own.
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -82,6 +82,7 @@ pub fn run() {
             notification_settings::macos_open_notification_settings,
             configuration_file::save_configuration_file,
             configuration_file::open_configuration_file,
+            directory_picker::pick_directory,
             updater::check_for_update,
             updater::install_update
         ])

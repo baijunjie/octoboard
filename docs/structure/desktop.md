@@ -9,8 +9,8 @@ UI of its own: the window loads the UI of `packages/ui/`, bundled at build time,
 The shell never carries daemon traffic. The UI talks to the daemon over the WebSocket/HTTP protocol
 ([`PROTOCOL.md`](../../apps/daemon/PROTOCOL.md)); the shell bakes the daemon's port and per-launch key and the system's
 preferred languages into the window's URL, restarts a daemon that ends unexpectedly and points the window at it, and
-passes only bare signals, display values, opaque ids, macOS privacy grants, update information and the text of a file
-the user saves or opens through the system dialog over IPC.
+passes only bare signals, display values, opaque ids, macOS privacy grants, update information, the text of a file
+the user saves or opens through the system dialog, and the path of a directory the user chooses there over IPC.
 
 Paths in this doc that do not start with `apps/` or `packages/` are relative to `apps/desktop/`.
 
@@ -25,7 +25,7 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 | `src/sidecar.rs`, `src/recovery.rs` | Starting `octoboardd`, parsing its handshake line into the daemon's address, keeping `DaemonState` and a tail of its stderr; restarting a daemon that ended, with a budget and backoff, and telling the window when the budget is spent or when an installed update is waiting for its restart (the daemon is then left alone) |
 | `src/exit.rs`, `src/background.rs` | The exit-confirmation flow and the `applicationShouldTerminate:` override; running in the background behind the menu bar icon, `bring_to_front` |
 | `src/menu.rs`, `src/tray/` | The native menu bar built from the UI's labels; the menu bar icon: `mod.rs` creation and `set_tray_menu`, `model.rs` the menu as the UI sends it, `items.rs` native items, `menu_tracking.rs`, `finish.rs`, `status_item.rs`, `icon.rs`, `lines.rs` the custom session and meter rows, `openers.rs` the quota openers (the rows that open a quota submenu). The model carries no agent knowledge: the UI sends each window's and meter's fill colour |
-| `src/permissions.rs`, `src/notification_settings.rs`, `src/configuration_file.rs`, `src/updater.rs` | The IPC commands for macOS privacy grants, the Notifications settings pane, the configuration file dialogs, and checking for and installing updates |
+| `src/permissions.rs`, `src/notification_settings.rs`, `src/configuration_file.rs`, `src/directory_picker.rs`, `src/updater.rs` | The IPC commands for macOS privacy grants, the Notifications settings pane, the configuration file dialogs, the system directory picker, and checking for and installing updates |
 | `src/system_settings.rs` | The one way the shell opens a System Settings pane (`open_system_settings`), and the address tables of the privacy and notification panes; `permissions.rs` and `notification_settings.rs` go through it |
 | `src/window_state.rs`, `src/page_isolation.rs`, `src/diagnostics.rs` | Remembering and validating the window frame; the WebKit content rule list blocking non-image `http(s)` requests (with a development-only localhost exception); the `diagnostic!` log to stderr and `desktop.log` |
 | `capabilities/default.json`, `permissions/*.toml` | The IPC allowlist and the app-defined permission files it names |
@@ -45,9 +45,10 @@ Commands permitted through `capabilities/default.json` and `permissions/*.toml`:
 (`frontend_exit_heartbeat`, `confirm_quit`, `daemon_exit_detail`), `set_menu_labels`, `set_tray_menu`,
 `set_run_in_background`, `bring_to_front`, `macos_permissions_status`, `macos_request_permission`,
 `macos_open_privacy_settings`, `macos_open_notification_settings`, `save_configuration_file`, `open_configuration_file`,
-`check_for_update` and `install_update`. Events to the webview: `settings-requested`, `about-requested`,
-`tray-session-chosen`, `tray-menu-opened`, `exit-requested` and `daemon-exited`. `packages/ui/src/platform/tauri.ts`
-maps commands and events onto the platform adapter's capabilities; it is the UI's only counterpart of this surface.
+`pick_directory`, `check_for_update` and `install_update`. Events to the webview: `settings-requested`,
+`about-requested`, `tray-session-chosen`, `tray-menu-opened`, `exit-requested` and `daemon-exited`.
+`packages/ui/src/platform/tauri.ts` maps commands and events onto the platform adapter's capabilities; it is the UI's
+only counterpart of this surface.
 
 ## Dependency direction
 

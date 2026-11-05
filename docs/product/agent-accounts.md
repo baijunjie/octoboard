@@ -457,7 +457,7 @@ user first (see "Starting a session on an account whose last change is incomplet
 agent of the tab in view — every added agent is listed, in the list's order (every agent while the list is undecided),
 and can be picked, one that is not installed included and marked with a Not installed badge after its name, since an
 account may be set up before its agent is, unlike the agent pickers elsewhere (see "Which agents the agent pickers list"
-in `docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the directory browser
+in `docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the directory picker
 (see "Browsing directories" in `docs/product/projects.md`). Editing an account offers its name and its directory, never
 its agent: a directory belongs to one agent's layout. The directory is checked for being absolute (or starting with
 `~/`) and for not being already used by another account of the same agent, the default account included (the full rules
@@ -474,7 +474,7 @@ directory. Removing an account alone does not free a number while its directory 
 path nor an account's reference to it remains, that number can be used again. For example, with `~/.claude-2` still
 occupied and `~/.claude-1` free, the next Claude Code account starts with `~/.claude-1`.
 
-The generated directory follows the agent choice until the user types a directory or chooses one in the browser;
+The generated directory follows the agent choice until the user types a directory or chooses one in the picker;
 after that, changing the agent or finishing the directory lookup keeps what the user entered, even if it is blank.
 Editing an account keeps its existing directory. While the home directory is being read, a new account's directory
 field is empty and can be filled manually. If that lookup fails, the field stays empty and a compact error alert

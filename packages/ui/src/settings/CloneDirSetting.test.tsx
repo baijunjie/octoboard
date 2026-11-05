@@ -134,3 +134,32 @@ it("does not send what is typed when focus moves into the picker, and sends it o
   act(() => input.blur());
   expect(sent()).toEqual([[{ type: "update_settings", default_clone_dir: "/srv/repos" }]]);
 });
+
+it.each([undefined, "/srv/chosen"])("holds a typed draft during native browsing and saves only a chosen directory (%s)", async (picked) => {
+  let finish!: (path: string | undefined) => void;
+  const pending = new Promise<string | undefined>((resolve) => { finish = resolve; });
+  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
+  const pick = vi.fn(() => { input.blur(); return pending; });
+  const host = mountHost(<CloneDirSetting />, {
+    daemon: testDaemon({ isLocal: true, state: { settings: { ...DEFAULT_SETTINGS, default_clone_dir: "/home/dev/Projects" }, homeDir: "/home/dev" }, request }),
+    platform: { kind: "tauri", directoryPicker: { pick } },
+  });
+  const input = host.querySelector("input")!;
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, " /srv/draft ");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  });
+  await act(async () => host.querySelector("button")!.click());
+  expect(pick).toHaveBeenCalledExactlyOnceWith({ title: "Choose a directory", initialPath: "/srv/draft" });
+  expect(request).not.toHaveBeenCalled();
+  await act(async () => finish(picked));
+  expect(document.activeElement).toBe(input);
+  if (picked) expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", default_clone_dir: picked });
+  else {
+    expect(request).not.toHaveBeenCalled();
+    act(() => input.blur());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", default_clone_dir: "/srv/draft" });
+    await act(async () => {});
+  }
+});

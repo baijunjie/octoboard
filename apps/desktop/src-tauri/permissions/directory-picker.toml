@@ -1,0 +1,6 @@
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-directory-picker"
+description = "Allows the frontend to ask the user for a directory in the system's dialog and receive its path."
+commands.allow = ["pick_directory"]

@@ -33,7 +33,7 @@ pub enum FileError {
 }
 
 impl FileError {
-    fn io(err: impl ToString) -> Self {
+    pub(crate) fn io(err: impl ToString) -> Self {
         Self::Io(err.to_string())
     }
 }

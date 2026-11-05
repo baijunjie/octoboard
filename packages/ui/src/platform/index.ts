@@ -45,6 +45,8 @@ export interface PlatformAdapter {
    * each through the system's own dialog. Present wherever the environment offers a way to
    * do both. */
   readonly configurationFile?: ConfigurationFileCapability;
+  /** Choosing a directory on the machine running the shell, through the system's own dialog. */
+  readonly directoryPicker?: DirectoryPickerCapability;
   /** Opening an address in the user's own browser (or mail client), for a link the UI shows but
    * must not navigate its own window to. */
   readonly links?: LinkCapability;
@@ -337,6 +339,12 @@ export interface ConfigurationFileCapability {
    * `undefined` when the user dismissed the dialog; rejects with a `ConfigurationFileError` when
    * the file could not be read. */
   open(): Promise<OpenedConfigurationFile | undefined>;
+}
+
+export interface DirectoryPickerCapability {
+  /** Opens at `initialPath` (absolute, `~` or beneath it), or its nearest existing ancestor. Resolves with the
+   * chosen absolute path, or `undefined` when dismissed; rejects when the shell cannot open the picker. */
+  pick(options: { title: string; initialPath: string }): Promise<string | undefined>;
 }
 
 export interface LinkCapability {
