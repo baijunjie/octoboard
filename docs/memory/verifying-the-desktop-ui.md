@@ -165,6 +165,11 @@ so a contrast ratio measured from one differs from the ratio the tokens give by 
 confirming which side of a threshold a pair lands on, and never for correcting a token-derived ratio recorded in the
 stylesheet or the accessibility standard.
 
+When an installed app shows a paint defect that a verification clone does not, compare in the same packaged native
+shell, on the same display and at the same window size before treating the difference as a code result. First
+reproduce the reported defect with an unmodified baseline under those conditions, then compare the candidate there;
+a candidate looking stable where the baseline also looks stable does not establish a fix.
+
 A scrollbar's own footprint is one layout question that check cannot answer, however much else it settles: Playwright's
 WebKit draws overlay scrollbars only — headless and headed, at `scrollbar-width` `auto` or `thin`, and even with macOS
 set to show scroll bars always — so a scroller over content larger than its box on both axes reports
