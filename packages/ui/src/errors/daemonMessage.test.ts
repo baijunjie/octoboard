@@ -526,7 +526,7 @@ it("words a session that did not stop as possibly still running, and a resume th
 it.each([
   ["ambiguous", "is in the project’s folder in more than one worktree", "在多个工作树的项目文件夹中都存在"],
   ["launchable", "is something the system would run", "是系统会运行的内容"],
-  ["not_private", "can be changed by other users of this machine", "可被此设备上的其他用户修改"],
+  ["not_private", "can be changed by other users", "可被其他用户修改"],
   ["not_a_file_or_folder", "is not a file or folder", "不是文件或文件夹"],
   ["unreadable", "could not be read, so it is not opened", "无法读取"],
   ["other", "cannot be opened from a link", "无法通过链接打开"],

@@ -780,7 +780,7 @@ it.each([
   const dialogs = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')];
   if (addAgent) {
     expect(dialogs).toHaveLength(1);
-    expect(dialogs[0]!.textContent).toContain("Only an agent installed on this machine can be added.");
+    expect(dialogs[0]!.textContent).toContain("Only an installed agent can be added.");
   } else {
     expect(dialogs).toHaveLength(0);
   }

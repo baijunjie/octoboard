@@ -146,14 +146,14 @@ it("shows a row for every project with where it was found and the labelled paths
   expect(row("Design System").textContent).toContain("Not found; can be cloned from its remote");
   // A project found nowhere has no status line: a warning mark after its name says so. Notes also names an
   // account that is not set up: the same point, so one mark, which says both.
-  expect(row("Notes").textContent).not.toContain("Not found on the daemon host");
+  expect(row("Notes").textContent).not.toContain("No matching project folder was found.");
   expect(row("Notes").querySelectorAll("button[data-status-mark]")).toHaveLength(1);
   const label = `${isolate("Notes")} not found, and accounts not set up`;
   const mark = row("Notes").querySelector<HTMLButtonElement>(`button[aria-label='${label}']`)!;
   expect(mark).not.toBeNull();
   act(() => mark.click());
   const popover = document.querySelector(`[role=dialog][aria-label='${label}']`)?.textContent;
-  expect(popover).toContain("Not found on the daemon host.");
+  expect(popover).toContain("No matching project folder was found.");
   expect(popover).toContain("It is skipped unless you choose a directory for it.");
   expect(popover).toContain("The Codex account Personal is not set up here");
   // Leaving a project out places it nowhere: only the exported path is left to show.
@@ -273,7 +273,7 @@ it("says what the document's keyboard shortcuts would do on this device", async 
   await reviewingSettings({ text: withShortcuts({ lock: LOCK, bad: 1 }) });
   expect(settingLines()["Keyboard shortcuts"]).toEqual({
     badge: "Set to the file's",
-    note: "1 of the file's shortcuts differs from the default. They apply to this device or browser only.",
+    note: "1 of the file's shortcuts differs from the default. Shortcut changes apply only to this browser.",
     values: ["Lock or unlock the session: ⇧⌃K (now ⇧⌃L)"],
   });
 });
@@ -308,7 +308,7 @@ it("puts every shortcut back to its default when the document carries an empty s
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ pin: PIN });
   await reviewingSettings({ text: withShortcuts({}), reply: echoing() });
-  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "They apply to this device or browser only.", values: ["Pin or unpin the session: ⇧⌃P (now ⇧⌃J)"] });
+  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "Shortcut changes apply only to this browser.", values: ["Pin or unpin the session: ⇧⌃P (now ⇧⌃J)"] });
   expect(text()).not.toContain("0 of them");
   await press("Import");
   expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });

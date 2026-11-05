@@ -51,13 +51,13 @@ it("leaves full project paths out by default, with no warning about them, before
 
 const hint = () => document.getElementById(pathsBox().getAttribute("aria-describedby")!.split(" ")[0]!)!;
 
-it("warns under the option, while it is checked, that the file carries project paths and whose", async () => {
+it("warns under the option, while it is checked, that the file carries project paths and what they may reveal", async () => {
   mount();
   await act(async () => pathsBox().click());
   const alert = document.body.querySelector<HTMLElement>("[data-slot=alert-root]")!;
   expect(alert).not.toBeNull();
   expect(alert.textContent).toContain("The file contains project paths");
-  expect(alert.textContent).toContain("the machine running Octoboard, which may not be the device you are using now");
+  expect(alert.textContent).toContain("Project paths can reveal details such as your user name and folder names.");
   expect(alert.textContent).toContain("Share the file only with people you trust.");
   // A warning about the choice, not about state: no mark beside the option, and the checkbox is named by its label
   // alone.
@@ -86,7 +86,7 @@ it("reaches a screen-reader user: described by the checkbox while checked, and s
   await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   const spoken = alert.querySelector("[role=alert]")!;
   expect(spoken.textContent).toContain("The file contains project paths.");
-  expect(spoken.textContent).toContain("which may not be the device you are using now");
+  expect(spoken.textContent).toContain("Project paths can reveal details such as your user name and folder names.");
   expect(spoken.textContent).not.toContain("Share the file only with people you trust.");
   await act(async () => box.click());
   expect(box.getAttribute("aria-describedby")!.split(" ")).toEqual([hint().id]);

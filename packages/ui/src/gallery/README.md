@@ -33,9 +33,10 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   as the real daemon would, an exit transition that never ends) is painted over the page as a `[data-gallery-failure]` overlay
   (`packages/ui/src/fixtures/banner.ts`); check a capture for it.
 - `chrome=1` in a frame URL gives the page the desktop window's `windowChrome` capability, so what only the desktop app
-  offers can be driven in a browser. A scenario's `desktopApp` gives it that and the native menu bar as well, for a view
-  that exists only in the app (the full Keyboard shortcuts list). Which keys are drawn (⌘ or Ctrl) and whether Back and
-  Forward are listed follow the platform the gallery is viewed in; steps press keys with `ui.chord`, which turns a
+  offers can be driven in a browser, while keeping the browser platform kind. A scenario's `desktopApp` gives it that,
+  the native menu bar and the desktop platform kind, for a view that exists only in the app (the full Keyboard
+  shortcuts list). Which keys are drawn (⌘ or Ctrl) and whether Back and Forward are listed follow the platform the
+  gallery is viewed in; steps press keys with `ui.chord`, which turns a
   portable binding into that platform's.
 - A scenario with `liveChanges` lists them as buttons beside the other controls, offered once its page is ready. Each
   makes what another window or the machine would while the view is on screen (an account added, a terminal closed there,

@@ -34,6 +34,7 @@ const text = (container: HTMLElement) => container.textContent ?? "";
 
 it("lists only the commands this client has, and says the fixed ones cannot be changed", () => {
   const browser = mount();
+  expect(text(browser)).toContain("Shortcut changes apply only to this browser.");
   expect(text(browser)).toContain("Toggle focus mode");
   expect(text(browser)).toContain("Next region of the window");
   expect(text(browser)).not.toContain("Back");
@@ -48,6 +49,7 @@ it("lists only the commands this client has, and says the fixed ones cannot be c
 
 it("lists the desktop app's own commands and the native menu's fixed keys there", () => {
   const app = mount(APP);
+  expect(text(app)).toContain("Shortcut changes apply only to this desktop app.");
   expect(text(app)).toContain("Open settings");
   expect(text(app)).toContain("Next console session");
   expect(text(app)).toContain("Undo");

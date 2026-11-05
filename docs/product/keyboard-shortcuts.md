@@ -72,8 +72,9 @@ Settings" in `docs/product/settings.md`; Find in file, which acts only in the fi
 
 The section sits after Notifications and before Configuration in Settings (see `docs/product/settings.md`). A paragraph
 under its heading says that the app's own commands can be changed, that the keys of the system, the window and the file
-viewer are listed too and cannot be, and that the changes apply to this device or browser only. Beside it, only while
-at least one shortcut differs from its default, is a **Restore defaults** button.
+viewer are listed too and cannot be, and that the changes apply only to the current desktop app or, when viewed in a
+browser, the current browser. Beside it, only while at least one shortcut differs from its default, is a **Restore
+defaults** button.
 
 Each group has a heading, and each command a row: its name, then its current key caps, and then either a **Change**
 button — with a **Reset** button after it while the command's shortcut differs from its default — or, for a key that

@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "../components/controls/Button";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { bindingOf, bindingsEqual, describeBinding, isModifierCode, type Binding } from "../shortcuts/binding";
@@ -24,6 +25,7 @@ import { SettingsGroup } from "./SettingsGroup";
 export function ShortcutsSection(): React.ReactElement {
   const t = useT();
   const platform = usePlatform();
+  const shortcutScope = useShortcutScopeDescription();
   const client = { windowChrome: platform.windowChrome !== undefined, nativeMenu: platform.appMenu !== undefined };
   const bindings = useBindings();
   const customised = Object.keys(shortcutOverrides.useValue()).length > 0;
@@ -129,7 +131,7 @@ export function ShortcutsSection(): React.ReactElement {
     <div ref={root}>
       <StatusAnnouncer text={announcement && (announcement.count % 2 === 0 ? `${announcement.text}\u00A0` : announcement.text)} />
       <div className="flex flex-col items-start gap-3 pb-2 tablet:flex-row tablet:items-center tablet:justify-between tablet:gap-6">
-        <p className="min-w-0 text-sm text-app-muted">{t("settings.shortcuts.intro")}</p>
+        <p className="min-w-0 text-sm text-app-muted">{`${t("settings.shortcuts.description")}${t("common.sentenceSeparator")}${shortcutScope}`}</p>
         {customised && (
           <Button
             size="sm"

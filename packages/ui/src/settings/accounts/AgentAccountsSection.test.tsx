@@ -433,7 +433,7 @@ it("shows an empty state with Add agent, and no strip or Add account, when no ag
 it("opens the Add agent dialog from its button", () => {
   const { container } = mount();
   act(() => buttonNamed(container, "Add agent")!.click());
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Only an agent installed on this machine can be added.");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Only an installed agent can be added.");
 });
 
 it("opens the Add agent dialog once when Settings asked for it, and takes the request up", () => {
@@ -450,7 +450,7 @@ it("opens the Add agent dialog once when Settings asked for it, and takes the re
   });
   render(true);
   expect(consume).toHaveBeenCalledOnce();
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Only an agent installed on this machine can be added.");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Only an installed agent can be added.");
   // Taken up, the request is gone: the section returning later (another section shown meanwhile) does not reopen it.
   act(() => root.unmount());
   const second = document.body.appendChild(document.createElement("div"));

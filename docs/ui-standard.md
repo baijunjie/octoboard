@@ -244,6 +244,26 @@ highlights in the project's `--find-match-bg`, with the current match in `--find
 `--find-current-fg` and underlined, so the current one is not told by colour alone; code and document text keep 4.5:1
 on the match fill. The bar floats over its content as a `floating-surface`.
 
+## Machine and platform perspective in copy
+
+Prefer wording that is accurate both in the desktop app and in a browser connected to a server. Describe the
+operation, scope or consequence without explaining where a service runs when that location does not help the user
+act: project paths can reveal user and folder names; an import may not find a matching project folder.
+
+When location matters, distinguish the environment where sessions run from the interface the user is viewing.
+Installation and project-directory instructions concern the session environment; clipboard access, file downloads,
+notifications and keyboard-shortcut preferences concern the current interface. Do not use an unqualified "this
+machine" or "your device" for server-side files or tools.
+
+Use the shared platform adapter and its capabilities for differences in what the user must do, such as opening
+system notification settings versus browser site settings. Desktop versus browser is not itself a local-versus-remote
+connection test, and a loopback address may be an SSH tunnel. Do not introduce per-component hostname or user-agent
+heuristics to select a perspective; where the connection does not establish locality, use wording that remains
+accurate without that assumption. Keep all translations aligned with the same scope.
+
+Keyboard-shortcut scope descriptions use the shared `useShortcutScopeDescription` hook: desktop app versus browser
+comes from the platform adapter's `kind`, independently of where sessions run.
+
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, except for the collection-row

@@ -166,7 +166,7 @@ describe("closing the Add agent dialog put in front of Settings with no agent ad
         framesAsTimers(modality);
         openSettings({ addAgent: true }, strict);
         await settleFrames();
-        expect(inFront().textContent).toContain("Only an agent installed on this machine can be added.");
+        expect(inFront().textContent).toContain("Only an installed agent can be added.");
         await pressButton("Close");
         await settleFrames();
         expect(dialogCount()).toBe(1);

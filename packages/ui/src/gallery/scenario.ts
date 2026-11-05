@@ -118,7 +118,7 @@ export interface Scenario extends Fixture {
   macosSettingsOpenError?: string;
   /** The platform has what the desktop app's window has, so a view that lists or uses it shows the app's: the
    * window chrome (the `chrome=1` of the frame URL, which a view that exists only in the app cannot leave to
-   * the address) and the native menu bar. */
+   * the address), the native menu bar and the desktop platform kind. */
   desktopApp?: boolean;
   /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
    * it is shown; the browser platform has none. */

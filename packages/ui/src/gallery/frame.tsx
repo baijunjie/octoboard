@@ -70,7 +70,7 @@ let daemonExited: ((detail: string) => void) | undefined;
 /** The browser platform, with what the desktop app alone offers added so it can be driven in the
  * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
  * between console sessions; it also puts the top bar's drag region on) and, with the scenario's
- * `desktopApp`, the native menu bar (which no menu is drawn for), the macOS privacy grants stubbed
+ * `desktopApp`, the desktop platform kind and native menu bar (which no menu is drawn for), the macOS privacy grants stubbed
  * from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
  * `macosSettingsOpenError`), there being no other
  * way to look at those rows than to really change a system setting, a link opener that refuses with
@@ -84,7 +84,7 @@ let daemonExited: ((detail: string) => void) | undefined;
  * quit request is raised once its steps have run and whose confirmation ends nothing (or fails with
  * the text of its `exitFailure`), the daemon exiting by itself for a scenario that says
  * `daemonExited`, and the updater for a scenario that has one (`updater`), with that same exit
- * capability, since a restart goes through it. Nothing else native. */
+ * capability, since a restart goes through it. Nothing else native; `chrome=1` alone keeps the browser platform kind. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
@@ -93,6 +93,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   let clipboardText = typeof scenario?.clipboard === "object" ? scenario.clipboard.text : "";
   return {
     ...platform,
+    kind: scenario?.desktopApp ? "tauri" : platform.kind,
     ...((params.get("chrome") === "1" || scenario?.desktopApp) && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
     ...(scenario?.desktopApp && { appMenu: { onSettingsRequested: () => () => {}, onAboutRequested: () => () => {}, setLabels: async () => {} } }),
     ...(grants && {

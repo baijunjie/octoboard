@@ -53,11 +53,11 @@ sentence.
   an import can look for the project there first; while checked, that an import first looks for each project at its
   recorded full path. Only while it is checked, and so before anything is saved, a warning alert stands directly under
   it (see "Warnings about a choice being made" in `docs/product/error-alerts.md`), titled that the file contains
-  project paths: these are paths on the machine running Octoboard, which may not be the device the user is on, and they
-  can reveal details such as the user name; the thing to do is to share the file only with people the user trusts.
+  project paths: they can reveal details such as user and folder names; the thing to do is to share the file only with
+  people the user trusts.
 - A group headed **Global settings**, with two checkboxes. **Application settings**, checked by default whichever
-  consoles are chosen, notes that it includes the settings that apply to every console, this device's keyboard
-  shortcuts among them. **Accounts**, unchecked by default, notes that it includes the account names, their
+  consoles are chosen, notes that it includes the settings that apply to every console and the current keyboard
+  shortcuts. **Accounts**, unchecked by default, notes that it includes the account names, their
   configuration directories, their sharing and turned-off choices, their order and the added agents, and that no login
   credentials are included, so the accounts are to be logged in again after an import. Neither note changes with the
   other choices.
@@ -120,8 +120,8 @@ A **project's row** has the project's name and, under it, where the daemon found
 default clone directory, or not found but able to be cloned from its remote. That line follows what was found, whatever
 choice is then made. A project with nothing offered, and so no default (see "Where an imported project goes" in
 `docs/product/configuration-export-and-import.md`), has no such line: an amber warning mark follows its name instead,
-named after the project as not found, whose popover says that it was not found on the machine running Octoboard and
-that it is left out unless a directory is chosen for it. A project not found that also has account fallbacks still has
+named after the project as not found, whose popover says that no matching project folder was found and that it is left
+out unless a directory is chosen for it. A project not found that also has account fallbacks still has
 this one mark, named after the project as not found and with accounts not set up, its popover adding the fallbacks'
 sentences (see "Account fallbacks" below) after its own. The choice of where the project goes sits at the end of the
 name's line, and drops under it where the row is narrow; its accessible name is "Where to place" followed by the
@@ -206,10 +206,11 @@ now. A line with no item to list is badged **No change**, so a changing badge ne
 - **Agent tags**, present when the document carries tags for an agent this build knows: badged **Set to the file's**, it
   lists each such agent whose tags would change, its tags shown as tags, or **No tags** for none.
 - **Keyboard shortcuts**, present when the document carries them: badged **Set to the file's**, with how many of the
-  file's shortcuts differ from the defaults — counting only those that can be used here — and that they apply to this
-  device or browser only; or **Back to defaults**, when none of them does, with that it applies to this device or
-  browser only. Under that note it lists each command whose shortcut would change, the shortcuts shown as key caps. It
-  is **No change** when the file's shortcuts are the ones this device already has.
+  file's shortcuts differ from the defaults — counting only those that can be used here — and that changes apply only
+  to the current desktop app or, when importing in a browser, the current browser; or **Back to defaults**, when none
+  of them does, with the same scope note. Under that note it
+  lists each command whose shortcut would change, the shortcuts shown as key caps. It is **No change** when the file's
+  shortcuts are the ones the current client already has.
 
 Whether the settings are applied is the **Application settings** checkbox of What to import; the card has no choice of
 its own.

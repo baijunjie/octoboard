@@ -145,7 +145,7 @@ export function ExportConfigurationDialog({
           title={t("configuration.export.paths.title")}
           remedy={t("configuration.export.paths.remedy")}
         >
-          <Message id="configuration.export.paths.description" />
+          <Message id="configuration.export.paths.privacy" />
         </ChoiceWarning>
       )}
       <LabelledGroup label={t("configuration.export.global")}>

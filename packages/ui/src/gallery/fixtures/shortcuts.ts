@@ -51,7 +51,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in a browser",
     description:
-      "Only what a browser has is listed: under Navigation the two Fixed region keys, then Focus mode and Sessions with a Change button per command, each key drawn as key caps. Back and Forward, the console-session switch and the native-menu groups (Application, Window) are left out. Editing is listed with only Find in file, also Fixed. A line above says the changes apply to this device or browser only, and there is no Restore defaults while every key is a default.",
+      "Only what a browser has is listed: under Navigation the two Fixed region keys, then Focus mode and Sessions with a Change button per command, each key drawn as key caps. Back and Forward, the console-session switch and the native-menu groups (Application, Window) are left out. Editing is listed with only Find in file, also Fixed. A line above says shortcut changes apply only to the current browser, and there is no Restore defaults while every key is a default.",
     state,
     steps: openSection,
   },
@@ -61,7 +61,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the desktop app",
     description:
-      "Every group is listed: Navigation (Back and Forward appear only where the window itself reports macOS, the console-session switch as ⌃Tab and ⇧⌃Tab), Focus mode, Sessions, Application with Open settings, then Editing and Window below it, where the dialog scrolls and every row reads Fixed instead of Change.",
+      "The introduction says shortcut changes apply only to the current desktop app. Every group is listed: Navigation (Back and Forward appear only where the window itself reports macOS, the console-session switch as ⌃Tab and ⇧⌃Tab), Focus mode, Sessions, Application with Open settings, then Editing and Window below it, where the dialog scrolls and every row reads Fixed instead of Change.",
     desktopApp: true,
     state,
     steps: openSection,

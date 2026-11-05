@@ -1,5 +1,6 @@
 import React from "react";
 
+import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import { useT } from "../i18n/react";
 import { BOOLEAN_SETTINGS, type BooleanField } from "./booleanSettings";
 import type { Inspection, shortcutsReview } from "./importPlan";
@@ -33,6 +34,7 @@ export function ImportSettings({
   shortcuts?: ReturnType<typeof shortcutsReview>;
 }): React.ReactElement {
   const t = useT();
+  const shortcutScope = useShortcutScopeDescription();
   const shortcutChanges = shortcuts ? shortcutChangeValues(t, shortcuts.changed) : [];
   return (
     <SettingsCard settings={settings} current={currentSettings(settings)}>
@@ -40,8 +42,8 @@ export function ImportSettings({
         shortcutChanges.length === 0
           ? <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.same")} />
           : shortcuts.count === 0
-            ? <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.reset")} tone="accent" values={shortcutChanges}>{t("configuration.import.settings.consequence.shortcutsReset")}</SettingLine>
-            : <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.changes")} tone="accent" values={shortcutChanges}>{t("configuration.import.settings.consequence.shortcuts", { count: shortcuts.count })}</SettingLine>
+            ? <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.reset")} tone="accent" values={shortcutChanges}>{shortcutScope}</SettingLine>
+            : <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.changes")} tone="accent" values={shortcutChanges}>{`${t("configuration.import.settings.consequence.shortcutCount", { count: shortcuts.count })}${t("common.sentenceSeparator")}${shortcutScope}`}</SettingLine>
       )}
     </SettingsCard>
   );
