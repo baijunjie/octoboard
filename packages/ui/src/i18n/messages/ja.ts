@@ -2504,6 +2504,9 @@ export const ja: Translation<"other"> = {
   "processes.global.showIn": {
     "other": "{console} の {name} で {count} 個のプロセスが実行中です。プロセスパネルを表示します。",
   },
+  "processes.global.projectsWithCount": "プロジェクト（{count}）",
+  "processes.global.consoleSessionsWithCount": "コンソールセッション（{count}）",
+  "processes.global.description": "実行中のバックグラウンドプロセスをコンソールセッションとプロジェクトごとに表示します。項目を選択すると詳細を確認できます。",
   "processes.global.refreshFailed": "表示中の数は古い可能性があります。",
   "processes.commandUnknown": "不明なコマンド",
   "processes.cwdUnknown": "作業ディレクトリが不明です",

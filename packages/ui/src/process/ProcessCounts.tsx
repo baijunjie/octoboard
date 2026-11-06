@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useId, useRef } from "react";
 
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
@@ -40,15 +40,23 @@ export function ProcessCounts({ rows, error, focusFirst, onPress }: {
 }): React.ReactElement {
   const t = useT();
   const root = useRef<HTMLDivElement>(null);
+  const listRef = useListMotion<HTMLDivElement>({ descendants: true, fitHeight: true });
+  const groups = [
+    { key: "consoleSessions", title: "processes.global.consoleSessionsWithCount", rows: rows.filter((row) => "consoleSession" in row.target) },
+    { key: "projects", title: "processes.global.projectsWithCount", rows: rows.filter((row) => "project" in row.target) },
+  ] as const;
   // A failure already there as the popover opens is part of what it opened with; one that arrives while it is open is
   // announced.
   const hasPainted = useHasPainted();
-  const listRef = useListMotion<HTMLUListElement>({ fitHeight: true });
   useEffect(() => {
     if (focusFirst) root.current?.querySelector<HTMLElement>("ul button")?.focus();
   }, []);
   return (
     <FadedScroller ref={root} {...{ [PANEL_ATTRIBUTE]: "" }} className="flex max-h-[70vh] flex-col gap-1 p-2">
+      <div className="flex flex-col gap-1 px-2 py-1.5">
+        <h2 className="text-sm font-semibold">{t("panel.processes.name")}</h2>
+        <p className="text-xs text-app-muted">{t("processes.global.description")}</p>
+      </div>
       {error !== undefined && (
         <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce={hasPainted}>
           {typeof error !== "string" && !isUncataloguedFailure(error) && !lacksSummary(error.code)
@@ -56,7 +64,27 @@ export function ProcessCounts({ rows, error, focusFirst, onPress }: {
             : t("processes.global.refreshFailed")}
         </ErrorAlert>
       )}
-      <ul ref={listRef} className="relative flex min-w-0 flex-col gap-1">
+      <div ref={listRef} className="relative flex min-w-0 flex-col gap-1">
+        {groups.filter((group) => group.rows.length > 0).map((group) => (
+          <ProcessGroup key={group.key} groupKey={group.key} title={t(group.title, { count: group.rows.length })} rows={group.rows} onPress={onPress} />
+        ))}
+      </div>
+    </FadedScroller>
+  );
+}
+
+function ProcessGroup({ groupKey, title, rows, onPress }: {
+  groupKey: string;
+  title: string;
+  rows: ProcessRow[];
+  onPress: (target: ProcessJump) => void;
+}): React.ReactElement {
+  const t = useT();
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-1">
+      <h3 id={headingId} data-list-motion={`heading:${groupKey}`} className="px-2 pt-2 text-xs font-medium text-app-muted">{title}</h3>
+      <ul className="relative flex min-w-0 flex-col gap-1">
         {rows.map((row) => (
           <li key={row.key} data-list-motion={row.key} className="min-w-0">
             <Button variant="ghost" size="sm" className="h-auto min-h-0 w-full justify-start gap-2 rounded-lg px-2 py-1.5 font-normal"
@@ -74,6 +102,6 @@ export function ProcessCounts({ rows, error, focusFirst, onPress }: {
           </li>
         ))}
       </ul>
-    </FadedScroller>
+    </section>
   );
 }

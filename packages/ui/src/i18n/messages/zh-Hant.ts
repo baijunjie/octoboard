@@ -2505,6 +2505,9 @@ export const zhHant: Translation<"other"> = {
   "processes.global.showIn": {
     "other": "{name}（{console}）有 {count} 個行程在執行。顯示行程面板。",
   },
+  "processes.global.projectsWithCount": "專案（{count}）",
+  "processes.global.consoleSessionsWithCount": "主控台工作階段（{count}）",
+  "processes.global.description": "依主控台工作階段和專案彙整執行中的背景行程。選取項目以查看詳細資訊。",
   "processes.global.refreshFailed": "顯示的數量可能已過時。",
   "processes.commandUnknown": "未知指令",
   "processes.cwdUnknown": "工作目錄未知",

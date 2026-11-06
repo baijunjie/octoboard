@@ -54,13 +54,18 @@ it is a dialog named "Processes". What differs:
 
 ## The rows
 
-One row per project that has trees counted, then one per console session that has, each showing:
+The popover starts with a **Processes** heading and a description explaining that the running background processes
+are grouped by console session and project, and that selecting an item opens its details.
+
+The rows are grouped under **Console sessions**, then **Projects**. Each heading includes the number of console
+sessions or projects in its group, in parentheses as in the sidebar. A group with no counted trees is not shown.
+There is one row per console session or project that has trees counted, each showing:
 
 - **its name** — the project's, or the console session's displayed name (see "Displayed names" in
   `docs/product/session-titles.md`) — on one line, and beneath it, smaller and muted, **the name of its console**; each
   fades out where it is cut, with the whole name as its tooltip (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`);
-- **its count**, in a small bordered green status badge;
+- **its process-tree count**, in a small bordered green status badge;
 - a **chevron** pointing to the reading direction's end, mirrored under a right-to-left language.
 
 Its name for assistive technology says the name, its console, how many processes are running there, and that pressing
@@ -92,10 +97,10 @@ has ended, since. Readings that arrive while counts are being worked out wait fo
 working out their own. A reading waits for it at most about **10 seconds**; past that it is answered with the last
 counts worked out, however old, or fails with the code `process_count_timed_out` when there are none yet.
 
-A reading that fails keeps the last counts, on the button and in the rows. While the failure lasts, the popover shows an
-amber warning alert at its top (see "Failures shown on the screen" in `docs/product/error-alerts.md`), titled that the
-list could not be refreshed, saying that the counts shown may be out of date, with **Details**. Where Octoboard has
-words of its own for the failure, the alert says why first, then that the counts may be out of date: for
-`process_count_timed_out`, that counting the processes took too long. A failure it has no words for says only that the
-counts may be out of date, its own text left to **Details**. It is announced to assistive technology only when it
-arrives while the popover is open, and goes with the next reading that succeeds.
+A reading that fails keeps the last counts, on the button and in the rows. While the failure lasts, the popover shows
+an amber warning alert below its heading and description, above the groups (see "Failures shown on the screen" in
+`docs/product/error-alerts.md`), titled that the list could not be refreshed, saying that the counts shown may be out
+of date, with **Details**. Where Octoboard has words of its own for the failure, the alert says why first, then that
+the counts may be out of date: for `process_count_timed_out`, that counting the processes took too long. A failure it
+has no words for says only that the counts may be out of date, its own text left to **Details**. It is announced to
+assistive technology only when it arrives while the popover is open, and goes with the next reading that succeeds.

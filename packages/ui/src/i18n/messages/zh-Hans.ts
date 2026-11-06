@@ -2584,6 +2584,9 @@ export const zhHans: Translation<"other"> = {
   "processes.global.showIn": {
     other: "{name}（{console}）有 {count} 个进程在运行。显示进程面板。",
   },
+  "processes.global.projectsWithCount": "项目（{count}）",
+  "processes.global.consoleSessionsWithCount": "控制台会话（{count}）",
+  "processes.global.description": "按控制台会话和项目汇总正在运行的后台进程。选择一项查看详情。",
   "processes.global.refreshFailed": "显示的数量可能已过时。",
   "processes.commandUnknown": "未知命令",
   "processes.cwdUnknown": "工作目录未知",

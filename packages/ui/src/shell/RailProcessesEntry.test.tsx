@@ -75,12 +75,23 @@ it("names the popover by what it lists, and its rows by everything they show", a
   const { container } = await mount(COUNTS);
   press(button(container), "touch");
   expect(panel()!.getAttribute("aria-label")).toBe("Processes");
+  expect(Array.from(panel()!.querySelectorAll("h3"), (heading) => heading.textContent)).toEqual(["Console sessions (1)", "Projects (1)"]);
   const rows = Array.from(panel()!.querySelectorAll("li button"), (row) => row.getAttribute("aria-label")?.replace(/[⁨⁩]/g, ""));
   expect(rows).toEqual([
-    "App in Main has 2 processes running. Show the processes panel.",
     "Hub in Main has 2 processes running. Show the processes panel.",
+    "App in Main has 2 processes running. Show the processes panel.",
   ]);
   for (const row of panel()!.querySelectorAll("li button")) expect(row.textContent).toContain("Main");
+});
+
+it.each([
+  { counts: [{ project_id: project.id, trees: 2 }], heading: "Projects (1)" },
+  { counts: [{ session_id: hub.id, trees: 2 }], heading: "Console sessions (1)" },
+])("omits empty groups when only $heading have running processes", async ({ counts, heading }) => {
+  const { container } = await mount(counts);
+  press(button(container), "touch");
+  expect(Array.from(panel()!.querySelectorAll("h3"), (element) => element.textContent)).toEqual([heading]);
+  expect(panel()!.querySelectorAll("section[aria-labelledby]")).toHaveLength(1);
 });
 
 it("sends a project's row to its project, and a console session's row to that console session, once the popover has gone", async () => {

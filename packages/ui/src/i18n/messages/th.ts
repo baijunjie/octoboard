@@ -2503,6 +2503,9 @@ export const th: Translation<"other"> = {
   "processes.global.showIn": {
     "other": "{name} ใน {console} มีกระบวนการทำงานอยู่ {count} รายการ แสดงแผงกระบวนการ",
   },
+  "processes.global.projectsWithCount": "โปรเจ็กต์ ({count})",
+  "processes.global.consoleSessionsWithCount": "เซสชันคอนโซล ({count})",
+  "processes.global.description": "แสดงกระบวนการเบื้องหลังที่กำลังทำงานโดยจัดกลุ่มตามเซสชันคอนโซลและโปรเจ็กต์ เลือกรายการเพื่อดูรายละเอียด",
   "processes.global.refreshFailed": "จำนวนที่แสดงอาจไม่เป็นปัจจุบัน",
   "processes.commandUnknown": "ไม่ทราบคำสั่ง",
   "processes.cwdUnknown": "ไม่ทราบไดเรกทอรีทำงาน",

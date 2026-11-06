@@ -273,7 +273,7 @@ the failure), **Details** where there is more to show and no other button, annou
 
 - the Processes panel's list that could not be refreshed while the last one still shows, above it (see "Loading,
   refreshing and failures" in `docs/product/processes-panel.md`);
-- the counts of the rail's Processes popover that could not be refreshed while the last ones still show, at its top
+- the counts of the rail's Processes popover that could not be refreshed while the last ones still show, above its groups
   (see "Keeping the count current" in `docs/product/processes-on-the-rail.md`);
 - the project processes that could not be listed in the confirmation of removing a project or deleting a console, in
   their section (see "The project's processes" in `docs/product/removing-projects.md`).
