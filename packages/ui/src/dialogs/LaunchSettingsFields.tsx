@@ -28,14 +28,14 @@ function modelOption(t: Translate, model: AgentModel): LaunchSettingOption {
   return { value: model.id, label: model.name, ...badge, detail: model.version, reason: { state: model.version } };
 }
 
-/** What the launch pickers of one agent and account need to know of the models it offers, asked of
- * the daemon while `enabled` (see `useAgentModels`). While the answer is out the pickers are locked,
- * showing what is stored; when the daemon has no list the model picker offers the stored value alone
- * and `modelFailure` says why, which the picker draws as a warning mark after the field's label (the
- * dialog goes on without the list). `listed` is whether the list is known, which is when a stored
- * value missing from it is marked "Not in the list": not while it loads, not when it could not be
- * read, and not when it came back empty, which the daemon treats as no list. `modelText` is what the
- * status region speaks: the loading note, or the failure's sentence alone as plain text. */
+/** What the launch pickers of one agent and account need to know of the models it offers, asked of the
+ * daemon while `enabled` (see `useAgentModels`). While the first answer for the agent and account is out
+ * the pickers are locked, showing what is stored; when the daemon has no list the model picker offers the
+ * stored value alone and `modelFailure` says why, which the picker draws as a warning mark after the
+ * field's label (the dialog goes on without the list). `listed` is whether the list is known, which is
+ * when a stored value missing from it is marked "Not in the list": not while it loads, not when it could
+ * not be read, and not when it came back empty, which the daemon treats as no list. `modelText` is what
+ * the status region speaks: the loading note, or the failure's sentence alone as plain text. */
 export function useLaunchModels(agent: Agent, account: string | null, enabled: boolean) {
   const t = useT();
   const language = useCurrentLanguage();

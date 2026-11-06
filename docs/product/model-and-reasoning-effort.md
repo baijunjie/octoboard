@@ -141,7 +141,8 @@ session uses" in `docs/product/opening-sessions.md`).
 
 The Change model dialog asks as soon as it opens; elsewhere nothing is asked until the Advanced section is opened for
 the first time. It is asked again whenever the agent or that account changes; an answer to a question the dialog has
-since moved off is dropped. A Codex or Grok Build answer is reused for ten minutes, and a reason there is none for
+since moved off is dropped. What a dialog shows while it asks again is in "While the list is being fetched, and when
+there is none" below. A Codex or Grok Build answer is reused for ten minutes, and a reason there is none for
 thirty seconds, so opening the section again does not run the agent's command each time; Claude Code's, which runs
 nothing, is read afresh each time, so it never lags behind the account's files. Sessions read the same list, from the same
 answers, with `list_agent_models` (see "Reading the models an agent offers" in
@@ -194,11 +195,18 @@ The levels follow the chosen model, and are each agent's own business rather tha
 
 ## While the list is being fetched, and when there is none
 
-While the answer for the agent and the account the dialog shows is outstanding, its pickers are locked and show what is
-stored, and the Model field says the list is being loaded — in the console dialog, both Model fields of the tab, Console
-sessions and Project sessions, each carry this note. Asking the agent is bounded at fifteen seconds, after which an
-agent still running is stopped, which can take up to six seconds more (see "How a run of an agent's CLI is stopped" in
-`docs/product/account-quota-readings.md`).
+While the dialog's first answer for the agent and the account it shows is outstanding, its pickers are locked and show
+what is stored, and the Model field says the list is being loaded — in the console dialog, both Model fields of the tab,
+Console sessions and Project sessions, each carry this note. Once the daemon has answered for an agent and account —
+with a list, or with the reason there is none — the answer is kept for as long as the section's fields stay mounted. In
+the project dialog that ends when "Detect from files" is chosen, which swaps the fields for a plain Advanced section;
+returning shows the loading state again. When the dialog asks again for that pair — on going back to an agent's tab in
+the console dialog, moving the agent or account field back to one it was asked for, or opening the Advanced section
+again — it shows the answer it kept while the question is out, with neither the lock nor the note, and the reply
+replaces it. A refused request is not an answer and is not kept: asking again for a pair that has had only refusals
+locks the pickers and shows the note as the first ask does, and a refused re-ask leaves the kept answer shown. Asking
+the agent is bounded at fifteen seconds, after which an agent still running is stopped, which can take up to six
+seconds more (see "How a run of an agent's CLI is stopped" in `docs/product/account-quota-readings.md`).
 
 The agent cannot always be asked: its binary does not resolve on the user's login shell `PATH`, the shell environment
 could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), the command failed or did

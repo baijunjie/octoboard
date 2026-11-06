@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
@@ -51,9 +51,9 @@ function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
   return { toggle, exposedStatuses, wait, request, container };
 }
 
-// The failure kept from the first opening comes back with the body; written in that same render it
-// would go unsaid, so the region is mounted anew with each opening and writes it after its delay.
-// The list is asked for again on each opening, and the same answer writes nothing new.
+// The list is asked for again on each opening and its refusal is shown again. The status region is mounted
+// anew with each opening and writes after its delay, so the refusal is said once; the same answer writes
+// nothing new.
 it("says the model list's failure again each time the section is opened, once, after the region is there", async () => {
   const { toggle, exposedStatuses, wait, request } = mount();
   toggle();
@@ -326,6 +326,121 @@ it.each([
   const disclosure = [...container.querySelectorAll("button")].find((button) => button.textContent === "Advanced")!;
   const launchTab = [...container.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent === "Launch settings");
   expect(document.activeElement).toBe(withTabs ? launchTab : disclosure);
+});
+
+function MarkProbe({ container, marks }: { container: HTMLElement; marks: boolean[] }) {
+  useLayoutEffect(() => {
+    marks.push(modelMark(container) !== null);
+  });
+  return null;
+}
+
+// A refusal is not an answer: only what the daemon gave is kept for a pair, and a later refusal leaves it be.
+// `replies` holds what each ask of the agent gets, in order; `hang` is an ask that never comes back.
+type Reply = "list" | "refuse" | "hang";
+function mountAsking(replies: Record<"claude" | "codex", Reply[]>) {
+  const asked = { claude: 0, codex: 0 };
+  const unexpected: string[] = [];
+  const request = vi.fn(async (body: { type: string; agent?: "claude" | "codex" }) => {
+    if (body.type !== "list_agent_models") return { type: "ack", id: null };
+    const reply = replies[body.agent!][asked[body.agent!]++];
+    if (reply === undefined) {
+      unexpected.push(body.agent!);
+      throw new Error(`Unexpected ask for ${body.agent}`);
+    }
+    if (reply === "hang") return new Promise<never>(() => {});
+    if (reply === "refuse") throw new Error("Refused");
+    return { type: "agent_models", id: null, agent: body.agent, account: null, models: [{ id: `${body.agent}-model`, name: `${body.agent} model`, efforts: [] }], unavailable: null };
+  });
+  const daemon = testDaemon({ request: request as Daemon["request"], showNotice: vi.fn() });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    expect(unexpected).toEqual([]);
+  });
+  // Whether the failure mark is in the DOM at each commit `render` makes, read in a layout effect: before the passive
+  // effects of that commit, which is where the first paint after a reopening is decided.
+  const marks: boolean[] = [];
+  const render = (agent: "claude" | "codex", expanded = true) => act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <LaunchSettingsFields agent={agent} account={null} model={null} effort={null} onModelChange={() => {}} onEffortChange={() => {}} expanded={expanded} onExpandedChange={() => {}} />
+        <MarkProbe container={container} marks={marks} />
+      </DaemonProvider>,
+    ),
+  );
+  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  const trigger = () => container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  const options = () => [...container.querySelectorAll("option")].map((option) => option.value);
+  return { render, settle, trigger, options, container, request, marks };
+}
+
+// A form switching between agents would otherwise lock its pickers and add the loading note under the Model
+// picker for every round trip, moving every field below it down and back.
+it("shows the list an agent was last given while asking again on going back to it, and locks the pickers only on the first ask", async () => {
+  const { render, settle, trigger, options, container, request } = mountAsking({ claude: ["list", "hang"], codex: ["list"] });
+  const loadingNote = "Loading the models this agent offers…";
+  render("claude");
+  expect(trigger().disabled).toBe(true);
+  await settle();
+  expect(trigger().disabled).toBe(false);
+  render("codex");
+  expect(trigger().disabled).toBe(true);
+  expect(container.textContent).toContain(loadingNote);
+  await settle();
+
+  render("claude");
+  await settle();
+  expect(trigger().disabled).toBe(false);
+  expect(container.textContent).not.toContain(loadingNote);
+  expect(options()).toContain("claude-model");
+  expect(request.mock.calls.filter(([body]) => body.agent === "claude")).toHaveLength(2);
+});
+
+it.each([
+  ["going away and back", false],
+  ["collapsing and opening the section", true],
+] as const)("locks the pickers and shows the loading note again when a pair that has had only refusals is asked again, after %s", async (_, collapse) => {
+  const { render, settle, trigger, container, marks } = mountAsking({ claude: ["refuse", "hang"], codex: ["list"] });
+  render("claude");
+  await settle();
+  expect(modelMark(container)).not.toBeNull();
+  if (collapse) render("claude", false);
+  else render("codex");
+  await settle();
+  const before = marks.length;
+  render("claude");
+  // Not even the first commit back shows the old refusal, before the ask is sent.
+  expect(marks.slice(before)).not.toHaveLength(0);
+  expect(marks.slice(before)).not.toContain(true);
+  expect(trigger().disabled).toBe(true);
+  expect(container.textContent).toContain("Loading the models this agent offers…");
+});
+
+it.each([
+  ["going away and back", false],
+  ["collapsing and opening the section", true],
+] as const)("keeps the list a pair was given when a later ask is refused, after %s", async (_, collapse) => {
+  const { render, settle, trigger, options, container } = mountAsking({ claude: ["list", "refuse", "refuse"], codex: ["list", "list"] });
+  render("claude");
+  await settle();
+  const away = () => (collapse ? render("claude", false) : render("codex"));
+  away();
+  await settle();
+  render("claude");
+  await settle();
+  expect(options()).toContain("claude-model");
+  expect(trigger().disabled).toBe(false);
+  // Away and back once more: the refusal the hook now holds must not show in place of the list.
+  away();
+  await settle();
+  render("claude");
+  expect(options()).toContain("claude-model");
+  await settle();
+  expect(options()).toContain("claude-model");
+  expect(modelMark(container)).toBeNull();
 });
 
 it("keeps the mark clear of the Model field's own press: pressing it neither opens the list nor clears the value", () => {

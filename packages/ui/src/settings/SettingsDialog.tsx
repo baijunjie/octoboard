@@ -189,15 +189,14 @@ export function SettingsDialog({
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
               <Tabs.List aria-label={t("settings.sections")} className="max-tablet:min-w-0 max-tablet:p-1.5 tablet:w-full">
-                {/* Hovered labels take the foreground colour for clear feedback. Each tab keeps its own
-                    composited layer while the indicator moves inside WebKit's masked scroller. */}
+                {/* Hovered labels take the foreground colour for clear feedback. */}
                 {SETTINGS_SECTION_IDS.map((id) => {
                   const { label, Icon } = SECTIONS[id];
                   return (
                     <Tabs.Tab
                       key={id}
                       id={id}
-                      className="transform-gpu justify-start gap-2 whitespace-nowrap hover:text-foreground max-tablet:w-auto max-tablet:flex-none max-tablet:scroll-mx-1.5"
+                      className="justify-start gap-2 whitespace-nowrap hover:text-foreground max-tablet:w-auto max-tablet:flex-none max-tablet:scroll-mx-1.5"
                       ref={id === sectionId ? attachSelected : undefined}
                       {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
                     >

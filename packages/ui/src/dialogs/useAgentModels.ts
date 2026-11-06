@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
@@ -7,9 +7,11 @@ import type { Agent, AgentModel, DefaultModelSource, ModelsUnavailable } from ".
 import type { RequestSender } from "../requests";
 import { shownError } from "./shownError";
 
-/** `idle`: not asked, as nothing needs the list yet. `loading`: the answer for the agent and account
- * the form shows now is not in yet. `ready`: the daemon has answered for them, with a list or with
- * `unavailable` saying why it has none. `failed`: the daemon refused or answered with something else, with `error`. */
+/** `idle`: not asked, as nothing needs the list yet. `loading`: no answer for the agent and account the
+ * form shows now has arrived yet in this hook's life. `ready`: the daemon has answered for them, with a
+ * list or with `unavailable` saying why it has none; it may be the kept answer while the question is
+ * asked again. `failed`: the daemon refused or answered with something else, with `error`, and none was
+ * kept for them. */
 export type AgentModelsStatus = "idle" | "loading" | "ready" | "failed";
 
 export interface AgentModels {
@@ -34,6 +36,11 @@ const IDLE: AgentModels = { status: "idle", ...NONE };
  * account; `list_agent_models`) while `enabled`, and again whenever the agent or the account changes.
  * Only the answer to the latest question counts: a reply for an agent or account the form has since
  * moved off, or for a dialog that has closed, is dropped.
+ *
+ * The last answer for each agent and account stays with the hook, and is what a question asked again
+ * shows in place of `loading` while it is out, and in place of `failed` when the ask is refused: a form that
+ * switches back to an agent it showed before would otherwise lock its pickers and add the loading note under
+ * its Model pickers for the round trip, moving every field below them down and back on each switch.
  */
 export function useAgentModels(
   request: RequestSender,
@@ -42,9 +49,11 @@ export function useAgentModels(
   enabled: boolean,
 ): AgentModels {
   const key = enabled ? JSON.stringify([agent, account]) : undefined;
-  const { value, send, reconnects } = useLatestRequest<AgentModels>({
+  const { value, send, hold, reconnects } = useLatestRequest<AgentModels>({
     scope: key, initial: LOADING,
   });
+  // The answers the daemon gave, a list or why there is none, are kept; a refusal is not.
+  const [answered, setAnswered] = useState<ReadonlyMap<string, AgentModels>>(() => new Map());
   const latest = useLatest({ request, agent, account, send });
 
   useEffect(() => {
@@ -52,12 +61,23 @@ export function useAgentModels(
     // held for already refuses it for any other question.
     if (key === undefined) return;
     const { request, agent, account, send } = latest.current;
+    // A refusal held for the scope being left is dropped at once, so the render that comes back to it does not
+    // show it for a frame before the ask below puts `loading` in its place.
+    const leave = () => hold((held) => (held.status === "failed" ? LOADING : held), key);
     void send({
       request: () => request({ type: "list_agent_models", agent, ...(account && { account }) }),
-      accept: (event) => () => ({ status: "ready", models: event.models, defaultModel: event.default_model ?? null, defaultModelSource: event.default_model_source ?? null, unavailable: event.unavailable }),
+      accept: (event) => {
+        const answer: AgentModels = { status: "ready", models: event.models, defaultModel: event.default_model ?? null, defaultModelSource: event.default_model_source ?? null, unavailable: event.unavailable };
+        setAnswered((kept) => new Map(kept).set(key, answer));
+        return () => answer;
+      },
+      // A refusal held from an earlier ask is not an answer: asking again shows `loading` as the first ask does.
+      pending: (held) => (held.status === "failed" ? LOADING : held),
       failed: (failure, _held, t) => ({ status: "failed", ...NONE, error: shownError(failure, t) }),
     });
+    return leave;
   }, [key, reconnects]);
 
-  return key === undefined ? IDLE : value;
+  if (key === undefined) return IDLE;
+  return value.status === "loading" || value.status === "failed" ? (answered.get(key) ?? value) : value;
 }
