@@ -206,12 +206,9 @@ the earlier steps do not run them separately (the related tests a step runs to c
   the automated gallery quick check and sweep to before pushing, when the UI changes call for them; do not run
   them again at routine development completion or local merge. The agent runs them via the `agent-gallery` skill
   before pushing when the UI changed; the pre-push hook does not.
-- Release verification is unconditional in CI: `quality.yml` runs the frontend and native groups of
-  `pnpm verify --release --fresh` on separate runners before `release.yml` builds the app. The frontend group runs
-  application lint, production UI type checks and application UI tests on Linux; the native group runs desktop
-  script tests, Rust formatting, clippy (`--workspace --all-targets -- -D warnings`) and tests of both Rust crates on
-  macOS. Website and gallery-only checks are excluded; application tests may still consume their shared fixtures.
-  Another job compiles both Rust crates on Linux (`cargo check`), which no local check covers. The release waits for
-  all three jobs. Rust dependency caches speed compilation; they never replace verification results.
+- Before creating a release tag: `release:version` runs `pnpm verify --release --fresh --head <release-commit>`
+  locally before push verification. This application check is unconditional, regardless of the changed files or
+  earlier successful checks. `release.yml` validates and publishes the tag without calling `quality.yml`;
+  the latter remains available on request, including its Linux compilation job, and does not gate publication.
 
 <!-- setup-agent:workflow:end -->

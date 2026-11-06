@@ -11,7 +11,7 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    - `--base <ref>` names it explicitly, force-push tips included. The pre-push hook passes the destination's live tip
      (`--base <tip> --head <pushed commit>`); for a branch being created it passes the merge base with the live remote
      target branch (`branch.<name>.targetBranch`, else the remote's HEAD), and with no baseline at all it passes
-     `--full`. A tag push is not verified (release CI checks the tag).
+     `--full`. A tag push is not verified by this hook; release preparation checks the commit locally before tagging.
    - Without `--base`, the base is the fetched upstream of the branch, else of its target branch. With neither, or when
      the base cannot be fetched or read, the scope is every package.
    - `--quick` runs before a local merge, so a branch with no upstream of its own is measured from its merge base with
@@ -43,8 +43,10 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    and heavy ones (UI tests, Rust builds and tests, the website build) last, and a failure stops the run. The website
    build runs before its SEO tests, which read the generated output. `--release` runs the application checks:
    application lint, production UI type check, application UI tests, desktop script tests, rustfmt, clippy and Rust
-   tests. The release groups partition those same commands; both also run the identity check. Hosted CI runs the
-   groups independently, with a separate Linux compilation job (see "Hosted application checks").
+   tests. Local `release:version` runs the complete plan with `--fresh --head <release-commit>` before tagging, then
+   scoped push verification can reuse matching passes. The release groups partition those same commands; both also
+   run the identity check. The optional hosted workflow runs the groups independently, with a separate Linux
+   compilation job (see "Hosted application checks").
 4. **Reuse** (`stamp.mjs`, `tree.mjs`, `rerun.mjs`). `tree.mjs` fingerprints the working copy (tracked and untracked,
    non-ignored files, taken through a scratch index). A pass is recorded in the common git directory, keyed by that tree
    and the toolchain versions (node and pnpm, plus rustc except for the frontend release group) per step command, so
@@ -85,8 +87,8 @@ automatically.
 
 ## Hosted application checks
 
-`.github/workflows/quality.yml` runs on request and is called by the release workflow. Its three independent jobs
-must all pass before the application is built for publication:
+`.github/workflows/quality.yml` runs only on request. Its three independent jobs provide hosted checks; release CI
+does not call this workflow or wait for its results:
 
 | Job | Runner | Command and scope |
 |---|---|---|
@@ -97,7 +99,8 @@ must all pass before the application is built for publication:
 The frontend group does not invoke `rustc`, including when identifying the toolchain for local pass stamps, so it
 does not download the pinned Rust toolchain. Desktop script tests stay on macOS because archive tests exercise its
 BSD tar; Rust checks stay there for the desktop crate's native frameworks. The separate Linux job detects compilation
-failures that macOS cannot. Website and gallery-only checks remain outside the application release plan.
+failures that the local macOS release checks cannot; it is not a publication gate. Website and gallery-only checks
+remain outside the application release plan.
 
 CI uses `--fresh` to run the complete selected checks each time. Rust dependency caches reduce repeated compilation;
 they do not carry successful verification stamps or bypass failing tests. Cache profiles, manual main-branch warming,

@@ -1,19 +1,17 @@
 name: Code quality
 
-# Application checks run unconditionally before releases and on request. Website and gallery-only
-# checks belong to local scoped push verification, not the desktop release gate.
+# Optional hosted application checks, including Linux compilation. Release preparation runs application checks
+# locally before tagging; the release workflow does not call this workflow.
 on:
-  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A run started by hand replaces an earlier one started by hand on the same ref, whose result it supersedes. A run
-# that a release calls sees the caller's workflow name, so it is grouped apart and never cancelled.
+# A run started by hand replaces an earlier one on the same ref, whose result it supersedes.
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.workflow == 'Code quality' && github.event_name == 'workflow_dispatch' }}
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   frontend:

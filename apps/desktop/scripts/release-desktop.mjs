@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Prepares a version in its own worktree, then pushes main and its annotated tag together. The tag starts
-// release CI; signing, notarization and publishing stay there. Failed preparations are left for inspection.
+// release CI after local application checks; signing, notarization and publishing stay there. Failed
+// preparations are left for inspection.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -77,7 +78,7 @@ export function releaseDesktop({ root, version, notes, dryRun = false, run = run
   log(`release: ${current} -> ${version}; annotated tag ${releaseTag}`);
   log(`release: notes:\n${notes.trim()}`);
   if (dryRun) {
-    log("release: --dry-run: no files or refs changed. Would fetch main, prepare and check an isolated version commit, fast-forward main, verify the push, and atomically push main and the tag to origin. Release CI then builds and publishes.");
+    log("release: --dry-run: no files or refs changed. Would fetch main, prepare and check an isolated version commit, fast-forward main, run fresh application release checks, verify the push, and atomically push main and the tag to origin. All checks precede tagging. Release CI then builds and publishes.");
     return;
   }
 
@@ -114,6 +115,9 @@ export function releaseDesktop({ root, version, notes, dryRun = false, run = run
     const releaseCommit = git("rev-parse", "HEAD");
     command(root, "git", ["worktree", "remove", worktree]);
     command(root, "git", ["branch", "-d", branch]);
+    command(root, "pnpm", ["verify", "--release", "--fresh", "--head", releaseCommit]);
+    cleanMain();
+    if (git("rev-parse", "HEAD") !== releaseCommit) throw new Error("main changed during release verification. Recheck it before tagging or pushing.");
     command(root, "pnpm", ["verify", "--base", remoteMain, "--head", releaseCommit]);
     cleanMain();
     if (git("rev-parse", "HEAD") !== releaseCommit) throw new Error("main changed during push verification. Recheck it before tagging or pushing.");
@@ -121,7 +125,7 @@ export function releaseDesktop({ root, version, notes, dryRun = false, run = run
     cleanMain();
     if (git("rev-parse", "HEAD") !== releaseCommit) throw new Error("main changed after tagging. Inspect the local release tag before pushing.");
     command(root, "git", ["push", "--atomic", "origin", `${releaseCommit}:refs/heads/main`, `refs/tags/${releaseTag}`]);
-    log(`release: pushed ${releaseTag}. CI will verify, build, sign, notarize and publish; inspect the Release workflow before announcing success.`);
+    log(`release: pushed ${releaseTag} after local application checks. CI will build, sign, notarize and publish; inspect the Release workflow before announcing success.`);
   } catch (error) {
     log(merged
       ? `release: the version commit is on main. History was not reset. Inspect the failure before retrying the checks or push for ${releaseTag}.`

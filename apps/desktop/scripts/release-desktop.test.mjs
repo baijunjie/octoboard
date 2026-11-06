@@ -105,6 +105,13 @@ test("publishes one version commit and an annotated tag atomically, keeping hook
   assert.deepEqual(calls.at(-1).args, ["push", "--atomic", "origin", `${git("rev-parse", "HEAD")}:refs/heads/main`, `refs/tags/${releaseTag}`]);
   assert.ok(calls.some(({ args }) => args.join(" ") === "metadata --locked --format-version 1"));
   assert.ok(calls.some(({ args }) => args.join(" ") === "verify --quick"));
+  const releaseCheck = calls.findIndex(({ name, args }) => name === "pnpm" && args.includes("--release"));
+  assert.deepEqual(calls[releaseCheck], {
+    name: "pnpm", args: ["verify", "--release", "--fresh", "--head", git("rev-parse", "HEAD")], cwd: root,
+  });
+  const pushCheck = calls.findIndex(({ name, args }) => name === "pnpm" && args.includes("--base"));
+  const tagging = calls.findIndex(({ name, args }) => name === "git" && args[0] === "tag");
+  assert.ok(releaseCheck < pushCheck && pushCheck < tagging);
   assert.ok(calls.every(({ args }) => !args.includes("--no-verify") && !args.includes("--force")));
 });
 
@@ -139,11 +146,28 @@ test("a failed full check leaves a local version commit without pushing or creat
   const before = git("rev-parse", "HEAD");
   const run = options.run;
   assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) =>
-    name === "pnpm" && args.includes("--head") ? { status: 1 } : run(name, args, config),
+    name === "pnpm" && args.includes("--base") ? { status: 1 } : run(name, args, config),
   }), /failed/);
   assert.notEqual(git("rev-parse", "HEAD"), before);
   assert.equal(git("--git-dir", remote, "rev-parse", "main"), before);
   assert.equal(git("tag", "--list", "desktop-v0.1.0-beta.2"), "");
+});
+
+test("failed application release checks prevent tagging and leave both remote refs unchanged", (t) => {
+  const { root, remote, git, calls, options } = fixture(t);
+  const before = git("rev-parse", "HEAD");
+  const run = options.run;
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => {
+    const result = run(name, args, config);
+    return name === "pnpm" && args.includes("--release") ? { status: 1 } : result;
+  } }), /pnpm verify failed/);
+  assert.notEqual(git("rev-parse", "HEAD"), before);
+  assert.equal(JSON.parse(readFileSync(path.join(root, "apps/desktop/package.json"), "utf8")).version, options.version);
+  assert.equal(git("--git-dir", remote, "rev-parse", "main"), before);
+  assert.equal(git("--git-dir", remote, "tag", "--list"), "");
+  assert.equal(git("tag", "--list", "desktop-v0.1.0-beta.2"), "");
+  assert.ok(calls.some(({ args }) => args.includes("--release") && args.includes("--fresh")));
+  assert.ok(calls.every(({ name, args }) => name !== "git" || !["tag", "push"].includes(args[0])));
 });
 
 test("a commit hook refusal stops preparation and keeps the version changes for inspection", (t) => {
@@ -175,7 +199,7 @@ test("a concurrent main commit during verification prevents tagging and pushing"
   const before = git("rev-parse", "HEAD");
   const run = options.run;
   assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => {
-    if (name === "pnpm" && args.includes("--head")) {
+    if (name === "pnpm" && args.includes("--base")) {
       writeFileSync(path.join(root, "other"), "another task");
       git("add", "other");
       git("commit", "-qm", "other task");
@@ -205,4 +229,20 @@ test("a concurrent main commit after tagging leaves the tag on the checked commi
   assert.notEqual(git("rev-parse", "HEAD"), checked);
   assert.equal(git("--git-dir", remote, "rev-parse", "main"), before);
   assert.equal(git("--git-dir", remote, "tag", "--list"), "");
+});
+
+test("a concurrent main commit during application release checks prevents tagging and pushing", (t) => {
+  const { root, remote, git, options } = fixture(t);
+  const before = git("rev-parse", "HEAD");
+  const run = options.run;
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => {
+    if (name === "pnpm" && args.includes("--release")) {
+      writeFileSync(path.join(root, "other"), "another task");
+      git("add", "other");
+      git("commit", "-qm", "other task");
+    }
+    return run(name, args, config);
+  } }), /main changed during release verification/);
+  assert.equal(git("--git-dir", remote, "rev-parse", "main"), before);
+  assert.equal(git("tag", "--list", "desktop-v0.1.0-beta.2"), "");
 });

@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing an annotated tag `desktop-v<version>` builds, signs, notarizes and publishes that version, once the
-# application checks have passed. The tag's message is the release notes, which the in-app update notice shows too. What
+# Pushing an annotated tag `desktop-v<version>` builds, signs, notarizes and publishes that version. Application
+# checks run locally before tagging. The tag's message is the release notes, which the in-app update notice shows too. What
 # runs is `pnpm release --no-sign-update`, `sign-update` and `publish-release`, as on a Mac by hand
 # (apps/desktop/scripts/README.md's "Release builds" and "Publishing a release" sections); this workflow only supplies
 # their credentials from the repository's secrets.
@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The checks a bad tag or a missing secret would otherwise fail only after the full checks, or the build and
+  # The checks a bad tag or a missing secret would otherwise fail only after the build and
   # notarization: a missing signing identity would make an unsigned build, refused only at publishing.
   validate:
     runs-on: ubuntu-latest
@@ -58,17 +58,13 @@ jobs:
             exit 1
           fi
       # The release builds `--locked`; a `Cargo.lock` that no longer matches the manifests would otherwise fail only
-      # once the full checks have run and the build has started.
+      # once the build has started.
       - run: rustup toolchain install
       - name: Check that Cargo.lock is up to date
         run: cargo metadata --locked --format-version 1 > /dev/null
 
-  checks:
-    needs: validate
-    uses: ./.github/workflows/quality.yml
-
   release:
-    needs: checks
+    needs: validate
     runs-on: macos-26
     timeout-minutes: 120
     permissions:

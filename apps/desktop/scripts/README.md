@@ -119,13 +119,14 @@ described in `docs/product/in-app-updates.md`, section "Where updates come from"
 
 ## Releasing by tag
 
-Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which does the two steps above on a macOS
-runner after the application checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and
-`publish-release` path stays available.
+Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which validates the tag and does the two steps
+above on a macOS runner. Application quality checks run locally before creating the tag; release CI does not repeat
+them. The manual `pnpm release` and `publish-release` path stays available.
 
 ### Prepare and push a version
 
-Run from the clean main checkout on `main`, with dependencies installed and Git access to `origin`:
+Run from the clean main checkout on `main` on macOS, with dependencies installed, the Rust toolchain available and
+Git access to `origin`:
 
 ```sh
 pnpm --filter @octoboard/desktop release:version 0.1.0-beta.2 --notes-file /tmp/octoboard-release-notes.md --dry-run
@@ -151,22 +152,28 @@ The command:
    `Cargo.lock`. `cargo metadata --locked` validates that lockfile without updating external dependencies. It installs
    dependencies with `pnpm install --frozen-lockfile`, stages exactly the three version files and makes one version
    commit through the normal Git hooks.
-3. Rebases onto main, runs `pnpm verify --quick`, fast-forwards main and removes the release worktree and branch. It
-   then runs the full checks selected by the changes since the fetched remote main, including other unpushed main
-   commits. It stops if main changes while preparation or verification is running.
-4. Creates the annotated version tag on the checked commit and atomically pushes that exact commit to remote main
+3. Rebases onto main, runs `pnpm verify --quick`, fast-forwards main and removes the release worktree and branch.
+4. Runs `pnpm verify --release --fresh --head <release-commit>` locally on the version commit, regardless of the
+   changed files or previous passes. This checks identity, application lint, production UI types, application UI
+   tests, desktop script tests, Rust formatting, clippy and both Rust crates' tests. Website and gallery-only checks
+   are excluded. It then runs `pnpm verify --base <fetched-remote-main> --head <release-commit>` for every unpushed
+   main change, reusing the release checks' passes where the step commands match and adding any other affected checks.
+   Both runs require that exact commit and a clean checkout; the command stops if main changes during preparation or
+   verification.
+5. Creates the annotated version tag on the checked commit and atomically pushes that exact commit to remote main
    together with its tag. Git hooks stay enabled, and a refused push updates neither remote ref.
 
 Successful command completion means the tag was pushed, not that the application has been published. Follow the
-**Release** workflow in GitHub Actions through its checks, build, signing, notarization and publishing steps before
+**Release** workflow in GitHub Actions through its validation, build, signing, notarization and publishing steps before
 announcing the release.
 
 Failures leave the current state for inspection; the command never resets history or force-removes a worktree. Before
 the merge, inspect the named release branch and worktree, correct the cause, and finish or clean up that attempt before
 starting another. After the merge, the version commit stays on main; the same `release:version` command cannot be
-rerun because the version must increase. Correct the failure, check main with `pnpm verify --base origin/main --head
-<release-commit>`, create the annotated tag only if it is absent, and atomically push the checked commit and tag after
-confirming any existing local tag has the intended commit and notes. Do not delete or replace a published tag to retry.
+rerun because the version must increase. Correct the failure, run `pnpm verify --release --fresh --head <release-commit>`
+on clean main, then `pnpm verify --base origin/main --head <release-commit>`. Create the annotated tag only if it is
+absent, and atomically push the checked commit and tag after confirming any existing local tag has the intended commit
+and notes. Do not delete or replace a published tag to retry.
 
 ### Release CI
 
@@ -176,14 +183,9 @@ The workflow:
    and be an annotated tag with a non-empty message. The message, minus any signature, is the release notes, which the
    in-app update notice shows too. It also checks that the tagged commit is on `main`, that the repository secrets
    below are set, and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build
-   would otherwise find only after the checks.
-2. `checks` calls `quality.yml`, which runs three independent hosted jobs. Ubuntu runs
-   `pnpm verify --release --release-group frontend --fresh` for identity, application lint, production UI type checks
-   and application UI tests, without installing Rust. macOS runs the `native` group for identity, desktop script tests
-   (including BSD tar archive cases), rustfmt, clippy and both Rust crates' tests. Another Ubuntu job compiles both
-   crates with `node scripts/cargo.mjs check --locked`. Every job must pass; the grouped commands come from the same
-   plan as a complete `pnpm verify --release` run.
-3. `release` restores the universal-build Rust dependency cache, then builds, signs and notarizes with
+   would otherwise find after the build starts.
+2. After `validate` passes, `release` restores the universal-build Rust dependency cache, then builds, signs and
+   notarizes with
    `pnpm --filter @octoboard/desktop release --no-sign-update`. It signs the update archive in a step of its own
    (`sign-update`), the only step given the update key (no build step has it in its environment; code planted for
    later steps of the same runner could still read it), and publishes with `publish-release --notes-file`, the only
@@ -191,14 +193,18 @@ The workflow:
    and the Developer ID G2 intermediate go into a keychain that exists for that run only, and the API key is written
    to a temporary file; both are removed right after the build. `validate` learns whether the secrets are set from
    boolean expressions, without their values reaching a step.
-4. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
+3. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
    third tag pushed while one runs replaces the waiting one, which must then be re-run.
 
 Before the first release, or after dependency or toolchain changes, run **Warm Rust caches** manually on `main` to
 prepare compatible dependency caches. Warming uses an unsigned universal build with no signing credentials and never
 publishes an application. Tag runs restore main's caches; different version tags cannot restore one another's caches.
-All release checks still run. The [Rust cache module](../../../.github/actions/rust-cache/README.md) documents the
-command, profiles, GitHub retention limits and the measurements to inspect before judging a speed change.
+Local release checks still run before tagging. The [Rust cache module](../../../.github/actions/rust-cache/README.md)
+documents the command, profiles, GitHub retention limits and the measurements to inspect before judging a speed change.
+
+The **Code quality** workflow (`.github/workflows/quality.yml`) remains available on request for independent hosted
+frontend, macOS native and Linux compilation checks. It is not called by release CI and does not block publication.
+The local macOS release checks do not cover Linux compilation; run that workflow when Linux verification is needed.
 
 Repository secrets: `APPLE_CERTIFICATE` (base64 of the Developer ID Application `.p12`, private key included),
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`
@@ -212,7 +218,10 @@ to the agent CLIs. `src-tauri/build.rs` fails every build and test of the shell 
 `tauri.conf.json` names a version of its own, or when the daemon's manifest does not take the workspace version.
 
 For manual tag preparation, raise the version in `apps/desktop/package.json` and in the root `Cargo.toml`, run
-`cargo check` so that `Cargo.lock` records it, check and push that commit to `main`, write the notes to a file, then
+`cargo check` so that `Cargo.lock` records it, and commit the changes on `main`. Before creating the tag, run
+`pnpm verify --release --fresh --head <release-commit>`, then
+`pnpm verify --base origin/main --head <release-commit>`, on that exact commit with a clean checkout. Push the checked
+commit to `main`, write the notes to a file, then run
 `git tag -a desktop-v<version> --cleanup=whitespace -F <notes-file>` and `git push origin desktop-v<version>`.
 `--cleanup=whitespace` keeps the notes' Markdown heading lines, which the default `--cleanup=strip` drops; the file
 rather than the editor keeps Git's `#` template lines out of them. Push tags one at a time: GitHub creates no push

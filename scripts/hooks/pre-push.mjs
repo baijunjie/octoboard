@@ -26,7 +26,7 @@ function verifyCommand(args) {
 }
 
 export function verifyPush(input, remoteName, remoteUrl, { git = defaultGit, verify = verifyCommand } = {}) {
-  // Tags are not verified here: the release workflow checks the tagged commit itself.
+  // Tags are not verified here: release preparation checks the commit before tagging.
   const updates = parseUpdates(input).filter((update) => !deleted.test(update.localSha) && !update.remoteRef.startsWith("refs/tags/"));
   if (!updates.length) return;
   // Git supplies the actual destination URL, which may differ from the fetch URL for this remote.
