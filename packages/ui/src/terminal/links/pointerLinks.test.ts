@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
-import { type ILink, type ITerminalOptions, Terminal } from "@xterm/xterm";
+import { type IBufferRange, type ILink, type ITerminalOptions, Terminal } from "@xterm/xterm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installPathLinks, type PathAnswer } from "./pathLinks";
+import { cellAtPoint, rangeHasCell, type TerminalGrid } from "./terminalLinks";
 import { watchPointerForLinks } from "./pointerLinks";
 
-/** The real xterm, to pin the link detection `watchPointerForLinks` relies on: if an upgrade changes
- * what it listens to or when it asks the providers, this fails. jsdom lays nothing out, so a
+/** The real xterm, to pin the link detection `watchPointerForLinks` relies on, and the cell under a point
+ * that `cellAtPoint` / `rangeHasCell` match against the range xterm hovers: if an upgrade changes what
+ * it listens to, when it asks the providers or how it numbers cells, this fails. jsdom lays nothing out, so a
  * character measures 8 by 16 pixels here and the screen's box is put where xterm sized it. */
 const CELL = { width: 8, height: 16 };
 const COLS = 20;
@@ -227,5 +229,62 @@ describe("a path the pointer rests on before the daemon answers", () => {
     await vi.waitFor(() => expect(probe).toHaveBeenCalledWith(["/a/b.ts"]));
     answer([{ kind: "file" }]);
     await vi.waitFor(() => expect(showsLink(screen)).toBe(true));
+  });
+});
+
+describe("the path link the pointer is on", () => {
+  /** A terminal where `text` has been written and the daemon has said every path in it is a file. */
+  async function withPaths(text: string) {
+    const opened = openTerminal();
+    const { term, screen, signal } = opened;
+    const askAgain = watchPointerForLinks(term, screen, signal);
+    const { cache } = installPathLinks(term, { probe: async (paths) => paths.map(() => ({ kind: "file" as const })), open: async () => {} }, () => false, askAgain);
+    await write(term, text);
+    const grid = (): TerminalGrid => ({
+      cols: COLS,
+      rows: ROWS,
+      viewportY: term.buffer.active.viewportY,
+      screen: screen.getBoundingClientRect(),
+    });
+    return { ...opened, cache, grid };
+  }
+
+  /** Whether the hovered link covers the cell under a point, as `pathLinkAt` asks it. */
+  function covers(cache: { hovered?: { range: IBufferRange } }, grid: TerminalGrid, x: number, y: number): boolean {
+    const cell = cellAtPoint(grid, x, y);
+    return !!cache.hovered && !!cell && rangeHasCell(cache.hovered.range, cell);
+  }
+
+  it("covers the cell under the pointer once it has moved onto the link, and not after a scroll without a move", async () => {
+    const { term, screen, cache, grid } = await withPaths("1\r\n2\r\nsee /a/b.ts here\r\n4\r\n5\r\n6\r\n7");
+    const point = at(6, 1);
+    moveTo(screen, point);
+    await vi.waitFor(() => expect(cache.hovered).toBeDefined());
+    expect(covers(cache, grid(), point.clientX, point.clientY)).toBe(true);
+    term.scrollLines(-1);
+    expect(covers(cache, grid(), point.clientX, point.clientY)).toBe(false);
+  });
+
+  it("covers the pixel on a link's right and bottom edge, as xterm counts it", async () => {
+    const { screen, cache, grid } = await withPaths("see /a/b.ts here");
+    moveTo(screen, at(6, 1));
+    await vi.waitFor(() => expect(cache.hovered).toBeDefined());
+    // The link fills columns 5 to 11 of the first row: its edge pixels are x = 88 and y = 16.
+    expect(covers(cache, grid(), 11 * CELL.width, CELL.height)).toBe(true);
+    expect(covers(cache, grid(), 4 * CELL.width + 1, 8)).toBe(true);
+    expect(covers(cache, grid(), 4 * CELL.width, 8)).toBe(false);
+    expect(covers(cache, grid(), 11 * CELL.width + 1, 8)).toBe(false);
+    expect(covers(cache, grid(), 50, CELL.height + 1)).toBe(false);
+  });
+
+  it("covers every row of a path that wraps", async () => {
+    const { screen, cache, grid } = await withPaths("x /abcdefghijklmnopqrstuvwxyz");
+    moveTo(screen, at(10, 1));
+    await vi.waitFor(() => expect(cache.hovered).toBeDefined());
+    const { range } = cache.hovered!;
+    expect(range.end.y).toBeGreaterThan(range.start.y);
+    expect(covers(cache, grid(), at(range.start.x, range.start.y).clientX, at(range.start.x, range.start.y).clientY)).toBe(true);
+    expect(covers(cache, grid(), at(range.end.x, range.end.y).clientX, at(range.end.x, range.end.y).clientY)).toBe(true);
+    expect(covers(cache, grid(), at(range.end.x + 1, range.end.y).clientX, at(range.end.x + 1, range.end.y).clientY)).toBe(false);
   });
 });

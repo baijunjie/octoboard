@@ -1,4 +1,4 @@
-import type { ILinkProvider, Terminal } from "@xterm/xterm";
+import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
 import { foundPathMatches, installPathLinks, type PathAnswer, PathLinkCache, pathCandidates, pathMatchesIn } from "./pathLinks";
@@ -402,4 +402,43 @@ it("offers a path only on the rows it fills, though its line is under the pointe
 it("offers a path wrapped inside a table cell on each of its pieces, as the whole path", async () => {
   const linksAt = await pathProvider(PATH_TABLE, [BROKEN_PATH]);
   expect(linksAt(3)).toEqual([{ text: BROKEN_PATH, range: { start: { x: 3, y: 3 }, end: { x: 12, y: 3 } } }]);
+});
+
+it("remembers the path link the pointer is on, and forgets it only when that link is left", async () => {
+  const term = {
+    cols: 20,
+    registerLinkProvider: vi.fn(),
+    buffer: { active: {
+      getNullCell: () => ({}),
+      getLine: (y: number) => y === 0 && { isWrapped: false, getCell: (x: number) => ({ getChars: () => sized(20, "see /tmp/a.png ok").cells[x].trim(), getWidth: () => 1 }) },
+    } },
+  };
+  const { cache } = installPathLinks(
+    term as unknown as Terminal,
+    { probe: async (asked) => asked.map((): PathAnswer => ({ kind: "file" })), open: vi.fn(async () => {}) },
+    () => false,
+    () => {},
+  );
+  const provider = term.registerLinkProvider.mock.calls[0][0] as ILinkProvider;
+  cache.want(["/tmp/a.png"]);
+  await vi.waitFor(() => expect(cache.kind("/tmp/a.png")).toBe("file"));
+  const provide = () => {
+    const found = vi.fn();
+    provider.provideLinks(1, found);
+    return found.mock.calls[0][0][0] as ILink;
+  };
+  const [first, second] = [provide(), provide()];
+  const event = {} as MouseEvent;
+  expect(cache.hovered).toBeUndefined();
+  first.hover?.(event, first.text);
+  expect(cache.hovered).toMatchObject({ target: { path: "/tmp/a.png", kind: "file" }, range: first.range });
+  // A defence: xterm 6 always leaves a link before hovering again, but a leave arriving late must not forget the new hover.
+  second.hover?.(event, second.text);
+  first.leave?.(event, first.text);
+  expect(cache.hovered).toBeDefined();
+  second.leave?.(event, second.text);
+  expect(cache.hovered).toBeUndefined();
+  second.hover?.(event, second.text);
+  cache.clear();
+  expect(cache.hovered).toBeUndefined();
 });

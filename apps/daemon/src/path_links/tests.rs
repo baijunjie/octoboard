@@ -941,6 +941,315 @@ mod with_state {
         assert!(result.is_ok() && opened);
     }
 
+    /// What a reveal of `path` shows, or the error that refuses it.
+    fn shown(fixture: &Fixture, project: Option<&str>, path: &str) -> Result<PathBuf> {
+        let shown = std::cell::RefCell::new(None);
+        reveal_with(&fixture.state, project, path, |shown_path| {
+            *shown.borrow_mut() = Some(shown_path.to_path_buf());
+            Ok(())
+        })?;
+        Ok(shown.into_inner().expect("shown on success"))
+    }
+
+    fn code_of(error: &anyhow::Error) -> crate::protocol::Code {
+        error.downcast_ref::<CodedError>().unwrap().code
+    }
+
+    #[test]
+    fn revealing_takes_a_project_file_and_a_folder_but_nothing_unreachable() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-reveal");
+        std::fs::write(directory.join("notes.txt"), "x").unwrap();
+        std::fs::write(directory.join("run.command"), "x").unwrap();
+        std::fs::create_dir(directory.join("src")).unwrap();
+        let project = fixture.project("reveal-project", &directory);
+        // Files that `open` refuses as viewer-only are shown, since nothing is launched.
+        for (path, expected) in [
+            ("notes.txt", directory.join("notes.txt")),
+            ("run.command", directory.join("run.command")),
+            ("src", directory.join("src")),
+        ] {
+            assert_eq!(
+                shown(&fixture, Some(&project), path).unwrap(),
+                canonical(&expected),
+                "{path}"
+            );
+        }
+        for (path, code) in [
+            ("/etc/hosts", error_code::OUTSIDE_SCOPE),
+            ("missing.txt", error_code::FILE_NOT_FOUND),
+        ] {
+            let error = shown(&fixture, Some(&project), path).unwrap_err();
+            assert_eq!(code_of(&error), code, "{path}");
+        }
+        let error =
+            reveal_with(&fixture.state, Some("unknown"), "notes.txt", |_| Ok(())).unwrap_err();
+        assert_eq!(code_of(&error), error_code::UNKNOWN_PROJECT);
+    }
+
+    #[test]
+    fn revealing_selects_a_symbolic_link_below_the_root_by_its_own_name() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-reveal-link");
+        let outside = ScratchDir::new("path-links-reveal-link-outside");
+        let base = canonical(&directory);
+        std::fs::write(directory.join("notes.txt"), "x").unwrap();
+        std::fs::create_dir(directory.join("src")).unwrap();
+        std::fs::write(directory.join("src/inner.txt"), "x").unwrap();
+        std::os::unix::fs::symlink("notes.txt", directory.join("file-link")).unwrap();
+        std::os::unix::fs::symlink("src", directory.join("folder-link")).unwrap();
+        std::os::unix::fs::symlink("inner.txt", directory.join("src/inner-link")).unwrap();
+        std::os::unix::fs::symlink(directory.join("src"), directory.join("via")).unwrap();
+        // A folder linked out of the root, holding a link back into it.
+        std::os::unix::fs::symlink(&*outside, directory.join("out")).unwrap();
+        std::os::unix::fs::symlink(directory.join("notes.txt"), outside.join("back")).unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), directory.join("leak")).unwrap();
+        std::fs::write(outside.join("secret.txt"), "x").unwrap();
+        let project = fixture.project("reveal-link-project", &directory);
+        let absolute = |name: &str| base.join(name).to_string_lossy().into_owned();
+        for (path, expected) in [
+            // The link itself, written absolute or relative, to a file or to a folder.
+            (absolute("file-link"), base.join("file-link")),
+            ("file-link".to_string(), base.join("file-link")),
+            (absolute("folder-link"), base.join("folder-link")),
+            ("folder-link".to_string(), base.join("folder-link")),
+            // A link below a linked folder that stays inside the root.
+            ("via/inner-link".to_string(), base.join("src/inner-link")),
+            // A `..` that is folded before the link at the end is looked at.
+            ("src/../file-link".to_string(), base.join("file-link")),
+            // Not a link: what it resolves to.
+            ("src/inner.txt".to_string(), base.join("src/inner.txt")),
+            ("via/inner.txt".to_string(), base.join("src/inner.txt")),
+            // A last component of `.` or `..` names a folder as well.
+            ("folder-link/.".to_string(), base.join("src")),
+            ("folder-link/..".to_string(), base.clone()),
+            // A trailing slash names the folder, not the link.
+            ("folder-link/".to_string(), base.join("src")),
+            (absolute("folder-link/"), base.join("src")),
+            // The link's folder is outside the root: shown as what it resolves to.
+            ("out/back".to_string(), base.join("notes.txt")),
+        ] {
+            assert_eq!(
+                shown(&fixture, Some(&project), &path).unwrap(),
+                expected,
+                "{path}"
+            );
+        }
+        // A link leading outside the roots is still refused.
+        let error = shown(&fixture, Some(&project), "leak").unwrap_err();
+        assert_eq!(code_of(&error), error_code::OUTSIDE_SCOPE);
+    }
+
+    #[test]
+    fn revealing_a_root_spelled_through_a_link_opens_the_root_folder() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-reveal-root");
+        let aliases = ScratchDir::new("path-links-reveal-root-alias");
+        let base = canonical(&directory);
+        let alias = canonical(&aliases).join("alias");
+        std::os::unix::fs::symlink(&*directory, &alias).unwrap();
+        std::fs::write(directory.join("notes.txt"), "x").unwrap();
+        std::os::unix::fs::symlink("notes.txt", directory.join("file-link")).unwrap();
+        let project = fixture.project("reveal-root-project", &alias);
+        for (path, expected) in [
+            // The root itself, spelled as stored: not the alias in its parent.
+            (alias.to_string_lossy().into_owned(), base.clone()),
+            // A link in it, spelled through the alias.
+            (
+                alias.join("file-link").to_string_lossy().into_owned(),
+                base.join("file-link"),
+            ),
+        ] {
+            assert_eq!(
+                shown(&fixture, Some(&project), &path).unwrap(),
+                expected,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn revealing_selects_links_in_each_of_two_roots() {
+        let fixture = Fixture::new();
+        let repository = repo_with("path-links-reveal-two", &[(b"a.ts", b"x")]);
+        let linked_parent = ScratchDir::new("path-links-reveal-two-linked");
+        let linked = canonical(&linked_parent).join("tree");
+        git(
+            &repository,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "reveal-two",
+                linked.to_str().unwrap(),
+            ],
+        );
+        let main = canonical(&repository);
+        std::os::unix::fs::symlink("a.ts", main.join("main-link")).unwrap();
+        std::os::unix::fs::symlink("a.ts", linked.join("tree-link")).unwrap();
+        let project = fixture.project("reveal-two-project", &repository);
+        for (path, expected) in [
+            ("main-link".to_string(), main.join("main-link")),
+            ("tree-link".to_string(), linked.join("tree-link")),
+            (
+                linked.join("tree-link").to_string_lossy().into_owned(),
+                linked.join("tree-link"),
+            ),
+        ] {
+            assert_eq!(
+                shown(&fixture, Some(&project), &path).unwrap(),
+                expected,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn revealing_selects_a_link_in_a_temp_root_only_when_it_is_private() {
+        let fixture = Fixture::new();
+        let scratch = ScratchDir::new("path-links-reveal-temp");
+        let base = canonical(&scratch);
+        std::fs::create_dir(scratch.join("mine")).unwrap();
+        std::fs::write(scratch.join("mine/a.txt"), "x").unwrap();
+        std::os::unix::fs::symlink("a.txt", scratch.join("mine/own")).unwrap();
+        // A folder others can write to, as another user's would be, holding a link into the
+        // private one.
+        std::fs::create_dir(scratch.join("evil")).unwrap();
+        std::fs::set_permissions(scratch.join("evil"), std::fs::Permissions::from_mode(0o777))
+            .unwrap();
+        std::os::unix::fs::symlink("../mine/a.txt", scratch.join("evil/l")).unwrap();
+        for (path, expected) in [
+            ("mine/own", base.join("mine/own")),
+            ("evil/l", base.join("mine/a.txt")),
+        ] {
+            let absolute = base.join(path);
+            assert_eq!(
+                shown(&fixture, None, absolute.to_str().unwrap()).unwrap(),
+                expected,
+                "{path}"
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn revealing_selects_a_link_whose_mode_is_open_to_everyone() {
+        let fixture = Fixture::new();
+        let scratch = ScratchDir::new("path-links-reveal-mode");
+        let base = canonical(&scratch);
+        std::fs::create_dir(scratch.join("mine")).unwrap();
+        std::fs::write(scratch.join("mine/a.txt"), "x").unwrap();
+        let link = scratch.join("mine/own");
+        std::os::unix::fs::symlink("a.txt", &link).unwrap();
+        // A link's mode is 0777 on Linux; the same is set here, where `symlink` honours the umask.
+        let path = std::ffi::CString::new(link.to_str().unwrap()).unwrap();
+        // SAFETY: `path` is a valid NUL-terminated string that outlives the call.
+        assert_eq!(unsafe { libc::lchmod(path.as_ptr(), 0o777) }, 0);
+        let mode = std::fs::symlink_metadata(&link)
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o777);
+        assert_eq!(
+            shown(&fixture, None, base.join("mine/own").to_str().unwrap()).unwrap(),
+            base.join("mine/own")
+        );
+    }
+
+    #[test]
+    fn revealing_selects_a_link_in_the_root_that_holds_it_not_the_one_holding_its_target() {
+        let fixture = Fixture::new();
+        let repository = repo_with("path-links-reveal-nested", &[(b"a.ts", b"x")]);
+        let main = canonical(&repository);
+        std::fs::create_dir(main.join(".worktrees")).unwrap();
+        let linked = main.join(".worktrees/w");
+        git(
+            &repository,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "reveal-nested",
+                linked.to_str().unwrap(),
+            ],
+        );
+        // A link in the project to a file of the worktree below it, and the reverse.
+        std::os::unix::fs::symlink(".worktrees/w/a.ts", main.join("down")).unwrap();
+        std::os::unix::fs::symlink("../../a.ts", linked.join("up")).unwrap();
+        let project = fixture.project("reveal-nested-project", &repository);
+        for (path, expected) in [
+            ("down".to_string(), main.join("down")),
+            ("up".to_string(), linked.join("up")),
+            (
+                linked.join("up").to_string_lossy().into_owned(),
+                linked.join("up"),
+            ),
+        ] {
+            assert_eq!(
+                shown(&fixture, Some(&project), &path).unwrap(),
+                expected,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn revealing_clears_a_folder_link_in_a_project_under_a_temp_root_when_its_folder_is_open() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-reveal-open-folder");
+        let base = canonical(&directory);
+        std::fs::create_dir(directory.join("src")).unwrap();
+        std::fs::create_dir(directory.join("shared")).unwrap();
+        std::fs::set_permissions(
+            directory.join("shared"),
+            std::fs::Permissions::from_mode(0o777),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("../src", directory.join("shared/folder-link")).unwrap();
+        std::os::unix::fs::symlink("../src/a.txt", directory.join("shared/file-link")).unwrap();
+        std::fs::write(directory.join("src/a.txt"), "x").unwrap();
+        let project = fixture.project("reveal-open-folder-project", &directory);
+        for (path, expected) in [
+            // A folder link: judged like a folder of the project, so shown as what it leads to.
+            ("shared/folder-link", base.join("src")),
+            // A file link is not checked.
+            ("shared/file-link", base.join("shared/file-link")),
+        ] {
+            assert_eq!(
+                shown(&fixture, Some(&project), path).unwrap(),
+                expected,
+                "{path}"
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn revealing_a_path_spelled_under_tmp_shows_the_resolved_entry() {
+        let fixture = Fixture::new();
+        let name = format!("octoboardd-reveal-tmp-{}", std::process::id());
+        let directory = PathBuf::from("/tmp").join(&name);
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(directory.join("a.txt"), "x").unwrap();
+        std::os::unix::fs::symlink("a.txt", directory.join("l")).unwrap();
+        let resolved = PathBuf::from("/private/tmp").join(&name);
+        let results = [
+            // The root, spelled through the system's link: the folder, not the link in `/`.
+            ("/tmp", PathBuf::from("/private/tmp")),
+            (&*format!("/tmp/{name}/l"), resolved.join("l")),
+            (&*format!("/tmp/{name}/a.txt"), resolved.join("a.txt")),
+        ]
+        .map(|(path, expected)| (shown(&fixture, None, path), expected, path.to_string()));
+        std::fs::remove_dir_all(&directory).unwrap();
+        for (result, expected, path) in results {
+            assert_eq!(result.unwrap(), expected, "{path}");
+        }
+    }
+
     #[test]
     fn opening_a_path_in_two_roots_is_refused_as_ambiguous() {
         let fixture = Fixture::new();

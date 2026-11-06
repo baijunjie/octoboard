@@ -468,7 +468,7 @@ pub mod error_code {
     pub const FILE_NOT_FOUND: Code = Code("file_not_found");
     pub const PERMISSION_DENIED: Code = Code("permission_denied");
     pub const OUTSIDE_SCOPE: Code = Code("outside_scope");
-    /// `open_path_link` found a path it will not open from a link, or could not look at; its `cause` says why, and
+    /// `open_path_link` found a path it will not open from a link, or `reveal_path_link` one it will not show, or either could not look at it; its `cause` says why, and
     /// `detail` carries the system's text for an `unreadable` one.
     pub const PATH_LINK_REFUSED: Code = Code("path_link_refused");
     pub const UNSUPPORTED_FILE_TYPE: Code = Code("unsupported_file_type");
@@ -494,7 +494,7 @@ pub mod error_code {
     /// A terminal's connection ended before input someone may have typed was written into it.
     /// `params` carries the `detail` of the write that failed, when one did.
     pub const TERMINAL_INPUT_LOST: Code = Code("terminal_input_lost");
-    /// The system file manager could not open a project directory. `params` names `detail`.
+    /// The system file manager could not open a project directory, or show a path for `reveal_path_link`. `params` names `detail`.
     pub const DIRECTORY_UNAVAILABLE: Code = Code("directory_unavailable");
     pub const PATH_OPEN_FAILED: Code = Code("path_open_failed");
     /// A push was asked for while `HEAD` is detached. Nothing was pushed.

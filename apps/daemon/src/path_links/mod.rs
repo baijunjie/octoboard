@@ -14,6 +14,8 @@
 //! `viewer_only`, to be shown by the file viewer, and `open` refuses it. On macOS `open` also
 //! refuses a folder the system types as a package (`.xcodeproj`, `.playground`), which no list
 //! names. Only a file in a temp root, a folder in a project or a folder in a temp root is opened.
+//! Showing a path in the file manager (`reveal`) launches nothing, so it also takes a project file
+//! and a package folder, and refuses what is not reachable at all.
 //! A path under a temp root that lies in a project (or a worktree of it) is the project's, however
 //! it is spelled.
 //! Inside a temp root, which other users can write to, the file and every directory down to it must
@@ -38,7 +40,7 @@ use tokio::sync::Semaphore;
 use crate::protocol::{error_code, CodedError, PathLink, PathLinkKind, PathLinkView};
 
 mod resolve;
-use resolve::{reach, resolve, Refusal, Resolved, Unreached};
+use resolve::{own_entry, reach, resolve, Refusal, Resolved, Unreached};
 
 /// The most paths one `probe_path_links` request may ask about.
 pub const MAX_PROBED_PATHS: usize = 64;
@@ -297,6 +299,47 @@ fn entry_file(directory: &Path) -> Option<PathBuf> {
     best.map(|(_, _, name)| directory.join(name))
 }
 
+/// The roots of `project` looked up afresh, once into `cache` however often they are asked for.
+fn fresh_roots(
+    state: &crate::state::AppState,
+    project: Option<&str>,
+    cache: &OnceLock<ProjectRoots>,
+) -> ProjectRoots {
+    cache
+        .get_or_init(|| {
+            project.map_or_else(ProjectRoots::default, |project| {
+                project_roots(state, project, true)
+            })
+        })
+        .clone()
+}
+
+/// What `path` names now, resolved as `probe` does but with the project's roots as `lookup` finds
+/// them, or why it is not reachable. A file only the viewer shows is reachable here; it is for the
+/// caller to refuse.
+fn reached(
+    state: &crate::state::AppState,
+    project: Option<&str>,
+    path: &str,
+    temp: &TempRoots,
+    lookup: &dyn Fn() -> ProjectRoots,
+) -> Result<Resolved> {
+    known(state, project)?;
+    let home = crate::paths::known_home_dir();
+    match reach(path, home.as_deref(), temp, lookup) {
+        Ok(resolved) => Ok(resolved),
+        Err(Unreached::Refused(refusal)) => Err(refusal.into_error(path)),
+        Err(Unreached::Gone { in_project }) => Err(CodedError::raised(
+            error_code::FILE_NOT_FOUND,
+            format!("{path} does not exist"),
+            &[
+                ("path", path),
+                ("root", if in_project { "project" } else { "temporary" }),
+            ],
+        )),
+    }
+}
+
 /// Opens `path` with the host's default application (a directory in its file manager), after
 /// resolving it again as `probe` does, from the project's roots as they are now. On macOS a folder
 /// the system types as a package is refused like a launchable one; the type is asked only here,
@@ -320,33 +363,45 @@ fn open_with(
     is_package: impl FnOnce(&Path) -> bool,
     opener: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
-    known(state, project)?;
-    let home = crate::paths::known_home_dir();
-    let lookup = || {
-        project.map_or_else(ProjectRoots::default, |project| {
-            project_roots(state, project, true)
-        })
-    };
-    let resolved = reach(path, home.as_deref(), &temp_roots(), &lookup);
-    let resolved = match resolved {
-        Ok(resolved) if !resolved.viewer_only() => resolved,
-        Ok(_) => return Err(Refusal::Launchable.into_error(path)),
-        Err(Unreached::Refused(refusal)) => return Err(refusal.into_error(path)),
-        Err(Unreached::Gone { in_project }) => {
-            return Err(CodedError::raised(
-                error_code::FILE_NOT_FOUND,
-                format!("{path} does not exist"),
-                &[
-                    ("path", path),
-                    ("root", if in_project { "project" } else { "temporary" }),
-                ],
-            ))
-        }
-    };
+    let cache = OnceLock::new();
+    let resolved = reached(state, project, path, &temp_roots(), &|| {
+        fresh_roots(state, project, &cache)
+    })?;
+    if resolved.viewer_only() {
+        return Err(Refusal::Launchable.into_error(path));
+    }
     if resolved.kind == PathLinkKind::Directory && is_package(&resolved.path) {
         return Err(Refusal::Launchable.into_error(path));
     }
     opener(&resolved.path)
+}
+
+/// Shows `path` in the host's file manager, resolving it as `open` does: a file is selected in its
+/// folder, a folder is opened, and a package folder (on macOS) is selected in its parent. A symbolic
+/// link the path ends in is selected by its own name in its folder, not followed, when it lies below
+/// the root holding it (and, in a temp root, when its folder and it are the daemon user's and its
+/// folder is closed to others; a file in a project is not checked); a root itself, a link whose
+/// folder is outside the roots and a path ending in `/`, `/.` or `..` are shown as what they
+/// resolve to. Nothing is launched, so a file only the viewer shows is revealed too; whatever a link
+/// never reaches still is refused.
+pub fn reveal(state: &crate::state::AppState, project: Option<&str>, path: &str) -> Result<()> {
+    reveal_with(state, project, path, |path| {
+        crate::host_open::paths::open_path(path, true)
+    })
+}
+
+/// [`reveal`] with what shows a path given, so that a test can see that nothing is shown.
+fn reveal_with(
+    state: &crate::state::AppState,
+    project: Option<&str>,
+    path: &str,
+    shower: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    let temp = temp_roots();
+    let cache = OnceLock::new();
+    let lookup = || fresh_roots(state, project, &cache);
+    let resolved = reached(state, project, path, &temp, &lookup)?;
+    shower(&own_entry(&resolved, &temp, &lookup).unwrap_or(resolved.path))
 }
 
 #[cfg(test)]

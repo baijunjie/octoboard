@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import type { Terminal } from "@xterm/xterm";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { IS_MAC } from "../../input/keys";
 import type { TerminalRow } from "./terminalLines";
-import { brokenUrlsAt, linkBox, linkSegmentsIn, TERMINAL_URL_REGEX, terminalLinkHandler, visibleLinkSegments } from "./terminalLinks";
+import { brokenUrlsAt, cellAtPoint, linkBox, linkSegmentsIn, rangeHasCell, TERMINAL_URL_REGEX, terminalLinkHandler, type TerminalGrid, visibleLinkSegments } from "./terminalLinks";
 
 it("opens a link with a plain click", () => {
   const open = vi.fn(async () => {});
@@ -478,4 +478,39 @@ it("colours OSC 8 labels by their cells and accepts only web targets, with a saf
   expect(visibleLinkSegments(term as unknown as Terminal)).toEqual([{ y: 1, col: 0, width: 4 }]);
   Object.assign(term, { _core: undefined });
   expect(visibleLinkSegments(term as unknown as Terminal)).toEqual([]);
+});
+
+describe("the cell under a point", () => {
+  const grid: TerminalGrid = { cols: 10, rows: 4, viewportY: 100, screen: { left: 50, top: 20, width: 80, height: 64 } };
+
+  it("is numbered from 1, with the row counted from the top of the buffer", () => {
+    expect(cellAtPoint(grid, 50, 20)).toEqual({ x: 1, y: 101 });
+    expect(cellAtPoint(grid, 129, 83)).toEqual({ x: 10, y: 104 });
+  });
+
+  it("puts a point on a cell's right or bottom edge in that cell, as xterm does", () => {
+    expect(cellAtPoint(grid, 58, 20)).toEqual({ x: 1, y: 101 });
+    expect(cellAtPoint(grid, 58.5, 20)).toEqual({ x: 2, y: 101 });
+    expect(cellAtPoint(grid, 60, 36)).toEqual({ x: 2, y: 101 });
+    expect(cellAtPoint(grid, 60, 37)).toEqual({ x: 2, y: 102 });
+    expect(cellAtPoint(grid, 130, 84)).toEqual({ x: 10, y: 104 });
+  });
+
+  it("is none off the screen", () => {
+    expect(cellAtPoint(grid, 49, 30)).toBeUndefined();
+    expect(cellAtPoint(grid, 131, 30)).toBeUndefined();
+    expect(cellAtPoint(grid, 60, 19)).toBeUndefined();
+    expect(cellAtPoint(grid, 60, 85)).toBeUndefined();
+    expect(cellAtPoint({ ...grid, screen: { ...grid.screen, width: 0 } }, 60, 30)).toBeUndefined();
+  });
+
+  it("is covered by a range from its first cell to its last, across rows", () => {
+    const range = { start: { x: 8, y: 3 }, end: { x: 2, y: 4 } };
+    expect(rangeHasCell(range, { x: 8, y: 3 })).toBe(true);
+    expect(rangeHasCell(range, { x: 1, y: 4 })).toBe(true);
+    expect(rangeHasCell(range, { x: 2, y: 4 })).toBe(true);
+    expect(rangeHasCell(range, { x: 7, y: 3 })).toBe(false);
+    expect(rangeHasCell(range, { x: 3, y: 4 })).toBe(false);
+    expect(rangeHasCell(range, { x: 5, y: 2 })).toBe(false);
+  });
 });

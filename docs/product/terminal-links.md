@@ -13,8 +13,9 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 - **A link opens with a primary-button click**, without requiring a modifier key.
 - **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a link,
   opens nothing. Other mouse buttons and a Mac's Control-click do not open a link. Right-click and a Mac's Control-click
-  open the editing menu described in "Copy, paste and selection" in `docs/product/session-terminal.md`, which has
-  nothing of its own for a link. Opening a link does not resume an interrupted session or reopen an archived one.
+  open the editing menu described in "Copy, paste and selection" in `docs/product/session-terminal.md`; on a file path
+  link it offers **Open in file manager** (see "File paths" below), and it has nothing of its own for a web address.
+  Opening a link does not resume an interrupted session or reopen an archived one.
 
 ## Web addresses
 
@@ -212,6 +213,19 @@ pointer has to move first.
   - Octoboard is not allowed to read it, or a directory on the way to it;
   - it could not be read for another reason, the system's own text then under **Error details**;
   - for any other reason, or one the window does not know, only that it cannot be opened from a link.
+- **Open in file manager**, in the editing menu a right-click on a path link opens, shows the path in the file manager
+  on the machine the daemon runs on, whatever a click would do with it, and launches nothing: a file is selected in its
+  folder, a folder is opened, and on macOS a folder the system treats as a package is selected in its containing folder.
+  So it also shows a file of the project, which a click only opens in the file viewer. A symbolic link is selected by
+  its own name in its folder, not followed, as File manager in the project pane does (see "A row's actions" in
+  `docs/product/project-pane.md`), whether it leads to a file or a folder; the rules above still judge where it leads. A
+  root, a link whose folder lies outside the roots, a link in a temp root whose folder is not closed to others or that
+  is not the daemon user's, and a path ending in `/`, `/.` or `..` are shown as what they resolve to. A line given with
+  the path plays no part. Success says nothing. The path is checked again by the rules above as it is shown; only what
+  keeps a click from opening it on the host — being a file of the project, or a macOS package folder — does not stop it
+  being shown. A failure raises an error alert titled that it
+  could not open in the file manager, with the sentence and remedy the same failure of a click opening the path on the
+  host gets (above), the system's own failure being the file manager's.
 - **When paths are checked**: only paths on screen, or under the pointer, are checked; those that appear together are
   checked together, about 120 ms after they appear, at most 64 at a time. An answer is kept for about 30 seconds for a
   path found and about 10 seconds for one that was not, and a path still on screen is checked again once its answer is

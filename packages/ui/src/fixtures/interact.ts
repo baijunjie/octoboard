@@ -241,8 +241,10 @@ export interface Ui {
   pressEach: (matcher: Matcher) => Promise<void>;
   /** Opens a row’s context menu at a point within the named control. */
   contextMenu: (matcher: Matcher) => Promise<void>;
-  /** Opens the terminal's edit menu once the terminal has rendered its output. */
-  terminalContextMenu: () => Promise<void>;
+  /** Opens the terminal's edit menu once the terminal has rendered its output: at a fixed point of the
+   * screen, or, given `text` (as `hoverTerminalUrl` takes it), on that link once xterm has it under the pointer,
+   * for the item the menu offers over a path link. Fails if the text is not a link. */
+  terminalContextMenu: (text?: string) => Promise<void>;
   /** Focuses the rendered agent terminal without sending input or changing its selection. */
   focusTerminal: () => Promise<void>;
   /** Presses the button that submits the open dialog, waiting for it to appear and be enabled: for a
@@ -1211,7 +1213,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       input.focus();
       await wait(150);
     },
-    async terminalContextMenu() {
+    async terminalContextMenu(text) {
+      if (text !== undefined) {
+        const { screen, clientX, clientY } = await pointOnTerminalLink(text);
+        screen.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX, clientY }));
+        await wait(300);
+        return;
+      }
       const screen = await waitFor(() => {
         const terminal = doc.querySelector(`${AGENT_TERMINAL} .xterm`) as TerminalElement | null;
         if (!terminal?.octoboardTerminalText?.row(0)) return undefined;

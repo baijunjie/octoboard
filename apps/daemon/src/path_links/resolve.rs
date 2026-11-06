@@ -105,6 +105,9 @@ const FINAL_FILE_EXTENSIONS: &[&str] = &[
 #[derive(Debug, PartialEq, Eq)]
 pub struct Resolved {
     pub path: PathBuf,
+    /// The path as spelled, with its `.` and `..` folded, for [`own_entry`] to look at the entry it
+    /// ends in; none when the spelling names a folder (it ends in `/`, `/.` or `..`).
+    pub spelled: Option<PathBuf>,
     pub kind: PathLinkKind,
     /// What is found could be launched by the system: for a file in a project root, kept to be
     /// viewed rather than refused outright.
@@ -229,20 +232,23 @@ pub fn reach(
     } else {
         None
     };
+    // A spelling ending in `/`, `.` or `..` names a folder, so a link spelled that way is followed.
+    let names_directory = matches!(raw.rsplit('/').next(), Some("" | "." | ".."));
+    let spelled_as = |spelled: PathBuf| (!names_directory).then_some(spelled);
     // Folded lexically first, so that a `..` cannot lead `canonicalize` out of the roots the
     // spelling was checked against.
     let Some(absolute) = absolute.map(|path| lexically_normalise(&path)) else {
         let roots = project();
-        let mut found: Vec<PathBuf> = Vec::new();
-        let (mut spelled, mut missing) = (0, 0);
+        let mut found: Vec<(PathBuf, PathBuf)> = Vec::new();
+        let (mut spellings, mut missing) = (0, 0);
         let mut failure: Option<Refusal> = None;
         for root in &roots.canonical {
             let joined = lexically_normalise(&root.join(raw));
             if !roots.lexical.iter().any(|root| joined.starts_with(root)) {
                 continue;
             }
-            spelled += 1;
-            let canonical = match std::fs::canonicalize(joined) {
+            spellings += 1;
+            let canonical = match std::fs::canonicalize(&joined) {
                 Ok(canonical) => canonical,
                 Err(err) => {
                     if is_not_found(&err) {
@@ -261,15 +267,15 @@ pub fn reach(
                 .canonical
                 .iter()
                 .any(|root| canonical.starts_with(root))
-                && !found.contains(&canonical)
+                && !found.iter().any(|(seen, _)| *seen == canonical)
             {
-                found.push(canonical);
+                found.push((canonical, joined));
             }
         }
-        let [canonical] = found.as_slice() else {
+        let [(canonical, joined)] = found.as_slice() else {
             return Err(if found.len() > 1 {
                 Unreached::Refused(Refusal::Ambiguous)
-            } else if spelled > 0 && missing == spelled {
+            } else if spellings > 0 && missing == spellings {
                 Unreached::Gone { in_project: true }
             } else {
                 // Nothing found: a failure looking, else every spelling led outside the roots.
@@ -279,7 +285,13 @@ pub fn reach(
         let index = roots
             .innermost(canonical)
             .ok_or(Unreached::Refused(Refusal::Outside))?;
-        return in_project(canonical.clone(), &roots, index, temp);
+        return in_project(
+            canonical.clone(),
+            spelled_as(joined.clone()),
+            &roots,
+            index,
+            temp,
+        );
     };
     if temp.lexical.iter().any(|root| absolute.starts_with(root)) {
         // A gone path is the project's when it is spelled inside it too, as for a project kept
@@ -299,9 +311,16 @@ pub fn reach(
         // are found there however they are spelled.
         let roots = project();
         if let Some(index) = roots.innermost(&canonical) {
-            return in_project(canonical, &roots, index, temp);
+            return in_project(canonical, spelled_as(absolute), &roots, index, temp);
         }
-        return reachable(canonical, root, temp.check_owner, false).map_err(Unreached::Refused);
+        return reachable(
+            canonical,
+            spelled_as(absolute),
+            root,
+            temp.check_owner,
+            false,
+        )
+        .map_err(Unreached::Refused);
     }
     let roots = project();
     if !roots.lexical.iter().any(|root| absolute.starts_with(root)) {
@@ -311,7 +330,7 @@ pub fn reach(
     let index = roots
         .innermost(&canonical)
         .ok_or(Unreached::Refused(Refusal::Outside))?;
-    in_project(canonical, &roots, index, temp)
+    in_project(canonical, spelled_as(absolute), &roots, index, temp)
 }
 
 /// `canonical`, found in the project root `index` of `roots`, as [`reachable`] judges it there. A
@@ -319,22 +338,18 @@ pub fn reach(
 /// root's rule that nobody else could have placed it holds for it however it was spelled.
 fn in_project(
     canonical: PathBuf,
+    spelled: Option<PathBuf>,
     roots: &ProjectRoots,
     index: usize,
     temp: &TempRoots,
 ) -> Result<Resolved, Unreached> {
-    let mut resolved =
-        reachable(canonical, &roots.canonical[index], false, true).map_err(Unreached::Refused)?;
-    if resolved.kind == PathLinkKind::Directory && temp.check_owner {
-        if let Some(root) = temp
-            .canonical
-            .iter()
-            .find(|root| resolved.path.starts_with(root))
-        {
-            if !closed_to_others(&resolved.path, root) {
-                return Err(Unreached::Refused(Refusal::NotPrivate));
-            }
-        }
+    let mut resolved = reachable(canonical, spelled, &roots.canonical[index], false, true)
+        .map_err(Unreached::Refused)?;
+    if resolved.kind == PathLinkKind::Directory
+        && temp.check_owner
+        && !private_in_temp(&resolved.path, temp)
+    {
+        return Err(Unreached::Refused(Refusal::NotPrivate));
     }
     resolved.project_root = Some(index);
     Ok(resolved)
@@ -354,11 +369,13 @@ fn canonical_or_gone(path: &Path, in_project: impl FnOnce() -> bool) -> Result<P
     })
 }
 
-/// `canonical`, found inside `root`, with what it is, unless it is not something to show: not a file
-/// or folder, or (with `check_owner`) not solely the daemon's user's from `root` down. What could be
-/// launched is refused too, except a file in a project (`in_project`), which is kept for the viewer.
+/// `canonical`, spelled `spelled` (none when the spelling names the directory) and found inside
+/// `root`, with what it is, unless it is not something to show: not a file or folder, or (with
+/// `check_owner`) not solely the daemon's user's from `root` down. What could be launched is refused
+/// too, except a file in a project (`in_project`), which is kept for the viewer.
 fn reachable(
     canonical: PathBuf,
+    spelled: Option<PathBuf>,
     root: &Path,
     check_owner: bool,
     in_project: bool,
@@ -380,14 +397,61 @@ fn reachable(
     }
     Ok(Resolved {
         path: canonical,
+        spelled,
         kind,
         launchable,
         project_root: None,
     })
 }
 
+/// The symbolic link `resolved` was spelled to end in, by its own name, for a reveal to select in
+/// its folder instead of following it: the folder it sits in resolved, joined with its final
+/// component. None unless that entry is a link leading to `resolved.path` that lies strictly below
+/// the root holding it (the innermost project root, or the temp root for a path found in one only; a
+/// root, or a link whose folder is outside the roots, is shown as what it resolves to) and, in a
+/// temp root, is private (see [`private_in_temp`]); a file in a project is not checked there, as
+/// [`in_project`] does not check it.
+pub fn own_entry(
+    resolved: &Resolved,
+    temp: &TempRoots,
+    project: &dyn Fn() -> ProjectRoots,
+) -> Option<PathBuf> {
+    let spelled = resolved.spelled.as_ref()?;
+    let own = std::fs::canonicalize(spelled.parent()?)
+        .ok()?
+        .join(spelled.file_name()?);
+    let in_project = resolved.project_root.is_some();
+    let root = if in_project {
+        let roots = project();
+        roots.canonical[roots.innermost(&own)?].clone()
+    } else {
+        temp.canonical
+            .iter()
+            .find(|root| own.starts_with(root))?
+            .clone()
+    };
+    let below_root = own.starts_with(&root) && own != root;
+    let checked = temp.check_owner && (!in_project || resolved.kind == PathLinkKind::Directory);
+    (below_root
+        && std::fs::symlink_metadata(&own).ok()?.is_symlink()
+        && std::fs::canonicalize(&own).ok()? == resolved.path
+        && (!checked || private_in_temp(&own, temp)))
+    .then_some(own)
+}
+
+/// Whether `path`, a resolved path or a link in a resolved folder, is private if it lies in a temp
+/// root: every entry from the one below that root down is the daemon user's and closed to others.
+/// Always so outside a temp root.
+fn private_in_temp(path: &Path, temp: &TempRoots) -> bool {
+    temp.canonical
+        .iter()
+        .find(|root| path.starts_with(root))
+        .is_none_or(|root| closed_to_others(path, root))
+}
+
 /// Whether every entry from the one below `root` down to `canonical` belongs to the daemon's user
-/// and cannot be written by its group or others, as read without following links.
+/// and cannot be written by its group or others, as read without following links. A link at the
+/// end has no mode of its own to judge (it is always open on Linux), so only its owner counts.
 fn closed_to_others(canonical: &Path, root: &Path) -> bool {
     let Ok(below) = canonical.strip_prefix(root) else {
         return false;
@@ -397,8 +461,10 @@ fn closed_to_others(canonical: &Path, root: &Path) -> bool {
     let mut current = root.to_path_buf();
     below.components().all(|component| {
         current.push(component);
-        std::fs::symlink_metadata(&current)
-            .is_ok_and(|metadata| metadata.uid() == me && metadata.mode() & 0o022 == 0)
+        std::fs::symlink_metadata(&current).is_ok_and(|metadata| {
+            metadata.uid() == me
+                && ((metadata.is_symlink() && current == canonical) || metadata.mode() & 0o022 == 0)
+        })
     })
 }
 

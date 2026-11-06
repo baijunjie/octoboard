@@ -1,4 +1,4 @@
-import { ClipboardPaste, Copy, TextSelect } from "lucide-react";
+import { ClipboardPaste, Copy, FolderOpen, TextSelect } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ActionMenu } from "../components/menus/ActionMenu";
@@ -7,6 +7,7 @@ import { useLatest } from "../components/hooks/useLatest";
 import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
+import type { PathLinkTarget } from "./links/pathLinks";
 import { OPTION_FORCES_SELECTION, type TerminalController } from "./TerminalController";
 import { raiseError } from "../components/alerts/raiseError";
 
@@ -26,6 +27,8 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
   }, []);
   const [selection, setSelection] = useState("");
   const [mouseReporting, setMouseReporting] = useState(false);
+  // The path link under the pointer when the menu opened, which the menu offers to show in the file manager.
+  const [pathLink, setPathLink] = useState<PathLinkTarget>();
   const [inputSession, setInputSession] = useState<string>();
   const paste = () => {
     const controller = controllerRef.current;
@@ -44,7 +47,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
       label={t("terminal.actions")}
       contextOnly
       contextTargetRef={contextTargetRef}
-      onContextOpen={() => {
+      onContextOpen={({ clientX, clientY, byKey }) => {
         const controller = controllerRef.current;
         // The terminal's own selection first; failing that, what a program that selects for itself
         // (under mouse reporting) last copied.
@@ -53,9 +56,14 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         // OSC 52, leaving nothing here to copy: the item then says how to select in the terminal instead.
         setMouseReporting(controller?.mouseReporting ?? false);
         setInputSession(controller?.inputSessionId);
+        // Only a pointer-opened menu has a link under it: a key-opened one is anchored to the focused element.
+        setPathLink(byKey ? undefined : controller?.pathLinkAt(clientX, clientY));
         controller?.focus();
       }}
       items={[
+        ...(pathLink
+          ? [{ label: t("viewer.openInFileManager"), icon: FolderOpen, onClick: () => { void controllerRef.current?.revealPathLink(pathLink); } }, "separator" as const]
+          : []),
         {
           label: t("terminal.copy"), icon: Copy, disabled: !selection,
           reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,

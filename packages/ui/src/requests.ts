@@ -65,6 +65,7 @@ export const REPLY_TYPES = {
   open_project_path: "ack",
   probe_path_links: "path_links",
   open_path_link: "ack",
+  reveal_path_link: "ack",
   push_project_branch: "ack",
   switch_project_branch: "ack",
   restore_project_changes: "ack",

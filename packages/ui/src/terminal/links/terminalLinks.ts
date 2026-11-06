@@ -85,6 +85,26 @@ export function linkBox(uri: string, range: IBufferRange, grid: TerminalGrid): H
   };
 }
 
+/** The buffer cell under a client point, as xterm numbers it (1-based, `y` counted from the top of the buffer),
+ * rounded as xterm rounds a pointer to a cell, so a point on a cell's far edge is in that cell; `undefined` where the
+ * point is off the screen or the screen is not laid out. */
+export function cellAtPoint(grid: TerminalGrid, clientX: number, clientY: number): { x: number; y: number } | undefined {
+  const { cols, rows, viewportY, screen } = grid;
+  const px = clientX - screen.left;
+  const py = clientY - screen.top;
+  if (!(px >= 0 && py >= 0 && screen.width > 0 && screen.height > 0)) return undefined;
+  const x = Math.max(1, Math.ceil(px / (screen.width / cols)));
+  const row = Math.max(1, Math.ceil(py / (screen.height / rows)));
+  if (x > cols || row > rows) return undefined;
+  return { x, y: viewportY + row };
+}
+
+/** Whether a buffer range, its ends included, covers a cell (both as `cellAtPoint` numbers them). */
+export function rangeHasCell({ start, end }: IBufferRange, cell: { x: number; y: number }): boolean {
+  const after = (a: { x: number; y: number }, b: { x: number; y: number }) => a.y > b.y || (a.y === b.y && a.x >= b.x);
+  return after(cell, start) && after(end, cell);
+}
+
 /** An address spread over several rows, with the cells it fills (1-based, the end inclusive). */
 export interface BrokenUrl {
   url: string;

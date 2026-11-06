@@ -1510,6 +1510,66 @@ describe("the fixture daemon's path link probe", () => {
     });
   });
 
+  it("reveals every path the probe found unless open refuses it for more than being viewer-only", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: {
+        [`${project.path}/src/a.ts`]: { view: { path: "src/a.ts" } },
+        [`${project.path}/docs`]: "directory",
+        "/tmp/out.log": "file",
+        [`${project.path}/bin/helper`]: { kind: "file", refused: "launchable", view: { path: "bin/helper" } },
+      },
+    });
+    for (const path of ["src/a.ts", "docs", "/tmp/out.log", "bin/helper"]) {
+      await expect(daemon.request({ type: "reveal_path_link", project: project.id, path })).resolves.toEqual({ type: "ack", id: null });
+    }
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "bin/helper" })).rejects.toMatchObject({ code: "path_link_refused", params: { cause: "launchable" } });
+  });
+
+  it("refuses revealing a launchable path of a temp root or a folder of a project, as it refuses opening it", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: {
+        "/tmp/movie.mov": { kind: "file", refused: "launchable" },
+        [`${project.path}/docs`]: { kind: "directory", refused: "launchable" },
+      },
+    });
+    for (const path of ["/tmp/movie.mov", "docs"]) {
+      await expect(daemon.request({ type: "reveal_path_link", project: project.id, path })).rejects.toMatchObject({ code: "path_link_refused", params: { path, cause: "launchable" } });
+      await expect(daemon.request({ type: "open_path_link", project: project.id, path })).rejects.toMatchObject({ code: "path_link_refused", params: { path, cause: "launchable" } });
+    }
+  });
+
+  it("refuses revealing a path gone since, outside every root or refused for another cause, as it refuses opening it", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: {
+        "/private/tmp/sheet.png": { kind: "file", gone: true },
+        [`${project.path}/docs`]: { kind: "directory", gone: true },
+        "/tmp/link": { kind: "file", outside: true },
+        "/tmp/locked.txt": { kind: "file", refused: "unreadable", detail: "Permission denied" },
+        "/tmp/tool": { kind: "file", refused: "ambiguous" },
+      },
+    });
+    await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/private/tmp/sheet.png" })).rejects.toMatchObject({
+      code: "file_not_found",
+      params: { path: "/private/tmp/sheet.png", root: "temporary" },
+    });
+    await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "docs" })).rejects.toMatchObject({ code: "file_not_found", params: { path: "docs", root: "project" } });
+    await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/tmp/link" })).rejects.toMatchObject({ code: "outside_scope", params: { path: "/tmp/link" } });
+    await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/tmp/locked.txt" })).rejects.toMatchObject({
+      code: "path_link_refused",
+      params: { path: "/tmp/locked.txt", cause: "unreadable", detail: "Permission denied" },
+    });
+    await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/tmp/tool" })).rejects.toMatchObject({ code: "path_link_refused", params: { path: "/tmp/tool", cause: "ambiguous" } });
+  });
+
   it("opens what the probe found, but refuses one gone since with file_not_found, the path as given and the kind of root it was in", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");

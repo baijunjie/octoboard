@@ -177,6 +177,16 @@ export const connectionScenarios: Scenario[] = [
     ],
   },
   {
+    id: "terminal-edit-menu-path-link",
+    group: TERMINAL,
+    category: "normal",
+    title: "Terminal edit menu over a file path",
+    description: "The right-click was made on src/summary/Summary.tsx:42:7, so the menu has \"Open in file manager\", with a folder icon, above Copy, Paste and Select all; the rest is the plain menu. Right-click anywhere else in the output and the item is not there. Choosing it shows the path in the host's file manager, which the gallery cannot show.",
+    ...PATH_LINK_SCENARIO,
+    clipboard: { text: "echo hello" },
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.terminalContextMenu("src/summary/Summary.tsx:42:7")],
+  },
+  {
     id: "terminal-cursor-selection",
     group: TERMINAL,
     category: "normal",

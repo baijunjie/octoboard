@@ -8,6 +8,7 @@ import { useOctoboardTheme } from "../preferences/theme";
 import { usePlatform } from "../platform/react";
 import type { ViewedFile } from "../viewer/viewedFile";
 import { useDaemon } from "../store";
+import { revealPathTarget } from "./links/revealPathTarget";
 import { openPathTarget } from "./links/openPathTarget";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
 import { programCopyHandler } from "./osc52";
@@ -90,6 +91,7 @@ export function useTerminalController({
               request: latest.current.request,
               viewFile: latest.current.viewFile,
             }),
+          reveal: (target) => revealPathTarget({ target, project: latest.current.project, request: latest.current.request }),
         },
       },
       appliedColorThemeRef.current,

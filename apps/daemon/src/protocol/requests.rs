@@ -997,6 +997,19 @@ pub enum RequestBody {
         project: Option<String>,
         path: String,
     },
+    /// Shows a path `probe_path_links` found in the file manager on the daemon host: a file is selected
+    /// in its folder, a folder is opened. Resolved as `open_path_link` does, but a file only the viewer
+    /// shows is accepted, since nothing is launched. A symbolic link at the end of the path is
+    /// selected by its own name in its folder, not followed; a root, a link whose folder lies
+    /// outside the roots, a link in a temp root whose folder is not closed to others or that is not
+    /// the daemon user's (a file link in a project is not checked), and a path ending in `/`, `/.`
+    /// or `..` are shown as what they resolve to.
+    RevealPathLink {
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+        path: String,
+    },
     /// Pushes the project's current branch, and only that branch, never with `--force`. Answered
     /// with `ack` once `git push` has exited; a success is followed by `project_git_status` from a
     /// local re-read, with no fetch. Refused with `not_a_git_repository`, `not_on_a_branch`,

@@ -89,6 +89,30 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
    * are not. */
   const isViewerOnly = (found: NonNullable<ReturnType<typeof pathLinkFound>>) =>
     typeof found === "object" && "view" in found && found.view !== undefined && (!("kind" in found) || found.kind === "file");
+  /** Refuses a path the daemon will not take from a link, with the path as given, as the daemon does: one gone since the
+   * output was drawn, one that lies outside every root now, one found but refused. Of the `launchable` refusals a reveal
+   * drops only the viewer-only one, as the daemon drops only that and the macOS package folder, which no entry can
+   * express; a launchable path in a temp root or a launchable folder in a project is refused by both. */
+  const refuseUnreachableLink = (body: { project?: string; path: string }, found: ReturnType<typeof pathLinkFound>, action: "open" | "reveal"): void => {
+    const done = action === "open" ? "opened" : "shown";
+    if (typeof found === "object" && "gone" in found) {
+      // `root` says where the path was: a temporary folder has nowhere to be found again, the project has its files.
+      const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
+      fail({ code: "file_not_found", params: { path: body.path, root }, message: `\`${body.path}\` does not exist` });
+    }
+    if (typeof found === "object" && "outside" in found) {
+      fail({ code: "outside_scope", params: { path: body.path, action: "open" }, message: `${body.path} leads outside the project, so it is not ${done}` });
+    }
+    if (typeof found === "object" && "refused" in found && (action === "open" || found.refused !== "launchable" || !isViewerOnly(found))) {
+      // Only an `unreadable` cause carries the system's text, as the daemon sends `detail` for no other.
+      const detail = found.refused === "unreadable" ? found.detail : undefined;
+      fail({
+        code: "path_link_refused",
+        params: { path: body.path, cause: found.refused, ...(detail !== undefined && { detail }) },
+        message: `${body.path} is not ${done} from a link: ${found.refused}`,
+      });
+    }
+  };
   /** A browse request's path, or the daemon error it is answered with, worded as the store words one. */
   const browsed = (files: FixtureFiles, path: string): FixtureFile => {
     const file = files[path];
@@ -135,31 +159,17 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
   return {
     ...browse,
     open_path_link: (body) => {
-      // A path found when the output was drawn that is gone now is refused as the daemon refuses it, with the path as given.
       const found = pathLinkFound(body.project, body.path);
-      if (typeof found === "object" && "gone" in found) {
-        // `root` says where the path was: a temporary folder has nowhere to be found again, the project has its files.
-        const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
-        return fail({ code: "file_not_found", params: { path: body.path, root }, message: `\`${body.path}\` does not exist` });
-      }
-      // One that lies outside every root now is refused as the daemon refuses an open from a link, with the path as given.
-      if (typeof found === "object" && "outside" in found) {
-        return fail({ code: "outside_scope", params: { path: body.path, action: "open" }, message: `${body.path} leads outside the project, so it is not opened` });
-      }
-      // One found but not opened from a link is refused as the daemon refuses it, with the path as given and why.
-      if (typeof found === "object" && "refused" in found) {
-        // Only an `unreadable` cause carries the system's text, as the daemon sends `detail` for no other.
-        const detail = found.refused === "unreadable" ? found.detail : undefined;
-        return fail({
-          code: "path_link_refused",
-          params: { path: body.path, cause: found.refused, ...(detail !== undefined && { detail }) },
-          message: `${body.path} is not opened from a link: ${found.refused}`,
-        });
-      }
+      refuseUnreachableLink(body, found, "open");
       // A file the viewer shows is never opened on the host, so the daemon refuses it as one it would launch.
       if (found !== undefined && isViewerOnly(found)) {
         return fail({ code: "path_link_refused", params: { path: body.path, cause: "launchable" }, message: `${body.path} is not opened from a link: launchable` });
       }
+      return { type: "ack", id: null };
+    },
+    // Nothing is launched, so a file the viewer shows is revealed too; a launchable path the daemon never reaches (one in a temp root, a folder in a project) still is not.
+    reveal_path_link: (body) => {
+      refuseUnreachableLink(body, pathLinkFound(body.project, body.path), "reveal");
       return { type: "ack", id: null };
     },
     probe_path_links: (body) => {

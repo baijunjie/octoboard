@@ -962,6 +962,15 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::RevealPathLink { project, path } => {
+            let state = Arc::clone(state);
+            tokio::task::spawn_blocking(move || {
+                crate::path_links::reveal(&state, project.as_deref(), &path)
+            })
+            .await??;
+            Ok(None)
+        }
+
         RequestBody::PushProjectBranch { project } => {
             let project = state.store.require_project(&project)?;
             let state = Arc::clone(state);

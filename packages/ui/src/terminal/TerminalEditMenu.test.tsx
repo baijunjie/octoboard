@@ -14,7 +14,7 @@ let root: Root;
 let container: HTMLDivElement;
 let target: HTMLDivElement;
 let input: HTMLTextAreaElement;
-let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; paste: ReturnType<typeof vi.fn>; focus: () => void };
+let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; pathLinkAt: ReturnType<typeof vi.fn>; revealPathLink: ReturnType<typeof vi.fn>; paste: ReturnType<typeof vi.fn>; focus: () => void };
 let clipboard: ClipboardCapability | undefined;
 let sessionId: string;
 const controllerRef = { current: undefined as TerminalController | undefined };
@@ -30,7 +30,7 @@ beforeEach(() => {
   input = target.appendChild(document.createElement("textarea"));
   targetRef.current = target;
   controller = {
-    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), focus: () => input.focus(),
+    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), pathLinkAt: vi.fn(), revealPathLink: vi.fn(async () => {}), focus: () => input.focus(),
     selectAll: () => { controller.selectedText = "all terminal output"; },
   };
   controllerRef.current = controller as unknown as TerminalController;
@@ -191,4 +191,26 @@ it("intercepts only a secondary press, leaving ordinary terminal mouse input alo
   input.dispatchEvent(secondary);
   expect(secondary.defaultPrevented).toBe(true);
   expect(terminalMouse).toHaveBeenCalledOnce();
+});
+
+const closeMenu = () => act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+
+it("offers the file manager first, then a separator, over a path link, and reveals that link", async () => {
+  await open();
+  expect(item("Open in file manager")).toBeUndefined();
+  closeMenu();
+  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts" });
+  await open();
+  expect(controller.pathLinkAt).toHaveBeenLastCalledWith(30, 40);
+  const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem], [role=separator]")];
+  expect(entries.map((entry) => entry.getAttribute("role") === "separator" ? "-" : entry.textContent)).toEqual(["Open in file manager", "-", "Copy", "Paste", "Select all"]);
+  await choose("Open in file manager");
+  expect(controller.revealPathLink).toHaveBeenCalledExactlyOnceWith({ path: "/r/a.ts" });
+});
+
+it("offers no file manager item to a menu opened with the keyboard, whatever was hovered", async () => {
+  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts" });
+  await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true })); });
+  expect(item("Copy")).toBeDefined();
+  expect(item("Open in file manager")).toBeUndefined();
 });

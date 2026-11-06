@@ -159,7 +159,11 @@ export interface Fixture {
    * that was redirected since), which the daemon refuses with `outside_scope` and `action: "open"`. A click reaches
    * `open_path_link` only for a path that is no file of a project (a folder with no entry file or one whose entry
    * file cannot be read, a path in a temp root) or a folder opened on the host. Cause `unreadable` carries the
-   * system's text as `detail`, which the daemon sends only for it. */
+   * system's text as `detail`, which the daemon sends only for it. `reveal_path_link` shows the same path in the file
+   * manager and answers an entry as `open_path_link` does, except that it accepts a file the viewer shows with an
+   * ack, including a `refused: "launchable"` one that has a `view`; a path that is gone, outside or refused for any
+   * other cause, a `launchable` one with no `view` (a path in a temp root, a folder in a project) included, is still
+   * refused. A package folder, which the daemon opens only by revealing it, has no entry. */
   pathLinks?: Record<
     string,
     | Exclude<PathLinkKind, "none">

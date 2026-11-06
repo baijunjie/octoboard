@@ -236,8 +236,9 @@ export function foundPathMatches(matches: PathMatch[], found: (path: string) => 
  * gathered for a moment into one batch, with at most two requests out at a time; a path that has
  * left the screen by then is not asked about. It is asked again only when its answer is old. Until
  * an answer arrives, or if the path is not one, it is no link. `onChange` runs when an answer makes
- * a path a link or stops it being one. The cache belongs to one session's project, so it is cleared
- * when the terminal shows another.
+ * a path a link or stops it being one. It also holds the link the pointer is on (`hovered`), which a
+ * context menu offers to act on. The cache belongs to one session's project, so it is cleared when the
+ * terminal shows another.
  */
 export class PathLinkCache {
   private readonly entries = new Map<string, PathAnswer & { at: number }>();
@@ -247,6 +248,9 @@ export class PathLinkCache {
   private timer?: ReturnType<typeof setTimeout>;
   private inFlight = 0;
   private generation = 0;
+  /** The path link the pointer is on, as xterm last reported it, with the cells it covers; for what the context
+   * menu offers. */
+  hovered?: { target: PathLinkTarget; range: IBufferRange };
 
   constructor(
     private readonly probe: (paths: string[]) => Promise<PathAnswer[]>,
@@ -295,6 +299,7 @@ export class PathLinkCache {
     this.asking.clear();
     this.queued = [];
     this.visible = undefined;
+    this.hovered = undefined;
   }
 
   private schedule(): void {
@@ -385,9 +390,15 @@ function pathLinkProvider(
         .flatMap((match) => {
           const target: PathLinkTarget = { path: match.path, line: match.line, ...cache.answerFor(match.path) };
           const activate = terminalLinkHandler((_, event) => open(target, isPrimaryModifier(event)), hasSelection);
+          // A leave that arrives after another link's hover must not forget that link, hence the identity check.
           return match.ranges
             .filter((range) => range.start.y <= y && y <= range.end.y)
-            .map((range) => ({ range, text: match.path, activate }));
+            .map((range) => {
+              const hovered = { target, range };
+              const hover = () => { cache.hovered = hovered; };
+              const leave = () => { if (cache.hovered === hovered) cache.hovered = undefined; };
+              return { range, text: match.path, activate, hover, leave };
+            });
         });
       callback(links.length > 0 ? links : undefined);
     },

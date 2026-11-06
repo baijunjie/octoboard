@@ -3116,6 +3116,11 @@ export type Request = {
   path: string,
 }
   | {
+  "type": "reveal_path_link",
+  project?: string,
+  path: string,
+}
+  | {
   "type": "push_project_branch",
   project: string,
 }
@@ -3805,6 +3810,11 @@ export type RequestBody = {
 }
 | {
   "type": "open_path_link",
+  project?: string,
+  path: string,
+}
+| {
+  "type": "reveal_path_link",
   project?: string,
   path: string,
 }

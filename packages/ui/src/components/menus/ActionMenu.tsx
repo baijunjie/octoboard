@@ -62,8 +62,9 @@ export function ActionMenu({
   contextTargetRef?: React.RefObject<HTMLElement | null>;
   /** Opens only from the target's context menu gesture, without a visible or tabbable trigger. */
   contextOnly?: boolean;
-  /** Refreshes actions before opening; runs before the target's own context menu handler. */
-  onContextOpen?: () => void;
+  /** Refreshes actions before opening; runs before the target's own context menu handler. Told where the
+   * menu opens (the pointer, or below the focused element for the keyboard) and whether the keyboard did it. */
+  onContextOpen?: (opened: { clientX: number; clientY: number; byKey: boolean }) => void;
   /** Called once the menu has closed and its popover has left the page (after its exit animation),
    * so focus has gone wherever the closing put it. It is given the trigger when the menu was opened
    * from the keyboard, that is while the trigger held focus, and no pointer press came before the
@@ -183,7 +184,7 @@ export function ActionMenu({
     const onContextMenu = (event: MouseEvent, byKey = false) => {
       event.preventDefault();
       if (contextOnly) event.stopPropagation();
-      contextOpenRef.current?.();
+      contextOpenRef.current?.({ clientX: event.clientX, clientY: event.clientY, byKey });
       const active = document.activeElement;
       const handed = takeHandedFocus();
       const adopt =

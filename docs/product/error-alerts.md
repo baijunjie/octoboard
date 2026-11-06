@@ -497,14 +497,16 @@ For example:
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
 - An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location. A file or
   folder that File manager or Default application no longer finds, a folder a folder row's Terminal would start a
-  shell in that is no longer there or is no longer a folder, or a folder a terminal's path link names in the project
-  that is gone when the click opens it on the host, instead says it may have been moved, renamed or
+  shell in that is no longer there or is no longer a folder, a folder a terminal's path link names in the project
+  that is gone when the click opens it on the host, or a file or folder one names there that is gone when the
+  terminal's Open in file manager shows it, instead says it may have been moved, renamed or
   deleted, and that one moved or renamed can be found in the project's files and tried again from there (see
   "A row's actions" in `docs/product/project-pane.md`, "Opened from the terminal" in `docs/product/file-viewer.md` and
   "File paths" in `docs/product/terminal-links.md`). A path link's file or folder gone from a temporary directory
   outside the project gets no remedy: the alert's sentence already says it does not exist any more.
-- A terminal's path link that a click refuses to open on the host, for a reason other than its being gone (see "File
-  paths" in `docs/product/terminal-links.md`), gets a remedy by that reason:
+- A terminal's path link that a click refuses to open on the host, or that the terminal's Open in file manager
+  refuses to show, for a reason other than its being gone (see "File paths" in `docs/product/terminal-links.md`), gets
+  a remedy by that reason:
   - **a relative path found in more than one of the places it is looked for**: find the one meant in the project's
     files and open it from there;
   - **something the system would run**: if it is meant to run, open it oneself from the file manager;
@@ -516,8 +518,8 @@ For example:
     the system's own text of a read that failed under Error details.
 - A read of the project's files that the operating system denies — Octoboard is not allowed to read the path, as when a
   shell terminal starts in a folder it may not read, when File manager or Default application is used on such a path, or
-  when a terminal's path link is opened on the host — asks the user to check the path's permissions,
-  and grant Octoboard access in the system's privacy settings if needed, then try again. It names no writable disk and
+  when a terminal's path link is opened on the host or shown in the file manager — asks the user to check the path's
+  permissions, and grant Octoboard access in the system's privacy settings if needed, then try again. It names no writable disk and
   no other folder to choose: nothing is written there, and there is no folder to pick instead.
 - A folder a request is scoped to that cannot be read (`source_unavailable`) — the project's own directory, or its
   place in a worktree of its repository — is not something the user typed or picked, so its remedy asks for it to be

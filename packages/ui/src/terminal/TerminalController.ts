@@ -13,9 +13,12 @@ import { watchPointerForLinks } from "./links/pointerLinks";
 import { macEditingSequence } from "./terminalKeys";
 import {
   brokenUrlLinkProvider,
+  cellAtPoint,
   type HoveredTerminalLink,
   linkBox,
+  rangeHasCell,
   TERMINAL_URL_REGEX,
+  type TerminalGrid,
   terminalLinkHandler,
 } from "./links/terminalLinks";
 import { exposeReadOnlyView } from "./terminalTextView";
@@ -76,6 +79,8 @@ export interface TerminalControllerHandlers {
      * or index file), otherwise a file with its default application and a folder in the file
      * manager. `onHost` asks for a folder to go to the file manager even when it has a view. */
     open: (target: PathLinkTarget, onHost: boolean) => Promise<void>;
+    /** Shows a path that was found in the host's file manager, a file selected in its folder. */
+    reveal: (target: PathLinkTarget) => Promise<void>;
   };
 }
 
@@ -320,14 +325,20 @@ export class TerminalController {
     );
   }
 
+  /** The screen's cell grid, or `undefined` while it is not in the document. */
+  private grid(): TerminalGrid | undefined {
+    const screen = this.term.element?.querySelector(".xterm-screen")?.getBoundingClientRect();
+    if (!screen) return undefined;
+    const { cols, rows } = this.term;
+    return { cols, rows, viewportY: this.term.buffer.active.viewportY, screen };
+  }
+
   /** Reports the OSC 8 link the pointer has come onto, placed from the screen's cell grid. */
   private hoverLink(uri: string, range: IBufferRange): void {
-    const screen = this.term.element?.querySelector(".xterm-screen")?.getBoundingClientRect();
-    if (!screen) return;
-    const { cols, rows } = this.term;
-    const viewportY = this.term.buffer.active.viewportY;
-    this.hoveredViewportY = viewportY;
-    this.handlers.onLinkHover?.(linkBox(uri, range, { cols, rows, viewportY, screen }));
+    const grid = this.grid();
+    if (!grid) return;
+    this.hoveredViewportY = grid.viewportY;
+    this.handlers.onLinkHover?.(linkBox(uri, range, grid));
   }
 
   mount(container: HTMLElement): void {
@@ -441,6 +452,22 @@ export class TerminalController {
    * selecting here. */
   get mouseReporting(): boolean {
     return this.term.modes.mouseTrackingMode !== "none";
+  }
+
+  /** The path link under a client point, if the link the pointer last hovered still covers it: xterm does not always
+   * report a leave when a scroll takes a link from under a resting pointer (when it carries the link off the screen,
+   * for one). */
+  pathLinkAt(clientX: number, clientY: number): PathLinkTarget | undefined {
+    const hovered = this.pathLinks?.hovered;
+    const grid = this.grid();
+    const cell = hovered && grid && cellAtPoint(grid, clientX, clientY);
+    if (!hovered || !cell) return undefined;
+    return rangeHasCell(hovered.range, cell) ? hovered.target : undefined;
+  }
+
+  /** Shows a path link in the host's file manager. */
+  revealPathLink(target: PathLinkTarget): Promise<void> {
+    return this.handlers.pathLinks?.reveal(target) ?? Promise.resolve();
   }
 
   selectAll(): void {

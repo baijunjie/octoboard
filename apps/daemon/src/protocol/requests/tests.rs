@@ -410,6 +410,24 @@ fn open_path_link_parses_with_and_without_a_project() {
 }
 
 #[test]
+fn reveal_path_link_parses_with_and_without_a_project() {
+    let request: Request = serde_json::from_str(
+        r#"{"type":"reveal_path_link","id":"request-1","project":"project-7","path":"src/a.ts"}"#,
+    )
+    .unwrap();
+    assert!(matches!(
+        request.body,
+        RequestBody::RevealPathLink { project: Some(project), path } if project == "project-7" && path == "src/a.ts"
+    ));
+    let request: Request =
+        serde_json::from_str(r#"{"type":"reveal_path_link","path":"/tmp/b.png"}"#).unwrap();
+    assert!(matches!(
+        request.body,
+        RequestBody::RevealPathLink { project: None, path } if path == "/tmp/b.png"
+    ));
+}
+
+#[test]
 fn a_quota_refresh_may_name_neither_agent_nor_account() {
     let request: Request =
         serde_json::from_str(r#"{"type":"refresh_account_quotas","id":"request-1"}"#).unwrap();
