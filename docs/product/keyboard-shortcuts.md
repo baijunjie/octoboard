@@ -6,9 +6,29 @@ changed shortcut belongs to the client it was changed in — the desktop app, or
 "Where the shortcuts are kept" below).
 
 What each command does, and when it does nothing, is in the doc of the command itself; this doc covers the keys: which
-there are, how they are changed and how a key press is matched against them. The fixed letters that act only inside
-an open session menu are described in "Session menu keyboard shortcuts" in `docs/product/sidebar-session-rows.md`;
-they are not listed in Settings.
+there are, how they are changed and how a key press is matched against them.
+
+## Menu keyboard shortcuts
+
+Session, project and console action menus show fixed single-letter shortcuts on their top-level actions. While a menu
+is open, a letter takes that action immediately, on the session, project or console the menu belongs to, regardless
+of the selected session. The mappings are in "Session menu keyboard shortcuts" in
+`docs/product/sidebar-session-rows.md`, "Project menu keyboard shortcuts" in `docs/product/sidebar-project-rows.md`
+and "The console header" in `docs/product/sidebar.md`.
+
+Only items that perform an action have these keys. Entries that open another menu or a custom panel, such as Colour,
+Switch account, Copy, Open in and View archive, have no letter or key cap; they keep their usual pointer and keyboard
+navigation. Choices inside those submenus have no temporary letter shortcuts either. Keys pressed in a submenu or
+its panel never activate a parent item.
+
+An action shows its letter at its trailing edge, except when a disabled item's reason takes that space. The letters
+are fixed across languages, cannot be changed and are not listed in Settings. Only actions that are present can be
+taken; a disabled action does nothing from its letter, as from a press. Each action keeps its normal confirmation and
+protection rules.
+
+The letter is matched against the character typed, with no modifier held. Holding a letter does not repeat its
+action, and input-method composition does not activate an item. Once the menu closes its letters have no effect.
+Arrow keys, Enter, Space and Escape keep the menu's usual navigation and activation behavior.
 
 ## How a combination is written and matched
 
@@ -152,7 +172,6 @@ The same rules decide what a recording accepts, what a reset may put back and wh
 
 Where a configurable shortcut is shown it is the command's current one, and it changes as soon as the shortcut does:
 
-- the key caps at the end of a project menu's Focus mode item;
 - the tooltips that name a shortcut: the **+** that the New session commands act on, which shows the shortcut of
   whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/focus-mode.md`);
 - the desktop app's native menu, whose **Settings…** item carries Open settings' shortcut;
@@ -185,7 +204,7 @@ and matched" above). A modifier that is absent or `false` is not held. `{}` mean
 ```
 
 The command ids are `back`, `forward`, `nextConsoleSession`, `previousConsoleSession`, `focusMode`, `newSession`,
-`quickCreate` (New session with defaults) and `openSettings`. The fixed window keys and session-menu letters have
+`quickCreate` (New session with defaults) and `openSettings`. The fixed window keys and menu letters have
 none.
 
 **Such an object is judged as a whole set**, against the bindings the whole set would leave, so that two commands

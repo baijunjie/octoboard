@@ -122,10 +122,14 @@ it("shows menu-only letters instead of selected-session window shortcuts", async
   press(container.querySelector<HTMLElement>('button[aria-label^="Actions for session"]')!, "mouse");
   await act(async () => {});
   const shown = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith(label))!;
-  for (const [label, letter] of [["Lock", "L"], ["Pin", "P"], ["Focus mode", "F"], ["Rename", "R"], ["Copy session ID", "C"], ["Colour", "B"], ["Change model", "M"], ["Archive", "A"]]) {
+  for (const [label, letter] of [["Lock", "L"], ["Pin", "P"], ["Focus mode", "F"], ["Rename", "R"], ["Copy session ID", "C"], ["Change model", "M"], ["Archive", "A"]]) {
     expect(shown(label).querySelector("kbd")?.textContent).toBe(letter);
     expect(shown(label).getAttribute("aria-keyshortcuts")).toBe(letter);
   }
+  expect(shown("Colour").querySelector("kbd")).toBeNull();
+  expect(shown("Colour").getAttribute("aria-keyshortcuts")).toBeNull();
+  act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true, cancelable: true })));
+  expect(document.querySelector('[role="listbox"]')).toBeNull();
   act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "c", bubbles: true, cancelable: true })));
   expect(handlers.onCopySessionId).toHaveBeenCalledExactlyOnceWith(session);
 });

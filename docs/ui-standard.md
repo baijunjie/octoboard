@@ -307,10 +307,11 @@ comes from the platform adapter's `kind`, independently of where sessions run.
 
 ## Keyboard
 
-Session action menus show fixed single-letter shortcuts at the trailing edge of their items, using the standard
-menu key caps. They act only while that menu is open, on the session the menu belongs to. A submenu keeps its own
-keys; a key pressed there never activates a parent item. Disabled actions remain unavailable from their keys too.
-These temporary keys are separate from the window's configurable shortcuts and do not appear in Settings.
+Session, project and console action menus show fixed single-letter shortcuts at the trailing edge of direct actions,
+using the standard menu key caps. Entries that open a submenu or a custom panel have no letter shortcut. The letters
+act only while that menu is open, on the item the menu belongs to; a key pressed inside a submenu never activates a
+parent action. Disabled actions remain unavailable from their keys too. These temporary keys are separate from the
+window's configurable shortcuts and do not appear in Settings.
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, except for the collection-row
 behavior under "Buttons" below and a choice inside a dialog's form. A control that holds a choice there (a checkbox, a

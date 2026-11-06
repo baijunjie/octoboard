@@ -33,6 +33,11 @@ view" in `docs/product/archive-view.md` for what it lists and how each item look
 archived console session (see "The archive view" in `docs/product/archive-view.md`). A console with no archived console
 session shows only a disabled item saying so. The console's avatar is not repeated here; the rail marks it.
 
+While the console's action menu is open, its top-level actions have fixed letter shortcuts: **Add project** takes
+`A`, **Console settings** takes `E` and **Delete console** takes `D`. They act on the console the menu belongs to,
+including when opened from its avatar on the rail, under "Menu keyboard shortcuts" in
+`docs/product/keyboard-shortcuts.md`. View archive is a submenu and has no temporary letter shortcut.
+
 ## The console sessions section and the project list
 
 Under the header comes the **console sessions** section: every console session of the console that is not archived,

@@ -144,9 +144,10 @@ goes to the row.
 
 ## Session menu keyboard shortcuts
 
-While a session's action menu is open, a single letter takes the corresponding item immediately. It acts on the
-**session the menu belongs to**, whether or not that session is selected. This applies wherever that menu is offered,
-including right-click menus, nested sessions, focus cards and archived rows.
+A session's action menu offers the following letters on its top-level actions, wherever the menu is offered,
+including right-click menus, nested sessions, focus cards and archived rows. Availability is the item's availability
+as described above; a console session's own focus card, for example, has no Pin or Focus mode item. The keys act on
+the session the menu belongs to under "Menu keyboard shortcuts" in `docs/product/keyboard-shortcuts.md`.
 
 | Action | Letter |
 |---|---|
@@ -156,24 +157,13 @@ including right-click menus, nested sessions, focus cards and archived rows.
 | Reopen | O |
 | Rename | R |
 | Copy session ID | C |
-| Colour submenu | B |
 | Change model | M |
-| Switch account submenu | S |
 | Hand off | H |
 | Unbind | U |
 | Archive | A |
 | Delete | D |
 
-Each item shows its letter at its trailing edge, except when a disabled item's reason takes that space. The letters
-are fixed across languages and cannot be changed in Settings. Only items that are present can be taken; a disabled
-item does nothing from its letter, as from a press. Archive and Delete follow their own menu actions and normal
-confirmation and protection rules.
-
-The letter is matched against the character typed, with no modifier held. Holding a letter does not repeat its
-action, and input-method composition does not activate an item. A letter acts only inside its own open
-menu: once the menu closes it has no effect, and keys inside a submenu or its panel do not activate a parent item.
-Pressing a submenu's letter opens it with keyboard focus inside, as Enter on its item does. Arrow keys, Enter,
-Space and Escape keep the menu's usual navigation and activation behavior.
+Colour and Switch account open submenus or a panel, so neither has a temporary letter shortcut.
 
 ## The binding badge
 

@@ -15,7 +15,6 @@ import type { Account, AccountSharing, Agent, Console, Project, ProviderInfo, Se
 import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
-import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
 import { archivePreviewSessions, isUnusedSession } from "../sessions/order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { ArchiveScope, ProjectPanelKind, SidebarHandlers } from "./types";
@@ -71,14 +70,14 @@ export function consoleMenu(
   archived: Session[],
 ): ActionMenuEntry[] {
   return [
-    { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
+    { label: t("sidebar.console.addProject"), shortcut: "A", icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
     archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: console.id }),
     ),
     "separator",
-    { label: t("sidebar.console.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
+    { label: t("sidebar.console.edit"), shortcut: "E", icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
     "separator",
-    { label: t("sidebar.console.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-console", console }), destructive: true },
+    { label: t("sidebar.console.delete"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-console", console }), destructive: true },
   ];
 }
 
@@ -120,8 +119,8 @@ export function projectMenu(
   const onScreen = handlers.visibleProjectPanels?.project === project.id ? handlers.visibleProjectPanels.kinds : [];
   const panels = PROJECT_PANELS.filter((kind) => !onScreen.includes(kind));
   return [
-    ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
-    ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, onClick: () => handlers.onFocus({ project }) }] : []),
+    ...(placement === "focused" ? [] : [{ ...pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned)), shortcut: "P" }]),
+    ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, shortcut: "F", onClick: () => handlers.onFocus({ project }) }] : []),
     ...(placement === "focused"
       ? []
       : [archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () => handlers.onOpenArchive(archiveScope))]),
@@ -162,10 +161,10 @@ export function projectMenu(
       ]
       : []),
     "separator",
-    { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
-    { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
+    { label: t("sidebar.project.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
+    { label: t("sidebar.project.edit"), shortcut: "E", icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
     "separator",
-    { label: t("sidebar.project.remove"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },
+    { label: t("sidebar.project.remove"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },
   ];
 }
 
@@ -337,11 +336,11 @@ export function sessionMenu(
       shortcut: "C",
       onClick: () => handlers.onCopySessionId(session),
     },
-    ...(session.kind === "console" && !archived ? [{ ...colourSubmenu(t, handlers, session), shortcut: "B" }] : []),
+    ...(session.kind === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(!archived ? ["separator" as const] : []),
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
     ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
-    ...(switchAccount ? [{ ...switchAccount, shortcut: "S" }] : []),
+    ...(switchAccount ? [switchAccount] : []),
     ...(archived ? [] : [{ ...handoffItem(t, handlers, session, canHandoff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }]),
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",

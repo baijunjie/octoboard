@@ -599,3 +599,52 @@ it("keeps composed archive names raw for matching while retaining their visible 
   expect(entry.label).not.toMatch(/[\u2066-\u2069]/);
   expect(entry.content).toBeTruthy();
 });
+
+describe("menu-only letters on direct actions", () => {
+  const direct = (menu: ActionMenuEntry[]) => menu.filter((entry): entry is ActionMenuItem => typeof entry === "object" && "onClick" in entry);
+  const letters = (menu: ActionMenuEntry[]) => direct(menu).map(({ label, shortcut }) => [label, shortcut]);
+  const noNestedLetters = (menu: ActionMenuEntry[]) => {
+    for (const entry of menu) {
+      if (typeof entry !== "object" || "onClick" in entry || "note" in entry) continue;
+      expect(entry).not.toHaveProperty("shortcut");
+      if ("items" in entry) {
+        for (const item of entry.items) if (typeof item === "object") expect(item).not.toHaveProperty("shortcut");
+        noNestedLetters(entry.items);
+      }
+    }
+  };
+  const uniqueLetters = (menu: ActionMenuEntry[]) => {
+    const keys = direct(menu).filter((entry) => !entry.disabled && !entry.reason).map((entry) => entry.shortcut);
+    expect(keys.every((key) => typeof key === "string" && /^[A-Z]$/.test(key))).toBe(true);
+    expect(new Set(keys).size).toBe(keys.length);
+  };
+
+  it.each(["list", "focused", "nested"] as const)("keeps project letters unique in the %s menu, pinned or not", (placement) => {
+    for (const pinned of [false, true]) {
+      const project = { id: "p", pinned } as Project;
+      const menu = projectMenu(t, {} as SidebarHandlers, project, [], { placement, gitRepository: true });
+      expect(letters(menu)).toEqual([
+        ...(placement !== "focused" ? [[pinned ? "Unpin" : "Pin", "P"]] : []),
+        ...(placement === "list" ? [["Focus mode", "F"]] : []),
+        ["Rename", "R"], ["Project settings", "E"], ["Remove project", "D"],
+      ]);
+      noNestedLetters(menu);
+      uniqueLetters(menu);
+    }
+  });
+
+  it("gives a console's direct actions letters and leaves its archive submenu unbound", () => {
+    const menu = consoleMenu(t, consoleOf("c", "Main"), { onOpenDialog: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn() }, []);
+    expect(letters(menu)).toEqual([["Add project", "A"], ["Console settings", "E"], ["Delete console", "D"]]);
+    noNestedLetters(menu);
+    uniqueLetters(menu);
+  });
+
+  it.each(["list", "focused"] as const)("keeps session leaves bound and Colour and Switch account unbound in %s", (placement) => {
+    const session = sessionOf("hub", "c", undefined, "Hub", "idle");
+    const menu = sessionMenu(t, {} as SidebarHandlers, session, [account("work", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, placement });
+    expect(menu.filter((entry) => typeof entry === "object" && ("items" in entry || "panel" in entry)).map((entry) => typeof entry === "object" && entry.label)).toEqual(["Colour", "Switch account"]);
+    noNestedLetters(menu);
+    uniqueLetters(menu);
+  });
+});

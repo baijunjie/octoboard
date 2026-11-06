@@ -602,15 +602,22 @@ it("does not choose a disabled item or an item with a reason by its letter", asy
   expect(document.querySelector("[role=menu]")).not.toBeNull();
 });
 
-it("opens a submenu by its letter and keeps parent letters out of it", async () => {
+it("opens a submenu with an arrow key and keeps parent letters out of it", async () => {
   const parent = vi.fn();
   const child = vi.fn();
   await openMenu([
     { label: "Root", icon: Trash2, shortcut: "R", onClick: parent },
-    { label: "Switch", icon: Trash2, shortcut: "S", items: [{ label: "Choice", icon: Trash2, shortcut: "R", onClick: child }] },
+    { label: "Switch", icon: Trash2, items: [{ label: "Choice", icon: Trash2, shortcut: "R", onClick: child }] },
   ]);
-  const menu = document.querySelector<HTMLElement>("[role=menu]")!;
-  act(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "s", bubbles: true, cancelable: true })));
+  const branch = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Switch")!;
+  expect(branch.querySelector("kbd")).toBeNull();
+  expect(branch.getAttribute("aria-keyshortcuts")).toBeNull();
+  act(() => {
+    branch.focus();
+    branch.dispatchEvent(new KeyboardEvent("keydown", { key: "s", bubbles: true, cancelable: true }));
+  });
+  expect(document.querySelectorAll("[role=menu]")).toHaveLength(1);
+  act(() => branch.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
   await act(async () => {});
   const menus = document.querySelectorAll<HTMLElement>("[role=menu]");
   expect(menus).toHaveLength(2);

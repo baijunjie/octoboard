@@ -106,6 +106,23 @@ coordinators and sessions bound to a console session stay at the project's own l
 two levels deep. The nesting has no fold control of its own: the sessions under an owner fold away with their project,
 like every other session row.
 
+## Project menu keyboard shortcuts
+
+A project's action menu offers these letters on its top-level actions, in its row, its focus header and its heading
+inside a console session's focus mode, wherever the corresponding item is offered. They act on the project the menu
+belongs to under "Menu keyboard shortcuts" in `docs/product/keyboard-shortcuts.md`.
+
+| Action | Letter |
+|---|---|
+| Pin / Unpin | P |
+| Focus mode | F |
+| Rename | R |
+| Project settings | E |
+| Remove project | D |
+
+The focus header leaves out Pin / Unpin and Focus mode; a heading inside a console session's focus mode leaves out
+Focus mode. View archive, Copy, Open in, Open panel and Git are submenus and have no temporary letter shortcuts.
+
 ## Opening the system file manager
 
 **File manager** under **Open in** is available for every project in all the project-menu placements above,
