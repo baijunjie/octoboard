@@ -290,9 +290,9 @@ function DialogFrame({
           aria-describedby={alerting ? bodyId : undefined}
           className={
             fullScreen
-              ? "control-fills overflow-hidden p-0"
+              ? "control-fills bg-panel-sidebar overflow-hidden p-0"
               : size === "viewer"
-                ? "control-fills overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none desktop:h-[calc(100dvh-80px-var(--bottom-chrome-height))] desktop:w-[min(1440px,calc(100vw-80px))]"
+                ? "control-fills bg-panel-sidebar overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none desktop:h-[calc(100dvh-80px-var(--bottom-chrome-height))] desktop:w-[min(1440px,calc(100vw-80px))]"
                 : size === "wide"
                   ? "control-fills max-w-3xl"
                   : "control-fills"

@@ -228,7 +228,7 @@ export function FileViewer({
         {/* The find bar floats over the content's top trailing corner; while it is open the scrolled text
             starts below it (`data-find-open` in style.css), so it covers no line until the reader scrolls.
             The content is in a box of its own so the bar's changes do not count as the drawn text changing. */}
-        <div className="relative flex min-h-0 flex-1 flex-col" data-find-open={find.bar ? "" : undefined}>
+        <div className="relative flex min-h-0 flex-1 flex-col bg-overlay" data-find-open={find.bar ? "" : undefined}>
           {find.bar && <FindBar {...find.bar} />}
           <div ref={contentRef} data-find-content="" className="flex min-h-0 flex-1 flex-col gap-3">
             <ControlsSlot value={controls}>

@@ -214,6 +214,10 @@ hairline and a drop shadow instead of HeroUI's faint inset line. The rule is the
 app's own takes its `floating-surface` class, which in dark also gives it that edge). Light keeps HeroUI's own
 surfaces and shadows.
 
+The file viewer's header uses `--panel-sidebar` in both appearances to distinguish it from the reading
+area below its full-width groove. The content area's ground remains `--overlay`; code, documents and images
+keep their own reading surfaces. This header is the exception to the shared floating-surface colour above.
+
 The step is held small by HeroUI's `--muted`, which keeps 4.5:1 on a fill holding secondary text (a placeholder, a menu
 item's description under the pointer) only up to that resting fill. The user accepted the shortfalls the lighter ground
 leaves in HeroUI's own colours: `--muted` on the hovered fill is 4.05:1; `--danger` is 3.33:1 for a destructive menu
