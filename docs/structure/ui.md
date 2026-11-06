@@ -20,7 +20,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 | `vite.config.ts`, `typography.mjs`, `tsconfig.json`, `tsconfig.app.json` | Vite and Vitest configuration; `tsconfig.app.json` is the production type check, which leaves out tests, `src/gallery/`, `src/fixtures/` and `src/website-preview/` |
 | `gallery.html`, `gallery-frame.html` | Entries of the gallery |
 | `website-preview.html`, `feature-preview.html`, `vite.preview.config.ts` | Entries and build of the website preview and the feature views (`pnpm build:preview` writes into `dist-preview/`; the site's `build-preview` passes `--outDir`) |
-| `packages/ui/scripts/gallery-sweep.mjs` | `pnpm gallery:sweep`: loads gallery scenarios in a headless browser and fails on any gallery failure; `gallery-chip-geometry.mjs` and `gallery-report-focus.mjs` are standalone Playwright checks run by hand |
+| `packages/ui/scripts/gallery-sweep.mjs`, `gallery-compare.mjs` | `pnpm gallery:sweep` checks scenario rendering; the manual `pnpm gallery:compare` writes screenshot difference reports from two served galleries. Both use `gallery-browser.mjs` for browser resolution; comparison and report helpers live in `gallery-compare-report.mjs`. Usage is in the [gallery README](../../packages/ui/src/gallery/README.md). `gallery-chip-geometry.mjs` and `gallery-report-focus.mjs` are standalone Playwright checks run by hand |
 | `packages/ui/scripts/compiler-bailouts.mjs` | `pnpm compiler:bailouts`: lists the components and hooks the React Compiler leaves uncompiled, and exits 1 when there is any (run by hand; not part of `pnpm verify`) |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
@@ -135,7 +135,8 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 - [`src/fixtures/`](../../packages/ui/src/fixtures/README.md) — the fixtures runtime (fixture daemon with its per-domain reply modules, fake terminal,
   builders, step driver, sample data) shared by the gallery, the website preview and the application tests.
 - [`src/gallery/`](../../packages/ui/src/gallery/README.md) — the UI state gallery: pages, the `Scenario` type and the
-  scenarios under `fixtures/`; its README also holds the conventions for writing scenarios and how to sweep the gallery.
+  scenarios under `fixtures/`; its README also holds the conventions for writing scenarios, sweeping the gallery and
+  manually comparing screenshots.
 - `src/website-preview/` — the fixture-backed build the website embeds: the real `App` over a preview daemon, scenes,
   simulated agent terminals, `features/` focused views, and `messages.ts`, the `postMessage` contract with the embedding
   page that `apps/web/` imports too (through the `./preview-messages` export).

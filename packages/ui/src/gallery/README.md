@@ -166,6 +166,60 @@ sets how many), and say who holds it and who is queued ahead while they wait, so
 rather than overload the machine. The queue is first come, first served: a sweep run again after another run started
 waiting lines up behind it.
 
+## Comparing gallery screenshots
+
+`pnpm gallery:compare` (`packages/ui/scripts/gallery-compare.mjs`) compares two already served galleries and writes a
+static HTML difference report, JSON results and PNG images. It runs only when invoked explicitly; automatic checks
+do not invoke it. Start each checkout's gallery yourself on a different free port, with dependencies installed and
+Chromium available as described in "Sweeping the gallery". The command starts no servers, builds or worktrees.
+
+From `packages/ui`, compare selected scenarios using the baseline and current checkout's actual gallery origins:
+
+```sh
+pnpm gallery:compare --base-url http://localhost:5192 --url http://localhost:5191 --output /tmp/gallery-comparison-1 'viewer-*'
+```
+
+From the repository root, the same package command is:
+
+```sh
+pnpm --filter @octoboard/ui gallery:compare --base-url http://localhost:5192 --url http://localhost:5191 --output /tmp/gallery-comparison-1 'viewer-*'
+```
+
+Choose a new output directory for each run; an existing directory, even an empty one, is refused. Keep reports outside
+the repository or under its ignored `out/` directory. Open `index.html` directly in a browser: each case shows its
+status, viewport and viewing conditions, baseline and current captures, and a difference image with changed pixels
+marked red. Pixel counts, percentages and difference bounds describe the comparison. `results.json` records the
+origins, selection, threshold, timing, completion state and per-case results; the PNG files sit beside both reports.
+
+With no scenario arguments the command compares the union of both catalogs, reporting scenarios present only in the
+current catalog as added and those present only in the baseline as removed. Prefer selecting the cases relevant to
+the change: repeat ids or quoted `*` patterns, or use `--group <text>` to select a group substring on either side.
+An explicit pattern matching no selected scenario fails rather than silently omitting it.
+
+The defaults are English, the light theme and one capture at a time. The whole comparison waits for the machine-wide
+heavy-step lock used by `pnpm verify`; it prints the current holders while queued. `--theme dark|both` and
+`--lang en,zh-Hans` widen the viewing conditions; each named language must exist in both galleries. `--width <pixels>`
+chooses one width. Both sides use the current scenario's own width when set, otherwise that flag or 1440, widened to
+either side's `minWidth`; height is the current scenario's height or 900, with a minimum of 400. A removed scenario
+uses its baseline metadata. This keeps the viewport equal on both sides.
+
+Each capture uses a fresh browser context, waits for the scenario's initial steps and fonts, disables screenshot
+animations and hides the caret. It does not replay the Live changes buttons. Render errors and gallery failure
+overlays are recorded as errors. A completed comparison records unchanged, changed, added, removed or error; a case
+interrupted before completion remains pending. Reports are saved incrementally, and an interrupted or aborted run
+shows Incomplete. Browser or comparison infrastructure failures stop the remaining cases and close Chromium; a
+scenario render failure can be recorded while the remaining cases continue.
+
+`--threshold <0..255>` sets the largest RGBA channel difference ignored, default 8; a pixel beyond it counts as changed.
+`--timeout <ms>` bounds browser operations, default 60000. `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT` and
+`--chromium <path>` / `OCTOBOARD_CHROMIUM` select existing browser installations. `pnpm gallery:compare --help` lists
+all options. Exit status is 0 for no differences, 1 for changed/added/removed cases, 2 for rendering, setup or cleanup
+errors, and 128 plus the signal number for interruption.
+
+Compare both checkouts on the same machine and inspect the images: dynamic timestamps, terminal output, fixture
+changes and rendering differences can change pixels too. A pixel difference identifies something to review; it does
+not establish a regression or application correctness.
+
 ## External interfaces
 
 - `SCENARIOS`, `GROUPS`, `DEFAULT_SCENARIO` (`fixtures/index.ts`) — the scenario registry the shell lists.

@@ -55,6 +55,10 @@ with `pnpm gallery`. How it works, how to write a scenario and the conventions f
 `pnpm gallery:sweep` loads scenarios in a headless browser and fails on any gallery failure; its flags and the
 Playwright setup are in [`src/gallery/README.md`](src/gallery/README.md), section "Sweeping the gallery".
 
+`pnpm gallery:compare` compares screenshots from two served galleries and writes an HTML difference report. It is a
+manual command, excluded from automatic checks; see "Comparing gallery screenshots" in
+[`src/gallery/README.md`](src/gallery/README.md) for setup and usage.
+
 ## Read next
 
 - [The UI's structure: directories, the lint-enforced import layering, where new code goes and the shared entry

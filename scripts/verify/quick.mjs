@@ -37,6 +37,7 @@ export const UI_DISK_TESTS = [
   "src/components/text/InlineReference.test.tsx",
   "src/components/form/AdvancedSection.test.tsx",
   "scripts/gallery-sweep.test.mjs",
+  "scripts/gallery-compare.test.mjs",
 ];
 
 // UI tests that use the file system without reading UI sources: they read files outside the package
