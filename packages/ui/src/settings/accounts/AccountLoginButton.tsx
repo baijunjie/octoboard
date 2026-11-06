@@ -11,6 +11,8 @@ import type { QuotaReading } from "../../quota/useAccountQuota";
 import { loginStateOf } from "../../accounts/quotaFormat";
 import { useDaemonStore } from "../../store";
 import { afterFrames } from "../../components/focus/afterFrames";
+import { canTakeFocus } from "../../components/focus/regionFocus";
+import { useLatest } from "../../components/hooks/useLatest";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 
@@ -29,10 +31,10 @@ export type ReturnLoginFocus = (succeeded: boolean, cancelling?: Promise<void>) 
  * gone. Either way focus would otherwise end on `<body>`, where VoiceOver reads the whole web area and does not speak
  * the row's status.
  *
- * The move waits a frame past the restore, which runs in the frame after the dialog unmounts, and acts only where the
- * restore left focus on `<body>` or on a button that is going: a restore that landed right, or on another control,
- * is left alone. A restore React Aria defers further for a screen reader's virtual cursor acts only while focus is
- * still on `<body>`, so it does not undo this move.
+ * A removed opener makes React Aria restore to another control in its parent scope. Intercept that automatic
+ * restore to choose the row's fallback instead, before it could be mistaken for a deliberate focus move. A pending
+ * cancel still waits a frame past the restore before returning to the button once it is available. Focus already
+ * held elsewhere is left alone.
  */
 function useLoginFocusReturn(
   button: React.RefObject<HTMLElement | null>,
@@ -40,9 +42,13 @@ function useLoginFocusReturn(
   { active, succeeded }: { active: boolean; succeeded: boolean },
 ): ReturnLoginFocus {
   const [returning, setReturning] = useState<{ to: "button" | "fallback"; cancelling: boolean }>();
+  const latest = useLatest({ fallback, succeeded });
+  const restoreGuard = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => restoreGuard.current?.abort(), []);
   useEffect(() => {
     if (!returning || returning.cancelling || (returning.to === "button" && active)) return;
     return afterFrames(2, () => {
+      restoreGuard.current?.abort();
       setReturning(undefined);
       const opener = button.current;
       const target = returning.to === "button" && !succeeded && opener ? opener : fallback();
@@ -54,6 +60,24 @@ function useLoginFocusReturn(
     });
   }, [returning, active, succeeded]);
   return (closedOnSuccess, cancelling) => {
+    restoreGuard.current?.abort();
+    const controller = new AbortController();
+    restoreGuard.current = controller;
+    const closingDialog = document.activeElement?.closest('[role="dialog"], [role="alertdialog"]');
+    // React Aria 3.52 FocusScope emits this cancelable event before applying its restore target,
+    // including the first control in a parent scope when the opener has disappeared.
+    document.addEventListener("react-aria-focus-scope-restore", (event) => {
+      if (event.defaultPrevented || (!closedOnSuccess && button.current?.isConnected && !latest.current.succeeded)) return;
+      const target = latest.current.fallback();
+      if (!canTakeFocus(target)) return;
+      event.preventDefault();
+      controller.abort();
+      ringForAutomaticFocus();
+      target.focus();
+    }, { capture: true, once: true, signal: controller.signal });
+    document.addEventListener("focusin", (event) => {
+      if (!(event.target instanceof Node) || !closingDialog?.contains(event.target)) controller.abort();
+    }, { capture: true, signal: controller.signal });
     const next = { to: closedOnSuccess ? "fallback" : "button", cancelling: cancelling !== undefined } as const;
     setReturning(next);
     void cancelling?.then(() => setReturning((current) => (current === next ? { ...next, cancelling: false } : current)));
@@ -98,7 +122,11 @@ export function AccountLoginButton({ agent, account, name, quota, turnedOff, onL
         aria-describedby={active ? reasonId : undefined}
         aria-label={t("settings.accounts.login.open", { name: isolate(name) })}
         className={active ? UNAVAILABLE_CLASS : ICON_TRIGGER_CLASS}
-        onPress={() => { if (!active) onLogin(returnFocus); }}
+        onPress={() => {
+          if (active) return;
+          const focused = document.activeElement;
+          onLogin(focused === document.body || button.current?.contains(focused) ? returnFocus : () => {});
+        }}
       >
         {active && <span id={reasonId} className="sr-only">{t("settings.accounts.login.starting")}</span>}
         <LogIn aria-hidden="true" className="size-4" />

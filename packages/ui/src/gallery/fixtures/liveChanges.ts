@@ -12,6 +12,27 @@ import type { LiveChange } from "../scenario";
 /** The readings without the one for the account `account` of `agent` (`null` for its default account). */
 const withoutQuota = (quotas: AccountQuota[], agent: Agent, account: string | null) => quotas.filter((held) => held !== accountQuotaOf(quotas, agent, account));
 
+/** A fresh reading of one account, leaving the other accounts' readings intact. */
+export function accountQuotaUpdated(id: string, label: string, quota: AccountQuota): LiveChange {
+  return {
+    id,
+    label,
+    steps: [(ui) => ui.daemonEvents((state) => ({ type: "account_quotas_updated", account_quotas: [...withoutQuota(state.accountQuotas, quota.agent, quota.account), quota] }))],
+  };
+}
+
+/** A running login completed by its agent; the separate quota update can arrive on either side of it. */
+export function accountLoginSucceeded(id: string, label: string, agent: Agent, account: string | null): LiveChange {
+  return {
+    id,
+    label,
+    steps: [(ui) => ui.daemonEvents((state): DaemonEvent | null => {
+      const login = state.accountLogins.find((held) => held.agent === agent && held.account === account && (held.status === "starting" || held.status === "waiting"));
+      return login ? { type: "account_login_updated", login: { ...login, status: "succeeded", failure: null } } : null;
+    })],
+  };
+}
+
 /** `account`, with its `quota` reading, appearing in the settings just before the account `before`. */
 export function accountAdded(id: string, label: string, account: Account, quota: AccountQuota, before: string): LiveChange {
   const step: Step = (ui) =>

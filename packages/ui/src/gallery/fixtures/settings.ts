@@ -7,7 +7,7 @@ import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
 import { noneAddedState } from "./empty";
-import { agentAvailability } from "./liveChanges";
+import { accountLoginSucceeded, accountQuotaUpdated, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
 const GROUP = "Settings";
@@ -1272,11 +1272,16 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, accounts not logged in yet",
-    description: "Work (never logged in) and Client (whose config directory does not exist yet) both have a dash in the Usage cell, which assistive technology reads as no usage reading, and after it the soft warning \"Not logged in\" badge in the Status column with a small Log in icon button beside it; they have no plan badge, and their Disable switches are off as usual. The default account above them is logged in: its plan, its \"Logged in\" badge and its usage bar.",
+    description: "Work (never logged in) and Client (whose config directory does not exist yet) both have a dash in the Usage cell, which assistive technology reads as no usage reading, and after it the soft warning \"Not logged in\" badge in the Status column with a small Log in icon button beside it; they have no plan badge, and their Disable switches are off as usual. The default account above them is logged in: its plan, its \"Logged in\" badge and its usage bar. Open Work's inline Log in from the keyboard, then apply the live changes for its logged-in reading and login success in either order: focus returns to Work's actions button when the dialog closes. Restore its signed-out reading to try again. Applying the reading after moving focus to another control preserves that choice.",
     state: notSignedInState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
+    ],
+    liveChanges: [
+      accountQuotaUpdated("work-quota-signed-in", "Work: logged-in reading", signedInState.accountQuotas!.find((quota) => quota.agent === "claude" && quota.account === "a-work")!),
+      accountLoginSucceeded("work-login-succeeded", "Work: login succeeds", "claude", "a-work"),
+      accountQuotaUpdated("work-quota-signed-out", "Work: signed-out reading", notSignedInState.accountQuotas!.find((quota) => quota.agent === "claude" && quota.account === "a-work")!),
     ],
   },
   {
