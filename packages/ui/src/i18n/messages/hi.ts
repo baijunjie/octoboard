@@ -1817,8 +1817,6 @@ export const hi: Translation<"one" | "other"> = {
   "settings.shortcuts.command.focusMode": "फ़ोकस मोड चालू या बंद करें",
   "settings.shortcuts.command.newSession": "नया सेशन",
   "settings.shortcuts.command.quickCreate": "डिफ़ॉल्ट सेटिंग्स के साथ नया सेशन",
-  "settings.shortcuts.command.lock": "सेशन लॉक या अनलॉक करें",
-  "settings.shortcuts.command.pin": "सेशन पिन या अनपिन करें",
   "settings.shortcuts.command.archive": "सेशन आर्काइव करें",
   "settings.shortcuts.command.copyId": "सेशन ID कॉपी करें",
   "settings.shortcuts.command.openSettings": "सेटिंग्स खोलें",

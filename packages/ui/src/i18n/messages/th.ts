@@ -1970,8 +1970,6 @@ export const th: Translation<"other"> = {
   "settings.shortcuts.command.focusMode": "สลับโหมดโฟกัส",
   "settings.shortcuts.command.newSession": "เซสชันใหม่",
   "settings.shortcuts.command.quickCreate": "เซสชันใหม่ด้วยค่าเริ่มต้น",
-  "settings.shortcuts.command.lock": "ล็อกหรือปลดล็อกเซสชัน",
-  "settings.shortcuts.command.pin": "ปักหมุดหรือเลิกปักหมุดเซสชัน",
   "settings.shortcuts.command.archive": "เก็บเซสชันถาวร",
   "settings.shortcuts.command.copyId": "คัดลอก ID เซสชัน",
   "settings.shortcuts.command.openSettings": "เปิดการตั้งค่า",

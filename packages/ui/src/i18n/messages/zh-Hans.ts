@@ -2023,8 +2023,6 @@ export const zhHans: Translation<"other"> = {
   "settings.shortcuts.command.focusMode": "切换专注模式",
   "settings.shortcuts.command.newSession": "新建会话",
   "settings.shortcuts.command.quickCreate": "以默认设置新建会话",
-  "settings.shortcuts.command.lock": "锁定或解锁会话",
-  "settings.shortcuts.command.pin": "置顶或取消置顶会话",
   "settings.shortcuts.command.archive": "归档会话",
   "settings.shortcuts.command.copyId": "复制会话 ID",
   "settings.shortcuts.command.openSettings": "打开设置",

@@ -1972,8 +1972,6 @@ export const ko: Translation<"other"> = {
   "settings.shortcuts.command.focusMode": "집중 모드 전환",
   "settings.shortcuts.command.newSession": "새 세션",
   "settings.shortcuts.command.quickCreate": "기본 설정으로 새 세션 생성",
-  "settings.shortcuts.command.lock": "세션 잠금 전환",
-  "settings.shortcuts.command.pin": "세션 고정 전환",
   "settings.shortcuts.command.archive": "세션 아카이브",
   "settings.shortcuts.command.copyId": "세션 ID 복사",
   "settings.shortcuts.command.openSettings": "설정 열기",

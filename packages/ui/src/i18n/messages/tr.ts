@@ -2046,8 +2046,6 @@ export const tr: Translation<"one" | "other"> = {
   "settings.shortcuts.command.focusMode": "Odak modunu değiştir",
   "settings.shortcuts.command.newSession": "Yeni oturum",
   "settings.shortcuts.command.quickCreate": "Saptanmış ayarlarla yeni oturum",
-  "settings.shortcuts.command.lock": "Oturumu kilitle veya kilidini aç",
-  "settings.shortcuts.command.pin": "Oturumu sabitle veya sabitlemesini kaldır",
   "settings.shortcuts.command.archive": "Oturumu arşivle",
   "settings.shortcuts.command.copyId": "Oturum kimliğini kopyala",
   "settings.shortcuts.command.openSettings": "Ayarları aç",

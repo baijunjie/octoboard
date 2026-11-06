@@ -1818,8 +1818,6 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "settings.shortcuts.command.focusMode": "Переключить режим фокусирования",
   "settings.shortcuts.command.newSession": "Новый сеанс",
   "settings.shortcuts.command.quickCreate": "Новый сеанс с настройками по умолчанию",
-  "settings.shortcuts.command.lock": "Заблокировать или разблокировать сеанс",
-  "settings.shortcuts.command.pin": "Закрепить или открепить сеанс",
   "settings.shortcuts.command.archive": "Архивировать сеанс",
   "settings.shortcuts.command.copyId": "Скопировать ID сеанса",
   "settings.shortcuts.command.openSettings": "Открыть настройки",

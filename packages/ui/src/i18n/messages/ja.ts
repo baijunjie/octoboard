@@ -1971,8 +1971,6 @@ export const ja: Translation<"other"> = {
   "settings.shortcuts.command.focusMode": "集中モードを切り替え",
   "settings.shortcuts.command.newSession": "新しいセッション",
   "settings.shortcuts.command.quickCreate": "デフォルト設定でセッションを作成",
-  "settings.shortcuts.command.lock": "セッションのロックを切り替え",
-  "settings.shortcuts.command.pin": "セッションのピン固定を切り替え",
   "settings.shortcuts.command.archive": "セッションをアーカイブ",
   "settings.shortcuts.command.copyId": "セッション ID をコピー",
   "settings.shortcuts.command.openSettings": "設定を開く",

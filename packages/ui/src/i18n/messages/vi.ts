@@ -1817,8 +1817,6 @@ export const vi: Translation<"other"> = {
   "settings.shortcuts.command.focusMode": "Bật/tắt chế độ tập trung",
   "settings.shortcuts.command.newSession": "Phiên mới",
   "settings.shortcuts.command.quickCreate": "Phiên mới với cài đặt mặc định",
-  "settings.shortcuts.command.lock": "Khóa hoặc mở khóa phiên",
-  "settings.shortcuts.command.pin": "Ghim hoặc bỏ ghim phiên",
   "settings.shortcuts.command.archive": "Lưu trữ phiên",
   "settings.shortcuts.command.copyId": "Sao chép ID phiên",
   "settings.shortcuts.command.openSettings": "Mở cài đặt",

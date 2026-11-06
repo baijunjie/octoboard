@@ -1972,8 +1972,6 @@ export const zhHant: Translation<"other"> = {
   "settings.shortcuts.command.focusMode": "切換專注模式",
   "settings.shortcuts.command.newSession": "新增工作階段",
   "settings.shortcuts.command.quickCreate": "以預設設定新增工作階段",
-  "settings.shortcuts.command.lock": "鎖定或解鎖工作階段",
-  "settings.shortcuts.command.pin": "置頂或取消置頂工作階段",
   "settings.shortcuts.command.archive": "封存工作階段",
   "settings.shortcuts.command.copyId": "複製工作階段 ID",
   "settings.shortcuts.command.openSettings": "開啟設定",

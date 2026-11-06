@@ -2214,8 +2214,6 @@ export const en = {
   "settings.shortcuts.command.focusMode": "Toggle focus mode",
   "settings.shortcuts.command.newSession": "New session",
   "settings.shortcuts.command.quickCreate": "New session with defaults",
-  "settings.shortcuts.command.lock": "Lock or unlock the session",
-  "settings.shortcuts.command.pin": "Pin or unpin the session",
   "settings.shortcuts.command.archive": "Archive the session",
   "settings.shortcuts.command.copyId": "Copy session ID",
   "settings.shortcuts.command.openSettings": "Open settings",

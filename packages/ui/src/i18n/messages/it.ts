@@ -1818,8 +1818,6 @@ export const it: Translation<"one" | "many" | "other"> = {
   "settings.shortcuts.command.focusMode": "Attiva o disattiva la modalità concentrazione",
   "settings.shortcuts.command.newSession": "Nuova sessione",
   "settings.shortcuts.command.quickCreate": "Nuova sessione con impostazioni predefinite",
-  "settings.shortcuts.command.lock": "Blocca o sblocca la sessione",
-  "settings.shortcuts.command.pin": "Fissa la sessione o rimuovila dai fissati",
   "settings.shortcuts.command.archive": "Archivia la sessione",
   "settings.shortcuts.command.copyId": "Copia ID sessione",
   "settings.shortcuts.command.openSettings": "Apri impostazioni",

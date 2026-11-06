@@ -1818,8 +1818,6 @@ export const id: Translation<"other"> = {
   "settings.shortcuts.command.focusMode": "Alihkan mode fokus",
   "settings.shortcuts.command.newSession": "Sesi baru",
   "settings.shortcuts.command.quickCreate": "Sesi baru dengan pengaturan default",
-  "settings.shortcuts.command.lock": "Kunci atau buka kunci sesi",
-  "settings.shortcuts.command.pin": "Sematkan atau lepas sematan sesi",
   "settings.shortcuts.command.archive": "Arsipkan sesi",
   "settings.shortcuts.command.copyId": "Salin ID sesi",
   "settings.shortcuts.command.openSettings": "Buka pengaturan",

@@ -1818,8 +1818,6 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "settings.shortcuts.command.focusMode": "تبديل وضع التركيز",
   "settings.shortcuts.command.newSession": "جلسة جديدة",
   "settings.shortcuts.command.quickCreate": "جلسة جديدة بالإعدادات الافتراضية",
-  "settings.shortcuts.command.lock": "قفل الجلسة أو فتح قفلها",
-  "settings.shortcuts.command.pin": "تثبيت الجلسة أو إلغاء تثبيتها",
   "settings.shortcuts.command.archive": "أرشفة الجلسة",
   "settings.shortcuts.command.copyId": "نسخ معرّف الجلسة",
   "settings.shortcuts.command.openSettings": "فتح الإعدادات",

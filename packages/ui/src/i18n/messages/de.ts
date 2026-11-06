@@ -1845,8 +1845,6 @@ export const de: Translation<"one" | "other"> = {
   "settings.shortcuts.command.focusMode": "Fokusmodus umschalten",
   "settings.shortcuts.command.newSession": "Neue Sitzung",
   "settings.shortcuts.command.quickCreate": "Neue Sitzung mit Standardeinstellungen",
-  "settings.shortcuts.command.lock": "Sitzung sperren oder entsperren",
-  "settings.shortcuts.command.pin": "Sitzung anheften oder loslösen",
   "settings.shortcuts.command.archive": "Sitzung archivieren",
   "settings.shortcuts.command.copyId": "Sitzungs-ID kopieren",
   "settings.shortcuts.command.openSettings": "Einstellungen öffnen",
