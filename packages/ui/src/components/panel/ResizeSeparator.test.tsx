@@ -139,7 +139,7 @@ it.each([
   expect(grip.className).toContain("rounded-full");
   expect(grip.className).toContain("opacity-0 ");
   expect(grip.className).toContain("group-hover:opacity-100");
-  expect(grip.className).toContain("group-data-focus-visible:opacity-100");
+  expect(grip.className).toContain("group-ui-keyboard-focus:opacity-100");
   // Light grey on hover and focus; the strong colour only once pressed.
   expect(grip.className).toContain("bg-(--grip-hover)");
   expect(grip.className).not.toContain("--grip-active");

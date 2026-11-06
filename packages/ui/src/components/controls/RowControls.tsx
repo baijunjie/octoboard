@@ -60,8 +60,8 @@ export function RowControls({
           always
             ? ""
             : reserve
-              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 group-data-selected:opacity-100 group-data-current:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100"
-              : "max-w-0 overflow-hidden opacity-0 [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-hover:opacity-100 group-focus-within:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-focus-within:overflow-visible group-focus-within:opacity-100 group-data-selected:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-selected:opacity-100 group-data-current:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-current:opacity-100 has-[[aria-expanded=true]]:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] has-[[aria-expanded=true]]:opacity-100"
+              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 group-data-current:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100"
+              : "max-w-0 overflow-hidden opacity-0 [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-hover:opacity-100 group-focus-within:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-focus-within:overflow-visible group-focus-within:opacity-100 group-data-current:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-current:opacity-100 has-[[aria-expanded=true]]:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] has-[[aria-expanded=true]]:opacity-100"
         }`}
       >
         <RowIconGroup className={fixed ? "ps-(--row-control-gap)" : "ps-(--row-controls-gap,0px)"}>{children}</RowIconGroup>

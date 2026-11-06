@@ -94,7 +94,7 @@ export const ProjectNode = memo(function ProjectNode({
           {isCollapsed ? (
             <ChevronRight aria-hidden="true" className="ms-(--row-control-gap) size-3.5 shrink-0 text-app-muted rtl:-scale-x-100" />
           ) : (
-            <ChevronDown aria-hidden="true" className="h-3.5 w-0 shrink-0 overflow-hidden text-app-muted opacity-0 transition-[opacity,width,margin] duration-150 motion-reduce:transition-none group-hover:ms-(--row-control-gap) group-hover:w-3.5 group-hover:opacity-100 group-data-focus-visible:ms-(--row-control-gap) group-data-focus-visible:w-3.5 group-data-focus-visible:opacity-100" />
+            <ChevronDown aria-hidden="true" className="h-3.5 w-0 shrink-0 overflow-hidden text-app-muted opacity-0 transition-[opacity,width,margin] duration-150 motion-reduce:transition-none group-hover:ms-(--row-control-gap) group-hover:w-3.5 group-hover:opacity-100 group-ui-keyboard-focus:ms-(--row-control-gap) group-ui-keyboard-focus:w-3.5 group-ui-keyboard-focus:opacity-100" />
           )}
         </div>
         {/* No touch popover: a tap on the project row folds it. A failure mark is a button that answers its own tap. */}

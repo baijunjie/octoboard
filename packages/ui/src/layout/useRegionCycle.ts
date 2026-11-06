@@ -11,7 +11,7 @@ import { setKeyboardModality } from "../primitives";
  * them in `panels`, in order. The toast stack comes last and is a
  * stop only while a toast is on screen; unlike the others it is not for the caller to say: the stack
  * is in the DOM while it holds a toast, and one that is closing (kept mounted for its exit animation,
- * `data-exiting`) is not a landing place. */
+ * `partSelector.liveToast` leaves it out) is not a landing place. */
 const BEFORE_PANELS = ["topbar", "rail", "welcome", "sidebar", "archive", "terminal"] as const;
 const AFTER_PANELS = ["update", "banner", "toast"] as const;
 type FixedRegion = (typeof BEFORE_PANELS)[number] | (typeof AFTER_PANELS)[number];

@@ -271,7 +271,7 @@ describe("a note", () => {
     const note = items.find((el) => el.textContent === "There are more than this list can show.")!;
     expect(note.querySelector("svg")).toBeNull();
     // Drawn as quiet text, not as a faded (disabled) item.
-    expect(note.className).toContain("data-[disabled=true]:opacity-100");
+    expect(note.className).toContain("ui-disabled:opacity-100");
     expect(note.querySelector("label, span:not([aria-hidden])")?.className).toContain("text-app-muted");
     expect(note.querySelector('[data-slot="label"]')?.className).toContain("opacity-100");
     expect(note.getAttribute("aria-disabled")).toBe("true");
@@ -319,8 +319,8 @@ it("lets the pointer reach every item's label content, so a clipped label can op
   for (const name of ["Plain", "Own", "Sub"]) expect(label(name)).toContain("cursor-[inherit]");
   expect(label("Off")).toContain("cursor-default");
   // HeroUI's `.menu-item:hover` fill and `:active` shrink, which the disabled row now matches under its label.
-  expect(item("Off").className).toContain("data-[disabled=true]:hover:bg-transparent");
-  expect(item("Off").className).toContain("data-[disabled=true]:active:transform-none");
+  expect(item("Off").className).toContain("ui-disabled:hover:bg-transparent");
+  expect(item("Off").className).toContain("ui-disabled:active:transform-none");
 });
 
 describe("Escape with a label's tooltip open", () => {
@@ -444,7 +444,7 @@ describe("a disabled item", () => {
     ]);
     const item = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith(name))!;
     for (const name of ["Plain", "Reasoned"]) {
-      expect(item(name).className).toContain("data-[disabled=true]:opacity-100");
+      expect(item(name).className).toContain("ui-disabled:opacity-100");
       expect(item(name).querySelector('[data-slot="label"]')?.className).toContain("text-app-muted");
       // HeroUI fades `[data-disabled=true] .label`; the class cancels it (jsdom has no CSS to measure).
       expect(item(name).querySelector('[data-slot="label"]')?.className).toContain("opacity-100");

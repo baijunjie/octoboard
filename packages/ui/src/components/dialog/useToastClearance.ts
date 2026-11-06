@@ -2,7 +2,7 @@ import { useLayoutEffect, type RefObject } from "react";
 
 import { TOAST_BREAKPOINT, TOAST_MARGIN, TOAST_WIDTH } from "./toastGeometry";
 import { dialogAround } from "./dialogElement";
-import { partSelector } from "../../primitives";
+import { partSelector, toastStateAttributes } from "../../primitives";
 
 /** The custom property `style.css` lifts the toast region by, from the window's bottom edge. */
 const PROPERTY = "--dialog-footer-clearance";
@@ -31,7 +31,7 @@ function overlapsToasts(footer: DOMRect, region: HTMLElement | null): boolean {
   const chrome = STRIPS.reduce((height, name) => height + (parseFloat(document.documentElement.style.getPropertyValue(name)) || 0), 0);
   const bottom = window.innerHeight - TOAST_MARGIN - chrome;
   return [...region.querySelectorAll<HTMLElement>(TOAST)].some((toast) => {
-    if (toast.dataset.hidden === "true" || toast.dataset.exiting === "true") return false;
+    if (!toast.matches(partSelector.liveToast)) return false;
     const value = (name: string) => parseFloat(toast.style.getPropertyValue(name));
     const height = value("--toast-height") || toast.offsetHeight;
     const offset = value("--offset-expanded") || 0;
@@ -118,7 +118,7 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["style", "data-hidden", "data-exiting"],
+        attributeFilter: ["style", ...toastStateAttributes],
       });
       observeToasts();
       entry.measure();

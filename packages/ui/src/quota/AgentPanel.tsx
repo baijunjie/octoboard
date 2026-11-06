@@ -38,7 +38,7 @@ export function AgentPanel({ agent, rows, currentAccount, dimOthers, onUseReset 
       keepMounted
       // No padding or margin of its own, which would make this panel's height differ from the others',
       // and not the library's exit placement out of the flow, which would drop the cell's height.
-      className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
+      className="col-start-1 row-start-1 m-0 self-start p-0 ui-exiting:static ui-inert:invisible"
     >
       <AgentAccountList agent={agent} rows={rows} currentAccount={currentAccount} dimOthers={dimOthers} region={region} onUseReset={onUseReset} />
     </TabPanel>

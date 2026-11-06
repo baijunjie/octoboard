@@ -85,7 +85,7 @@ function useLoginFocusReturn(
 /** `ICON_TRIGGER_CLASS` without its hover tint and press shrink, for the button while it is unavailable. HeroUI turns
  * pointer events off for `aria-disabled`, so they are turned back on for the tooltip to open (as `RowIconButton`'s
  * unavailable state does), and the ghost button's own hover and pressed fills are covered by a transparent one. */
-const UNAVAILABLE_CLASS = `${ICON_TRIGGER_BASE_CLASS} bg-transparent pointer-events-auto data-[pressed=true]:[transform:none] active:[transform:none]`;
+const UNAVAILABLE_CLASS = `${ICON_TRIGGER_BASE_CLASS} bg-transparent pointer-events-auto ui-pressed:[transform:none] active:[transform:none]`;
 
 /** The Log in button of an account: an icon with a tooltip and a name that says whose account, looking as the row's
  * actions menu button does, shown in the table row's Status cell while the account reads as not logged in and is not

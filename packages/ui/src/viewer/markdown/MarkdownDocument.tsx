@@ -126,7 +126,7 @@ function DocumentLink({
       title={title}
       style={image ? { ...attributes.style, textDecoration: "none" } : attributes.style}
       {...focus}
-      className="rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+      className="rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2 outline-none ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus"
       onClick={(event) => {
         event.preventDefault();
         onActivate(event);
@@ -158,7 +158,7 @@ function DocumentExternalLink({ href, image, onOpen, children }: {
       aria-description={t("common.opensExternally")}
       aria-disabled={action.busy || undefined}
       aria-busy={action.busy || undefined}
-      className="rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+      className="rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2 outline-none ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus"
       style={image ? { textDecoration: "none" } : undefined}
       onClick={action.onClick}
       onAuxClick={action.onAuxClick}

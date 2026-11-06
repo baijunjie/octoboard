@@ -9,6 +9,7 @@ import { useCopyPath } from "../components/host/useCopyPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
+import { itemKeyOf, itemKeySelector } from "../primitives";
 import { focusRowControl } from "./focusRow";
 
 /** The live directory behind the displayed rows: the worktree a branch is checked out in, or the
@@ -59,8 +60,8 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   // The tree takes focus to the row as a menu closes, while a menu opened from the keyboard is to
   // give it back to its Actions button.
   const returnFocusToTrigger = (trigger: HTMLElement | null) => {
-    const row = trigger?.closest<HTMLElement>("[role=row][data-key]");
-    const key = row?.dataset.key;
+    const row = trigger?.closest<HTMLElement>(`[role=row]${itemKeySelector()}`);
+    const key = itemKeyOf(row);
     if (trigger && row && key) focusRowControl(row.closest<HTMLElement>("[role=treegrid]"), key, trigger);
   };
   return (

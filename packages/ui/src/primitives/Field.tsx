@@ -33,6 +33,13 @@ export function Label({ id, dir, className, children }: {
   return <HeroLabel {...definedProps({ id, dir, className })}>{children}</HeroLabel>;
 }
 
+/** Props that make the element they go on, a group of controls around a `Label` that sits outside the controls, read as
+ * disabled while `disabled`: HeroUI dims a field's label through `[data-disabled=true] .label`, a hook the label of a
+ * group never sits under by itself. */
+export function disabledGroupProps(disabled: boolean | undefined): { "data-disabled"?: true } {
+  return disabled ? { "data-disabled": true } : {};
+}
+
 /** HeroUI's description: the note under a field, which describes the field it sits in, or, given an `id`, whatever
  * points to it. Inside a menu or list item it is the item's description. */
 export function Description({ id, className, children }: {

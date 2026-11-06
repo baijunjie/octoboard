@@ -245,7 +245,7 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
               id={PARENT_KEY}
               textValue={t("directoryPicker.parent")}
               label={t("directoryPicker.parent")}
-              className={`sticky top-0 z-3 bg-overlay shadow-[0_-4px_0_0_var(--overlay)] data-[hovered=true]:bg-default ${pinnedFocus.className}`}
+              className={`sticky top-0 z-3 bg-overlay shadow-[0_-4px_0_0_var(--overlay)] ui-hovered:bg-default ${pinnedFocus.className}`}
             >
               <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
               <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
@@ -279,7 +279,7 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
           // so a message too long for the dialog wraps rather than being clipped; the option drops
           // its own padding and dimming, as the row carries the padding and its message is no
           // disabled control.
-            <ListBoxItem id={EMPTY_KEY} disabled textValue={t("directoryPicker.empty")} className="p-0 data-[disabled=true]:opacity-100">
+            <ListBoxItem id={EMPTY_KEY} disabled textValue={t("directoryPicker.empty")} className="p-0 ui-disabled:opacity-100">
               <EmptyPanel compact icon={FolderX} message={t("directoryPicker.empty")} />
             </ListBoxItem>
           )}

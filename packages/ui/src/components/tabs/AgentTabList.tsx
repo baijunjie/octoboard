@@ -10,7 +10,7 @@ import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { beginTabDrag, DRAG_THRESHOLD } from "./tabDrag";
 import { useLatest, useStableHandler } from "../hooks/useLatest";
 import { DURATION, releaseListMotion, useListMotion } from "../motion/useListMotion";
-import { partSelector, Tab, TabList, TabListContainer, useKeyboardModality, useObjectRef } from "../../primitives";
+import { itemKeySelector, partSelector, Tab, TabList, TabListContainer, useKeyboardModality, useObjectRef } from "../../primitives";
 
 /** How long after keyboard focus arrives to wait for the scroll that reveals the tab to begin, and how long a
  * scroll has to be quiet before it counts as over. A tooltip is closed by a scroll under it, so one opened
@@ -304,7 +304,7 @@ function useTabActionPlaces(overlay: React.RefObject<HTMLElement | null>, agents
     const next: Partial<Record<Agent, TabActionPlace>> = {};
     // The tabs are found by the key the tab list gives them, in the strip the overlay sits in.
     for (const agent of agents) {
-      const tab = frame.parentElement?.querySelector<HTMLElement>(`[role="tab"][data-key="${agent}"]`);
+      const tab = frame.parentElement?.querySelector<HTMLElement>(`[role="tab"]${itemKeySelector(agent)}`);
       if (!tab) continue;
       const box = tab.getBoundingClientRect();
       const scroller = tab.closest(partSelector.scrollShadow)?.getBoundingClientRect();

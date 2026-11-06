@@ -7,6 +7,7 @@ import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { t } from "../../i18n/language";
 import { raiseError } from "../../components/alerts/raiseError";
+import { menuOfTrigger } from "../../primitives";
 import type { Daemon } from "../../store";
 
 // The parts of a shell terminal's tab strip that stand on their own: what a tab holds and does,
@@ -31,10 +32,7 @@ export function TabContextMenu({ label, items, tab, onGone }: { label: string; i
   const scope = useRef<HTMLDivElement | null>(null);
   // Only this menu: another one open (the tab row's) keeps its focus when a tab goes. The menu is
   // labelled by its hidden trigger, in the wrapper.
-  const ownMenu = () => {
-    const trigger = scope.current?.querySelector("button")?.id;
-    return trigger ? document.querySelector(`[role=menu][aria-labelledby="${CSS.escape(trigger)}"]`) : null;
-  };
+  const ownMenu = () => menuOfTrigger(scope.current?.querySelector("button"));
   return (
     <div ref={(element) => { if (element) scope.current = element; }} className="contents">
       <HandoffOnUnmount from={ownMenu} to={onGone} />

@@ -26,7 +26,7 @@ export function AdvancedSection({
   return (
     <Disclosure expanded={expanded} onExpandedChange={onExpandedChange}>
       <DisclosureHeading>
-        <DisclosureTrigger className={`${buttonClassName({ variant: "ghost", size: "sm" })} text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground`}>
+        <DisclosureTrigger className={`${buttonClassName({ variant: "ghost", size: "sm" })} text-app-muted hover:text-foreground ui-keyboard-focus:text-foreground`}>
           {t("dialog.agentSettings.advanced")}
           <DisclosureIndicator className="ms-0" />
         </DisclosureTrigger>

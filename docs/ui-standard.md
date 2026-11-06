@@ -154,7 +154,7 @@ lightness, so the row's accessible name carries the state (", ignored").
 A select option or menu item that cannot be chosen, whether or not it says why (an account whose quota is used up, a
 terminal's Copy with nothing to copy while the program takes the mouse), is dimmed as an agent row is: its name takes
 the secondary text colour (`text-app-muted`, at least 4.5:1 in both themes) and only its icon fades, with HeroUI's
-`--disabled-opacity`. HeroUI's fade of the whole row is switched off (`data-[disabled=true]:opacity-100` on a menu item;
+`--disabled-opacity`. HeroUI's fade of the whole row is switched off (`ui-disabled:opacity-100` on a menu item;
 a select option never gets `data-disabled`, see below), and so is its fade of a menu item's `Label`
 (`[data-disabled=true] .label`, cancelled with `opacity-100` on the `Label`), so no text is faded below AA by opacity.
 The option's badge, checkmark and a reason line under the name stay at full opacity; the reason is the text that
@@ -164,8 +164,8 @@ and badge alone, on one row, and that line is its description, so nothing is rea
 disabled only so that it cannot be chosen, keeps its muted text at full opacity the same way. HeroUI has a disabled menu
 item's row ignore the pointer; its name takes the pointer back, so that a clipped name shows its tooltip and runs its
 marquee while the pointer is on it. The row then matches `:hover` and `:active` under the name, so HeroUI's hover fill
-and press shrink are cancelled on it (`data-[disabled=true]:hover:bg-transparent`,
-`data-[disabled=true]:active:transform-none`), and the name shows the arrow the rest of the row shows rather than
+and press shrink are cancelled on it (`ui-disabled:hover:bg-transparent`,
+`ui-disabled:active:transform-none`), and the name shows the arrow the rest of the row shows rather than
 HeroUI's `not-allowed` (`cursor-default`). These overrides change HeroUI's default disabled look, an approved exception
 by the user's decision (see "Do not change how a HeroUI component looks").
 
@@ -274,9 +274,12 @@ layer's `partSelector`, never HeroUI's `data-slot` names or classes, so only the
 parts. The application stylesheet, which themes HeroUI's own stylesheet, is the exception: its rules over HeroUI's
 parts are written against HeroUI's classes and slots.
 
-Nor does it depend on the libraries' internal behaviour: it never listens for a react-aria event, sets an attribute
-react-aria filters out on a wrapper's node or synthesises its key events; the layer offers that behaviour under a
-project name (see its `README.md`).
+Nor does it depend on the libraries' internal behaviour: it never listens for a react-aria event, reads or sets the
+libraries' attributes on a wrapper's node or synthesises its key events; the layer offers that behaviour under a
+project name (see its `README.md`). The state a wrapper's element is in (pressed, hovered, selected, disabled, keyboard
+focus) is styled through the layer's `ui-` variants (`ui-pressed:`, `ui-keyboard-focus:` and the rest, defined in
+`style.css`), never through the attribute that marks it; a state the application sets itself on its own element is its
+own to name.
 
 Tests and test support, the gallery, the shared fixtures and the website preview may import the libraries directly
 (setting the input modality in a test, say); the rule is for application source. Lint enforces the import
@@ -416,9 +419,9 @@ the buttons beside it. Whatever the alignment, a group has at most one primary b
 two buttons: a third way out becomes a mark or goes.
 
 Every button is the wrapper layer's `Button` (HeroUI's, through `primitives`). A custom-drawn button, such as a whole
-band or row that is itself the control, uses the layer's `BareButton`, which sets the state attributes React Aria's
-buttons set (such as `data-hovered`, `data-pressed` and `data-focus-visible`) for the caller's classes to draw. A
-native `<button>` is allowed only where a custom button is needed that HeroUI's cannot be, with the reason in a comment
+band or row that is itself the control, uses the layer's `BareButton`, which marks the states React Aria's buttons
+mark (hovered, pressed, keyboard focus) for the caller's classes to draw through the `ui-hovered:`, `ui-pressed:` and
+`ui-keyboard-focus:` variants. A native `<button>` is allowed only where a custom button is needed that HeroUI's cannot be, with the reason in a comment
 there. A hand-built `role="button"` element needs `tabIndex={0}` and its own Enter / Space handling.
 
 Files and Git tree chevrons are also an exception to HeroUI's `Button`: they are the layer's `TreeExpandButton`
@@ -659,7 +662,8 @@ overrides WebKit's native inset without changing the component's colours or ring
 
 An element that removes the outline puts a ring back, never `outline-none` alone, and takes it from
 `useFocusVisibleProps` (the wrapper layer's, `packages/ui/src/primitives/focus.ts`): spread its props on the element and
-style with `data-focus-visible:ring-2 data-focus-visible:ring-focus` (`group-data-focus-visible:` from a child).
+style with `ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus` (`group-ui-keyboard-focus:` from a child,
+`has-ui-keyboard-focus:` from a parent; the variants are defined in `style.css`).
 The application's custom ring uses HeroUI's `--focus`, the same token HeroUI controls use.
 
 ### Never style focus with CSS `:focus-visible`
@@ -1862,9 +1866,9 @@ element, an error from `role="alert"`.
   surface that takes focus as it opens delays its first status write (`StatusAnnouncer`'s `firstWriteDelayMs`, with
   `AFTER_FOCUS_MOVE_DELAY_MS`).
 - A status written while its region sits under an open modal is effectively written into a hidden region: the modal
-  hides everything outside it from assistive technology, except an element marked `data-live-announcer="true"` or
-  `data-react-aria-top-layer`, and closing the modal moves focus, which replaces what was written. A status about what
-  the modal's own action produced (a login that ends by closing its dialog) is therefore written after the close and
+  hides everything outside it from assistive technology, except an element marked a live announcer (the layer's
+  `liveAnnouncerProps`) or a top layer (`topLayerProps`), and closing the modal moves focus, which replaces what was
+  written. A status about what the modal's own action produced (a login that ends by closing its dialog) is therefore written after the close and
   the focus move, a delay past both, not at the moment the state changes.
 - A status about something that can happen while the user is out of the window (a login finishing in the browser) waits
   until the window is attended (`useWindowAttended`: the document is visible and the window has focus), then

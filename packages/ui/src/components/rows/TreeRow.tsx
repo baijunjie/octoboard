@@ -77,9 +77,11 @@ export function TreeRow({
       aria-current={selected ? "true" : undefined}
       aria-expanded={expanded}
       data-selected={selected || undefined}
+      // What `RowControls` keys on, as it does on the project browser's rows, whose `data-selected` is react-aria's.
+      data-current={selected || undefined}
       data-locked={locked || undefined}
       {...focusVisible}
-      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors motion-reduce:transition-none hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
+      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors motion-reduce:transition-none hover:bg-panel-hover ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}
       onClick={onActivate}
       onKeyDown={rowKeyHandler(onActivate)}

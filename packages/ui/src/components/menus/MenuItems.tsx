@@ -28,7 +28,7 @@ function labelPointerClass(disabled: boolean): string {
 /** A disabled row that its label's content has given the pointer back to matches `:hover` and `:active` while the
  * pointer is on that content, so HeroUI's hover fill and press shrink are cancelled on it; it stays at full
  * opacity too (see `renderItem`). */
-const DISABLED_ROW_CLASS = "data-[disabled=true]:opacity-100 data-[disabled=true]:hover:bg-transparent data-[disabled=true]:active:transform-none";
+const DISABLED_ROW_CLASS = "ui-disabled:opacity-100 ui-disabled:hover:bg-transparent ui-disabled:active:transform-none";
 
 /** Whether an item cannot be chosen: it is disabled, or it gives a reason it cannot be. */
 function isDisabledItem(entry: ActionMenuItem): boolean {
@@ -180,7 +180,7 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
         // branch that is off (HeroUI's fade of the row and of its `Label` cancelled, by the user's decision); the
         // spacer holds the place of the glyph the items have, and `ps-7` that of the check indicator a menu with
         // choices reserves at the start of each of its items (HeroUI's `ps-7` for them).
-        <MenuItem key={index} id={itemId(index)} textValue={entry.label} disabled className={`cursor-default data-[disabled=true]:opacity-100 ${entries.some(isChoice) ? "ps-7" : ""}`}>
+        <MenuItem key={index} id={itemId(index)} textValue={entry.label} disabled className={`cursor-default ui-disabled:opacity-100 ${entries.some(isChoice) ? "ps-7" : ""}`}>
           <span aria-hidden="true" className="size-4 shrink-0" />
           <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted opacity-100" dir="auto">{entry.label}</Label>
         </MenuItem>,
@@ -296,5 +296,5 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
 }
 
 function MenuShortcut({ letter }: { letter: string }): React.ReactElement {
-  return <Kbd decorative dir="ltr" slot="keyboard" className="ms-auto shrink-0 in-data-[hovered=true]:bg-surface"><KbdContent>{letter}</KbdContent></Kbd>;
+  return <Kbd decorative dir="ltr" slot="keyboard" className="ms-auto shrink-0 in-ui-hovered:bg-surface"><KbdContent>{letter}</KbdContent></Kbd>;
 }

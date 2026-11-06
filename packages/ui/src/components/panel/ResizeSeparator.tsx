@@ -12,8 +12,8 @@ const KEY_STEP_SHIFT = 64;
 /** The two axes a separator can move along, named by the line it draws as ARIA does (so a vertical
  * line resizes width): a vertical line moves with the pointer's X, a horizontal one with its Y. */
 const AXES = {
-  vertical: { pointer: "clientX", increase: "ArrowRight", decrease: "ArrowLeft", cursor: "cursor-col-resize", dragCursor: "col-resize", line: "mx-auto h-full w-0.5 group-data-focus-visible:w-full", grip: "m-auto h-10 w-1" },
-  horizontal: { pointer: "clientY", increase: "ArrowDown", decrease: "ArrowUp", cursor: "cursor-row-resize", dragCursor: "row-resize", line: "my-auto w-full h-0.5 group-data-focus-visible:h-full", grip: "m-auto h-1 w-10" },
+  vertical: { pointer: "clientX", increase: "ArrowRight", decrease: "ArrowLeft", cursor: "cursor-col-resize", dragCursor: "col-resize", line: "mx-auto h-full w-0.5 group-ui-keyboard-focus:w-full", grip: "m-auto h-10 w-1" },
+  horizontal: { pointer: "clientY", increase: "ArrowDown", decrease: "ArrowUp", cursor: "cursor-row-resize", dragCursor: "row-resize", line: "my-auto w-full h-0.5 group-ui-keyboard-focus:h-full", grip: "m-auto h-1 w-10" },
 } as const;
 
 /** `grow` is the direction, along the reading direction for a vertical line and downward for a
@@ -165,7 +165,7 @@ export function ResizeSeparator({
       data-region={region}
       {...focusVisible}
       style={style}
-      className={`group touch-none outline-none ${appearance === "grip" ? "flex" : ""} data-focus-visible:ring-2 data-focus-visible:ring-focus ${axis.cursor} ${className}`}
+      className={`group touch-none outline-none ${appearance === "grip" ? "flex" : ""} ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus ${axis.cursor} ${className}`}
       onPointerEnter={(event) => event.pointerType === "mouse" && setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       onMouseDown={(event) => event.preventDefault()}
@@ -195,9 +195,9 @@ export function ResizeSeparator({
       onKeyDown={onKeyDown}
     >
       {appearance === "grip" ? (
-        <div ref={gripRef} className={`rounded-full transition-opacity motion-reduce:transition-none ${axis.grip} ${dragging ? "bg-(--grip-active) opacity-100" : "bg-(--grip-hover) opacity-0 group-hover:opacity-100 group-data-focus-visible:opacity-100"}`} />
+        <div ref={gripRef} className={`rounded-full transition-opacity motion-reduce:transition-none ${axis.grip} ${dragging ? "bg-(--grip-active) opacity-100" : "bg-(--grip-hover) opacity-0 group-hover:opacity-100 group-ui-keyboard-focus:opacity-100"}`} />
       ) : (
-        <div className={`transition-colors motion-reduce:transition-none group-hover:bg-accent group-data-focus-visible:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
+        <div className={`transition-colors motion-reduce:transition-none group-hover:bg-accent group-ui-keyboard-focus:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
       )}
       {tooltip && appearance === "grip" && <AnchoredTooltip tooltip={tooltip} anchor={gripRef} hovered={hovered && !dragging} placement={orientation === "vertical" ? tooltipPlacement : undefined} />}
     </div>

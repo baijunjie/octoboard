@@ -128,7 +128,7 @@ export function ChangeSectionHeading({
       tabStop={false}
       focusOnPress={false}
       onPress={toggle}
-      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${mark || byCommit ? "pe-2" : ""} data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset`}
+      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${mark || byCommit ? "pe-2" : ""} ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus ui-keyboard-focus:ring-inset`}
     >
       {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (

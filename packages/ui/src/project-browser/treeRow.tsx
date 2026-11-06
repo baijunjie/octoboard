@@ -56,7 +56,7 @@ export function DirectoryRow({ name, isExpanded, link = false, nameGrows = true,
  * would hold an actions button that never appears. */
 export const ROW_CLASS = [
   "group mx-(--row-fill-inset) my-0.5 cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
-  "data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset",
+  "ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus ui-keyboard-focus:ring-inset",
 ].join(" ");
 
 /** What an ignored row (`data-ignored`) adds to `ROW_CLASS`: dimmed the way the sidebar dims its inactive
@@ -64,12 +64,12 @@ export const ROW_CLASS = [
  * `opacity` or a muted colour (the veil is plain paint; see the sidebar's note on WebKit compositing a fading
  * child inside a translucent ancestor). It takes the names below WCAG AA (about 2.9:1) on purpose, by the
  * user's decision, as the sidebar's does. Each row lifts its own veil while it is pointed at, has keyboard
- * focus (`data-focus-visible`, on the row or on a control in it), is the selected row or has its actions menu
+ * focus (on the row or on a control in it), is the selected row or has its actions menu
  * open (matched on `aria-haspopup`, since a folder row is itself `aria-expanded`). */
 export const IGNORED_ROW_CLASS = [
   "relative after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:transition-colors after:duration-200 motion-reduce:after:transition-none",
-  "data-ignored:after:bg-panel-sidebar/55 data-ignored:hover:after:bg-transparent data-ignored:data-[current]:after:bg-transparent data-ignored:data-[focus-visible]:after:bg-transparent",
-  "data-ignored:has-[[data-focus-visible]]:after:bg-transparent data-ignored:has-[[aria-haspopup][aria-expanded=true]]:after:bg-transparent",
+  "data-ignored:after:bg-panel-sidebar/55 data-ignored:hover:after:bg-transparent data-ignored:data-[current]:after:bg-transparent data-ignored:ui-keyboard-focus:after:bg-transparent",
+  "data-ignored:has-ui-keyboard-focus:after:bg-transparent data-ignored:has-[[aria-haspopup][aria-expanded=true]]:after:bg-transparent",
 ].join(" ");
 
 // A flat row below the first level adds a chevron slot and its gap (1.375rem) once, whatever its depth.

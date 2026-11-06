@@ -25,5 +25,5 @@ export function ShortcutKbd({ command, className = "" }: { command: CommandId; c
   // a hovered item it would vanish into it; there it takes the surface colour instead. Hover
   // only: an item keeps focus after the pointer leaves it but loses that fill, and a surface cap
   // would then vanish into the menu.
-  return <BindingKbd binding={useBinding(command)} slot="keyboard" className={`ms-auto shrink-0 in-data-[hovered=true]:bg-surface ${className}`.trim()} />;
+  return <BindingKbd binding={useBinding(command)} slot="keyboard" className={`ms-auto shrink-0 in-ui-hovered:bg-surface ${className}`.trim()} />;
 }

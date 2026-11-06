@@ -14,11 +14,13 @@ export function setKeyboardModality(): void {
   setInteractionModality("keyboard");
 }
 
-type FocusVisibleProps = React.DOMAttributes<Element> & { "data-focus-visible"?: true };
+export type FocusVisibleProps = React.DOMAttributes<Element> & { "data-focus-visible"?: true };
 
 /**
  * Props that mark a hand-built focusable element `data-focus-visible` while it has keyboard focus,
- * for its ring to be styled from (`data-focus-visible:ring-2 data-focus-visible:ring-focus`).
+ * for its ring to be styled from (`ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus`; `group-ui-keyboard-focus` and
+ * `has-ui-keyboard-focus` reach across it). The layer's variants in `style.css` are how the application styles any
+ * element the wrappers or this hook mark, never the attribute itself.
  *
  * The state is react-aria's rather than CSS `:focus-visible`, because the app's WKWebView decides
  * that one differently from the Playwright `webkit` build: once the last focus came from a click,
@@ -31,6 +33,11 @@ type FocusVisibleProps = React.DOMAttributes<Element> & { "data-focus-visible"?:
 export function useFocusVisibleProps(): FocusVisibleProps {
   const { focusProps, isFocusVisible } = useFocusRing();
   return { ...focusProps, "data-focus-visible": isFocusVisible || undefined };
+}
+
+/** Whether `props`, from `useFocusVisibleProps`, say the element has keyboard focus now. */
+export function hasKeyboardFocus(props: FocusVisibleProps): boolean {
+  return Boolean(props["data-focus-visible"]);
 }
 
 /** An object ref that also keeps `ref`, whichever kind it is, in step with the element it holds. */

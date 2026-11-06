@@ -24,6 +24,7 @@ import { effectiveTags, matchesFilter } from "../sessions/projectFiltering";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useArchivedOwnerSessions, useDaemonStore, useDaemonStoreEqual, useProviders, useSessionProjectId } from "../store";
 import { consoleMenu } from "./menus";
+import { liveAnnouncerProps } from "../primitives";
 import { NewSessionButton } from "./NewSessionButton";
 import { type FilterUpdate, isFiltering, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import type { ProjectFoldControl } from "./projectFold";
@@ -165,7 +166,7 @@ export function ConsoleBody({
         </StickyHeading>
         {/* The modal filter popover hides the surrounding sidebar from assistive technology;
           React Aria keeps a mounted live announcer and its ancestors exposed. */}
-        <div data-live-announcer="true">
+        <div {...liveAnnouncerProps()}>
           <StatusAnnouncer text={noMatch} />
         </div>
         {noMatch ? (
@@ -184,13 +185,13 @@ export function ConsoleBody({
         ) : (
         // The inactive projects (no unarchived session) sit at the end, dimmed as one group; pointing at
         // any of them, keyboard focus or an open menu inside one, brings the whole group back.
-        // Keyboard focus only (`data-focus-visible`, set by the rows and HeroUI's controls alike):
-        // focus a mouse-opened menu hands back to its trigger would otherwise keep the group lit
-        // after the pointer has gone. An open menu is matched on `aria-haspopup`, since a project
+        // Keyboard focus only (`style.css` lifts the group for it, `.inactive-projects`): focus a
+        // mouse-opened menu hands back to its trigger would otherwise keep the group lit after the
+        // pointer has gone. An open menu is matched on `aria-haspopup`, since a project
         // row is itself `aria-expanded` while open.
           <div
             ref={listRef}
-            className="relative flex flex-col gap-0.5 [&:has(>[data-inactive]:hover)>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[data-focus-visible])>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[aria-haspopup][aria-expanded=true])>[data-inactive]]:after:bg-transparent"
+            className="inactive-projects relative flex flex-col gap-0.5 [&:has(>[data-inactive]:hover)>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[aria-haspopup][aria-expanded=true])>[data-inactive]]:after:bg-transparent"
           >
             {ordered.map((project) => (
               <div

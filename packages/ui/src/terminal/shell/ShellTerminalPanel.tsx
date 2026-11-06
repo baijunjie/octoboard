@@ -16,7 +16,7 @@ import { focusFellToPage } from "../../components/focus/regionFocus";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/RowControls";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { INACTIVE_VEIL_CLASS } from "../../components/status/inactiveVeil";
-import { Button, partSelector, Tab, TabList, TabListContainer, Tabs, useKeyboardModality } from "../../primitives";
+import { Button, itemKeyOf, itemKeySelector, partSelector, Tab, TabList, TabListContainer, Tabs, useKeyboardModality, useTabPanelLink } from "../../primitives";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { useLatest, useStableHandler } from "../../components/hooks/useLatest";
 import { useListMotion } from "../../components/motion/useListMotion";
@@ -39,7 +39,7 @@ import { useShellTabFocus } from "./useShellTabFocus";
  * starts another. The tab strip is HeroUI's, but the terminals are not in its tab panels, which
  * exist only while their tab is selected: every terminal's view stays mounted, hidden while its tab
  * is not the one shown, so it keeps its screen and its connection. The box holding them is named
- * the shown tab's panel by hand (`role="tabpanel"`, with the ids react-aria gives the tab).
+ * the shown tab's panel by hand (`role="tabpanel"`, linked to the tab by `useTabPanelLink`).
  *
  * The caller mounts one per project (keyed by it), so switching projects shows that project's tabs;
  * the daemon keeps the others' shells running, and coming back attaches to them again. Which tab is
@@ -95,9 +95,9 @@ export function ShellTerminalPanel({
   // mounts, and react-aria renders the tabs in a commit of their own, after this component's.
   const [tabNodes, setTabNodes] = useState<ReadonlyMap<string, HTMLElement>>(new Map());
   // One callback for every tab, for the life of the panel: a new one each render would detach and
-  // attach every tab again. The tab's id is its element's `data-key`.
+  // attach every tab again. The tab's id is its element's key.
   const [registerTab] = useState(() => (element: HTMLDivElement | null) => {
-    const id = element?.dataset.key;
+    const id = itemKeyOf(element);
     if (!element || id === undefined) return;
     tabs.current.set(id, element);
     setTabNodes((nodes) => (nodes.get(id) === element ? nodes : new Map(nodes).set(id, element)));
@@ -221,23 +221,9 @@ export function ShellTerminalPanel({
     { label: t("shellTerminal.close"), icon: X, onClick: () => requestClose(terminal, "menu"), disabled: closingIds.has(terminal.id) },
   ];
 
-  // The box of terminals is the shown tab's panel, under the ids react-aria gave the tab: the tab
-  // names its panel in `aria-controls`, and the panel is labelled by the tab. A tab that arrives in
-  // a commit of its own renders this component again (`tabNodes`).
-  const linkPanel = () => {
-    const body = bodyRef.current;
-    if (!body) return;
-    const tab = latest.current.activeId === undefined ? undefined : tabs.current.get(latest.current.activeId);
-    const panelId = tab?.getAttribute("aria-controls");
-    if (tab && panelId) {
-      body.id = panelId;
-      body.setAttribute("aria-labelledby", tab.id);
-    } else {
-      body.removeAttribute("id");
-      body.removeAttribute("aria-labelledby");
-    }
-  };
-  useLayoutEffect(linkPanel);
+  // The box of terminals is the shown tab's panel. A tab that arrives in a commit of its own renders
+  // this component again (`tabNodes`).
+  useTabPanelLink(bodyRef, activeTab);
 
   const tabLabel = (terminal: ShellTerminal, title = shellTerminalTitle(terminal)) =>
     terminal.state === "exited" ? t("shellTerminal.tab.exited", { title: isolate(title) }) : title;
@@ -280,7 +266,7 @@ export function ShellTerminalPanel({
                       className={tabClass(terminal)}
                     >
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
-                      <HandoffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
+                      <HandoffOnUnmount from={itemKeySelector(terminal.id)} to={focusShownTab} />
                       <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" title={shellTerminalTitle(terminal) !== terminal.title ? tabLabel(terminal, terminal.title) : undefined} titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
                       <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal, "terminal")} />
                     </Tab>
@@ -381,7 +367,7 @@ export function ShellTerminalPanel({
   );
 }
 
-const TAB_CLASS = `${INACTIVE_VEIL_CLASS} h-8 w-auto flex-none scroll-mx-1.5 gap-2 rounded-md border border-transparent px-2 whitespace-nowrap after:-m-px after:rounded-md hover:bg-default hover:text-foreground data-[selected=true]:border-accent data-[selected=true]:bg-accent-soft data-[selected=true]:text-(--tint-accent-fg) data-closing:after:bg-panel-sidebar/55`;
+const TAB_CLASS = `${INACTIVE_VEIL_CLASS} h-8 w-auto flex-none scroll-mx-1.5 gap-2 rounded-md border border-transparent px-2 whitespace-nowrap after:-m-px after:rounded-md hover:bg-default hover:text-foreground ui-selected:border-accent ui-selected:bg-accent-soft ui-selected:text-(--tint-accent-fg) data-closing:after:bg-panel-sidebar/55`;
 
 /** A tab's classes. Built from whole class names, none of them glued to an interpolation, which
  * Tailwind's scanner would read as one unknown class and drop. A tab being closed (`data-closing`) is

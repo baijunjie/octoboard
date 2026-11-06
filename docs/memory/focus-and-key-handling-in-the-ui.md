@@ -327,9 +327,9 @@ key included.
 ## A surface that stays usable while a dialog is open is marked a top layer before the dialog opens
 
 While a modal is open React Aria sets `inert` on everything outside it (`ariaHideOutside`) and dismisses it on a press
-outside it (`useInteractOutside`); both make an exception for an element carrying `data-react-aria-top-layer="true"` —
-and for the ancestors containing it — which is how HeroUI's own toast region stays usable over a dialog. So that
-marking is how a surface of this project's own that is not itself a modal is kept reachable there, but it counts only
+outside it (`useInteractOutside`); both make an exception for an element carrying the mark `topLayerProps` sets
+(`data-react-aria-top-layer="true"`) — and for the ancestors containing it — which is how HeroUI's own toast region
+stays usable over a dialog. So that marking is how a surface of this project's own that is not itself a modal is kept reachable there, but it counts only
 on an element that was already in the DOM when the dialog opened: the `MutationObserver` that `ariaHideOutside` watches
 later additions with
 skips anything added inside a subtree it has already hidden, and never looks at the marking on it. Keep the marked

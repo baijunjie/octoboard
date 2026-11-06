@@ -48,9 +48,23 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   are exported, and one only a wrapper needs (`mergeProps`, `parseColor`) stays inside it.
 - **Behaviour that rests on react-aria internals lives here too**, under a project name, so the version note stays
   in one place: `onFocusScopeRestore` (a one-shot capture listener for the cancelable focus-scope restore, to place
-  focus when a dialog or popover closes), `MenuItem`'s `shortcut` (renders `aria-keyshortcuts`, which react-aria filters out of
-  item props) and `activateMenuItem` (runs an item as its keyboard activation does). Application code never listens
-  for a react-aria event, sets its attributes on a wrapper's node or synthesises its key events.
+  focus when a dialog or popover closes), `MenuItem`'s `shortcut` (renders `aria-keyshortcuts`, which react-aria
+  filters out of item props), `activateMenuItem` (runs an item as its keyboard activation does) and `useTabPanelLink`
+  (makes an element of the caller's own the panel of a tab, under the ids react-aria gave the tab). Application code
+  never listens for a react-aria event, sets its attributes on a wrapper's node or synthesises its key events.
+- **The library's DOM markers and states are read through the layer.** `itemKeyOf` / `itemKeySelector` (a collection
+  item's key), `topLayerProps` / `closestTopLayer` / `clearTopLayer` and `liveAnnouncerProps` (what a modal's hiding of
+  the page leaves out), `menuOfTrigger` (the open menu a trigger's button labels), `disabledGroupProps` (marks a group
+  of controls disabled for its `Label`'s dimming), `hasKeyboardFocus` (reads the props of `useFocusVisibleProps`,
+  whose type is `FocusVisibleProps`), `toastStateAttributes` for a mutation observer and the part selectors that carry a
+  state in `partSelector` (`liveToast`, `liveTooltip`, `disabledControl`).
+- **State is styled through the layer's variants.** `style.css` defines `ui-keyboard-focus`, `ui-pressed`, `ui-hovered`,
+  `ui-selected`, `ui-disabled`, `ui-empty`, `ui-exiting` and `ui-inert` (prefixed so they do not clash with Tailwind's
+  own `disabled:`, `empty:` and `inert:`), each matching the attribute the library sets, and they compose as any variant
+  does (`group-ui-pressed/name:`, `has-ui-keyboard-focus:`, `in-ui-hovered:`). Application code styles a wrapper's
+  element, or one given `useFocusVisibleProps`, with them and never writes `data-pressed`, `data-focus-visible` and the
+  like. A state the application's own code sets on its own element (`data-current`, `data-selected` on a `TreeRow`) is
+  the application's, and is named as it is with Tailwind's `data-*`.
 - **Class and style helpers.** Where a consumer has to give its own element the look of a wrapped component (a button
   drawn as a link, a scroller with HeroUI's scroll shadow, a tooltip's surface), the layer exports the helper instead
   of the class names: `buttonClassName`, `scrollShadowClassName`, `scrollShadowStripStyle`, `scrollShadowAutoProps`,

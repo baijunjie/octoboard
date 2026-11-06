@@ -1,5 +1,7 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 
+import { clearTopLayer, closestTopLayer } from "../../primitives";
+
 /** The overlays of the mounted dialogs that were marked top layers as they mounted (`topLayerAtMount`), each with the
  * order in which its dialog was first rendered. */
 const markedAtMount = new Map<Element, number>();
@@ -23,10 +25,10 @@ export function useTopLayerAtMount(enabled: boolean, inside: RefObject<Element |
   const [mountCommitDone, setMountCommitDone] = useState(false);
   useLayoutEffect(() => {
     if (!enabled) return;
-    const overlay = inside.current?.closest("[data-react-aria-top-layer]");
+    const overlay = closestTopLayer(inside.current);
     if (!overlay) return;
     for (const [other, otherOrder] of markedAtMount) {
-      if (otherOrder < order) other.removeAttribute("data-react-aria-top-layer");
+      if (otherOrder < order) clearTopLayer(other);
     }
     markedAtMount.set(overlay, order);
     setMountCommitDone(true);

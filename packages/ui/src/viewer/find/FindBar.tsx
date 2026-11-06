@@ -27,7 +27,7 @@ const OPTIONS: { option: keyof FindOptions; label: "viewer.find.matchCase" | "vi
  * colour alone. The outline is an `inset-ring`, which shares no variable with the focus ring (`ring`),
  * so a keyboard focus ring is drawn over it rather than replaced by it. A press keeps focus where
  * it was, in the query. */
-const TOGGLE_CLASS = `row-icon-control ${ROW_ICON_BUTTON_CLASS} data-[selected=true]:bg-default data-[selected=true]:text-foreground data-[selected=true]:inset-ring-1 data-[selected=true]:inset-ring-app-muted`;
+const TOGGLE_CLASS = `row-icon-control ${ROW_ICON_BUTTON_CLASS} ui-selected:bg-default ui-selected:text-foreground ui-selected:inset-ring-1 ui-selected:inset-ring-app-muted`;
 
 /**
  * The find bar of the viewer: the query, the count of matches, the three switches, Previous and Next,

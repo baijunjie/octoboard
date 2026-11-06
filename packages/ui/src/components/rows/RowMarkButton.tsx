@@ -43,8 +43,8 @@ export function RowMarkButton({
           }}
           className={`group/mark shrink-0 rounded-md hover:text-foreground ${tone}`}
         >
-          <Icon aria-hidden="true" className="size-4 group-hover/mark:hidden group-data-[focus-visible=true]/mark:hidden" />
-          <HoverIcon aria-hidden="true" className="hidden size-4 group-hover/mark:block group-data-[focus-visible=true]/mark:block" />
+          <Icon aria-hidden="true" className="size-4 group-hover/mark:hidden group-ui-keyboard-focus/mark:hidden" />
+          <HoverIcon aria-hidden="true" className="hidden size-4 group-hover/mark:block group-ui-keyboard-focus/mark:block" />
         </Button>
       </TitledControl>
     </div>

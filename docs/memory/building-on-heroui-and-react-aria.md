@@ -106,7 +106,7 @@ Giving the pointer back inside a `Label` changes two more things, neither visibl
   `data-hovered` / `data-pressed`, so the disabled row lights and shrinks under that element, and the element shows
   the `not-allowed` cursor of `[data-disabled=true] .label`, none of which the row showed before. react-aria sets no
   `data-hovered` or `data-pressed` on a disabled item, so cancel the pseudo-class forms on the row
-  (`data-[disabled=true]:hover:` / `data-[disabled=true]:active:` variants) and give the `Label` the row's cursor.
+  (`ui-disabled:hover:` / `ui-disabled:active:` variants) and give the `Label` the row's cursor.
   For a menu item that cancellation is an approved departure from HeroUI's look, recorded under "Confirmed visual
   choices" in `docs/ui-standard.md`; anywhere else it is a change of HeroUI's look and goes by "Do not change how
   a HeroUI component looks" there.
@@ -169,8 +169,8 @@ where the hidden panels must go on taking up layout, as the rail's quota panel
 (`packages/ui/src/quota/AgentPanel.tsx`) is the one place that does: it stacks every agent's panel in one grid cell
 so that, anchored by its bottom edge, it keeps the tallest tab's height and its tab strip does not move out from under
 the pointer. A force-mounted unselected panel is rendered `inert` with `data-inert="true"` and without its `role`, `id`
-or `tabIndex`, but it is still shown, so hide it yourself (`data-[inert=true]:invisible`). HeroUI's `.tabs__panel` gives
-every panel padding and a top margin and takes an exiting one out of the flow (`data-[exiting=true]`,
+or `tabIndex`, but it is still shown, so hide it yourself (`ui-inert:invisible`). HeroUI's `.tabs__panel` gives
+every panel padding and a top margin and takes an exiting one out of the flow (`ui-exiting`,
 `position: absolute`), so where the panels share one box, clear those on the panels and put the spacing on the
 container.
 
@@ -223,7 +223,7 @@ HeroUI's `Tabs.Indicator`, which the wrapper layer's `Tab` draws unless `indicat
 again within the frame it was selected in, that transition is left stuck part-way, and a tab created and selected in one
 go always renders again then. So in `packages/ui`, give a `Tab` its indicator only where the set of tabs does not change
 while the strip is shown; a strip that adds a tab and selects it at once draws the selected tab's fill on the tab itself
-(`data-[selected=true]:` classes carrying the indicator's fill and shadow), as the Terminal panel's strip in
+(`ui-selected:` classes carrying the indicator's fill and shadow), as the Terminal panel's strip in
 `packages/ui/src/terminal/shell/ShellTerminalPanel.tsx` does.
 
 ## Wiring a tooltip: what `TitledControl` and the other wrappers silently fail on

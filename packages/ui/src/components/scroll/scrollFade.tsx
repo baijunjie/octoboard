@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type Ref, type RefObject } from "react";
 
-import { ScrollShadow, scrollShadowAutoProps, scrollShadowClassName, scrollShadowStripStyle, type ScrollShadowVisibility, useFocusVisibleProps, useObjectRef, useScrollShadow } from "../../primitives";
+import { type FocusVisibleProps, hasKeyboardFocus, ScrollShadow, scrollShadowAutoProps, scrollShadowClassName, scrollShadowStripStyle, type ScrollShadowVisibility, useFocusVisibleProps, useObjectRef, useScrollShadow } from "../../primitives";
 
 /** The fade's size in pixels. A row scrolled to the list's edge has to stop this far short of it to
  * be clear of the fade, so whatever scrolls the list by hand keeps this margin too. */
@@ -143,12 +143,11 @@ function joinClasses(...names: (string | undefined)[]): string {
   return names.filter(Boolean).join(" ");
 }
 
-type RegionProps = React.DOMAttributes<Element> & {
+type RegionProps = FocusVisibleProps & {
   tabIndex?: 0;
   role?: "region";
   "aria-label"?: string;
   "aria-labelledby"?: string;
-  "data-focus-visible"?: true;
 };
 
 const RING = "ring-2 ring-focus";
@@ -195,7 +194,7 @@ export function useFadeRegion(
   const [overflows, setOverflows] = useState(false);
   const focus = useFocusVisibleProps();
   const active = always || overflows;
-  const focused = active && Boolean(focus["data-focus-visible"]);
+  const focused = active && hasKeyboardFocus(focus);
   return {
     overflows,
     focused,

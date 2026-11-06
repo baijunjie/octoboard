@@ -24,7 +24,7 @@ export const PanelFrameProvider = PanelFrameContext.Provider;
 
 /** A header slot that scrolls: it fades its edges, and the padding and negative margin keep a focus ring inside the
  * clip; the slot drops its fade while a control inside it shows a focus ring. */
-const SCROLLING_SLOT_CLASS = "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none";
+const SCROLLING_SLOT_CLASS = "min-w-0 p-1.5 -m-1.5 has-ui-keyboard-focus:mask-none";
 
 /**
  * The header every panel's content starts with, laid out as the header of the sidebar's floating

@@ -1,3 +1,7 @@
+/** The attributes whose change takes a toast off the screen or puts it back (`liveToast` reads them), for a mutation
+ * observer's `attributeFilter`. */
+export const toastStateAttributes = ["data-hidden", "data-exiting"] as const;
+
 /** Selectors for the parts of the layer's components that code outside it has to find in the DOM: an element a focus
  * hand-off goes to, a region whose geometry is measured, a test fixture's target. Which attribute or class marks each
  * part is the library's business, so it is written here only, and a change of library changes it here. */
@@ -15,6 +19,8 @@ export const partSelector = {
   disclosureTrigger: "[data-slot=disclosure-trigger]",
   /** The footer of a dialog or alert dialog (`ModalFooter`). */
   dialogFooter: "[data-slot=modal-footer], [data-slot=alert-dialog-footer]",
+  /** A control the library marks disabled without a native `disabled` (a menu item, a list option). */
+  disabledControl: '[data-disabled="true"]',
   /** A `Button` that is `pending`. */
   pendingButton: "[data-pending=true]",
   /** What wraps a `Tooltip`'s trigger (`TooltipTrigger`); not the `phrasing` form, whose span is not marked. */
@@ -23,7 +29,9 @@ export const partSelector = {
   toastRegion: "[data-slot=toast-region]",
   toast: "[data-slot=toast]",
   /** A toast that is on screen, not one fading out or hidden behind the stack's limit. */
-  liveToast: '[data-slot=toast]:not([data-exiting="true"]):not([data-hidden="true"])',
+  liveToast: `[data-slot=toast]${toastStateAttributes.map((name) => `:not([${name}="true"])`).join("")}`,
+  /** A tooltip that is open, not one fading out. */
+  liveTooltip: "[role=tooltip]:not([data-exiting])",
   /** A toast's text: its title and description, which can be selected. */
   toastText: "[data-slot=toast-title], [data-slot=toast-description]",
   /** The scroller of a `TabListContainer`, and the container around it. */
@@ -32,3 +40,4 @@ export const partSelector = {
   /** A `ScrollShadow`, or an element drawn as one with `useScrollShadow`. */
   scrollShadow: ".scroll-shadow",
 } as const;
+

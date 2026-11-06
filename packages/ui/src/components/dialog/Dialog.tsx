@@ -153,7 +153,7 @@ function DialogFrame({
    * dialog already open underneath plays no part in that while this one is also `topLayerAtMount`, as react-aria never
    * counts focus inside a top layer as escaping its containment. */
   focusesItselfOnOpen?: boolean;
-  /** Marks the overlay, the element portalled to `<body>`, a react-aria top layer (`data-react-aria-top-layer`) for
+  /** Marks the overlay, the element portalled to `<body>`, a react-aria top layer (`topLayerProps`) for
    * the commit it mounts in, and only that commit (see `useTopLayerAtMount`). For a modal that comes up a commit after
    * what raised it, which can be the very commit another modal mounts in: one that a dialog opens from an effect as it
    * mounts. */

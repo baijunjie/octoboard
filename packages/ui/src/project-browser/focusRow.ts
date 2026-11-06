@@ -1,8 +1,9 @@
 import { afterCollectionFocus } from "../components/focus/afterCollectionFocus";
+import { itemKeySelector } from "../primitives";
 
 /** The row `key` names in `list`, found again by its key since the collection may have rebuilt it. */
 function findRow(list: HTMLElement | null, key: string): HTMLElement | null {
-  return list?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`) ?? null;
+  return list?.querySelector<HTMLElement>(itemKeySelector(key)) ?? null;
 }
 
 /** Puts keyboard focus on the row `key` names in `list` once a viewer opened from it has closed:
@@ -32,6 +33,6 @@ export function focusRowControl(list: HTMLElement | null, key: string, control: 
 export function focusFirst(list: HTMLElement | null, fallback: HTMLElement | null): void {
   afterCollectionFocus(() => {
     if (document.activeElement !== document.body && !list?.contains(document.activeElement)) return;
-    (list?.querySelector<HTMLElement>("[role=row][data-key]") ?? fallback?.querySelector<HTMLElement>("button"))?.focus();
+    (list?.querySelector<HTMLElement>(`[role=row]${itemKeySelector()}`) ?? fallback?.querySelector<HTMLElement>("button"))?.focus();
   });
 }

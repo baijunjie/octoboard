@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 
 import { CodeToneContext } from "../../i18n/codeTone";
-import { Description, GroupFieldError, Label } from "../../primitives";
+import { Description, disabledGroupProps, GroupFieldError, Label } from "../../primitives";
 
 /** A label over a group of controls that read as one field, visible unless `hideLabel`, named for assistive technology
  * as the group, with an optional `description` under them that the group is described by and an optional `help` tip at
@@ -9,8 +9,8 @@ import { Description, GroupFieldError, Label } from "../../primitives";
  * HeroUI's `Fieldset` is not used: its legend is drawn a size up from `Label` and flush against what follows it, and a
  * native `<fieldset>` lays its legend out by rules of its own rather than as a flex item, so matching the labels of the
  * fields beside it would take an override on the root and on the legend alike — more than the `div`, `Label` and
- * `Description` this assembles. HeroUI dims a field's label through `[data-disabled=true] .label`, which a label
- * outside the controls never sits under, so `isDisabled` marks the group `div` for it. With `errorMessage` the group is
+ * `Description` this assembles. A label outside the controls is not dimmed with them, so `isDisabled` marks
+ * the group `div` for it (`disabledGroupProps`). With `errorMessage` the group is
  * the field the message is about: it is drawn under the controls as a `FieldError` is, with the `errorId` its controls
  * point to as their description, so it is heard where focus lands and once: the group itself is not described by it,
  * and loses its description while the message shows, as HeroUI hides a field's description while it is invalid. */
@@ -43,7 +43,7 @@ export function LabelledGroup({
       role="group"
       aria-labelledby={labelId}
       aria-describedby={description && !errorMessage ? descriptionId : undefined}
-      data-disabled={isDisabled || undefined}
+      {...disabledGroupProps(isDisabled)}
       className="flex flex-col gap-1.5"
     >
       {help ? (

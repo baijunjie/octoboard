@@ -526,7 +526,7 @@ it("holds the panel's height across tabs, so that choosing a tab with fewer acco
     }
     expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
   };
-  expect(panels()[0]!.className).toContain("data-[inert=true]:invisible");
+  expect(panels()[0]!.className).toContain("ui-inert:invisible");
   check(0);
   expect(clean(panels()[1]!)).toContain("Codex Work");
 

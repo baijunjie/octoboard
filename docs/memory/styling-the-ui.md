@@ -59,7 +59,7 @@ The same layering cuts the other way on a HeroUI part: a background given to it 
 fills HeroUI's sheet gives its states, such as a `ListBox.Item`'s hover `bg-default`, and the part silently stops
 showing them (the jsdom tests never hover). When giving a HeroUI part a background of its own — an opaque one behind a
 sticky row, say — restore each state fill on the same element with its state attribute's variant
-(`data-[hovered=true]:bg-default`).
+(`ui-hovered:bg-default`).
 
 ## A `docked:` or `phone:` utility loses to an `sm:` or an `rtl:` twin on the same property
 

@@ -76,7 +76,7 @@ export function SessionHistoryView({
       onFocus={(event) => { focus.onFocus?.(event); held.onFocus(event); }}
       onBlur={(event) => { focus.onBlur?.(event); held.onBlur(event); }}
       aria-label={t("history.title")}
-      className="absolute inset-0 flex flex-col bg-panel outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus data-focus-visible:ring-inset"
+      className="absolute inset-0 flex flex-col bg-panel outline-none ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus ui-keyboard-focus:ring-inset"
     >
       {/* At narrow widths the header wraps its contents so the dates stay readable. */}
       <header className="flex min-h-(--pane-header-height) shrink-0 flex-wrap items-center gap-x-3 gap-y-2 groove-b px-(--pane-inset) py-1">
@@ -154,7 +154,7 @@ function OwnerLine({
               type="button"
               {...focus}
               onClick={() => onSelectSession(owner)}
-              className="min-w-0 cursor-pointer rounded-sm text-(--tint-accent-fg) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+              className="min-w-0 cursor-pointer rounded-sm text-(--tint-accent-fg) underline underline-offset-2 outline-none ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus"
             >
               <FadeOverflow as="span" className="block min-w-0" dir="auto" titleWhenClipped={title}>
                 {title}

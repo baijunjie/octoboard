@@ -5,7 +5,7 @@ import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useBottomStrip } from "../components/panel/useBottomStrip";
-import { Button } from "../primitives";
+import { Button, topLayerProps } from "../primitives";
 
 /** The CSS custom property this banner publishes its own height to. `style.css` exposes it as
  * `--bottom-chrome-height`, the offset that everything overlaying the content area ends above, so
@@ -85,7 +85,7 @@ export function ConnectionBanner({
     // watches later additions with ignores anything added inside a subtree it has already hidden —
     // so a strip that first appears while a dialog is open would inherit that subtree's `inert`,
     // and be drawn above the backdrop by the z-index while taking no press at all.
-    <div data-react-aria-top-layer="true" className="relative z-(--z-index-banner) flex-none">
+    <div {...topLayerProps(true)} className="relative z-(--z-index-banner) flex-none">
       <StatusAnnouncer text={visible && announcementReady ? message : undefined} />
       {visible && (
         <div

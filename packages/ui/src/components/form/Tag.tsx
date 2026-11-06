@@ -14,7 +14,7 @@ const ACCENT_CLASS = "bg-accent-soft text-(--tint-accent-fg)";
 /** The 3rem minimum applies only while the remove button is visible, keeping a short label clear
  * of the button and its fade while fitting the content at rest. */
 const TAG_CLASS =
-  `group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full ${ACCENT_CLASS} hover:bg-accent-soft-hover`;
+  `group/tag min-w-0 hover:min-w-12 ui-keyboard-focus:min-w-12 max-w-full ${ACCENT_CLASS} hover:bg-accent-soft-hover`;
 
 /** Laid over the tag's end rather than in the row, so it does not reserve space in the row:
  * 0.25rem from the end, inside the tag's 0.5rem end padding, so the 0.75rem glyph
@@ -24,7 +24,7 @@ const TAG_CLASS =
  * `bg-transparent` cancels the button's own fill so the tag's hover fill is not left with a pill
  * inside it. */
 const REMOVE_CLASS =
-  "absolute inset-y-0 end-1 my-auto opacity-0 transition-opacity duration-100 motion-reduce:transition-none group-hover/tag:opacity-100 group-data-focus-visible/tag:opacity-100 bg-transparent";
+  "absolute inset-y-0 end-1 my-auto opacity-0 transition-opacity duration-100 motion-reduce:transition-none group-hover/tag:opacity-100 group-ui-keyboard-focus/tag:opacity-100 bg-transparent";
 
 /** The glyph takes the tag's text colour; its hover fill is HeroUI's accent soft hover, the fill a
  * selected tag takes on hover. */
@@ -39,7 +39,7 @@ const REMOVE_COLOUR_CLASS =
  * tag held wider by the active minimum stays clear of it. The mask is on an element around
  * `FadeOverflow`, whose own fade at a cut edge is a mask of its own. */
 const LABEL_CLASS =
-  "flex min-w-0 flex-1 [--picked-tag-fade:linear-gradient(to_right,#000_calc(100%_-_1.25rem),transparent_calc(100%_-_0.5rem))] group-[[dir=rtl]]/tag:[--picked-tag-fade:linear-gradient(to_left,#000_calc(100%_-_1.25rem),transparent_calc(100%_-_0.5rem))] group-hover/tag:[mask-image:var(--picked-tag-fade)] group-data-focus-visible/tag:[mask-image:var(--picked-tag-fade)]";
+  "flex min-w-0 flex-1 [--picked-tag-fade:linear-gradient(to_right,#000_calc(100%_-_1.25rem),transparent_calc(100%_-_0.5rem))] group-[[dir=rtl]]/tag:[--picked-tag-fade:linear-gradient(to_left,#000_calc(100%_-_1.25rem),transparent_calc(100%_-_0.5rem))] group-hover/tag:[mask-image:var(--picked-tag-fade)] group-ui-keyboard-focus/tag:[mask-image:var(--picked-tag-fade)]";
 
 /** The scripts written right to left that a tag is likely to be in; rarer ones (Samaritan,
  * Mandaic, Adlam, Hanifi Rohingya) are left out, and such a tag takes the left-to-right layout. */

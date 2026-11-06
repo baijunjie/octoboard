@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { useLatest } from "../hooks/useLatest";
 import { isImeKey } from "../../input/imeKey";
+import { partSelector } from "../../primitives";
 
 /**
  * Closes the surface `surface` returns on Escape while a tooltip is open — the one state in which
@@ -42,7 +43,7 @@ export function useEscapeWhileTooltipOpen(surface: () => HTMLElement | null | un
       if (event.key !== "Escape" || event.repeat || isImeKey(event)) return;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       // A tooltip fading out has already handed the key back, and is marked while it does.
-      if (!document.querySelector('[role="tooltip"]:not([data-exiting], [data-anchored-tooltip])')) return;
+      if (!document.querySelector(`${partSelector.liveTooltip}:not([data-anchored-tooltip])`)) return;
       const focused = document.activeElement;
       const around = find.current();
       // Only the surface holding focus acts, so a dialog opened from inside another one keeps

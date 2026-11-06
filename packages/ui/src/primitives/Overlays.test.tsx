@@ -3,11 +3,12 @@ import React, { act, useRef } from "react";
 import { toast } from "@heroui/react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { activateMenuItem, Menu, MenuChoices, MenuItem, MenuList, MenuPopover, MenuTrigger } from "./Menu";
+import { activateMenuItem, Menu, MenuChoices, MenuItem, MenuList, menuOfTrigger, MenuPopover, MenuTrigger } from "./Menu";
 import { onFocusScopeRestore } from "./focus";
 import { Modal, ModalBody, ModalHeading } from "./Modal";
+import { partSelector, toastStateAttributes } from "./parts";
 import { mount } from "./testSupport";
-import { closeToast, showToast, ToastRegion } from "./Toast";
+import { closeToast, showToast, Toast, ToastContent, ToastRegion } from "./Toast";
 import { Tooltip, TooltipContent, TooltipTrigger, useTooltipState } from "./Tooltip";
 
 it("announces a modal given the alert dialog role as one, described by the element it names", () => {
@@ -219,4 +220,49 @@ it("lets the caller take over a focus restore once, and stops listening on abort
   aborted.abort();
   restore();
   expect(late).not.toHaveBeenCalled();
+});
+
+it("finds the open menu a trigger's button labels, and none for a closed one", () => {
+  const menu = (open: boolean) => (
+    <Menu open={open} onOpenChange={() => {}}>
+      <MenuTrigger label="More actions">…</MenuTrigger>
+      <MenuPopover>
+        <MenuList onAction={() => {}}>
+          <MenuItem id="rename" textValue="Rename">Rename</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+  const { container, render } = mount(menu(true));
+  const trigger = container.querySelector("button")!;
+  expect(menuOfTrigger(trigger)).toBe(document.querySelector('[role="menu"]'));
+  expect(menuOfTrigger(trigger)).not.toBeNull();
+  render(menu(false));
+  expect(menuOfTrigger(trigger)).toBeNull();
+  expect(menuOfTrigger(null)).toBeNull();
+});
+
+it("tells an open tooltip and a live toast apart from their closing forms by the part selectors", () => {
+  mount(<AnchoredTooltip />);
+  const tooltip = document.querySelector('[role="tooltip"]')!;
+  expect(tooltip.matches(partSelector.liveTooltip)).toBe(true);
+  tooltip.setAttribute("data-exiting", "true");
+  expect(tooltip.matches(partSelector.liveTooltip)).toBe(false);
+  vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+  });
+  mount(<ToastRegion placement="bottom end">{(entry) => <Toast variant={entry.variant}><ToastContent>{entry.title}</ToastContent></Toast>}</ToastRegion>);
+  let key = "";
+  act(() => {
+    key = showToast("Saved", { variant: "accent" });
+  });
+  const toastElement = document.querySelector(partSelector.toast)!;
+  expect(toastElement.matches(partSelector.liveToast)).toBe(true);
+  for (const name of toastStateAttributes) {
+    toastElement.setAttribute(name, "true");
+    expect(toastElement.matches(partSelector.liveToast)).toBe(false);
+    toastElement.removeAttribute(name);
+  }
+  act(() => closeToast(key));
 });

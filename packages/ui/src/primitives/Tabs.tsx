@@ -1,5 +1,5 @@
 import { Tabs as HeroTabs } from "@heroui/react";
-import React from "react";
+import React, { useLayoutEffect } from "react";
 
 import { useDisabled } from "./busy";
 import type { DataAttributes } from "./props";
@@ -143,4 +143,27 @@ export function TabPanel({ id, keepMounted, className, children }: {
       {children}
     </HeroTabs.Panel>
   );
+}
+
+/**
+ * Makes `panel`, an element of the caller's own, the panel of `tab` (a tab element of this strip, `undefined` while none
+ * is shown): the tab names it in `aria-controls`, as it does its `TabPanel`, so the panel takes the id react-aria gave
+ * the tab for it, and is labelled by the tab. For a panel that holds the content of every tab at once, which a
+ * `TabPanel` cannot, as it renders only the content of its own. With no tab the panel carries neither. It runs after
+ * every render, since a tab that arrives in a commit of its own (react-aria renders the tabs after the strip) is passed
+ * in by the caller's next one.
+ */
+export function useTabPanelLink(panel: React.RefObject<HTMLElement | null>, tab: HTMLElement | undefined): void {
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (!element) return;
+    const panelId = tab?.getAttribute("aria-controls");
+    if (tab && panelId) {
+      element.setAttribute("id", panelId);
+      element.setAttribute("aria-labelledby", tab.id);
+    } else {
+      element.removeAttribute("id");
+      element.removeAttribute("aria-labelledby");
+    }
+  });
 }

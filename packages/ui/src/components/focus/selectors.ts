@@ -1,3 +1,5 @@
+import { partSelector } from "../../primitives";
+
 /** What sequential navigation can stop on: with `isShown` and `isTabbable`, adapted from react-aria 3.52.1's tabbable
  * selector and visibility test (`isTabbable`, `isElementVisible`), which it exports only from private entry points.
  * It leaves out `permission` and `data-react-aria-prevent-focus`, which this UI never renders. */
@@ -31,7 +33,7 @@ export const FOCUSABLE =
 export const MODAL_DIALOG = '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"])';
 
 /** What disables a control, natively or as a state the control reports. */
-export const DISABLED_CONTROL = ':disabled, [aria-disabled="true"], [data-disabled="true"]';
+export const DISABLED_CONTROL = `:disabled, [aria-disabled="true"], ${partSelector.disabledControl}`;
 
 /** A dialog or a menu is open: ordinary regions stay unavailable. */
 export const MODAL_OPEN = `${MODAL_DIALOG}, [role="menu"]`;

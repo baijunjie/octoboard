@@ -128,6 +128,12 @@ export function activateMenuItem(item: HTMLElement): void {
   item.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
 }
 
+/** The open menu of the `MenuTrigger` whose button is `trigger`, or `null` while it is closed: react-aria labels a menu
+ * by the button that opened it. */
+export function menuOfTrigger(trigger: Element | null | undefined): Element | null {
+  return trigger?.id ? document.querySelector(`[role=menu][aria-labelledby="${CSS.escape(trigger.id)}"]`) : null;
+}
+
 /** HeroUI's check mark of a `MenuItem` in `MenuChoices`, shown while it is the chosen one. */
 export function MenuItemCheck(): React.ReactElement {
   return <Dropdown.ItemIndicator />;

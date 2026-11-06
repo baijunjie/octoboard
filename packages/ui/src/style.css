@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* The wrapper layer's state variants (`primitives/README.md`): the one place the app's classes learn how
+   react-aria and HeroUI mark the state of a wrapper's element, or of an element given `useFocusVisibleProps`.
+   Each styles the element itself, and composes across it as any variant does (`group-ui-pressed/name:`,
+   `has-ui-keyboard-focus:`, `in-ui-hovered:`). The `ui-` prefix keeps them from Tailwind's own `disabled:`,
+   `empty:` and `inert:`, which test the pseudo-classes. A state the application sets itself on its own element
+   (`data-selected` on a `TreeRow`) is styled with Tailwind's `data-*`, not these. */
+@custom-variant ui-keyboard-focus (&[data-focus-visible]);
+@custom-variant ui-pressed (&[data-pressed="true"]);
+@custom-variant ui-hovered (&[data-hovered="true"]);
+@custom-variant ui-selected (&[data-selected="true"]);
+@custom-variant ui-disabled (&[data-disabled="true"]);
+@custom-variant ui-empty (&[data-empty="true"]);
+@custom-variant ui-exiting (&[data-exiting="true"]);
+@custom-variant ui-inert (&[data-inert="true"]);
+
 /* HeroUI's stylesheet, limited to the components this app renders. A style recalculation that
    reaches the whole document (opening an overlay makes the rest of the window inert) pays for every
    rule on the page, and the package's own entry point carries the CSS of all of its components.
@@ -1345,6 +1360,14 @@ html.pane-resizing * {
 @keyframes panel-switch-reveal {
   from { opacity: 1; }
   to { opacity: 0; }
+}
+
+/* Keyboard focus inside one of the sidebar's inactive projects lifts the veil over the whole group (see
+   `ConsoleView`; the pointer and an open menu do it in its classes). Written here because a named custom
+   variant (`ui-keyboard-focus`) cannot be nested inside the arbitrary `:has(...)` selector that reaches the
+   group's other children. */
+.inactive-projects:has(> [data-inactive] [data-focus-visible]) > [data-inactive]::after {
+  background-color: transparent;
 }
 
 /* Keep keyboard focus fully visible when the tab strip scrolls beneath its edge fade. */

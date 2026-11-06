@@ -51,7 +51,7 @@ export function RowIconButton({
           focusOnPress={false}
           onPress={onPress}
           disabled={isDisabled}
-          className={unavailable ? `${ROW_ICON_BUTTON_BASE_CLASS} pointer-events-auto data-[pressed=true]:[transform:none] active:[transform:none]` : ROW_ICON_BUTTON_CLASS}
+          className={unavailable ? `${ROW_ICON_BUTTON_BASE_CLASS} pointer-events-auto ui-pressed:[transform:none] active:[transform:none]` : ROW_ICON_BUTTON_CLASS}
         >
           {unavailable && <span id={reasonId} className="sr-only">{unavailable}</span>}
           <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />

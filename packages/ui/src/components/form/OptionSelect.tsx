@@ -188,7 +188,7 @@ export function OptionSelect<T extends string>({
       // trigger and the later half would otherwise paint over it along the shared edge. The raise
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
       // Both halves may carry a badge. Share the width so either name gives way within its own half.
-      className={inline ? "w-48" : joined ? "min-w-0 basis-0 flex-1 has-[[data-focus-visible=true]]:z-10" : undefined}
+      className={inline ? "w-48" : joined ? "min-w-0 basis-0 flex-1 has-ui-keyboard-focus:z-10" : undefined}
       label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
       labelledBy={labelledBy}
       // react-aria drops the slot's id when no note exists on mount and does not restore it when
@@ -246,7 +246,7 @@ export function OptionSelect<T extends string>({
         {placeholder !== undefined && (
           // The shared ghost button, as HeroUI's clear action, beside the trigger.
           <SelectClearButton onClear={() => trigger.current?.focus()}>
-            <FieldClearButton disabled={isDisabled} className="absolute end-7 top-1/2 -translate-y-1/2 data-[empty=true]:invisible" />
+            <FieldClearButton disabled={isDisabled} className="absolute end-7 top-1/2 -translate-y-1/2 ui-empty:invisible" />
           </SelectClearButton>
         )}
         {mark && (

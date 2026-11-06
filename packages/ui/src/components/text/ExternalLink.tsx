@@ -101,7 +101,7 @@ export function ExternalLink({ href, appearance = "text", size, variant = "secon
       aria-description={props["aria-description"] ?? t("common.opensExternally")}
       aria-busy={action.busy || undefined}
       data-external-link=""
-      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? `${buttonClassName({ variant, size })}` : unfollowable ? "rounded-sm break-words cursor-default text-app-muted" : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
+      className={`outline-none ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus ${appearance === "button" ? `${buttonClassName({ variant, size })}` : unfollowable ? "rounded-sm break-words cursor-default text-app-muted" : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
       onClick={unfollowable ? undefined : action.onClick}
       onAuxClick={unfollowable ? undefined : action.onAuxClick}
     >

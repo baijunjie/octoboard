@@ -3,6 +3,7 @@ import React, { createContext, useContext } from "react";
 
 import { BusyContext, useDisabled } from "./busy";
 import { type DataAttributes, definedProps } from "./props";
+import { topLayerProps } from "./hideOutside";
 
 /** The children HeroUI's modal parts accept. Their typings resolve `ReactNode` against the React 18 types that react-aria
  * pulls in, which `React.ReactNode` from this package's React 19 does not satisfy. */
@@ -73,7 +74,7 @@ export function Modal({
           isDismissable={outsideDismissable}
           isKeyboardDismissDisabled={keyboardDismissDisabled}
           onOpenChange={(open) => !open && onClose()}
-          data-react-aria-top-layer={topLayer ? "true" : undefined}
+          {...topLayerProps(topLayer)}
         >
           <Frame.Container {...definedProps({ size: containerSize, className: containerClassName })}>
             <Frame.Dialog {...definedProps({ role, "aria-label": label, "aria-describedby": describedBy, className })}>
