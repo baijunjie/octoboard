@@ -90,9 +90,19 @@ async fn import(
     document: &serde_json::Value,
     resolutions: Vec<ProjectResolution>,
 ) -> Result<Vec<ImportedConsole>> {
-    Ok(apply(state, document, resolutions, false, None, true)
-        .await?
-        .consoles)
+    Ok(apply(
+        state,
+        document,
+        resolutions,
+        ApplyOptions {
+            settings: false,
+            accounts: None,
+            consoles: true,
+            clone_dir: true,
+        },
+    )
+    .await?
+    .consoles)
 }
 
 fn with_settings(
@@ -104,20 +114,26 @@ fn with_settings(
         "auto_close_idle_shell_terminals": false,
         "auto_pull_repositories": auto_pull,
         "auto_delete_unresumable_archives": auto_delete,
-        "auto_select_account": false,
-        "auto_switch_on_usage_limit": false,
         "sidebar_order_by_status": true,
-        "auto_start_quota_windows": false,
         "auto_approve_session_requests": false,
         "auto_approve_resume_requests": false,
         "auto_approve_account_switches": false,
         "auto_approve_handoffs": false,
         "ask_questions_as_choices": true,
         "git_workflow": GitWorkflowSettings::default(),
-        "provider_settings": {},
-        "agent_tags": {},
     });
     document
+}
+
+/// The document an export of everything, accounts included, makes of `state`.
+fn export_everything(state: &Arc<AppState>) -> serde_json::Value {
+    let selection = export::Selection {
+        consoles: export::ConsoleScope::All,
+        settings: true,
+        accounts: true,
+        paths: true,
+    };
+    serde_json::to_value(export::build(&state.store, &selection).unwrap()).unwrap()
 }
 
 pub(super) fn stored_projects(state: &Arc<AppState>) -> Vec<Project> {

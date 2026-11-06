@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, useEffect, useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -11,6 +11,7 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { RequestedDialog } from "../dialogs/RequestedDialog";
 import type { ClientRequestBody, Event, ImportItem } from "../protocol";
 import { createImportProgressListeners, type ImportProgressEvent } from "../store";
+import { ThemeProvider } from "../preferences/theme";
 import { ConfigurationSection } from "../settings/ConfigurationSection";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
@@ -59,7 +60,7 @@ const buttonLabelled = (label: string) => Array.from(document.body.querySelector
 const progressBar = () => document.body.querySelector<HTMLElement>("[role=progressbar]")!;
 
 function mountImportDialog(running: ReturnType<typeof runningImport>) {
-  return mountDialog((onClose) => <ImportConfigurationDialog onClose={onClose} />, running.reply, configurationFile(), {}, running.members);
+  return mountDialog((onClose) => <ImportConfigurationDialog onClose={onClose} />, running.reply, configurationFile(), {}, {}, running.members);
 }
 
 async function startImport() {
@@ -99,6 +100,32 @@ describe("the progress view", () => {
     expect(buttonLabelled("Cancel")!.disabled).toBe(true);
     expect(document.body.querySelector<HTMLButtonElement>('[role=dialog] button[aria-label="Close"]')!.disabled).toBe(true);
     expect(document.body.querySelector("button[aria-busy=true]")?.textContent).toBe("Import");
+  });
+
+  it("lists the default clone directory, the Agent account settings and the application settings, each with its own state", async () => {
+    const running = runningImport();
+    mountImportDialog(running);
+    await startImport();
+
+    for (const item of [{ kind: "clone_dir" }, { kind: "agent_settings" }, { kind: "settings" }] as const) await running.report({ item, state: "waiting" });
+    expect(progressBar().getAttribute("aria-valuetext")).toBe("0 of 3 processed");
+    for (const heading of ["Default clone directory", "Agent account settings", "Application settings"]) expect(text()).toContain(heading);
+    expect(text().match(/Waiting/g)).toHaveLength(3);
+
+    await running.report({ item: { kind: "clone_dir" }, state: "done" });
+    await running.report({ item: { kind: "agent_settings" }, state: "creating" });
+    expect(progressBar().getAttribute("aria-valuetext")).toBe("1 of 3 processed");
+    expect(text().match(/Done/g)).toHaveLength(1);
+    expect(text().match(/Creating…/g)).toHaveLength(1);
+    expect(text().match(/Waiting/g)).toHaveLength(1);
+
+    // A clone directory that cannot be written leaves the settings failed with it, never created.
+    const error = { code: "path_not_found", params: { path: "/gone" }, message: "no such path /gone" };
+    await running.report({ item: { kind: "agent_settings" }, state: "done" });
+    await running.report({ item: { kind: "settings" }, state: "failed", error });
+    expect(progressBar().getAttribute("aria-valuetext")).toBe("3 of 3 processed");
+    expect(text()).toContain("/gone");
+    await running.finish();
   });
 
   it("keeps focus on the Import button that was pressed, now pending", async () => {
@@ -177,6 +204,11 @@ describe("the progress view", () => {
 });
 
 describe("the dialog Settings opens", () => {
+  // The dialog reads the appearance, so the window is under the theme provider, which asks for the colour scheme.
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  });
+
   /** What the window does: owns the import dialog, and Settings' section is only what asks for it. */
   function Window({ closeSettings }: { closeSettings: { current: () => void } }) {
     const [dialog, setDialog] = useState<DialogRequest>();
@@ -184,7 +216,7 @@ describe("the dialog Settings opens", () => {
     useEffect(() => registerDialogLauncher(setDialog), []);
     closeSettings.current = () => setSettingsOpen(false);
     return (
-      <>
+      <ThemeProvider>
         {settingsOpen && <ConfigurationSection />}
         {dialog && (
           <RequestedDialog
@@ -196,7 +228,7 @@ describe("the dialog Settings opens", () => {
             onResumeSession={async () => {}}
           />
         )}
-      </>
+      </ThemeProvider>
     );
   }
   const platform = () => ({ kind: "browser" as const, configurationFile: configurationFile() });

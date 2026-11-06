@@ -38,8 +38,8 @@ offered for the other agents. Every session reads the tags of the agents a sessi
 accounts, through `list_agents`, which does not list a removed agent (see
 `docs/product/listing-agents-from-a-session.md`). Like Claude compatibility, a console session may read them but not
 change them (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
-configuration export that includes the application settings carries them (see "The application settings an export
-carries" in `docs/product/configuration-export-and-import.md`).
+configuration export that includes the accounts carries them (see "The agent account settings an export carries" in
+`docs/product/settings-in-a-configuration.md`).
 
 ## Provider settings
 
@@ -48,8 +48,8 @@ every account of that agent, the default account included. Today they are:
 
 | Agent | Row | Setting id | Kind | Carried by a configuration export | Readable by sessions |
 |---|---|---|---|---|---|
-| Claude Code | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `auto`, `manual` or `bypass` | No | No |
-| Codex | **Permission approval** (see "Approval modes" below) | `approval_reviewer` | Choice of `auto_review` or `user` | No | No |
+| Claude Code | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `auto`, `manual` or `bypass` | Yes | No |
+| Codex | **Permission approval** (see "Approval modes" below) | `approval_reviewer` | Choice of `auto_review` or `user` | Yes | No |
 | Codex | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, on while Claude Code is an added agent until chosen | Yes | Yes |
 | Grok Build | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, on until chosen | Yes | Yes |
 
@@ -84,9 +84,11 @@ A value is read when a session of any account of the agent starts or resumes, in
 pinned directory with no account reference included; a running process keeps what it was started with. Octoboard
 writes none of the agents' configuration files for any of them.
 
-Whether a configuration export carries a setting's explicit choice is the provider's to declare (see "The application
-settings an export carries" in `docs/product/configuration-export-and-import.md`); one it does not carry stays on this
-machine. Whether sessions may read a setting's value in effect is declared the same way; no session changes any of them
+Whether a configuration export carries a setting's explicit choice is the provider's to declare (see "The agent account
+settings an export carries" in `docs/product/settings-in-a-configuration.md`); one it does not carry stays on this
+machine. A setting whose turning on itself changes files outside Octoboard's own directory is not carried (see "What is
+not configuration and never travels" in `docs/product/configuration-export-and-import.md`); none of today's does, since
+Octoboard writes none of the agents' configuration files for them. Whether sessions may read a setting's value in effect is declared the same way; no session changes any of them
 (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
 
 A program on the daemon's host sets a choice with the control request `set_provider_setting`, naming the agent, the
@@ -132,8 +134,10 @@ fails, the error alert is shown over the confirmation, which stays open, and the
 user has agreed there, Claude Code's own blocking warning for that mode never appears (see "Claude Code" in
 `docs/product/per-agent-launch-specifics.md`).
 
-The choices stay on this machine (see "What is not configuration and never travels" in
-`docs/product/configuration-export-and-import.md`), and no session can read or change them.
+A configuration export that includes the accounts carries the explicit choices, and an import of the accounts applies
+them — **Approve everything** included, without this confirmation; the import's review names the choice beforehand (see
+"The agent account settings are applied with the accounts" in `docs/product/settings-in-a-configuration.md`). No
+session can read or change them.
 
 ## Claude compatibility
 
@@ -157,5 +161,5 @@ What a launch is given for it is in "Claude compatibility for Codex" and "Claude
 
 A console session may read the value in effect, unlike the approval modes, but not change it (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a configuration export
-that includes the application settings carries the explicit choices (see "The application settings an export carries"
-in `docs/product/configuration-export-and-import.md`).
+that includes the accounts carries the explicit choices (see "The agent account settings an export carries" in
+`docs/product/settings-in-a-configuration.md`).

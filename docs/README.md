@@ -122,8 +122,12 @@ Where to start, by question:
   when it is archived or deleted.
 - [Configuration export and import](product/configuration-export-and-import.md) — the configuration document and its
   regions (consoles and projects, application settings, the account structure) and what an import does with each.
+- [Settings in a configuration](product/settings-in-a-configuration.md) — which settings a configuration document
+  carries in which region, the ones only a client holds, and how an import applies each.
 - [The configuration export and import dialogs](product/configuration-export-and-import-dialogs.md) — the export
-  dialog's region choices and the import dialog's file step, region-tabbed review and result.
+  dialog's region choices and the import dialog's file step and region-tabbed review.
+- [Configuration import progress and result](product/configuration-import-progress-and-result.md) — what the import
+  dialog shows while an import runs and the per-region result after it finishes.
 
 ### Window and interface
 

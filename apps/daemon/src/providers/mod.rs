@@ -262,8 +262,9 @@ pub struct SettingDescriptor {
     /// Unique within its provider; snake_case.
     pub id: &'static str,
     pub kind: SettingKind,
-    /// Whether a configuration export carries the user's explicit choice. A setting that lets
-    /// agents act without asking stays out of one.
+    /// Whether a configuration export carries the user's explicit choice. A setting whose
+    /// enabling itself modifies files outside Octoboard's own directory stays out of one, for the
+    /// user to turn on by hand; a setting that only becomes a launch flag travels.
     pub exported: bool,
     /// Whether the agents' `get_settings` tool returns the value in effect. Agents never write a
     /// provider setting.

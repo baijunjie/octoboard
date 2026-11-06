@@ -2,8 +2,9 @@
 
 Octoboard can lift its configuration out of one machine and build it again on another. What travels is a **configuration
 document**, made of up to three **regions**, each chosen on its own: the **consoles and projects** (one console, every
-console, or none), the **accounts** — the structure of the agents' accounts, never anything to log one in with — and the
-**application settings**. Nothing of what a machine is doing goes with it, so what arrives on the other side is the
+console, or none), the **accounts** — the structure of the agents' accounts and the settings that apply to them, never
+anything to log one in with — and the **application settings**. Which settings travel in which region is in
+`docs/product/settings-in-a-configuration.md`. Nothing of what a machine is doing goes with it, so what arrives on the other side is the
 layout of consoles, projects and accounts, with its accounts still to be logged in and its directories still to be
 trusted.
 
@@ -78,8 +79,9 @@ goes" below).
 
 An export either includes full project paths or leaves them out; the export dialog leaves them out unless its checkbox
 is checked, and a request to the daemon that does not say which includes them. Either way the document has the same
-format and version. The choice is about projects alone: the accounts' directories are written whatever it says (see
-"The accounts" below).
+format and version. The choice is about projects alone: the accounts' directories and the default clone directory are
+written whatever it says (see "The accounts" below and "The application settings an export carries" in
+`docs/product/settings-in-a-configuration.md`).
 
 In either mode a project's remote URL goes into the document without any credential it carries, removed as a remote
 URL is whenever it is shown (see "A credential is never shown" in `docs/product/agent-settings-tools.md`), so a
@@ -87,13 +89,15 @@ document never carries one: `https://user:token@example.com/r.git` is written `h
 
 - **Full paths included** — each project's path is its absolute directory path on the exporting machine, and its remote
   URL is the one recorded for it, whatever kind of URL it is. A project's path, a remote URL that is itself a local
-  path or a `file://` URL, and an account directory outside the home directory are the only paths of the exporting
-  machine anywhere in the document, which is the thing to look at before handing the file to someone else.
+  path or a `file://` URL, and an account directory or a default clone directory outside the home directory are the
+  only paths of the exporting machine anywhere in the document, which is the thing to look at before handing the file
+  to someone else.
 - **Full paths left out** — each project's path is only the last segment of its directory path, its directory name
   (empty for a path with none, such as `/`), and its remote URL is kept only when, without its credential, it may be
   cloned from (see "What may be cloned from" below); any other remote URL, such as a local path or a `file://` URL, is
   left out. Such a document holds no path of the exporting machine but, when it carries the accounts, an account
-  directory outside the home directory.
+  directory outside the home directory, and, when it carries the application settings, a default clone directory
+  outside it.
 
 ### How an account reference travels
 
@@ -125,17 +129,20 @@ never a credential, a login state or a quota reading. It holds:
 
 - the **added agents**, in their order (see "Added agents" in `docs/product/agent-accounts.md`); left out while the
   exporting machine's list is still undecided, and an import of such a document then adds no agent;
-- for each agent that has an account the user owns or a default account the user has named, in the order Claude Code,
-  Codex, Grok Build:
-  - the **default account**'s name as the user gave it, if any, and its place in the agent's display order — how many
-    accounts come before it. The default account's directory, which the agent resolves on each machine, and whether it
-    is turned off are not carried;
+- for each added agent — every agent while the exporting machine's list is undecided — and each other agent that has an
+  account the user owns, a default account the user has named or a default account turned off, in the order Claude
+  Code, Codex, Grok Build:
+  - the **default account**'s name as the user gave it, if any, its place in the agent's display order — how many
+    accounts come before it — and whether it is turned off. The default account's directory, which the agent resolves
+    on each machine, is not carried;
   - each **account the user owns**, in the agent's display order (see "Reordering accounts" in
-    `docs/product/agent-accounts.md`): its name, its directory, whether it shares the default configuration and whether
-    it is turned off.
+    `docs/product/agent-accounts.md`): its name, its directory and whether it is turned off;
+- the **agent account settings**, the settings of the Agent accounts section that apply to all of an agent's accounts
+  or to every agent (see "The agent account settings an export carries" in
+  `docs/product/settings-in-a-configuration.md`).
 
-No account carries its stored id, and an account whose last sharing change did not finish is not marked as such in the
-document.
+No account carries its stored id, nor anything of its sharing of the default configuration (see "What is not
+configuration and never travels" below).
 
 An account's **directory is always written**, whatever the choice about project paths, since an account cannot be
 created without one: as `~/` followed by its path under the exporting machine's home directory when it lies there (`~`
@@ -152,110 +159,55 @@ meets it (see `docs/product/model-and-reasoning-effort.md`).
 
 Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep, and folder
 trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
-configuration, and are in no document. Neither is the default clone directory: that one is the importing machine's own
-to choose, and an import places what it clones under it (see "Default clone directory" in `docs/product/settings.md`).
-No console, project or account carries its stored id. A provider setting its provider does not declare as carried
-stays local too (see "Provider settings" in `docs/product/per-agent-settings.md`): Codex's and Claude Code's permission
-approval settings are such, so exports omit them and imports leave the importing machine's choices unchanged, since
-importing them could silently turn on **Approve everything**, which on its own machine is saved only after a
-confirmation (see "Approval modes" in the same document). Nothing to log an account in with — credentials, login state — is in any
-document, so every account an import creates starts not logged in; nor are the default account's directory and whether
-the default account is turned off. The added agents, the accounts and their order, sharing and turned-off choices, and
-the default accounts' names travel only in the accounts region (see "The accounts" above). Account quota readings are
-not stored at all and are in no document either (see "How a quota is read" in `docs/product/account-quota-readings.md`).
+configuration, and are in no document. No console, project or account carries its stored id. Nothing to log an account
+in with — credentials, login state — is in any document, so every account an import creates starts not logged in; nor
+is the default account's directory. The added agents, the accounts and their order, the turned-off choices and the
+default accounts' names travel only in the accounts region (see "The accounts" above). Account quota readings are not
+stored at all and are in no document either (see "How a quota is read" in `docs/product/account-quota-readings.md`).
 
-### The application settings an export carries
-
-Fifteen, each under its own key, all in every document that has application settings. The import review notes each
-of the twelve switches. A settings key the daemon does not know, such as `reply_in_interface_language`, is ignored.
-The language the daemon holds for the user is not carried either (see "The language the daemon holds" in
-`docs/product/language.md`): applying the document's settings leaves it as the importing daemon holds it.
-
-- **Close idle terminals when closing the panel** (see that section in `docs/product/settings.md`), under
-  `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
-  idle terminals and keeps terminals with running programs.
-- **Automatically pull repositories** (see "Automatically pulling repositories" in
-  `docs/product/project-git-status.md`), under `auto_pull_repositories`.
-- **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
-  conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
-- **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`. The
-  review's line for turning it on says that a new session then uses the account whose weekly limit resets soonest.
-- **Automatically switch accounts at the usage limit** (see that section in `docs/product/settings.md`), under
-  `auto_switch_on_usage_limit`. The review's line for turning it on says that a session that stops at its account's
-  usage limit is then switched to another account with usage left and carries on.
-- **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`. The
-  review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
-- **Start usage windows automatically** (see that section in `docs/product/settings.md`), under
-  `auto_start_quota_windows`. The review's line for turning it on says that a usage window that has not started counting
-  is then started with one small request, which counts a little toward the account's usage limits.
-- **Automatically approve session requests** (see "Approving requests automatically" in
-  `docs/product/session-requests.md`), under `auto_approve_session_requests`. The review's line for turning it on says
-  that a session's request to start a session that reports to the user is then approved without asking first.
-- **Automatically approve resume requests** (see the same section), under `auto_approve_resume_requests`. The review's
-  line for turning it on says that a session's request to reopen or resume a session, or to resume a conversation in a
-  new session, is then approved without asking first.
-- **Automatically approve account switches** (see the same section), under `auto_approve_account_switches`. The review's
-  line for turning it on says that a session's request to switch the account of one of its sessions is then approved
-  without asking first.
-- **Automatically approve handoffs** (see the same section), under `auto_approve_handoffs`. The review's line for
-  turning it on says that a session's request to hand one of its sessions off to another agent is then approved without
-  asking first.
-- **Ask questions as choices** (see that section in `docs/product/settings.md`), under `ask_questions_as_choices`. The
-  review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
-  the user's decision as options to pick from.
-- **The application-wide git workflow settings** (see "The five settings" in `docs/product/git-workflow-settings.md`),
-  under `git_workflow`, an object holding all five of `development`, `squash_before_delivery`, `rebase_before_delivery`,
-  `delivery` and `revert_gate`. A settings region without `git_workflow`, with `null` there, or with an object that
-  leaves out any of the five cannot be read, and the import is refused (see "What is refused, and what is reported
-  instead" below). Applying the document's settings sets all five to the document's values.
-  The import review and its result each have one line for all five (see "The import review" and "The import result" in
-  `docs/product/configuration-export-and-import-dialogs.md`).
-- **Provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), under
-  `provider_settings`, an object keyed by agent, each holding an object keyed by setting id with the user's explicit
-  choice: `true` or `false` for a switch, the choice's text for a choice setting. Only the settings their provider
-  declares as carried are in it — today Claude compatibility, `{"codex": {"claude_compatibility": true}}` say — and of
-  those only the ones the user made a choice for: a setting never chosen for is absent, so on the importing machine it
-  keeps following that machine's default — an unset Codex Claude compatibility there follows whether Claude Code is
-  added there — and an agent with nothing carried is absent, an export where no choice was made carrying `{}`.
-  Applying the document's settings records each choice it carries as the importing machine's own, setting by setting,
-  and leaves a setting it does not carry as it is. An entry naming an agent or a setting this build does not declare as
-  carried, or a value the setting does not take, is skipped rather than refused, in the inspection as in the apply, so
-  a hand-edited document cannot set a permission approval this way.
-- **Agent tags** (see "Agent tags" in `docs/product/per-agent-settings.md`), under `agent_tags`, an object keyed by
-  agent (`claude`, `codex`, `grok`) holding each agent's tags as a list. It carries every agent that has tags, a removed
-  agent's included; an agent without tags is absent, and an export where no agent has tags carries `{}`. Applying the
-  document's settings replaces the tags of each agent it lists with the document's, normalised as the Tags row's are,
-  and leaves an agent it does not list as it is; an agent this build does not know is skipped rather than refused.
-
-**The keyboard shortcuts of the exporting client** travel with these, under `keyboard_shortcuts`. They are not the
-daemon's: each client keeps its own (see "Where the shortcuts are kept" in `docs/product/keyboard-shortcuts.md`), so
-the client adds them to the document it saves whenever it carries the application settings — only the shortcuts it has
-changed from their defaults, and `{}` when it has changed none — and the daemon neither builds nor reads them. A
-document with application settings asked of the daemon by any other program therefore has none. Their form is in "The
-shortcuts as data" in `docs/product/keyboard-shortcuts.md`. A document without them leaves the importing client's
-shortcuts as they are when its settings are applied; one with `{}` puts them back to their defaults.
-
-A document whose export did not include the application settings carries none of them, whichever consoles it holds.
-The settings that belong to one machine stay out of every document (see "What is not configuration and never travels"
-above).
+**A setting whose turning on itself changes files outside Octoboard's own directory** (`~/.octoboard`; see "Files
+Octoboard owns" in `docs/product/application-lifecycle.md`) **is in no document**, and the user turns it on again by
+hand on the importing machine. Today that is an account's sharing of the default configuration, which links the
+account's directory to the default account's (see "Turning sharing on" in
+`docs/product/sharing-the-default-configuration.md`): an export never writes it, an import never turns it on, and every
+account an import creates starts not sharing. A setting that only has Octoboard act on files outside that directory
+later, as it runs — pulling repositories automatically, deleting archived sessions, switching an account at its usage
+limit, starting usage windows — is not of this kind, and travels like any other (see
+`docs/product/settings-in-a-configuration.md`). A provider setting its provider does not declare as carried stays on
+its machine too (see "Provider settings" in `docs/product/per-agent-settings.md`); today every provider setting is
+declared as carried.
 
 ### Versions
 
-The format marker tells a configuration document from any other JSON. The version is a whole number, 1 today, and is
-raised only when a change would make a reader written for a released version misread a document — a field dropped, or
-given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know. An import
-reads only version 1. It refuses a document whose format it does not recognize, and one of any other version, older or
-newer, before it creates anything. Version changes and upgrade steps are written only between released versions: a
-change no release has carried is made in place, at the current version, and raising the version past a released one adds
-a step that upgrades a document of that version. No build has been released, so there is no upgrade of an older
-document.
+The format marker tells a configuration document from any other JSON. The version is a whole number, **2** today, and
+is raised only when a change would make a reader written for a released version misread a document — a field dropped,
+or given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know. Version
+changes and upgrade steps are written only between released versions: a change no release has carried is made in place,
+at the current version, and raising the version past a released one adds a step that upgrades a document of that
+version.
+
+An import reads **versions 1 to 2**: version 1 is the one the first beta releases wrote, and is upgraded to the current
+version as it is read, before anything else looks at it, so the inspection and the import see the same document. It
+refuses a document whose format it does not recognize, and one of any other version, older or newer, before it creates
+anything; the refusal names the versions it reads. Upgrading a version 1 document:
+
+- moves the agent account settings — automatic account selection, automatic switching at the usage limit, starting
+  usage windows, the provider settings and the agent tags — from its application settings into its accounts region,
+  where version 2 carries them (see "The agent account settings an export carries" in
+  `docs/product/settings-in-a-configuration.md`); a document that carries them but no accounts region is given one
+  that holds those settings alone, so they are kept, and are applied when its accounts are imported;
+- drops each account's sharing of the default configuration, which an import does not read (see "What is not
+  configuration and never travels" above);
+- reads what version 1 never carried — the default clone directory, whether a default account is turned off, and the
+  agent account settings of a document without application settings — as not said, so an import leaves the importing
+  machine's own as they are.
 
 An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads
 an agent's entry that is left out as unset: a console's account is then the agent's default account, a project's
 account inherits its console's reference, and the model and effort are unset. An entry of `accounts`, `launch` or
 `project_session_launch` keyed by an agent this build does not support (see `docs/product/supported-agents.md`) is
-ignored, as are such an agent's `provider_settings` and `agent_tags` entries (see "The application settings an export
-carries" above). A document that names such an agent anywhere else — among the added agents (`added_agents`), as an
+ignored, as are such an agent's `provider_settings` and `agent_tags` entries (see "The agent account settings an export
+carries" in `docs/product/settings-in-a-configuration.md`). A document that names such an agent anywhere else — among the added agents (`added_agents`), as an
 account's agent, or as a console's or project's default agent or a console's default agent for project sessions —
 cannot be read, and is refused as one (see "What is refused, and what is reported instead" below).
 
@@ -266,8 +218,9 @@ for diagnosing a document that misbehaves: an import never reads it and it has n
 
 An import is two steps. **Inspecting** reads a document and answers what importing it would meet on the daemon's host;
 it changes nothing and runs no `git`. **Applying** takes the same document, together with which of its regions to
-import and the choice made for each project and each account, and creates. The consoles and projects are imported
-unless the import is told to leave them out; the accounts and the application settings only when it is asked for them.
+import, the choice made for each project and each account, and whether to keep the host's own default clone directory,
+and creates. The consoles and projects are imported unless the import is told to leave them out; the accounts, with the
+agent account settings, and the application settings only when it is asked for them.
 The document is untrusted input: every path and URL in it is data the daemon's host checks, and nothing in it is acted
 on as it stands.
 
@@ -284,7 +237,10 @@ comes to on the daemon's host, and which of them is the default:
 | A directory the user points at | that directory | never offered: only the user can name one, and any project can be placed this way |
 
 The **default** is the first of the recorded path, the derived path and the clone that is offered, and there is no
-default when none of them is. A project recorded by its directory name alone (see "Project paths" above) is never
+default when none of them is. The default clone directory is the one in effect once the import has made its choice
+about the document's (see "The default clone directory on import" in `docs/product/settings-in-a-configuration.md`):
+the inspection answers the offers under the host's own directory and, where the document carries another one, under
+the document's too. A project recorded by its directory name alone (see "Project paths" above) is never
 offered the recorded path, since a name is not an absolute path, so it can be offered only the directory under the
 default clone directory and a fresh clone; an empty name derives no directory, which leaves only the clone. A project
 with nothing offered is left out of the import unless the user points at a directory for it.
@@ -320,8 +276,8 @@ Inspecting a document that carries accounts says, for each of its accounts, agen
 what importing it would come to:
 
 - **Existing** — an account of the same agent already has its name, compared trimmed and ignoring letter case. An
-  import uses that account as it is and **never changes it**: the document's directory, sharing and turned-off choices
-  are not applied to it.
+  import uses that account as it is and **never changes it**: the document's directory and turned-off choice are not
+  applied to it.
 - **New** — it can be created as the document has it.
 - **Directory in use** — its directory, as it resolves here, is already another account's of that agent, the default
   account included, or that of an earlier new account of the document, compared as the Add account form compares
@@ -341,7 +297,8 @@ out, since no directory would help.
 The inspection also says which of the document's added agents this machine has not added (none while this machine's
 list is undecided), and, for each agent, the name the document gives its default account and whether an import would
 apply it: only when this machine's default account of that agent has no name of its own, and the name is neither blank
-nor "Default" and is no account's of that agent, the ones the import would create included.
+nor "Default" and is no account's of that agent, the ones the import would create included; and, where the document
+says whether the default account is turned off, what it says and whether that differs from this machine's.
 
 Applying the accounts comes **before any console is created**, and nothing of it is undone:
 
@@ -354,12 +311,15 @@ Applying the accounts comes **before any console is created**, and nothing of it
    reason, and the import goes on.
 3. The accounts created come after the agent's other accounts in its display order, in the document's order. The
    default account keeps its place on this machine: its place in the document is not applied.
-4. A created account takes the document's turned-off choice. Where the document says it shares the default
-   configuration, sharing is then turned on for it as its switch turns it on (see "Turning sharing on" in
-   `docs/product/sharing-the-default-configuration.md`); when that fails, the account stays created and the failure is
-   a warning on it.
+4. A created account takes the document's turned-off choice, and does not share the default configuration (see "What
+   is not configuration and never travels" above).
 5. The default account's name is applied under the rule above, checked again at that moment, so a name the default
-   account was given meanwhile is kept. Whether the default account is turned off is never applied.
+   account was given meanwhile is kept. The default account is turned off, or back on, as the document says, where it
+   says and that differs from this machine's — for every agent the document lists, so a document whose default account
+   of an agent is on turns that agent's default account back on here (see "Turning an account off" in
+   `docs/product/agent-accounts.md`).
+6. The agent account settings are applied (see "The agent account settings are applied with the accounts" in
+   `docs/product/settings-in-a-configuration.md`).
 
 Every change appears in every window as the same change made by hand does. **Nothing is logged in**: the accounts are
 created without credentials, and the user logs each one in afterwards (see `docs/product/logging-accounts-in.md`).
@@ -380,11 +340,14 @@ accounts region holds no named reference (see "How an account reference travels"
 
 ### What applying does
 
-Applying goes region by region: first the accounts, when they are asked for, so that the consoles' and projects'
-references can bind to them (see "Importing accounts" above); then the consoles and projects, unless the import is told
-to leave them out, in which case no console or project is created and no choice for a project is read; then the
-application settings, when they are asked for (see "Application settings are left alone unless they are asked for"
-below).
+Applying goes region by region: first, when the application settings are asked for, the document's default clone
+directory, unless the import is told to keep the host's own, so that the projects placed under it follow the choice
+(see "The default clone directory on import" in `docs/product/settings-in-a-configuration.md`); then the accounts and
+the agent account settings, when they are asked for, so that the consoles' and projects' references can bind to the
+accounts (see "Importing accounts" above); then the consoles and projects, unless the import is told to leave them out,
+in which case no console or project is created and no choice for a project is read; then the rest of the application
+settings, when they are asked for (see "Application settings are left alone unless they are asked for" in
+`docs/product/settings-in-a-configuration.md`).
 
 **An import always creates.** Every console of the document becomes a new console, whether or not one of the same name
 is already there — console names are not unique, so two of a name stand side by side.
@@ -407,43 +370,12 @@ falls under a folder the user has already trusted on the daemon's host (see "The
 Every account, console and project appears as soon as it is created rather than when the import finishes, so a long
 import fills the window in as it goes.
 
-### Application settings are left alone unless they are asked for
-
-A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
-applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
-automatically deleting archived sessions makes it delete sessions by itself, automatic account selection makes a later
-new session that names no account take the one whose weekly quota resets soonest, automatic switching at the usage
-limit ends sessions' processes and moves them to other accounts by itself, starting usage windows automatically spends
-a little of the accounts' quota by itself, and the four automatic approvals let agents' requests, account
-switches and handoffs through without asking the user, asking questions as choices changes what sessions are told at
-launch, and the provider settings — Claude compatibility — change what Codex and Grok Build sessions load at launch, so applying them changes how the daemon's host behaves rather than only adding to what it holds. The inspection
-says both what the document sets and what is set now — for the provider settings, the value in effect here of every
-setting a document can carry, `null` for a choice setting left unset — so what applying would change can be shown before anything is
-done. The settings are applied last, through the same path as a change made in Settings — so an import that turns
-automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on"
-in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes nothing until the next
-scheduled check, as the switch does, one that changes closing idle terminals with the panel closes nothing at once
-and applies to later panel closes, one that turns automatic account selection on or off changes no session already
-open, one that turns automatic switching at the usage limit on or off changes no session, one that turns the
-starting of usage windows on looks over the quota readings already held at once (see "When an
-account is kicked" in `docs/product/starting-usage-windows.md`), one that turns an automatic approval on or off changes
-no request already waiting, and one that turns asking questions as choices or an agent's Claude compatibility on or off
-changes no session already running — and the result of the import reports what was applied. Asking to apply the settings of a document that carries none is
-refused rather than quietly ignored, so a request never does less than it was told to.
-
-The keyboard shortcuts follow the same choice, and are applied by the client that runs the import, to itself alone,
-once the daemon reports the other settings applied; when those could not be applied, neither are the shortcuts. They
-**replace** that client's shortcuts: every command the document does not name goes back to its default. The document's
-shortcuts are judged as one set, under the same rules as a shortcut the user records, and an entry that cannot be used
-on the importing client is dropped and counted (see "The shortcuts as data" in `docs/product/keyboard-shortcuts.md`).
-Other clients — another browser, or the desktop app — keep their own.
-
 ### What is refused, and what is reported instead
 
 Refused before anything at all is created:
 
-- a document that is not a configuration document, one whose version is not the one this Octoboard reads, and one
-  that cannot be read;
+- a document that is not a configuration document, one of a version this Octoboard does not read (see "Versions"
+  above), and one that cannot be read;
 - a choice for a project that cannot be right: it names a project the document does not have, it names one project
   twice, or the directory it points at is neither absolute nor starts with `~/`;
 - a choice for an account that cannot be right: it names an account the document does not have, it names one account
@@ -461,20 +393,22 @@ Refused before anything at all is created:
 **Past that point nothing is refused and nothing is undone**, because by then earlier accounts, consoles and projects
 exist and have already appeared:
 
-- an account that cannot be created is recorded as failed with the reason, sharing that could not be turned on is a
-  warning on its account, and the remaining accounts, then the consoles, are imported as usual;
+- an account that cannot be created is recorded as failed with the reason, and the remaining accounts, then the
+  consoles, are imported as usual;
+- agent account settings that could not be applied are reported as such, with the accounts;
 - a console that cannot be created is recorded as failed, every project of it as not attempted, and the next console of
   the document is imported;
 - a project that cannot be placed — the recorded path is gone, a clone fails or the directory it would create already
   exists, the directory pointed at is not there, the directory is already associated with that console — is recorded as
   failed with the reason, and the remaining projects are imported as usual;
-- application settings that could not be applied are reported as such, and the import stands.
+- application settings that could not be applied are reported as such, and the import stands; a default clone
+  directory written before them stays written, and the result says so.
 
 The result says, for every console and every project of the document when the consoles were imported, whether it was
 created, left out for want of a choice, failed and why, or never attempted; and for every account of the document when
-the accounts were, whether it was created, already existed, was left out or failed and why, with any sharing warning,
-which agents were added and which default accounts were named — so the outcome never has to be pieced together from
-what appeared in the window.
+the accounts were, whether it was created, already existed, was left out or failed and why, which agents were added,
+which default accounts were named and which were turned off or on, and what came of the agent account settings — so the
+outcome never has to be pieced together from what appeared in the window.
 
 ### How long an import takes
 
@@ -490,17 +424,18 @@ An import request may name itself with a token of the client's choosing (`import
 reports where each of its items stands while it runs, broadcasting `configuration_import_progress` events that carry the
 token, to every client; a client keeps those with its own token. An import that names none is reported on by no event.
 
-- **The items** are each account the import handles, each console, each project it places, and the application settings
-  when they are applied. A project left out is not one, nor an account left out — but an account that already exists
-  is, whatever was chosen for it, since it is used as it is.
+- **The items** are the default clone directory when the import writes it, each account the import handles, the agent
+  account settings when the accounts imported carry them, each console, each project it places, and the rest of the
+  application settings when they are applied. A project left out is not one, nor an account left out — but an account
+  that already exists is, whatever was chosen for it, since it is used as it is.
 - **Once nothing can be refused any more**, every item is reported waiting, in the order the import handles them: the
-  accounts, then each console followed by its projects, then the settings. A request refused before anything is
-  created reports nothing.
+  default clone directory, the accounts, the agent account settings, then each console followed by its projects, then
+  the application settings. A request refused before anything is created reports nothing.
 - **Each item then moves** to being created as the daemon starts on it — being cloned, for a project that is cloned —
   and ends done, failed (with the same failure the result reports for it), or, for a project whose console could not
   be created, not attempted. A console is done as soon as it is created, its projects then reporting for themselves.
-  An account that already exists goes straight to done, and so does a created account whose sharing could not be
-  turned on: that warning is the result's.
+  An account that already exists goes straight to done. A default clone directory that cannot be written fails, and
+  the application settings then fail with the same failure without having been worked on.
 
 The events are sent before the reply, but the last of them can reach a client after it; once a client has the reply,
 it ignores the later events of that import. A failure the daemon answers with an error after reporting progress

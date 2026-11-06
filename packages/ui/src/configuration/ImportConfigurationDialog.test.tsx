@@ -8,11 +8,14 @@ import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
 import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
+import { currentLanguage, setLanguage } from "../i18n/language";
+import { runInBackground } from "../lifecycle/runInBackground";
 import { ConfigurationFileError } from "../platform";
 import type { Event, GitWorkflowSettings, ClientRequestBody } from "../protocol";
 import { bindingFor, shortcutOverrides } from "../shortcuts/store";
+import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
-import { mountDialog, openTab, press, settingLinesOf } from "./testSupport";
+import { mountDialog, openTab, press, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,15 +50,14 @@ const regionBox = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
 const settingsBox = () => regionBox("Application settings");
 const tabNames = () => Array.from(document.body.querySelectorAll("[role=tab]")).map((tab) => tab.textContent);
-/** The lines of the settings card of the result, by setting name. */
+/** The lines of the settings cards of the result, by setting name. */
 function resultSettingLines(): ReturnType<typeof settingLinesOf> {
-  const card = Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > h3")?.textContent === "Application settings applied")!;
-  return settingLinesOf(card.querySelector("ul")!);
+  return settingLinesAcrossGroups(document.body.querySelector("[role=tabpanel]")!);
 }
 
-/** The lines of the settings card of the review, by setting name. */
+/** The lines of the settings cards of the review, by setting name. */
 function settingLines(): ReturnType<typeof settingLinesOf> {
-  return settingLinesOf(document.body.querySelector("[role=tabpanel] ul")!);
+  return settingLinesAcrossGroups(document.body.querySelector("[role=tabpanel]")!);
 }
 
 /** Picks `option` in the select of the project's row. */
@@ -253,12 +255,14 @@ it("applies the application settings only once they are included", async () => {
 });
 
 const FOCUS = { code: "KeyK", primary: true, shift: true };
-/** A daemon that, when asked for the settings, applies them and echoes the document's keyboard shortcuts as they came
- * (or as `echo` has it, where given); asked for no settings, it reports none applied. */
+/** A daemon that, when asked for the settings, applies them and echoes the document's keyboard shortcuts and the
+ * settings only a client holds as they came (or as `settings` has it, where given); asked for no settings, it reports
+ * none applied. */
 const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
   if (body.type !== "import_configuration") return reply(body);
-  const carried = (body.document as { settings?: { keyboard_shortcuts?: unknown } }).settings?.keyboard_shortcuts;
-  const applied = { ...MIXED_RESULT.settings_applied!, ...(carried !== undefined && carried !== null && { keyboard_shortcuts: carried as never }), ...settings };
+  const document = (body.document as { settings?: Record<string, unknown> }).settings ?? {};
+  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "interface_language"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
+  const applied = { ...MIXED_RESULT.settings_applied!, ...passedThrough, ...settings };
   return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings ? applied : null });
 };
 const QUICK_CREATE = { code: "KeyJ", primary: true, shift: true };
@@ -272,11 +276,27 @@ it("says nothing of keyboard shortcuts when the document carries none", async ()
 it("says what the document's keyboard shortcuts would do on this device", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS, bad: 1 }) });
-  expect(settingLines()["Keyboard shortcuts"]).toEqual({
+  expect(settingLines()["Changed shortcuts"]).toEqual({
     badge: "Set to the file's",
     note: "1 of the file's shortcuts differs from the default. Shortcut changes apply only to this browser.",
     values: ["Toggle focus mode: ⇧⌃K (now ⇧⌃F)"],
   });
+});
+
+it("groups the application settings as the Settings dialog does, each group in the order of its section", async () => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }) });
+  const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
+  expect(groups.map((group) => group.title)).toEqual(["General", "Git", "Agent behavior", "Keyboard shortcuts"]);
+  expect(groups[1].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
+  expect(groups[2].lines).toEqual([
+    "Automatically approve session requests",
+    "Automatically approve resume requests",
+    "Automatically approve account switches",
+    "Automatically approve handoffs",
+    "Ask questions as choices",
+  ]);
+  expect(groups[3].lines).toEqual(["Changed shortcuts"]);
 });
 
 it("replaces this device's keyboard shortcuts with the document's once the settings are applied, and reports it", async () => {
@@ -288,7 +308,7 @@ it("replaces this device's keyboard shortcuts with the document's once the setti
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   await openTab("Application settings");
   const applied = resultSettingLines();
-  expect(applied["Keyboard shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Toggle focus mode: ⇧⌃K"] });
+  expect(applied["Changed shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Toggle focus mode: ⇧⌃K"] });
 });
 
 it("leaves this device's keyboard shortcuts alone unless the settings are included", async () => {
@@ -309,12 +329,12 @@ it("puts every shortcut back to its default when the document carries an empty s
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ quickCreate: QUICK_CREATE });
   await reviewingSettings({ text: withShortcuts({}), reply: echoing() });
-  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "Shortcut changes apply only to this browser.", values: ["New session with defaults: ⇧⌃N (now ⇧⌃J)"] });
+  expect(settingLines()["Changed shortcuts"]).toEqual({ badge: "Back to defaults", note: "Shortcut changes apply only to this browser.", values: ["New session with defaults: ⇧⌃N (now ⇧⌃J)"] });
   expect(text()).not.toContain("0 of them");
   await press("Import");
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   await openTab("Application settings");
-  expect(resultSettingLines()["Keyboard shortcuts"]).toEqual({ badge: "Defaults" });
+  expect(resultSettingLines()["Changed shortcuts"]).toEqual({ badge: "Defaults" });
   expect(text()).not.toContain("0 changes");
 });
 
@@ -347,6 +367,191 @@ it("leaves this device's keyboard shortcuts alone when the document carries none
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyJ", primary: true, shift: true });
 });
 
+describe("the settings only this client holds", () => {
+  const carrying = (settings: Record<string, unknown>) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, ...settings } });
+  const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", run_in_background: true };
+  const restoreOnFinish = () =>
+    onTestFinished(() => {
+      markdownStyle.set("tailwind");
+      setLanguage("en");
+      runInBackground.set(false);
+      localStorage.removeItem("heroui-theme");
+    });
+
+  it("are reviewed against what this client has, and the one its platform lacks is left out", async () => {
+    restoreOnFinish();
+    await reviewingSettings({ text: carrying(FILE) });
+    const lines = settingLines();
+    expect(lines["Appearance"]).toEqual({ badge: "Set to the file's", note: "Dark (now System)" });
+    expect(lines["Markdown style"]).toEqual({ badge: "Set to the file's", note: "GitHub (now Tailwind)" });
+    expect(lines["Language"]).toEqual({ badge: "Set to the file's", note: "日本語 (now English)" });
+    // Each name is marked as the language it is written in; the Markdown style names are English.
+    expect(Array.from(document.body.querySelectorAll("[lang]"), (node) => `${node.getAttribute("lang")}:${node.textContent}`)).toEqual(expect.arrayContaining(["ja:日本語", "en:English"]));
+    // A browser has no background running.
+    expect(lines["Keep running in the background when the window is closed"]).toBeUndefined();
+  });
+
+  it("say they change nothing where they are what this client has, and are not listed where the file has none, or one this client does not know", async () => {
+    restoreOnFinish();
+    await reviewingSettings({ text: carrying({ markdown_style: "tailwind", appearance: "sepia", interface_language: "tlh" }) });
+    const lines = settingLines();
+    expect(lines["Markdown style"]).toEqual({ badge: "No change" });
+    for (const unlisted of ["Appearance", "Language", "Keep running in the background when the window is closed"]) expect(lines[unlisted]).toBeUndefined();
+  });
+
+  it("are applied to this client from what the daemon says it applied, and told in the result", async () => {
+    restoreOnFinish();
+    await reviewingSettings({ text: carrying(FILE), reply: echoing() });
+    await press("Import");
+    expect(localStorage.getItem("heroui-theme")).toBe("dark");
+    expect(markdownStyle.get()).toBe("github");
+    // The window is in the file's language now; the rest of the test reads it in English.
+    expect(currentLanguage()).toBe("ja");
+    act(() => setLanguage("en"));
+    await openTab("Application settings");
+    // Not a platform that runs in the background: the value is not taken.
+    expect(runInBackground.get()).toBe(false);
+    const lines = resultSettingLines();
+    expect(lines["Appearance"]).toEqual({ badge: "Dark" });
+    expect(lines["Markdown style"]).toEqual({ badge: "GitHub" });
+    expect(Object.keys(lines)).not.toContain("Keep running in the background when the window is closed");
+  });
+
+  it("take the background running where the platform has it", async () => {
+    restoreOnFinish();
+    mountDialog(
+      (onClose) => <ImportConfigurationDialog onClose={onClose} />,
+      echoing(),
+      { save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text: carrying(FILE) })) },
+      {},
+      { backgroundRun: { set: vi.fn(async () => {}) } },
+    );
+    await press("Choose file");
+    await act(async () => settingsBox().click());
+    await openTab("Application settings");
+    expect(settingLines()["Keep running in the background when the window is closed"]).toEqual({ badge: "Set to the file's", note: "On (now Off)" });
+    await press("Import");
+    act(() => setLanguage("en"));
+    await openTab("Application settings");
+    expect(runInBackground.get()).toBe(true);
+    expect(resultSettingLines()["Keep running in the background when the window is closed"]).toEqual({ badge: "On" });
+  });
+
+  it("are left alone when the settings are not imported", async () => {
+    restoreOnFinish();
+    await reviewing({ text: carrying(FILE), reply: echoing() });
+    await press("Import");
+    expect(markdownStyle.get()).toBe("tailwind");
+    expect(currentLanguage()).toBe("en");
+  });
+
+  it("are left alone when the daemon could not apply the settings", async () => {
+    restoreOnFinish();
+    const failing = (body: ClientRequestBody): Promise<Event> =>
+      body.type === "import_configuration"
+        ? Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: null, settings_error: { code: "internal_error", params: {}, message: "no" } })
+        : reply(body);
+    await reviewingSettings({ text: carrying(FILE), reply: failing });
+    await press("Import");
+    expect(markdownStyle.get()).toBe("tailwind");
+    expect(currentLanguage()).toBe("en");
+  });
+});
+
+describe("the default clone directory", () => {
+  const cloneBox = () =>
+    Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === "Use the file's default clone directory");
+
+  it("is shown against this machine's, with the choice to keep this machine's own", async () => {
+    await reviewingSettings();
+    // The choice to keep this machine's own is under the line's note.
+    expect(settingLines()["Default clone directory"]).toEqual({ badge: "Set to the file's", note: "/Users/ana/Code/clones (now /Users/dev/Projects)Use the file's default clone directory" });
+    expect(cloneBox()!.checked).toBe(true);
+  });
+
+  it("is applied by default, without a word of it in the request", async () => {
+    const mounted = await reviewingSettings();
+    await press("Import");
+    await openTab("Application settings");
+    expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true });
+    expect(mounted.sent().at(-1)).not.toHaveProperty("apply_clone_dir");
+    expect(resultSettingLines()["Default clone directory"]).toEqual({ badge: "Matches the file", note: "/Users/ana/Code/clones" });
+  });
+
+  it("is kept at this machine's own when the user unchecks it, which the request says", async () => {
+    const mounted = await reviewingSettings();
+    await act(async () => cloneBox()!.click());
+    // Its own sentence says what is kept and names the file's, not the change.
+    expect(settingLines()["Default clone directory"]).toEqual({ badge: "No change", note: "/Users/dev/Projects is kept instead of the file's /Users/ana/Code/clones.Use the file's default clone directory" });
+    await press("Import");
+    expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true, apply_clone_dir: false });
+  });
+
+  it("is not offered a choice where it is this machine's own, nor when the file carries none", async () => {
+    const same = { ...REVIEW, settings: { ...REVIEW.settings!, default_clone_dir: "/Users/dev/Projects" } };
+    await reviewingSettings({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...same }) : reply(body)) });
+    expect(settingLines()["Default clone directory"]).toEqual({ badge: "No change" });
+    expect(cloneBox()).toBeUndefined();
+  });
+
+  it("is not listed when the file carries none", async () => {
+    const none = { ...REVIEW, settings: { ...REVIEW.settings!, default_clone_dir: null } };
+    await reviewingSettings({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...none }) : reply(body)) });
+    expect(settingLines()["Default clone directory"]).toBeUndefined();
+  });
+
+  describe("the targets the review offers", () => {
+    // "Search API" is found under this machine's clone directory only, "Dotfiles" under the file's only.
+    const inspecting = (body: ClientRequestBody) => {
+      if (body.type !== "inspect_configuration") return reply(body);
+      const consoles = REVIEW.consoles.map((console) => ({
+        ...console,
+        projects: console.projects.map((project) =>
+          project.name === "Search API"
+            ? { ...project, in_document_clone_dir: { offers: { exported_path: null, default_clone_dir: null, clone: null }, default: null } }
+            : project.name === "Dotfiles"
+              ? { ...project, in_document_clone_dir: { offers: { exported_path: null, default_clone_dir: "/Users/ana/Code/clones/dotfiles", clone: "/Users/ana/Code/clones/dotfiles" }, default: "default_clone_dir" as const } }
+              : project,
+        ),
+      }));
+      return Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, consoles });
+    };
+
+    it("are this machine's while the settings are not imported, and the file's once they are, unless the file's directory is kept off", async () => {
+      await reviewing({ reply: inspecting });
+      // The settings region is unchecked: nothing of the file's directory applies.
+      expect(fields("Search API")["Placed in"]).toBe("/Users/dev/Projects/search-api");
+      expect(fields("Dotfiles")["Clone into"]).toBe("/Users/dev/Projects/dotfiles");
+      await act(async () => settingsBox().click());
+      // Taking the file's directory: nothing is under it for Search API, which is then left out, and Dotfiles, which
+      // the user never touched, follows the file's preselection and is placed there.
+      expect(fields("Search API")["Placed in"]).toBeUndefined();
+      expect(fields("Dotfiles")["Placed in"]).toBe("/Users/ana/Code/clones/dotfiles");
+      await openTab("Application settings");
+      await act(async () => cloneBox()!.click());
+      await openTab("Consoles and projects");
+      expect(fields("Search API")["Placed in"]).toBe("/Users/dev/Projects/search-api");
+      expect(fields("Dotfiles")["Clone into"]).toBe("/Users/dev/Projects/dotfiles");
+    });
+
+    it("send the choices as they stand under the directory the import takes", async () => {
+      const mounted = await reviewing({ reply: inspecting });
+      await act(async () => settingsBox().click());
+      await press("Import");
+      const { resolutions } = mounted.sent().at(-1) as { resolutions: { console: number; project: number; choice: { kind: string } }[] };
+      const dotfiles = resolutions.find((r) => r.console === 1 && r.project === 0);
+      expect(dotfiles?.choice.kind).toBe("default_clone_dir");
+      expect(resolutions.find((r) => r.console === 0 && r.project === 1)).toBeUndefined();
+    });
+  });
+
+  it("is not sent a refusal while the settings are not imported", async () => {
+    const mounted = await reviewing();
+    await press("Import");
+    expect(mounted.sent().at(-1)).not.toHaveProperty("apply_clone_dir");
+  });
+});
+
 it("offers the regions of the file as checkboxes above the tabs, the settings unchecked, and a tab only for a checked region", async () => {
   await reviewing();
   expect(regionBox("Consoles and projects").checked).toBe(true);
@@ -362,6 +567,57 @@ it("offers the regions of the file as checkboxes above the tabs, the settings un
   expect(document.body.textContent).not.toContain("Also apply the application settings");
 });
 
+it("starts an accounts region that holds no agent and no account unchecked like the settings, and one that holds an agent checked", async () => {
+  const agent_settings = {
+    auto_select_account: true,
+    current_auto_select_account: false,
+    auto_switch_on_usage_limit: false,
+    current_auto_switch_on_usage_limit: false,
+    auto_start_quota_windows: false,
+    current_auto_start_quota_windows: false,
+    provider_settings: {},
+    current_provider_settings: {},
+    agent_tags: {},
+    current_agent_tags: {},
+  };
+  const inspecting = (accounts: NonNullable<typeof REVIEW.accounts>) => (body: ClientRequestBody) =>
+    body.type === "inspect_configuration" ? Promise.resolve<Event>({ type: "configuration_inspected", ...REVIEW, accounts }) : reply(body);
+
+  // What a version 1 file with settings and no accounts is upgraded to: the Agent accounts settings alone.
+  const mounted = await reviewing({ reply: inspecting({ agents_to_add: [], agents: [], agent_settings }) });
+  expect(regionBox("Accounts").checked).toBe(false);
+  expect(regionBox("Consoles and projects").checked).toBe(true);
+  expect(tabNames()).toEqual([]);
+  await press("Import");
+  expect(mounted.sent().at(-1)).not.toHaveProperty("apply_accounts");
+});
+
+describe("the accounts region on opening", () => {
+  const listed = { agent: "claude" as const, default_name: null, default_name_applies: false, default_disabled: null, default_disabled_applies: false, accounts: [] };
+  const opened = async (accounts: NonNullable<typeof REVIEW.accounts>) => {
+    await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve<Event>({ type: "configuration_inspected", ...REVIEW, accounts }) : reply(body)) });
+    return regionBox("Accounts").checked;
+  };
+  const rows = [{ name: "Work", directory: "~/.work", proposed_directory: "/Users/dev/.work", status: "new" as const, in_use_by: null, error: null, disabled: false }];
+
+  it.each([
+    ["an agent to add", { agents_to_add: ["codex" as const], agents: [], agent_settings: null }],
+    ["an account", { agents_to_add: [], agents: [{ ...listed, accounts: rows }], agent_settings: null }],
+    ["a default account's name that applies", { agents_to_add: [], agents: [{ ...listed, default_name: "Main", default_name_applies: true }], agent_settings: null }],
+    ["a default account's switch that applies", { agents_to_add: [], agents: [{ ...listed, default_disabled: true, default_disabled_applies: true }], agent_settings: null }],
+  ])("starts checked when the file brings %s", async (_name, accounts) => {
+    expect(await opened(accounts)).toBe(true);
+  });
+
+  it("starts unchecked when the agents it lists bring nothing", async () => {
+    expect(await opened({ agents_to_add: [], agents: [listed], agent_settings: null })).toBe(false);
+  });
+
+  it("starts unchecked when the name or switch it lists does not apply", async () => {
+    expect(await opened({ agents_to_add: [], agents: [{ ...listed, default_name: "Main", default_disabled: true }], agent_settings: null })).toBe(false);
+  });
+});
+
 it("keeps Import unavailable while no region is checked", async () => {
   await reviewing();
   const importButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Import")!;
@@ -375,7 +631,8 @@ it("keeps Import unavailable while no region is checked", async () => {
 it("shows no checkbox for a file that carries one region, and imports that region", async () => {
   const only = { ...REVIEW, consoles: [], accounts: null };
   const mounted = await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...only }) : reply(body)) });
-  expect(document.body.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
+  // No region to check: the only checkbox is the choice about the default clone directory.
+  expect(Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]"), (input) => input.labels?.[0]?.textContent)).toEqual(["Use the file's default clone directory"]);
   expect(text()).toContain("Automatically pull repositories");
   await press("Import");
   expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true, resolutions: [] });
@@ -396,10 +653,10 @@ it("notes what applying each application setting would change with a badge, and 
   expect(lines["Automatically pull repositories"]).toEqual({ badge: "Turns on", note: "Your repositories will then be pulled automatically." });
   // Turning a setting off, or leaving it as it is, has no consequence line.
   expect(lines["Automatically delete archived sessions whose conversation is gone"]).toEqual({ badge: "Turns off" });
-  expect(lines["Automatically select an account"]).toEqual({ badge: "Turns on", note: "A new session then uses the account whose weekly limit resets soonest." });
   expect(lines["Order the sidebar by status"]).toEqual({ badge: "Turns off" });
-  expect(lines["Start usage windows automatically"]?.badge).toBe("Turns on");
-  expect(lines["Start usage windows automatically"]?.note).toContain("counts a little toward the account's usage limits");
+  // The switches of the Agent accounts section are in the accounts part, not here.
+  expect(lines["Automatically select an account"]).toBeUndefined();
+  expect(lines["Start usage windows automatically"]).toBeUndefined();
 });
 
 it("says a setting the file shares with this machine changes nothing", async () => {
@@ -465,34 +722,62 @@ describe("the git workflow settings", () => {
   });
 });
 
-describe("the Claude compatibility and agent tags", () => {
-  const inspecting = (settings: Partial<NonNullable<typeof REVIEW.settings>>) => (body: ClientRequestBody) =>
-    body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings: { ...REVIEW.settings!, ...settings } }) : reply(body);
+describe("the settings of the Agent accounts section", () => {
+  const withAgentSettings = (settings: Partial<NonNullable<NonNullable<typeof REVIEW.accounts>["agent_settings"]>>) => (body: ClientRequestBody) =>
+    body.type === "inspect_configuration"
+      ? Promise.resolve({
+        type: "configuration_inspected" as const,
+        ...REVIEW,
+        settings: null,
+        consoles: [],
+        accounts: {
+          agents_to_add: [],
+          agents: [],
+          agent_settings: {
+            auto_select_account: false, current_auto_select_account: false,
+            auto_switch_on_usage_limit: false, current_auto_switch_on_usage_limit: false,
+            auto_start_quota_windows: false, current_auto_start_quota_windows: false,
+            provider_settings: {}, current_provider_settings: {}, agent_tags: {}, current_agent_tags: {},
+            ...settings,
+          },
+        },
+      })
+      : reply(body);
+  const accountSettingLines = () => settingLinesOf(document.body.querySelector("[role=tabpanel] ul, section ul")!);
 
-  it("list the agents applying would change, each with what it is now", async () => {
-    await reviewingSettings({
-      reply: inspecting({
+  it("note what applying each would change, in the accounts part", async () => {
+    await reviewing({ reply: withAgentSettings({ auto_select_account: true, auto_start_quota_windows: true, current_auto_start_quota_windows: false }) });
+    const lines = accountSettingLines();
+    expect(lines["Automatically select an account"]).toEqual({ badge: "Turns on", note: "A new session then uses the account whose weekly limit resets soonest." });
+    expect(lines["Start usage windows automatically"]?.badge).toBe("Turns on");
+    expect(lines["Start usage windows automatically"]?.note).toContain("counts a little toward the account's usage limits");
+    expect(lines["Automatically switch accounts at the usage limit"]).toEqual({ badge: "No change" });
+  });
+
+  it("list the agents applying the provider settings and tags would change, each with what it is now", async () => {
+    await reviewing({
+      reply: withAgentSettings({
         provider_settings: { codex: { claude_compatibility: false }, grok: { claude_compatibility: true } },
         current_provider_settings: { codex: { claude_compatibility: true }, grok: { claude_compatibility: true } },
         agent_tags: { codex: ["review", "ci"], grok: [], claude: ["same"] },
         current_agent_tags: { codex: [], grok: ["old"], claude: ["same"] },
       }),
     });
-    const lines = settingLines();
+    const lines = accountSettingLines();
     expect(lines["Claude compatibility"]).toEqual({ badge: "Set to the file's", values: ["Codex: Off (now On)"] });
     expect(lines["Agent tags"]).toEqual({ badge: "Set to the file's", values: ["Codex: review, ci (now No tags)", "Grok Build: No tags (now old)"] });
   });
 
   it("list nothing when they are the same", async () => {
-    await reviewingSettings({
-      reply: inspecting({
+    await reviewing({
+      reply: withAgentSettings({
         provider_settings: { codex: { claude_compatibility: true } },
         current_provider_settings: { codex: { claude_compatibility: true } },
         agent_tags: { codex: ["review"] },
         current_agent_tags: { codex: ["review"] },
       }),
     });
-    const lines = settingLines();
+    const lines = accountSettingLines();
     expect(lines["Claude compatibility"]).toEqual({ badge: "No change" });
     expect(lines["Agent tags"]).toEqual({ badge: "No change" });
   });

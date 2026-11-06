@@ -96,7 +96,7 @@ and records tests replay.
 - `src/revert_gate/` — the revert gate engine run in-process by `gate-hook`: `local.rs` decides a ref update, `push.rs`
   a push, `report.rs` words a rejection, `content.rs` the content criteria, `git.rs` the gate's own `git`.
 - `src/config_document/` — export and import of the configuration document that carries state between devices
-  (`import/projects.rs` places an imported project, `import/progress.rs` broadcasts the `configuration_import_progress` events of a running import); provider settings travel as the explicit choices of the settings
+  (`upgrade.rs` brings a document of an older version up to the current one before it is read, so an inspection and an import see the same document; `import/projects.rs` places an imported project, `import/progress.rs` broadcasts the `configuration_import_progress` events of a running import); provider settings travel as the explicit choices of the settings
   their descriptor marks `exported`.
 
 ### Storage and state

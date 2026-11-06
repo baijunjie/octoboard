@@ -128,17 +128,17 @@ fn write_default_account_name(state: &Arc<AppState>, agent: AgentId, name: &str)
 }
 
 /// Turns an account off for new work, or back on, and broadcasts the settings when the flag
-/// changed. `None` is `agent`'s default account. A running session is not looked at: it keeps its
-/// account. A quota is not read for an account that is off, unless a session is running on it, so
-/// turning it off drops its held reading when none is, and turning it back on reads it at once with
-/// no failures held against it; that reading starts the usage window it shows unstarted, when the
-/// setting that does that is on.
-pub(super) fn set_account_disabled(
+/// changed, answering whether it did (decided under the lock the write takes). `None` is `agent`'s
+/// default account. A running session is not looked at: it keeps its account. A quota is not read
+/// for an account that is off, unless a session is running on it, so turning it off drops its held
+/// reading when none is, and turning it back on reads it at once with no failures held against it;
+/// that reading starts the usage window it shows unstarted, when the setting that does that is on.
+pub(crate) fn set_account_disabled(
     state: &Arc<AppState>,
     agent: AgentId,
     account: Option<&str>,
     disabled: bool,
-) -> Result<()> {
+) -> Result<bool> {
     let _writes = state.lock_account_writes();
     let changed = match account {
         None => state.store.set_default_account_disabled(agent, disabled)?,
@@ -164,7 +164,7 @@ pub(super) fn set_account_disabled(
             quotas::refresh_in_background(state, scope);
         }
     }
-    Ok(())
+    Ok(changed)
 }
 
 /// Refuses to put a new session on an account the user turned off, going by the flag as it stands.

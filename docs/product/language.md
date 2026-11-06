@@ -129,6 +129,9 @@ The choice is remembered **per client**, in that client's own browser storage, a
 the choice is stored" in `docs/product/appearance.md`). A desktop window and a browser tab, or two machines reaching the
 same daemon, each keep their own, and each renders its own whatever the daemon holds (see "The language the daemon
 holds" below). A client whose storage has been cleared picks the language from the system again on its next load.
+A configuration export that includes the application settings carries the language the exporting client shows, and an
+import asked to apply them switches the client that runs the import to it, when that client offers it (see "The
+settings a client holds" in `docs/product/settings-in-a-configuration.md`).
 Without that storage nothing is kept: every load picks the language from the system, and a choice in Settings lasts
 until the page is reloaded.
 
@@ -148,8 +151,10 @@ A client reports its language:
   every start: the daemon keeps the most recent report.
 
 The first launch's pick from the system is not reported by itself; it reaches the daemon only through the report on
-connecting. The held language is not carried by a configuration export (see "The application settings an export
-carries" in `docs/product/configuration-export-and-import.md`). A console session reads it and changes it through
+connecting. A configuration export that includes the application settings carries the language the exporting client
+shows in its place, and an import asked to apply them sets the held language to it when it is one of the offered
+languages, leaving it as it is otherwise (see "Application settings are left alone unless they are asked for" in
+`docs/product/settings-in-a-configuration.md`). A console session reads it and changes it through
 the settings tools, under the same rule about offered tags (see "Application settings: `get_settings` and
 `update_settings`" in `docs/product/agent-settings-tools.md`); such a change, like a client's report, changes no
 window's own language.

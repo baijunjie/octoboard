@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(reviewer["id"], "approval_reviewer");
         assert_eq!(reviewer["kind"]["type"], "choice");
         assert_eq!(reviewer["kind"]["choices"][0]["value"], "auto_review");
-        assert_eq!(reviewer["exported"], false);
+        assert_eq!(reviewer["exported"], true);
         let bypass = &claude["settings"][0]["kind"]["choices"][2];
         assert_eq!(
             (bypass["value"].as_str(), bypass["confirm"].as_bool()),

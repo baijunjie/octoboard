@@ -198,5 +198,5 @@ both the project's own values and its effective ones. A project session reads it
 
 **Through configuration export and import.** An export that includes the application settings carries the
 application-wide values, and every export of consoles, of one or of all, carries each project's own values (see "The
-application settings an export carries" and "What each project carries" in
-`docs/product/configuration-export-and-import.md`).
+application settings an export carries" in `docs/product/settings-in-a-configuration.md` and "What each project
+carries" in `docs/product/configuration-export-and-import.md`).

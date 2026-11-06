@@ -118,8 +118,9 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
                 },
             ],
         },
-        // Letting a session act without asking never travels to another machine.
-        exported: false,
+        // The choice only becomes a launch flag, and no file is written to enable it, so it travels
+        // like any other setting; an agent never reads or changes it.
+        exported: true,
         shown_to_agents: false,
         compatibility_with: None,
     }],

@@ -35,14 +35,14 @@ const MODEL_DISPLAY: Record<Agent, ModelDisplay> = {
 const claudeCompatibility = (kind: Extract<SettingDescriptor["kind"], { type: "switch" }>): SettingDescriptor => ({ id: "claude_compatibility", kind, exported: true, shown_to_agents: true, compatibility_with: "claude" });
 
 /** The settings each provider declares, as the daemon's registry does: the permission approval of Claude Code and Codex
- * (a choice no export carries, and no agent reads) and the Claude compatibility switch of Codex (on while Claude Code is
+ * (a choice an export carries, and no agent reads) and the Claude compatibility switch of Codex (on while Claude Code is
  * among the added agents) and Grok Build (on). */
 const SETTINGS: Record<Agent, SettingDescriptor[]> = {
   claude: [
-    { id: "approval_mode", kind: { type: "choice", choices: [{ value: "auto", confirm: false }, { value: "manual", confirm: false }, { value: "bypass", confirm: true }] }, exported: false, shown_to_agents: false, compatibility_with: null },
+    { id: "approval_mode", kind: { type: "choice", choices: [{ value: "auto", confirm: false }, { value: "manual", confirm: false }, { value: "bypass", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
   ],
   codex: [
-    { id: "approval_reviewer", kind: { type: "choice", choices: [{ value: "auto_review", confirm: false }, { value: "user", confirm: false }] }, exported: false, shown_to_agents: false, compatibility_with: null },
+    { id: "approval_reviewer", kind: { type: "choice", choices: [{ value: "auto_review", confirm: false }, { value: "user", confirm: false }] }, exported: true, shown_to_agents: false, compatibility_with: null },
     claudeCompatibility({ type: "switch", default: { while_added: "claude" } }),
   ],
   grok: [claudeCompatibility({ type: "switch", default: "on" })],

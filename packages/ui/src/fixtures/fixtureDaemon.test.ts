@@ -660,57 +660,57 @@ describe("the fixture daemon's settings and trusted folders", () => {
       await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
       expect(daemon.store.getState().settings[setting]).toBe(true);
     }
-    expect(exportedDocument(daemon.store.getState()).settings?.auto_select_account).toBe(DEFAULT_SETTINGS.auto_select_account);
+    expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_select_account).toBe(DEFAULT_SETTINGS.auto_select_account);
     await daemon.request({ type: "update_settings", auto_select_account: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);
-    expect(exportedDocument(daemon.store.getState()).settings?.auto_select_account).toBe(true);
-    expect(exportedDocument(daemon.store.getState()).settings?.auto_switch_on_usage_limit).toBe(DEFAULT_SETTINGS.auto_switch_on_usage_limit);
+    expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_select_account).toBe(true);
+    expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_switch_on_usage_limit).toBe(DEFAULT_SETTINGS.auto_switch_on_usage_limit);
     await daemon.request({ type: "update_settings", auto_switch_on_usage_limit: true });
     expect(daemon.store.getState().settings.auto_switch_on_usage_limit).toBe(true);
     await daemon.request({ type: "update_settings", auto_select_account: false });
     expect(daemon.store.getState().settings.auto_switch_on_usage_limit).toBe(true);
-    expect(exportedDocument(daemon.store.getState()).settings?.auto_switch_on_usage_limit).toBe(true);
+    expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_switch_on_usage_limit).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(DEFAULT_SETTINGS.sidebar_order_by_status);
     await daemon.request({ type: "update_settings", sidebar_order_by_status: false });
     expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
     expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(false);
-    expect(exportedDocument(daemon.store.getState()).settings?.auto_start_quota_windows).toBe(DEFAULT_SETTINGS.auto_start_quota_windows);
+    expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_start_quota_windows).toBe(DEFAULT_SETTINGS.auto_start_quota_windows);
     await daemon.request({ type: "update_settings", auto_start_quota_windows: true });
     expect(daemon.store.getState().settings.auto_start_quota_windows).toBe(true);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.auto_start_quota_windows).toBe(true);
-    expect(exportedDocument(daemon.store.getState()).settings?.auto_start_quota_windows).toBe(true);
+    expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_start_quota_windows).toBe(true);
     await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
   });
 
-  it("exports only the exported provider settings the user chose, refuses what a provider does not take and leaves the choices unchanged", async () => {
+  it("exports only the exported provider settings the user chose with the accounts, refuses what a provider does not take and leaves the choices unchanged", async () => {
     const daemon = createFixtureDaemon({ state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) });
-    const exported = async () => ((await daemon.request({ type: "export_configuration" })) as { document: ReturnType<typeof exportedDocument> }).document.settings?.provider_settings;
+    const exported = async () => ((await daemon.request({ type: "export_configuration", include_accounts: true })) as { document: ReturnType<typeof exportedDocument> }).document.accounts?.agent_settings?.provider_settings;
     // The values in effect follow the added agents; none has been chosen, so the export carries none.
     expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }));
     expect(await exported()).toEqual({});
     await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: false });
     expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }));
     expect(await exported()).toEqual({ grok: { claude_compatibility: false } });
-    // A choice of a setting no export carries is kept but never exported.
+    // A permission choice only becomes a launch flag, so it is exported like the others.
     await daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "manual" });
-    expect(await exported()).toEqual({ grok: { claude_compatibility: false } });
+    expect(await exported()).toEqual({ claude: { approval_mode: "manual" }, grok: { claude_compatibility: false } });
     await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "claude_compatibility", value: true })).rejects.toMatchObject({ code: "unreadable_request" });
     await expect(daemon.request({ type: "set_provider_setting", agent: "codex", setting: "claude_compatibility", value: "on" })).rejects.toMatchObject({ code: "unreadable_request" });
     await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "sometimes" })).rejects.toMatchObject({ code: "unreadable_request" });
-    expect(await exported()).toEqual({ grok: { claude_compatibility: false } });
+    expect(await exported()).toEqual({ claude: { approval_mode: "manual" }, grok: { claude_compatibility: false } });
     // A refusal of the rest of an `update_settings` leaves the choices as they were.
     await expect(daemon.request({ type: "update_settings", default_clone_dir: "relative/dir" })).rejects.toMatchObject({ code: "path_not_absolute" });
     expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }, { approval_mode: "manual" }));
     // A null clears the choice, which goes back to the default rule.
     await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: null });
     expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }, { approval_mode: "manual" }));
-    expect(await exported()).toEqual({});
+    expect(await exported()).toEqual({ claude: { approval_mode: "manual" } });
   });
 });
 
@@ -2301,14 +2301,16 @@ describe("the fixture daemon's configuration export", () => {
         agents: [
           {
             agent: "claude",
-            default_account: { name: "Personal", position: 1 },
+            default_account: { name: "Personal", position: 1, disabled: false },
+            // Whether an account shares the default configuration is never exported.
             accounts: [
-              { name: "Studio", directory: "/Volumes/Shared/claude-studio", share_default_config: false, disabled: true },
-              { name: "Work", directory: "~/.claude-work", share_default_config: true, disabled: false },
+              { name: "Studio", directory: "/Volumes/Shared/claude-studio", disabled: true },
+              { name: "Work", directory: "~/.claude-work", disabled: false },
             ],
           },
-          { agent: "codex", default_account: { name: null, position: 0 }, accounts: [{ name: "Home", directory: "~", share_default_config: false, disabled: false }] },
+          { agent: "codex", default_account: { name: null, position: 0, disabled: false }, accounts: [{ name: "Home", directory: "~", disabled: false }] },
         ],
+        agent_settings: { auto_select_account: false, auto_switch_on_usage_limit: false, auto_start_quota_windows: false, provider_settings: {}, agent_tags: {} },
       });
     });
 
@@ -2338,6 +2340,16 @@ describe("the fixture daemon's configuration export", () => {
         console: null,
         projects: [{ kind: "inherit" }, { kind: "inherit" }, { kind: "default" }],
       });
+    });
+
+    it("writes the default clone directory like an account directory, whatever the paths choice, and a turned-off default account", async () => {
+      expect((await exported({ consoles: "none", include_settings: true, include_paths: false })).settings?.default_clone_dir).toBe("~/Projects");
+      const off = createFixtureDaemon({
+        state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["codex"], default_clone_dir: "/Users/dev/Code", accounts: [], disabled_default_accounts: ["codex"] } }),
+      });
+      const { document } = (await off.request({ type: "export_configuration", consoles: "none", include_settings: true, include_accounts: true })) as { document: ReturnType<typeof exportedDocument> };
+      expect(document.settings?.default_clone_dir).toBe("~/Code");
+      expect(document.accounts?.agents).toEqual([{ agent: "codex", default_account: { name: null, position: 0, disabled: true }, accounts: [] }]);
     });
 
     it("writes every account directory, home-relative or absolute, whatever the paths choice", async () => {
@@ -2640,7 +2652,7 @@ describe("the fixture daemon's providers", () => {
 
   it("reports, takes and exports the settings of a provider it serves beside the registered ones", async () => {
     const daemon = createFixtureDaemon({ state: { providers: [...FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER] } });
-    const exported = async () => ((await daemon.request({ type: "export_configuration" })) as { document: ReturnType<typeof exportedDocument> }).document.settings?.provider_settings;
+    const exported = async () => ((await daemon.request({ type: "export_configuration", include_accounts: true })) as { document: ReturnType<typeof exportedDocument> }).document.accounts?.agent_settings?.provider_settings;
     expect(daemon.store.getState().settings.provider_settings[UNPRESENTED_PROVIDER.id]).toEqual({ review_mode: null });
     await daemon.request({ type: "set_provider_setting", agent: UNPRESENTED_PROVIDER.id, setting: "review_mode", value: "fast" });
     expect(daemon.store.getState().settings.provider_settings[UNPRESENTED_PROVIDER.id]).toEqual({ review_mode: "fast" });

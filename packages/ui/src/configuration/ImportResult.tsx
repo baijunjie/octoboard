@@ -8,13 +8,15 @@ import { Message, useT } from "../i18n/react";
 import type { ReplyOf } from "../requests";
 import type { DirectoryChoiceKind } from "../protocol";
 import type { Overrides } from "../shortcuts/store";
+import { AgentSettingsCard } from "./AgentSettingsCard";
+import type { ClientSettingValue } from "./clientSettings";
 import { useFailureNode } from "./failureText";
 import { accountsOutcomeOf, outcomeOf } from "./importPlan";
-import { AgentList, CardRows, EmptyLine, SettingLine, ToneLine } from "./importParts";
+import { AgentList, CardRows, EmptyLine, NamedValue, SettingLine, ToneLine } from "./importParts";
 import { shortcutValues } from "./importValues";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
 import { Outcome, ResultCard, ResultRow } from "./ResultCards";
-import { SettingsCard } from "./SettingsCard";
+import { SettingsGroupCard, SettingsGroups } from "./SettingsGroups";
 import { useProviders } from "../store";
 import { ProviderName } from "../components/text/ProviderName";
 
@@ -43,27 +45,38 @@ function RegionTotals({ label, items }: { label: string; items: string[] }): Rea
   );
 }
 
+/** A directory on a line of its own in a settings card's line, as plain monospace text in the line's muted style. */
+function DirectoryValue({ children }: { children: string }): React.ReactElement {
+  return <div className="align-match-parent font-mono [overflow-wrap:anywhere]" dir="ltr">{children}</div>;
+}
+
 /**
- * What an import came to, as the daemon reported it: the regions the document carried as
- * tabs (a single one stands without a tab bar; see `RegionTabs`), each with a warning glyph on its tab when it holds a
- * failure or a warning, and the first such tab forward. Consoles and projects: a line of their totals, then a card for
- * every console, as in the review: its name and always its own outcome (created, or failed and why), a row for each of
- * its projects (what came of it: created and how it was placed, left out, failed, not tried; the reason of a failure
- * written under the row), and a warning mark after the name of every console or project whose account references fell
- * back to a default account. Accounts: a line of their totals, then a card for every agent with a row for each of its
- * accounts (created, already existing, left out, or failed; the reason written under the row, and under a created
- * account the reason sharing could not be turned on), the agents added, the default accounts named, and, when accounts
- * were created, a note that they are not logged in. Application settings: an alert when they could not be applied, else
- * a card of what was applied, where the git workflow, provider settings, agent tags and keyboard shortcuts also list
- * the values they were set to. The totals lines give the counts and the cards the items, so neither repeats the other.
- * `shortcuts` says what came of the document's keyboard shortcuts, when they were applied here: how many, how many were skipped, and the overrides that were set.
+ * What an import came to, as the daemon reported it: the regions the document carried as tabs (a single one stands
+ * without a tab bar; see `RegionTabs`), each with a warning glyph on its tab when it holds a failure or a warning, and
+ * the first such tab forward. Consoles and projects: a line of their totals, then a card for every console, as in the
+ * review: its name and always its own outcome (created, or failed and why), a row for each of its projects (what came
+ * of it: created and how it was placed, left out, failed, not tried; the reason of a failure written under the row),
+ * and a warning mark after the name of every console or project whose account references fell back to a default
+ * account. Accounts: a line of their totals, then a card for every agent with a row for each of its accounts (created,
+ * already existing, left out, or failed; the reason written under the row), the agents added, the default accounts
+ * named and disabled or enabled, an alert when the agent account settings could not be applied or else a card of what
+ * was applied (the provider settings and agent tags listing the values they were set to), and, when accounts were
+ * created, a note that they are not logged in. Application settings: an alert when they could not be applied, beside
+ * it a card of the default clone directory when that had been written already, else cards of what was applied, grouped
+ * and titled as in the review (see `SettingsGroups`), where the git workflow and keyboard shortcuts also list the
+ * values they were set to. The totals lines give the counts and the cards the items, so neither repeats the other.
+ * `shortcuts` says what came of the document's keyboard shortcuts, when they were applied here: how many, how many
+ * were skipped, and the overrides that were set. `clientSettings` are the settings only this client holds that were
+ * applied here, worded for the cards.
  */
 export function ImportResult({
   result,
   shortcuts,
+  clientSettings = [],
 }: {
   result: Imported;
   shortcuts?: { applied: number; skipped: number; overrides: Overrides };
+  clientSettings?: ClientSettingValue[];
 }): React.ReactElement {
   const t = useT();
   const providers = useProviders();
@@ -91,7 +104,7 @@ export function ImportResult({
       accountsOutcome.existing > 0 && t("configuration.import.result.accountsExisting", { count: accountsOutcome.existing }),
       accountsOutcome.leftOut > 0 && t("configuration.import.result.accountsLeftOut", { count: accountsOutcome.leftOut }),
       accountsOutcome.failed > 0 && t("configuration.import.result.failedCount", { count: accountsOutcome.failed }),
-      accountsOutcome.failed === 0 && t("configuration.import.result.noFailures"),
+      accountsOutcome.failed === 0 && !accounts?.agent_settings_error && t("configuration.import.result.noFailures"),
     ].filter((item) => typeof item === "string")
     : [];
 
@@ -138,7 +151,6 @@ export function ImportResult({
                 name={account.name}
                 status={<Outcome status={account.status} />}
                 failure={account.status === "failed" ? account.error : undefined}
-                warning={account.sharing_warning ? { text: t("configuration.import.result.sharingWarning.text"), failure: account.sharing_warning } : undefined}
               />
             ))}
           </CardRows>
@@ -152,6 +164,27 @@ export function ImportResult({
           <Message id="configuration.import.result.accounts.defaultNamed" params={{ agent: <ProviderName agent={agent.agent} /> }} />
         </p>
       ))}
+      {accounts.agents.filter((agent) => agent.default_disabled_applied !== null).map((agent) => (
+        <p key={agent.agent} className="text-sm">
+          <Message
+            id={agent.default_disabled_applied ? "configuration.import.result.accounts.defaultDisabled" : "configuration.import.result.accounts.defaultEnabled"}
+            params={{ agent: <ProviderName agent={agent.agent} /> }}
+          />
+        </p>
+      ))}
+      {accounts.agent_settings_error && (
+        <ErrorAlert
+          announce
+          announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
+          title={t("configuration.import.result.agentSettings.failedTitle")}
+          remedy={failureNode(accounts.agent_settings_error, "remedy")}
+          details={failureNode(accounts.agent_settings_error, "details")}>
+          <Message id="configuration.import.result.agentSettings.failed" params={{ reason: failureNode(accounts.agent_settings_error, "summary") }} />
+        </ErrorAlert>
+      )}
+      {accounts.agent_settings_applied && (
+        <AgentSettingsCard settings={accounts.agent_settings_applied} heading={t("configuration.import.agentSettings.heading")} />
+      )}
       {accountsOutcome && accountsOutcome.created > 0 && (
         <ToneLine>{t("configuration.import.result.accounts.loginNote")}</ToneLine>
       )}
@@ -169,18 +202,42 @@ export function ImportResult({
           <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} />
         </ErrorAlert>
       )}
+      {/* The directory is written before the rest, so it stays when the rest could not be applied. */}
+      {!applied && result.clone_dir_applied && (
+        <SettingsGroupCard
+          title={t("settings.section.git")}
+          lines={[
+            <SettingLine key="clone-dir" label={t("settings.cloneDir.label")} badge={t("configuration.import.result.badge.matches")}>
+              <div>{t("configuration.import.result.cloneDir.beforeFailure")}</div>
+              <DirectoryValue>{result.clone_dir_applied}</DirectoryValue>
+            </SettingLine>,
+          ]}
+        />
+      )}
       {applied && (
-        <SettingsCard settings={applied} heading={t("configuration.import.result.settings.heading")}>
-          {shortcuts && (
-            <SettingLine
-              label={t("settings.section.shortcuts")}
-              values={shortcutValues(t, shortcuts.overrides)}
-              badge={shortcuts.applied === 0 ? t("configuration.import.result.badge.defaults") : t("configuration.import.result.badge.shortcuts", { count: shortcuts.applied })}
-            >
-              {shortcuts.skipped > 0 && t("configuration.import.result.shortcutsSkipped", { count: shortcuts.skipped })}
-            </SettingLine>
-          )}
-        </SettingsCard>
+        <SettingsGroups
+          settings={applied}
+          clientSettings={clientSettings}
+          clientLine={({ label, value, lang }) => <SettingLine label={t(label)} badge={<NamedValue text={value} lang={lang} />} />}
+          cloneDir={
+            applied.default_clone_dir !== null ? (
+              <SettingLine label={t("settings.cloneDir.label")} badge={t("configuration.import.result.badge.matches")}>
+                <DirectoryValue>{applied.default_clone_dir}</DirectoryValue>
+              </SettingLine>
+            ) : undefined
+          }
+          shortcuts={
+            shortcuts && (
+              <SettingLine
+                label={t("configuration.import.settings.shortcutsLine")}
+                values={shortcutValues(t, shortcuts.overrides)}
+                badge={shortcuts.applied === 0 ? t("configuration.import.result.badge.defaults") : t("configuration.import.result.badge.shortcuts", { count: shortcuts.applied })}
+              >
+                {shortcuts.skipped > 0 && t("configuration.import.result.shortcutsSkipped", { count: shortcuts.skipped })}
+              </SettingLine>
+            )
+          }
+        />
       )}
     </>
   );
@@ -199,11 +256,11 @@ export function ImportResult({
     regions.push({
       id: "accounts",
       label: t("configuration.import.tab.accounts"),
-      attention: (accountsOutcome?.failed ?? 0) > 0 || (accountsOutcome?.sharingWarnings ?? 0) > 0,
+      attention: (accountsOutcome?.failed ?? 0) > 0 || !!accounts.agent_settings_error,
       content: accountsContent,
     });
   }
-  if (applied || result.settings_error) {
+  if (applied || result.settings_error || result.clone_dir_applied) {
     regions.push({ id: "settings", label: t("configuration.import.tab.settings"), attention: !!result.settings_error, content: settingsContent });
   }
 

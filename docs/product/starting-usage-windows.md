@@ -32,8 +32,8 @@ again until it has been seen counting. A failed kick is written to the daemon's 
 is shown in the window. Episodes live in the daemon's memory with the readings: they start afresh when the daemon
 restarts, and an account removed or pointed at another directory loses its own.
 
-Turning the setting on, in Settings or by an import that applies it (see "Application settings are left alone unless
-they are asked for" in `docs/product/configuration-export-and-import.md`), looks over the readings already held at once
+Turning the setting on, in Settings or by an import that applies it (see "The agent account settings are applied with
+the accounts" in `docs/product/settings-in-a-configuration.md`), looks over the readings already held at once
 and kicks every account they call for, without waiting for the next reading; so does turning an account back on while
 the setting is on. Turning the setting off starts no further kick; one already running goes on to its end and to the
 reading after it.

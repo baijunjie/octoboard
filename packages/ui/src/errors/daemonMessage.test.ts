@@ -112,7 +112,7 @@ it("picks the singular or plural wording from a numeric count param", () => {
 // catalog of every language that has one; a miss would show English, or the daemon's own text.
 it.each([
   ["configuration_not_recognised", {}],
-  ["configuration_version_unsupported", { version: "3", supported: "1" }],
+  ["configuration_version_unsupported", { version: "3", oldest: "1", supported: "2" }],
   ["configuration_unreadable", { detail: "bad" }],
   ["import_resolution_invalid", { console: "0", project: "1" }],
   ["import_resolution_invalid", { agent: "Claude Code", account: "1" }],

@@ -28,6 +28,8 @@ fn item_name(item: &ImportItem) -> String {
         ImportItem::Console { console } => format!("console {console}"),
         ImportItem::Project { console, project } => format!("project {console}.{project}"),
         ImportItem::Account { agent, account } => format!("account {}.{account}", agent.label()),
+        ImportItem::CloneDir => "clone directory".to_string(),
+        ImportItem::AgentSettings => "agent settings".to_string(),
         ImportItem::Settings => "settings".to_string(),
     }
 }
@@ -54,9 +56,12 @@ async fn import_named(
         state,
         document,
         resolutions,
-        apply_settings,
-        None,
-        true,
+        ApplyOptions {
+            settings: apply_settings,
+            accounts: None,
+            consoles: true,
+            clone_dir: true,
+        },
         import_id.map(str::to_string),
     )
     .await
@@ -114,6 +119,82 @@ async fn every_item_is_announced_waiting_then_reported_as_it_is_handled() {
             "settings: creating",
             "settings: done",
         ]
+    );
+}
+
+/// The document an export of everything makes of a fresh state, which carries the settings and the
+/// Agent accounts settings, with a default clone directory of its own.
+fn document_with_clone_dir(clone_dir: &Path) -> serde_json::Value {
+    let (source, _dir) = app_state("import-progress-source");
+    let mut document = export_everything(&source);
+    document["settings"]["default_clone_dir"] = json!(clone_dir.to_string_lossy());
+    document
+}
+
+#[tokio::test]
+async fn the_clone_directory_comes_first_and_the_agent_account_settings_follow_the_accounts() {
+    let area = ScratchDir::new("import-progress-order-area");
+    let document = document_with_clone_dir(&directory(&area, "theirs"));
+    let (state, _dir) = app_state("import-progress-order");
+    let mut events = state.subscribe();
+
+    apply_reporting(
+        &state,
+        &document,
+        Vec::new(),
+        ApplyOptions {
+            settings: true,
+            accounts: Some(Vec::new()),
+            consoles: true,
+            clone_dir: true,
+        },
+        Some("order".to_string()),
+    )
+    .await
+    .unwrap();
+
+    // The settings item stands for the application settings without those two.
+    assert_eq!(
+        reported(&mut events, "order"),
+        [
+            "clone directory: waiting",
+            "agent settings: waiting",
+            "settings: waiting",
+            "clone directory: creating",
+            "clone directory: done",
+            "agent settings: creating",
+            "agent settings: done",
+            "settings: creating",
+            "settings: done",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn the_clone_directory_is_not_announced_when_the_machines_own_is_kept() {
+    let area = ScratchDir::new("import-progress-kept-area");
+    let document = document_with_clone_dir(&directory(&area, "theirs"));
+    let (state, _dir) = app_state("import-progress-kept");
+    let mut events = state.subscribe();
+
+    apply_reporting(
+        &state,
+        &document,
+        Vec::new(),
+        ApplyOptions {
+            settings: true,
+            accounts: None,
+            consoles: true,
+            clone_dir: false,
+        },
+        Some("kept".to_string()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        reported(&mut events, "kept"),
+        ["settings: waiting", "settings: creating", "settings: done"]
     );
 }
 
@@ -198,9 +279,12 @@ async fn a_refused_request_that_names_an_id_reports_nothing() {
         &state,
         &document(vec![console("Hub", Vec::new()), bad_icon]),
         Vec::new(),
-        false,
-        None,
-        true,
+        ApplyOptions {
+            settings: false,
+            accounts: None,
+            consoles: true,
+            clone_dir: true,
+        },
         Some("five".to_string()),
     )
     .await;

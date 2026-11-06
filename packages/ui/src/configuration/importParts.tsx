@@ -1,4 +1,4 @@
-import { CircleAlert, CircleSlash, Info, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleAlert, CircleSlash, Info, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
 import { providerLabel } from "../agents/providers";
@@ -18,6 +18,7 @@ import type { AccountFallback, Agent, ImportFailure } from "../protocol";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useFailureNode } from "./failureText";
 import { type DirectoryProblem } from "./importPlan";
+import type { ClientSettingValue } from "./clientSettings";
 import type { SettingValue } from "./importValues";
 import { useProviders } from "../store";
 import { ProviderName } from "../components/text/ProviderName";
@@ -27,7 +28,7 @@ import { ProviderName } from "../components/text/ProviderName";
  * settings. Its edge and the grooves between rows already frame it as a table, so the rows take the dialog's own
  * background and only the header is filled.
  */
-export const CARD_CLASS = "flex flex-col rounded-xl panel-edge";
+const CARD_CLASS = "flex flex-col rounded-xl panel-edge";
 /** A card's header row, filled like the fields in the rows so it reads apart from the rows under it. */
 export const CARD_HEADER_CLASS = "rounded-t-xl bg-(--control-fill) groove-b px-4 py-3 last:rounded-b-xl last:border-b-0";
 
@@ -63,25 +64,13 @@ export function CardTitle({ id, name, fallbacks, className }: { id: string; name
   );
 }
 
-/** A line marked by a glyph that gives its tone: a note (information, the circled `i`) by default, or a warning (the
- * triangle). `stacked` lays its body out as a column of blocks (a sentence and what goes with it) instead of running
- * text. */
-export function ToneLine({ tone = "info", stacked = false, children }: { tone?: "info" | "warning"; stacked?: boolean; children: React.ReactNode }): React.ReactElement {
-  const Glyph = tone === "info" ? Info : TriangleAlert;
-  const glyph = <Glyph aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${tone === "info" ? "text-accent-soft-foreground" : "text-warning-soft-foreground"}`} />;
+/** A note: a line marked by the circled `i`. */
+export function ToneLine({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    // A line of running text is a paragraph; a stacked one holds blocks, which a paragraph cannot.
-    stacked ? (
-      <div className="flex items-start gap-2 text-sm">
-        {glyph}
-        <div className="flex min-w-0 flex-col gap-1.5">{children}</div>
-      </div>
-    ) : (
-      <p className="flex items-start gap-2 text-sm">
-        {glyph}
-        <span className="min-w-0">{children}</span>
-      </p>
-    )
+    <p className="flex items-start gap-2 text-sm">
+      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
+      <span className="min-w-0">{children}</span>
+    </p>
   );
 }
 
@@ -235,14 +224,14 @@ export function DirectoryChoiceField({
 /** One line of a settings card: the setting's name, a badge for what came or would come of it, where that is worth
  * knowing a muted note under it and, for a setting made of several items, a muted list of the `values` the badge
  * speaks of. */
-export function SettingLine({ label, badge, tone = "default", values, children }: { label: string; badge: string; tone?: StatusBadgeColor; values?: SettingValue[]; children?: React.ReactNode }): React.ReactElement {
+export function SettingLine({ label, badge, tone = "default", values, children }: { label: React.ReactNode; badge: React.ReactNode; tone?: StatusBadgeColor; values?: SettingValue[]; children?: React.ReactNode }): React.ReactElement {
   return (
     <li className="flex flex-col gap-0.5 py-2">
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="font-medium text-foreground" dir="auto">{label}</span>
+        <span className="font-medium text-foreground" dir={typeof label === "string" ? "auto" : undefined}>{label}</span>
         <StatusBadge color={tone} variant="soft">{badge}</StatusBadge>
       </span>
-      {children && <span className="text-sm text-app-muted">{children}</span>}
+      {children && <div className="text-sm text-app-muted">{children}</div>}
       {values && values.length > 0 && (
         // Lines 24px tall, so a row with tags or key caps keeps the rhythm of a plain row and wrapped lines of
         // chips do not touch. A row that wraps hangs its later lines, so they do not read as rows of their own; the
@@ -256,6 +245,48 @@ export function SettingLine({ label, badge, tone = "default", values, children }
         </ul>
       )}
     </li>
+  );
+}
+
+/** `text` as a name in the language `lang` (a language's own name, a style's English one), so a reader or a speech
+ * engine takes it for that language. */
+export function NamedValue({ text, lang }: { text: string; lang?: string }): React.ReactNode {
+  return lang ? <span lang={lang}>{text}</span> : text;
+}
+
+/** A boolean application setting: what applying it would do against `current` (turns it on, off, or leaves it as it
+ * is), or, with no `current`, what it was set to. */
+export function BooleanSettingLine({ label, wanted, current, consequence }: { label: string; wanted: boolean; current: boolean | undefined; consequence: PlainMessageKey }): React.ReactElement {
+  const t = useT();
+  if (current === undefined) return <SettingLine label={label} badge={t(wanted ? "configuration.import.result.badge.on" : "configuration.import.result.badge.off")} />;
+  if (wanted === current) return <SettingLine label={label} badge={t("configuration.import.settings.badge.same")} />;
+  return wanted ? (
+    <SettingLine label={label} badge={t("configuration.import.settings.badge.turnsOn")} tone="accent">
+      <Message id={consequence} />
+    </SettingLine>
+  ) : (
+    <SettingLine label={label} badge={t("configuration.import.settings.badge.turnsOff")} />
+  );
+}
+
+/** A setting made of several items: against `current`, listing those that would change or "No change" where none
+ * would; with none, listing the values it was set to. */
+export function CompositeLine({ label, values, comparing }: { label: React.ReactNode; values: SettingValue[]; comparing: boolean }): React.ReactElement {
+  const t = useT();
+  if (!comparing) return <SettingLine label={label} badge={t("configuration.import.result.badge.matches")} values={values} />;
+  return values.length === 0
+    ? <SettingLine label={label} badge={t("configuration.import.settings.badge.same")} />
+    : <SettingLine label={label} badge={t("configuration.import.settings.badge.changes")} tone="accent" values={values} />;
+}
+
+/** A setting only this client holds: the value in the file, with the value this client has now where they differ. */
+export function ClientSettingLine({ setting: { label, value, current, lang, currentLang } }: { setting: ClientSettingValue }): React.ReactElement {
+  const t = useT();
+  if (current === undefined || current === value) return <SettingLine label={t(label)} badge={t("configuration.import.settings.badge.same")} />;
+  return (
+    <SettingLine label={t(label)} badge={t("configuration.import.settings.badge.changes")} tone="accent">
+      <Message id="configuration.import.settingValueChange" params={{ value: <NamedValue text={value} lang={lang} />, current: <NamedValue text={current} lang={currentLang} /> }} />
+    </SettingLine>
   );
 }
 
@@ -293,15 +324,14 @@ export function FallbackMark({ subject, fallbacks, size }: { subject: string; fa
 
 /** What the daemon reported of a failure, written out where it happened: the reason in the application's own words,
  * the one main thing to do about it under it, and, where there is more, the further explanation and the raw text behind
- * a Details button, so the raw text never stands in the line itself. Under a sentence that already says what
- * happened, `withoutSummary` leaves the reason out and keeps the remedy and Details. */
-export function FailureReason({ failure, withoutSummary = false }: { failure: ImportFailure; withoutSummary?: boolean }): React.ReactElement {
+ * a Details button, so the raw text never stands in the line itself. */
+export function FailureReason({ failure }: { failure: ImportFailure }): React.ReactElement {
   const failureNode = useFailureNode();
   const remedy = failureNode(failure, "remedy");
   const details = failureNode(failure, "details");
   return (
     <div className="flex flex-col items-start gap-1.5 text-sm">
-      {!withoutSummary && <p className="min-w-0 [overflow-wrap:anywhere]" dir="auto">{failureNode(failure, "summary")}</p>}
+      <p className="min-w-0 [overflow-wrap:anywhere]" dir="auto">{failureNode(failure, "summary")}</p>
       {remedy && <p className="min-w-0 text-app-muted [overflow-wrap:anywhere]" dir="auto">{remedy}</p>}
       {details && <DetailsButton>{details}</DetailsButton>}
     </div>

@@ -6,9 +6,12 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
+import { setLanguage } from "../i18n/language";
+import { runInBackground } from "../lifecycle/runInBackground";
 import type { SavedConfigurationFile } from "../platform";
 import type { ConfigurationDocument, Event, ClientRequestBody } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
+import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { ExportConfigurationDialog, exportFileName } from "./ExportConfigurationDialog";
 import { documentSettings, mountDialog, press } from "./testSupport";
 
@@ -136,11 +139,18 @@ const box = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
 const exportButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Export")!;
 
+it("names the four groups of application settings it carries, each as a reference", () => {
+  mount();
+  const hint = document.getElementById(box("Application settings").getAttribute("aria-describedby")!)!;
+  expect(hint.textContent).toBe("Includes the settings of General, Git, Agent behavior and Keyboard shortcuts, such as the language and the default clone directory.");
+  expect(Array.from(hint.querySelectorAll("[data-color]"), (chip) => chip.textContent)).toEqual(["General", "Git", "Agent behavior", "Keyboard shortcuts"]);
+});
+
 it("exports the global regions on their own, the application settings checked and the accounts not by default", async () => {
   const mounted = mount();
   expect(box("Application settings").checked).toBe(true);
   expect(box("Accounts").checked).toBe(false);
-  expect(text()).toContain("Login credentials are not included");
+  expect(text()).toContain("login credentials are not included");
   await act(async () => radio("Do not export consoles").click());
   await act(async () => box("Accounts").click());
   await act(async () => box("Application settings").click());
@@ -189,20 +199,55 @@ it("saves the document as the daemon sent it, under a name for the console, and 
   expect(mounted.closed()).toBe(1);
 });
 
-it("adds this client's changed keyboard shortcuts to a full export, and to nothing else", async () => {
-  const focusMode = { code: "KeyK", primary: true, shift: true };
-  shortcutOverrides.set({ focusMode });
-  onTestFinished(() => shortcutOverrides.set({}));
-  const full: ConfigurationDocument = { ...DOCUMENT, settings: documentSettings({ auto_pull_repositories: true }) };
+const FOCUS = { code: "KeyK", primary: true, shift: true };
+
+/** Exports a full document whose settings are the daemon's own (it holds the language `daemon` reports), from a client with
+ * `capabilities`, and returns the settings that were saved. */
+async function savedSettings(daemonLanguage: string | undefined, capabilities: Parameters<typeof mountDialog>[4] = {}) {
+  const full: ConfigurationDocument = { ...DOCUMENT, settings: documentSettings({ auto_pull_repositories: true, ...(daemonLanguage && { interface_language: daemonLanguage }) }) };
   const save = vi.fn<Save>(async (name) => ({ kind: "saved", name }));
-  mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", id: null, document: full }), { save, open: vi.fn() });
-  await press("Export");
-  expect(JSON.parse(save.mock.calls[0][1]).settings).toEqual({ ...full.settings, keyboard_shortcuts: { focusMode } });
+  mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", id: null, document: full }), { save, open: vi.fn() }, {}, capabilities);
+  // By its type: the label follows the language the test has set.
+  await act(async () => document.body.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
+  return { saved: JSON.parse(save.mock.calls[0][1]).settings as Record<string, unknown>, full };
+}
+
+it("adds this client's changed keyboard shortcuts to a full export, and to nothing else", async () => {
+  shortcutOverrides.set({ focusMode: FOCUS });
+  onTestFinished(() => shortcutOverrides.set({}));
+  const { saved, full } = await savedSettings(undefined);
+  expect(saved).toMatchObject({ ...full.settings, keyboard_shortcuts: { focusMode: FOCUS } });
 });
 
-it("leaves a single console's export as the daemon sent it, whatever shortcuts this client has changed", async () => {
-  shortcutOverrides.set({ focusMode: { code: "KeyK", primary: true, shift: true } });
-  onTestFinished(() => shortcutOverrides.set({}));
+it("adds the appearance, Markdown style and language this client has to a full export, the language replacing the daemon's", async () => {
+  markdownStyle.set("github");
+  setLanguage("ja");
+  localStorage.setItem("heroui-theme", "dark");
+  onTestFinished(() => {
+    markdownStyle.set("tailwind");
+    setLanguage("en");
+    localStorage.removeItem("heroui-theme");
+  });
+  const { saved } = await savedSettings("de");
+  expect(saved).toMatchObject({ appearance: "dark", markdown_style: "github", interface_language: "ja" });
+  // A browser has no background running to report.
+  expect(saved).not.toHaveProperty("run_in_background");
+});
+
+it("adds whether this client runs in the background only where its platform has that", async () => {
+  runInBackground.set(true);
+  onTestFinished(() => runInBackground.set(false));
+  const { saved } = await savedSettings(undefined, { backgroundRun: { set: vi.fn(async () => {}) } });
+  expect(saved.run_in_background).toBe(true);
+});
+
+it("leaves a single console's export as the daemon sent it, whatever this client has changed", async () => {
+  shortcutOverrides.set({ focusMode: FOCUS });
+  markdownStyle.set("github");
+  onTestFinished(() => {
+    shortcutOverrides.set({});
+    markdownStyle.set("tailwind");
+  });
   const mounted = mount();
   await press("Export");
   expect(mounted.save).toHaveBeenCalledExactlyOnceWith("octoboard-Main.json", `${JSON.stringify(DOCUMENT, null, 2)}\n`);

@@ -3,7 +3,7 @@
 // The UI imports it only through `protocol.ts`, which re-exports it.
 
 /** The protocol generation this file describes; see `hello`. */
-export const PROTOCOL_GENERATION = 1;
+export const PROTOCOL_GENERATION = 2;
 
 /**
  * A named config directory of one agent, kept once for the whole application and referred to by
@@ -859,8 +859,9 @@ export type DirectoryOffers = {
 };
 
 /**
- * An account the user owns. Its id, its login and everything the agent keeps in its directory
- * stay behind.
+ * An account the user owns. Its id, its login, everything the agent keeps in its directory and
+ * whether it shares the agent's default configuration (which moves files outside Octoboard's own
+ * directory, so it is turned on by hand) stay behind.
  */
 export type DocumentAccount = {
   name: string,
@@ -870,10 +871,6 @@ export type DocumentAccount = {
    * choice: an account cannot exist without its directory.
    */
   directory: string,
-  /**
-   * Whether the account shares the agent's default configuration.
-   */
-  share_default_config: boolean,
   disabled: boolean,
 };
 
@@ -889,10 +886,16 @@ export type DocumentAccounts = {
    */
   added_agents?: Array<Agent> | null,
   /**
-   * One entry for each agent that has an account of its own or a named default account, in
-   * `AgentId::ALL` order.
+   * One entry for each agent that has an account of its own, a named default account or a
+   * turned-off default account, in `AgentId::ALL` order.
    */
   agents: Array<DocumentAgentAccounts>,
+  /**
+   * The settings of the Agent accounts section that are not an account's own. `null` in a
+   * document upgraded from version 1 that had no `settings` region to take them from: importing
+   * it leaves them as they are.
+   */
+  agent_settings: DocumentAgentSettings | null,
 };
 
 export type DocumentAgentAccounts = {
@@ -902,6 +905,30 @@ export type DocumentAgentAccounts = {
    * The accounts the user owns, in the agent's display order.
    */
   accounts: Array<DocumentAccount>,
+};
+
+/**
+ * The settings of the Agent accounts section that are not an account's own: the three switches,
+ * the tags of each agent and the user's choices for the agents' provider settings. They travel
+ * with the accounts, since they only mean something to the agents and accounts of the machine
+ * they are applied to.
+ */
+export type DocumentAgentSettings = {
+  auto_select_account: boolean,
+  auto_switch_on_usage_limit: boolean,
+  auto_start_quota_windows: boolean,
+  /**
+   * The tags the user put on each agent (by wire name), for the agents that have any, removed
+   * agents' included. An agent the document does not list is left as it is on import.
+   */
+  agent_tags: Partial<Record<Agent, Array<string>>>,
+  /**
+   * The choices the user made for the settings of each provider (by provider id, then setting
+   * id) that a configuration export carries (`SettingDescriptor::exported`). A setting they
+   * never chose for is not listed, so the importing machine keeps following its own default for
+   * it, and a setting the document does not list is left as it is.
+   */
+  provider_settings: Partial<Record<Agent, Record<string, boolean | string>>>,
 };
 
 /**
@@ -936,7 +963,7 @@ export type DocumentConsole = {
 
 /**
  * What the document says of an agent's default account. Its directory is whatever the agent
- * resolves on the machine, so it is not carried, and neither is its disabled flag.
+ * resolves on the machine, so it is not carried.
  */
 export type DocumentDefaultAccount = {
   /**
@@ -947,6 +974,11 @@ export type DocumentDefaultAccount = {
    * Its place in the display order: how many of the agent's accounts come before it.
    */
   position: number,
+  /**
+   * Whether the user turned it off. `null` in a document upgraded from version 1, which did not
+   * carry the flag: importing it leaves this machine's flag as it is.
+   */
+  disabled: boolean | null,
 };
 
 /**
@@ -987,10 +1019,7 @@ export type DocumentSettings = {
   auto_close_idle_shell_terminals: boolean,
   auto_pull_repositories: boolean,
   auto_delete_unresumable_archives: boolean,
-  auto_select_account: boolean,
-  auto_switch_on_usage_limit: boolean,
   sidebar_order_by_status: boolean,
-  auto_start_quota_windows: boolean,
   auto_approve_session_requests: boolean,
   auto_approve_resume_requests: boolean,
   auto_approve_account_switches: boolean,
@@ -1001,18 +1030,38 @@ export type DocumentSettings = {
    */
   git_workflow: GitWorkflowSettings,
   /**
-   * The choices the user made for the settings of each provider (by provider id, then setting
-   * id) that a configuration export carries (`SettingDescriptor::exported`). A setting they
-   * never chose for is not listed, so the importing machine keeps following its own default for
-   * it, and a setting the document does not list is left as it is. A provider's settings that
-   * let its sessions act without asking are never listed.
+   * The default clone directory as `~/<relative path>` under the exporting machine's home
+   * directory (also `~` for the home directory itself), otherwise the absolute path, whatever
+   * the export's paths choice. An import applies it only when the user asks to, and it must be
+   * usable here (absolute, or starting with `~/`). `null` in a document upgraded from version
+   * 1, which did not carry it: importing it leaves this machine's as it is.
    */
-  provider_settings: Partial<Record<Agent, Record<string, boolean | string>>>,
+  default_clone_dir: string | null,
   /**
-   * The tags the user put on each agent (by wire name), for the agents that have any, removed
-   * agents' included. An agent the document does not list is left as it is on import.
+   * The language tag of the exporting client's interface (see `Settings.interface_language`):
+   * the daemon writes the one it holds and the client replaces it with the one it shows, which
+   * is the language the user chose. An import applies it only when this build offers it. Absent
+   * when neither knew one.
    */
-  agent_tags: Partial<Record<Agent, Array<string>>>,
+  interface_language?: string | null,
+  /**
+   * The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
+   * `localStorage`): the client adds it to a document it saves and applies it from an import's
+   * reply, so the daemon builds none, stores it nowhere and passes it through an import's reply
+   * as it came. A value the importing client does not know is ignored. Absent in a document a
+   * client saved without it.
+   */
+  appearance?: string | null,
+  /**
+   * How a rendered Markdown document is styled (the style's id), carried like `appearance`.
+   */
+  markdown_style?: string | null,
+  /**
+   * Whether closing the window leaves the app running in the background, carried like
+   * `appearance`. Only a client that has the setting (the desktop app) writes it, and only
+   * such a client applies it.
+   */
+  run_in_background?: boolean | null,
   /**
    * The keyboard shortcuts the exporting client has changed, by command id, which only the
    * client reads and writes: the client adds them to a full export it saves (an empty object
@@ -1376,6 +1425,11 @@ export type Event = {
   id: string | null,
   settings_applied: DocumentSettings | null,
   settings_error: ImportFailure | null,
+  /**
+   * The default clone directory written, which stays written when the settings as a whole
+   * could not be applied (`settings_error`).
+   */
+  clone_dir_applied?: string,
   accounts: ImportedAccounts | null,
   consoles: Array<ImportedConsole>,
 }
@@ -1787,6 +1841,12 @@ export type ImportItem = {
   account: number,
 }
 | {
+  "kind": "clone_dir"
+}
+| {
+  "kind": "agent_settings"
+}
+| {
   "kind": "settings"
 };
 
@@ -1800,11 +1860,6 @@ export type ImportedAccount = {
    */
   account: string | null,
   error: ImportFailure | null,
-  /**
-   * Why sharing the default configuration, which the document asked for, was not turned on for
-   * an account that was created all the same.
-   */
-  sharing_warning: ImportFailure | null,
 };
 
 export type ImportedAccounts = {
@@ -1813,6 +1868,15 @@ export type ImportedAccounts = {
    */
   agents_added: Array<Agent>,
   agents: Array<ImportedAgentAccounts>,
+  /**
+   * The settings of the Agent accounts section applied to this machine; absent when the document
+   * carries none, or they could not be applied (`agent_settings_error`).
+   */
+  agent_settings_applied: DocumentAgentSettings | null,
+  /**
+   * Why the settings of the Agent accounts section were not applied.
+   */
+  agent_settings_error: ImportFailure | null,
 };
 
 export type ImportedAgentAccounts = {
@@ -1822,6 +1886,11 @@ export type ImportedAgentAccounts = {
    * Whether the document's name for the default account was applied.
    */
   default_name_applied: boolean,
+  /**
+   * The flag this machine's default account was changed to, as the document says (`true`
+   * disabled, `false` enabled); `None` when the flag was not changed.
+   */
+  default_disabled_applied: boolean | null,
 };
 
 export type ImportedConsole = {
@@ -1883,7 +1952,6 @@ export type InspectedAccount = {
    * Why it is `invalid`.
    */
   error: ImportFailure | null,
-  share_default_config: boolean,
   disabled: boolean,
 };
 
@@ -1894,6 +1962,10 @@ export type InspectedAccounts = {
    */
   agents_to_add: Array<Agent>,
   agents: Array<InspectedAgentAccounts>,
+  /**
+   * Absent when the document carries no settings of the Agent accounts section.
+   */
+  agent_settings: InspectedAgentSettings | null,
 };
 
 export type InspectedAgentAccounts = {
@@ -1909,6 +1981,39 @@ export type InspectedAgentAccounts = {
    * included.
    */
   default_name_applies: boolean,
+  /**
+   * Whether the document says the default account is turned off; absent when it does not say.
+   */
+  default_disabled: boolean | null,
+  /**
+   * Whether importing would change this machine's default account's flag to `default_disabled`:
+   * the document says and this machine's differs.
+   */
+  default_disabled_applies: boolean,
+};
+
+/**
+ * The settings of the Agent accounts section a document carries, beside the value this machine
+ * has now, so a client can show what applying them would change.
+ */
+export type InspectedAgentSettings = {
+  auto_select_account: boolean,
+  current_auto_select_account: boolean,
+  auto_switch_on_usage_limit: boolean,
+  current_auto_switch_on_usage_limit: boolean,
+  auto_start_quota_windows: boolean,
+  current_auto_start_quota_windows: boolean,
+  /**
+   * The document's choices for the exported provider settings, those this build declares only
+   * (see `DocumentAgentSettings::provider_settings`).
+   */
+  provider_settings: Partial<Record<Agent, Record<string, boolean | string>>>,
+  /**
+   * The values in effect on this machine of the exported provider settings.
+   */
+  current_provider_settings: Partial<Record<Agent, Record<string, boolean | string | null>>>,
+  agent_tags: Partial<Record<Agent, Array<string>>>,
+  current_agent_tags: Partial<Record<Agent, Array<string>>>,
 };
 
 export type InspectedConsole = {
@@ -1926,6 +2031,13 @@ export type InspectedProject = {
   remote_url: string | null,
   offers: DirectoryOffers,
   default: "exported_path" | "default_clone_dir" | "clone" | null,
+  /**
+   * What the clone-dependent choices (`default_clone_dir`, `clone`) come to under the document's
+   * own default clone directory, which an import takes when it applies the settings and is not
+   * told to keep this machine's. Absent unless the document carries a usable directory that
+   * differs from this machine's; `offers` and `default` are always this machine's.
+   */
+  in_document_clone_dir: OffersUnderCloneDir | null,
   account_fallbacks: Array<AccountFallback>,
 };
 
@@ -1940,14 +2052,8 @@ export type InspectedSettings = {
   current_auto_pull_repositories: boolean,
   auto_delete_unresumable_archives: boolean,
   current_auto_delete_unresumable_archives: boolean,
-  auto_select_account: boolean,
-  current_auto_select_account: boolean,
-  auto_switch_on_usage_limit: boolean,
-  current_auto_switch_on_usage_limit: boolean,
   sidebar_order_by_status: boolean,
   current_sidebar_order_by_status: boolean,
-  auto_start_quota_windows: boolean,
-  current_auto_start_quota_windows: boolean,
   auto_approve_session_requests: boolean,
   current_auto_approve_session_requests: boolean,
   auto_approve_resume_requests: boolean,
@@ -1961,16 +2067,15 @@ export type InspectedSettings = {
   git_workflow: GitWorkflowSettings,
   current_git_workflow: GitWorkflowSettings,
   /**
-   * The document's choices for the exported provider settings, those this build declares only
-   * (see `DocumentSettings::provider_settings`).
+   * The document's default clone directory as it resolves on this machine (`~/` expanded);
+   * absent when the document carries none or it is not usable here (neither absolute nor
+   * starting with `~/`), which an import leaves out.
    */
-  provider_settings: Partial<Record<Agent, Record<string, boolean | string>>>,
+  default_clone_dir: string | null,
   /**
-   * The values in effect on this machine of the exported provider settings.
+   * This machine's default clone directory.
    */
-  current_provider_settings: Partial<Record<Agent, Record<string, boolean | string | null>>>,
-  agent_tags: Partial<Record<Agent, Array<string>>>,
-  current_agent_tags: Partial<Record<Agent, Array<string>>>,
+  current_default_clone_dir: string,
 };
 
 /**
@@ -2057,6 +2162,15 @@ export type ModelsUnavailable = {
     [key in string]: string
   },
   message: string,
+};
+
+/**
+ * The offers of a project, and the choice an import would preselect, with the clone-dependent
+ * ones worked out against another default clone directory than this machine's.
+ */
+export type OffersUnderCloneDir = {
+  offers: DirectoryOffers,
+  default: "exported_path" | "default_clone_dir" | "clone" | null,
 };
 
 export type Origin = "console" | "user";
@@ -2693,6 +2807,13 @@ export type Request = {
    * sent.
    */
   import_id?: string | null,
+  /**
+   * Whether, applying the settings, to take the document's default clone directory; absent
+   * means true. Without it this machine's own stays, and the clones this import makes go
+   * there. It is written before the projects are placed, whatever the rest of the settings
+   * come to.
+   */
+  apply_clone_dir?: boolean,
 }
   | {
   "type": "open_session",
@@ -3391,6 +3512,13 @@ export type RequestBody = {
    * sent.
    */
   import_id?: string | null,
+  /**
+   * Whether, applying the settings, to take the document's default clone directory; absent
+   * means true. Without it this machine's own stays, and the clones this import makes go
+   * there. It is written before the projects are placed, whatever the rest of the settings
+   * come to.
+   */
+  apply_clone_dir?: boolean,
 }
 | {
   "type": "open_session",
@@ -4179,8 +4307,9 @@ export type SettingDescriptor = {
   id: string,
   kind: SettingKind,
   /**
-   * Whether a configuration export carries the user's explicit choice. A setting that lets
-   * agents act without asking stays out of one.
+   * Whether a configuration export carries the user's explicit choice. A setting whose
+   * enabling itself modifies files outside Octoboard's own directory stays out of one, for the
+   * user to turn on by hand; a setting that only becomes a launch flag travels.
    */
   exported: boolean,
   /**

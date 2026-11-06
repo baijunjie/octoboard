@@ -20,6 +20,10 @@ export function itemKey(item: ImportItem): string {
       return `project:${item.console}:${item.project}`;
     case "account":
       return `account:${item.agent}:${item.account}`;
+    case "clone_dir":
+      return "clone_dir";
+    case "agent_settings":
+      return "agent_settings";
     case "settings":
       return "settings";
   }

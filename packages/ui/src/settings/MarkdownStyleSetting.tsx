@@ -2,13 +2,10 @@ import React from "react";
 
 import { OptionSelect } from "../components/form/OptionSelect";
 import { useT } from "../i18n/react";
-import { MARKDOWN_STYLES, markdownStyle, type MarkdownStyle } from "../viewer/markdown/markdownStyle";
+import { MARKDOWN_STYLE_NAMES, MARKDOWN_STYLES, markdownStyle } from "../viewer/markdown/markdownStyle";
 import { SettingRow } from "./SettingRow";
 
-// The styles are named for what they imitate, so the names are proper names and the same in every language.
-const NAMES: Record<MarkdownStyle, string> = { tailwind: "Tailwind", github: "GitHub", newsprint: "Newsprint", latex: "LaTeX" };
-
-const OPTIONS = MARKDOWN_STYLES.map((style) => ({ value: style, label: NAMES[style], lang: "en" }));
+const OPTIONS = MARKDOWN_STYLES.map((style) => ({ value: style, label: MARKDOWN_STYLE_NAMES[style], lang: "en" }));
 
 /** How a rendered Markdown document is styled in the file viewer. */
 export function MarkdownStyleSetting(): React.ReactElement {

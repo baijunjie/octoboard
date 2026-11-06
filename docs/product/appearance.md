@@ -81,8 +81,11 @@ one thing a client tells the daemon is what the choice has resolved to, light or
 a session so that a Grok Build session's theme matches the terminal; the daemon uses it for that launch alone and keeps
 nothing of it (see "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`).
 
-So the choice does not travel. A desktop window and a browser tab, or two machines reaching the same
-daemon, each keep their own; a client whose storage has been cleared is back to System.
+So the choice does not travel between clients. A desktop window and a browser tab, or two machines reaching the same
+daemon, each keep their own; a client whose storage has been cleared is back to System. A configuration export that
+includes the application settings carries the exporting client's choice, and an import asked to apply them sets it on
+the client that runs the import alone (see "The settings a client holds" in
+`docs/product/settings-in-a-configuration.md`).
 
 ## A report page stays on a light surface in both appearances
 

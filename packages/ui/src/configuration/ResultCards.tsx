@@ -1,9 +1,8 @@
 import { CircleCheck, CircleDot, CircleMinus } from "lucide-react";
 import React from "react";
 
-import { AlertStatusContext } from "../components/alerts/AlertButton";
 import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus } from "../protocol";
-import { Card, CARD_HEADER_CLASS, CardTitle, EntryStatus, FailureReason, FallbackMark, ItemName, SHARED_STATUS, STATUS_TONE, type StatusEntry, ToneLine } from "./importParts";
+import { Card, CARD_HEADER_CLASS, CardTitle, EntryStatus, FailureReason, FallbackMark, ItemName, SHARED_STATUS, STATUS_TONE, type StatusEntry } from "./importParts";
 
 type Status = ImportStatus | AccountOutcome;
 
@@ -59,8 +58,8 @@ export function ResultCard({
 
 /**
  * One project's or account's row: its name (with its fallback mark) and `status` on a line that wraps the status under
- * the name when there is no room, what there is to say about it under it, then the reason when it failed and
- * the sharing warning when sharing could not be turned on, each written out in the row.
+ * the name when there is no room, what there is to say about it under it, then the reason when it failed, written out
+ * in the row.
  */
 export function ResultRow({
   name,
@@ -68,16 +67,12 @@ export function ResultRow({
   status,
   detail,
   failure,
-  warning,
 }: {
   name: string;
   fallbacks?: AccountFallback[];
   status: React.ReactNode;
   detail?: string;
   failure?: ImportFailure | null;
-  /** What went wrong beside an outcome that was reached: the sentence, and under it the remedy and Details of the
-   * failure behind it, whose own summary would only say the sentence again. */
-  warning?: { text: string; failure: ImportFailure };
 }): React.ReactElement {
   return (
     <li className="flex flex-col gap-1.5 groove-b px-4 py-3 last:border-b-0">
@@ -90,15 +85,6 @@ export function ResultRow({
       </div>
       {detail && <p className="text-sm text-app-muted [overflow-wrap:anywhere]" dir="auto">{detail}</p>}
       {failure && <FailureReason failure={failure} />}
-      {warning && (
-        <ToneLine tone="warning" stacked>
-          <p dir="auto">{warning.text}</p>
-          {/* Outside an Alert, Details defaults to danger; under a warning it takes the warning's colour. */}
-          <AlertStatusContext.Provider value="warning">
-            <FailureReason failure={warning.failure} withoutSummary />
-          </AlertStatusContext.Provider>
-        </ToneLine>
-      )}
     </li>
   );
 }

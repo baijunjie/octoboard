@@ -77,9 +77,11 @@ later changes before the next release fold into that same version and step.
 
 A version is released only once a release tag (`desktop-v*`, the tags `.github/workflows/release.yml` builds) is on a
 commit that carries it; check the remote's tags (`git ls-remote --tags origin 'desktop-v[0-9]*'`), not only the local
-`git tag`. With no release tags nothing is released, and all three stay at 1 with `MIGRATIONS` empty. What each version
-guards, once a release exists, is in `apps/daemon/PROTOCOL.md`, "Versions and compatibility" and the "Version" paragraph
-of "Configuration export", and in `docs/structure/daemon.md`, "Where new code goes". (Source: user instruction)
+`git tag`. A prerelease tag such as `desktop-v0.1.0-beta.1` is a release like any other. Once a version is released, a
+field or column removed, moved or renamed is bridged by the raised version and its step, never by keeping the old one
+readable beside the new. What each version guards is in `apps/daemon/PROTOCOL.md`, "Versions and compatibility" and
+the "Version" paragraph of "Configuration export", and in `docs/structure/daemon.md`, "Where new code goes". (Source:
+user instruction)
 
 ## Time a repeating refresh from the client, and bound it in the daemon
 

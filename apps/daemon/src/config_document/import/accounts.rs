@@ -1,7 +1,8 @@
 //! The accounts region of a configuration document: what an inspection says importing each account
-//! would do, and the creation of the accounts as the Add account form would, with the added agents
-//! and the default accounts' names around them. The account helpers it calls are the
-//! coordinator's, so an imported account passes the checks a hand-added one does.
+//! would do, and the creation of the accounts as the Add account form would, with the added agents,
+//! the default accounts' names and flags and the settings of the Agent accounts section around
+//! them. The account helpers it calls are the coordinator's, so an imported account passes the
+//! checks a hand-added one does.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -9,17 +10,17 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::progress::Progress;
-use super::Rebinder;
+use super::{exported_in_effect, known_agent_tags, Rebinder};
 use crate::accounts::dirs::normalize_account_dir;
 use crate::agents::availability;
 use crate::config_document::export;
-use crate::coordinator;
+use crate::coordinator::{self, settings::SettingsChanges};
 use crate::hostfs::dir_key;
 use crate::protocol::{
     error_code, AccountOutcome, AccountResolution, AccountStatus, AgentId, CodedError,
-    DocumentAccount, DocumentAccounts, ImportFailure, ImportItem, ImportItemState, ImportedAccount,
-    ImportedAccounts, ImportedAgentAccounts, InspectedAccount, InspectedAccounts,
-    InspectedAgentAccounts,
+    DocumentAccount, DocumentAccounts, DocumentAgentSettings, ImportFailure, ImportItem,
+    ImportItemState, ImportedAccount, ImportedAccounts, ImportedAgentAccounts, InspectedAccount,
+    InspectedAccounts, InspectedAgentAccounts, InspectedAgentSettings,
 };
 use crate::state::AppState;
 
@@ -28,6 +29,7 @@ use crate::state::AppState;
 struct AgentAccounts<'a> {
     agent: AgentId,
     default_name: Option<&'a str>,
+    default_disabled: Option<bool>,
     accounts: Vec<&'a DocumentAccount>,
 }
 
@@ -46,6 +48,7 @@ fn group_accounts(document: &DocumentAccounts) -> Vec<AgentAccounts<'_>> {
                 groups.push(AgentAccounts {
                     agent: entry.agent,
                     default_name: None,
+                    default_disabled: None,
                     accounts: Vec::new(),
                 });
                 groups.len() - 1
@@ -53,6 +56,7 @@ fn group_accounts(document: &DocumentAccounts) -> Vec<AgentAccounts<'_>> {
         };
         let group = &mut groups[at];
         group.default_name = group.default_name.or(named);
+        group.default_disabled = group.default_disabled.or(entry.default_account.disabled);
         group.accounts.extend(&entry.accounts);
     }
     groups
@@ -211,7 +215,6 @@ pub(super) fn inspect_accounts(
                 status,
                 in_use_by,
                 error,
-                share_default_config: account.share_default_config,
                 disabled: account.disabled,
             });
         }
@@ -219,16 +222,56 @@ pub(super) fn inspect_accounts(
             Some(name) => default_name_applies(state, group.agent, name, &created)?,
             None => false,
         };
+        let default_disabled_applies = match group.default_disabled {
+            Some(disabled) => disabled != default_account_disabled(state, group.agent)?,
+            None => false,
+        };
         agents.push(InspectedAgentAccounts {
             agent: group.agent,
             accounts,
             default_name: group.default_name.map(str::to_string),
             default_name_applies,
+            default_disabled: group.default_disabled,
+            default_disabled_applies,
         });
     }
+    let agent_settings = match &document.agent_settings {
+        Some(settings) => Some(inspect_agent_settings(state, settings)?),
+        None => None,
+    };
     Ok(InspectedAccounts {
         agents_to_add,
         agents,
+        agent_settings,
+    })
+}
+
+/// Whether this machine's default account of `agent` is turned off.
+fn default_account_disabled(state: &Arc<AppState>, agent: AgentId) -> Result<bool> {
+    Ok(state
+        .store
+        .disabled_default_accounts()?
+        .contains(agent.wire_name()))
+}
+
+/// The settings of the Agent accounts section a document carries, beside this machine's own.
+fn inspect_agent_settings(
+    state: &Arc<AppState>,
+    settings: &DocumentAgentSettings,
+) -> Result<InspectedAgentSettings> {
+    Ok(InspectedAgentSettings {
+        auto_select_account: settings.auto_select_account,
+        current_auto_select_account: state.store.auto_select_account()?,
+        auto_switch_on_usage_limit: settings.auto_switch_on_usage_limit,
+        current_auto_switch_on_usage_limit: state.store.auto_switch_on_usage_limit()?,
+        auto_start_quota_windows: settings.auto_start_quota_windows,
+        current_auto_start_quota_windows: state.store.auto_start_quota_windows()?,
+        provider_settings: crate::config_document::exported_provider_settings(
+            &settings.provider_settings,
+        ),
+        current_provider_settings: exported_in_effect(state.store.provider_settings()?),
+        agent_tags: known_agent_tags(&settings.agent_tags).collect(),
+        current_agent_tags: state.store.agent_tags()?,
     })
 }
 
@@ -325,7 +368,8 @@ pub(super) fn prepare_accounts(
 
 /// Announces as waiting each account of the document that [`apply_accounts`] handles: all but the
 /// left-out ones, an existing account included whatever was chosen for it, since one is used as it
-/// is and the choice is never read.
+/// is and the choice is never read. The settings of the Agent accounts section follow, where the
+/// document carries them.
 pub(super) fn announce_accounts(
     document: &DocumentAccounts,
     prepared: &PreparedAccounts,
@@ -350,6 +394,9 @@ pub(super) fn announce_accounts(
             }
         }
     }
+    if document.agent_settings.is_some() {
+        progress.waiting(ImportItem::AgentSettings);
+    }
 }
 
 /// Creates the document's accounts as the Add account form would, with the added agents and the
@@ -358,12 +405,14 @@ pub(super) fn announce_accounts(
 /// The agents were appended by [`prepare_accounts`]. Then each account in the document's order: one
 /// whose name an account of the agent had before the import is used as it is, a left-out one is
 /// skipped, and any other goes through the form's checks, a failure of which is recorded for that
-/// account alone. A created account takes the document's disabled flag, comes after the agent's
-/// other accounts in its display order, and has sharing turned on afterwards where the document
-/// says so, a failure of which is a warning on the account. The default account's name is applied
-/// last, under the rule an inspection reports. Each account is reported to `progress` as it is
-/// handled (see [`announce_accounts`]).
-pub(super) async fn apply_accounts(
+/// account alone. A created account takes the document's disabled flag and comes after the agent's
+/// other accounts in its display order; it never shares the agent's default configuration,
+/// whatever the document says. The default account's name is applied under the rule an inspection
+/// reports, and its disabled flag as the document has it. The settings of the Agent accounts
+/// section come last, through the path a settings update takes; a failure of those is reported on
+/// the result and leaves the accounts as they are. Each account, and those settings, is reported
+/// to `progress` as it is handled (see [`announce_accounts`]).
+pub(super) fn apply_accounts(
     state: &Arc<AppState>,
     document: &DocumentAccounts,
     prepared: PreparedAccounts,
@@ -385,7 +434,6 @@ pub(super) async fn apply_accounts(
                 status,
                 account: id,
                 error: None,
-                sharing_warning: None,
             };
             let item = ImportItem::Account {
                 agent: group.agent,
@@ -413,18 +461,9 @@ pub(super) async fn apply_accounts(
                 account.disabled,
             ) {
                 Ok(created) => {
-                    let mut imported = outcome(AccountOutcome::Created, Some(created.id.clone()));
-                    if account.share_default_config {
-                        if let Err(err) =
-                            coordinator::account_sharing::set(state, Some(created.id.clone()), true)
-                                .await
-                        {
-                            imported.sharing_warning = Some(ImportFailure::of(&err));
-                        }
-                    }
+                    accounts.push(outcome(AccountOutcome::Created, Some(created.id.clone())));
                     created_ids.push(created.id);
                     progress.report(item, ImportItemState::Done);
-                    accounts.push(imported);
                 }
                 Err(err) => {
                     let failure = ImportFailure::of(&err);
@@ -438,11 +477,16 @@ pub(super) async fn apply_accounts(
         if !created_ids.is_empty() {
             place_after_existing(state, group.agent, &created_ids);
         }
-        agents.push((group.agent, group.default_name, accounts));
+        agents.push((
+            group.agent,
+            group.default_name,
+            group.default_disabled,
+            accounts,
+        ));
     }
 
     let mut imported = Vec::new();
-    for (agent, default_name, accounts) in agents {
+    for (agent, default_name, default_disabled, accounts) in agents {
         let mut default_name_applied = false;
         if let Some(name) = default_name {
             // The rule an inspection reports, checked under the lock the write takes: a name
@@ -456,15 +500,54 @@ pub(super) async fn apply_accounts(
                 }
             }
         }
+        let mut default_disabled_applied = None;
+        if let Some(disabled) = default_disabled {
+            match coordinator::accounts::set_account_disabled(state, agent, None, disabled) {
+                Ok(changed) => default_disabled_applied = changed.then_some(disabled),
+                Err(err) => {
+                    tracing::warn!(%err, "setting the default account's flag after an import failed")
+                }
+            }
+        }
         imported.push(ImportedAgentAccounts {
             agent,
             accounts,
             default_name_applied,
+            default_disabled_applied,
         });
+    }
+    let (mut agent_settings_applied, mut agent_settings_error) = (None, None);
+    if let Some(settings) = &document.agent_settings {
+        progress.report(ImportItem::AgentSettings, ImportItemState::Creating);
+        let changes = SettingsChanges {
+            auto_select_account: Some(settings.auto_select_account),
+            auto_switch_on_usage_limit: Some(settings.auto_switch_on_usage_limit),
+            auto_start_quota_windows: Some(settings.auto_start_quota_windows),
+            // A setting this build does not carry is skipped, so a document from a build that
+            // knows more providers still applies the rest of its settings.
+            provider_settings: crate::config_document::exported_provider_settings(
+                &settings.provider_settings,
+            ),
+            agent_tags: known_agent_tags(&settings.agent_tags).collect(),
+            ..Default::default()
+        };
+        match coordinator::settings::update_settings(state, changes) {
+            Ok(()) => {
+                agent_settings_applied = Some(settings.clone());
+                progress.report(ImportItem::AgentSettings, ImportItemState::Done);
+            }
+            Err(err) => {
+                let failure = ImportFailure::of(&err);
+                progress.failed(ImportItem::AgentSettings, &failure);
+                agent_settings_error = Some(failure);
+            }
+        }
     }
     ImportedAccounts {
         agents_added,
         agents: imported,
+        agent_settings_applied,
+        agent_settings_error,
     }
 }
 
@@ -510,7 +593,7 @@ mod tests {
     use super::super::tests::{
         account, at, console, directory, document, project, stored_projects,
     };
-    use super::super::{apply, apply_reporting, inspect, Inspection};
+    use super::super::{apply, apply_reporting, inspect, ApplyOptions, Inspection};
     use super::*;
     use crate::protocol::{
         AccountFallback, AccountName, DirectoryChoice, ProjectAccount, ProjectAccountRef,
@@ -524,7 +607,6 @@ mod tests {
         json!({
             "name": name,
             "directory": directory,
-            "share_default_config": false,
             "disabled": false,
         })
     }
@@ -662,20 +744,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_sharing_and_disabled_values_and_the_agents_to_add_are_reported() {
+    async fn the_disabled_values_and_the_agents_to_add_are_reported() {
         let area = ScratchDir::new("import-inspect-agents-area");
         let (state, _state_dir) = account_state("import-inspect-agents", &area);
         state
             .store
             .set_added_agents_if_undecided(&[AgentId::CLAUDE])
             .unwrap();
-        let mut shared = doc_account("Shared", &path_text(&area.join("shared")));
-        shared["share_default_config"] = json!(true);
-        shared["disabled"] = json!(true);
+        let mut off = doc_account("Off", &path_text(&area.join("off")));
+        off["disabled"] = json!(true);
         let document = with_accounts(
             document(Vec::new()),
             &["codex", "claude", "codex", "grok"],
-            vec![agent_entry("claude", None, vec![shared])],
+            vec![agent_entry("claude", None, vec![off])],
         );
 
         let accounts = inspected_accounts(&state, &document)
@@ -685,7 +766,7 @@ mod tests {
 
         assert_eq!(accounts.agents_to_add, [AgentId::CODEX, AgentId::GROK]);
         let row = &accounts.agents[0].accounts[0];
-        assert!(row.share_default_config && row.disabled);
+        assert!(row.disabled);
     }
 
     #[tokio::test]
@@ -870,13 +951,16 @@ mod tests {
             &state,
             &document,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
-            false,
-            Some(vec![
-                resolve(AgentId::CLAUDE, 2, None, true),
-                resolve(AgentId::CLAUDE, 3, Some(&path_text(&moved_to)), false),
-                resolve(AgentId::CODEX, 0, None, true),
-            ]),
-            true,
+            ApplyOptions {
+                settings: false,
+                accounts: Some(vec![
+                    resolve(AgentId::CLAUDE, 2, None, true),
+                    resolve(AgentId::CLAUDE, 3, Some(&path_text(&moved_to)), false),
+                    resolve(AgentId::CODEX, 0, None, true),
+                ]),
+                consoles: true,
+                clone_dir: true,
+            },
         )
         .await
         .unwrap();
@@ -990,14 +1074,17 @@ mod tests {
             &state,
             &document,
             Vec::new(),
-            false,
-            Some(vec![AccountResolution {
-                agent: AgentId::CLAUDE,
-                account: 3,
-                directory: None,
-                leave_out: true,
-            }]),
-            true,
+            ApplyOptions {
+                settings: false,
+                accounts: Some(vec![AccountResolution {
+                    agent: AgentId::CLAUDE,
+                    account: 3,
+                    directory: None,
+                    leave_out: true,
+                }]),
+                consoles: true,
+                clone_dir: true,
+            },
             Some("accounts".to_string()),
         )
         .await
@@ -1039,14 +1126,17 @@ mod tests {
             &state,
             &document,
             Vec::new(),
-            false,
-            Some(vec![AccountResolution {
-                agent: AgentId::CLAUDE,
-                account: 0,
-                directory: None,
-                leave_out: true,
-            }]),
-            true,
+            ApplyOptions {
+                settings: false,
+                accounts: Some(vec![AccountResolution {
+                    agent: AgentId::CLAUDE,
+                    account: 0,
+                    directory: None,
+                    leave_out: true,
+                }]),
+                consoles: true,
+                clone_dir: true,
+            },
             Some("existing".to_string()),
         )
         .await
@@ -1065,58 +1155,127 @@ mod tests {
         );
     }
 
+    /// Sharing the agent's default configuration moves files outside Octoboard's own directory, so
+    /// it is never turned on by an import: a document of an earlier build that carries the flag has
+    /// it ignored, and the account is created unshared with the agent's directory untouched.
     #[tokio::test]
-    async fn a_sharing_that_fails_is_a_warning_on_the_account_that_was_created_all_the_same() {
+    async fn an_account_the_document_says_shares_is_created_unshared() {
         let area = ScratchDir::new("import-apply-sharing-area");
         let (state, _state_dir) = account_state("import-apply-sharing", &area);
-        // An account directory that cannot be made, since a file is where its parent should be.
-        let blocker = area.join("blocker");
-        std::fs::write(&blocker, b"").unwrap();
-        let shared = |name: &str, dir: &Path| {
-            let mut account = doc_account(name, &path_text(dir));
-            account["share_default_config"] = json!(true);
-            account
+        let default_dir = directory(&area, "default-claude");
+        std::fs::write(default_dir.join("settings.json"), b"{}").unwrap();
+        let mut shared = doc_account("Shared", &path_text(&area.join("shared")));
+        shared["share_default_config"] = json!(true);
+        let document = with_accounts(
+            document(Vec::new()),
+            &[],
+            vec![agent_entry("claude", None, vec![shared])],
+        );
+
+        let inspected = inspected_accounts(&state, &document)
+            .await
+            .accounts
+            .unwrap();
+        assert_eq!(inspected.agents[0].accounts[0].status, AccountStatus::New);
+        let imported = apply(
+            &state,
+            &document,
+            Vec::new(),
+            ApplyOptions {
+                settings: false,
+                accounts: Some(Vec::new()),
+                consoles: true,
+                clone_dir: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        let claude = &imported.accounts.unwrap().agents[0];
+        assert_eq!(claude.accounts[0].status, AccountOutcome::Created);
+        let stored = state.store.list_accounts().unwrap();
+        assert_eq!(stored.len(), 1);
+        assert!(!stored[0].share_default_config);
+        assert!(!stored[0].share_default_config_incomplete);
+        assert!(!area.join("shared").join("settings.json").exists());
+        assert!(!default_dir.join("settings.json").is_symlink());
+    }
+
+    #[tokio::test]
+    async fn the_default_accounts_disabled_flag_is_reported_and_applied_as_the_document_has_it() {
+        let area = ScratchDir::new("import-default-disabled-area");
+        let (state, _state_dir) = account_state("import-default-disabled", &area);
+        state
+            .store
+            .set_default_account_disabled(AgentId::GROK, true)
+            .unwrap();
+        let entry = |agent: &str, disabled: Option<bool>| {
+            let mut entry = agent_entry(agent, None, Vec::new());
+            entry["default_account"]["disabled"] = json!(disabled);
+            entry
         };
         let document = with_accounts(
             document(Vec::new()),
             &[],
-            vec![agent_entry(
-                "claude",
-                None,
-                vec![
-                    shared("Fine", &area.join("fine")),
-                    shared("Blocked", &blocker.join("inside")),
-                    doc_account("Plain", &path_text(&area.join("plain"))),
-                ],
-            )],
+            vec![
+                entry("claude", Some(true)),
+                entry("codex", Some(false)),
+                entry("grok", Some(false)),
+            ],
         );
 
-        let imported = apply(&state, &document, Vec::new(), false, Some(Vec::new()), true)
+        let inspected = inspected_accounts(&state, &document)
             .await
-            .unwrap();
-
-        let claude = &imported.accounts.unwrap().agents[0];
-        assert!(claude
             .accounts
+            .unwrap();
+        let reported: Vec<(Option<bool>, bool)> = inspected
+            .agents
             .iter()
-            .all(|a| a.status == AccountOutcome::Created));
-        assert!(claude.accounts[0].sharing_warning.is_none());
-        let warning = claude.accounts[1].sharing_warning.as_ref().expect("warned");
-        assert_eq!(warning.code, error_code::ACCOUNT_SHARING_FAILED);
-        assert!(claude.accounts[2].sharing_warning.is_none());
-        let stored = state.store.list_accounts().unwrap();
-        assert_eq!(stored.len(), 3, "the account stays created");
-        assert!(
-            stored
-                .iter()
-                .find(|a| a.name == "Fine")
-                .unwrap()
-                .share_default_config
+            .map(|a| (a.default_disabled, a.default_disabled_applies))
+            .collect();
+        // Claude turns off, Codex is off nowhere and stays so, Grok turns back on.
+        assert_eq!(
+            reported,
+            [
+                (Some(true), true),
+                (Some(false), false),
+                (Some(false), true)
+            ]
         );
+        assert!(!state
+            .store
+            .disabled_default_accounts()
+            .unwrap()
+            .contains("claude"));
+
+        let imported = apply(
+            &state,
+            &document,
+            Vec::new(),
+            ApplyOptions {
+                settings: false,
+                accounts: Some(Vec::new()),
+                consoles: true,
+                clone_dir: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        let applied: Vec<Option<bool>> = imported
+            .accounts
+            .unwrap()
+            .agents
+            .iter()
+            .map(|a| a.default_disabled_applied)
+            .collect();
+        assert_eq!(applied, [Some(true), None, Some(false)]);
+        let disabled = state.store.disabled_default_accounts().unwrap();
+        assert!(disabled.contains("claude") && !disabled.contains("grok"));
     }
 
     #[tokio::test]
-    async fn the_default_account_name_is_applied_by_the_rule_and_its_disabled_flag_is_never_applied(
+    async fn the_default_account_name_is_applied_by_the_rule_and_an_absent_disabled_flag_changes_nothing(
     ) {
         let area = ScratchDir::new("import-apply-default-name-area");
         let (state, _state_dir) = account_state("import-apply-default-name", &area);
@@ -1138,9 +1297,19 @@ mod tests {
             ],
         );
 
-        let imported = apply(&state, &document, Vec::new(), false, Some(Vec::new()), true)
-            .await
-            .unwrap();
+        let imported = apply(
+            &state,
+            &document,
+            Vec::new(),
+            ApplyOptions {
+                settings: false,
+                accounts: Some(Vec::new()),
+                consoles: true,
+                clone_dir: true,
+            },
+        )
+        .await
+        .unwrap();
 
         let applied: Vec<bool> = imported
             .accounts
@@ -1219,9 +1388,19 @@ mod tests {
             )],
         );
 
-        let imported = apply(&state, &with, Vec::new(), false, None, true)
-            .await
-            .unwrap();
+        let imported = apply(
+            &state,
+            &with,
+            Vec::new(),
+            ApplyOptions {
+                settings: false,
+                accounts: None,
+                consoles: true,
+                clone_dir: true,
+            },
+        )
+        .await
+        .unwrap();
 
         assert!(imported.accounts.is_none());
         assert!(state.store.list_accounts().unwrap().is_empty());
@@ -1233,9 +1412,12 @@ mod tests {
             &state,
             &document(vec![console("Other", Vec::new())]),
             Vec::new(),
-            false,
-            Some(Vec::new()),
-            true,
+            ApplyOptions {
+                settings: false,
+                accounts: Some(Vec::new()),
+                consoles: true,
+                clone_dir: true,
+            },
         )
         .await
         .expect_err("no accounts in the document");
@@ -1270,9 +1452,12 @@ mod tests {
             &state,
             &document,
             vec![at(7, 7, DirectoryChoice::ExportedPath)],
-            false,
-            Some(Vec::new()),
-            false,
+            ApplyOptions {
+                settings: false,
+                accounts: Some(Vec::new()),
+                consoles: false,
+                clone_dir: true,
+            },
         )
         .await
         .unwrap();
@@ -1291,9 +1476,12 @@ mod tests {
             &state,
             &document,
             vec![at(7, 7, DirectoryChoice::ExportedPath)],
-            false,
-            None,
-            true,
+            ApplyOptions {
+                settings: false,
+                accounts: None,
+                consoles: true,
+                clone_dir: true,
+            },
         )
         .await
         .expect_err("no such project");
@@ -1330,9 +1518,12 @@ mod tests {
                 &state,
                 &document,
                 Vec::new(),
-                false,
-                Some(resolutions),
-                true,
+                ApplyOptions {
+                    settings: false,
+                    accounts: Some(resolutions),
+                    consoles: true,
+                    clone_dir: true,
+                },
             )
             .await
             .expect_err("refused");
@@ -1398,9 +1589,12 @@ mod tests {
             &target,
             &exported,
             Vec::new(),
-            false,
-            Some(Vec::new()),
-            true,
+            ApplyOptions {
+                settings: false,
+                accounts: Some(Vec::new()),
+                consoles: true,
+                clone_dir: true,
+            },
         )
         .await
         .unwrap();

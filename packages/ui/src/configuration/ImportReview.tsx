@@ -20,6 +20,7 @@ import {
 import { ImportAccounts } from "./ImportAccounts";
 import { ImportConsoles } from "./ImportConsoles";
 import type { Shown } from "./importParts";
+import type { ClientSettingValue } from "./clientSettings";
 import { ImportSettings } from "./ImportSettings";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
 
@@ -58,6 +59,8 @@ export function ImportReview({
   tab,
   onTab,
   shortcuts,
+  clientSettings,
+  cloneDir,
   shown,
 }: {
   fileName: string;
@@ -74,6 +77,10 @@ export function ImportReview({
   onTab: (tab: Region) => void;
   /** What the document's keyboard shortcuts would do on this device; `undefined` when it carries none. */
   shortcuts?: ReturnType<typeof shortcutsReview>;
+  /** What the settings only this client holds would do here, one for each the document carries. */
+  clientSettings: ClientSettingValue[];
+  /** Whether the file's default clone directory is applied with the application settings, and the change of that. */
+  cloneDir: { use: boolean; onUse: (use: boolean) => void };
   /** Holds a field's message back until the user has tried to import. */
   shown: Shown;
 }): React.ReactElement {
@@ -93,7 +100,7 @@ export function ImportReview({
       attention: accountsNeedAttention(accounts),
       content: <ImportAccounts accounts={accounts} review={accountReview} onReview={onAccountReview} shown={shown} />,
     } : undefined,
-    settings: settings ? { attention: false, content: <ImportSettings settings={settings} shortcuts={shortcuts} /> } : undefined,
+    settings: settings ? { attention: false, content: <ImportSettings settings={settings} clientSettings={clientSettings} shortcuts={shortcuts} cloneDir={cloneDir} /> } : undefined,
   };
   const regions: RegionPanel[] = imported.flatMap((id) => {
     const region = contents[id];

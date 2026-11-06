@@ -42,7 +42,10 @@ text. Changing the choice restyles a document that is already open at once.
 
 The choice is remembered **per client**, in that client's own browser storage, under the same rules as the appearance
 choice (see "Where the choice is stored" in `docs/product/appearance.md`): the daemon neither stores it nor carries it,
-so it does not travel between clients. Where nothing is stored, or what is stored names no style, the style is Tailwind.
+so it does not travel between clients. A configuration export that includes the application settings carries the
+exporting client's style, and an import asked to apply them sets it on the client that runs the import alone (see "The
+settings a client holds" in `docs/product/settings-in-a-configuration.md`). Where nothing is stored, or what is stored
+names no style, the style is Tailwind.
 
 **Which direction the document reads.** Every block — each heading, paragraph, list, quote and table — is laid out in
 the direction of **its own text**, whichever direction the window reads in (see `docs/product/right-to-left-layout.md`):

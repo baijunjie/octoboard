@@ -14,41 +14,48 @@ Settings before deciding. If you are unsure, ask rather than leave it out.
 Do not take a setting the tools leave out as precedent on its own: settings are not opt-in to the tools, and one is left
 out only because that rule makes it the user's alone.
 
-## A new application setting travels in the settings region of a configuration export
+## A new setting of General, Git, Agent behavior, Keyboard shortcuts or Agent accounts travels in a configuration export
 
-Every application setting is carried by any export that includes the application settings region — chosen on its own,
-whatever consoles and accounts the export holds — and applied by an import that is asked to apply settings, except one
-that is only valid on this machine, such as a path like the default clone directory or a system permission, since it
-would mean nothing elsewhere (`docs/product/configuration-export-and-import.md`, sections "The application settings an
-export carries" and "What is not configuration and never travels"). If you are unsure whether a new setting is valid
-only on this machine, ask. Whether the agents' settings tools may read or change a setting is a separate decision and
-no reason to leave it out of the export: the settings hidden from agents because they let them act without asking or
-spend quota (approving requests automatically, starting usage windows automatically) travel all the same. So a new
-application setting that is not machine-local is added, in the same change, to:
+Every setting of those Settings sections travels and is applied by an import, except one whose turning on itself
+changes files outside `~/.octoboard/` (today only an account's sharing of the default configuration), which the user
+turns on again by hand (`docs/product/configuration-export-and-import.md`, "What is not configuration and never
+travels"). None of these is a reason to leave a setting out: its value is a path (the default clone directory travels,
+written `~/`-relative), it lets agents act without asking or spend quota, the agents' settings tools hide it, or it has
+Octoboard act on files outside `~/.octoboard/` later as it runs. If you are unsure whether turning it on itself changes
+outside files, ask. In the same change, by where the setting sits:
 
-- `DocumentSettings` in `apps/daemon/src/protocol/configuration.rs`, filled in `build` in
-  `apps/daemon/src/config_document/export.rs` beside the others, which are written only when `Selection.settings` asks
-  for the settings region. Until the first release it is a required field (no `Option`, no `#[serde(default)]`), since
-  every export writes it and there is no older document to read. From the first release on, a setting added without
-  raising `CONFIGURATION_VERSION` is an `Option` with `#[serde(default)]`, applied by an import only when present,
-  because an export from a released build lacks it and a required field would make that export unreadable; otherwise
-  raise `CONFIGURATION_VERSION` and add the step that upgrades the previous version (its doc comment in
-  `protocol/configuration.rs`);
-- `InspectedSettings` in `apps/daemon/src/protocol/configuration.rs`, with the document's value and the current one,
-  filled by the import inspection in `apps/daemon/src/config_document/import/mod.rs`, and the
-  `coordinator::settings::update_settings` call there that applies the document's settings;
-- the window: its fields in `DocumentSettings` and `InspectedSettings` come from regenerating
-  `packages/ui/src/protocol.generated.ts` after the Rust change (`docs/structure/daemon.md`, "Where new code goes"),
-  never written by hand in the UI. For a setting that is a switch, add its entry in `COPY` in
-  `packages/ui/src/configuration/booleanSettings.ts` (which the type check then demands): its settings-page label and
-  on / off descriptions, an optional help tip, and a `configuration.import.settings.consequence.<name>` message saying
-  what turning it on then does, added to `packages/ui/src/i18n/messages/en.ts` and `zh-Hans.ts`. The import review, the
-  import result and the settings page all render from that entry; on the settings page the switch is
-  `<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), not a component of its
-  own. A setting that is not a switch (like the git workflow settings or keyboard shortcuts) instead gets its own line
-  in both `packages/ui/src/configuration/ImportSettings.tsx` (the review's Application settings tab) and
-  `ImportResult.tsx`: always shown for a required field (like the git workflow line), shown only when the document
-  carries the setting for an optional one.
+- An application setting the daemon holds (General, Git, Agent behavior): a field of `DocumentSettings` in
+  `apps/daemon/src/protocol/configuration.rs`, filled in `build` in `apps/daemon/src/config_document/export.rs`; its
+  document and current values in `InspectedSettings`, filled by the inspection in
+  `apps/daemon/src/config_document/import/mod.rs`, and the `coordinator::settings::update_settings` call there that
+  applies the document's settings.
+- A setting of the Agent accounts section: in the accounts region, `DocumentAgentSettings` and
+  `InspectedAgentSettings`, inspected and applied in `apps/daemon/src/config_document/import/accounts.rs` — never in
+  `DocumentSettings`.
+- A setting only the client holds (kept in the client, like the appearance, the Markdown style, running in the
+  background or the shortcuts): an optional field of `DocumentSettings` that the daemon neither builds nor reads and
+  passes back as it came, handled on the client beside the others in
+  `packages/ui/src/configuration/clientSettings.ts`. The client adds it to a document it saves and applies it to
+  itself only from the import reply's `settings_applied`, never from the file it read, so it is not applied when the
+  daemon failed to apply the settings.
+
+A field added to the document is an `Option` with `#[serde(default)]`, applied by an import only when present: a
+document from a released build, the beta releases included, may lack it, and a required field would make it
+unreadable. It may be required only while the current `CONFIGURATION_VERSION` is in no release yet and that version's
+upgrade step in `apps/daemon/src/config_document/upgrade.rs` writes it into every older document. Moving, renaming or
+removing a field goes by the version rule in `apps/daemon/PROTOCOL.md`, "Configuration export", its "Version"
+paragraph.
+
+In the window, the document's fields come from regenerating `packages/ui/src/protocol.generated.ts` after the Rust
+change (`docs/structure/daemon.md`, "Where new code goes"), never written by hand. A switch gets its entry in `COPY` in
+`packages/ui/src/configuration/booleanSettings.ts`, which the type check demands: its Settings section and place there,
+its settings-page label and on / off descriptions, an optional help tip, and a
+`configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to every message
+catalog. The import review, the import result and the settings page all render from that entry; on the settings page
+the switch is `<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), not a
+component of its own. A setting that is not a switch gets its own line in the card the review and the result share:
+`packages/ui/src/configuration/SettingsGroups.tsx` for an application setting, `AgentSettingsCard.tsx` beside it for an
+Agent accounts setting; an optional one is shown only when the document carries it.
 
 ## A new provider setting is declared only in its provider's schema, with its flags set by whether it is a permission setting
 
@@ -59,13 +66,11 @@ store column, document field, MCP field or UI component for it. Decide its flags
 (`apps/daemon/src/providers/mod.rs`):
 
 - A permission setting, one that decides what the agent's sessions may do without asking the user (like
-  `approval_mode` and `approval_reviewer`), is `exported: false` and `shown_to_agents: false`, and a choice of it that
-  lets sessions run every action without asking has `confirm: true`. This is unlike an application setting, whose
-  automatic approvals do travel: imported, a provider's permission choice would turn on silently, skipping the
-  confirmation (`docs/product/configuration-export-and-import.md`, "What is not configuration and never travels";
-  `docs/product/agent-settings-tools.md`, "Who reads and changes what").
-- Any other is `exported: true`, unless it is valid only on this machine, and `shown_to_agents: true`. Agents never
-  change a provider setting, whichever flags it has. If you are unsure whether it is a permission setting, ask.
+  `approval_mode` and `approval_reviewer`), is `shown_to_agents: false`, and a choice of it that lets sessions run
+  every action without asking has `confirm: true`. It is still `exported: true`, like any other.
+- Any setting is `exported: true` unless turning it on itself changes files outside `~/.octoboard/`, and any that is
+  not a permission setting is `shown_to_agents: true`. Agents never change a provider setting, whichever flags it has.
+  If you are unsure whether it is a permission setting, ask.
 - Its copy, `provider.<id>.setting.<setting>.heading` at the least, in every language of the provider's presentation
   module, lands in the same change: a setting without a heading is silently left out of Settings and of the import
   review and result, and no test catches it.

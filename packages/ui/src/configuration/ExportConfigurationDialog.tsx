@@ -9,11 +9,13 @@ import { Dialog } from "../components/dialog/Dialog";
 import { useDialogAction } from "../components/dialog/dialogHooks";
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { isolate } from "../i18n/isolate";
-import { Message, useT } from "../i18n/react";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
+import { useOctoboardTheme } from "../preferences/theme";
 import type { Console, ExportedConsoles } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
+import { heldClientSettings } from "./clientSettings";
 import { fileFailure } from "./failureText";
 
 /** The name the save dialog offers: the application's, and for one console that console's, with
@@ -34,9 +36,11 @@ export function exportFileName(console?: Pick<Console, "name">): string {
  * directories are always in the file), so it is not shown while no console is exported, as there is no path to record,
  * and then it is not sent; and Export is unavailable while nothing at all is chosen. The daemon builds the document;
  * this saves it as the daemon sent it, through the platform's save dialog, and says what became of it: the name it was
- * saved under, or only that it was downloaded where the platform cannot say more. The one thing added is this client's
- * keyboard shortcut changes, which the daemon does not know of: a document with the application settings always gets
- * them (an empty set when none is changed). Dismissing the save dialog leaves this one open.
+ * saved under, or only that it was downloaded where the platform cannot say more. What is added are the settings this
+ * client holds, which the daemon does not know of: a document with the application settings always gets this client's
+ * keyboard shortcut changes (an empty set when none is changed), its appearance, Markdown style and, where the platform
+ * has it, whether it runs in the background (see `heldClientSettings`), and the language it shows in place of the one
+ * the daemon holds. Dismissing the save dialog leaves this one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -47,7 +51,9 @@ export function ExportConfigurationDialog({
 }): React.ReactElement {
   const t = useT();
   const { request, showNotice } = useDaemon();
-  const { configurationFile } = usePlatform();
+  const { configurationFile, backgroundRun } = usePlatform();
+  const { choice: appearance } = useOctoboardTheme();
+  const language = useCurrentLanguage();
   const { busy, run } = useDialogAction(undefined, t("configuration.export.alertTitle"));
   const [consoles, setConsoles] = useState<ExportedConsoles>(inHand ? "one" : "all");
   const [includeSettings, setIncludeSettings] = useState(true);
@@ -71,9 +77,16 @@ export function ExportConfigurationDialog({
         include_accounts: includeAccounts,
         ...(pathsApply && { include_paths: pathsIncluded }),
       });
-      // The daemon knows nothing of this client's shortcuts: a document with the settings gets them here.
+      // The daemon knows nothing of this client's own settings: a document with the settings gets them here.
       const file = reply.document.settings
-        ? { ...reply.document, settings: { ...reply.document.settings, keyboard_shortcuts: shortcutOverrides.get() } }
+        ? {
+          ...reply.document,
+          settings: {
+            ...reply.document.settings,
+            keyboard_shortcuts: shortcutOverrides.get(),
+            ...heldClientSettings({ appearance, language }, { backgroundRun: backgroundRun !== undefined }),
+          },
+        }
         : reply.document;
       let saved;
       try {
@@ -155,7 +168,17 @@ export function ExportConfigurationDialog({
             onChange={setIncludeSettings}
             isReadOnly={busy}
             label={t("configuration.export.settings.include")}
-            hint={t("configuration.export.settings.description")}
+            hint={
+              <Message
+                id="configuration.export.settings.description"
+                params={{
+                  generalSection: <InlineReference>{t("settings.section.general")}</InlineReference>,
+                  gitSection: <InlineReference>{t("settings.section.git")}</InlineReference>,
+                  behaviorSection: <InlineReference>{t("settings.section.agentPermissions")}</InlineReference>,
+                  shortcutsSection: <InlineReference>{t("settings.section.shortcuts")}</InlineReference>,
+                }}
+              />
+            }
           />
           <ConfirmOption
             isSelected={includeAccounts}

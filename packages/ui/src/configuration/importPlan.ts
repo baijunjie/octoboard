@@ -35,6 +35,9 @@ export interface RowState {
   choice: OfferedChoice | "directory" | "skip";
   /** What the field handed the form, which is already trimmed. */
   directory: string;
+  /** Set once the user has made a choice for the row (see `withRow`, `applyToAll`); a row without it still follows the
+   * preselection. */
+  chosen?: true;
 }
 
 /** The review's state, indexed as the document is: `[console][project]`, which is also how a
@@ -54,9 +57,37 @@ export function initialReview(consoles: InspectedConsole[]): ReviewState {
   );
 }
 
-/** Replaces one project's row; every other row is the same object as before. */
+/** The consoles with their projects' clone-dependent offers (`default_clone_dir`, `clone`) and preselected choice as they
+ * come to under the document's own default clone directory where `documentDir` says the import takes it, else as they
+ * stand under this machine's. A project the document gives no second set for is as it was. */
+export function withCloneDirOffers(consoles: InspectedConsole[], documentDir: boolean): InspectedConsole[] {
+  if (!documentDir) return consoles;
+  return consoles.map((console) => ({
+    ...console,
+    projects: console.projects.map((project) =>
+      project.in_document_clone_dir ? { ...project, offers: project.in_document_clone_dir.offers, default: project.in_document_clone_dir.default } : project,
+    ),
+  }));
+}
+
+/** The review's rows after the offers changed to `after` (see `withCloneDirOffers`): a row the user never touched
+ * follows the new preselected choice, or is left out where there is none. A row the user chose for keeps the choice,
+ * unless it is on a clone-dependent choice that the new offers lack, which goes to the new preselected choice too. */
+export function reviewForOffers(review: ReviewState, after: InspectedConsole[]): ReviewState {
+  return review.map((rows, c) =>
+    rows.map((row, p) => {
+      const now = after[c].projects[p];
+      const fallback = now.default ?? "skip";
+      if (!row.chosen) return row.choice === fallback ? row : { ...row, choice: fallback };
+      if ((row.choice === "default_clone_dir" || row.choice === "clone") && now.offers[row.choice] === null) return { ...row, choice: fallback };
+      return row;
+    }),
+  );
+}
+
+/** Replaces one project's row, which the user has now chosen for; every other row is the same object as before. */
 export function withRow(review: ReviewState, console: number, project: number, row: RowState): ReviewState {
-  return review.map((rows, c) => (c === console ? rows.map((existing, p) => (p === project ? row : existing)) : rows));
+  return review.map((rows, c) => (c === console ? rows.map((existing, p) => (p === project ? { ...row, chosen: true } : existing)) : rows));
 }
 
 /** How many projects `choice` can be applied to: those whose state offers it, and every project for
@@ -69,8 +100,8 @@ export function availableFor(consoles: InspectedConsole[], choice: OfferedChoice
   );
 }
 
-/** `choice` on every project it is available for; a project it is not available for keeps its
- * row. */
+/** `choice` on every project it is available for, which the user has now chosen for; a project it is not available
+ * for keeps its row. */
 export function applyToAll(
   consoles: InspectedConsole[],
   review: ReviewState,
@@ -79,7 +110,7 @@ export function applyToAll(
   return review.map((rows, c) =>
     rows.map((row, p) => {
       const project = consoles[c].projects[p];
-      return choice === "skip" || project.offers[choice] !== null ? { ...row, choice } : row;
+      return choice === "skip" || project.offers[choice] !== null ? { ...row, choice, chosen: true } : row;
     }),
   );
 }
@@ -280,17 +311,15 @@ export interface AccountsOutcome {
   existing: number;
   leftOut: number;
   failed: number;
-  sharingWarnings: number;
 }
 
 export function accountsOutcomeOf(accounts: ImportedAccounts): AccountsOutcome {
-  const outcome: AccountsOutcome = { created: 0, existing: 0, leftOut: 0, failed: 0, sharingWarnings: 0 };
+  const outcome: AccountsOutcome = { created: 0, existing: 0, leftOut: 0, failed: 0 };
   for (const account of accounts.agents.flatMap((agent) => agent.accounts)) {
     if (account.status === "created") outcome.created += 1;
     else if (account.status === "existing") outcome.existing += 1;
     else if (account.status === "left_out") outcome.leftOut += 1;
     else if (account.status === "failed") outcome.failed += 1;
-    if (account.sharing_warning) outcome.sharingWarnings += 1;
   }
   return outcome;
 }

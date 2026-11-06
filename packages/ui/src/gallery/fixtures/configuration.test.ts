@@ -6,6 +6,7 @@ import { type AccountFallback, type Agent, type ProviderInfo } from "../../proto
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
 import { SCENARIOS } from ".";
 import { currentExportedProviderSettings, effectiveProviderSettings } from "../../fixtures/builders";
+import { FILE_CLONE_DIR } from "../../fixtures/configurationReview";
 import { FIXTURE_PROVIDERS } from "../../fixtures/fixtureProviders";
 import { carriedSettings, DEFAULT_CLONE_DIR, resolvedAccountDirectory } from "./configuration";
 
@@ -69,23 +70,66 @@ it("never offers a clone into a directory it also offers as one that exists", ()
 it("reports the setting this machine has now as the scenario's own state has it", () => {
   const withSettings = inspected.filter(({ inspection }) => inspection.settings);
   expect(withSettings.length).toBeGreaterThan(0);
-  for (const { id, providers, machine, inspection } of withSettings) {
+  for (const { id, machine, inspection } of withSettings) {
     const settings = inspection.settings!;
     expect(settings.current_auto_close_idle_shell_terminals, id).toBe(machine!.auto_close_idle_shell_terminals);
     expect(settings.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
     expect(settings.current_auto_delete_unresumable_archives, id).toBe(machine!.auto_delete_unresumable_archives);
-    expect(settings.current_auto_select_account, id).toBe(machine!.auto_select_account ?? false);
-    expect(settings.current_auto_switch_on_usage_limit, id).toBe(machine!.auto_switch_on_usage_limit ?? false);
     expect(settings.current_sidebar_order_by_status, id).toBe(machine!.sidebar_order_by_status ?? true);
-    expect(settings.current_auto_start_quota_windows, id).toBe(machine!.auto_start_quota_windows ?? false);
     expect(settings.current_auto_approve_session_requests, id).toBe(machine!.auto_approve_session_requests ?? false);
     expect(settings.current_auto_approve_resume_requests, id).toBe(machine!.auto_approve_resume_requests ?? false);
     expect(settings.current_auto_approve_account_switches, id).toBe(machine!.auto_approve_account_switches ?? false);
     expect(settings.current_auto_approve_handoffs, id).toBe(machine!.auto_approve_handoffs ?? false);
     expect(settings.current_git_workflow, id).toEqual(machine!.git_workflow);
+    expect(settings.current_default_clone_dir, id).toBe(machine!.default_clone_dir);
+  }
+});
+
+it("reports the Agent accounts settings this machine has now as the scenario's own state has it, the provider settings as the values in effect and not its explicit choices alone", () => {
+  const withSettings = inspected.filter(({ inspection }) => inspection.accounts?.agent_settings);
+  expect(withSettings.length).toBeGreaterThan(0);
+  for (const { id, providers, machine, inspection } of withSettings) {
+    const settings = inspection.accounts!.agent_settings!;
+    expect(settings.current_auto_select_account, id).toBe(machine!.auto_select_account ?? false);
+    expect(settings.current_auto_switch_on_usage_limit, id).toBe(machine!.auto_switch_on_usage_limit ?? false);
+    expect(settings.current_auto_start_quota_windows, id).toBe(machine!.auto_start_quota_windows ?? false);
     expect(settings.current_agent_tags, id).toEqual(machine!.agent_tags ?? {});
-    // The values in effect on this machine, not its explicit choices alone.
     expect(settings.current_provider_settings, id).toEqual(currentExportedProviderSettings(effectiveProviderSettings(machine!.provider_settings ?? {}, machine!.added_agents, providers), providers));
+  }
+});
+
+it("offers the clone-dependent targets under the file's default clone directory for every project, and only where the file carries one that differs from this machine's", () => {
+  let offered = 0;
+  for (const { id, inspection } of inspected) {
+    const dir = inspection.settings?.default_clone_dir ?? null;
+    const differs = dir !== null && dir !== inspection.settings!.current_default_clone_dir;
+    for (const { in_document_clone_dir: under, offers: here, path, remote_url, name } of projectsOf(inspection)) {
+      const label = `${id}: ${name}`;
+      expect(under !== null, label).toBe(differs);
+      if (!under) continue;
+      offered += 1;
+      expect(dir, label).toBe(FILE_CLONE_DIR);
+      // The recorded path does not depend on the clone directory.
+      expect(under.offers.exported_path, label).toBe(here.exported_path);
+      if (under.offers.default_clone_dir !== null) expect(under.offers.default_clone_dir, label).toBe(`${dir}/${lastSegment(path)}`);
+      if (under.offers.clone !== null) {
+        expect(remote_url, label).not.toBeNull();
+        expect(under.offers.clone, label).toBe(`${dir}/${repoName(remote_url!)}`);
+        expect(under.offers.default_clone_dir, label).not.toBe(under.offers.clone);
+      }
+      const first = (["exported_path", "default_clone_dir", "clone"] as const).find((choice) => under.offers[choice] !== null) ?? null;
+      expect(under.default, label).toBe(first);
+    }
+  }
+  expect(offered).toBeGreaterThan(0);
+});
+
+it("turns a default account off or on only where the file says so and this machine's account is not already so", () => {
+  for (const { id, machine, accounts } of accounted) {
+    for (const entry of accounts.agents) {
+      const here = machine.disabled_default_accounts?.includes(entry.agent) ?? false;
+      expect(entry.default_disabled_applies, `${id}: ${entry.agent}`).toBe(entry.default_disabled !== null && entry.default_disabled !== here);
+    }
   }
 });
 
@@ -217,13 +261,21 @@ it("reports a result of the accounts for the accounts of the inspection it follo
         if (account.status === "created") expect(proposed.status, label).not.toBe("existing");
         expect(account.status === "failed", label).toBe(account.error !== null);
         expect(account.account !== null, label).toBe(account.status === "created" || account.status === "existing");
-        if (account.sharing_warning) expect(account.status, label).toBe("created");
       }),
     );
     for (const agent of result.accounts!.agents_added) expect(inspection.accounts!.agents_to_add, id).toContain(agent);
     result.accounts!.agents.forEach((entry, a) => {
       if (entry.default_name_applied) expect(inspection.accounts!.agents[a].default_name_applies, `${id}: ${entry.agent}`).toBe(true);
+      // The flag is reported as the value it was set to, and null where nothing was changed.
+      const proposed = inspection.accounts!.agents[a];
+      expect(entry.default_disabled_applied !== null, `${id}: ${entry.agent}`).toBe(proposed.default_disabled_applies);
+      if (entry.default_disabled_applied !== null) expect(entry.default_disabled_applied, `${id}: ${entry.agent}`).toBe(proposed.default_disabled);
     });
+    // The settings come with the accounts that carry them, and are applied or refused, not both.
+    const settings = result.accounts!.agent_settings_applied;
+    const failed = result.accounts!.agent_settings_error;
+    expect(settings !== null && failed !== null, id).toBe(false);
+    if (settings || failed) expect(inspection.accounts!.agent_settings, id).not.toBeNull();
   }
 });
 
@@ -239,7 +291,8 @@ it("reports application settings only for a document that carries them", () => {
       expect(result.settings_applied ?? null, id).toBeNull();
       expect(result.settings_error ?? null, id).toBeNull();
     } else if (result.settings_applied) {
-      const { keyboard_shortcuts: _shortcuts, ...applied } = result.settings_applied;
+      // The language is the daemon's own to apply; the other client-held values are passed through.
+      const { keyboard_shortcuts: _shortcuts, interface_language: _language, ...applied } = result.settings_applied;
       expect(applied, id).toEqual(carriedSettings(inspection.settings));
     }
   }

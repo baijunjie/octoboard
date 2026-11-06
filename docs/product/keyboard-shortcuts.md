@@ -170,9 +170,8 @@ cannot stand when it is read — one these rules refuse, or one for a command th
 its command has its default.
 
 A configuration export that includes the application settings carries the exporting client's changed shortcuts, and
-an import can apply a file's to the importing client (see "The application settings an export carries" and
-"Application settings are left alone unless they are asked for" in
-`docs/product/configuration-export-and-import.md`).
+an import can apply a file's to the importing client (see "The application settings an export carries" and "The
+keyboard shortcuts on import" in `docs/product/settings-in-a-configuration.md`).
 
 ## The shortcuts as data
 

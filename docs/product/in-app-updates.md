@@ -20,8 +20,8 @@ older version.
 
 The choice is kept **per client**, in the window's own browser storage, as the choice to keep running in the background
 is (see "Closing the window" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
-it, and it is not part of a configuration export (see "The application settings an export carries" in
-`docs/product/configuration-export-and-import.md`). A saved choice of either channel is kept; storage that holds no
+it, and it is not part of a configuration export (see "Which settings travel" in
+`docs/product/settings-in-a-configuration.md`). A saved choice of either channel is kept; storage that holds no
 choice, has been cleared, or holds anything but Beta reads as Stable.
 
 **Switching the channel** withdraws at once an update found on the other channel, with its notice, and checks the new

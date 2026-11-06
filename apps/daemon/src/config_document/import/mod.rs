@@ -7,9 +7,10 @@
 //! never values to act on: a project's directory comes from one of four choices, each offered only
 //! when its state allows, and every one of them ends in the ordinary association, which requires
 //! an existing directory or clones a remote. An account's directory is proposed in the review and
-//! created through the same checks as Add account, and sharing its configuration goes through the
-//! normal sharing path. A document names no database id and no folder-trust state, so a project
-//! created here is as untrusted as one added by hand.
+//! created through the same checks as Add account; whether it shares its agent's default
+//! configuration is not read, since turning that on modifies files outside Octoboard's own
+//! directory. A document names no database id and no folder-trust state, so a project created here
+//! is as untrusted as one added by hand.
 
 mod accounts;
 mod progress;
@@ -20,15 +21,16 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+use crate::config_document::upgrade;
 use crate::coordinator::{self, consoles::NewConsole, settings::SettingsChanges};
 use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Account, AccountFallback, AccountName, AccountResolution, AgentId, CodedError,
-    ConfigurationDocument, DirectoryChoice, DocumentConsole, DocumentProject, DocumentSettings,
-    ImportFailure, ImportItem, ImportItemState, ImportStatus, ImportedAccounts, ImportedConsole,
-    ImportedProject, InspectedAccounts, InspectedConsole, InspectedProject, InspectedSettings,
-    PerAgent, ProjectAccount, ProjectAccountRef, ProjectResolution, CONFIGURATION_FORMAT,
-    CONFIGURATION_VERSION,
+    ConfigurationDocument, DirectoryChoice, DirectoryOffers, DocumentConsole, DocumentProject,
+    DocumentSettings, ImportFailure, ImportItem, ImportItemState, ImportStatus, ImportedAccounts,
+    ImportedConsole, ImportedProject, InspectedAccounts, InspectedConsole, InspectedProject,
+    InspectedSettings, OffersUnderCloneDir, PerAgent, ProjectAccount, ProjectAccountRef,
+    ProjectResolution, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
 };
 use crate::providers::SettingValue;
 use crate::state::AppState;
@@ -59,9 +61,27 @@ pub struct Imported {
     pub settings_applied: Option<DocumentSettings>,
     /// Why the settings asked for were not applied.
     pub settings_error: Option<ImportFailure>,
+    /// The default clone directory written, which is written before anything is created and so
+    /// stays written when the settings as a whole then could not be applied.
+    pub clone_dir_applied: Option<String>,
     /// What came of the accounts; absent unless the caller asked for them.
     pub accounts: Option<ImportedAccounts>,
     pub consoles: Vec<ImportedConsole>,
+}
+
+/// What an import asks to apply. Consoles and accounts are created only when asked for, the
+/// application settings only when `settings`, and the default clone directory only when
+/// `clone_dir` allows it too.
+#[derive(Debug)]
+pub struct ApplyOptions {
+    /// Apply the document's application settings.
+    pub settings: bool,
+    /// The resolutions for the document's accounts, when they are to be created.
+    pub accounts: Option<Vec<AccountResolution>>,
+    /// Create the document's consoles and projects.
+    pub consoles: bool,
+    /// Take the document's default clone directory, rather than keep this machine's own.
+    pub clone_dir: bool,
 }
 
 /// [`apply_reporting`] for the tests, which have no client to report progress to.
@@ -70,26 +90,15 @@ pub async fn apply(
     state: &Arc<AppState>,
     document: &serde_json::Value,
     resolutions: Vec<ProjectResolution>,
-    apply_settings: bool,
-    accounts: Option<Vec<AccountResolution>>,
-    apply_consoles: bool,
+    options: ApplyOptions,
 ) -> Result<Imported> {
-    apply_reporting(
-        state,
-        document,
-        resolutions,
-        apply_settings,
-        accounts,
-        apply_consoles,
-        None,
-    )
-    .await
+    apply_reporting(state, document, resolutions, options, None).await
 }
 
-/// The document `value` holds, or the refusal that applies: it is not one at all, it is of a
-/// version this daemon does not read, or it cannot be read. `format` and `version` are looked at
-/// before the rest, since a document of another version may well have a shape this one cannot
-/// read, and the useful answer to that is its version.
+/// The document `value` holds, upgraded to the current version, or the refusal that applies: it is
+/// not one at all, it is of a version this daemon does not read, or it cannot be read. `format` and
+/// `version` are looked at before the rest, since a document of another version may well have a
+/// shape this one cannot read, and the useful answer to that is its version.
 fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
     let unreadable = |detail: &str| {
         CodedError::raised(
@@ -112,20 +121,25 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
         .get("version")
         .and_then(|version| version.as_u64())
         .ok_or_else(|| unreadable("`version` is not a whole number"))?;
-    if version != u64::from(CONFIGURATION_VERSION) {
+    if !(u64::from(upgrade::OLDEST_VERSION)..=u64::from(CONFIGURATION_VERSION)).contains(&version) {
         return Err(CodedError::raised(
             error_code::CONFIGURATION_VERSION_UNSUPPORTED,
             format!(
-                "the configuration is of version {version}; this Octoboard reads only version {}",
+                "the configuration is of version {version}; this Octoboard reads versions {} to {}",
+                upgrade::OLDEST_VERSION,
                 CONFIGURATION_VERSION
             ),
             &[
                 ("version", &version.to_string()),
+                ("oldest", &upgrade::OLDEST_VERSION.to_string()),
                 ("supported", &CONFIGURATION_VERSION.to_string()),
             ],
         ));
     }
-    serde_json::from_value(value.clone()).map_err(|err| unreadable(&err.to_string()))
+    let mut upgraded = object.clone();
+    upgrade::upgrade(&mut upgraded, version as u32);
+    serde_json::from_value(serde_json::Value::Object(upgraded))
+        .map_err(|err| unreadable(&err.to_string()))
 }
 
 /// The document's account references bound to this machine's accounts.
@@ -238,6 +252,25 @@ fn known_agent_tags(
         .map(|(name, tags)| (name.clone(), tags.clone()))
 }
 
+/// The default clone directory `text` stands for on this machine (`~/` expanded), or `None` for
+/// blank text or text that is neither absolute nor starts with `~/`: a document may carry anything,
+/// and an unusable directory is left out rather than refusing the settings.
+fn usable_clone_dir(text: Option<&str>) -> Option<String> {
+    let text = text?.trim();
+    if text.is_empty() {
+        return None;
+    }
+    coordinator::validate::absolute_path(text)
+        .ok()
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
+/// The language tag of a document to apply: one this build offers.
+fn offered_language(tag: Option<&str>) -> Option<String> {
+    tag.filter(|tag| crate::interface_language::is_offered(tag))
+        .map(str::to_string)
+}
+
 /// Reads the document and answers, per project, which directory choices its state allows and the
 /// account references that fall back. Changes nothing.
 ///
@@ -257,22 +290,45 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
     };
     let clone_dir = state.store.default_clone_dir()?;
 
-    let mut probes = Vec::new();
-    for (console, document_console) in document.consoles.iter().enumerate() {
-        for (project, document_project) in document_console.projects.iter().enumerate() {
-            probes.push(Probe {
-                console,
-                project,
-                exported: exported_directory(&document_project.path),
-                derived: derived_directory(&clone_dir, &document_project.path),
-                clone: document_project
-                    .remote_url
-                    .as_deref()
-                    .and_then(|url| clone_directory(&clone_dir, url)),
-            });
+    // The document's own clone directory, where an import could take it and it is another one: the
+    // review shows the targets of whichever the user chooses.
+    let document_clone_dir = document
+        .settings
+        .as_ref()
+        .and_then(|settings| usable_clone_dir(settings.default_clone_dir.as_deref()))
+        .filter(|dir| *dir != clone_dir);
+
+    // `exported` is the same under either directory, so only the first set checks it.
+    let probes_under = |dir: &str, with_exported: bool| {
+        let mut probes = Vec::new();
+        for (console, document_console) in document.consoles.iter().enumerate() {
+            for (project, document_project) in document_console.projects.iter().enumerate() {
+                probes.push(Probe {
+                    console,
+                    project,
+                    exported: exported_directory(&document_project.path).filter(|_| with_exported),
+                    derived: derived_directory(dir, &document_project.path),
+                    clone: document_project
+                        .remote_url
+                        .as_deref()
+                        .and_then(|url| clone_directory(dir, url)),
+                });
+            }
         }
-    }
-    let mut offers = probe_offers(probes, PROBE_DEADLINE, probe_disk).await;
+        probes
+    };
+    // Both sets run at once, so the one deadline bounds the whole inspection.
+    let (mut offers, mut offers_in_document_dir) = tokio::join!(
+        probe_offers(probes_under(&clone_dir, true), PROBE_DEADLINE, probe_disk),
+        async {
+            match &document_clone_dir {
+                Some(dir) => {
+                    Some(probe_offers(probes_under(dir, false), PROBE_DEADLINE, probe_disk).await)
+                }
+                None => None,
+            }
+        }
+    );
 
     let settings = match &document.settings {
         Some(settings) => Some(InspectedSettings {
@@ -286,14 +342,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_delete_unresumable_archives: state
                 .store
                 .auto_delete_unresumable_archives()?,
-            auto_select_account: settings.auto_select_account,
-            current_auto_select_account: state.store.auto_select_account()?,
-            auto_switch_on_usage_limit: settings.auto_switch_on_usage_limit,
-            current_auto_switch_on_usage_limit: state.store.auto_switch_on_usage_limit()?,
             sidebar_order_by_status: settings.sidebar_order_by_status,
             current_sidebar_order_by_status: state.store.sidebar_order_by_status()?,
-            auto_start_quota_windows: settings.auto_start_quota_windows,
-            current_auto_start_quota_windows: state.store.auto_start_quota_windows()?,
             auto_approve_session_requests: settings.auto_approve_session_requests,
             current_auto_approve_session_requests: state.store.auto_approve_session_requests()?,
             auto_approve_resume_requests: settings.auto_approve_resume_requests,
@@ -306,10 +356,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
             git_workflow: settings.git_workflow,
             current_git_workflow: state.store.git_workflow_settings()?,
-            provider_settings: super::exported_provider_settings(&settings.provider_settings),
-            current_provider_settings: exported_in_effect(state.store.provider_settings()?),
-            agent_tags: known_agent_tags(&settings.agent_tags).collect(),
-            current_agent_tags: state.store.agent_tags()?,
+            default_clone_dir: usable_clone_dir(settings.default_clone_dir.as_deref()),
+            current_default_clone_dir: clone_dir,
         }),
         None => None,
     };
@@ -327,6 +375,7 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                 .map(|(project, document_project)| {
                     // A probe that did not come back is absent: nothing is offered.
                     let offers = offers.remove(&(console, project)).unwrap_or_default();
+                    let exported_path = offers.exported_path.clone();
                     InspectedProject {
                         name: document_project.name.clone(),
                         path: document_project.path.clone(),
@@ -336,6 +385,17 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                             .map(remote_url::without_credentials),
                         default: offers.default_choice(),
                         offers,
+                        in_document_clone_dir: offers_in_document_dir.as_mut().map(|all| {
+                            let under = all.remove(&(console, project)).unwrap_or_default();
+                            let offers = DirectoryOffers {
+                                exported_path: exported_path.clone(),
+                                ..under
+                            };
+                            OffersUnderCloneDir {
+                                default: offers.default_choice(),
+                                offers,
+                            }
+                        }),
                         account_fallbacks: rebinder.project(document_project).fallbacks,
                     }
                 })
@@ -419,7 +479,7 @@ fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
 /// Creates a console for each console of the document and associates its projects as `resolutions`
 /// say, through the same association a hand-added project goes through.
 ///
-/// The document's consoles are created only when `apply_consoles`; without it no console or
+/// The document's consoles are created only when `options.consoles`; without it no console or
 /// project is created and `resolutions` are not read.
 ///
 /// What can be refused without side effects is refused before the first console is created: the
@@ -429,31 +489,46 @@ fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
 /// that cannot be applied is reported in the result, and the rest carry on. A console whose
 /// projects all failed is still created.
 ///
-/// The document's accounts are created only when `accounts` (the resolutions for them) is given,
-/// first, so the consoles' and projects' account references bind to them; see [`apply_accounts`].
+/// The document's accounts are created only when `options.accounts` (the resolutions for them) is
+/// given, first, so the consoles' and projects' account references bind to them; see
+/// [`apply_accounts`].
 ///
-/// The document's application settings are applied only when `apply_settings` asks for it, last,
+/// The document's application settings are applied only when `options.settings` asks for it, last,
 /// through the path a settings update takes, since they change how this machine behaves rather
-/// than add something to it.
+/// than add something to it. The one exception is the default clone directory, which is written
+/// before anything is created when the settings are applied and `options.clone_dir` allows it, so
+/// a project cloned by the same import goes where the user's choice puts it; without
+/// `options.clone_dir` this machine's own directory stays and is the one used. Where the settings
+/// then fail to apply, the directory stays written and is reported as `clone_dir_applied`. A
+/// directory the document carries that is not usable here (neither absolute nor starting with
+/// `~/`) is left out. The settings of the Agent accounts section are applied with the accounts
+/// (see [`apply_accounts`]), a document of an earlier version having been upgraded so that they
+/// are there.
 ///
 /// Projects are placed one at a time, so a clone, which may run for minutes, holds one blocking
 /// thread for its whole length and no document, however large, holds more.
 ///
 /// With an `import_id`, every item is announced as waiting once nothing can be refused any more,
 /// in the order they are handled, and then reported as each is (`configuration_import_progress`;
-/// see [`ImportItem`]). A project with no resolution is left out and never announced. A console is
-/// `done` as soon as it is created, its projects reporting for themselves after it. What can fail
-/// of the accounts runs before the announcements; the one read after them, of the accounts the
-/// consoles bind to, can still fail, which ends the import with an error reply.
+/// see [`ImportItem`]): the clone directory, the accounts and the Agent accounts settings, the
+/// consoles and their projects, the application settings. A project with no resolution is left
+/// out and never announced. A console is `done` as soon as it is created, its projects reporting
+/// for themselves after it. What can fail of the accounts runs before the announcements; the
+/// reads after them, of this machine's clone directory and of the accounts the consoles bind to,
+/// can still fail, which ends the import with an error reply.
 pub async fn apply_reporting(
     state: &Arc<AppState>,
     document: &serde_json::Value,
     resolutions: Vec<ProjectResolution>,
-    apply_settings: bool,
-    accounts: Option<Vec<AccountResolution>>,
-    apply_consoles: bool,
+    options: ApplyOptions,
     import_id: Option<String>,
 ) -> Result<Imported> {
+    let ApplyOptions {
+        settings: apply_settings,
+        accounts,
+        consoles: apply_consoles,
+        clone_dir: apply_clone_dir,
+    } = options;
     let progress = Progress::new(state, import_id);
     let mut document = parse(document)?;
     let mut chosen = if apply_consoles {
@@ -485,7 +560,6 @@ pub async fn apply_reporting(
             ))
         }
     };
-    let clone_dir = state.store.default_clone_dir()?;
 
     // What `create_console` would refuse of any console is refused before the first account is
     // created; the account references are not bound yet, and nothing in the check depends on them.
@@ -497,13 +571,27 @@ pub async fn apply_reporting(
     }
 
     let accounts_ready = match account_step {
-        Some((document_accounts, account_choices)) => {
-            let prepared = prepare_accounts(state, document_accounts)?;
-            announce_accounts(document_accounts, &prepared, &account_choices, &progress);
-            Some((document_accounts, account_choices, prepared))
-        }
+        Some((document_accounts, account_choices)) => Some((
+            document_accounts,
+            account_choices,
+            prepare_accounts(state, document_accounts)?,
+        )),
         None => None,
     };
+    // The directory this import writes: the document's, when it is usable here and the user takes
+    // it.
+    let clone_dir_choice = document
+        .settings
+        .as_ref()
+        .filter(|_| apply_settings)
+        .and_then(|settings| usable_clone_dir(settings.default_clone_dir.as_deref()))
+        .filter(|_| apply_clone_dir);
+    if clone_dir_choice.is_some() {
+        progress.waiting(ImportItem::CloneDir);
+    }
+    if let Some((document_accounts, account_choices, prepared)) = &accounts_ready {
+        announce_accounts(document_accounts, prepared, account_choices, &progress);
+    }
     for (console_index, document_console) in document.consoles.iter().enumerate() {
         progress.waiting(ImportItem::Console {
             console: console_index,
@@ -521,19 +609,39 @@ pub async fn apply_reporting(
         progress.waiting(ImportItem::Settings);
     }
 
-    let imported_accounts = match accounts_ready {
-        Some((document_accounts, account_choices, prepared)) => Some(
-            apply_accounts(
-                state,
-                document_accounts,
-                prepared,
-                account_choices,
-                &progress,
-            )
-            .await,
-        ),
-        None => None,
-    };
+    // After everything that can be refused is, and before any account or project is created: a
+    // clone made by this import goes into the directory in effect once the user's choice is made.
+    // A failure is reported with the settings, which are then left unapplied.
+    let (mut clone_dir_applied, mut clone_dir_error) = (None, None);
+    if let Some(dir) = clone_dir_choice {
+        progress.report(ImportItem::CloneDir, ImportItemState::Creating);
+        let changes = SettingsChanges {
+            default_clone_dir: Some(dir.clone()),
+            ..Default::default()
+        };
+        match coordinator::settings::update_settings(state, changes) {
+            Ok(()) => {
+                clone_dir_applied = Some(dir);
+                progress.report(ImportItem::CloneDir, ImportItemState::Done);
+            }
+            Err(err) => {
+                let failure = ImportFailure::of(&err);
+                progress.failed(ImportItem::CloneDir, &failure);
+                clone_dir_error = Some(failure);
+            }
+        }
+    }
+    let clone_dir = state.store.default_clone_dir()?;
+
+    let imported_accounts = accounts_ready.map(|(document_accounts, account_choices, prepared)| {
+        apply_accounts(
+            state,
+            document_accounts,
+            prepared,
+            account_choices,
+            &progress,
+        )
+    });
     // After the accounts, so a reference binds to one the import created.
     let rebinder = Rebinder {
         accounts: state.store.list_accounts()?,
@@ -628,9 +736,17 @@ pub async fn apply_reporting(
         });
     }
 
-    let (mut settings_applied, mut settings_error) = (None, None);
-    if let Some(settings) = document.settings.filter(|_| apply_settings) {
+    let (mut settings_applied, mut settings_error) = (None, clone_dir_error);
+    if let Some(failure) = &settings_error {
+        // The settings are then left unapplied, which the item says as the result does.
+        progress.failed(ImportItem::Settings, failure);
+    }
+    if let Some(settings) = document
+        .settings
+        .filter(|_| apply_settings && settings_error.is_none())
+    {
         progress.report(ImportItem::Settings, ImportItemState::Creating);
+        let interface_language = offered_language(settings.interface_language.as_deref());
         let changes = SettingsChanges {
             auto_close_idle_shell_terminals: Some(settings.auto_close_idle_shell_terminals),
             auto_pull_repositories: Some(settings.auto_pull_repositories),
@@ -640,22 +756,22 @@ pub async fn apply_reporting(
             auto_approve_account_switches: Some(settings.auto_approve_account_switches),
             auto_approve_handoffs: Some(settings.auto_approve_handoffs),
             ask_questions_as_choices: Some(settings.ask_questions_as_choices),
-            // Reported by a client, not carried by a document.
-            interface_language: None,
-            auto_select_account: Some(settings.auto_select_account),
-            auto_switch_on_usage_limit: Some(settings.auto_switch_on_usage_limit),
+            interface_language: interface_language.clone(),
             sidebar_order_by_status: Some(settings.sidebar_order_by_status),
-            auto_start_quota_windows: Some(settings.auto_start_quota_windows),
+            // Written above, before the projects.
             default_clone_dir: None,
             git_workflow: settings.git_workflow.into(),
-            // A setting this build does not carry is skipped, so a document from a build that
-            // knows more providers still applies the rest of its settings.
-            provider_settings: super::exported_provider_settings(&settings.provider_settings),
-            agent_tags: known_agent_tags(&settings.agent_tags).collect(),
+            ..Default::default()
         };
         match coordinator::settings::update_settings(state, changes) {
+            // The echo says what was applied, so the directory only where it was written above and
+            // the language only where this build offers it.
             Ok(()) => {
-                settings_applied = Some(settings);
+                settings_applied = Some(DocumentSettings {
+                    default_clone_dir: clone_dir_applied.clone(),
+                    interface_language,
+                    ..settings
+                });
                 progress.report(ImportItem::Settings, ImportItemState::Done);
             }
             Err(err) => {
@@ -668,6 +784,7 @@ pub async fn apply_reporting(
     Ok(Imported {
         settings_applied,
         settings_error,
+        clone_dir_applied,
         accounts: imported_accounts,
         consoles: imported,
     })

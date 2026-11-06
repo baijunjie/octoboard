@@ -229,7 +229,10 @@ the Dock, and the menu bar icon's menu keeps following the sessions (see `docs/p
 as the appearance and language choices (see "Where the choice is stored" in `docs/product/appearance.md`): the daemon
 neither stores it nor carries it, and it is not among the files under `~/.octoboard` (see "Files Octoboard owns"
 below). So it does not travel between a desktop window and a browser tab, or between two machines reaching the same
-daemon, and a client whose storage has been cleared is back to off. Each launch starts from off until the window's UI
+daemon, and a client whose storage has been cleared is back to off. A configuration export that includes the
+application settings carries the exporting application's choice, and an import asked to apply them sets it on the
+application that runs the import; a browser, which has no such choice, neither writes nor applies it (see "The
+settings a client holds" in `docs/product/settings-in-a-configuration.md`). Each launch starts from off until the window's UI
 hands the choice over (see "Starting up" above).
 
 **Bringing a window closed into the background back.** Any of these brings the window back where it was, at the size

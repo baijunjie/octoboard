@@ -8,30 +8,27 @@ import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
-import type { ConfigurationFileCapability } from "../platform";
+import type { ConfigurationFileCapability, PlatformAdapter } from "../platform";
+import { ThemeProvider } from "../preferences/theme";
 import type { DocumentSettings, Event, ClientRequestBody } from "../protocol";
 import type { Daemon, State } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 
-/** A document's settings with each switch off and no Claude compatibility choice, except what `carried` sets. */
+/** A document's settings with each switch off and no default clone directory, except what `carried` sets. */
 export function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
   return {
     auto_pull_repositories: false,
     auto_close_idle_shell_terminals: false,
     auto_delete_unresumable_archives: false,
-    auto_select_account: false,
-    auto_switch_on_usage_limit: false,
     sidebar_order_by_status: false,
-    auto_start_quota_windows: false,
     auto_approve_session_requests: false,
     auto_approve_resume_requests: false,
     auto_approve_account_switches: false,
     auto_approve_handoffs: false,
     ask_questions_as_choices: false,
     git_workflow: DEFAULT_GIT_WORKFLOW,
-    provider_settings: {},
-    agent_tags: {},
+    default_clone_dir: null,
     ...carried,
   };
 }
@@ -47,23 +44,28 @@ export interface Mounted {
 }
 
 /** Renders `dialog(onClose)` over a daemon answering each request with `reply`, and a platform
- * whose configuration-file capability is `configurationFile`; `daemonMembers` replace the daemon's other members.
- * Taken down when the test finishes. */
+ * whose configuration-file capability is `configurationFile` and which has what `capabilities` adds; `daemonMembers`
+ * replace the daemon's other members. The dialogs read the appearance, so they are under the theme provider. Taken
+ * down when the test finishes. */
 export function mountDialog(
   dialog: (onClose: () => void) => React.ReactElement,
   reply: (body: ClientRequestBody) => Promise<Event>,
   configurationFile: ConfigurationFileCapability,
   state: Partial<State> = {},
+  capabilities: Pick<PlatformAdapter, "backgroundRun"> = {},
   daemonMembers: Partial<Omit<Daemon, "request">> = {},
 ): Mounted {
   const closed = vi.fn();
   const request = vi.fn(reply);
   const daemon = testDaemon({ state, request, showNotice: vi.fn(), ...daemonMembers });
+  // The theme provider asks the window for the system's colour scheme.
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   // Registered before the mount, so it runs after the unmount.
   onTestFinished(() => {
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+    vi.unstubAllGlobals();
   });
-  mountHost(<>{dialog(closed)}<ErrorAlerts daemon={daemon} /></>, { daemon, platform: { kind: "browser", configurationFile } });
+  mountHost(<ThemeProvider>{dialog(closed)}<ErrorAlerts daemon={daemon} /></ThemeProvider>, { daemon, platform: { kind: "browser", configurationFile, ...capabilities } });
   return {
     sent: () => request.mock.calls.map(([body]) => body),
     notices: () => vi.mocked(daemon.showNotice).mock.calls.map(([message]) => message),
@@ -85,7 +87,7 @@ export function settingLinesOf(list: Element): Record<string, { badge: string; n
   return Object.fromEntries(
     Array.from(list.querySelectorAll(":scope > li")).map((li) => {
       const [head, ...rest] = Array.from(li.children);
-      const note = rest.find((child) => child.tagName === "SPAN");
+      const note = rest.find((child) => child.tagName === "DIV");
       const values = rest.find((child) => child.tagName === "UL");
       return [
         head.firstElementChild!.textContent,
@@ -97,6 +99,19 @@ export function settingLinesOf(list: Element): Record<string, { badge: string; n
       ];
     }),
   );
+}
+
+/** The titled cards of the settings in `root`, each with the names of its lines in the order they are drawn. */
+export function settingGroupsOf(root: Element): { title: string; lines: string[] }[] {
+  return Array.from(root.querySelectorAll("section[aria-labelledby]")).map((card) => ({
+    title: card.querySelector(":scope > h3")!.textContent!,
+    lines: Object.keys(settingLinesOf(card.querySelector(":scope > ul")!)),
+  }));
+}
+
+/** The lines of every settings card in `root`, by setting name. */
+export function settingLinesAcrossGroups(root: Element): ReturnType<typeof settingLinesOf> {
+  return Object.assign({}, ...Array.from(root.querySelectorAll("section[aria-labelledby] > ul")).map(settingLinesOf));
 }
 
 /** Selects the tab with this label, whether or not it is marked as needing attention. */

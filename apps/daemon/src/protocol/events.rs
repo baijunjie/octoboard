@@ -376,6 +376,11 @@ pub enum Event {
         id: Option<String>,
         settings_applied: Option<DocumentSettings>,
         settings_error: Option<ImportFailure>,
+        /// The default clone directory written, which stays written when the settings as a whole
+        /// could not be applied (`settings_error`).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        clone_dir_applied: Option<String>,
         accounts: Option<ImportedAccounts>,
         consoles: Vec<ImportedConsole>,
     },

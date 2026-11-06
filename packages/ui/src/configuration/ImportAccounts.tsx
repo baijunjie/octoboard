@@ -14,9 +14,10 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, InspectedAccount, InspectedAccounts } from "../protocol";
 import { useProviders } from "../store";
 import { ProviderName } from "../components/text/ProviderName";
+import { AgentSettingsCard, type CurrentAgentSettings } from "./AgentSettingsCard";
 import { useFailureNode } from "./failureText";
 import { accountChoicesFor, directoryProblem, hasNameProblem, withAccountRow, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
-import { AgentList, Card, CardHeading, CardRows, DirectoryChoiceField, EmptyLine, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
+import { AgentList, Card, CardHeading, CardRows, DirectoryChoiceField, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
 
 const CHOICE_LABEL: Record<AccountRowState["choice"], PlainMessageKey> = {
   create: "configuration.import.accounts.choice.create",
@@ -64,7 +65,6 @@ function AccountRow({
                 </MarkLineBox>
               )}
             </span>
-            {account.share_default_config && <StatusBadge color="accent" variant="soft">{t("configuration.import.accounts.badge.sharing")}</StatusBadge>}
             {account.disabled && <StatusBadge variant="soft">{t("configuration.import.accounts.badge.disabled")}</StatusBadge>}
           </span>
           {settled && (
@@ -137,13 +137,27 @@ function UnusableMark({ account }: { account: InspectedAccount }): React.ReactEl
   );
 }
 
+/** This machine's values of the Agent accounts settings the document carries, in the shape of the document's own. */
+function currentAgentSettings(settings: NonNullable<InspectedAccounts["agent_settings"]>): CurrentAgentSettings {
+  return {
+    auto_select_account: settings.current_auto_select_account,
+    auto_switch_on_usage_limit: settings.current_auto_switch_on_usage_limit,
+    auto_start_quota_windows: settings.current_auto_start_quota_windows,
+    agent_tags: settings.current_agent_tags,
+    provider_settings: settings.current_provider_settings,
+  };
+}
+
 /**
  * The accounts of the document, the panel of the review's Accounts tab, which is there only while the accounts are
- * being imported: what would be added to the added agents and which default accounts would be named, a card for every
- * agent with a row for each of its accounts (its name, with a warning mark after it where it cannot be created as it
- * is in the file, what it shares or has disabled, its status here, the directory the file gives it, and where the
- * status allows a choice, a choice for it), and a note that the accounts are not logged in. An account that exists
- * already is used as it is, never changed, and has no choice or directory. The state of every choice is the caller's.
+ * being imported: what would be added to the added agents, which default accounts would be named and which would be
+ * turned off or on, the card of the Agent accounts settings the file carries (what applying each would change), a card
+ * for every agent the file gives accounts with a row for each of them (its name, with a warning mark after it where it
+ * cannot be created as it is in the file, whether it is disabled, its status here, the directory the file gives it,
+ * and where the status allows a choice, a choice for it), and, where there is such a card, a note that the accounts
+ * are not logged in. An account that
+ * exists already is used as it is, never changed, and has no choice or directory. Whether an account shares the
+ * default configuration is not shown, since an import never turns that on. The state of every choice is the caller's.
  */
 export function ImportAccounts({
   accounts,
@@ -159,6 +173,7 @@ export function ImportAccounts({
 }): React.ReactElement {
   const t = useT();
   const named = accounts.agents.filter((agent) => agent.default_name_applies && agent.default_name);
+  const switched = accounts.agents.filter((agent) => agent.default_disabled_applies);
   return (
     <>
       {accounts.agents_to_add.length > 0 && (
@@ -172,17 +187,31 @@ export function ImportAccounts({
           />
         </p>
       ))}
-      {accounts.agents.map((agent, a) => (
-        <AgentCard
-          key={agent.agent}
-          agent={agent.agent}
-          accounts={agent.accounts}
-          review={review[a]}
-          shown={shown}
-          onRow={(i, row) => onReview(withAccountRow(review, a, i, row))}
-        />
+      {switched.map((agent) => (
+        <p key={agent.agent} className="text-sm">
+          <Message
+            id={agent.default_disabled ? "configuration.import.accounts.defaultDisabled" : "configuration.import.accounts.defaultEnabled"}
+            params={{ agent: <ProviderName agent={agent.agent} /> }}
+          />
+        </p>
       ))}
-      <ToneLine>{t("configuration.import.accounts.note")}</ToneLine>
+      {accounts.agent_settings && (
+        <AgentSettingsCard settings={accounts.agent_settings} current={currentAgentSettings(accounts.agent_settings)} heading={t("configuration.import.agentSettings.heading")} />
+      )}
+      {accounts.agents.map((agent, a) =>
+        // An agent with no account of its own has no card: its default account's name and switch are said above.
+        agent.accounts.length === 0 ? null : (
+          <AgentCard
+            key={agent.agent}
+            agent={agent.agent}
+            accounts={agent.accounts}
+            review={review[a]}
+            shown={shown}
+            onRow={(i, row) => onReview(withAccountRow(review, a, i, row))}
+          />
+        ),
+      )}
+      {accounts.agents.some((agent) => agent.accounts.length > 0) && <ToneLine>{t("configuration.import.accounts.note")}</ToneLine>}
     </>
   );
 }
@@ -204,22 +233,18 @@ function AgentCard({
   const providers = useProviders();
   return (
     <Card header={(headingId) => <CardHeading id={headingId}>{providerLabel(t, providers, agent)}</CardHeading>}>
-      {accounts.length === 0 ? (
-        <EmptyLine>{t("configuration.import.accounts.none")}</EmptyLine>
-      ) : (
-        <CardRows>
-          {accounts.map((account, i) => (
-            <AccountRow
-              key={i}
-              agent={agent}
-              account={account}
-              row={review[i]}
-              problem={shown(directoryProblem(review[i]))}
-              onChange={(row) => onRow(i, row)}
-            />
-          ))}
-        </CardRows>
-      )}
+      <CardRows>
+        {accounts.map((account, i) => (
+          <AccountRow
+            key={i}
+            agent={agent}
+            account={account}
+            row={review[i]}
+            problem={shown(directoryProblem(review[i]))}
+            onChange={(row) => onRow(i, row)}
+          />
+        ))}
+      </CardRows>
     </Card>
   );
 }

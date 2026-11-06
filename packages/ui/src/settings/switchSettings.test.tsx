@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LanguageProvider } from "../i18n/react";
 import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
-import { BOOLEAN_SETTINGS } from "../configuration/booleanSettings";
+import { AGENT_SWITCHES, APPLICATION_SWITCHES } from "../configuration/booleanSettings";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { DEFAULT_SETTINGS } from "../store";
 import { mountHost } from "../test/mountHost";
@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 it("lists every switch the settings page covers once", () => {
-  expect(BOOLEAN_SETTINGS.map(({ field }) => field).sort()).toEqual(switches.map(({ key }) => key).sort());
+  expect([...APPLICATION_SWITCHES, ...AGENT_SWITCHES].map(({ field }) => field).sort()).toEqual(switches.map(({ key }) => key).sort());
 });
 
 // What each switch says while it is on; every one says the same while it is off.

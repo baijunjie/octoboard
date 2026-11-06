@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type DocumentSettings, type FileContent, type Launch, type GitStatus, type Host, type InspectedSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type InspectedAgentSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -367,8 +367,8 @@ export function effectiveProviderSettings(choices: Settings["provider_settings"]
 /** What a configuration export carries of the user's explicit choices (`choices`, as `effectiveProviderSettings` takes
  * them): only the settings their descriptors export, only those the user chose for. A provider with none has no entry.
  * `providers` are the ones the machine serves, the registered ones by default. */
-export function exportedProviderSettings(choices: Settings["provider_settings"], providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): DocumentSettings["provider_settings"] {
-  const exported: DocumentSettings["provider_settings"] = {};
+export function exportedProviderSettings(choices: Settings["provider_settings"], providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): DocumentAgentSettings["provider_settings"] {
+  const exported: DocumentAgentSettings["provider_settings"] = {};
   for (const { id, settings } of providers) {
     const chosen = settings.flatMap(({ id: setting, exported: carried }) => {
       const value = choices[id]?.[setting];
@@ -380,10 +380,10 @@ export function exportedProviderSettings(choices: Settings["provider_settings"],
 }
 
 /** The values in effect (`effectiveProviderSettings`) of the exported settings, as an import's review reports them for
- * this machine in `InspectedSettings.current_provider_settings`. A provider that exports none has no entry. `providers`
+ * this machine in `InspectedAgentSettings.current_provider_settings`. A provider that exports none has no entry. `providers`
  * are the ones the machine serves, the registered ones by default. */
-export function currentExportedProviderSettings(effective: Settings["provider_settings"], providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): InspectedSettings["current_provider_settings"] {
-  const current: InspectedSettings["current_provider_settings"] = {};
+export function currentExportedProviderSettings(effective: Settings["provider_settings"], providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): InspectedAgentSettings["current_provider_settings"] {
+  const current: InspectedAgentSettings["current_provider_settings"] = {};
   for (const { id, settings } of providers) {
     const carried = settings.filter(({ exported }) => exported).map(({ id: setting }) => [setting, effective[id]?.[setting] ?? null] as const);
     if (carried.length > 0) current[id] = Object.fromEntries(carried);

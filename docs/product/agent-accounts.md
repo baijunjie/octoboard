@@ -350,8 +350,9 @@ Turning an account back on reads its quota at once, and while **Start usage wind
 starts any window it shows has not begun counting.
 
 Whether an account is turned off is kept by the daemon on this machine. A configuration export that includes the
-accounts carries it for the accounts the user owns, not for the default account, and an import gives it to the accounts
-it creates, never to one that already exists (see "The accounts" and "Importing accounts" in
+accounts carries it for the accounts the user owns and for each listed agent's default account. An import gives it to
+the accounts it creates, never to an account the user owns that already exists, and turns the default account off or
+back on as the file has it (see "The accounts" and "Importing accounts" in
 `docs/product/configuration-export-and-import.md`). An agent can read
 it — `get_settings` marks each account that is turned off — but no tool turns an account off or on (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).

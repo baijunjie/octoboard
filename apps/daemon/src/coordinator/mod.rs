@@ -460,15 +460,19 @@ async fn handle_inner(
             apply_accounts,
             account_resolutions,
             apply_consoles,
+            apply_clone_dir,
             import_id,
         } => {
             let imported = import::apply_reporting(
                 state,
                 &document,
                 resolutions,
-                apply_settings,
-                apply_accounts.then_some(account_resolutions),
-                apply_consoles,
+                import::ApplyOptions {
+                    settings: apply_settings,
+                    accounts: apply_accounts.then_some(account_resolutions),
+                    consoles: apply_consoles,
+                    clone_dir: apply_clone_dir,
+                },
                 import_id,
             )
             .await?;
@@ -476,6 +480,7 @@ async fn handle_inner(
                 id: request_id,
                 settings_applied: imported.settings_applied,
                 settings_error: imported.settings_error,
+                clone_dir_applied: imported.clone_dir_applied,
                 accounts: imported.accounts,
                 consoles: imported.consoles,
             }))

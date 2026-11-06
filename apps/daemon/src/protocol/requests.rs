@@ -352,6 +352,13 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         import_id: Option<String>,
+        /// Whether, applying the settings, to take the document's default clone directory; absent
+        /// means true. Without it this machine's own stays, and the clones this import makes go
+        /// there. It is written before the projects are placed, whatever the rest of the settings
+        /// come to.
+        #[serde(default = "default_true")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        apply_clone_dir: bool,
     },
     OpenSession {
         console_id: String,

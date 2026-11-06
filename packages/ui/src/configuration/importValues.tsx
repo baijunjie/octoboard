@@ -2,13 +2,12 @@ import React from "react";
 
 import { idWords, isKnownAgent, providerLabel, servedProvider, settingMessageKey } from "../agents/providers";
 import { Tag } from "../components/form/Tag";
-import { isolate } from "../i18n/isolate";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { MessageKey, PlainMessageKey, Translate } from "../i18n/catalog";
 import { Message } from "../i18n/react";
-import type { Agent, DocumentSettings, GitWorkflowSettings, InspectedSettings, ProviderInfo, SettingDescriptor } from "../protocol";
+import type { Agent, DocumentAgentSettings, GitWorkflowSettings, InspectedAgentSettings, ProviderInfo, SettingDescriptor } from "../protocol";
 import type { Binding } from "../shortcuts/binding";
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
 import type { Overrides } from "../shortcuts/store";
@@ -51,11 +50,14 @@ export function gitWorkflowValues(t: Translate, wanted: GitWorkflowSettings, cur
 }
 
 /** The values in effect on this machine of the exported provider settings, which a choice left unset is `null` in. */
-export type CurrentProviderSettings = InspectedSettings["current_provider_settings"];
+export type CurrentProviderSettings = InspectedAgentSettings["current_provider_settings"];
 
 /** One line of the import cards for a provider setting: its name, and the agents' values for it. */
 export interface ProviderSettingLine {
-  label: string;
+  /** Identifies the line among its siblings. */
+  key: string;
+  /** The setting's name; a node where an agent's and a setting's names stand in a sentence, so each is isolated. */
+  label: React.ReactNode;
   values: SettingValue[];
 }
 
@@ -80,6 +82,17 @@ function settingValueText(t: Translate, agent: string, setting: string, value: b
   return settingWord(t, agent, setting, `choice.${value}`) ?? idWords(value);
 }
 
+/** The name of a setting no presentation has a heading for: the agent's label and the setting's id, each in a `bdi` so
+ * the sentence around them does not reorder them. */
+function unnamedSettingLabel(t: Translate, providers: readonly ProviderInfo[], agent: Agent, setting: string): React.ReactNode {
+  return (
+    <Message
+      id="configuration.import.settingUnnamed"
+      params={{ agent: <bdi dir="auto">{providerLabel(t, providers, agent)}</bdi>, setting: <bdi dir="auto">{idWords(setting)}</bdi> }}
+    />
+  );
+}
+
 /** The provider settings a document carries, one line for each setting, listing the agents' values under it (the
  * agents that declare a setting by the same id share its line, named by the first heading a provider has for it, as
  * Claude compatibility does). A setting counts when the providers this daemon serves declare it exported and the value
@@ -90,7 +103,7 @@ function settingValueText(t: Translate, agent: string, setting: string, value: b
 export function providerSettingLines(
   t: Translate,
   providers: readonly ProviderInfo[],
-  wanted: DocumentSettings["provider_settings"],
+  wanted: DocumentAgentSettings["provider_settings"],
   current?: CurrentProviderSettings,
 ): ProviderSettingLine[] {
   const lines = new Map<string, ProviderSettingLine>();
@@ -107,7 +120,7 @@ export function providerSettingLines(
       if (!descriptor.exported || !isSettingValue(descriptor, value)) continue;
       const heading = headings.get(descriptor.id);
       const key = heading === undefined ? `${agent}\u0000${descriptor.id}` : descriptor.id;
-      const line = lines.get(key) ?? { label: heading ?? t("configuration.import.settingUnnamed", { agent: isolate(providerLabel(t, providers, agent)), setting: isolate(idWords(descriptor.id)) }), values: [] };
+      const line = lines.get(key) ?? { key, label: heading ?? unnamedSettingLabel(t, providers, agent, descriptor.id), values: [] };
       lines.set(key, line);
       const values = line.values;
       const now = current?.[agent]?.[descriptor.id];

@@ -39,6 +39,21 @@ fn a_document_is_refused_by_what_it_is_before_it_is_read_any_further() {
 }
 
 #[test]
+fn an_unsupported_version_is_refused_with_the_range_this_daemon_reads() {
+    let value = json!({ "format": CONFIGURATION_FORMAT, "version": CONFIGURATION_VERSION + 1 });
+
+    let err = parse(&value).expect_err("refused");
+
+    let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+    assert_eq!(
+        coded.params["version"],
+        (CONFIGURATION_VERSION + 1).to_string()
+    );
+    assert_eq!(coded.params["oldest"], upgrade::OLDEST_VERSION.to_string());
+    assert_eq!(coded.params["supported"], CONFIGURATION_VERSION.to_string());
+}
+
+#[test]
 fn a_document_without_exported_by_is_read_with_none() {
     let mut value = document(vec![console("Hub", Vec::new())]);
     value.as_object_mut().unwrap().remove("exported_by");

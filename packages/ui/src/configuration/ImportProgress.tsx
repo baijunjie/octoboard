@@ -52,17 +52,20 @@ function ItemRow({ name, item }: { name: string; item: ItemProgress }): React.Re
 /**
  * A running import, as the daemon's progress events say it: a progress bar of how many items have settled, then the
  * items it announced, grouped as the review is (each console with its projects, each agent with its accounts, the
- * application settings), each with its state. A project the import leaves out is not announced and so not listed. The
- * bar is named for the import and its value is read as the count, which is not announced on every step: a status
- * speaks the import when it starts and again when every item has settled. Until the first event there is no count, and
- * the bar is indeterminate, described by the line saying what it waits for.
+ * Agent accounts settings, the default clone directory, the application settings), each with its state. A project the
+ * import leaves out is not announced and so not listed. The bar is named for the import and its value is read as the
+ * count, which is not announced on every step: a status speaks the import when it starts and again when every item has
+ * settled. Until the first event there is no count, and the bar is indeterminate, described by the line saying what it
+ * waits for.
  */
 export function ImportProgressView({ inspection, progress }: { inspection: Inspection; progress: ImportProgress }): React.ReactElement {
   const t = useT();
   const providers = useProviders();
   const id = useId();
   const { settled, total } = progressCount(progress);
-  const settings = progress.get("settings");
+  const agentSettings = progress.get(itemKey({ kind: "agent_settings" }));
+  const cloneDir = progress.get(itemKey({ kind: "clone_dir" }));
+  const settings = progress.get(itemKey({ kind: "settings" }));
   const counting = total > 0;
   const count = t("configuration.import.progress.summary", { count: settled, total });
   const label = t("configuration.import.progress.label");
@@ -104,6 +107,8 @@ export function ImportProgressView({ inspection, progress }: { inspection: Inspe
           </ResultCard>
         );
       })}
+      {agentSettings && <ResultCard name={t("configuration.import.agentSettings.heading")} status={<ItemState item={agentSettings} />} failure={agentSettings.state === "failed" ? agentSettings.error : undefined} />}
+      {cloneDir && <ResultCard name={t("settings.cloneDir.label")} status={<ItemState item={cloneDir} />} failure={cloneDir.state === "failed" ? cloneDir.error : undefined} />}
       {settings && <ResultCard name={t("configuration.import.tab.settings")} status={<ItemState item={settings} />} failure={settings.state === "failed" ? settings.error : undefined} />}
     </>
   );

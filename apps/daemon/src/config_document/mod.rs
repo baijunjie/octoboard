@@ -1,8 +1,10 @@
 //! The configuration document that carries the stored configuration between devices: building it
-//! for `export_configuration` (`export.rs`) and reading one back (`import/`).
+//! for `export_configuration` (`export.rs`) and reading one back (`import/`, after `upgrade.rs` has
+//! brought an older version up to the current one).
 
 pub(crate) mod export;
 pub(crate) mod import;
+pub(crate) mod upgrade;
 
 use std::collections::BTreeMap;
 

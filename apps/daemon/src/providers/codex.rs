@@ -120,7 +120,9 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
                     },
                 ],
             },
-            exported: false,
+            // Only a launch flag, like Claude Code's `approval_mode`: it travels, and an agent
+            // never reads or changes it.
+            exported: true,
             shown_to_agents: false,
             compatibility_with: None,
         },

@@ -5,6 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { registerDialogLauncher } from "../dialogs/dialogLauncher";
 import { consoleOf } from "../fixtures/builders";
 import type { PlatformAdapter } from "../platform";
+import { ThemeProvider } from "../preferences/theme";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { ConfigurationSection } from "./ConfigurationSection";
@@ -17,7 +18,13 @@ vi.hoisted(() => localStorage.setItem("octoboard.sidebarConsole", "c-docs"));
 const WITH_CONFIGURATION_FILE: PlatformAdapter = { kind: "browser", configurationFile: { save: vi.fn(), open: vi.fn() } };
 
 function mount(consoles: ReturnType<typeof consoleOf>[], platform: PlatformAdapter = WITH_CONFIGURATION_FILE): HTMLElement {
-  return mountHost(<ConfigurationSection />, { daemon: testDaemon({ state: { consoles: new Map(consoles.map((c) => [c.id, c])) } }), platform });
+  // The dialogs it opens read the appearance, so they are under the theme provider, which asks the window for the
+  // system's colour scheme.
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+  });
+  return mountHost(<ThemeProvider><ConfigurationSection /></ThemeProvider>, { daemon: testDaemon({ state: { consoles: new Map(consoles.map((c) => [c.id, c])) } }), platform });
 }
 
 const press = (label: string) =>

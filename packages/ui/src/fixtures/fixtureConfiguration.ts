@@ -68,17 +68,23 @@ function documentDirectory(directory: string, home: string | null): string {
   return directory;
 }
 
-/** The accounts region: the added agents and, for each agent with an account of its own or a named default account, the
- * default account's name and place in the display order (the accounts before it) and the accounts the user owns in that
- * order (the saved order, then those added since). Never an id, a credential, the default account's directory or its
- * disabled flag. */
-function exportedAccounts(state: State): DocumentAccounts {
+/** The accounts region: the added agents and, for each added agent and each other agent with an account of its own, a
+ * named default account or a turned-off one, the default account's name, disabled flag and place in the display order
+ * (the accounts before it) and the accounts the user owns in that order (the saved order, then those added since); then
+ * the settings of the Agent accounts section with the user's explicit provider setting `choices` of those that are
+ * exported. Never an id, a credential, the default account's directory or whether an account shares the default
+ * configuration. */
+function exportedAccounts(state: State, choices: Settings["provider_settings"]): DocumentAccounts {
   const { settings } = state;
   const agents: DocumentAccounts["agents"] = [];
   for (const agent of ["claude", "codex", "grok"] as const) {
     const owned = settings.accounts.filter((account) => account.agent === agent);
     const name = settings.default_account_names?.[agent];
-    if (owned.length === 0 && !name) continue;
+    const defaultDisabled = settings.disabled_default_accounts.includes(agent);
+    // An added agent is listed with nothing else to carry too, so an import can turn on a default account this machine
+    // disabled; a list not yet decided (`null`) counts every agent as added.
+    const added = settings.added_agents === null || settings.added_agents.includes(agent);
+    if (!added && owned.length === 0 && !name && !defaultDisabled) continue;
     const byId = new Map<string | null, Account | null>([[null, null], ...owned.map((account): [string, Account] => [account.id, account])]);
     const display: (Account | null)[] = [];
     for (const id of [...(settings.account_order?.[agent] ?? []), null, ...owned.map((account) => account.id)]) {
@@ -88,15 +94,25 @@ function exportedAccounts(state: State): DocumentAccounts {
     }
     agents.push({
       agent,
-      default_account: { name: name ?? null, position: display.indexOf(null) },
+      default_account: { name: name ?? null, position: display.indexOf(null), disabled: defaultDisabled },
       accounts: display.flatMap((account) =>
         account
-          ? [{ name: account.name, directory: documentDirectory(account.config_dir, state.homeDir), share_default_config: account.share_default_config, disabled: account.disabled }]
+          ? [{ name: account.name, directory: documentDirectory(account.config_dir, state.homeDir), disabled: account.disabled }]
           : [],
       ),
     });
   }
-  return { ...(settings.added_agents !== null && { added_agents: settings.added_agents }), agents };
+  return {
+    ...(settings.added_agents !== null && { added_agents: settings.added_agents }),
+    agents,
+    agent_settings: {
+      auto_select_account: settings.auto_select_account,
+      auto_switch_on_usage_limit: settings.auto_switch_on_usage_limit,
+      auto_start_quota_windows: settings.auto_start_quota_windows,
+      agent_tags: { ...settings.agent_tags },
+      provider_settings: exportedProviderSettings(choices, state.providers),
+    },
+  };
 }
 
 /** One per-agent group with `map` applied to each agent's value. */
@@ -104,14 +120,16 @@ function mappedAgents<T, U>(group: PerAgent<T>, map: (value: T, agent: Agent) =>
   return Object.fromEntries((["claude", "codex", "grok"] as const).map((agent) => [agent, map(group[agent], agent)])) as PerAgent<U>;
 }
 
-/** The document `export_configuration` answers: the regions the request chooses (see `exportedRegions`): the console named
- * or every console or none, the application settings, the accounts; consoles by creation time and a console's projects by
- * name, with no id and no console working directory in it, and an account carried by its name alone. Without
- * `include_paths` a project's path is only its last segment and a project's remote is kept only where it can be cloned
- * from; an account directory is written whatever it says. Without the accounts region no account is named: every console's
- * reference is `null` and a project's reference to an account is `inherit`. A document with the settings carries the user's explicit
- * provider setting `choices` of the settings that are exported (not the values in effect, which `state.settings` holds),
- * `{}` when the user chose for none. */
+/** The document `export_configuration` answers: the regions the request chooses (see `exportedRegions`): the console
+ * named or every console or none, the application settings, the accounts; consoles by creation time and a console's
+ * projects by name, with no id and no console working directory in it, and an account carried by its name alone.
+ * Without `include_paths` a project's path is only its last segment and a project's remote is kept only where it can
+ * be cloned from; an account directory is written whatever it says. Without the accounts region no account is named:
+ * every console's reference is `null` and a project's reference to an account is `inherit`. A document with the
+ * settings carries the user's explicit provider setting `choices` of the settings that are exported (not the values
+ * in effect, which `state.settings` holds), `{}` when the user chose for none. A document with the settings carries
+ * the default clone directory, written like an account directory, and the language the daemon holds when a window
+ * has reported one. */
 export function exportedDocument(
   state: State,
   request: Omit<ExportRequest, "type"> = {},
@@ -172,31 +190,30 @@ export function exportedDocument(
         auto_close_idle_shell_terminals: state.settings.auto_close_idle_shell_terminals,
         auto_pull_repositories: state.settings.auto_pull_repositories,
         auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
-        auto_select_account: state.settings.auto_select_account,
-        auto_switch_on_usage_limit: state.settings.auto_switch_on_usage_limit,
         sidebar_order_by_status: state.settings.sidebar_order_by_status,
-        auto_start_quota_windows: state.settings.auto_start_quota_windows,
         auto_approve_session_requests: state.settings.auto_approve_session_requests,
         auto_approve_resume_requests: state.settings.auto_approve_resume_requests,
         auto_approve_account_switches: state.settings.auto_approve_account_switches,
         auto_approve_handoffs: state.settings.auto_approve_handoffs,
         ask_questions_as_choices: state.settings.ask_questions_as_choices,
         git_workflow: state.settings.git_workflow,
-        provider_settings: exportedProviderSettings(choices, state.providers),
-        agent_tags: { ...state.settings.agent_tags },
+        default_clone_dir: documentDirectory(state.settings.default_clone_dir, state.homeDir),
+        ...(state.settings.interface_language !== null && { interface_language: state.settings.interface_language }),
       }
       : null,
-    ...(regions.accounts && { accounts: exportedAccounts(state) }),
+    ...(regions.accounts && { accounts: exportedAccounts(state, choices) }),
     consoles,
   };
 }
 
-/** What an import's result says that its request did not ask for, or the other way about: a project
- * left out that was given a resolution, one placed or tried that was given none, consoles reported though none were to be created, a created one
- * placed another way than the one asked for, an account left out that was not given the resolution to leave it out (or
- * the other way about), accounts reported without being asked for or asked for and not reported, and application
- * settings reported without being asked for or asked for and not reported. A console that could not be created is not looked into, since
- * its projects are all not tried whatever was asked. `undefined` where the two agree. */
+/** What an import's result says that its request did not ask for, or the other way about: a project left out that was
+ * given a resolution, one placed or tried that was given none, consoles reported though none were to be created, a
+ * created one placed another way than the one asked for, an account left out that was not given the resolution to
+ * leave it out (or the other way about), accounts reported without being asked for or asked for and not reported,
+ * application settings reported without being asked for or asked for and not reported, and a default clone directory
+ * reported written without the settings or against the request keeping this machine's own. A console that could not
+ * be created is not looked into, since its projects are all not tried whatever was asked. `undefined` where the two
+ * agree. */
 export function importDisagreement(
   request: Extract<ClientRequestBody, { type: "import_configuration" }>,
   result: Omit<Extract<Event, { type: "configuration_imported" }>, "type">,
@@ -239,15 +256,31 @@ export function importDisagreement(
       ? "the result reports application settings, but the request did not ask for them"
       : "the request asked for the application settings, but the result reports none";
   }
+  // The directory is written with the settings, and only where the request does not keep this machine's own.
+  const keepsOwnDir = request.apply_settings !== true || request.apply_clone_dir === false;
+  if (keepsOwnDir && result.clone_dir_applied != null) {
+    return "the result reports the default clone directory written, but the request did not ask for it to be applied";
+  }
+  if (request.apply_clone_dir === false && result.settings_applied?.default_clone_dir != null) {
+    return "the result reports the default clone directory among the settings applied, but the request keeps this machine's own";
+  }
+  const appliedDir = result.settings_applied?.default_clone_dir;
+  if (appliedDir != null && appliedDir !== result.clone_dir_applied) {
+    return "the result reports the default clone directory among the settings applied, but not as the one written";
+  }
   return undefined;
 }
 
-/** The items an `import_configuration` request makes the daemon handle, in the order it announces and handles them: the
- * accounts (when asked for) other than those left out, an account that exists already included whatever was chosen for it,
- * since it is used as it is and the choice is never read, then each console with the projects that have a resolution
- * (unless the request asks for no consoles), then the application settings (when asked for). */
+/** The items an `import_configuration` request makes the daemon handle, in the order it announces and handles them:
+ * the document's default clone directory (when the settings are asked for, the document has a usable one and the
+ * request does not keep this machine's own), the accounts (when asked for) other than those left out, an account
+ * that exists already included whatever was chosen for it, since it is used as it is and the choice is never read,
+ * the Agent accounts settings (when the accounts are asked for and the document carries them), then each console
+ * with the projects that have a resolution (unless the request asks for no consoles), then the application settings
+ * (when asked for). */
 export function handledImportItems(request: Extract<ClientRequestBody, { type: "import_configuration" }>, inspection: Omit<Inspection, "type">): ImportItem[] {
   const items: ImportItem[] = [];
+  if (request.apply_settings === true && request.apply_clone_dir !== false && inspection.settings?.default_clone_dir) items.push({ kind: "clone_dir" });
   if (request.apply_accounts === true) {
     const leftOut = new Set((request.account_resolutions ?? []).filter((r) => r.leave_out === true).map((r) => `${r.agent}:${r.account}`));
     for (const { agent, accounts } of inspection.accounts?.agents ?? []) {
@@ -255,6 +288,7 @@ export function handledImportItems(request: Extract<ClientRequestBody, { type: "
         if (entry.status === "existing" || !leftOut.has(`${agent}:${account}`)) items.push({ kind: "account", agent, account });
       });
     }
+    if (inspection.accounts?.agent_settings) items.push({ kind: "agent_settings" });
   }
   if (request.apply_consoles !== false) {
     const resolved = new Set((request.resolutions ?? []).map((r) => `${r.console}:${r.project}`));
@@ -302,16 +336,22 @@ export function importProgressDisagreement(handled: ImportItem[], progress: Impo
   return undefined;
 }
 
-/** The result with the document's `keyboard_shortcuts` echoed in `settings_applied`, as the daemon does when it applied
- * the settings: it does not apply them itself, so it hands them back as they came, for the client to apply. A document
- * without them, or a result that reports no settings applied (none asked for, or a `settings_error`), echoes nothing. */
-export function withShortcutsEcho(
+/** The settings only a client holds, which the daemon does not apply but hands back in what it applied. */
+const PASSED_THROUGH = ["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background"] as const;
+
+/** The result with the document's client-held settings (see `PASSED_THROUGH`) echoed in `settings_applied`, as the daemon
+ * does when it applied the settings: it does not apply them itself, so it hands them back as they came, for the client to
+ * apply. A document without them, or a result that reports no settings applied (none asked for, or a `settings_error`),
+ * echoes nothing. */
+export function withClientValuesEcho(
   request: Extract<ClientRequestBody, { type: "import_configuration" }>,
   result: Omit<Extract<Event, { type: "configuration_imported" }>, "type">,
 ): Omit<Extract<Event, { type: "configuration_imported" }>, "type"> {
-  const carried = (request.document as { settings?: { keyboard_shortcuts?: unknown } | null } | null)?.settings?.keyboard_shortcuts;
-  if (!result.settings_applied || carried === undefined || carried === null) return result;
-  return { ...result, settings_applied: { ...result.settings_applied, keyboard_shortcuts: carried as NonNullable<DocumentSettings["keyboard_shortcuts"]> } };
+  const carried = (request.document as { settings?: Record<string, unknown> | null } | null)?.settings;
+  if (!result.settings_applied || !carried) return result;
+  const echoed = PASSED_THROUGH.flatMap((field) => (carried[field] === undefined || carried[field] === null ? [] : [[field, carried[field]] as const]));
+  if (echoed.length === 0) return result;
+  return { ...result, settings_applied: { ...result.settings_applied, ...(Object.fromEntries(echoed) as Pick<DocumentSettings, (typeof PASSED_THROUGH)[number]>) } };
 }
 
 /** The reply to a configuration request, or `undefined` for a request that is not one. `fail`
@@ -357,7 +397,7 @@ export function createConfigurationReplies(
         if ("code" in imported) return fail(imported);
         const disagreement = importDisagreement(body, imported);
         if (disagreement !== undefined) return refuseUnfillable(`the scenario's import result does not follow from its steps: ${disagreement}`);
-        return { type: "configuration_imported", ...withShortcutsEcho(body, imported) };
+        return { type: "configuration_imported", ...withClientValuesEcho(body, imported) };
       }
       default:
         return undefined;

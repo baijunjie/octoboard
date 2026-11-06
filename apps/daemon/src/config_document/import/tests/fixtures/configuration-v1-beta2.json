@@ -1,0 +1,59 @@
+{
+  "format": "octoboard-configuration",
+  "version": 1,
+  "exported_by": "0.1.0-beta.2",
+  "settings": {
+    "auto_close_idle_shell_terminals": false,
+    "auto_pull_repositories": true,
+    "auto_delete_unresumable_archives": false,
+    "auto_select_account": true,
+    "auto_switch_on_usage_limit": false,
+    "sidebar_order_by_status": true,
+    "auto_start_quota_windows": true,
+    "auto_approve_session_requests": false,
+    "auto_approve_resume_requests": false,
+    "auto_approve_account_switches": false,
+    "auto_approve_handoffs": false,
+    "ask_questions_as_choices": true,
+    "git_workflow": {
+      "development": "worktree",
+      "squash_before_delivery": false,
+      "rebase_before_delivery": true,
+      "delivery": "ask",
+      "revert_gate": false
+    },
+    "provider_settings": { "codex": { "claude_compatibility": false } },
+    "agent_tags": { "codex": ["review"] },
+    "keyboard_shortcuts": {}
+  },
+  "accounts": {
+    "added_agents": ["claude", "codex"],
+    "agents": [
+      {
+        "agent": "claude",
+        "default_account": { "name": "Personal", "position": 1 },
+        "accounts": [
+          {
+            "name": "Work",
+            "directory": "~/.claude-work",
+            "share_default_config": true,
+            "disabled": false
+          }
+        ]
+      }
+    ]
+  },
+  "consoles": [
+    {
+      "name": "Hub",
+      "icon": null,
+      "default_agent": "codex",
+      "project_session_agent": null,
+      "accounts": { "claude": { "name": "Work" } },
+      "launch": {},
+      "project_session_launch": {},
+      "console_session_prompt": null,
+      "projects": []
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { setLanguage } from "../i18n/language";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import type { Inspection } from "./importPlan";
-import { mountDialog, openTab, press } from "./testSupport";
+import { mountDialog, openTab, press, settingLinesOf } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,7 +19,6 @@ const account = (fields: Partial<InspectedAccount> & Pick<InspectedAccount, "nam
   status: "new",
   in_use_by: null,
   error: null,
-  share_default_config: false,
   disabled: false,
   ...fields,
 });
@@ -31,15 +30,29 @@ const ACCOUNTS: InspectedAccounts = {
       agent: "claude",
       default_name: "Main",
       default_name_applies: true,
+      default_disabled: null,
+      default_disabled_applies: false,
       accounts: [
-        account({ name: "Work", share_default_config: true }),
+        account({ name: "Work" }),
         account({ name: "Home", status: "existing" }),
         account({ name: "Team", status: "directory_in_use", in_use_by: "Shared", disabled: true }),
         account({ name: "Odd", status: "invalid", error: { code: "path_not_absolute", params: { path: "rel", tilde: "~" }, message: "m" } }),
       ],
     },
-    { agent: "codex", default_name: null, default_name_applies: false, accounts: [] },
+    { agent: "codex", default_name: null, default_name_applies: false, default_disabled: true, default_disabled_applies: true, accounts: [] },
   ],
+  agent_settings: {
+    auto_select_account: true,
+    current_auto_select_account: false,
+    auto_switch_on_usage_limit: false,
+    current_auto_switch_on_usage_limit: false,
+    auto_start_quota_windows: false,
+    current_auto_start_quota_windows: true,
+    provider_settings: {},
+    current_provider_settings: {},
+    agent_tags: { codex: ["review"] },
+    current_agent_tags: {},
+  },
 };
 
 const DOCUMENT = { format: "octoboard-configuration", version: 1 };
@@ -49,6 +62,7 @@ const project = {
   remote_url: null,
   offers: { exported_path: "/a/site", default_clone_dir: null, clone: null },
   default: "exported_path" as const,
+  in_document_clone_dir: null,
 };
 const CONSOLES: Inspection["consoles"] = [
   {
@@ -136,12 +150,12 @@ it("has no tab bar when the document carries only one region", async () => {
   expect(document.body.textContent).toContain("The default account of Claude Code will be named Main.");
 });
 
-it("shows each account with its status, what it shares and the directory the file gives it", async () => {
+it("shows each account with its status, whether it is disabled and the directory the file gives it, and never sharing", async () => {
   await reviewing();
   await openTab("Accounts");
   expect(accountsBox().checked).toBe(true);
   expect(row("Work").textContent).toContain("New");
-  expect(row("Work").textContent).toContain("Shares default configuration");
+  expect(row("Work").textContent).not.toContain("Shares");
   expect(row("Work").textContent).toContain("Directory in the file");
   expect(row("Work").textContent).toContain("~/.work");
   // An account used as it is has no directory line and no choice.
@@ -155,6 +169,30 @@ it("shows each account with its status, what it shares and the directory the fil
   expect(Array.from(toAdd?.querySelectorAll("[role=listitem] bdi") ?? [], (item) => item.textContent)).toEqual(["Codex"]);
   expect(document.body.textContent).toContain("The default account of Claude Code will be named Main.");
   expect(document.body.textContent).toContain("The accounts are created without being logged in.");
+});
+
+it("shows the Agent accounts settings of the file in a card of their own and the default accounts it turns off or on", async () => {
+  await reviewing();
+  await openTab("Accounts");
+  expect(document.body.textContent).toContain("The default account of Codex will be disabled.");
+  expect(document.body.textContent).not.toContain("The default account of Claude Code will be disabled");
+  const card = Array.from(document.body.querySelectorAll("section")).find((section) => section.querySelector(":scope > h3")?.textContent === "Agent account settings")!;
+  expect(settingLinesOf(card.querySelector("ul")!)).toEqual({
+    "Automatically select an account": { badge: "Turns on", note: "A new session then uses the account whose weekly limit resets soonest." },
+    "Automatically switch accounts at the usage limit": { badge: "No change" },
+    "Start usage windows automatically": { badge: "Turns off" },
+    "Agent tags": { badge: "Set to the file's", values: ["Codex: review (now No tags)"] },
+  });
+});
+
+it("draws no card for an agent with no account of its own, whose default account's lines still stand", async () => {
+  await reviewing();
+  await openTab("Accounts");
+  const headings = Array.from(document.body.querySelectorAll("section h3"), (heading) => heading.textContent);
+  expect(headings).toContain("Claude Code");
+  expect(headings).not.toContain("Codex");
+  expect(document.body.textContent).toContain("The default account of Codex will be disabled.");
+  expect(document.body.textContent).not.toContain("The file has no accounts of its own");
 });
 
 it("says why an account cannot be created in a warning mark after its name, not as text in its row", async () => {
@@ -306,14 +344,17 @@ it("tells of each account's outcome in the result, with a note that the new ones
                 {
                   agent: "claude",
                   default_name_applied: true,
+                  default_disabled_applied: true,
                   accounts: [
-                    { name: "Work", status: "created", account: "a1", error: null, sharing_warning: { code: "account_sharing_failed", params: {}, message: "no" } },
-                    { name: "Home", status: "existing", account: "a2", error: null, sharing_warning: null },
-                    { name: "Team", status: "left_out", account: null, error: null, sharing_warning: null },
-                    { name: "Odd", status: "failed", account: null, error: { code: "path_not_absolute", params: { path: "rel", tilde: "~" }, message: "m" }, sharing_warning: null },
+                    { name: "Work", status: "created", account: "a1", error: null },
+                    { name: "Home", status: "existing", account: "a2", error: null },
+                    { name: "Team", status: "left_out", account: null, error: null },
+                    { name: "Odd", status: "failed", account: null, error: { code: "path_not_absolute", params: { path: "rel", tilde: "~" }, message: "m" } },
                   ],
                 },
               ],
+              agent_settings_applied: { auto_select_account: true, auto_switch_on_usage_limit: false, auto_start_quota_windows: false, provider_settings: {}, agent_tags: {} },
+              agent_settings_error: null,
             }, settings_applied: null, settings_error: null,
           } as Event),
       ),
@@ -330,15 +371,14 @@ it("tells of each account's outcome in the result, with a note that the new ones
   expect(rowText("Home")).toContain("Already existed");
   expect(rowText("Team")).toContain("Left out");
   expect(rowText("Odd")).toContain("Failed");
-  // The reason of a failure and the sharing warning are written in their rows, not behind a mark.
+  // The reason of a failure is written in its row, not behind a mark.
   expect(rowText("Odd")).toContain("rel");
-  expect(rowText("Work")).toContain("The account was created, but sharing the default configuration with it could not be turned on.");
-  // The sentence says it once: the failure's own summary under it would repeat it, and the account's name.
-  expect(rowText("Work")).not.toContain("Could not finish the sharing change");
   expect(card.querySelector("button[data-status-mark]")).toBeNull();
   const added = [...document.querySelectorAll("[role=list]")].find((list) => list.getAttribute("aria-labelledby") && document.getElementById(list.getAttribute("aria-labelledby")!)?.textContent === "This agent was added to the agent list:");
   expect(Array.from(added?.querySelectorAll("[role=listitem] bdi") ?? [], (item) => item.textContent)).toEqual(["Codex"]);
   expect(text).toContain("The default account of Claude Code is now named as in the file.");
+  expect(text).toContain("The default account of Claude Code is now disabled.");
+  expect(text).toContain("Agent account settings");
   expect(text).toContain("The new accounts are not logged in yet.");
   expect(Array.from(document.body.querySelectorAll("button")).map((button) => button.textContent)).not.toContain("Log in");
 });

@@ -21,6 +21,7 @@ import {
   initialReview,
   outcomeOf,
   resolutionsOf,
+  reviewForOffers,
   shortcutsRecord,
   shortcutsReview,
   targetOf,
@@ -55,7 +56,7 @@ it("applies a choice to the projects that offer it and leaves every other row as
     [],
   ]);
   // The typed directory is kept under a choice that is not the directory, so going back finds it.
-  expect(applyToAll(consoles, start, "default_clone_dir")[0][0]).toEqual({ choice: "default_clone_dir", directory: "~/web" });
+  expect(applyToAll(consoles, start, "default_clone_dir")[0][0]).toEqual({ choice: "default_clone_dir", directory: "~/web", chosen: true });
 });
 
 it("leaves out every project when asked to, whatever it offers", () => {
@@ -69,10 +70,26 @@ it("counts the projects a choice is available for", () => {
   ).toEqual([1, 2, 2, 5]);
 });
 
+describe("reviewForOffers", () => {
+  const offers = (clone: string | null) => ({ exported_path: null, default_clone_dir: null, clone });
+  const projectOf = (now: InspectedConsole["projects"][number]["default"], offered: string | null) => ({ ...website, offers: offers(offered), default: now });
+  const after = [{ ...consoles[0], projects: [projectOf("clone", "/c/a"), projectOf(null, null), projectOf("clone", "/c/b")] }];
+  const review = [[{ choice: "skip" as const, directory: "" }, { choice: "clone" as const, directory: "" }, { choice: "skip" as const, directory: "" }]];
+
+  it("moves a row the user never touched to the new preselected choice, or leaves it out where there is none", () => {
+    expect(reviewForOffers(review, after)[0].map((row) => row.choice)).toEqual(["clone", "skip", "clone"]);
+  });
+
+  it("keeps the choice of a row the user chose for, even a skip, unless its clone-dependent target is gone", () => {
+    const chosen = withRow(withRow(withRow(review, 0, 0, review[0][0]), 0, 1, review[0][1]), 0, 2, review[0][2]);
+    expect(reviewForOffers(chosen, after)[0].map((row) => row.choice)).toEqual(["skip", "skip", "skip"]);
+  });
+});
+
 it("replaces one row and keeps every other the same object", () => {
   const start = initialReview(consoles);
   const next = withRow(start, 0, 1, { choice: "skip", directory: "" });
-  expect(next[0][1].choice).toBe("skip");
+  expect(next[0][1]).toEqual({ choice: "skip", directory: "", chosen: true });
   expect(next[0][0]).toBe(start[0][0]);
   expect(next[1]).toBe(start[1]);
 });
@@ -202,15 +219,15 @@ describe("accounts", () => {
     status,
     in_use_by: null,
     error: null,
-    share_default_config: false,
     disabled: false,
   });
   const accounts: InspectedAccounts = {
     agents_to_add: [],
     agents: [
-      { agent: "claude", default_name: null, default_name_applies: false, accounts: [account("a", "new"), account("b", "existing"), account("c", "directory_in_use"), account("d", "invalid")] },
-      { agent: "codex", default_name: null, default_name_applies: false, accounts: [account("e", "new")] },
+      { agent: "claude", default_name: null, default_name_applies: false, default_disabled: null, default_disabled_applies: false, accounts: [account("a", "new"), account("b", "existing"), account("c", "directory_in_use"), account("d", "invalid")] },
+      { agent: "codex", default_name: null, default_name_applies: false, default_disabled: null, default_disabled_applies: false, accounts: [account("e", "new")] },
     ],
+    agent_settings: null,
   };
 
   it("creates what can be created as proposed and leaves out what cannot", () => {

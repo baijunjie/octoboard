@@ -43,8 +43,9 @@ It is excluded from the production type check and from release verification, and
   `ConfigurationFixture.progress`: the items that have left `waiting`, as the last report of each says. The fixture daemon
   announces every item the request makes it handle `waiting` first, then sends those reports, to the listener of the
   request's `import_id` (`Daemon.onImportProgress`) and before the reply, which `imported: "pending"` holds back to keep the
-  import part-way. It refuses a list the daemon's order of work (accounts, then each console with its projects, then the
-  settings, one at a time) cannot have produced (`importProgressDisagreement`): a console is `done` as soon as it is created,
+  import part-way. It refuses a list the daemon's order of work (the default clone directory, the accounts and then the
+  Agent accounts settings, each console with its projects, then the application settings, one at a time) cannot have
+  produced (`importProgressDisagreement`): a console is `done` as soon as it is created,
   its projects following for themselves (or `failed`, with each project it announced `not_attempted`), and an account that
   exists already is announced whatever was chosen for it (`handledImportItems`).
 - `pageFrame.ts` and `preferences.ts` are the page set-up the gallery and the website preview do before the app loads;

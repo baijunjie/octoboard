@@ -290,9 +290,19 @@ async fn a_document_without_a_console_session_prompt_imports_a_console_with_none
         .unwrap()
         .remove("console_session_prompt");
 
-    apply(&state, &without, Vec::new(), false, None, true)
-        .await
-        .unwrap();
+    apply(
+        &state,
+        &without,
+        Vec::new(),
+        ApplyOptions {
+            settings: false,
+            accounts: None,
+            consoles: true,
+            clone_dir: true,
+        },
+    )
+    .await
+    .unwrap();
     let stored = state.store.list_consoles().unwrap().remove(0);
     assert_eq!(stored.console_session_prompt, None);
 }

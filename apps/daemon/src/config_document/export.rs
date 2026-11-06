@@ -15,9 +15,11 @@
 //! project travels, when the export holds the accounts region and only then, as its name alone
 //! ([`AccountName`]) and never as an id or a `config_dir`, since an id means nothing elsewhere and
 //! the directory is this machine's layout. The accounts region ([`DocumentAccounts`]) is the one
-//! place accounts are described, and it never holds a credential, an id or a quota reading.
-//! `Settings.default_clone_dir` stays behind for the same reason: an import places projects under
-//! the *importing* machine's own.
+//! place accounts are described, and it never holds a credential, an id or a quota reading. What
+//! stays behind besides is whatever only turns on by modifying files outside Octoboard's own
+//! directory: an account's sharing of its agent's default configuration
+//! (`docs/product/configuration-export-and-import.md`, "What is not configuration and never
+//! travels").
 
 use std::collections::HashMap;
 use std::path::{Component, Path};
@@ -28,9 +30,10 @@ use crate::hostfs::dir_key;
 use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Account, AccountName, AgentId, CodedError, ConfigurationDocument, Console,
-    DocumentAccount, DocumentAccounts, DocumentAgentAccounts, DocumentConsole,
-    DocumentDefaultAccount, DocumentProject, DocumentSettings, ExportedConsoles, PerAgent, Project,
-    ProjectAccount, ProjectAccountRef, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
+    DocumentAccount, DocumentAccounts, DocumentAgentAccounts, DocumentAgentSettings,
+    DocumentConsole, DocumentDefaultAccount, DocumentProject, DocumentSettings, ExportedConsoles,
+    PerAgent, Project, ProjectAccount, ProjectAccountRef, CONFIGURATION_FORMAT,
+    CONFIGURATION_VERSION,
 };
 use crate::store::Store;
 
@@ -151,20 +154,22 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
             auto_close_idle_shell_terminals: store.auto_close_idle_shell_terminals()?,
             auto_pull_repositories: store.auto_pull_repositories()?,
             auto_delete_unresumable_archives: store.auto_delete_unresumable_archives()?,
-            auto_select_account: store.auto_select_account()?,
-            auto_switch_on_usage_limit: store.auto_switch_on_usage_limit()?,
             sidebar_order_by_status: store.sidebar_order_by_status()?,
-            auto_start_quota_windows: store.auto_start_quota_windows()?,
             auto_approve_session_requests: store.auto_approve_session_requests()?,
             auto_approve_resume_requests: store.auto_approve_resume_requests()?,
             auto_approve_account_switches: store.auto_approve_account_switches()?,
             auto_approve_handoffs: store.auto_approve_handoffs()?,
             ask_questions_as_choices: store.ask_questions_as_choices()?,
             git_workflow: store.git_workflow_settings()?,
-            provider_settings: super::exported_provider_settings(
-                &store.provider_setting_choices()?,
-            ),
-            agent_tags: store.agent_tags()?,
+            default_clone_dir: Some(document_directory(
+                &store.default_clone_dir()?,
+                &crate::paths::home_dir(),
+            )),
+            interface_language: store.interface_language()?,
+            // Held by the client, which adds them to the document it saves.
+            appearance: None,
+            markdown_style: None,
+            run_in_background: None,
             keyboard_shortcuts: None,
         })
     } else {
@@ -219,6 +224,8 @@ pub(crate) fn display_order(saved: &[Option<String>], owned: &[String]) -> Vec<O
 fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts> {
     let home = crate::paths::home_dir();
     let names = store.default_account_names()?;
+    let disabled_defaults = store.disabled_default_accounts()?;
+    let added_agents = store.added_agents()?;
     let mut agents = Vec::new();
     for agent in AgentId::ALL {
         let owned: Vec<&Account> = all
@@ -226,7 +233,14 @@ fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts>
             .filter(|account| account.agent == agent)
             .collect();
         let default_name = names.get(agent.wire_name()).cloned();
-        if owned.is_empty() && default_name.is_none() {
+        let default_disabled = disabled_defaults.contains(agent.wire_name());
+        // An added agent is listed even with nothing else to carry, so an import can tell its
+        // default account is enabled and turn on one this machine disabled. A list not yet decided
+        // counts every agent as added.
+        let added = added_agents
+            .as_ref()
+            .is_none_or(|list| list.contains(&agent));
+        if !added && owned.is_empty() && default_name.is_none() && !default_disabled {
             continue;
         }
         let ids: Vec<String> = owned.iter().map(|account| account.id.clone()).collect();
@@ -239,7 +253,6 @@ fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts>
             .map(|account| DocumentAccount {
                 name: account.name.clone(),
                 directory: document_directory(&account.config_dir, &home),
-                share_default_config: account.share_default_config,
                 disabled: account.disabled,
             })
             .collect();
@@ -248,13 +261,23 @@ fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts>
             default_account: DocumentDefaultAccount {
                 name: default_name,
                 position,
+                disabled: Some(default_disabled),
             },
             accounts,
         });
     }
     Ok(DocumentAccounts {
-        added_agents: store.added_agents()?,
+        added_agents,
         agents,
+        agent_settings: Some(DocumentAgentSettings {
+            auto_select_account: store.auto_select_account()?,
+            auto_switch_on_usage_limit: store.auto_switch_on_usage_limit()?,
+            auto_start_quota_windows: store.auto_start_quota_windows()?,
+            agent_tags: store.agent_tags()?,
+            provider_settings: super::exported_provider_settings(
+                &store.provider_setting_choices()?,
+            ),
+        }),
     })
 }
 
@@ -507,11 +530,22 @@ mod tests {
     }
 
     fn exported_with(selection: Selection) -> (ConfigurationDocument, String) {
+        let (document, text, _) = exported_with_store(selection);
+        (document, text)
+    }
+
+    /// Like [`exported_with`], with the clone directory the store holds, written as the export
+    /// writes it.
+    fn exported_with_store(selection: Selection) -> (ConfigurationDocument, String, String) {
         let (state, _dir) = crate::test_support::app_state("config-export");
         populated(&state.store);
         let document = build(&state.store, &selection).expect("built");
         let text = serde_json::to_string(&document).unwrap();
-        (document, text)
+        let clone_dir = document_directory(
+            &state.store.default_clone_dir().unwrap(),
+            &crate::paths::home_dir(),
+        );
+        (document, text, clone_dir)
     }
 
     /// The keyboard shortcuts are the client's to add: the daemon's document has none, and one
@@ -538,7 +572,7 @@ mod tests {
 
     #[test]
     fn a_full_export_holds_every_console_with_its_projects_and_the_application_settings() {
-        let (document, _) = exported(None);
+        let (document, _, clone_dir) = exported_with_store(Selection::full(true));
 
         assert_eq!(
             (document.format.as_str(), document.version),
@@ -554,26 +588,32 @@ mod tests {
                 auto_close_idle_shell_terminals: false,
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: false,
-                auto_select_account: false,
-                auto_switch_on_usage_limit: false,
                 sidebar_order_by_status: true,
-                auto_start_quota_windows: false,
                 auto_approve_session_requests: false,
                 auto_approve_resume_requests: false,
                 auto_approve_account_switches: false,
                 auto_approve_handoffs: false,
                 ask_questions_as_choices: true,
                 git_workflow: GitWorkflowSettings::default(),
-                provider_settings: std::collections::BTreeMap::new(),
-                agent_tags: std::collections::BTreeMap::new(),
+                default_clone_dir: Some(clone_dir),
+                interface_language: None,
+                appearance: None,
+                markdown_style: None,
+                run_in_background: None,
                 keyboard_shortcuts: None,
             })
         );
-        assert_eq!(
-            serde_json::to_value(document.settings.as_ref().unwrap()).unwrap()
-                ["auto_select_account"],
-            false
-        );
+        // The Agent accounts settings travel with the accounts, not here.
+        let written = serde_json::to_value(document.settings.as_ref().unwrap()).unwrap();
+        for moved in [
+            "auto_select_account",
+            "auto_switch_on_usage_limit",
+            "auto_start_quota_windows",
+            "agent_tags",
+            "provider_settings",
+        ] {
+            assert!(written.get(moved).is_none(), "{moved} is still in settings");
+        }
         let names = |console: &DocumentConsole| {
             console
                 .projects
@@ -871,10 +911,8 @@ mod tests {
         ] {
             assert!(!text.contains(absent), "{absent} is in {text}");
         }
-        assert!(
-            !text.contains("default_clone_dir"),
-            "the clone directory is the importing machine's own"
-        );
+        // The clone directory travels with the settings, for the importing user to take or leave.
+        assert!(text.contains("default_clone_dir"));
     }
 
     #[test]
@@ -1024,6 +1062,7 @@ mod tests {
         let under_home = home().join(".claude-work").to_string_lossy().into_owned();
         let outside = "/srv/agents/claude-team".to_string();
         let mut work = account("acct-1", AgentId::CLAUDE, "Work", &under_home);
+        // A shared account: sharing is never written to the document.
         work.share_default_config = true;
         let mut team = account("acct-2", AgentId::CLAUDE, "Team", &outside);
         team.disabled = true;
@@ -1087,24 +1126,72 @@ mod tests {
             claude.default_account,
             DocumentDefaultAccount {
                 name: Some("Personal".to_string()),
-                position: 1
+                position: 1,
+                disabled: Some(false),
             }
         );
-        assert!(claude.accounts[0].disabled && !claude.accounts[0].share_default_config);
-        assert!(!claude.accounts[1].disabled && claude.accounts[1].share_default_config);
+        assert!(claude.accounts[0].disabled && !claude.accounts[1].disabled);
         let codex = &accounts.agents[1];
         assert_eq!(
             codex.default_account,
             DocumentDefaultAccount {
                 name: None,
-                position: 0
+                position: 0,
+                disabled: Some(false),
             }
         );
 
         let text = serde_json::to_string(&accounts).unwrap();
-        for leaked in ["acct-", "incomplete", "token", "credential", "quota"] {
+        for leaked in [
+            "acct-",
+            "incomplete",
+            "token",
+            "credential",
+            "used_percent",
+            "share_default_config",
+        ] {
             assert!(!text.contains(leaked), "{leaked} is in {text}");
         }
+    }
+
+    /// An import turns a default account on only for an agent the document lists, so every added
+    /// agent is listed, however little else it has to carry.
+    #[test]
+    fn an_added_agent_is_listed_with_its_default_account_enabled_and_nothing_else() {
+        let (state, _dir) = crate::test_support::app_state("config-export-added-agent");
+        with_accounts(&state.store);
+        state.store.add_added_agent(AgentId::GROK).unwrap();
+
+        let accounts = exported_accounts(&state.store, true);
+
+        let grok = accounts
+            .agents
+            .iter()
+            .find(|entry| entry.agent == AgentId::GROK)
+            .expect("grok is added");
+        assert!(grok.accounts.is_empty());
+        assert_eq!(
+            grok.default_account,
+            DocumentDefaultAccount {
+                name: None,
+                position: 0,
+                disabled: Some(false),
+            }
+        );
+    }
+
+    #[test]
+    fn every_agent_is_listed_while_the_added_agents_are_not_decided() {
+        let (state, _dir) = crate::test_support::app_state("config-export-undecided-agents");
+
+        let accounts = exported_accounts(&state.store, true);
+
+        assert_eq!(accounts.added_agents, None);
+        assert_eq!(accounts.agents.len(), AgentId::ALL.len());
+        assert!(accounts
+            .agents
+            .iter()
+            .all(|entry| entry.default_account.disabled == Some(false)));
     }
 
     #[test]
@@ -1132,7 +1219,12 @@ mod tests {
             .insert_account(&account("acct-4", AgentId::GROK, "Four", "/srv/four"))
             .unwrap();
 
-        let grok = &exported_accounts(&state.store, true).agents[0];
+        let exported = exported_accounts(&state.store, true);
+        let grok = exported
+            .agents
+            .iter()
+            .find(|entry| entry.agent == AgentId::GROK)
+            .unwrap();
 
         let names: Vec<&str> = grok.accounts.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(names, ["One", "Four"]);

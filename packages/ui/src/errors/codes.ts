@@ -119,7 +119,7 @@ const CORE_CODES = {
   config_dir_unreachable: { origin: "daemon", recovery: "path", recoveryLine: true, codeParams: ["path"] },
   configuration_not_recognised: { origin: "daemon", recovery: "configuration" },
   configuration_unreadable: { origin: "daemon", recovery: "configuration", detailBlock: true },
-  configuration_version_unsupported: { origin: "daemon", recovery: "configuration", codeParams: ["version", "supported"] },
+  configuration_version_unsupported: { origin: "daemon", recovery: "configuration", codeParams: ["version", "oldest", "supported"] },
   conflicting_fields: { origin: "daemon", unexpected: "the window never sends two fields that exclude each other", codeParams: ["first", "second"] },
   connection_closed: { origin: "client", recovery: "connection" },
   console_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },

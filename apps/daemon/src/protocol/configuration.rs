@@ -21,12 +21,14 @@ pub const CONFIGURATION_FORMAT: &str = "octoboard-configuration";
 /// Raised when a change makes a reader of a released version misread a document: a field removed
 /// or given another meaning. A field added, which a reader that does not know it ignores, does not raise it.
 ///
-/// An import reads only this version and refuses any other. Version changes and upgrade steps are
-/// written only between released versions: a change no release has carried is made in place, at
-/// this version, and raising it past a released version adds the step that upgrades a document of
-/// that version, so an export made by the release stays importable. No build has been released
-/// yet, so there are no upgrade steps.
-pub const CONFIGURATION_VERSION: u32 = 1;
+/// An import reads this version and, through the steps of `config_document::upgrade`, every older
+/// one from the first released; it refuses any other. Version changes and upgrade steps are written
+/// only between released versions: a change no release has carried is made in place, at this
+/// version, and raising it past a released version adds the step that upgrades a document of that
+/// version, so an export made by the release stays importable. Version 1 is what the beta releases
+/// wrote; 2 moved the Agent accounts settings into the accounts region and dropped an account's
+/// sharing flag.
+pub const CONFIGURATION_VERSION: u32 = 2;
 
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,9 +60,38 @@ pub struct DocumentAccounts {
     /// adds none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub added_agents: Option<Vec<AgentId>>,
-    /// One entry for each agent that has an account of its own or a named default account, in
-    /// `AgentId::ALL` order.
+    /// One entry for each agent that has an account of its own, a named default account or a
+    /// turned-off default account, in `AgentId::ALL` order.
     pub agents: Vec<DocumentAgentAccounts>,
+    /// The settings of the Agent accounts section that are not an account's own. `null` in a
+    /// document upgraded from version 1 that had no `settings` region to take them from: importing
+    /// it leaves them as they are.
+    pub agent_settings: Option<DocumentAgentSettings>,
+}
+
+/// The settings of the Agent accounts section that are not an account's own: the three switches,
+/// the tags of each agent and the user's choices for the agents' provider settings. They travel
+/// with the accounts, since they only mean something to the agents and accounts of the machine
+/// they are applied to.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DocumentAgentSettings {
+    pub auto_select_account: bool,
+    pub auto_switch_on_usage_limit: bool,
+    pub auto_start_quota_windows: bool,
+    /// The tags the user put on each agent (by wire name), for the agents that have any, removed
+    /// agents' included. An agent the document does not list is left as it is on import.
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
+    pub agent_tags: BTreeMap<String, Vec<String>>,
+    /// The choices the user made for the settings of each provider (by provider id, then setting
+    /// id) that a configuration export carries (`SettingDescriptor::exported`). A setting they
+    /// never chose for is not listed, so the importing machine keeps following its own default for
+    /// it, and a setting the document does not list is left as it is.
+    #[cfg_attr(
+        test,
+        ts(type = "Partial<Record<Agent, Record<string, boolean | string>>>")
+    )]
+    pub provider_settings: BTreeMap<String, BTreeMap<String, SettingValue>>,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -73,7 +104,7 @@ pub struct DocumentAgentAccounts {
 }
 
 /// What the document says of an agent's default account. Its directory is whatever the agent
-/// resolves on the machine, so it is not carried, and neither is its disabled flag.
+/// resolves on the machine, so it is not carried.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentDefaultAccount {
@@ -81,10 +112,14 @@ pub struct DocumentDefaultAccount {
     pub name: Option<String>,
     /// Its place in the display order: how many of the agent's accounts come before it.
     pub position: usize,
+    /// Whether the user turned it off. `null` in a document upgraded from version 1, which did not
+    /// carry the flag: importing it leaves this machine's flag as it is.
+    pub disabled: Option<bool>,
 }
 
-/// An account the user owns. Its id, its login and everything the agent keeps in its directory
-/// stay behind.
+/// An account the user owns. Its id, its login, everything the agent keeps in its directory and
+/// whether it shares the agent's default configuration (which moves files outside Octoboard's own
+/// directory, so it is turned on by hand) stay behind.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentAccount {
@@ -93,8 +128,6 @@ pub struct DocumentAccount {
     /// for the home directory itself); otherwise the absolute path. Whatever the export's paths
     /// choice: an account cannot exist without its directory.
     pub directory: String,
-    /// Whether the account shares the agent's default configuration.
-    pub share_default_config: bool,
     pub disabled: bool,
 }
 
@@ -104,10 +137,7 @@ pub struct DocumentSettings {
     pub auto_close_idle_shell_terminals: bool,
     pub auto_pull_repositories: bool,
     pub auto_delete_unresumable_archives: bool,
-    pub auto_select_account: bool,
-    pub auto_switch_on_usage_limit: bool,
     pub sidebar_order_by_status: bool,
-    pub auto_start_quota_windows: bool,
     pub auto_approve_session_requests: bool,
     pub auto_approve_resume_requests: bool,
     pub auto_approve_account_switches: bool,
@@ -115,20 +145,33 @@ pub struct DocumentSettings {
     pub ask_questions_as_choices: bool,
     /// The application-wide git workflow settings.
     pub git_workflow: GitWorkflowSettings,
-    /// The choices the user made for the settings of each provider (by provider id, then setting
-    /// id) that a configuration export carries (`SettingDescriptor::exported`). A setting they
-    /// never chose for is not listed, so the importing machine keeps following its own default for
-    /// it, and a setting the document does not list is left as it is. A provider's settings that
-    /// let its sessions act without asking are never listed.
-    #[cfg_attr(
-        test,
-        ts(type = "Partial<Record<Agent, Record<string, boolean | string>>>")
-    )]
-    pub provider_settings: BTreeMap<String, BTreeMap<String, SettingValue>>,
-    /// The tags the user put on each agent (by wire name), for the agents that have any, removed
-    /// agents' included. An agent the document does not list is left as it is on import.
-    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
-    pub agent_tags: BTreeMap<String, Vec<String>>,
+    /// The default clone directory as `~/<relative path>` under the exporting machine's home
+    /// directory (also `~` for the home directory itself), otherwise the absolute path, whatever
+    /// the export's paths choice. An import applies it only when the user asks to, and it must be
+    /// usable here (absolute, or starting with `~/`). `null` in a document upgraded from version
+    /// 1, which did not carry it: importing it leaves this machine's as it is.
+    pub default_clone_dir: Option<String>,
+    /// The language tag of the exporting client's interface (see `Settings.interface_language`):
+    /// the daemon writes the one it holds and the client replaces it with the one it shows, which
+    /// is the language the user chose. An import applies it only when this build offers it. Absent
+    /// when neither knew one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interface_language: Option<String>,
+    /// The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
+    /// `localStorage`): the client adds it to a document it saves and applies it from an import's
+    /// reply, so the daemon builds none, stores it nowhere and passes it through an import's reply
+    /// as it came. A value the importing client does not know is ignored. Absent in a document a
+    /// client saved without it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<String>,
+    /// How a rendered Markdown document is styled (the style's id), carried like `appearance`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub markdown_style: Option<String>,
+    /// Whether closing the window leaves the app running in the background, carried like
+    /// `appearance`. Only a client that has the setting (the desktop app) writes it, and only
+    /// such a client applies it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_in_background: Option<bool>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the
     /// client reads and writes: the client adds them to a full export it saves (an empty object
     /// when it has none changed, which on import means every shortcut at its default) and applies
@@ -329,7 +372,25 @@ pub struct InspectedProject {
         ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null")
     )]
     pub default: Option<DirectoryChoiceKind>,
+    /// What the clone-dependent choices (`default_clone_dir`, `clone`) come to under the document's
+    /// own default clone directory, which an import takes when it applies the settings and is not
+    /// told to keep this machine's. Absent unless the document carries a usable directory that
+    /// differs from this machine's; `offers` and `default` are always this machine's.
+    pub in_document_clone_dir: Option<OffersUnderCloneDir>,
     pub account_fallbacks: Vec<AccountFallback>,
+}
+
+/// The offers of a project, and the choice an import would preselect, with the clone-dependent
+/// ones worked out against another default clone directory than this machine's.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Serialize)]
+pub struct OffersUnderCloneDir {
+    pub offers: DirectoryOffers,
+    #[cfg_attr(
+        test,
+        ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null")
+    )]
+    pub default: Option<DirectoryChoiceKind>,
 }
 
 /// The application settings a document carries, beside the value this machine has now, so a client
@@ -343,14 +404,8 @@ pub struct InspectedSettings {
     pub current_auto_pull_repositories: bool,
     pub auto_delete_unresumable_archives: bool,
     pub current_auto_delete_unresumable_archives: bool,
-    pub auto_select_account: bool,
-    pub current_auto_select_account: bool,
-    pub auto_switch_on_usage_limit: bool,
-    pub current_auto_switch_on_usage_limit: bool,
     pub sidebar_order_by_status: bool,
     pub current_sidebar_order_by_status: bool,
-    pub auto_start_quota_windows: bool,
-    pub current_auto_start_quota_windows: bool,
     pub auto_approve_session_requests: bool,
     pub current_auto_approve_session_requests: bool,
     pub auto_approve_resume_requests: bool,
@@ -363,8 +418,27 @@ pub struct InspectedSettings {
     pub current_ask_questions_as_choices: bool,
     pub git_workflow: GitWorkflowSettings,
     pub current_git_workflow: GitWorkflowSettings,
+    /// The document's default clone directory as it resolves on this machine (`~/` expanded);
+    /// absent when the document carries none or it is not usable here (neither absolute nor
+    /// starting with `~/`), which an import leaves out.
+    pub default_clone_dir: Option<String>,
+    /// This machine's default clone directory.
+    pub current_default_clone_dir: String,
+}
+
+/// The settings of the Agent accounts section a document carries, beside the value this machine
+/// has now, so a client can show what applying them would change.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Serialize)]
+pub struct InspectedAgentSettings {
+    pub auto_select_account: bool,
+    pub current_auto_select_account: bool,
+    pub auto_switch_on_usage_limit: bool,
+    pub current_auto_switch_on_usage_limit: bool,
+    pub auto_start_quota_windows: bool,
+    pub current_auto_start_quota_windows: bool,
     /// The document's choices for the exported provider settings, those this build declares only
-    /// (see `DocumentSettings::provider_settings`).
+    /// (see `DocumentAgentSettings::provider_settings`).
     #[cfg_attr(
         test,
         ts(type = "Partial<Record<Agent, Record<string, boolean | string>>>")
@@ -431,6 +505,11 @@ pub enum ImportItem {
         agent: AgentId,
         account: usize,
     },
+    /// The default clone directory, written before anything else is created.
+    CloneDir,
+    /// The settings of the Agent accounts section, applied after the accounts.
+    AgentSettings,
+    /// The application settings, without the default clone directory.
     Settings,
 }
 
@@ -531,7 +610,6 @@ pub struct InspectedAccount {
     pub in_use_by: Option<String>,
     /// Why it is `invalid`.
     pub error: Option<ImportFailure>,
-    pub share_default_config: bool,
     pub disabled: bool,
 }
 
@@ -546,6 +624,11 @@ pub struct InspectedAgentAccounts {
     /// its own and the name collides with no account of the agent, those the import creates
     /// included.
     pub default_name_applies: bool,
+    /// Whether the document says the default account is turned off; absent when it does not say.
+    pub default_disabled: Option<bool>,
+    /// Whether importing would change this machine's default account's flag to `default_disabled`:
+    /// the document says and this machine's differs.
+    pub default_disabled_applies: bool,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -555,6 +638,8 @@ pub struct InspectedAccounts {
     /// add, in the document's order.
     pub agents_to_add: Vec<AgentId>,
     pub agents: Vec<InspectedAgentAccounts>,
+    /// Absent when the document carries no settings of the Agent accounts section.
+    pub agent_settings: Option<InspectedAgentSettings>,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -578,9 +663,6 @@ pub struct ImportedAccount {
     /// The id of the account created, or of the one that existed.
     pub account: Option<String>,
     pub error: Option<ImportFailure>,
-    /// Why sharing the default configuration, which the document asked for, was not turned on for
-    /// an account that was created all the same.
-    pub sharing_warning: Option<ImportFailure>,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -590,6 +672,9 @@ pub struct ImportedAgentAccounts {
     pub accounts: Vec<ImportedAccount>,
     /// Whether the document's name for the default account was applied.
     pub default_name_applied: bool,
+    /// The flag this machine's default account was changed to, as the document says (`true`
+    /// disabled, `false` enabled); `None` when the flag was not changed.
+    pub default_disabled_applied: Option<bool>,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -598,4 +683,9 @@ pub struct ImportedAccounts {
     /// The agents appended to the added agents, in the order they were.
     pub agents_added: Vec<AgentId>,
     pub agents: Vec<ImportedAgentAccounts>,
+    /// The settings of the Agent accounts section applied to this machine; absent when the document
+    /// carries none, or they could not be applied (`agent_settings_error`).
+    pub agent_settings_applied: Option<DocumentAgentSettings>,
+    /// Why the settings of the Agent accounts section were not applied.
+    pub agent_settings_error: Option<ImportFailure>,
 }

@@ -126,9 +126,19 @@ async fn a_refused_import_leaves_nothing_behind() {
         ),
     ];
     for (document, resolutions, code) in refusals {
-        let err = apply(&state, &document, resolutions, false, None, true)
-            .await
-            .expect_err(code.as_str());
+        let err = apply(
+            &state,
+            &document,
+            resolutions,
+            ApplyOptions {
+                settings: false,
+                accounts: None,
+                consoles: true,
+                clone_dir: true,
+            },
+        )
+        .await
+        .expect_err(code.as_str());
         assert_eq!(code_of(&err), code);
         // A refused avatar names the console it belongs to.
         let coded = err.downcast_ref::<CodedError>().unwrap();
@@ -199,9 +209,12 @@ async fn a_console_that_cannot_be_created_is_reported_and_the_import_goes_on_to_
         &state,
         &applied,
         vec![at(0, 0, DirectoryChoice::ExportedPath)],
-        true,
-        None,
-        true,
+        ApplyOptions {
+            settings: true,
+            accounts: None,
+            consoles: true,
+            clone_dir: true,
+        },
     )
     .await
     .expect("a console that fails is reported, not raised");

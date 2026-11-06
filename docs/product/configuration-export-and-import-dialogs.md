@@ -1,9 +1,11 @@
 # Configuration export and import dialogs
 
 The window's side of carrying a configuration between machines: where exporting and importing start, the export
-dialog, and the import dialog with its review, its progress and its result. What a configuration document holds, and what an import
-does on the machine running Octoboard, are in `docs/product/configuration-export-and-import.md`; the terms used here —
-the document's regions, the machine, account references and their fallbacks — are that doc's.
+dialog, and the import dialog up to its review and the start of the import. What the import dialog shows while the
+import runs and once it has finished is in `docs/product/configuration-import-progress-and-result.md`. What a
+configuration document holds, and what an import does on the machine running Octoboard, are in
+`docs/product/configuration-export-and-import.md`; the terms used here — the document's regions, the machine, account
+references and their fallbacks — are that doc's.
 
 ## Where they are
 
@@ -58,17 +60,21 @@ sentence.
   project paths: they can reveal details such as user and folder names; the thing to do is to share the file only with
   people the user trusts.
 - A group headed **Global settings**, with two checkboxes. **Application settings**, checked by default whichever
-  consoles are chosen, notes that it includes the settings that apply to every console and the current keyboard
-  shortcuts. **Accounts**, unchecked by default, notes that it includes the account names, their
-  configuration directories, their sharing and turned-off choices, their order and the added agents, and that no login
-  credentials are included, so the accounts are to be logged in again after an import. Neither note changes with the
-  other choices. With Accounts unchecked the file names no account at all: every console and project in it uses its
+  consoles are chosen, notes that it includes the settings of the **General**, **Git**, **Agent behavior** and
+  **Keyboard shortcuts** sections, naming the four as Settings names them, such as the language and the default clone
+  directory. **Accounts**, unchecked by default, notes that it includes the account names, their configuration
+  directories, their turned-off choices, their order, the added agents and the agent account settings, and that
+  neither sharing the default configuration nor login credentials are included, so sharing is to be turned on and the
+  accounts logged in again after an import. Neither note changes with the other choices (see "Which settings travel"
+  in `docs/product/settings-in-a-configuration.md`). With Accounts unchecked the file names no account at all: every console and project in it uses its
   agents' default accounts (see "How an account reference travels" in
   `docs/product/configuration-export-and-import.md`).
 
 **Export** is unavailable while nothing is chosen — Do not export consoles with both global settings unchecked — and
-nothing says why, since the boxes that left it so are in view. It asks the daemon for the document, adds this client's
-keyboard shortcuts to it when it carries the application settings, and opens the save dialog. In the desktop app a
+nothing says why, since the boxes that left it so are in view. It asks the daemon for the document, adds the settings
+this client holds to it when it carries the application settings — its appearance, Markdown style, keyboard shortcuts,
+the language it shows and, in the macOS application, keeping running in the background (see "The settings a client
+holds" in `docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
 toast names the file it was saved as. A browser files a download itself, under its own name and wherever its settings
 say, and does not report one that was blocked or cancelled, so there the toast says only that the configuration was
 downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the export dialog open;
@@ -89,8 +95,11 @@ then **reviewed before anything is created**.
 
 The review starts with a sentence naming the file. Under it, where the file carries more than one region, a group
 headed **What to import** has a checkbox for each region the file carries, in this order: **Consoles and projects**,
-checked; **Accounts**, checked; **Application settings**, unchecked, since they change how the machine behaves rather
-than add to what it holds. A region left unchecked is not imported. A file that carries one region alone has no such
+checked; **Accounts**, checked when the file brings something to the accounts — an agent to add, an account, or a
+default account's name or turned-off choice that the import would apply — and unchecked otherwise, as for a file of
+the first version whose accounts region holds only the agent account settings (see "Versions" in
+`docs/product/configuration-export-and-import.md`); **Application settings**, unchecked, since they change how the
+machine behaves rather than add to what it holds. A region left unchecked is not imported. A file that carries one region alone has no such
 group, and importing it imports that region, the application settings included. A file whose list of consoles is empty
 carries no Consoles and projects region, unless it carries nothing else at all.
 
@@ -146,6 +155,14 @@ not absolute and does not start with `~/` is refused. A project left out has no 
 the project's own account references would fall back to a default account, an amber warning mark follows its name (see
 "Account fallbacks" below).
 
+What the rows find and offer under the default clone directory, and where a clone would go, follow the choice about the
+file's default clone directory (see "Application settings in the review" below): while Application settings is
+imported and the file's directory is used, they are worked out under the file's directory, and otherwise under this
+machine's. When that changes, a row the user has made no choice for — on the row itself or through the Set every
+project buttons — moves to the new preselected choice, or to Leave out where there is none; a row the user chose for
+keeps its choice, unless it is Default clone directory or Clone from remote and is no longer offered, when it moves to
+the new preselected choice too.
+
 ### Accounts in the review
 
 In this order:
@@ -154,13 +171,18 @@ In this order:
   added to the user's agents.
 - For each agent whose default account the import would name, a line saying that its default account will be named
   with the name the file gives it. A name that would not be applied is not mentioned.
-- A card for each agent of the file, headed by the agent's name, with a row for each of its accounts in the file's
-  order — or, for an agent the file only names a default account for, a line saying that the file has no accounts of
-  its own for that agent.
-- A note that the accounts are created without being logged in, and that each is to be logged in after the import.
+- For each agent whose default account the import would turn off or back on, a line saying that its default account
+  will be disabled, or enabled. One the file leaves as this machine has it is not mentioned.
+- When the file carries the agent account settings, a card headed **Agent account settings** (see "The agent account
+  settings in the review" below).
+- A card for each agent the file has accounts of its own for, headed by the agent's name, with a row for each of those
+  accounts in the file's order. An agent the file has no accounts of its own for has no card: what the file does to
+  its default account is said by the lines above.
+- Where there is such a card, a note that the accounts are created without being logged in, and that each is to be
+  logged in after the import.
 
-An **account's row** has the account's name, then a **Shares default configuration** badge where the file has it share
-the default configuration and a **Disabled** badge where the file has it turned off. Under the name a line says what
+An **account's row** has the account's name, then a **Disabled** badge where the file has it turned off; whether an
+account shares the default configuration is not shown, since an import never turns that on. Under the name a line says what
 the import would do with it: **New**, or **Already exists, used as it is** for an account of that agent that already
 has the name (see "Importing accounts" in `docs/product/configuration-export-and-import.md`). An account that cannot be
 created as the file has it has no such line: an amber warning mark follows its name instead (see "Failures, warnings
@@ -186,11 +208,54 @@ agent's own default directory, such as `~/.claude-work` for Claude Code, and a *
 says to enter a directory or leave the account out, and a path that is not absolute and does not start with `~/` is
 refused.
 
+### The agent account settings in the review
+
+The **Agent account settings** card has a line for each of the three switches the file carries — **Automatically
+select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows automatically** —
+badged as a switch of the application settings is (see "Application settings in the review" below), then the provider
+settings and the agent tags, each a setting made of several items, listed as such a setting is:
+
+- **The provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), one line per setting
+  — today **Permission approval** and **Claude compatibility** — present when the document carries a choice that this
+  machine's agents declare as carried and that the setting takes, the agents declaring a setting under the same id
+  sharing its line, named as the agents' tabs name it. A setting the window has no wording for under any of those
+  agents is a line of its own for each agent, named by the agent's name, a colon, then the setting's id in words (an id
+  `sandbox_mode` as "Sandbox mode"). Badged **Set to the file's**, it lists each such agent that this machine reports
+  whose value would change: a switch **On** or **Off**, a choice by its name, or by its value in words where the window
+  has no name for it, and a choice left unset here as **Follow account configuration**.
+- **Agent tags**, present when the document carries tags for an agent this build knows: badged **Set to the file's**, it
+  lists each such agent whose tags would change, its tags shown as tags, or **No tags** for none.
+
+They are applied whenever Accounts is imported; the card has no choice of its own.
+
 ### Application settings in the review
 
-One card, with a line for each of the document's switches naming the setting with a badge for what applying would change
-from what is set now: **Turns on**, with what then follows in that setting's own words (see "The application settings an
-export carries" in `docs/product/configuration-export-and-import.md`); **Turns off**; or **No change**.
+Cards grouped as Settings groups the settings, each headed by its section's name, in the order of Settings' sections:
+**General**, **Git**, **Agent behavior** and **Keyboard shortcuts** (see `docs/product/settings.md`). Within a card the
+lines stand in the order of that section's rows, and a card with no line is not shown:
+
+- **General**: Appearance, Language and Markdown style, then the switches Order the sidebar by status, Automatically
+  delete archived sessions whose conversation is gone and Close idle terminals when closing the panel, then Keep running
+  in the background. A setting only a client holds has its line only when the file carries a value this client can
+  use: Keep running in the background has none in a browser.
+- **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
+- **Agent behavior**: its five switches.
+- **Keyboard shortcuts**: one line, **Changed shortcuts**.
+
+A **switch**'s line names the setting with a badge for what applying would change from what is set now: **Turns on**,
+with what then follows in that setting's own words (see "The application settings an export carries" in
+`docs/product/settings-in-a-configuration.md`); **Turns off**; or **No change**.
+
+A **setting only a client holds** — Appearance, Language, Markdown style, Keep running in the background — is badged
+**Set to the file's**, with the file's value and, in brackets, the value this client has now, worded as Settings words
+them (a language by its name in its own language, a Markdown style by its name); or **No change** when they are the
+same.
+
+The **default clone directory** has its line when the file carries one that can be used here: **No change** when it is
+this machine's already. Otherwise the line is badged **Set to the file's**, with the file's directory and, in brackets,
+this machine's, and holds a checkbox, **Use the file's default clone directory**, checked whenever a file is opened.
+Unchecked, the badge is **No change**, and the line says that this machine's directory is kept instead of the file's;
+the rows of Consoles and projects follow the choice (see "Consoles and projects in the review" above).
 
 The settings made of several items have one line each. When applying would change such a setting, its line lists under
 the badge each item that would change, one per row: the item, then the file's value, then in brackets the value it has
@@ -201,25 +266,15 @@ now. A line with no item to list is badged **No change**, so a changing badge ne
   names them (see "The five settings" in `docs/product/git-workflow-settings.md`), a switch as **On** or **Off**. Squash
   commits before delivery, Rebase before delivery and Delivery are listed when they differ even where the file's Where
   sessions develop is **On the current branch**, since their values are written all the same.
-- **The provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), one line per setting
-  — today **Claude compatibility** — present when the document carries a choice that this machine's agents declare
-  as carried and that the setting takes, the agents declaring a setting under the same id sharing its line, named as
-  the agents' tabs name it. A setting the window has no wording for under any of those agents is a line of its own for
-  each agent, named by the agent's name, a colon, then the setting's id in words (an id `sandbox_mode` as "Sandbox
-  mode"). Badged **Set to the file's**, it lists each such agent that this machine reports whose value would change: a
-  switch **On** or **Off**, a choice by its name, or by its value in words where the window has no name for it, and a
-  choice left unset here as **Follow account configuration**.
-- **Agent tags**, present when the document carries tags for an agent this build knows: badged **Set to the file's**, it
-  lists each such agent whose tags would change, its tags shown as tags, or **No tags** for none.
-- **Keyboard shortcuts**, present when the document carries them: badged **Set to the file's**, with how many of the
-  file's shortcuts differ from the defaults — counting only those that can be used here — and that changes apply only
-  to the current desktop app or, when importing in a browser, the current browser; or **Back to defaults**, when none
-  of them does, with the same scope note. Under that note it
-  lists each command whose shortcut would change, the shortcuts shown as key caps. It is **No change** when the file's
-  shortcuts are the ones the current client already has.
+- **Changed shortcuts**, present when the document carries keyboard shortcuts: badged **Set to the file's**, with how
+  many of the file's shortcuts differ from the defaults — counting only those that can be used here — and that changes
+  apply only to the current desktop app or, when importing in a browser, the current browser; or **Back to defaults**,
+  when none of them does, with the same scope note. Under that note it lists each command whose shortcut would change,
+  the shortcuts shown as key caps. It is **No change** when the file's shortcuts are the ones the current client
+  already has.
 
-Whether the settings are applied is the **Application settings** checkbox of What to import; the card has no choice of
-its own.
+Whether the settings are applied is the **Application settings** checkbox of What to import; beyond the default clone
+directory's checkbox, the cards have no choice of their own.
 
 ### Account fallbacks
 
@@ -240,108 +295,16 @@ have created included.
 ## Applying the import
 
 The review's **Import** button sends the document unchanged, in one request, with the regions checked, the choice of
-every project that is placed — a project left out is sent none — and, when the accounts are imported, the choice of
-every account given another directory or left out. A directory the user typed, for a project or an account of a region
+every project that is placed — a project left out is sent none —, when the accounts are imported, the choice of every
+account given another directory or left out, and, when the application settings are imported, whether the file's
+default clone directory is used. A directory the user typed, for a project or an account of a region
 being imported, that is not usable stops the import before any request: the tab holding it comes forward, Consoles and
 projects first, its row is marked and its field takes focus. Otherwise the **progress** replaces the review for as long
 as the request runs, which with clones can be long. When the daemon answers, the **result** replaces it, and the dialog
-is renamed to say that the import finished. When the request fails instead — the daemon refuses it, or the connection
+is renamed to say that the import finished (see `docs/product/configuration-import-progress-and-result.md`). When the request fails instead — the daemon refuses it, or the connection
 to it is lost — the dialog goes back to the review with every choice as it was, and the failure is told in an error
 alert over it (see "When the file fails" above).
 
 While the request runs the dialog cannot be left (see "A dialog cannot be left while its request runs" in
 `docs/product/dialogs.md`): **Cancel** stays in the footer, disabled, beside the **Import** button that was pressed, now
 pending, since an import cannot be cancelled once it has started.
-
-## The import progress
-
-At its top, a progress bar named **Importing configuration**. Until the daemon's first report on the import it shows no
-amount, and the line beside its name says that the import is starting; then it fills by the items that have settled —
-done, failed or not attempted — out of every item the import handles, and the line gives the count ("3 of 7
-processed"). The count is not announced at each step: assistive technology is told when the import starts and again
-when every item has been processed.
-
-Under it, one card per item group, in this order: a card for each console, with a row for each of its projects the
-import places; a card for each agent with accounts the import handles, with a row for each of those accounts; and a card
-for the application settings when they are applied. A project or an account left out has no row, and an agent with no
-account to handle has no card; an account that already exists has its row, whatever was chosen for it. There are no
-tabs. Each console, project, account and the application settings shows its state beside its name, a glyph followed by
-its word:
-
-- **Waiting** — not started yet;
-- **Creating…**, or **Cloning…** for a project being cloned, with a spinner in place of the glyph — being worked on;
-- **Done** — finished. A console is done as soon as it is created, before its projects, and an account that already
-  exists is done at once;
-- **Failed** — with its reason written out under the name, as in the result (see "The import result" below), and
-  **Details** where there is more;
-- **Not attempted** — a project whose console could not be created, with a line saying so.
-
-The progress shows no account fallback marks, totals or sharing warnings: those are the result's.
-
-## The import result
-
-The result has a tab for each region imported, in the review's order: **Consoles and projects** when the file had
-consoles and they were imported, **Accounts** when the accounts were imported, and **Application settings** when they
-were applied or could not be. A single one has no tab bar. A tab whose region holds a failure — on Consoles and
-projects, a console or project that failed or was not attempted; on Accounts, an account that failed or a sharing
-warning; on Application settings, settings that could not be applied — has the warning glyph, as in the review, and the
-first such tab is the one open; otherwise the first tab is. Nothing stands above the tabs: each region's totals are its
-own, and whether nothing failed is judged by that region's own failures alone.
-
-The result is the only place the import's failures are shown: no error alert opens for them. A failure is written out
-where it happened, under the name of the row it concerns or, for a console, in its card's header under its name: the
-reason in Octoboard's own
-words, under it the one thing to do about it, and, where there is more, a **Details** button that opens the further
-explanation and the raw text (see "Names and diagnostic details" in `docs/product/error-alerts.md`). An outcome is a
-glyph followed by its word, each outcome with a glyph of its own, and is not a control.
-
-### Consoles and projects in the result
-
-A line of totals, each item a full phrase, the items set apart by dots: the consoles created, the projects created, the
-projects left out, how many failed — consoles and projects together — and the projects not attempted, each only when
-there were any, and **Nothing failed** when nothing failed and nothing went unattempted.
-
-Then a card for each console, its header holding the console's name and always its outcome, **Created** or
-**Failed**, with the reason in the header under the name when it failed; then a row for each of its projects, or a line saying
-that it has none. A project's row has the project's name and its outcome — **Created**, **Left out**, **Failed** or
-**Not attempted** — on one line, the outcome going under the name where the row is narrow. Under them, for a project
-created, a muted line saying how it was placed (at its exported path, in the default clone directory, cloned from its
-remote, in the directory chosen); for a project not attempted, that its console could not be created; for a project
-that failed, its reason. A console or project whose account references fell back to a default account has the warning
-mark right after its name, on the card's header or the project's row (see "Account fallbacks" above); the result has no
-list of them elsewhere.
-
-### Accounts in the result
-
-A line of totals in the same form: the accounts created, those that already existed, those left out and how many
-failed, each only when there were any, and **Nothing failed** when none failed.
-
-Then a card for each agent the file had accounts for, headed by the agent's name, with a row for each account in the
-file's order and its outcome: **Created**, **Already existed**, **Left out**, or **Failed** with its reason under it. A
-created account whose sharing of the default configuration could not be turned on has, under its row, an amber warning
-glyph and a sentence saying that the account was created but sharing could not be turned on, followed by that failure's
-remedy and Details. The result does not show the accounts' directories.
-
-Under the cards, a line names the agents added to the user's agents, when any were; a line for each agent whose
-default account is now named as in the file; and, when any account was created, a note that the new accounts are not
-logged in yet and that each is to be logged in before a session uses it. The result has no **Log in** button: the
-accounts are logged in as any other (see `docs/product/logging-accounts-in.md`).
-
-### Application settings in the result
-
-When the application settings could not be applied, a red compact alert titled that the application settings could not
-be imported, saying so with the reason, its remedy and **Details** (see "Failures shown on the screen" in
-`docs/product/error-alerts.md`), and nothing else. When they were applied, a card headed **Application settings
-applied**, with a line for each setting applied, badged **On** or **Off**, and a line for each setting made of
-several items that lists under it, one per row, the item and the value applied, worded as in the review:
-
-- one line for the git workflow settings, badged **Matches the file**, listing all five;
-- one line per provider setting name, as in the review — today Claude compatibility — badged **Matches the file**,
-  listing each agent whose choice the document carried for it, worded as in the review;
-- one line for agent tags, when the document carried tags for an agent this build knows, badged **Matches the file**,
-  listing each such agent with its tags shown as tags, or **No tags** for none;
-- and, when this device applied the file's keyboard shortcuts, a line for them badged with how many changes from the
-  defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts could not be used here and
-  were left out said under it, when any were, and then each shortcut applied, as key caps — none for Defaults.
-
-This tab has no totals.

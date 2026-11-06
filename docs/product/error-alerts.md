@@ -9,7 +9,7 @@ Where a failure, a warning or a note is shown follows from how it arises, not fr
 | An important failure of automatic behaviour — a load, a refresh, a lookup a form makes on its own that could not run — one that blocks what follows, or that a component cannot do its job without | On that screen: in place of a whole page, pane, panel or list that could not be loaded, an empty-state failure; among other content, a compact alert (see "Failures shown on the screen" below) |
 | A warning about the consequence of a choice the user is making: an option of a dialog that, selected, makes what the dialog does riskier; or the reason an option, selected, cannot be carried out | A warning alert directly under that option, only while it is selected, never a mark (see "Warnings about a choice being made" below). A warning about the state of what an option acts on is a mark beside it, as below |
 | A failure or a warning about the state of something that does not block what follows, and a note | A mark at the point it concerns — a row, a table cell, a field, a checkbox, a setting, a list section's heading, a page's heading or a pane's or view's title, a line naming what it is about, a spot in a rendered document; one with no point to be located at is a compact alert in a shared place, the top of a dialog's body or of a section (see "Failures, warnings and notes marked at their point" below) |
-| A result view showing a failed result | In that view: a part that failed as a whole is a compact alert, such as a configuration import's application settings that could not be applied; an item of the result that failed has its outcome and its reason written out in its row, such as a console, project or account of a configuration import (see "The import result" in `docs/product/configuration-export-and-import-dialogs.md`) |
+| A result view showing a failed result | In that view: a part that failed as a whole is a compact alert, such as a configuration import's application settings that could not be applied; an item of the result that failed has its outcome and its reason written out in its row, such as a console, project or account of a configuration import (see "The import result" in `docs/product/configuration-import-progress-and-result.md`) |
 | A failure that ends what a dialog was opened for, while it is open | The dialog turns into a failure modal (see "The failure modal" below) |
 
 A destructive confirmation is not a failure: it is a warning modal, the warning icon in its header and what it does as
@@ -250,8 +250,8 @@ The places with a compact alert:
 - a submenu whose items are read as it opens, which is the project menu's Switch branch (see "Switching the local
   branch" in `docs/product/project-git-actions.md`), titled that the items could not be loaded;
 - Settings' Permissions section when the grants could not be read (see "Permissions" in `docs/product/settings.md`);
-- a configuration import's application settings that could not be applied, in the import's result (see "The import
-  result" in `docs/product/configuration-export-and-import-dialogs.md`);
+- a configuration import's application settings, or its agent account settings, that could not be applied, in the
+  import's result (see "The import result" in `docs/product/configuration-import-progress-and-result.md`);
 - the lookups forms make on their own that stop the form from going on, directly under the field they are about,
   which they describe to assistive technology: a project folder's detection that could not be made, and a
   repository's check (see "Associating a project" in `docs/product/projects.md`), and the session dialog's Session ID

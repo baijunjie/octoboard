@@ -13,11 +13,14 @@ import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import type { Overrides } from "../shortcuts/store";
 import { ImportResult } from "./ImportResult";
-import { documentSettings, openTab, settingLinesOf } from "./testSupport";
+import { documentSettings, openTab, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type ImportedSettings = NonNullable<Extract<Event, { type: "configuration_imported" }>["settings_applied"]>;
+
+/** What the accounts of a result hold when no account, agent or setting was dealt with. */
+const NO_ACCOUNTS = { agents_added: [], agents: [], agent_settings_applied: null, agent_settings_error: null };
 
 const project = (index: number): ImportedProject => ({
   name: `P${index}`,
@@ -85,29 +88,63 @@ it("gives each console a card named by its heading with its own outcome, and a r
   expect(cards[2].textContent).toContain("This console has no projects.");
 });
 
-it("colours a row's Details by its line: the warning's beside a reached outcome, danger under a failure", () => {
+it("colours a failed row's Details by its line, danger", () => {
   const failure = { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } };
   const accounts = {
-    agents_added: [],
+    ...NO_ACCOUNTS,
     agents: [{
       agent: "claude" as const,
       default_name_applied: false,
+      default_disabled_applied: null,
       accounts: [
-        { name: "Work", status: "created" as const, account: "a1", error: null, sharing_warning: failure },
-        { name: "Sandbox", status: "failed" as const, account: null, error: failure, sharing_warning: null },
+        { name: "Work", status: "created" as const, account: "a1", error: null },
+        { name: "Sandbox", status: "failed" as const, account: null, error: failure },
       ],
     }],
   };
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} />);
   const details = (name: string) => detailsButton([...container.querySelectorAll("li")].find((li) => li.textContent?.startsWith(name))!)!;
-  expect(details("Work").className).toContain("alert-button--warning-soft");
+  expect(details("Work")).toBeUndefined();
   expect(details("Sandbox").className).toContain("button--danger-soft");
+});
+
+it("tells of the default accounts switched and of the Agent accounts settings, which can fail on their own", async () => {
+  const settingsError = { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } };
+  const agents = [
+    { agent: "claude" as const, default_name_applied: false, default_disabled_applied: true, accounts: [] },
+    { agent: "codex" as const, default_name_applied: false, default_disabled_applied: false, accounts: [] },
+    { agent: "grok" as const, default_name_applied: false, default_disabled_applied: null, accounts: [] },
+  ];
+  const container = mountHost(
+    <ImportResult
+      result={{
+        type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error: null,
+        accounts: { ...NO_ACCOUNTS, agents, agent_settings_applied: { auto_select_account: true, auto_switch_on_usage_limit: false, auto_start_quota_windows: false, provider_settings: {}, agent_tags: {} }, agent_settings_error: null },
+      }}
+    />,
+  );
+  expect(container.textContent).toContain("The default account of Claude Code is now disabled.");
+  expect(container.textContent).toContain("The default account of Codex is now enabled.");
+  expect(container.textContent).not.toContain("The default account of Grok");
+  expect(container.querySelector("section > h3")?.textContent).toBe("Agent account settings");
+  expect(settingLinesOf(container.querySelector("section[aria-labelledby] > ul")!)).toEqual({
+    "Automatically select an account": { badge: "On" },
+    "Automatically switch accounts at the usage limit": { badge: "Off" },
+    "Start usage windows automatically": { badge: "Off" },
+  });
+  container.render(
+    <ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error: null, accounts: { ...NO_ACCOUNTS, agent_settings_error: settingsError } }} />,
+  );
+  expect(container.textContent).toContain("The agent account settings could not be applied");
+  expect(container.textContent).not.toContain("Agent account settings");
+  // The alert and "Nothing failed" do not both stand.
+  expect(container.textContent).not.toContain("Nothing failed");
 });
 
 it("says nothing failed for the consoles and the accounts beside a failure to apply the settings", async () => {
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
-  const accounts = { agents_added: [], agents: [{ agent: "claude" as const, default_name_applied: false, accounts: [{ name: "Work", status: "created" as const, account: "a1", error: null, sharing_warning: null }] }] };
+  const accounts = { ...NO_ACCOUNTS, agents: [{ agent: "claude" as const, default_name_applied: false, default_disabled_applied: null, accounts: [{ name: "Work", status: "created" as const, account: "a1", error: null }] }] };
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_error, settings_applied: null }} />);
   // The settings failure brings its tab forward; each other region's totals depend on its own failures alone.
   expect(container.textContent).toContain("The application settings could not be applied");
@@ -171,25 +208,29 @@ it("opens no error alert for partial import failures: the result screen already 
   expect(openDetails(container.querySelector('[data-slot="alert-root"]')!).textContent).toContain("Settings unavailable");
 });
 
-/** The lines of the settings card, by setting name. */
+/** The lines of the settings cards, by setting name. */
 function settingLines(container: Element): ReturnType<typeof settingLinesOf> {
-  return settingLinesOf(container.querySelector("section[aria-labelledby] > ul")!);
+  return settingLinesAcrossGroups(container);
 }
 
-it("tells of each application setting that was applied, and lists the values of the git workflow, Claude compatibility and agent tags", () => {
+it("tells of each application setting that was applied, and lists the values of the git workflow", () => {
   const container = mountHost(null);
   const render = (carried: Partial<ImportedSettings>) =>
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} />);
   render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false });
-  expect(container.querySelector("section > h3")?.textContent).toBe("Application settings applied");
+  expect(settingGroupsOf(container)).toEqual([
+    { title: "General", lines: ["Order the sidebar by status", "Automatically delete archived sessions whose conversation is gone", "Close idle terminals when closing the panel"] },
+    { title: "Git", lines: ["Automatically pull repositories", "Git workflow"] },
+    {
+      title: "Agent behavior",
+      lines: ["Automatically approve session requests", "Automatically approve resume requests", "Automatically approve account switches", "Automatically approve handoffs", "Ask questions as choices"],
+    },
+  ]);
   expect(settingLines(container)).toEqual({
     "Close idle terminals when closing the panel": { badge: "Off" },
     "Automatically pull repositories": { badge: "On" },
     "Automatically delete archived sessions whose conversation is gone": { badge: "Off" },
-    "Automatically select an account": { badge: "Off" },
-    "Automatically switch accounts at the usage limit": { badge: "Off" },
     "Order the sidebar by status": { badge: "Off" },
-    "Start usage windows automatically": { badge: "Off" },
     "Automatically approve session requests": { badge: "On" },
     "Automatically approve resume requests": { badge: "Off" },
     "Automatically approve account switches": { badge: "Off" },
@@ -206,9 +247,42 @@ it("tells of each application setting that was applied, and lists the values of 
       ],
     },
   });
-  render({ provider_settings: { codex: { claude_compatibility: false }, grok: { claude_compatibility: true } }, agent_tags: { codex: ["review", "ci"], grok: [] } });
-  expect(settingLines(container)["Claude compatibility"]).toEqual({ badge: "Matches the file", values: ["Codex: Off", "Grok Build: On"] });
-  expect(settingLines(container)["Agent tags"]).toEqual({ badge: "Matches the file", values: ["Codex: review, ci", "Grok Build: No tags"] });
+});
+
+it("tells of the default clone directory only where it was applied, and of the client's own settings in the card", () => {
+  const container = mountHost(null);
+  const render = (carried: Partial<ImportedSettings>, clientSettings?: Parameters<typeof ImportResult>[0]["clientSettings"]) =>
+    container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} clientSettings={clientSettings} />);
+  render({});
+  expect(Object.keys(settingLines(container))).not.toContain("Default clone directory");
+  render({ default_clone_dir: "/Users/dev/Code" }, [{ field: "appearance", label: "settings.appearance.label", value: "Dark" }, { field: "interface_language", label: "settings.language.label", value: "日本語", lang: "ja" }]);
+  expect(settingLines(container)["Default clone directory"]).toEqual({ badge: "Matches the file", note: "/Users/dev/Code" });
+  expect(settingLines(container)["Appearance"]).toEqual({ badge: "Dark" });
+  expect(settingLines(container)["Language"]).toEqual({ badge: "日本語" });
+  // The language's name is marked as that language, and the directory stands as plain monospace text, not a chip.
+  expect(container.querySelector("[lang=ja]")?.textContent).toBe("日本語");
+  const directory = Array.from(container.querySelectorAll("div.font-mono")).find((node) => node.textContent === "/Users/dev/Code");
+  expect(directory?.getAttribute("dir")).toBe("ltr");
+  expect(directory?.classList.contains("align-match-parent")).toBe(true);
+  expect(directory?.querySelector("[data-color]")).toBeNull();
+});
+
+it("keeps the clone directory that was written when the settings could not be applied, in a card beside the alert", () => {
+  const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error, clone_dir_applied: "/Users/dev/Code", accounts: null }} />);
+  expect(container.textContent).toContain("The application settings could not be applied");
+  expect(container.querySelector("[role=tab][aria-selected=true]")).toBeNull();
+  // The one region stands without a tab bar, its alert first and the directory in the Git card, as the settings'.
+  expect(settingGroupsOf(container)).toEqual([{ title: "Git", lines: ["Default clone directory"] }]);
+  // The line says the directory was set before the rest failed, so it does not read as contradicting the alert.
+  expect(settingLines(container)["Default clone directory"]).toEqual({ badge: "Matches the file", note: "Set before the other application settings failed to apply./Users/dev/Code" });
+  const text = container.textContent!;
+  expect(text.indexOf("could not be applied")).toBeLessThan(text.indexOf("Default clone directory"));
+});
+
+it("tells of the clone directory once where the settings were applied too", () => {
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings({ default_clone_dir: "/Users/dev/Code" }), settings_error: null, clone_dir_applied: "/Users/dev/Code", accounts: null }} />);
+  expect(container.textContent!.split("Default clone directory")).toHaveLength(2);
 });
 
 it("tells what came of the keyboard shortcuts in the settings card, and the ones left out under them", () => {
@@ -216,14 +290,14 @@ it("tells what came of the keyboard shortcuts in the settings card, and the ones
   const render = (shortcuts: { applied: number; skipped: number; overrides: Overrides }) =>
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} shortcuts={shortcuts} />);
   render({ applied: 2, skipped: 0, overrides: { focusMode: { code: "KeyK", primary: true, shift: true }, quickCreate: { code: "KeyJ", primary: true, shift: true } } });
-  const listed = settingLines(container)["Keyboard shortcuts"];
+  const listed = settingLines(container)["Changed shortcuts"];
   expect(listed.badge).toBe("2 changes from the defaults");
   expect(listed.values).toHaveLength(2);
   render({ applied: 1, skipped: 2, overrides: { focusMode: { code: "KeyK", primary: true, shift: true } } });
-  expect(settingLines(container)["Keyboard shortcuts"]).toMatchObject({ badge: "1 change from the default", note: "2 shortcuts in the file could not be applied here and were left out." });
-  expect(settingLines(container)["Keyboard shortcuts"].values).toHaveLength(1);
+  expect(settingLines(container)["Changed shortcuts"]).toMatchObject({ badge: "1 change from the default", note: "2 shortcuts in the file could not be applied here and were left out." });
+  expect(settingLines(container)["Changed shortcuts"].values).toHaveLength(1);
   render({ applied: 0, skipped: 0, overrides: {} });
-  expect(settingLines(container)["Keyboard shortcuts"]).toEqual({ badge: "Defaults" });
+  expect(settingLines(container)["Changed shortcuts"]).toEqual({ badge: "Defaults" });
 });
 
 it("marks a console and a project whose account fell back with a warning mark after the name, the sentence in its popover, and lists no section of them", async () => {
@@ -242,7 +316,7 @@ it("marks a console and a project whose account fell back with a warning mark af
   press(marks[1]);
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("The Codex account Personal is not set up here, so the default account is used.");
   await openTab("Application settings");
-  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Application settings applied"]);
+  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["General", "Git", "Agent behavior"]);
 });
 
 it("writes a failed line's reason under its row, with the raw text behind Details and not in the row", () => {
@@ -267,7 +341,7 @@ it("writes a failed line's reason under its row, with the raw text behind Detail
 
 it("shows tabs only for the regions that were imported", () => {
   const tabs = () => Array.from(container.querySelectorAll("[role=tab]")).map((tab) => tab.textContent);
-  const accounts = { agents_added: [], agents: [] };
+  const accounts = NO_ACCOUNTS;
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_applied: null, settings_error: null }} />);
   expect(tabs()).toEqual(["Consoles and projects", "Accounts"]);

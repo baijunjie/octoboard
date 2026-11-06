@@ -192,8 +192,9 @@ the switch is on the row's description says what is happening now: sessions and 
 and projects with no unarchived session end the list. While it is off the description says what turning it on will
 do, and that projects with no unarchived session end the list. The daemon stores it as `sidebar_order_by_status` and
 keeps it, so every window shows the same. A console session may read and change it, and a configuration export that
-includes the application settings carries it (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
-`docs/product/configuration-export-and-import.md`). The order under either state, and what else follows it, are in
+includes the application settings carries it (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md` and "The application settings an export carries" in
+`docs/product/settings-in-a-configuration.md`). The order under either state, and what else follows it, are in
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`.
 
 ### Automatically delete archived sessions whose conversation is gone
@@ -216,7 +217,7 @@ in `docs/product/terminal-panel.md`. Turning it on closes nothing at once; it ap
 The daemon stores it as `auto_close_idle_shell_terminals` and keeps it, so every window shows the same. A console
 session may read and change it, and a configuration export that includes the application settings carries it (see
 "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
-application settings an export carries" in `docs/product/configuration-export-and-import.md`).
+application settings an export carries" in `docs/product/settings-in-a-configuration.md`).
 
 ### Keep running in the background
 
@@ -263,7 +264,10 @@ above. A value that is neither absolute nor starts with `~/` is refused with an 
 stored one, and a blank value goes back to `~/Projects`. Browse opens the picker on the path the field holds — the
 stored directory until something is typed — by the rules every directory field's Browse follows, which also say where it
 opens on a relative path or on a directory that does not exist yet (see "Browsing directories" in
-`docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document.
+`docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document. A
+configuration export that includes the application settings carries it, and an import asked to apply them sets it
+unless the user keeps this machine's own (see "The default clone directory on import" in
+`docs/product/settings-in-a-configuration.md`).
 
 ### Automatically pull repositories
 
@@ -319,7 +323,7 @@ turning it on will do, and while it is on it says what is happening now.
 A console session may read and change all five git workflow settings, and a configuration export that includes the
 application settings carries them (see "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
-`docs/product/configuration-export-and-import.md`).
+`docs/product/settings-in-a-configuration.md`).
 
 ## Agent accounts
 
@@ -340,9 +344,9 @@ only when that agent has no usable account. While the switch is off the row's de
 do, and while it is on it says what is happening now: a new session uses the account whose weekly limit resets soonest,
 so usage left before a reset is not wasted. The daemon stores it as `auto_select_account` and keeps it, so every window
 shows the same. A console session may read it but not change it, as with every setting of Agent accounts, and a
-configuration export that includes the application settings carries it (see "Application settings: `get_settings` and
-`update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
-`docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies the choice, are in "Which
+configuration export that includes the accounts carries it (see "Application settings: `get_settings` and
+`update_settings`" in `docs/product/agent-settings-tools.md` and "The agent account settings an export carries" in
+`docs/product/settings-in-a-configuration.md`). Which account is chosen, and who applies the choice, are in "Which
 account a session uses" in `docs/product/opening-sessions.md`. Turning it on or off changes no session already open. It
 governs the initial agent and account of new sessions; explicit choices still win, and it does not move a session that
 is already running (see "Automatically switch accounts at the usage limit" below).
@@ -355,9 +359,9 @@ description says that, once it is on, a session that stops at its account's usag
 with usage left and carries on; while it is on, it says that this is what happens. The daemon stores it as
 `auto_switch_on_usage_limit` and keeps it, so every window shows the same. A console session can neither read nor change
 it, since it ends sessions' processes and spends another account's quota without asking (see "Who reads and changes
-what" in `docs/product/agent-settings-tools.md`); a configuration export that includes the application settings carries
-it (see "The application settings an export carries" in `docs/product/configuration-export-and-import.md`). Turning it
-on does not act on sessions
+what" in `docs/product/agent-settings-tools.md`); a configuration export that includes the accounts carries it (see
+"The agent account settings an export carries" in `docs/product/settings-in-a-configuration.md`). Turning it on does
+not act on sessions
 already stopped. Turning it off cancels waits for quota recovery; turning it back on does not restore them. While it is
 on, a turn that stops on the usage limit with no eligible alternative account can continue after a fresh successful
 quota reading, on another account of its agent or on its original account (see "When no account qualifies" in
@@ -377,8 +381,8 @@ countdown and the longer it waits the later its next reset comes; with the switc
 account with the agent's cheapest model to start it. The daemon stores it as `auto_start_quota_windows` and keeps it, so
 every window shows the same. A console session can neither read nor change it, since it spends the user's quota (see
 "Who reads and changes what" in `docs/product/agent-settings-tools.md`); a configuration export that includes the
-application settings carries it (see "The application settings an export carries" in
-`docs/product/configuration-export-and-import.md`). When a request
+accounts carries it (see "The agent account settings an export carries" in
+`docs/product/settings-in-a-configuration.md`). When a request
 is sent, what it is and what it leaves behind are in `docs/product/starting-usage-windows.md`.
 
 ## Agent behavior
@@ -388,7 +392,7 @@ much, above five rows: **Automatically approve session requests**, **Automatical
 **Automatically approve account switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The
 section is the same in every client. Each switch is kept by the daemon, so every window shows the same, and besides its
 row only an import asked to apply a configuration document's application settings changes it (see "The application
-settings an export carries" in `docs/product/configuration-export-and-import.md`); turning one on or
+settings an export carries" in `docs/product/settings-in-a-configuration.md`); turning one on or
 off leaves the others as they are. What an automatic approval does, what turning one of the four approval switches on
 changes, and why agents cannot change any of them are in "Approving requests automatically" in
 `docs/product/session-requests.md`.

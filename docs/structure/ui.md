@@ -126,8 +126,8 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
   its hooks.
 - `src/process/` — the Processes panel and its data, the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces), and the rail's process panel (`ProcessCounts`).
-- `src/configuration/` — configuration export and import dialogs (with the cards and parts they share, `SettingsCard.tsx`
-  and `importParts.tsx`; the review and result show one line per distinct provider-setting heading, from the served schema and the providers' copy; `ImportProgress.tsx` shows a running import item by item, its state kept in `progressState.ts`, with `ResultCards.tsx` shared by progress and result), and the list of plain switch settings.
+- `src/configuration/` — configuration export and import dialogs (with the cards and parts they share, `SettingsGroups.tsx`,
+  `AgentSettingsCard.tsx` and `importParts.tsx`; `clientSettings.ts` carries the settings only this client holds (appearance, Markdown style, run in the background, language) into and out of the document; the review and result show one line per distinct provider-setting heading, from the served schema and the providers' copy; `ImportProgress.tsx` shows a running import item by item, its state kept in `progressState.ts`, with `ResultCards.tsx` shared by progress and result), and the list of plain switch settings.
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
 
 ### Dev-only and website-facing

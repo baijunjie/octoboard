@@ -22,6 +22,17 @@ fn an_absent_apply_consoles_means_true() {
 }
 
 #[test]
+fn an_absent_apply_clone_dir_means_true() {
+    let json = r#"{"type":"import_configuration","document":{}}"#;
+    match serde_json::from_str::<Request>(json).unwrap().body {
+        RequestBody::ImportConfiguration {
+            apply_clone_dir, ..
+        } => assert!(apply_clone_dir),
+        _ => panic!("not import_configuration"),
+    }
+}
+
+#[test]
 fn an_absent_detect_default_agent_means_true() {
     let json = r#"{"type":"add_project","console_id":"c","source":"local"}"#;
     match serde_json::from_str::<Request>(json).unwrap().body {
