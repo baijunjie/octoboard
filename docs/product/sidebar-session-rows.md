@@ -181,10 +181,12 @@ name carries the same fact in words for assistive technology ("Bound to …"), i
 owner as for a console session's, which is the only place the nesting is put into words. The badge itself still carries
 no information its tooltip does not, so colour alone never distinguishes two owners for a user who cannot tell the
 colours apart. A console session's own row shows the same colour, decoratively, since the row's own label already names
-it, as do its own card in its focus mode, its chip in a project's focus mode and its chip in the switch strip. Cards in
-a project's combined focus view carry the dot for the console session above them, including cards inset under a
-coordinator; the tooltip and accessible name identify that console session. The other focus views carry no binding badge
-on their cards. See "A project's focus mode" in `docs/product/focus-mode.md` for the switch and the card labels.
+it, as do its focus header, its chip in a project's focus mode and its chip in the switch strip. The focus header's dot
+follows the console name, with the session named on its own card below (see "What both views show" in
+`docs/product/focus-mode.md`). Cards in a project's combined focus view carry the dot for the console session above
+them, including cards inset under a coordinator; the tooltip and accessible name identify that console session. The
+other focus views carry no binding badge on their cards. See "A project's focus mode" in `docs/product/focus-mode.md`
+for the switch and the card labels.
 
 **Where the colour comes from.** A console session's colour is one of a fixed palette of 16, one colour per family —
 red, orange, amber, yellow, lime, green, teal, cyan, sky, blue, indigo, violet, fuchsia, pink, brown and gray — each a

@@ -294,7 +294,8 @@ it("a console session's focus mode holds its own card above the list, with no lo
   const card = Array.from(container.querySelectorAll<HTMLElement>("div[role=button]")).find((row) => row.getAttribute("aria-label")?.startsWith(isolate("Hub")))!;
   expect(card.getAttribute("aria-label")).not.toContain("Bound to");
   expect(card.querySelector('[aria-label^="Unlock"]')).not.toBeNull();
-  expect(card.querySelector(".session-colour-dot")).not.toBeNull();
+  expect(header.querySelector(".session-colour-dot")).not.toBeNull();
+  expect(card.querySelector(".session-colour-dot")).toBeNull();
   act(() => card.click());
   expect(handlers.onSelectSession).toHaveBeenCalledWith(expect.objectContaining({ id: hub1.id }));
   unmount();

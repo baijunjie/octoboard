@@ -251,7 +251,10 @@ export function ConsoleSessionFocusView({
   return (
     <FocusModeContext value={true}>
       <FocusHeader handlers={handlers}>
-        <FocusTitle heading={parentConsole.name} />
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <PaneTitle heading={parentConsole.name} className="min-w-0 max-w-max flex-1 px-1" />
+          <BindingBadge owner={consoleSession} decorative />
+        </div>
         <RowIconGroup>
           {/* A session needs a project, and a console session with nothing bound yet has no group
               to open one from, so the header offers every project. */}
@@ -599,7 +602,7 @@ function ArchivedList({
  * view also names and marks its console owner.
  * `under`, the project session this one is bound to and is inset below, goes into its accessible name,
  * which is what carries that nesting to assistive technology. `own` is the console session's own
- * card in its focus mode: it shows its own colour as a plain mark, has no pin button, and its menu
+ * card in its focus mode: it has no pin button, and its menu
  * follows `sessionMenu`'s `focused` placement (no Pin / Unpin, no Focus mode). */
 const SessionCard = memo(function SessionCard({
   handlers,
@@ -625,8 +628,6 @@ const SessionCard = memo(function SessionCard({
   // only through the row's name, where it comes last; the account is already in its first part.
   const { accounts, defaultNames, launch, modelLabel, name, providers } = useSessionRowModel(session, [under ?? consoleOwner, under && consoleOwner], status);
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
-  // A console session's card shows its own colour; a project session's shows its console owner's.
-  const badgeOwner = own ? session : consoleOwner;
   return (
     <TreeRow
       ref={rowRef}
@@ -647,7 +648,7 @@ const SessionCard = memo(function SessionCard({
         </RowControls>
       </RowIconLine>
       <div className="flex min-w-0 items-center gap-(--row-leading-icon-gap)">
-        {badgeOwner?.colour && <RowIconSlot placement="leading"><BindingBadge owner={badgeOwner} decorative={own} /></RowIconSlot>}
+        {consoleOwner?.colour && <RowIconSlot placement="leading"><BindingBadge owner={consoleOwner} /></RowIconSlot>}
         <FadeOverflow as="span" titleWhenClipped={sessionDisplayTitle(t, session)} className="min-w-0 flex-1 text-sm font-medium">
           <bdi>{sessionDisplayTitle(t, session)}</bdi>
         </FadeOverflow>

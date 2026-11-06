@@ -11,20 +11,21 @@ Session titles throughout either view follow "Displayed names" in `docs/product/
 
 **The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar and shows Toggle focus
 mode's current shortcut in its tooltip; the view's heading; and a **+** button for a new session. A project's header
-shows the console's name on a smaller first line above the project's name, which is the heading. A console session's header shows the console's name alone, on one line, as the
-heading; the console session's title is on its own card below. The heading is a heading only: pressing it selects
-nothing. The header shows no pin button. A project's header also carries its branch badge, whose failure mark after a
-failed check is a tab stop of its own (see "The branch badge" in `docs/product/project-git-status.md`), and, after the
-**+**, the project's action menu without its **Focus mode**, **Pin** / **Unpin** and **View archive** items — the view's
-own **Archived (n)** list stands in for the last. In a project's header the title — the console's name over the
-project's name — and the branch badge split the room between the back button and the header's buttons evenly;
-whichever needs less than its half hands the rest to the other, and the badge sits at the end of that room, next to the
-buttons. The badge's state glyph or failure mark and its upstream counts always stay visible, so when they alone need
-more than half — a narrow sidebar, large counts — none of the branch name shows and the title takes the rest; the
-project's name keeps its floor all the same. While the badge shows nothing — no git status yet, or a directory that is
-not a repository — the title takes the whole room. A console session's header carries nothing else — no colour, lock
-button or action menu, and no menu on a right-click: those are on the console session's own card below it (see "A
-console session's focus mode" below).
+shows the console's name on a smaller first line above the project's name, which is the heading. A console session's
+header shows the console's name alone, on one line, as the heading, immediately followed by the console session's colour
+dot. The dot stays visible when a long console name is clipped; it is decorative, with no tooltip or tab stop. The
+console session's title is on its own card below. The heading is a heading only: pressing it selects nothing. The header
+shows no pin button. A project's header also carries its branch badge, whose failure mark after a failed check is a tab
+stop of its own (see "The branch badge" in `docs/product/project-git-status.md`), and, after the **+**, the project's
+action menu without its **Focus mode**, **Pin** / **Unpin** and **View archive** items — the view's own **Archived (n)**
+list stands in for the last. In a project's header the title — the console's name over the project's name — and the
+branch badge split the room between the back button and the header's buttons evenly; whichever needs less than its half
+hands the rest to the other, and the badge sits at the end of that room, next to the buttons. The badge's state glyph or
+failure mark and its upstream counts always stay visible, so when they alone need more than half — a narrow sidebar,
+large counts — none of the branch name shows and the title takes the rest; the project's name keeps its floor all the
+same. While the badge shows nothing — no git status yet, or a directory that is not a repository — the title takes the
+whole room. A console session's header has no lock button or action menu, and no menu on a right-click: those are on the
+console session's own card below it (see "A console session's focus mode" below).
 
 **The list's section headings**, in both: **Sessions (n)** stays at the top of the scrolling list while its
 cards move underneath; as **Archived (n)** approaches the top, it pushes the Sessions heading upward out of view
@@ -158,8 +159,8 @@ empty row is plain text (see "When no agent can open a session" in `docs/product
   archived: see "The switch strip" below.
 - **The console session's own card**, below the switch strip, or right under the header without one. It stays where it
   is while the list below scrolls. It is a session card as in "What both views show" above — status, title, agent,
-  creation time and context size — with these differences: its title is preceded by the console session's own colour,
-  decoratively, since the title names it; it never shows a pin button, even while the console session is pinned; and
+  creation time and context size — with these differences: its title starts at the card's leading content edge without
+  a colour dot; it never shows a pin button, even while the console session is pinned; and
   its action menu is the console session's row's (see "Session rows" in `docs/product/sidebar-session-rows.md`) without
   **Pin** / **Unpin** and **Focus mode**. Its lock button while locked, and its Delete or Archive shortcut, are as on
   any card.
