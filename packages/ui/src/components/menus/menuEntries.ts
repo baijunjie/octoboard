@@ -6,6 +6,8 @@ import type { Reason } from "../../format/reason";
 export interface ActionMenuItem {
   /** A single letter that chooses this entry while its menu is open. */
   shortcut?: string;
+  /** A window command advertised by this item, which it can take while its root menu has focus. */
+  commandShortcut?: { label: string; matches: (event: KeyboardEvent) => boolean };
   label: string;
   /** What the item shows in place of `label` (a path that has to read left to right); `label` stays
    * its text value for typeahead. It takes the pointer as `label` does, so a tooltip or marquee in it

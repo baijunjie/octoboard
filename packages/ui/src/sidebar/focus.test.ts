@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import { belongsToFocus, cycleConsoleSession, focusAfterSelect, focusFor, focusKey, focusTargetId, resolveFocus, shortcutOutcome } from "./focus";
+import { belongsToFocus, cycleConsoleSession, focusAfterSelect, focusFor, focusKey, focusTargetId, resolveFocus, selectedSessionFocusTarget } from "./focus";
 import type { FocusTarget } from "./types";
 
 const main = consoleOf("c-1", "Main");
@@ -67,23 +67,22 @@ describe("belongsToFocus", () => {
   });
 });
 
-describe("shortcutOutcome", () => {
+describe("selectedSessionFocusTarget", () => {
   it.each([
-    ["enters the project of a selected project session", undefined, unbound, projectFocus],
-    ["enters the project of a selected bound session", undefined, bound, projectFocus],
-    ["enters a selected console session itself", undefined, hub, hubFocus],
-    ["does nothing for an archived console session", undefined, { ...hub, status: "archived" as const }, null],
-    ["does nothing with nothing selected", undefined, undefined, null],
-    ["does nothing for a session of an unknown project", undefined, { ...unbound, project_id: "gone" }, null],
-    ["leaves a project's focus mode", projectFocus, unbound, undefined],
-    ["leaves a console session's focus mode", hubFocus, hub, undefined],
-    ["leaves focus mode with nothing selected", projectFocus, undefined, undefined],
-  ])("%s", (_, focus, selected, expected) => {
-    const outcome = shortcutOutcome(focus, selected, projects);
-    if (expected === null) expect(outcome).toBeUndefined();
-    else expect(outcome?.focus && ("project" in outcome.focus ? outcome.focus.project.id : outcome.focus.consoleSession.id)).toBe(
-      expected && ("project" in expected ? expected.project.id : expected.consoleSession.id),
-    );
+    ["an independent project session", unbound, projectFocus],
+    ["a directly bound session", bound, hubFocus],
+    ["an indirectly bound session", underCoordinator, hubFocus],
+    ["a console session", hub, hubFocus],
+    ["an archived console session", { ...hub, status: "archived" as const }, undefined],
+    ["nothing selected", undefined, undefined],
+    ["an unknown project", { ...unbound, project_id: "gone" }, undefined],
+    ["an archived independent project session", { ...unbound, status: "archived" as const }, projectFocus],
+    ["a missing owner", { ...bound, bound_to: "gone" }, projectFocus],
+    ["an archived console owner", { ...bound, bound_to: "s-archived-hub" }, undefined],
+    ["an owner chain cycle", { ...bound, bound_to: underCoordinator.id }, projectFocus],
+  ])("resolves %s", (_, selected, expected) => {
+    const current = selected ? new Map(sessions).set(selected.id, selected) : sessions;
+    expect(selectedSessionFocusTarget(selected, projects, current)).toEqual(expected);
   });
 });
 

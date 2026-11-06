@@ -380,7 +380,6 @@ export function App(): React.ReactElement {
     selectConsole: sidebarView.selectConsole,
     currentConsoleId: sidebarView.currentConsole?.id,
     selectedSession,
-    projects,
     sidebarShown: panes.sidebarShown,
     selectSession,
     focusTerminal,

@@ -309,20 +309,20 @@ describe("the Colour entry", () => {
 describe("the Focus mode entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle");
   const labels = (session: Session, placement: MenuPlacement = "list") =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false, placement }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
+    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { providers: TEST_PROVIDERS, switching: false, placement, focusTarget: { consoleSession: hub } }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
 
   it.each([
     ["a console session's row", hub, "list", true],
     ["a console session's own focus mode", hub, "focused", false],
     ["an archived console session", { ...hub, status: "archived" as const }, "list", false],
-    ["a project session", sessionOf("s", "c", "p", "Title", "idle"), "list", false],
+    ["a selected project session", sessionOf("s", "c", "p", "Title", "idle"), "list", true],
   ] as const)("is offered for %s: %#", (_, session, placement, offered) => {
     expect(labels(session, placement).includes("Focus mode")).toBe(offered);
   });
 
   it("enters the console session's focus mode", () => {
     const handlers = { onFocus: vi.fn() } as unknown as SidebarHandlers;
-    const entry = sessionMenu(t, handlers, hub, [], {}, { providers: TEST_PROVIDERS, switching: false }).find((candidate) => typeof candidate === "object" && candidate.label === "Focus mode");
+    const entry = sessionMenu(t, handlers, hub, [], {}, { providers: TEST_PROVIDERS, switching: false, focusTarget: { consoleSession: hub } }).find((candidate) => typeof candidate === "object" && candidate.label === "Focus mode");
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onFocus).toHaveBeenCalledWith({ consoleSession: hub });
   });

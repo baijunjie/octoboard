@@ -7,6 +7,8 @@ import type { RequestHandler } from "../requests";
 import { enter, openTooltip, press, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
+import { ariaBinding } from "../shortcuts/binding";
+import { defaultBinding } from "../shortcuts/commands";
 import { restoreAllBindings } from "../shortcuts/store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
@@ -23,7 +25,7 @@ function mount(session: Session, inspect: RequestHandler) {
   const root = createRoot(container);
   const render = (next: Session) => act(() => root.render(
     <TestHost daemon={daemon}>
-      <SessionActions session={next} handlers={handlers} accounts={[]} hasBoundSessions={false} rowRef={{ current: container }} />
+      <SessionActions selected session={next} handlers={handlers} accounts={[]} hasBoundSessions={false} rowRef={{ current: container }} />
     </TestHost>,
   ));
   onTestFinished(() => {
@@ -122,10 +124,12 @@ it("shows menu-only letters instead of selected-session window shortcuts", async
   press(container.querySelector<HTMLElement>('button[aria-label^="Actions for session"]')!, "mouse");
   await act(async () => {});
   const shown = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith(label))!;
-  for (const [label, letter] of [["Lock", "L"], ["Pin", "P"], ["Focus mode", "F"], ["Rename", "R"], ["Copy session ID", "C"], ["Change model", "M"], ["Archive", "A"]]) {
+  for (const [label, letter] of [["Lock", "L"], ["Pin", "P"], ["Rename", "R"], ["Copy session ID", "C"], ["Change model", "M"], ["Archive", "A"]]) {
     expect(shown(label).querySelector("kbd")?.textContent).toBe(letter);
     expect(shown(label).getAttribute("aria-keyshortcuts")).toBe(letter);
   }
+  expect(shown("Focus mode").querySelector("kbd")?.textContent?.endsWith("F")).toBe(true);
+  expect(shown("Focus mode").getAttribute("aria-keyshortcuts")).toBe(ariaBinding(defaultBinding("focusMode")));
   expect(shown("Colour").querySelector("kbd")).toBeNull();
   expect(shown("Colour").getAttribute("aria-keyshortcuts")).toBeNull();
   act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true, cancelable: true })));

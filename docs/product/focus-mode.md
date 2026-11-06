@@ -2,16 +2,16 @@
 
 Focus mode replaces the whole sidebar — the console header and the console sessions and project lists (see
 `docs/product/sidebar.md`) — with one project or one console session. Choosing **Focus mode** from a project's action
-menu enters the first, from a console session's action menu the second. The two views are built alike, and differ in
-what they list.
+menu enters that project's view. The selected session's menu enters its context as described in "The focus mode
+shortcut" below. The two views are built alike, and differ in what they list.
 
 ## What both views show
 
 Session titles throughout either view follow "Displayed names" in `docs/product/session-titles.md`.
 
-**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar; the view's heading; and
-a **+** button for a new session. A project's header shows the console's name on a smaller first line above the
-project's name, which is the heading. A console session's header shows the console's name alone, on one line, as the
+**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar and shows Toggle focus
+mode's current shortcut in its tooltip; the view's heading; and a **+** button for a new session. A project's header
+shows the console's name on a smaller first line above the project's name, which is the heading. A console session's header shows the console's name alone, on one line, as the
 heading; the console session's title is on its own card below. The heading is a heading only: pressing it selects
 nothing. The header shows no pin button. A project's header also carries its branch badge, whose failure mark after a
 failed check is a tab stop of its own (see "The branch badge" in `docs/product/project-git-status.md`), and, after the
@@ -295,16 +295,34 @@ creation. The header's existing availability and quick-creation refusals apply t
 
 **A keyboard shortcut toggles focus mode**: Toggle focus mode, `Shift+Cmd+F` on a Mac (the macOS application, or a
 browser on a Mac) and `Ctrl+Shift+F` elsewhere unless the user has changed it (see
-`docs/product/keyboard-shortcuts.md`), matched on the physical key whatever the keyboard layout. The Focus mode items
-of project and console session menus show a fixed `F` instead, which acts only while that menu is open and on the
-project or session it belongs to (see "Menu keyboard shortcuts" in `docs/product/keyboard-shortcuts.md`).
+`docs/product/keyboard-shortcuts.md`), matched on the physical key whatever the keyboard layout.
 
-- Outside focus mode it enters focus mode for the selected session's context, switching the sidebar to that session's
-  console first when needed: a project session's project, or, with a console session selected, that console session
-  itself. With nothing selected, or an archived console session, it does nothing.
-- In either focus mode it leaves focus mode.
-- It does nothing while a dialog or a menu is open, and during an input-method composition.
-- The key combination never reaches the terminal, so the agent never receives it.
+Outside focus mode, the shortcut and the selected session's **Focus mode** menu item enter the same context, switching
+the sidebar to that session's console first when needed:
+
+- A console session enters its own focus mode, provided it is not archived.
+- A project session bound to a console session, directly or through project coordinators, enters that console
+  session's focus mode. The console session must still be live and belong to the selected session's console; an
+  archived one or one belonging to another console is unavailable, rather than falling back to the project.
+- A project session with no console session above it enters its project's focus mode. An owner that is missing, or
+  an owner chain that loops without reaching a console session, leaves it in this case too. The project must exist
+  and belong to the selected session's console.
+- With nothing selected or no available context, the shortcut does nothing.
+
+The global shortcut also applies to an archived project session with an available context.
+
+The session-menu item is offered only for the selected session that is not archived and has an available context,
+while no focus mode is active (see "Session rows" in `docs/product/sidebar-session-rows.md`). It shows the current Toggle focus mode combination,
+which also activates it while keyboard focus is in that menu's main list. A project's own menu keeps its fixed `F`
+key and enters that project directly.
+
+In either focus mode the global shortcut leaves focus mode. The header's Leave focus mode tooltip shows that same
+current combination. Changing the binding updates both the session-menu hint and the tooltip immediately.
+
+The shortcut does nothing while a dialog, another menu, a submenu or a menu's custom panel is open, while recording a
+shortcut, and during input-method composition. The selected session's main menu above is the one menu exception.
+Holding the combination does not repeat the action, including after entering focus mode, so it cannot toggle back
+out while the keys remain held. The key combination never reaches the terminal, so the agent never receives it.
 
 ## Keyboard focus on entering and leaving
 

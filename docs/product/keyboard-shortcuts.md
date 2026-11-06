@@ -10,9 +10,9 @@ there are, how they are changed and how a key press is matched against them.
 
 ## Menu keyboard shortcuts
 
-Session, project and console action menus show fixed single-letter shortcuts on their top-level actions. While a menu
-is open, a letter takes that action immediately, on the session, project or console the menu belongs to, regardless
-of the selected session. The mappings are in "Session menu keyboard shortcuts" in
+Session, project and console action menus show fixed single-letter shortcuts on their top-level actions, apart from
+the selected session's Focus mode item described below. While a menu is open, a letter takes that action immediately,
+on the session, project or console the menu belongs to, regardless of the selected session. The mappings are in "Session menu keyboard shortcuts" in
 `docs/product/sidebar-session-rows.md`, "Project menu keyboard shortcuts" in `docs/product/sidebar-project-rows.md`
 and "The console header" in `docs/product/sidebar.md`.
 
@@ -29,6 +29,12 @@ protection rules.
 The letter is matched against the character typed, with no modifier held. Holding a letter does not repeat its
 action, and input-method composition does not activate an item. Once the menu closes its letters have no effect.
 Arrow keys, Enter, Space and Escape keep the menu's usual navigation and activation behavior.
+
+The selected session's Focus mode item shows and takes the current configurable Toggle focus mode combination,
+including its modifiers, instead of a fixed letter. It is offered only outside focus mode on a selected session that
+is not archived and has an available context. Its availability and target follow "The focus mode shortcut" in
+`docs/product/focus-mode.md`. That combination works in the menu's main list; another menu, a submenu or a dialog
+suppresses it. It does not repeat while held. The project's Focus mode item keeps its fixed `F`.
 
 ## How a combination is written and matched
 
@@ -172,6 +178,7 @@ The same rules decide what a recording accepts, what a reset may put back and wh
 
 Where a configurable shortcut is shown it is the command's current one, and it changes as soon as the shortcut does:
 
+- the selected session menu's Focus mode item and the Leave focus mode button's tooltip;
 - the tooltips that name a shortcut: the **+** that the New session commands act on, which shows the shortcut of
   whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/focus-mode.md`);
 - the desktop app's native menu, whose **Settings…** item carries Open settings' shortcut;

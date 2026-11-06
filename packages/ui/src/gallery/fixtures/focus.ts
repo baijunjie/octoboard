@@ -488,6 +488,19 @@ export const focusScenarios: Scenario[] = [
     ],
   },
   {
+    id: "focus-exit-shortcut-tooltip",
+    group: GROUP,
+    category: "normal",
+    title: "Leave focus mode shortcut tooltip",
+    description: "The focused back button's tooltip says Leave focus mode and shows the current global Focus mode shortcut as key caps. The same binding enters focus mode from a selected session's menu and leaves it again.",
+    state: consoleFocusState,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    steps: [
+      (ui) => ui.focusControl(ui.t("sidebar.focus.exit")),
+      (ui) => ui.wait(1000),
+    ],
+  },
+  {
     id: "focus-context-tooltip",
     group: GROUP,
     category: "normal",

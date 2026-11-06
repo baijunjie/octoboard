@@ -45,9 +45,11 @@ A session row's action menu offers:
 
 - **Lock** / **Unlock** — see "Session lock controls" below.
 - **Pin** / **Unpin**.
-- **Focus mode** — a console session's row only: enters that console session's focus mode (see
-  `docs/product/focus-mode.md`).
-  A project session's row has no such entry, and neither has an archived console session's.
+- **Focus mode** — offered only on the selected session that is not archived, while no focus mode is active and the
+  session has an available focus context. This applies to project and console sessions alike; an unselected session
+  has no such entry. It enters the same context as the global Toggle focus mode command (see "The focus mode
+  shortcut" in `docs/product/focus-mode.md`). Its key cap shows that command's current configurable combination,
+  which also activates the item while this menu's main list holds keyboard focus.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
 - **Copy session ID** — immediately after Rename, shows the session ID below its label in muted monospace text,
   left to right on one line within the same menu item, fading where it overflows. An overflowing ID scrolls while the
@@ -153,7 +155,6 @@ the session the menu belongs to under "Menu keyboard shortcuts" in `docs/product
 |---|---|
 | Lock / Unlock | L |
 | Pin / Unpin | P |
-| Focus mode | F |
 | Reopen | O |
 | Rename | R |
 | Copy session ID | C |
@@ -163,7 +164,9 @@ the session the menu belongs to under "Menu keyboard shortcuts" in `docs/product
 | Archive | A |
 | Delete | D |
 
-Colour and Switch account open submenus or a panel, so neither has a temporary letter shortcut.
+Focus mode is separate from these fixed letters: when offered, it shows and takes the current Toggle focus mode
+combination described above. Colour and Switch account open submenus or a panel, so neither has a temporary letter
+shortcut.
 
 ## The binding badge
 

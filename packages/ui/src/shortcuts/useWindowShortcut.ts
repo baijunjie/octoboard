@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 
+import { runMenuCommand } from "../components/menus/menuCommands";
 import { MODAL_OPEN } from "../components/focus/selectors";
 import { useLatest } from "../components/hooks/useLatest";
 
@@ -8,8 +9,9 @@ import { useLatest } from "../components/hooks/useLatest";
  * nothing else, so it can be a plain function of the event); a match calls `run` with it.
  *
  * Listened for on the window's capture phase so the key never reaches the terminal (and through it
- * the agent), and swallowed (not run) while a dialog or menu is open and during an input method
- * composition. `enabled` is false where the shortcut does not exist, and the key is then left alone.
+ * the agent). A modal suppresses the window action; an open menu may take a command its own item
+ * advertises. Input-method composition is left alone. `enabled` is false where the shortcut does not exist,
+ * and the key is then left alone.
  */
 export function useWindowShortcut<T>(
   match: (event: KeyboardEvent) => T | undefined,
@@ -25,7 +27,10 @@ export function useWindowShortcut<T>(
       if (matched === undefined) return;
       event.preventDefault();
       event.stopPropagation();
-      if (document.querySelector(MODAL_OPEN)) return;
+      if (document.querySelector(MODAL_OPEN)) {
+        runMenuCommand(event);
+        return;
+      }
       latest.current.run(matched);
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });

@@ -2,10 +2,10 @@ import { flushSync } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 
 import { useStableHandler } from "../components/hooks/useLatest";
-import type { Project, Session } from "../protocol";
+import type { Session } from "../protocol";
 import { switchStrip } from "../sessions/order";
 import { indexSessions, NO_SESSIONS, sessionsOf } from "../sessions/sessionIndex";
-import { KEY_SWITCH_SELECTION, shortcutOutcome } from "../sidebar/focus";
+import { KEY_SWITCH_SELECTION, selectedSessionFocusTarget } from "../sidebar/focus";
 import { useFocusShortcut } from "../sidebar/focusShortcut";
 import { useSwitchShortcut } from "../sidebar/switchShortcut";
 import type { FocusTarget } from "../sidebar/types";
@@ -22,7 +22,6 @@ export function useFocusMode({
   selectConsole,
   currentConsoleId,
   selectedSession,
-  projects,
   sidebarShown,
   selectSession,
   focusTerminal,
@@ -33,17 +32,16 @@ export function useFocusMode({
   selectConsole: (consoleId: string) => void;
   currentConsoleId: string | undefined;
   selectedSession: Session | undefined;
-  projects: Map<string, Project>;
   sidebarShown: boolean;
   selectSession: (session: Session, options?: { enterFocus?: boolean; resume?: boolean }) => void;
   focusTerminal: () => void;
 }) {
+  const selectedTarget = useDaemonStore(useShallow((s) => selectedSessionFocusTarget(selectedSession, s.projects, s.sessions)));
   // ⇧⌘F: into the focus mode of the selected session's context, or back out of focus mode.
   useFocusShortcut(() => {
-    const outcome = shortcutOutcome(focus, selectedSession, projects);
-    if (!outcome) return;
-    if (selectedSession && outcome.focus) selectConsole(selectedSession.console_id);
-    setFocus(outcome.focus);
+    if (!focus && !selectedTarget) return;
+    if (!focus && selectedSession) selectConsole(selectedSession.console_id);
+    setFocus(focus ? undefined : selectedTarget);
   });
 
   // The console sessions a console session's focus mode offers to switch between (its switch strip),

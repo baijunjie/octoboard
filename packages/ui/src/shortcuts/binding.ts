@@ -191,3 +191,9 @@ export function eventKey(binding: Binding): EventKey {
     altKey: alt,
   };
 }
+
+/** A combination in the platform-neutral key names that `aria-keyshortcuts` requires. */
+export function ariaBinding(binding: Binding): string {
+  const names = { other: IS_MAC ? "Control" : "Meta", alt: "Alt", shift: "Shift", primary: IS_MAC ? "Meta" : "Control" };
+  return [...MODIFIERS.filter((modifier) => binding[modifier]).map((modifier) => names[modifier]), keyText(binding.code)].join("+");
+}

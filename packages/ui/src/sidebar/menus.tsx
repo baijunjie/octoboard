@@ -15,9 +15,12 @@ import type { Account, AccountSharing, Agent, Console, Project, ProviderInfo, Se
 import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
+import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
+import { ariaBinding } from "../shortcuts/binding";
+import { bindingFor, matchesCommand } from "../shortcuts/store";
 import { archivePreviewSessions, isUnusedSession } from "../sessions/order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
-import type { ArchiveScope, ProjectPanelKind, SidebarHandlers } from "./types";
+import type { ArchiveScope, FocusTarget, ProjectPanelKind, SidebarHandlers } from "./types";
 
 /** The project panels the Open panel submenu offers, as the top bar's toggles draw them. The Report
  * panel is not among them: whether it exists depends on the selected session's pages, which the
@@ -281,9 +284,10 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
  * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
  * project session's row and a console session's row (`ConsoleSessionsSection` in `ConsoleView.tsx`) —
- * this is also where the user switches a console session's account. Focus mode is
- * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
- * leaves out Focus mode and Pin / Unpin. `canHandoff` is whether another agent could take a session over.
+ * this is also where the user switches a console session's account. `focusTarget` offers Focus mode only for the
+ * selected live session outside focus mode, resolving to its console owner or project. A console session's own card
+ * in its focus mode (`placement` `focused`) leaves out Focus mode and Pin / Unpin. `canHandoff` is whether another
+ * agent could take a session over.
  * `quota` is what the Switch account entries are judged against, for the accounts used up, and `sharing` for the
  * accounts whose sharing change runs, and `disabledDefaults` the agents whose default account is turned off.
  * `switching` is whether an account switch holds the session (`holdsAccountSwitch`), the daemon's or one this window
@@ -294,8 +298,10 @@ export function sessionMenu(
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandoff = true, switching, quota, providers, sharing, disabledDefaults, accountOrder }: {
+  { placement = "list", focusTarget, focusShortcut, hasBoundSessions = false, canHandoff = true, switching, quota, providers, sharing, disabledDefaults, accountOrder }: {
     placement?: MenuPlacement;
+    focusTarget?: FocusTarget;
+    focusShortcut?: string;
     hasBoundSessions?: boolean;
     canHandoff?: boolean;
     switching: boolean;
@@ -310,12 +316,12 @@ export function sessionMenu(
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
-  const focusable = session.kind === "console" && !archived && !focused;
+  const focusable = focusTarget && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
     ...(archived ? [{ label: t("sidebar.session.reopen"), shortcut: "O", icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
     ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), shortcut: "P" }]),
-    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, shortcut: "F", onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
+    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode")), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
     ...(!archived ? ["separator" as const] : []),
     ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
     {

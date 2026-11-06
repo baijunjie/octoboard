@@ -36,6 +36,8 @@ import { NewSessionMenu } from "./NewSessionMenu";
 import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
 import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "../sessions/order";
+import { FocusModeContext } from "./focusModeContext";
+import { ShortcutTooltip } from "./sessionShortcuts";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { hasSessionMarks, PinButton, SessionMarkButtons } from "./MarkButtons";
 import { useSessionRowModel } from "./sessionRowModel";
@@ -61,7 +63,7 @@ function FocusHeader({
     // card's border and padding add up to `--row-content-inset`), so the end padding matches that and
     // this header's trailing menus line up with the menu on a row or card. The start stays put.
     <div ref={ref} className={`${PANE_HEADER_FRAME_CLASS} gap-1 ps-(--row-fill-inset) pe-(--pane-inset)`}>
-      <TitledControl title={t("sidebar.focus.exit")} placement="bottom">
+      <TitledControl title={<ShortcutTooltip action="focusMode">{t("sidebar.focus.exit")}</ShortcutTooltip>} placement="bottom">
         <Button
           iconOnly
           size="sm"
@@ -146,7 +148,7 @@ export function ProjectFocusView({
   const showsBranch = gitStatus?.repository === true;
 
   return (
-    <>
+    <FocusModeContext value={true}>
       <FocusHeader handlers={handlers} ref={headerRef}>
         <FocusTitle heading={project.name} overline={parentConsole.name} sharesRow={showsBranch} />
         {/* Alone in the header, so a tap on it opens the popover. */}
@@ -203,7 +205,7 @@ export function ProjectFocusView({
         </section>
         <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
       </FadedScroller>
-    </>
+    </FocusModeContext>
   );
 }
 
@@ -247,7 +249,7 @@ export function ConsoleSessionFocusView({
   const strip = switchStrip(sessions, parentConsole.id, delegating, queuedSwitches);
 
   return (
-    <>
+    <FocusModeContext value={true}>
       <FocusHeader handlers={handlers}>
         <FocusTitle heading={parentConsole.name} />
         <RowIconGroup>
@@ -304,7 +306,7 @@ export function ConsoleSessionFocusView({
         </section>
         <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
       </FadedScroller>
-    </>
+    </FocusModeContext>
   );
 }
 
@@ -641,7 +643,7 @@ const SessionCard = memo(function SessionCard({
         {/* The controls reach 4px past the status line above and below so it keeps the agent line's
             height, leaving the card's top and bottom edges the same distance from their text. */}
         <RowControls always className="-my-1" fixed={hasSessionMarks(session, own) ? <SessionMarkButtons handlers={handlers} session={session} hidePin={own} returnFocusTo={rowRef} /> : undefined}>
-          <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} placement={own ? "focused" : undefined} />
+          <SessionActions handlers={handlers} selected={selected} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} placement={own ? "focused" : undefined} />
         </RowControls>
       </RowIconLine>
       <div className="flex min-w-0 items-center gap-(--row-leading-icon-gap)">
@@ -699,7 +701,7 @@ function ArchivedRow({
       </RowLabel>
       {session.ended_at != null && <div id={metadataId} className="flex shrink-0"><SessionRelativeTime session={session} touchPopover={false} /></div>}
       <RowControls>
-        <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
+        <SessionActions handlers={handlers} selected={selected} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

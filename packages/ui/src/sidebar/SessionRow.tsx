@@ -72,7 +72,7 @@ export const SessionRow = memo(function SessionRow({
           </>
         ) : undefined}
       >
-        <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} />
+        <SessionActions handlers={handlers} selected={selected} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

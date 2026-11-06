@@ -313,6 +313,10 @@ act only while that menu is open, on the item the menu belongs to; a key pressed
 parent action. Disabled actions remain unavailable from their keys too. These temporary keys are separate from the
 window's configurable shortcuts and do not appear in Settings.
 
+The Focus mode entry in the selected session's menu is an exception: it shows the current configurable window
+shortcut instead of a single letter. Other sessions' menus omit that entry. The focus view's exit button shows the
+same current shortcut in its tooltip.
+
 Every interactive control is reachable from the keyboard and operable with Enter / Space, except for the collection-row
 behavior under "Buttons" below and a choice inside a dialog's form. A control that holds a choice there (a checkbox, a
 radio, a switch, a closed select, a tab) takes Space, and the arrow keys where it has them, while Enter submits the

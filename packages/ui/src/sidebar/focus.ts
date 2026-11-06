@@ -85,21 +85,17 @@ export function focusAfterSelect(
  * over console sessions on its way, and must not start an agent in each. */
 export const KEY_SWITCH_SELECTION = { enterFocus: true, resume: false } as const;
 
-/** What the focus-mode shortcut does: enter the focus mode of the selected session's context — a
- * project session's project, or a console session itself — or, in focus mode, leave it. `undefined`
- * when it does nothing, otherwise the focus mode to be in afterwards. */
-export function shortcutOutcome(
-  focus: FocusTarget | undefined,
+/** The selected session's eligible context: its console owner, through any coordinators, else its project.
+ * Stored targets use the same availability rules as a focus view. */
+export function selectedSessionFocusTarget(
   selected: Session | undefined,
   projects: Map<string, Project>,
-): { focus: FocusTarget | undefined } | undefined {
-  if (focus) return { focus: undefined };
-  if (!selected) return undefined;
-  if (selected.kind === "console") {
-    return selected.status === "archived" ? undefined : { focus: { consoleSession: selected } };
-  }
-  const project = selected.project_id ? projects.get(selected.project_id) : undefined;
-  return project ? { focus: { project } } : undefined;
+  sessions: Map<string, Session>,
+): FocusTarget | undefined {
+  if (!selected || (selected.kind === "console" && selected.status === "archived")) return undefined;
+  const owner = selected.kind === "console" ? selected : consoleSessionAbove(selected, (id) => sessions.get(id));
+  const key = owner ? `consoleSession:${owner.id}` : selected.project_id ? `project:${selected.project_id}` : undefined;
+  return resolveFocus(key, selected.console_id, projects, sessions);
 }
 
 /** The console session ⌃Tab (`backward`: ⌃⇧Tab) moves to from `currentId`, going round the strip's

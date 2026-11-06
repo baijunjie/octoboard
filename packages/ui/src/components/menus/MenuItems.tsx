@@ -9,7 +9,9 @@ import { reasonText } from "../../format/reason";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../announce/StatusAnnouncer";
 import { useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";
-import { TABBABLE } from "../focus/selectors";
+import { registerMenuCommand } from "./menuCommands";
+import { useLatest } from "../hooks/useLatest";
+import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
 import { activateMenuItem, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, setKeyboardModality, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
@@ -103,6 +105,21 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
     if (node) itemRefs.current.set(index, node);
     else itemRefs.current.delete(index);
   }, []);
+  const latest = useLatest({ entries, shortcutsActive });
+  useEffect(() => registerMenuCommand((event) => {
+    if (!latest.current.shortcutsActive || event.repeat || event.isComposing || event.keyCode === 229) return false;
+    const menu = root.current?.querySelector('[role="menu"]');
+    if (!menu || document.activeElement?.closest('[role="menu"]') !== menu || document.querySelectorAll('[role="menu"]').length !== 1) return false;
+    const dialog = root.current?.closest('[role="dialog"]');
+    if ([...document.querySelectorAll(MODAL_DIALOG)].some((held) => held !== dialog)) return false;
+    const index = latest.current.entries.findIndex((entry) => isLeaf(entry) && entry.commandShortcut?.matches(event));
+    if (index < 0) return false;
+    const entry = latest.current.entries[index];
+    const item = itemRefs.current.get(index);
+    if (!isLeaf(entry) || isDisabledItem(entry) || !item) return false;
+    activateMenuItem(item);
+    return true;
+  }), [latest]);
   // Each menu owns its keys, including actions bubbling from a deeper submenu.
   const run = (key: string) => {
     if (!key.startsWith(`${prefix}:`)) return;
@@ -124,7 +141,7 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
         id={itemId(index)}
         textValue={entry.label}
         ref={(node) => rememberItem(node, index)}
-        shortcut={entry.shortcut}
+        shortcut={entry.commandShortcut?.label ?? entry.shortcut}
         data-marquee-scope
         label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
         className={disabled ? DISABLED_ROW_CLASS : undefined}

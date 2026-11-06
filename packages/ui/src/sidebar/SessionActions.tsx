@@ -1,6 +1,11 @@
 import { Archive, Trash2 } from "lucide-react";
-import React, { type RefObject } from "react";
+import React, { useContext, type RefObject } from "react";
+import { useShallow } from "zustand/react/shallow";
 
+import { ariaBinding } from "../shortcuts/binding";
+import { useBinding } from "../shortcuts/store";
+import { FocusModeContext } from "./focusModeContext";
+import { selectedSessionFocusTarget } from "./focus";
 import { pickableAgents } from "../agents/agents";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -27,6 +32,7 @@ export function SessionActions({
   hasBoundSessions,
   rowRef,
   placement,
+  selected = false,
 }: {
   handlers: SidebarHandlers;
   session: Session;
@@ -35,8 +41,12 @@ export function SessionActions({
   rowRef: RefObject<HTMLElement | null>;
   /** Where the menu is opened from; `focused` is a console session's own focus mode. */
   placement?: MenuPlacement;
+  selected?: boolean;
 }): React.ReactElement {
   const t = useT();
+  const inFocusMode = useContext(FocusModeContext);
+  const focusBinding = useBinding("focusMode");
+  const focusTarget = useDaemonStore(useShallow((s) => selected && !inFocusMode ? selectedSessionFocusTarget(session, s.projects, s.sessions) : undefined));
   const { store } = useDaemon();
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   // Only what is bound to the session can ask for more than its status does, and that is all in its
@@ -67,7 +77,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandoff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, focusTarget, focusShortcut: ariaBinding(focusBinding), hasBoundSessions, canHandoff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
     </>
   );
 }
