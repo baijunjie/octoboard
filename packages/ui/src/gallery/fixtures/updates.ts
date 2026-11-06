@@ -115,7 +115,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "About, Updates row with a newer version, notice put off",
-    description: "The notice was put off with its Later icon, so the update is offered only here: the Updates row names the newer version and the running one, and What is new, for the newer version, sits before its primary button, Download and install.",
+    description: "The notice was put off with its Later icon; the update remains available here: the Updates row names the newer version and the running one, and What is new, for the newer version, sits before its primary button, Download and install.",
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [(ui) => ui.press(ui.t("updates.notice.dismiss")), openSettings],

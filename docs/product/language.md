@@ -92,8 +92,8 @@ What follows the current language:
   these menus by itself — AutoFill, Start Dictation…, Emoji & Symbols, Close All — are not Octoboard's and do not
   follow the language; they are currently shown in English;
 - in the macOS application, the menu bar icon's menu: its group headings, its session lines' wording, its quota
-  submenus' titles and lines, Open and Quit (see "The icon's menu" in `docs/product/menu-bar-icon.md`). Like the
-  application menu, it is relabelled at once on a change of language and is English until the window's UI has
+  submenus' titles and lines, the update entry, Open and Quit (see "The icon's menu" in
+  `docs/product/menu-bar-icon.md`). Like the application menu, it is relabelled at once on a change of language and is English until the window's UI has
   loaded. The icon's accessible name follows the language too (see "The icon's look" in
   `docs/product/menu-bar-icon.md`); without a quota it is the product name alone. The product name and the
   agents' names are never translated;

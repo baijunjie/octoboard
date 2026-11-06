@@ -166,6 +166,8 @@ export interface StatusItemMenu {
   /** Each picture the lines name, once, by the key a line's `icon` gives. */
   icons: Record<string, StatusItemIcon>;
   open: string;
+  /** Opens the update controls in Settings; names a known update even when its notice is hidden. */
+  updates?: string;
   quit: string;
   /** Whether the icon shows its attention dot: a live session is waiting for the user. */
   attention: boolean;
@@ -259,6 +261,8 @@ export interface StatusItemCapability {
   /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
    * shell has already brought the window to the front. */
   onSessionChosen(handler: (sessionId: string) => void): () => void;
+  /** Opens update settings, checking manually when no newer version is already known. */
+  onUpdatesRequested?(handler: () => void): () => void;
   /** Subscribes to the menu beginning to open, returning the function that undoes it. A menu sent
    * while it is open is held until it closes, so what the handler asks for lands on the next one. */
   onOpened(handler: () => void): () => void;

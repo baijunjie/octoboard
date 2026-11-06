@@ -34,12 +34,13 @@ interface UseStatusItemMenuOptions {
   ready: boolean;
   selectedSessionId?: string;
   currentConsoleId?: string;
+  updatesLabel?: string;
   onSessionChosen: (session: Session) => void;
 }
 
 /**
  * Keeps the shell's menu bar icon menu listing the unarchived sessions and each available agent's quota
- * (`buildStatusItemMenu`), and selects a session chosen there. Best-effort, like the Dock badge: a
+ * (`buildStatusItemMenu`) and update status, and selects a session chosen there. Best-effort, like the Dock badge: a
  * menu left a moment behind is not worth surfacing.
  *
  * A window's bar is drawn full once its reset time has passed and the readings' ages are worded to the
@@ -55,7 +56,7 @@ interface UseStatusItemMenuOptions {
  * The pictures beside the lines are drawn in the appearance the app sets (`prefers-color-scheme`, which the native
  * menu follows), so the menu is pushed again when the appearance changes.
  */
-export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, onSessionChosen }: UseStatusItemMenuOptions): void {
+export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, updatesLabel, onSessionChosen }: UseStatusItemMenuOptions): void {
   const { statusItem } = usePlatform();
   const { store, request } = useDaemon();
   const t = useT();
@@ -85,6 +86,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
         quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas, providers },
       });
+      draft.updates = updatesLabel ?? t("settings.updates.check");
       // Re-armed on every push, so it follows the quotas held now; the one pending is replaced.
       clearTimeout(tickTimer);
       const tick = nextQuotaTick(accountQuotas, now);
@@ -120,7 +122,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       clearTimeout(tickTimer);
       unsubscribe();
     };
-  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store, pushSerially]);
+  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store, pushSerially, updatesLabel]);
 
   // Read at call time: the subscription is made once.
   const chooseRef = useLatest(onSessionChosen);

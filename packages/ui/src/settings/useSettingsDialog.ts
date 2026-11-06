@@ -6,6 +6,7 @@ import { canTakeFocus } from "../components/focus/regionFocus";
 import { focusAfterModalCloses, focusOpenDialog } from "../components/focus/modalFocus";
 import { usePressedControl } from "../components/controls/usePressedControl";
 import { usePlatform } from "../platform/react";
+import { useUpdateStore } from "../updates/UpdatesProvider";
 import type { SettingsNavigation, SettingsSectionId } from "./sections";
 import type { OpenSettings } from "./settingsLauncher";
 
@@ -16,7 +17,8 @@ import type { OpenSettings } from "./settingsLauncher";
  * attention: another modal (`otherModalOpen`), an open action menu, the settings themselves, or before the UI has
  * anything to show (`ready` is false), where it would otherwise pop the dialog up later, unasked. The native menu's
  * About item opens Settings on its About section the same way, and moves an open Settings there unless another modal or
- * an open action menu holds the user's attention. Closing hands keyboard focus to `focusTerminal`, whatever the modal's
+ * an open action menu holds the user's attention. The tray update item opens the same section and checks manually
+ * when no newer version is already known. Closing hands keyboard focus to `focusTerminal`, whatever the modal's
  * own focus restore would pick, unless a dialog is open under it (Settings was opened from one): focus then stays with
  * that dialog, which it is handed back to if the restore left it on `<body>` — to the control in it whose press opened
  * Settings, else the control it opens on. With no dialog under it and no session's
@@ -44,7 +46,8 @@ export function useSettingsDialog({
   const [addAgent, setAddAgent] = useState(false);
   const [account, setAccount] = useState<string>();
   const [nonce, setNonce] = useState(0);
-  const { appMenu } = usePlatform();
+  const { appMenu, statusItem } = usePlatform();
+  const updates = useUpdateStore();
   // Whether Settings was open as of the last commit, which the close effect below compares against.
   const wasOpenRef = useRef(false);
 
@@ -105,6 +108,13 @@ export function useSettingsDialog({
     if (ready && !otherModalOpen && !isActionMenuOpen()) openSettingsAt("about");
   });
   useEffect(() => appMenu?.onAboutRequested?.(() => requestAboutFromMenuRef.current()), [appMenu]);
+
+  const requestUpdatesRef = useLatest(() => {
+    if (!ready || otherModalOpen || isActionMenuOpen()) return;
+    openSettingsAt("about");
+    if (!updates?.getState().update) void updates?.check("manual");
+  });
+  useEffect(() => statusItem?.onUpdatesRequested?.(() => requestUpdatesRef.current()), [statusItem]);
 
   return {
     settingsOpen: open,

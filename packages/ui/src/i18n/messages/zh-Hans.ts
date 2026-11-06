@@ -723,6 +723,7 @@ export const zhHans: Translation<"other"> = {
   },
   "statusItem.noListedSessions": "没有可显示的会话",
   "statusItem.open": "打开 {appName}",
+  "statusItem.updateAvailable": "新版本 {version} 可用",
   "statusItem.quota": "{agent} 用量",
   "statusItem.quota.notLoggedIn": "未登录",
   "statusItem.quota.account": "{account} · {plan}",

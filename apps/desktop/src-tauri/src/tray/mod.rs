@@ -1,9 +1,9 @@
 //! The menu bar icon (a status item), which keeps the app reachable while its window is closed and
 //! the app is out of the Dock (`background.rs`). A click on the icon, left or right, opens its menu,
 //! which lists the live sessions the UI hands over (`set_tray_menu`) and its submenus (the agents'
-//! quotas), then Open and Quit; the window comes back through Open or by choosing a session, which
-//! also tells the UI which one. Quit goes through the same exit flow as Cmd+Q, so it still asks
-//! while a session is running.
+//! quotas), then Updates, Open and Quit; the window comes back through Open or by choosing a
+//! session, which also tells the UI which one. Updates brings it back at Settings’ About section.
+//! Quit goes through the same exit flow as Cmd+Q, so it still asks while a session is running.
 //!
 //! The icon itself has two looks: the octopus, and the octopus with an orange dot in its corner,
 //! which shows while the menu's `attention` flag is set (a session is waiting for the user). Like
@@ -69,6 +69,7 @@ use status_item::{show_icon, IconState};
 
 const TRAY_ID: &str = "main";
 const OPEN_ITEM_ID: &str = "tray-open";
+const UPDATES_ITEM_ID: &str = "tray-updates";
 /// The Quit item, which goes down the same exit flow as the app menu's.
 const QUIT_ITEM_ID: &str = "tray-quit";
 
@@ -154,6 +155,9 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
 pub fn handle_menu_event(app: &AppHandle, id: &str) {
     if id == OPEN_ITEM_ID {
         show_main_window(app);
+    } else if id == UPDATES_ITEM_ID {
+        show_main_window(app);
+        let _ = app.emit("tray-updates-requested", ());
     } else if id == QUIT_ITEM_ID {
         request_quit(app);
     } else if let Some(session) = id.strip_prefix(SESSION_ITEM_PREFIX) {

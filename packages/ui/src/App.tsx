@@ -50,6 +50,7 @@ import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { updateNoticeKind } from "./updates/noticeKind";
 import { UpdateNotice } from "./updates/UpdateNotice";
 import { useUpdateSelector, useUpdateStore } from "./updates/UpdatesProvider";
+import { useUpdateMenuLabel } from "./updates/useUpdateMenuLabel";
 import { belongsToFocus } from "./sidebar/focus";
 import { consoleSessionAbove } from "./sessions/order";
 import { useWaitingCount } from "./store";
@@ -251,7 +252,9 @@ export function App(): React.ReactElement {
   useEffect(() => refocusIfLost(focusTerminal), [ownerKey(asideOwner)]);
 
   useWaitingNotifications(hosts !== undefined);
+  const updatesLabel = useUpdateMenuLabel();
   useStatusItemMenu({
+    updatesLabel,
     selectedSessionId,
     currentConsoleId: sidebarView.currentConsole?.id,
     ready: hosts !== undefined,

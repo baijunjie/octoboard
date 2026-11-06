@@ -689,6 +689,7 @@ export const ko: Translation<"other"> = {
   },
   "statusItem.noListedSessions": "표시할 세션이 없습니다",
   "statusItem.open": "{appName} 열기",
+  "statusItem.updateAvailable": "버전 {version} 사용 가능",
   "statusItem.quota": "{agent} 사용량",
   "statusItem.quota.notLoggedIn": "로그인되지 않음",
   "statusItem.quota.account": "{account} · {plan}",

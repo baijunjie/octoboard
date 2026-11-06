@@ -8,7 +8,7 @@ use tauri::menu::{
 use tauri::{AppHandle, Wry};
 
 use super::model::TrayMenu;
-use super::{OPEN_ITEM_ID, QUIT_ITEM_ID, SESSION_ITEM_PREFIX};
+use super::{OPEN_ITEM_ID, QUIT_ITEM_ID, SESSION_ITEM_PREFIX, UPDATES_ITEM_ID};
 
 /// The picture a line names, or none when it names none or one the table does not hold, or one that
 /// does not decode: a line is better shown bare than not at all.
@@ -84,6 +84,7 @@ pub(super) fn build_menu(app: &AppHandle, menu: &TrayMenu) -> tauri::Result<Menu
         builder = builder.separator();
     }
     builder
+        .item(&MenuItemBuilder::with_id(UPDATES_ITEM_ID, literal(&menu.updates)).build(app)?)
         .item(&MenuItemBuilder::with_id(OPEN_ITEM_ID, literal(&menu.open)).build(app)?)
         .separator()
         .item(&MenuItemBuilder::with_id(QUIT_ITEM_ID, literal(&menu.quit)).build(app)?)

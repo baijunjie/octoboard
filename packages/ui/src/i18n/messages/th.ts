@@ -687,6 +687,7 @@ export const th: Translation<"other"> = {
   },
   "statusItem.noListedSessions": "ไม่มีเซสชันที่จะแสดง",
   "statusItem.open": "เปิด {appName}",
+  "statusItem.updateAvailable": "มีเวอร์ชัน {version} พร้อมใช้งาน",
   "statusItem.quota": "การใช้งาน {agent}",
   "statusItem.quota.notLoggedIn": "ยังไม่ได้ลงชื่อเข้าใช้",
   "statusItem.quota.account": "{account} · {plan}",

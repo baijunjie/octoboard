@@ -668,6 +668,7 @@ export const vi: Translation<"other"> = {
   "statusItem.more": { other: "{count} phiên khác…" },
   "statusItem.noListedSessions": "Không có phiên để hiển thị",
   "statusItem.open": "Mở {appName}",
+  "statusItem.updateAvailable": "Đã có phiên bản {version}",
   "statusItem.quota": "Mức sử dụng {agent}",
   "statusItem.quota.notLoggedIn": "Chưa đăng nhập",
   "statusItem.quota.account": "{account} · {plan}",

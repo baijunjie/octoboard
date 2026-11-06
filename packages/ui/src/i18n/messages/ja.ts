@@ -688,6 +688,7 @@ export const ja: Translation<"other"> = {
   },
   "statusItem.noListedSessions": "表示するセッションがありません",
   "statusItem.open": "{appName} を開く",
+  "statusItem.updateAvailable": "バージョン {version} が利用可能",
   "statusItem.quota": "{agent} の使用量",
   "statusItem.quota.notLoggedIn": "未ログイン",
   "statusItem.quota.account": "{account} · {plan}",

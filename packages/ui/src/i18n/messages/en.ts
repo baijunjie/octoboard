@@ -822,6 +822,7 @@ export const en = {
   },
   "statusItem.noListedSessions": "No sessions to show",
   "statusItem.open": "Open {appName}",
+  "statusItem.updateAvailable": "Version {version} available",
   "statusItem.quota": "{agent} usage",
   "statusItem.quota.notLoggedIn": "Not logged in",
   "statusItem.quota.account": "{account} · {plan}",

@@ -144,6 +144,9 @@ function tauriStatusItem(): StatusItemCapability {
     onSessionChosen(handler) {
       return listenTo<string>("tray-session-chosen", handler);
     },
+    onUpdatesRequested(handler) {
+      return listenTo("tray-updates-requested", () => handler());
+    },
     onOpened(handler) {
       return listenTo("tray-menu-opened", () => handler());
     },

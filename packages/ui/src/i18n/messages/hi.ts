@@ -668,6 +668,7 @@ export const hi: Translation<"one" | "other"> = {
   "statusItem.more": { "one": "{count} और…", "other": "{count} और…" },
   "statusItem.noListedSessions": "दिखाने के लिए कोई सेशन नहीं",
   "statusItem.open": "{appName} खोलें",
+  "statusItem.updateAvailable": "वर्शन {version} उपलब्ध है",
   "statusItem.quota": "{agent} का इस्तेमाल",
   "statusItem.quota.notLoggedIn": "लॉगिन नहीं है",
   "statusItem.quota.account": "{account} · {plan}",

@@ -696,6 +696,7 @@ export const de: Translation<"one" | "other"> = {
   },
   "statusItem.noListedSessions": "Keine Sitzungen zum Anzeigen",
   "statusItem.open": "{appName} öffnen",
+  "statusItem.updateAvailable": "Version {version} verfügbar",
   "statusItem.quota": "{agent}-Nutzung",
   "statusItem.quota.notLoggedIn": "Nicht angemeldet",
   "statusItem.quota.account": "{account} · {plan}",

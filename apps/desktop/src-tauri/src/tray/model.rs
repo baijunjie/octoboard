@@ -7,8 +7,8 @@ use serde::Deserialize;
 use crate::menu::APP_NAME;
 
 /// The tray menu as the UI words it, already in its language: sections of sessions, each under a
-/// heading, submenus of rows (headers, quota windows, notes) that cannot be chosen, then the Open
-/// and Quit labels, whether the icon should show its attention dot, and its selected-account quota.
+/// heading, submenus of rows (headers, quota windows, notes) that cannot be chosen, then the Updates,
+/// Open and Quit labels, whether the icon should show its attention dot, and its selected-account quota.
 /// Text, opaque session ids and the pictures beside the lines — the UI decides what is listed and
 /// how it reads, the same way it decides the Dock badge's count. The pictures are drawn by the UI,
 /// which already has every agent's mark, status glyph and bar colour, so a new agent needs nothing
@@ -22,6 +22,8 @@ pub struct TrayMenu {
     #[serde(default)]
     pub(super) icons: HashMap<String, LineIcon>,
     pub(super) open: String,
+    #[serde(default = "default_updates_label")]
+    pub(super) updates: String,
     pub(super) quit: String,
     /// Whether the icon shows the attention dot, which asks for the user's attention.
     #[serde(default)]
@@ -164,6 +166,10 @@ impl SubmenuItem {
     }
 }
 
+fn default_updates_label() -> String {
+    "Check for updates".to_string()
+}
+
 impl Default for TrayMenu {
     /// What the menu reads before the UI has handed over its own: no sessions, English labels.
     fn default() -> Self {
@@ -172,6 +178,7 @@ impl Default for TrayMenu {
             submenus: Vec::new(),
             icons: HashMap::new(),
             open: format!("Open {APP_NAME}"),
+            updates: default_updates_label(),
             quit: format!("Quit {APP_NAME}"),
             attention: false,
             quota_remaining: None,

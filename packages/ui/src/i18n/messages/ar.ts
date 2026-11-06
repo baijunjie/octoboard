@@ -669,6 +669,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "statusItem.more": { "zero": "{count} أخرى…", "one": "{count} أخرى…", "two": "{count} أخرى…", "few": "{count} أخرى…", "many": "{count} أخرى…", "other": "{count} أخرى…" },
   "statusItem.noListedSessions": "لا توجد جلسات لعرضها",
   "statusItem.open": "فتح {appName}",
+  "statusItem.updateAvailable": "الإصدار {version} متاح",
   "statusItem.quota": "استخدام {agent}",
   "statusItem.quota.notLoggedIn": "لم يُسجّل الدخول",
   "statusItem.quota.account": "{account} · {plan}",

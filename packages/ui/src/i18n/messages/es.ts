@@ -669,6 +669,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "statusItem.more": { one: "{count} más…", other: "{count} más…", many: "{count} más…" },
   "statusItem.noListedSessions": "No hay sesiones que mostrar",
   "statusItem.open": "Abrir {appName}",
+  "statusItem.updateAvailable": "Versión {version} disponible",
   "statusItem.quota": "Uso de {agent}",
   "statusItem.quota.notLoggedIn": "Sin iniciar sesión",
   "statusItem.quota.account": "{account} · {plan}",

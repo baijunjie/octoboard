@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
@@ -13,14 +13,17 @@ import type { StatusItemMenuDraft } from "./statusItemMenu";
 import { useStatusItemMenu } from "./useStatusItemMenu";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
+import { UpdatesProvider, useUpdateStore } from "../updates/UpdatesProvider";
+import { useUpdateMenuLabel } from "../updates/useUpdateMenuLabel";
+import type { UpdateStore } from "../updates/updateStore";
 
 const withIcons = vi.hoisted(() => vi.fn(async (draft: StatusItemMenuDraft, _appearance: "light" | "dark") => ({ ...draft, icons: {} })));
 vi.mock("./statusItemIcons", () => ({ withIcons }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function Host({ selectedSessionId, currentConsoleId }: { selectedSessionId?: string; currentConsoleId?: string }) {
-  useStatusItemMenu({ ready: true, selectedSessionId, currentConsoleId, onSessionChosen: () => {} });
+function Host({ selectedSessionId, currentConsoleId, updatesLabel }: { selectedSessionId?: string; currentConsoleId?: string; updatesLabel?: string }) {
+  useStatusItemMenu({ ready: true, selectedSessionId, currentConsoleId, updatesLabel, onSessionChosen: () => {} });
   return null;
 }
 
@@ -243,4 +246,48 @@ it("draws the pictures in the system's appearance, not the page's theme, and pus
   expect(setMenu).toHaveBeenCalledTimes(2);
   await act(async () => listeners.forEach((listener) => listener()));
   expect(setMenu).toHaveBeenCalledTimes(2);
+});
+
+
+it("keeps the tray update entry in sync even after the update notice is dismissed", async () => {
+  const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  let updates: UpdateStore | undefined;
+  let available = true;
+  const check = vi.fn(async () => available ? { version: "99.0.0" } : undefined);
+  function UpdatedHost() {
+    const store = useUpdateStore();
+    useEffect(() => { updates = store; }, [store]);
+    const updatesLabel = useUpdateMenuLabel();
+    return <Host updatesLabel={updatesLabel} />;
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(
+    <TestHost daemon={testDaemon()} platform={{
+      kind: "tauri", statusItem,
+      updater: { currentVersion: async () => "1.0.0", check, install: async () => {} },
+    }}>
+      <UpdatesProvider firstCheckDelayMs={null}><UpdatedHost /></UpdatesProvider>
+    </TestHost>,
+  ));
+  expect(setMenu.mock.lastCall![0].updates).toBe("Check for updates");
+  await act(async () => updates!.check("manual"));
+  expect(setMenu.mock.lastCall![0].updates).toContain("99.0.0");
+  const sent = setMenu.mock.calls.length;
+  await act(async () => updates!.dismissNotice());
+  expect(setMenu.mock.calls).toHaveLength(sent);
+  expect(setMenu.mock.lastCall![0].updates).toContain("99.0.0");
+  available = false;
+  await act(async () => updates!.check("manual"));
+  expect(setMenu.mock.lastCall![0].updates).toBe("Check for updates");
+  expect(check).toHaveBeenCalledTimes(2);
+  available = true;
+  await act(async () => updates!.check("manual"));
+  await act(async () => updates!.install());
+  expect(setMenu.mock.lastCall![0].updates).toBe("Updates");
 });

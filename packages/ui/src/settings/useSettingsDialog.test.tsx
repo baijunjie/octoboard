@@ -5,6 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { PlatformProvider } from "../platform/react";
+import type { UpdaterCapability } from "../platform";
+import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { useSettingsDialog } from "./useSettingsDialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -202,7 +204,9 @@ it("numbers each request, so an open dialog can follow a later one", () => {
   expect(hook().settingsNavigation).toMatchObject({ section: "accounts", addAgent: false });
 });
 
-function mountWithMenu(options: { otherModalOpen?: boolean; ready?: boolean }) {
+function mountWithMenu(options: { otherModalOpen?: boolean; ready?: boolean; updater?: UpdaterCapability }) {
+  let requestUpdates: () => void = () => {};
+  const statusItem = { setMenu: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {}, onUpdatesRequested: (handler: () => void) => { requestUpdates = handler; return () => {}; } };
   let about: () => void = () => {};
   const menu = { onSettingsRequested: () => () => {}, onAboutRequested: (handler: () => void) => { about = handler; return () => {}; }, setLabels: async () => {} };
   let hook!: ReturnType<typeof useSettingsDialog>;
@@ -212,12 +216,12 @@ function mountWithMenu(options: { otherModalOpen?: boolean; ready?: boolean }) {
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={{ kind: "tauri", appMenu: menu }}><Probe /></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={{ kind: "tauri", appMenu: menu, statusItem, updater: options.updater }}><UpdatesProvider firstCheckDelayMs={null}><Probe /></UpdatesProvider></PlatformProvider>));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
-  return { hook: () => hook, about: () => act(() => about()) };
+  return { hook: () => hook, about: () => act(() => about()), updates: () => act(async () => requestUpdates()) };
 }
 
 it("opens Settings on About from the native menu's About item, and moves an open Settings there", () => {
@@ -234,5 +238,31 @@ it("ignores the menu's About item before the UI is ready and while another modal
     const { hook, about } = mountWithMenu(options);
     about();
     expect(hook().settingsOpen).toBe(false);
+  }
+});
+
+
+it("opens update settings and checks manually from the tray, keeping an already offered update", async () => {
+  const check = vi.fn(async () => ({ version: "99.0.0" }));
+  const { hook, about, updates } = mountWithMenu({ updater: { currentVersion: async () => "1.0.0", check, install: async () => {} } });
+  about();
+  expect(check).not.toHaveBeenCalled();
+  act(() => hook().openSettingsAt("git"));
+  await updates();
+  expect(hook()).toMatchObject({ settingsOpen: true, settingsNavigation: { section: "about" } });
+  expect(check).toHaveBeenCalledOnce();
+  act(() => hook().closeSettings());
+  await updates();
+  expect(hook().settingsOpen).toBe(true);
+  expect(check).toHaveBeenCalledOnce();
+});
+
+it("ignores the tray update request before readiness or behind another modal", async () => {
+  for (const options of [{ ready: false }, { otherModalOpen: true }]) {
+    const check = vi.fn(async () => undefined);
+    const { hook, updates } = mountWithMenu({ ...options, updater: { currentVersion: async () => "1.0.0", check, install: async () => {} } });
+    await updates();
+    expect(hook().settingsOpen).toBe(false);
+    expect(check).not.toHaveBeenCalled();
   }
 });

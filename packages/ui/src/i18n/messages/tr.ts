@@ -696,6 +696,7 @@ export const tr: Translation<"one" | "other"> = {
   },
   "statusItem.noListedSessions": "Gösterilecek oturum yok",
   "statusItem.open": "{appName} uygulamasını aç",
+  "statusItem.updateAvailable": "{version} sürümü kullanılabilir",
   "statusItem.quota": "{agent} kullanımı",
   "statusItem.quota.notLoggedIn": "Giriş yapılmadı",
   "statusItem.quota.account": "{account} · {plan}",

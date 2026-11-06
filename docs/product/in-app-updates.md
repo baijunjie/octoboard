@@ -54,7 +54,8 @@ as `.sig`. A published version's files are never replaced; a changed build ships
 
 - **Automatically**: the first time **30 seconds** after Octoboard starts, so it never competes with the window
   opening, and then every **6 hours** for as long as it runs, whichever screen the window shows.
-- **On request**: **Check for updates** in Settings' About section.
+- **On request**: **Check for updates** in Settings' About section or the menu bar icon's menu (see "The menu bar
+  update entry" below).
 
 A check does nothing while another check or a download is under way, and nothing once an update is installed and waits
 for its restart: until Octoboard restarts nothing more is looked for or offered. The update state survives the screen
@@ -66,11 +67,31 @@ A check ends in one of three ways:
 - **Up to date**: the channel offers no version newer than the one running. A channel with no release published yet,
   and a release with no build for this Mac, count as up to date too.
 - **A newer version is available**: it is offered in the update notice (see "The update notice" below) and in
-  Settings, with a link to its release page.
+  Settings, with a link to its release page, and named in the menu bar icon's update entry (see "The menu bar update
+  entry" below).
 - **The check failed**: the update server could not be reached, did not answer within **30 seconds**, or answered with
   any error other than the channel having no release (an HTTP `404` for the channel's manifest). A failed check is never
   read as "up to date". A version offered by an earlier check stays offered after a later check fails, and is withdrawn
   by a later check that finds nothing newer.
+
+## The menu bar update entry
+
+The menu bar icon's menu always includes an update entry immediately above Open Octoboard
+(see "The icon's menu" in `docs/product/menu-bar-icon.md`). It normally offers to check for updates; while a newer
+version is known it names that version as available, and while it is downloading it identifies the version being
+downloaded. Hiding the update notice does not hide this entry or the available version it names. After installation the entry
+uses a neutral update label; Settings still shows the pending restart, and no further check runs until Octoboard
+restarts.
+
+Choosing the entry brings the main window to the front, restoring it from the background or from being minimized,
+and opens Settings on its About section, where the update controls are (see "The Updates and Update channel rows"
+below). Settings already open on another section moves to About. Before the UI is ready, or while another modal or
+an action menu is open, only the window is brought back; opening Settings and checking are both skipped rather than
+deferred.
+
+When no newer version is known, choosing the entry also starts a manual check, with the same busy and installed-state
+limits as any other check (see "When the application checks" above). When a version is already offered, it only opens
+Settings. The entry itself starts no download, installation or restart.
 
 ## The update notice
 
@@ -149,8 +170,9 @@ Only a failure of something the user started opens an error alert (see "The erro
 `docs/product/error-alerts.md`); each says what failed and what to do, with the updater's own text, where there is any,
 behind **Error details**:
 
-- **Check for updates** pressed in Settings that fails: titled "Could not check for updates"; Octoboard keeps running
-  the current version and whether a newer one is available is not known; check the internet connection and try again.
+- **Check for updates** pressed in Settings or the menu bar icon's menu that fails: titled "Could not check for
+  updates"; Octoboard keeps running the current version and whether a newer one is available is not known; check
+  the internet connection and try again.
 - **Download and install** that fails: titled "Could not install the update"; the update could not be downloaded and
   installed; check the internet connection and the free disk space, then try again. The update stays offered, so it
   can be tried again.

@@ -669,6 +669,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "statusItem.more": { "one": "Ещё {count}…", "few": "Ещё {count}…", "many": "Ещё {count}…", "other": "Ещё {count}…" },
   "statusItem.noListedSessions": "Нет сеансов для отображения",
   "statusItem.open": "Открыть {appName}",
+  "statusItem.updateAvailable": "Доступна версия {version}",
   "statusItem.quota": "Использование {agent}",
   "statusItem.quota.notLoggedIn": "Вход не выполнен",
   "statusItem.quota.account": "{account} · {plan}",

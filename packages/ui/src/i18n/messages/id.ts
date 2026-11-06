@@ -669,6 +669,7 @@ export const id: Translation<"other"> = {
   "statusItem.more": { "other": "{count} lainnya…" },
   "statusItem.noListedSessions": "Tidak ada sesi untuk ditampilkan",
   "statusItem.open": "Buka {appName}",
+  "statusItem.updateAvailable": "Versi {version} tersedia",
   "statusItem.quota": "Penggunaan {agent}",
   "statusItem.quota.notLoggedIn": "Belum login",
   "statusItem.quota.account": "{account} · {plan}",

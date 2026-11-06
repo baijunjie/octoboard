@@ -689,6 +689,7 @@ export const zhHant: Translation<"other"> = {
   },
   "statusItem.noListedSessions": "沒有可顯示的工作階段",
   "statusItem.open": "開啟 {appName}",
+  "statusItem.updateAvailable": "新版本 {version} 可用",
   "statusItem.quota": "{agent} 用量",
   "statusItem.quota.notLoggedIn": "未登入",
   "statusItem.quota.account": "{account} · {plan}",

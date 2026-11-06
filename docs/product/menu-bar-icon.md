@@ -53,7 +53,7 @@ the octopus alone.
 ## Clicking the icon
 
 A click on the icon, left or right, opens the icon's menu, described below. A click does nothing else: the window
-comes back through the menu's **Open Octoboard** or one of its sessions.
+comes back through the menu's **Open Octoboard**, its update entry or one of its sessions.
 
 For about the first 0.6 seconds after the window is closed from native fullscreen, a click on the icon, left or right,
 is lost and opens nothing; macOS swallows it while it leaves fullscreen.
@@ -194,18 +194,21 @@ From top to bottom:
    Opening the menu asks the daemon for a fresh reading, as opening the rail's panel or Settings' section does (see
    "When quotas are read" in `docs/product/account-quota-readings.md`); since the menu never changes while open, what that
    brings shows from the next time it is opened. The menu does not wait for the reply.
-3. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
+3. **Check for updates**, which opens Settings on its About section with the update controls and checks when no
+   newer version is known. Its label identifies a known newer version, or a download in progress, as described in
+   "The menu bar update entry" in `docs/product/in-app-updates.md`.
+4. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
    in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
    first if it was minimized.
-4. **Quit Octoboard**, after a separator, described below.
+5. **Quit Octoboard**, after a separator, described below.
 
-The menu follows the sessions as they change, including while the window is closed into the background. It is never
-replaced while open, though: while any of Octoboard's menus is open — this one or the application menu — changes
+The menu follows the sessions and update entry as they change, including while the window is closed into the
+background. It is never replaced while open, though: while any of Octoboard's menus is open — this one or the application menu — changes
 wait, and once no menu is open the icon's menu takes on the latest of them, so an open menu stays open and unchanged
 until it is dismissed or an item is chosen. The icon's look waits with them (see "The icon's look" above). It is
 worded in the UI's current language (see "What follows the language" in `docs/product/language.md`). Until the
 window's UI has loaded and received the daemon's state — and throughout on the screen shown when the daemon failed to
-start — the menu holds only Open Octoboard and Quit Octoboard, in English, with no quota submenus.
+start — the menu holds only Check for updates, Open Octoboard and Quit Octoboard, in English, with no quota submenus.
 
 ### Choosing a session
 

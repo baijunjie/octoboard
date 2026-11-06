@@ -47,7 +47,8 @@ Commands permitted through `capabilities/default.json` and `permissions/*.toml`:
 `set_run_in_background`, `bring_to_front`, `macos_permissions_status`, `macos_request_permission`,
 `macos_open_privacy_settings`, `macos_open_notification_settings`, `save_configuration_file`, `open_configuration_file`,
 `pick_directory`, `check_for_update` and `install_update`. Events to the webview: `settings-requested`,
-`about-requested`, `tray-session-chosen`, `tray-menu-opened`, `exit-requested` and `daemon-exited`.
+`about-requested`, `tray-session-chosen`, `tray-updates-requested`, `tray-menu-opened`, `exit-requested` and
+`daemon-exited`.
 `packages/ui/src/platform/tauri.ts` maps commands and events onto the platform adapter's capabilities; it is the UI's
 only counterpart of this surface.
 
