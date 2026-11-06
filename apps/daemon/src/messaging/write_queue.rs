@@ -82,8 +82,6 @@ pub enum WriteHold {
     SharingChange,
     /// A message written into it was not sent and is still in its input box.
     UnsentMessage,
-    /// A native submission may have been accepted; it must not be submitted again.
-    SubmissionUncertain,
 }
 
 impl WriteHold {
@@ -97,7 +95,6 @@ impl WriteHold {
             Self::Handoff => "handoff",
             Self::SharingChange => "sharing_change",
             Self::UnsentMessage => "unsent_message",
-            Self::SubmissionUncertain => "submission_uncertain",
         }
     }
 
@@ -196,14 +193,6 @@ impl HookPrompts<'_> {
 }
 
 impl PromptSignal for HookPrompts<'_> {
-    fn mark_submission_uncertain(&self, before: u64) {
-        self.live.mark_submission_uncertain(before);
-    }
-
-    fn submission_uncertain(&self) -> bool {
-        self.live.submission_uncertain()
-    }
-
     fn input_recovery_pending(&self) -> bool {
         self.live.input_recovery_pending().is_some()
     }
@@ -475,24 +464,6 @@ impl AppState {
                 }
             }
         }
-        if matches!(outcome, Drain::Uncertain(_)) && still_running {
-            self.broadcast(
-                Notice::new(
-                    notice_code::MESSAGE_ACCEPTANCE_UNCONFIRMED,
-                    format!(
-                        "{} did not confirm that it accepted a message {} wrote into this \
-                         session. The message may already be queued and will not be sent \
-                         again. Later messages are held for at most three seconds or until \
-                         another prompt is sent; check the conversation before deciding whether \
-                         to send it again.",
-                        live.agent.label(),
-                        crate::APP_NAME
-                    ),
-                    &[("agent", live.agent.label())],
-                )
-                .about(id),
-            );
-        }
         // A message `Drain::Fragmented` lost was announced as `typing_blocked`, which says what
         // holds there; this notice's warning that the next message runs together with it does
         // not, and nothing behind it was dropped.
@@ -522,10 +493,7 @@ impl AppState {
             matches!(
                 self.agent_status(&record),
                 SessionStatus::Idle | SessionStatus::Working
-            ) && matches!(
-                self.write_hold(id),
-                None | Some(WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
-            )
+            ) && matches!(self.write_hold(id), None | Some(WriteHold::UnsentMessage))
         })
     }
 
@@ -660,8 +628,6 @@ impl AppState {
             Some(WriteHold::SharingChange)
         } else if self.outbox.is_held(id) {
             Some(WriteHold::Handoff)
-        } else if live.submission_uncertain() {
-            Some(WriteHold::SubmissionUncertain)
         } else if live.unsent_waiting() {
             Some(WriteHold::UnsentMessage)
         } else {

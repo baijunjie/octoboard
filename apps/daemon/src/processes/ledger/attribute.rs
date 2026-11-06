@@ -961,14 +961,14 @@ mod tests {
     }
 
     #[test]
-    fn a_private_server_session_is_internal_but_its_detached_tasks_are_followed() {
+    fn a_session_led_by_a_daemon_child_is_internal_but_its_detached_tasks_are_followed() {
         let mut book = book();
-        let server = proc(300, 1001, OWN, 300);
+        let leader = proc(300, 1001, OWN, 300);
         let helper = proc(301, 1002, 300, 300);
         let task = proc(302, 1003, 300, 302);
         let table = Table::from_procs([
             agent(),
-            server,
+            leader,
             helper.clone(),
             task,
             proc(303, 1004, 302, 302),

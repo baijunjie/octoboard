@@ -511,9 +511,7 @@ pub(crate) fn report_failed_turn(state: &Arc<AppState>, session_id: &str, messag
 /// The session is credited with having reported before delivery, even if its owner cannot take the
 /// message yet, so its stop does not also produce a synthesised report. The credit is given after
 /// the session's queued hooks, whose turn start would otherwise reset it, and is taken back
-/// when delivery definitely failed, so the owner gets a synthesised report instead of neither.
-/// An uncertain native submission keeps its credit: synthesising another report could duplicate
-/// one the native queue already accepted.
+/// when delivery fails, so the owner gets a synthesised report instead of neither.
 pub async fn deliver_own_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -548,11 +546,7 @@ pub async fn deliver_own_report(
         .map_err(anyhow::Error::from)
         .and_then(|delivered| delivered)
     };
-    let (note, archived, delivery) = delivered.inspect_err(|error| {
-        if !error.is::<crate::session::term::UncertainSubmission>() {
-            state.clear_reported(session_id);
-        }
-    })?;
+    let (note, archived, delivery) = delivered.inspect_err(|_| state.clear_reported(session_id))?;
     branch_cleanup::remove::remove_in_background(state, archived);
     Ok((note, delivery))
 }
@@ -1461,99 +1455,6 @@ mod tests {
 
         assert!(kept_texts(&state).is_empty());
         assert_eq!(state.store.kept_messages("heir").unwrap().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn uncertain_native_report_keeps_credit_and_is_not_synthesised_again() {
-        use tokio_tungstenite::tungstenite::{accept, Message};
-        let (state, _dir) = crate::test_support::app_state("reporting-native-uncertain");
-        state.store.insert_console(&console()).unwrap();
-        let hub = Session {
-            id: "hub".into(),
-            kind: SessionKind::Console,
-            bound_to: None,
-            agent: AgentId::CODEX,
-            ..project_session("hub")
-        };
-        state.store.insert_session(&hub).unwrap();
-        let mut worker = project_session("worker");
-        worker.id = "worker".into();
-        worker.bound_to = Some("hub".into());
-        worker.role = Role::Worker;
-        state.store.insert_session(&worker).unwrap();
-        let (transport, listener) = crate::adapter::codex::transport::test_transport();
-        let live =
-            crate::test_support::fake_live_session("hub", AgentId::CODEX, 120, 40, "sleep 30")
-                .with_transport(std::sync::Arc::new(transport));
-        state.register_live(live.clone());
-        state.turn_started("worker", Some("work"));
-        let server = std::thread::spawn(move || {
-            let (stream, _) = listener.accept().unwrap();
-            stream
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .unwrap();
-            let mut socket = accept(stream).unwrap();
-            loop {
-                let request: serde_json::Value =
-                    serde_json::from_str(&socket.read().unwrap().into_text().unwrap()).unwrap();
-                match request["method"].as_str().unwrap() {
-                    "initialize" => socket
-                        .send(Message::Text(
-                            serde_json::json!({
-                                "id":request["id"], "result":{},
-                            })
-                            .to_string(),
-                        ))
-                        .unwrap(),
-                    "initialized" => {}
-                    "thread/loaded/list" => socket
-                        .send(Message::Text(
-                            serde_json::json!({
-                                "id":request["id"], "result":{"data":["thread"],"nextCursor":null},
-                            })
-                            .to_string(),
-                        ))
-                        .unwrap(),
-                    "thread/queue/add" => {
-                        assert!(request["params"]["input"][0]["text"]
-                            .as_str()
-                            .unwrap()
-                            .contains("summary"));
-                        socket.close(None).unwrap();
-                        break;
-                    }
-                    other => panic!("unexpected request: {other}"),
-                }
-            }
-        });
-        let error = deliver_own_report(
-            &state,
-            "worker",
-            "summary".into(),
-            ReportStatus::Done,
-            vec![],
-            vec![],
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            error.is::<crate::session::term::UncertainSubmission>(),
-            "{error:#}"
-        );
-        assert_eq!(
-            state.close_turn("worker", false),
-            crate::state::TurnClose::Reported
-        );
-        assert_eq!(
-            state.store.get_session("worker").unwrap().unwrap().status,
-            SessionStatus::Idle
-        );
-        assert_eq!(
-            state.write_hold("hub"),
-            Some(crate::state::WriteHold::SubmissionUncertain)
-        );
-        assert_eq!(state.queued_count("hub"), 0);
-        server.join().unwrap();
     }
 
     /// What a reporter is told became of its report, word for word, archived or not.

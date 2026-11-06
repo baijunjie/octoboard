@@ -2323,8 +2323,8 @@ history or working directory. Creating a thread through `thread/start` and then 
 review modal despite the TUI's bypass flag; that bootstrap path does not preserve the ordinary fresh-launch flow.
 
 Persistent remote resumes ignore hook-trust bypass too. `hooks/list` exposes each hook's native key, source, command,
-and current hash. A resume can trust only Octoboard's generated `sessionFlags` command with invocation-local
-`hooks.state` overrides, leaving user hooks untouched. Pass the complete state table as one TOML assignment:
+and current hash. A resume can trust a single generated hook command with invocation-local `hooks.state`
+overrides, leaving user hooks untouched. Pass the complete state table as one TOML assignment:
 `-c 'hooks.state={"/<session-flags>/config.toml:stop:0:0"={trusted_hash="sha256:..."}}'`. A quoted dotted key passed
 through `-c` was split incorrectly at the native key's `.toml`; the complete table retained it exactly. An isolated
 existing-thread resume using this method confirmed no extra review for the injected hooks, independent message
@@ -2333,8 +2333,9 @@ delivery, and draft and cursor preservation. No user's trust file was changed.
 Codex 0.163.0 rejects explicit permission overrides, including `approvals_reviewer`, in a remote TUI resume. The
 private server can receive that configuration, but a saved thread reviewer takes precedence over its CLI default.
 Source inspection of that release confirms that an explicit `thread/resume` with `approvalsReviewer` checkpoints and
-flushes the effective settings before replying, even without a turn. Apply an explicit reviewer through that request
-before connecting the TUI without its reviewer override; a subsequent TUI reload restores the checkpointed choice.
+flushes the effective settings before replying, even without a turn. A reviewer applied through that request
+before the TUI connects without its reviewer override survives; a subsequent TUI reload restores the checkpointed
+choice.
 
 `thread/queue/add` accepts `threadId`, text `input`, and a stable `clientUserMessageId`. Its response includes
 `queuedSubmission.id`, passed with `threadId` to `thread/queue/start`. In idle sessions the add can start the item

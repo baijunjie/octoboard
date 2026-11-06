@@ -200,16 +200,6 @@ impl StandIn {
         self
     }
 
-    pub(crate) fn with_transport(
-        mut self,
-        transport: Arc<dyn crate::session::term::MessageTransport>,
-    ) -> Self {
-        Arc::get_mut(&mut self.0)
-            .expect("configure before registering the stand-in")
-            .transport = Some(transport);
-        self
-    }
-
     pub(crate) fn with_auto_review(mut self) -> Self {
         Arc::get_mut(&mut self.0)
             .expect("configure before registering the stand-in")
@@ -351,7 +341,6 @@ fn stand_in(
         ),
         spawned,
         checks_composer: false,
-        transport: None,
         scratch_dir: None,
         resolves_approvals_itself: false,
         carried_trust,

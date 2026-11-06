@@ -16,7 +16,6 @@ impl AgentProvider for TestProvider {
     fn plan(&self, _spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
         Ok(LaunchPlan {
             args: Vec::new(),
-            private_server: None,
             env: Vec::new(),
             resolves_approvals_itself: false,
             notice: None,

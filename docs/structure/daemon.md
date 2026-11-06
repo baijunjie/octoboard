@@ -164,9 +164,8 @@ and records tests replay.
   terminal's own protocol traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell
   terminals).
 - `src/session/` — one running agent process (`LiveSession`), input and message-write gates, `term/` launch and writing
-  a message into the process (and `UncertainSubmission`, the error of a write whose outcome is unknown;
-  `PrivateServer` and `MessageTransport`, a provider's own server a session's messages go through instead of its
-  terminal, and `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`), `draft.rs`,
+  a message into the process through the guarded bracketed-paste write (and `AfterExit`, the work a launch leaves for
+  once its process has exited: `LaunchPlan::after_exit`), `draft.rs`,
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
   a per-session home), `interrupt/`, `title_activity.rs` (what
   a terminal title says about a turn), `title_interrupt.rs` (a cancel that left no other trace, read off the title),
@@ -241,8 +240,8 @@ and records tests replay.
   `models.rs` is a provider's `ModelCatalogue`, and `accounts.rs` its `AccountOps` with the parts `quota.rs`
   (`QuotaProbe`), `login.rs` (`LoginFlow`) and `shared_config.rs` (the items it shares); Codex also has
   `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its unarchiving of a rollout),
-  `app_server.rs` (the app-server start and handshake every conversation with `codex app-server` shares) and `transport.rs` with `private_server.rs` (the
-  `PrivateServer` its launch plan carries), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
+  `app_server.rs` (the app-server start and handshake the account-level uses of `codex app-server` share: the quota
+  probe, reset credit and login), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
   directories, commands and short queries (running an agent CLI as an account) (`codex/claude_mcp.rs` only translates a
   compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
   descriptors by `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.

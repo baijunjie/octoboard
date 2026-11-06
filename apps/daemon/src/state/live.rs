@@ -108,7 +108,6 @@ impl AppState {
         session.status == SessionStatus::Idle
             && !process.waits_for_user()
             && !process.unsent_waiting()
-            && !process.submission_uncertain()
             && !self.outbox.is_pending(&session.id)
             && self.background_tasks_of(&session.id).is_empty()
     }

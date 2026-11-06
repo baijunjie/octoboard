@@ -24,7 +24,7 @@ it.each([
   ["git_failed", "gitFailure"], ["git_clone_failed", "gitFailure"], ["git_push_failed", "gitFailure"],
   ["git_switch_failed", "gitSwitchFailure"], ["git_restore_failed", "gitRestoreFailure"], ["git_operation_in_progress", "none"], ["push_in_progress", "none"],
   ["terminal_unavailable", "openTerminal"], ["directory_unavailable", "openFileManager"], ["path_open_failed", "openDefaultApplication"],
-  ["sharing_resume_failed", "none"], ["message_acceptance_unconfirmed", "none"], ["terminal_input_lost", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
+  ["sharing_resume_failed", "none"], ["terminal_input_lost", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
   ["provider.codex.login_busy", "none"], ["provider_unsupported", "none"], ["login_already_running", "none"], ["login_not_running", "none"],
   ["reset_credit_in_progress", "none"], ["reset_credit_timed_out", "none"], ["reset_credit_failed", "resetCredit"], ["reset_credit_not_signed_in", "resetCreditLogin"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {

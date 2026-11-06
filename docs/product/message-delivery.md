@@ -8,8 +8,8 @@ information shared by another session, a report panel form submission — and wh
 A session that is working or at its prompt (paused, done, awaiting instructions, with child sessions working, or working
 in background) takes a message straight away, unless one of the holds below applies to it, or it is a Claude Code
 session held behind a message its agent did not send (see "A message written but not sent" below). A message written mid-turn is taken by the agent: Claude Code and Grok Build
-queue it and run it once the turn ends, though Claude Code can also take it into the turn still running. Codex's
-independent queue runs it after the active turn. What becomes of such messages when an owner interrupts the turn is
+queue it and run it once the turn ends, though Claude Code can also take it into the turn still running, and Codex
+steers it into the running turn. What becomes of such messages when an owner interrupts the turn is
 in "Messages during an interrupt" in `docs/product/interrupting-turns.md`.
 
 **Draft preservation has a bounded wait.** On supported launches, Octoboard first tries to deliver the automatic
@@ -21,11 +21,8 @@ message separately while preserving the user's draft, without waiting for the us
   stash a second time. An existing stash of the user's is never overwritten by another stash operation.
   Claude Code additionally requires a verifiable Ctrl-S stash binding in the configuration this launch uses; an
   overridden binding or an unreadable or unrecognised keybindings file disables this path.
-- **Codex 0.163.0:** automatic messages use its independent queue and leave the composer untouched, while idle,
-  working or after cancellation, including before the user has submitted a first prompt. Delivery requires exactly
-  one identifiable conversation in the session's private server, matching the resumed or previously identified
-  conversation when there is one. Until that identity is unambiguous the message stays queued. This path is enabled
-  only for that verified version; an unknown or different version retains the guarded terminal delivery below.
+- **Codex:** Octoboard uses no stash of Codex's, whatever its version, so its automatic messages always take the
+  guarded terminal delivery below.
 
 Octoboard reads the composer off the session's screen with faint text left out, so Claude Code's hints in an empty
 box — a fresh session's placeholder, and "Press up to edit queued messages" while a message waits for the turn to
@@ -40,7 +37,7 @@ reaches the input only in part (see "A message only partly written while the dra
 terminal responses continue meanwhile. If a dialog is shown during recovery, earlier retained keystrokes wait until it
 is gone; newly typed answers can answer the dialog once restoration is confirmed or the protection times out, and are
 not added to the draft's tracked edits. Successful restoration preserves multiline text and long collapsed pastes.
-Claude Code and Codex retain the cursor position; Grok Build restores the cursor at the end. Attachment restoration has
+Claude Code retains the cursor position; Grok Build restores the cursor at the end. Attachment restoration has
 not been verified and is not guaranteed.
 
 Saving and restoring a native stash share one three-second confirmation window. If saving is not confirmed in time,
@@ -274,7 +271,6 @@ because its agent reported it is waiting for the user — at a permission prompt
 | `agent_error` | The moment after a Grok Build error (above). |
 | `sharing_change` | It is being restarted for a change of its account's sharing of the default configuration, and is resumed on its conversation afterwards; what is queued for it is written into the resumed process (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). |
 | `handoff` | It is being handed off to another agent. |
-| `submission_uncertain` | Codex's independent queue did not confirm accepting a message; later messages wait up to three seconds or until another submitted prompt, whichever comes first (see "A message whose acceptance is uncertain" below). |
 | `unsent_message` | A message written into it was left unsent (see "A message written but not sent" below). |
 
 An input-box, unconfirmed-edit or draft-preservation hold — a draft being stashed or restored, or a partly written
@@ -305,25 +301,6 @@ sends the `typing_blocked` notice. Then:
 
 A partial write outside a native stash is not covered by this: it drops the message and its queue (see "Messages
 held until a session can take them" above).
-
-## A message whose acceptance is uncertain
-
-If Codex's independent queue may have accepted an automatic message but its response or the start of that message
-cannot be confirmed, Octoboard never sends that message again automatically. The user's draft
-stays in the composer. Later messages remain queued for up to three seconds or until the agent reports another
-submitted prompt, whichever comes first; the hold is reported as `submission_uncertain`. The user should check the
-conversation before retrying manually, since the message may already be queued or running. This uncertainty does not
-discard the later messages and is distinct from a partial terminal write, which drops the affected queue as described
-above.
-
-Every client is sent the `message_acceptance_unconfirmed` notice about that session, naming its agent (`agent`),
-provided the session's process that was written to is still running. The window shows it as an error alert (see
-`docs/product/error-alerts.md`) titled "Message not confirmed", naming the session and where it is: the agent did not
-confirm accepting a message Octoboard wrote into the session, and the user is to check the conversation before deciding
-whether to send it again. Its details add that the message may already be queued and will not be sent again, and that
-later messages are held for at most three seconds or until another prompt is sent. The alert is a known failure with no
-remedy beyond its own text, not an unexpected one. What a reporting session is told is in
-`docs/product/reporting-to-owners.md`.
 
 ## A message written but not sent
 
@@ -399,8 +376,7 @@ every client, gets the `message_not_sent` notice.
 
 - A message written while the agent is mid-turn. The agent queues it and sends it only when the turn ends, which no
   short wait can see, so a mid-turn message Claude Code holds back is not detected and counts as delivered.
-- Codex and Grok Build sessions: terminal delivery counts as delivered once written; Codex's independent queue has
-  the acceptance rule in "A message whose acceptance is uncertain" above.
+- Codex and Grok Build sessions: a message counts as delivered once it has been written.
 - A message written through a native stash whose input recovery remains pending: the recovery rules above apply,
   and the message is not reported as an unsent draft or retried.
 - Which prompt was sent. The prompt's text is not matched against the message: a prompt the user sends within those

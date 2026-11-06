@@ -309,9 +309,6 @@ export const zhHans: Translation<"other"> = {
   "daemon.queued_messages_dropped.summary": "{appName} 丢弃了为此会话排队的内容。",
   "daemon.queued_messages_dropped.recovery": "在发送其他内容之前，请先检查会话的输入行。",
   "daemon.queued_messages_dropped.details": "输入行中可能残留了应用未能写完的消息片段，下一条写入会话的消息会与它一起运行。",
-  "daemon.message_acceptance_unconfirmed.summary": "{agent} 未确认已接收 {appName} 写入此会话的一条消息。",
-  "daemon.message_acceptance_unconfirmed.recovery": "请先检查对话，再决定是否重新发送这条消息。",
-  "daemon.message_acceptance_unconfirmed.details": "这条消息可能已在队列中，应用不会再次发送。后续消息最多暂缓三秒，或直到发送下一条提示。",
   "daemon.submit_retry_failed.summary": "{agent} 未确认已发送 {appName} 写入此会话的一条消息，应用也未能再次按下 {enter}。",
   "daemon.submit_retry_failed.recovery": "请检查输入框。如果消息还在，请手动按 {enter}，不要再次粘贴。",
   "daemon.draft_save_unconfirmed.summary": "{agent} 未确认保存此会话输入框中的草稿，因此 {appName} 直接将消息写入了输入框。",
@@ -609,8 +606,6 @@ export const zhHans: Translation<"other"> = {
     "账户的共享更改期间，{appName} 为某个会话暂存的消息已被丢弃，因为该会话没有重新启动。",
   "daemon.message_not_sent":
     "{appName} 写入此会话的一条消息未被 {agent} 发送，仍停留在会话的输入框中。在发送任何提示之前，应用不会再向此会话写入内容。",
-  "daemon.message_acceptance_unconfirmed":
-    "{agent} 未确认已接收 {appName} 写入此会话的一条消息。这条消息可能已在队列中，应用不会再次发送。后续消息最多暂缓三秒，或直到发送下一条提示。请先检查对话，再决定是否重新发送这条消息。",
   "daemon.message_not_sent.retry":
     "{agent} 尚未确认发送 {appName} 写入此会话的消息。应用会再尝试提交一次输入框中的现有内容，不会重复粘贴消息。如有待回答的弹窗，请先处理。",
   "daemon.message_discarded_by_dialog":
@@ -635,7 +630,6 @@ export const zhHans: Translation<"other"> = {
   // The plain title of an error alert, naming what failed: the session and any names are in the body.
   "daemon.launch_failed.alertTitle": "无法启动会话",
   "daemon.message_not_sent.alertTitle": "消息未发送",
-  "daemon.message_acceptance_unconfirmed.alertTitle": "消息未获确认",
   "daemon.submit_retry_failed.alertTitle": "提交未获确认",
   "daemon.draft_save_unconfirmed.alertTitle": "草稿保存未获确认",
   "daemon.draft_restore_unconfirmed.alertTitle": "草稿恢复未获确认",

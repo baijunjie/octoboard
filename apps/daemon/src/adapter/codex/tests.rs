@@ -8,75 +8,6 @@ use crate::adapter::files::SMALL_FILE_LIMIT;
 use crate::adapter::tests::spec_fixture;
 use crate::records::line_file::JSON_FILE_LIMIT;
 
-/// The Codex private server plan a launch plan carries.
-fn private_plan(plan: &LaunchPlan) -> &PrivateServerPlan {
-    plan.private_server
-        .as_ref()
-        .expect("a private server")
-        .as_any()
-        .downcast_ref()
-        .expect("Codex's plan")
-}
-
-#[test]
-fn verified_private_server_keeps_client_and_server_overrides() {
-    let mut fixture = spec_fixture();
-    fixture.agent_version = Some((0, 163, 0));
-    fixture.model = Some("probe-model".to_string());
-    fixture.effort = Some("high".to_string());
-    let mut spec = fixture.spec();
-    spec.task = Some("first task");
-    let plan = CodexProvider.plan(&spec).unwrap();
-    let private = private_plan(&plan);
-    assert_eq!(overrides(&private.args), overrides(&plan.args));
-    assert_eq!(private.tui_args, plan.args);
-    assert_eq!(&private.tui_args[..2], ["--cd", spec.cwd.to_str().unwrap()]);
-    assert_eq!(
-        private.tui_args.last().map(String::as_str),
-        Some("first task")
-    );
-    assert_eq!(private.hook_command, spec.hook_script.to_string_lossy());
-    spec.resume_agent_session_id = Some("thread-to-resume");
-    let resumed = CodexProvider.plan(&spec).unwrap();
-    let private = private_plan(&resumed);
-    assert_eq!(private.resume_thread.as_deref(), Some("thread-to-resume"));
-    assert_eq!(private.tui_args, resumed.args);
-    assert_eq!(&private.tui_args[..2], ["resume", "thread-to-resume"]);
-    assert_eq!(
-        &private.tui_args[2..4],
-        ["--cd", spec.cwd.to_str().unwrap()]
-    );
-    fixture.agent_version = None;
-    assert!(CodexProvider
-        .plan(&fixture.spec())
-        .unwrap()
-        .private_server
-        .is_none());
-    fixture.agent_version = Some((0, 164, 0));
-    assert!(CodexProvider
-        .plan(&fixture.spec())
-        .unwrap()
-        .private_server
-        .is_none());
-}
-
-#[test]
-fn standalone_installs_report_the_version_from_the_resolved_package() {
-    let fixture = crate::test_support::ScratchDir::new("codex-installed-version");
-    std::fs::create_dir_all(fixture.join("release/bin")).unwrap();
-    std::fs::write(fixture.join("release/bin/codex"), "").unwrap();
-    std::fs::write(
-        fixture.join("release/codex-package.json"),
-        r#"{"version":"0.163.0"}"#,
-    )
-    .unwrap();
-    std::os::unix::fs::symlink(fixture.join("release/bin/codex"), fixture.join("codex")).unwrap();
-    assert_eq!(
-        CodexProvider.installed_version(fixture.join("codex").to_str().unwrap()),
-        Some((0, 163, 0))
-    );
-}
-
 #[test]
 fn terminal_titles_keep_only_the_task_between_the_spinner_and_the_project() {
     let names = ["proj".to_owned()];
@@ -519,44 +450,6 @@ fn account_reviewer_overrides_are_repeated_on_resume_without_changing_the_users_
         .any(|arg| arg.starts_with("approvals_reviewer=")));
 }
 
-#[test]
-fn remote_resumes_pass_the_reviewer_to_the_server_only() {
-    let mut fixture = spec_fixture();
-    fixture.agent_version = Some((0, 163, 0));
-    for reviewer in [ApprovalReviewer::User, ApprovalReviewer::AutoReview] {
-        for resume in [None, Some("conversation-1")] {
-            let settings = reviewer_settings(reviewer);
-            let mut spec = fixture.spec();
-            spec.settings = &settings;
-            spec.resume_agent_session_id = resume;
-            let plan = CodexProvider.plan(&spec).unwrap();
-            let private = private_plan(&plan);
-            assert_eq!(private.resume_reviewer, Some(reviewer));
-            let server_overrides = overrides(&private.args);
-            let client_overrides = overrides(&private.tui_args);
-            let reviewer_override = server_overrides
-                .iter()
-                .find(|value| value.starts_with("approvals_reviewer="))
-                .unwrap();
-            if resume.is_some() {
-                assert_eq!(&private.tui_args[..2], ["resume", "conversation-1"]);
-                assert!(!client_overrides.contains(reviewer_override));
-                assert_eq!(
-                    client_overrides,
-                    server_overrides
-                        .iter()
-                        .filter(|value| *value != reviewer_override)
-                        .cloned()
-                        .collect::<Vec<_>>()
-                );
-            } else {
-                assert_eq!(private.tui_args, plan.args);
-                assert!(client_overrides.contains(reviewer_override));
-            }
-        }
-    }
-}
-
 /// A hand raised for an approval the user is never shown can never be cleared by them, so the
 /// setting has to be read before the promise is made.
 #[test]
@@ -894,11 +787,10 @@ fn codex_action_markers_are_activity_items_rather_than_task_text() {
     }
 }
 
-/// Codex has no stash the daemon uses, whatever its version.
+/// Codex has no stash the daemon uses.
 #[test]
 fn codex_never_uses_a_stash() {
-    let mut fixture = spec_fixture();
-    fixture.agent_version = Some((99, 0, 0));
+    let fixture = spec_fixture();
     assert!(!CodexProvider
         .screen()
         .native_stash(&fixture.spec(), &LaunchPlan::default()));

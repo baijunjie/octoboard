@@ -89,9 +89,8 @@ last started name nothing. If those records cannot be read, it does not assume t
 the processes identified only by their launch tag running and records them as kept.
 
 The daemon, its ancestors and its direct children are protected. Processes in terminal sessions led by those direct
-children, including a Codex session's private app-server and its internal helpers, are excluded from the
-background-process lists and Stop and Keep controls. Their lifecycle remains managed with the agent session. Tool
-commands that start a terminal session of their own remain subject to the attribution rules above.
+children are excluded from the background-process lists and Stop and Keep controls. Tool commands that start a
+terminal session of their own remain subject to the attribution rules above.
 
 The user's shell terminals and the processes in their terminal sessions are excluded from the background-process lists
 and cleanup described here; closing those terminals still follows "Closing a shell terminal" in

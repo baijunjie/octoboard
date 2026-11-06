@@ -1,9 +1,6 @@
-//! Codex adapter. Configuration is injected through repeated per-invocation `-c` overrides,
-//! without changing the user's configuration files. Verified releases run those overrides in a
-//! private app server and explicitly connect the TUI to it. Rendering and startup notices need client-side
-//! overrides, while hooks and model execution belong to the server. Remote resumes apply an
-//! explicit approval reviewer through the server because the TUI refuses permission overrides;
-//! Codex checkpoints that reviewer in the thread before the TUI attaches.
+//! Codex adapter. Configuration is injected through repeated per-invocation `-c` overrides on the
+//! terminal's own command line, without changing the user's configuration files. A resume repeats
+//! them, the approval reviewer included.
 //!
 //! `CODEX_HOME` must not be used to *inject* anything: it makes Codex ignore the user's entire
 //! global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not just add
@@ -56,9 +53,8 @@
 //! Actual action prompts are observed separately from the terminal activity title, since automatic
 //! review does not rule out manual approvals.
 //!
-//! Codex allocates its own thread ids. A private server exposes its loaded thread before the first
-//! submission, allowing independent messages even while the user is composing the first prompt.
-//! The persisted conversation id still arrives through the hooks; thread id and session id match.
+//! Codex allocates its own thread ids, so the conversation id arrives through the hooks; thread id
+//! and session id match.
 
 pub(crate) mod accounts;
 mod app_server;
@@ -69,7 +65,6 @@ mod conversation;
 mod hooks;
 mod login;
 pub(crate) mod models;
-mod private_server;
 pub(crate) mod quota;
 pub(crate) mod records;
 mod reset_credit;
@@ -81,12 +76,11 @@ mod switch_continue;
 #[cfg(test)]
 mod tests;
 pub(crate) mod threads;
-pub(crate) mod transport;
 mod unarchive;
 
 use serde_json::json;
 
-use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
+use super::files::canonical_project;
 use super::{AgentProvider, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::protocol::{error_code, AgentId, CodedError};
 use crate::providers::{codex, ProviderDescriptor};
@@ -94,10 +88,6 @@ use crate::session::screen::ScreenReader;
 use crate::session_tools;
 use claude_compatibility::reserved_env;
 use config::{model_migrations, project_server_names, read_config, server_names, ConfigFile};
-use private_server::private_server_supported;
-
-use crate::session::term::PrivateServer;
-pub use private_server::PrivateServerPlan;
 
 /// Who resolves Codex's approval requests: the value of the `approval_reviewer` setting. Unset
 /// follows the account's own configuration.
@@ -209,25 +199,6 @@ impl AgentProvider for CodexProvider {
         &records::CodexRecords
     }
 
-    fn installed_version(&self, binary: &str) -> Option<super::AgentVersion> {
-        let binary = std::fs::canonicalize(binary).ok()?;
-        for directory in binary.ancestors().skip(1).take(4) {
-            for name in ["codex-package.json", "package.json"] {
-                let Ok(text) = read_regular_text(&directory.join(name), SMALL_FILE_LIMIT) else {
-                    continue;
-                };
-                let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-                if name == "package.json"
-                    && value.get("name").and_then(|value| value.as_str()) != Some("@openai/codex")
-                {
-                    continue;
-                }
-                return super::parse_version(value.get("version")?.as_str()?);
-            }
-        }
-        None
-    }
-
     /// Codex's title is a list of items joined by ` | `: a spinner, a status such as `[ ! ] Action
     /// Required`, the conversation's title once it has one, and the project last. An unnamed
     /// conversation is left with the project alone, which says nothing. Codex cuts a project name
@@ -308,36 +279,33 @@ impl AgentProvider for CodexProvider {
             })?;
         }
         let mut args = Vec::new();
-        let mut server_args = Vec::new();
 
         // `resume` is a subcommand, so it comes before the overrides.
         if let Some(id) = spec.resume_agent_session_id {
             args.push("resume".to_string());
             args.push(id.to_string());
         }
-        // A remote TUI cannot infer the workspace from its process's working directory.
-        args.extend(["--cd".to_string(), spec.cwd.to_string_lossy().into_owned()]);
+        args.push("--dangerously-bypass-hook-trust".to_string());
 
         let command = spec.hook_script.to_string_lossy().into_owned();
         for event in HOOK_EVENTS {
-            server_args.push("-c".to_string());
-            server_args.push(format!(
+            args.push("-c".to_string());
+            args.push(format!(
                 "hooks.{event}=[{{hooks=[{{type=\"command\",command={},timeout={},async=true}}]}}]",
                 toml_string(&command),
                 HOOK_TIMEOUT_SECS
             ));
         }
-        args.push("--dangerously-bypass-hook-trust".to_string());
 
         let (mcp_command, mcp_args) = super::mcp_server_command(spec);
         let key = session_tools::catalogue::SERVER_KEY;
-        server_args.push("-c".to_string());
-        server_args.push(format!(
+        args.push("-c".to_string());
+        args.push(format!(
             "mcp_servers.{key}.command={}",
             toml_string(&mcp_command)
         ));
-        server_args.push("-c".to_string());
-        server_args.push(format!(
+        args.push("-c".to_string());
+        args.push(format!(
             "mcp_servers.{key}.args=[{}]",
             mcp_args
                 .iter()
@@ -352,16 +320,16 @@ impl AgentProvider for CodexProvider {
         // do — and under an approval policy of `never` it does not even ask, it refuses the call
         // outright without sending it. The key is per server, so nothing else the session may need
         // approval for is widened.
-        server_args.push("-c".to_string());
-        server_args.push(format!(
+        args.push("-c".to_string());
+        args.push(format!(
             "mcp_servers.{key}.default_tools_approval_mode=\"approve\""
         ));
         // Codex abandons a tool call at a limit of its own and sends the server nothing when it
         // does, so a call that outlasts it never returns its result — and a call Octoboard holds
         // for the user (`session_request::ANSWER_TIME_LIMIT`) alone outlasts Codex's default.
         // Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.
-        server_args.push("-c".to_string());
-        server_args.push(format!(
+        args.push("-c".to_string());
+        args.push(format!(
             "mcp_servers.{key}.tool_timeout_sec={}",
             super::MCP_TOOL_TIMEOUT_SECS
         ));
@@ -404,28 +372,28 @@ impl AgentProvider for CodexProvider {
                 &taken,
             );
             for server_override in servers.overrides {
-                server_args.push("-c".to_string());
-                server_args.push(server_override);
+                args.push("-c".to_string());
+                args.push(server_override);
             }
             env.extend(servers.env);
         }
 
         // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
         // screen, unrecognised and in the way of it. Off for this launch only.
-        server_args.push("-c".to_string());
-        server_args.push("check_for_update_on_startup=false".to_string());
+        args.push("-c".to_string());
+        args.push("check_for_update_on_startup=false".to_string());
 
-        server_args.push("-c".to_string());
-        server_args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
+        args.push("-c".to_string());
+        args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
         if spec.resume_agent_session_id.is_some() {
-            server_args.push("-c".to_string());
-            server_args.push("tui.resume_cwd=\"current\"".to_string());
+            args.push("-c".to_string());
+            args.push("tui.resume_cwd=\"current\"".to_string());
         }
-        server_args.push("-c".to_string());
-        server_args.push("notice.hide_rate_limit_model_nudge=true".to_string());
+        args.push("-c".to_string());
+        args.push("notice.hide_rate_limit_model_nudge=true".to_string());
         if let Some(upgrades) = model_migrations(&home) {
-            server_args.push("-c".to_string());
-            server_args.push(format!("notice.model_migrations={upgrades}"));
+            args.push("-c".to_string());
+            args.push(format!("notice.model_migrations={upgrades}"));
         }
 
         let mut instructions = session_tools::role::role_description(
@@ -438,8 +406,8 @@ impl AgentProvider for CodexProvider {
             instructions.push_str("\n\n");
             instructions.push_str(&source.instructions(AgentId::CODEX.label(), spec.shell_env));
         }
-        server_args.push("-c".to_string());
-        server_args.push(format!(
+        args.push("-c".to_string());
+        args.push(format!(
             "developer_instructions={}",
             toml_string(&instructions)
         ));
@@ -449,33 +417,22 @@ impl AgentProvider for CodexProvider {
         // task, which Codex takes last. A model that does not advertise the effort is refused by
         // Codex itself, at launch.
         if let Some(model) = spec.model {
-            server_args.push("-c".to_string());
-            server_args.push(format!("model={}", toml_string(model)));
+            args.push("-c".to_string());
+            args.push(format!("model={}", toml_string(model)));
         }
         if let Some(effort) = spec.effort {
-            server_args.push("-c".to_string());
-            server_args.push(format!("model_reasoning_effort={}", toml_string(effort)));
+            args.push("-c".to_string());
+            args.push(format!("model_reasoning_effort={}", toml_string(effort)));
         }
 
-        // Remote resumes reject explicit permission overrides in the TUI. Its server receives
-        // the reviewer below; the client still needs the other overrides for local UI settings.
-        let resume_tui_args = spec.resume_agent_session_id.map(|_| {
-            let mut tui_args = args.clone();
-            tui_args.extend(server_args.iter().cloned());
-            tui_args
-        });
-
-        let reviewer = ApprovalReviewer::of(spec.settings);
-        if let Some(reviewer) = reviewer {
+        if let Some(reviewer) = ApprovalReviewer::of(spec.settings) {
             // Repeated on resume like the other launch overrides; the user's file stays intact.
-            server_args.push("-c".to_string());
-            server_args.push(format!(
+            args.push("-c".to_string());
+            args.push(format!(
                 "approvals_reviewer={}",
                 toml_string(reviewer.as_str())
             ));
         }
-
-        args.extend(server_args.iter().cloned());
 
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
@@ -483,20 +440,8 @@ impl AgentProvider for CodexProvider {
             }
         }
 
-        let private_server = private_server_supported(spec.agent_version).then(|| {
-            Box::new(PrivateServerPlan {
-                args: server_args,
-                // Explicit --remote selects the server even with -c. Omitting the client overrides
-                // would lose its terminal title, resume cwd and startup-notice settings.
-                tui_args: resume_tui_args.unwrap_or_else(|| args.clone()),
-                hook_command: command,
-                resume_thread: spec.resume_agent_session_id.map(str::to_string),
-                resume_reviewer: reviewer,
-            }) as Box<dyn PrivateServer>
-        });
         Ok(LaunchPlan {
             args,
-            private_server,
             env,
             resolves_approvals_itself: resolves_approvals_itself(spec, &config),
             ..LaunchPlan::default()

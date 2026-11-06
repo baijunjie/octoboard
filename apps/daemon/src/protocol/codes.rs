@@ -637,9 +637,6 @@ pub mod notice_code {
     /// box; nothing more is written into the session until a prompt is sent. `params` names the
     /// `agent`.
     pub const MESSAGE_NOT_SENT: Code = Code("message_not_sent");
-    /// The session's agent did not confirm accepting a message written into its own queue. The
-    /// message may already be queued, and is not sent again. `params` names the `agent`.
-    pub const MESSAGE_ACCEPTANCE_UNCONFIRMED: Code = Code("message_acceptance_unconfirmed");
     /// A message written into the session was thrown away by a dialog its agent raised as the
     /// message went in; it is back at the front of the queue and is written again once the dialog
     /// has been answered. `params` names the `agent`.

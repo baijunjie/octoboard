@@ -51,12 +51,6 @@ Reporting is refused, or fails without accepting the report, when:
   has), and a session bound to it is not archived, unless a lock blocks automatic archiving (see "Automatic archiving"
   below). The reason names those sessions. Its other reports go through, and none of them archives it.
 
-If a Codex owner's independent queue may have accepted the report but cannot confirm it, reporting returns an error
-and the reporting session is not archived. The report still counts as that session having reported for the turn:
-Octoboard does not synthesise a second report when it stops, since that could duplicate one already accepted. It does
-not resend the original report automatically. The delivery hold and recovery rules are in
-`docs/product/message-delivery.md`'s "A message whose acceptance is uncertain" section.
-
 ## When a session does not report
 
 **Reporting is not forced.** When a reporting session ends a turn without having called `report`, Octoboard delivers
@@ -235,8 +229,7 @@ queued is different: it archives the session on acceptance, as above, so if it i
 session is already archived, and only the notice the user gets tells anyone.
 
 The one-time automatic submit-key retry in `docs/product/message-delivery.md`'s "A message written but not sent"
-section does not archive a reporting session later by itself either. A report whose independent-queue acceptance is
-uncertain likewise archives nothing, as described above.
+section does not archive a reporting session later by itself either.
 
 Anything else — open items, `failed`, `needs_decision` — leaves the session running and awaiting
 instructions, for its owner to continue with `instruct_session` or to archive explicitly.

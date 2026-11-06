@@ -496,15 +496,6 @@ export const noticeScenarios: Scenario[] = [
     notifications: [sessionNoticeNotification(longTitled.id, "message_not_sent", { agent: "Claude Code", submit_retry: "once" })],
   },
   {
-    id: "toast-message-acceptance-unconfirmed",
-    group: TRUST,
-    category: "exceptional",
-    title: "Message not confirmed by the agent",
-    description: "An error alert titled \"Message not confirmed\", with the session line above the message, the session and its project each a chip: the summary says the agent (Codex) did not confirm that it accepted a message the app wrote into the session, with the agent and app names as chips; the recovery step asks the person to check the conversation before deciding whether to send the message again; the details say the message may already be queued, is not sent again by the app, and that later messages are held for at most three seconds or until another prompt is sent.",
-    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    notifications: [sessionNoticeNotification("s-web-1", "message_acceptance_unconfirmed", { agent: "Codex" })],
-  },
-  {
     id: "toast-submit-retry-failed",
     group: TRUST,
     category: "exceptional",

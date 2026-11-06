@@ -10,8 +10,6 @@
 //! the queue behind it are reported lost, because another paste would join the unterminated one.
 //! A fragment written while the draft was stashed loses only itself: the session holds whatever
 //! follows until nothing can join the fragment, so the queue behind it waits instead.
-//! An uncertain native submission instead consumes only its own ticket and retains later ones:
-//! there is no terminal fragment, but repeating the request could deliver the message twice.
 //!
 //! A complete write missing its prompt acknowledgement briefly holds later messages. Its payload
 //! never goes back into the queue; the running session owns the bounded submit-key retry.
@@ -46,8 +44,6 @@ pub enum Drain {
     /// writes until a prompt is sent after it, so nothing written next can run together with the
     /// fragment: the queue behind it stays, and is written in order once the hold ends.
     Fragmented(Ticket),
-    /// The native queue may have accepted this ticket; it is never submitted again.
-    Uncertain(Ticket),
     /// The message with this ticket was written, but the agent did not report sending it. Its text
     /// is not repeated; later messages wait for a prompt acknowledgement or a bounded submit retry.
     Unsent(Ticket),
@@ -82,12 +78,6 @@ pub trait PromptSignal {
     fn mark_unsent(&self, before: u64);
     /// Whether a message marked unsent still holds delivery before acknowledgement or submit retry.
     fn unsent_waiting(&self) -> bool;
-    fn mark_submission_uncertain(&self, before: u64) {
-        self.mark_unsent(before);
-    }
-    fn submission_uncertain(&self) -> bool {
-        false
-    }
     /// Looks at the agent's screen now: whether it shows a dialog only the user can answer, which
     /// a message written into it would answer destructively, and how many times dialogs of each
     /// kind have come up so far, including any that have gone again.
@@ -300,14 +290,7 @@ impl Outbox {
     pub fn drain(&self, session: &LiveSession, prompts: &impl PromptSignal) -> Drain {
         self.drain_with(
             &session.id,
-            &mut |ticket, text, allow_mixed| {
-                term::send_message_with_id(
-                    session,
-                    text,
-                    &format!("{}:{ticket}", session.launch_id),
-                    allow_mixed,
-                )
-            },
+            &mut |_, text, allow_mixed| term::paste_message(session, text, allow_mixed),
             prompts,
         )
     }
@@ -353,10 +336,7 @@ impl Outbox {
             if self.is_held(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
-            if prompts.unsent_waiting()
-                || prompts.submission_uncertain()
-                || prompts.trust_holds_writes()
-            {
+            if prompts.unsent_waiting() || prompts.trust_holds_writes() {
                 return Drain::Pending;
             }
             // Asked afresh for every message: once one is sent the agent reads as working, and what
@@ -419,17 +399,6 @@ impl Outbox {
                     let protection_started = (!prompts.input_held()).then_some(protection_started);
                     self.push_front(id, ticket, text, protection_started);
                     return Drain::Pending;
-                }
-                Err(partial)
-                    if partial.error.get_ref().is_some_and(|error| {
-                        error.is::<crate::session::term::UncertainSubmission>()
-                    }) =>
-                {
-                    self.mark_written(ticket);
-                    prompts.mark_submission_uncertain(before);
-                    tracing::error!(session = %id, error = %partial.error,
-                        "the native queue did not confirm accepting a message; it will not be resent");
-                    return Drain::Uncertain(ticket);
                 }
                 Err(partial)
                     if partial
@@ -1328,47 +1297,6 @@ mod tests {
         assert_eq!(agent.waits.get(), 0);
     }
 
-    #[test]
-    fn uncertain_native_acceptance_preserves_later_messages_without_resending() {
-        let outbox = Outbox::default();
-        let first = outbox.push("s", "first");
-        outbox.push("s", "second");
-        let agent = AtPrompt::new(true);
-        let mut attempts = Vec::new();
-        let outcome = outbox.drain_with(
-            "s",
-            &mut |ticket, text, _| {
-                attempts.push((ticket, text.to_string()));
-                Err(PartialWrite {
-                    written: 1,
-                    error: std::io::Error::other(crate::session::term::UncertainSubmission(
-                        "connection closed after add".into(),
-                    )),
-                })
-            },
-            &agent,
-        );
-        assert_eq!(outcome, Drain::Uncertain(first));
-        assert_eq!(attempts, [(first, "first".to_string())]);
-        assert_eq!(outbox.len("s"), 1);
-        assert_eq!(
-            outbox.drain_with("s", &mut |_, _, _| panic!("held"), &agent),
-            Drain::Pending
-        );
-        agent.prompt_sent();
-        assert_eq!(
-            outbox.drain_with(
-                "s",
-                &mut |ticket, text, _| {
-                    attempts.push((ticket, text.to_string()));
-                    Ok(())
-                },
-                &agent
-            ),
-            Drain::Clear
-        );
-        assert_eq!(attempts[1].1, "second");
-    }
     #[test]
     fn an_unsubmitted_draft_does_not_prevent_delivery_after_the_grace_period() {
         let outbox = Outbox::default();

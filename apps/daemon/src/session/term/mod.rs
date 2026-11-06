@@ -4,7 +4,7 @@ mod image_path;
 mod invisible;
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -19,7 +19,6 @@ use crate::providers::ProviderSettings;
 use crate::session::{self, LiveSession, NewSession};
 use crate::session_git_hooks;
 use crate::terminal::pty;
-use crate::terminal::ptyio::PartialWrite;
 
 /// Bracketed paste, then the text, then the paste end, then Enter — written as one buffer, which is
 /// what makes a multi-line message arrive as a single submitted message with no delay needed
@@ -209,15 +208,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         process_tag.value(),
     );
     environment.insert("TERM".to_string(), pty::TERM.to_string());
-    let (args, transport) = match &plan.private_server {
-        Some(server) => {
-            let (args, transport) = server.start(&binary, &environment, cwd)?;
-            (args, Some(transport))
-        }
-        None => (plan.args.clone(), None),
-    };
     let mut cmd = CommandBuilder::new(&binary);
-    cmd.args(&args);
+    cmd.args(&plan.args);
     cmd.env_clear();
     for (key, value) in &environment {
         cmd.env(key, value);
@@ -239,23 +231,12 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         launch_id: process_tag.launch_id().to_string(),
         spawned,
         checks_composer: true,
-        transport: transport.clone(),
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
-        before_scratch_removal: {
-            let after_exit = plan.after_exit;
-            (transport.is_some() || after_exit.is_some()).then(move || {
-                Box::new(move || {
-                    if let Some(transport) = transport {
-                        transport.stop();
-                    }
-                    if let Some(after_exit) = after_exit {
-                        after_exit.run();
-                    }
-                }) as Box<dyn FnOnce() + Send>
-            })
-        },
+        before_scratch_removal: plan
+            .after_exit
+            .map(|after_exit| Box::new(move || after_exit.run()) as Box<dyn FnOnce() + Send>),
     }));
     live.enable_native_stash(native_stash);
     if let Some(prompt) = task.as_deref().and_then(launch_prompt) {
@@ -268,31 +249,6 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         agent_session_id,
         notice: plan.notice,
     })
-}
-
-/// A server of the provider's own that a session's automatic messages go through instead of its
-/// terminal.
-pub trait MessageTransport: Send + Sync {
-    /// Delivers `text` as the message `logical_id`.
-    fn send(&self, text: &str, logical_id: &str) -> Result<(), PartialWrite>;
-    /// Ends the server; called after the session's process is reaped.
-    fn stop(&self);
-}
-
-/// How a launch starts such a server, when its plan has one.
-pub trait PrivateServer: Send + Sync {
-    /// Starts the server for the session and gives the arguments the terminal is started with,
-    /// which replace `LaunchPlan::args`, and the transport to it.
-    fn start(
-        &self,
-        binary: &str,
-        environment: &HashMap<String, String>,
-        cwd: &Path,
-    ) -> Result<(Vec<String>, Arc<dyn MessageTransport>)>;
-
-    /// The plan itself, for the tests of the provider that made it.
-    #[cfg(test)]
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Work a launch leaves for once its process has exited (`LaunchPlan::after_exit`), done before the
@@ -334,64 +290,34 @@ pub const HELD_FRAGMENT: &str = concat!(
      sent now waits until then."
 );
 
-/// Acceptance could not be established after the queue request was sent. Retrying could duplicate
-/// it.
-#[derive(Debug)]
-pub struct UncertainSubmission(pub String);
-
-impl std::fmt::Display for UncertainSubmission {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for UncertainSubmission {}
-
 #[cfg(test)]
 pub fn send_message(
     session: &LiveSession,
     text: &str,
 ) -> Result<(), crate::terminal::ptyio::PartialWrite> {
-    send_message_with_id(session, text, &Uuid::new_v4().to_string(), false)
+    paste_message(session, text, false)
 }
 
-/// Submits a message through Codex's private RPC connection or checked bracketed paste + Enter.
+/// Submits a message by checked bracketed paste + Enter.
 ///
-/// On the PTY path, a failure's `written` counts bytes of the **framed** buffer, not `text`, so zero is
+/// A failure's `written` counts bytes of the **framed** buffer, not `text`, so zero is
 /// the one case where nothing of the message reached the session. Any other count may have left an
 /// unterminated paste in the input line, or — for a count short of the paste introducer — a
 /// truncated escape sequence; either way the message may not be written again.
 ///
-/// A native RPC acceptance failure carries `UncertainSubmission`; no terminal input is written.
 /// The input write checks for an empty, acknowledged composer or saves and restores the draft
 /// through a supported native stash. Preservation has a bounded grace period; after expiry,
 /// delivery may include unfinished user input and retained keys are released into the current editor.
 /// The caller also holds messages while a modal dialog is up,
 /// because the paste is discarded but the trailing Enter confirms whatever option is highlighted —
 /// at Claude Code's trust dialog that exits the session, and at Grok's approval modal it selects
-/// always-approve. Writing mid-turn is safe and is the better path: every agent queues the message
-/// itself and consumes it when the turn ends.
-pub fn send_message_with_id(
+/// always-approve. Writing mid-turn is safe and is the better path: the agent takes the message
+/// itself, queuing it until the turn ends or, for Codex, steering it into the running turn.
+pub fn paste_message(
     session: &LiveSession,
     text: &str,
-    logical_id: &str,
     allow_mixed: bool,
 ) -> Result<(), crate::terminal::ptyio::PartialWrite> {
-    if let Some(transport) = &session.transport {
-        if session.is_frozen()
-            || session.trust.holds_writes()
-            || session.look_for_dialog().current.is_some()
-        {
-            return Err(crate::terminal::ptyio::PartialWrite {
-                written: 0,
-                error: std::io::Error::new(
-                    std::io::ErrorKind::WouldBlock,
-                    "the session's server is not accepting automatic messages",
-                ),
-            });
-        }
-        return transport.send(&shaped(text), logical_id);
-    }
     let framed = frame_message(session.agent, text);
     let prompt = std::str::from_utf8(
         &framed[PASTE_START.len()..framed.len() - PASTE_END.len() - SUBMIT.len()],
@@ -400,7 +326,7 @@ pub fn send_message_with_id(
     session.write_message_input(&framed, prompt, allow_mixed)
 }
 
-/// Shapes a message into the bracketed-paste buffer `send_message_with_id` writes: see [`shaped`], then
+/// Shapes a message into the bracketed-paste buffer `paste_message` writes: see [`shaped`], then
 /// whatever the receiving agent needs on top, then frame. Pulled out as a pure function so the
 /// ordering — both strips before the slash guard, not after — is something a test can pin
 /// directly, rather than re-deriving it from a copy of this logic; the send path itself needs a

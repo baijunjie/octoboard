@@ -269,14 +269,6 @@ fn delivery_of(drain: Drain, ticket: Ticket) -> Result<Delivery> {
         Drain::Diverted(diverted) if diverted == ticket => Ok(Delivery::Unsent),
         Drain::Diverted(diverted) if diverted < ticket => Ok(Delivery::Queued),
         Drain::Diverted(_) => Ok(Delivery::Written),
-        Drain::Uncertain(uncertain) if uncertain < ticket => Ok(Delivery::Queued),
-        Drain::Uncertain(uncertain) if uncertain > ticket => Ok(Delivery::Written),
-        Drain::Uncertain(_) => Err(term::UncertainSubmission(
-            "the native message queue did not confirm acceptance; the message may already be \
-             queued and will not be sent again, so check the conversation before retrying"
-                .into(),
-        )
-        .into()),
         Drain::Lost => Err(CodedError::raised(
             error_code::QUEUED_MESSAGES_LOST,
             lost_message(),

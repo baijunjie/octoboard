@@ -16,12 +16,6 @@ pub(crate) fn error_code(reply: &Value) -> Option<i64> {
     reply.pointer("/error/code").and_then(Value::as_i64)
 }
 
-/// The `message` of a JSON-RPC error reply on its own, for a caller that tells refusals apart by it;
-/// [`error_detail`] is for showing one.
-pub(crate) fn error_message(reply: &Value) -> Option<&str> {
-    reply.pointer("/error/message").and_then(Value::as_str)
-}
-
 /// What a JSON-RPC error reply says, if the reply is one: its message joined to its `data`, since
 /// Grok Build refuses an account whose stored credentials have expired with a bare "Internal
 /// error" (code -32603) and the cause only in `data` ("Billing service error: Invalid or expired
@@ -78,10 +72,5 @@ mod tests {
             error_code(&json!({"error": {"code": -32000}})),
             Some(-32000)
         );
-        assert_eq!(
-            error_message(&json!({"error": {"message": "busy", "data": "x"}})),
-            Some("busy")
-        );
-        assert_eq!(error_message(&json!({"id": 2, "result": {}})), None);
     }
 }
